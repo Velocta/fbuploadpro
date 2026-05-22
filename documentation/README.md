@@ -9,8 +9,8 @@ Shared documentation for the FBUploadPro monorepo.
 | `architecture/` | System boundaries and data flow |
 | `database/` | Migration workflow and RLS overview |
 | `adr/` | Architectural decision records |
-| `runbooks/` | Deploy, env, posting operations |
-| `webapp/` | Webapp architecture, API reference, performance |
+| `runbooks/` | Deploy, env, posting operations, InApp schedule |
+| `webapp/` | Webapp architecture, API reference, performance, UI/UX |
 
 ## Reading order for new contributors
 
@@ -27,7 +27,7 @@ Shared documentation for the FBUploadPro monorepo.
 11. [`webapp/api-reference.md`](webapp/api-reference.md)
 12. Relevant ADRs in `adr/`
 
-## Posting operations
+## Posting operations (ADU)
 
 - [`runbooks/posting-deploy.md`](runbooks/posting-deploy.md)
 - [`runbooks/posting-test-injection.md`](runbooks/posting-test-injection.md)

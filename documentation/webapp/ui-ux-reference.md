@@ -44,7 +44,7 @@ From current `webapp` code:
 - Product type: multi-role SaaS (`agency`, `super-admin`, auth, public landing).
 - Core surfaces:
   - landing,
-  - agency dashboard (facebook accounts, pages, settings),
+  - agency dashboard (Facebook: accounts, auto-download-upload, bulk-delete, direct-post, direct-schedule, inapp-schedule; YouTube/Instagram shells; settings),
   - super-admin dashboard (agencies, pricing/tokens).
 - Stack:
   - Next.js App Router,

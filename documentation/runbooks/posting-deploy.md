@@ -1,10 +1,10 @@
-# Posting Deploy Runbook
+# Posting Deploy Runbook (ADU)
 
 ## Pre-deploy checklist
 
 - Confirm `database/production_schema.sql` includes `posting_jobs_v2` and V2 RPCs.
 - Cloudflare account has R2 bucket `fbuploadprov2-v2-posting-media`.
-- Worker service bindings match names in each `wrangler.toml` under `backend_v3/services/posting/`.
+- Worker service bindings match names in each `wrangler.toml` under `backend_v3/services/facebook/auto-download-upload/posting/`.
 - Set `posting_v2_intake_paused = true` before deploying workers.
 
 ## Deploy
@@ -17,7 +17,7 @@ export SUPABASE_SERVICE_ROLE_KEY=...
 export INTERNAL_JOB_DISPATCH_TOKEN=...
 # optional: export RESIDENTIAL_PROXY=...
 
-./backend_v3/services/posting/deploy-posting.sh
+./backend_v3/services/facebook/auto-download-upload/posting/deploy.sh
 ```
 
 **Order (script):** downloader-service → reel-geter → publisher → download-processor → publish-processor → scheduler.

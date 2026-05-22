@@ -7,9 +7,12 @@ Canonical database path: `database/`.
 | Artifact | Purpose |
 |----------|---------|
 | `database/production_schema.sql` | Full canonical schema for fresh installs and agent reference |
-| `database/migrations/` | One new `.sql` file per forward change (empty after 2026-05-22 consolidation) |
+| `database/migrations/` | One new `.sql` file per forward change |
 
 Historical migrations were merged into `production_schema.sql` on 2026-05-22. Do not recreate deleted migration files.
+
+Current migrations:
+- `20260522120000_platform_features_tables.sql` — `token_cost_rules`, `facebook_direct_posts`, `facebook_direct_schedule_pages/posts`, `facebook_inapp_schedule_pages/posts`, claim RPC.
 
 `supabase/` is not used as migration source in this repository.
 

@@ -9,10 +9,11 @@
 ## Recommended order
 
 1. **Database** — Apply new migration in staging/production when schema-dependent.
-2. **Posting workers** — `backend_v3/services/posting/deploy-posting.sh` (downloader → reel-geter → publisher → processors → scheduler).
-3. **Analytics** — `backend_v3/services/analytics/deploy-analytics.sh` or manual wrangler deploy for followers cron.
-4. **Scraper** — Restart VPS process if scraper code changed (`backend_v3/services/scraper/reels-scraper`).
-5. **Webapp** — Vercel preview, then production promote.
+2. **ADU Posting workers** — `backend_v3/services/facebook/auto-download-upload/posting/deploy.sh` (downloader → reel-geter → publisher → processors → scheduler).
+3. **InApp Schedule worker** — `cd backend_v3/services/facebook/inapp-schedule/posting/processor-worker && npm install && npx wrangler deploy`.
+4. **Analytics** — `backend_v3/services/facebook/auto-download-upload/analytics/deploy.sh`.
+5. **Scraper** — Restart VPS process if scraper code changed (`backend_v3/services/facebook/auto-download-upload/scraping/reels-scraper`).
+6. **Webapp** — Vercel preview, then production promote.
 
 Adjust order when only a subset of services changes.
 
@@ -21,14 +22,24 @@ Adjust order when only a subset of services changes.
 ### Webapp
 
 - Agency and super-admin login.
-- `/api/v1/agency/...` and `/api/v1/admin/...` respond (503 if maintenance gate is still enabled in `proxy.ts`).
+- Sidebar navigation renders correctly (Facebook, YouTube shells, Instagram shells, Settings).
+- `/api/v1/agency/uploads/presign` responds (requires R2 env vars).
+- `/api/v1/agency/facebook/direct-post` responds.
+- `/api/v1/agency/facebook/direct-schedule` responds.
+- `/api/v1/agency/facebook/inapp-schedule` responds.
 
-### Posting
+### ADU Posting
 
 - Downloader `GET /health` returns OK.
 - Scheduler cron runs without Supabase RPC errors.
 - One synthetic job reaches `published` (see `runbooks/posting-test-injection.md`) with intake paused first.
 - Reel `posted` and one `token_transactions` usage row per job.
+
+### InApp Schedule
+
+- Processor cron runs without errors.
+- Create a test pending post with `scheduled_at` in the past → verify it publishes immediately.
+- Token balance decremented.
 
 ### Analytics
 
@@ -37,10 +48,11 @@ Adjust order when only a subset of services changes.
 ### Database
 
 - No unexpected RLS errors in worker logs.
+- `token_cost_rules` seeded with expected rows.
 
 ## Related runbooks
 
-- `posting-deploy.md` — Posting worker deploy checklist
+- `posting-deploy.md` — ADU posting worker deploy checklist
 - `posting-test-injection.md` — Controlled test jobs
 - `posting-rollback.md` — Pause intake and disable workers
 - `posting-observability.md` — SQL health queries and backpressure

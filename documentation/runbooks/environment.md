@@ -10,10 +10,15 @@
 | `NEXT_PUBLIC_MAIN_DOMAIN` | e.g. `fbuploadpro.com` |
 | `NEXT_PUBLIC_COOKIE_DOMAIN` | e.g. `.fbuploadpro.com` |
 | `MAGIC_LINK_SIGNING_SECRET` | HMAC for magic-link FB connect |
+| `R2_ACCOUNT_ID` | Cloudflare account ID for R2 |
+| `R2_ACCESS_KEY_ID` | R2 API token access key |
+| `R2_SECRET_ACCESS_KEY` | R2 API token secret key |
+| `R2_USER_MEDIA_BUCKET` | Bucket name (default: `fbuploadpro-user-media`) |
+| `USER_MEDIA_PUBLIC_BASE_URL` | HTTPS origin for Facebook `file_url` fetches |
 
 Production validates required vars in `webapp/src/lib/config/env.ts`. Integration-heavy API routes use Node.js runtime on Vercel.
 
-## Posting workers (`backend_v3/services/posting/*/.env.example`)
+## ADU Posting workers (`backend_v3/services/facebook/auto-download-upload/posting/*`)
 
 Shared across scheduler, download-processor, reel-geter, publish-processor, publisher:
 
@@ -52,24 +57,34 @@ Shared across scheduler, download-processor, reel-geter, publish-processor, publ
 | `POSTING_MEDIA_PUBLIC_BASE_URL` | Public origin for hosted mode |
 | `INTEGRITY_PAUSE_THRESHOLD` / `INTEGRITY_WINDOW_SECONDS` | Auto-pause intake on integrity errors |
 
-## Downloader service (`backend_v3/services/posting/downloader-service/.env.example`)
+## Downloader service (`backend_v3/services/facebook/auto-download-upload/posting/downloader-service`)
 
 | Variable | Purpose |
 |----------|---------|
 | `RESIDENTIAL_PROXY` | Required for YouTube downloads in container |
 
-Cloudflare bindings (see each `wrangler.toml`): R2 `fbuploadprov2-v2-posting-media`, Container `DownloaderContainer`.
+Cloudflare bindings (see `wrangler.toml`): R2 `fbuploadprov2-v2-posting-media`, Container `DownloaderContainer`.
 
-## Followers metrics cron (`backend_v3/services/analytics/followers-metrics-cron-worker/.env.example`)
+## InApp Schedule processor (`backend_v3/services/facebook/inapp-schedule/posting/processor-worker`)
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role for claim RPC and token deduction |
+| `USER_MEDIA_PUBLIC_BASE_URL` | HTTPS origin for `file_url` (Facebook fetches media) |
+
+Cloudflare bindings: R2 `fbuploadpro-user-media`. Cron: every minute.
+
+## Analytics (`backend_v3/services/facebook/auto-download-upload/analytics/followers-metrics-cron-worker`)
 
 | Variable | Purpose |
 |----------|---------|
 | `SUPABASE_URL` | Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role for RPC `bulk_update_page_metrics` |
 
-Wrangler name: `fbuploadprov2-prod-analytics-01-followers-cron`. Cron: every 2 minutes.
+Wrangler name: `fbuploadpro-fb-adu-analytics`. Cron: every 2 minutes.
 
-## Reels scraper (`backend_v3/services/scraper/reels-scraper/.env.example`)
+## Reels scraper (`backend_v3/services/facebook/auto-download-upload/scraping/reels-scraper`)
 
 | Variable | Purpose |
 |----------|---------|

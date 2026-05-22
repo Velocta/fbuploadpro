@@ -44,7 +44,6 @@ create table public.users (
   phone_number text not null default '',
   subdomain text unique,
   role user_role_enum not null default 'agency',
-  
   tokens_balance bigint default 0,
   is_active_override boolean default true,
 
@@ -74,8 +73,7 @@ create table public.facebook_accounts (
   
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  
-  -- An agency can connect a specific FB user only once
+
   constraint unique_fb_user_per_agency unique (agency_id, fb_user_id)
 );
 
