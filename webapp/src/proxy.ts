@@ -6,30 +6,8 @@ import {
   isVercelPreviewHost,
 } from '@/lib/config/runtime'
 
-const MAINTENANCE_PATH = '/maintenance'
-
-function isMaintenanceBypass(pathname: string): boolean {
-  return pathname === MAINTENANCE_PATH || pathname.startsWith('/_next')
-}
-
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl
-  const pathname = url.pathname
-
-  if (!isMaintenanceBypass(pathname)) {
-    if (pathname.startsWith('/api')) {
-      return NextResponse.json(
-        {
-          error: 'Service unavailable',
-          message:
-            'FBupload Pro is migrating to v3. The site is temporarily offline for a few days.',
-        },
-        { status: 503 }
-      )
-    }
-
-    return NextResponse.rewrite(new URL(MAINTENANCE_PATH, request.url))
-  }
 
   const hostname = request.headers.get('host') || ''
   const cleanHost = (hostname.split(':')[0] ?? hostname).toLowerCase()

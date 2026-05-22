@@ -56,7 +56,7 @@ export default async function AgencyDashboard() {
                 Token balance is 0
               </p>
               <p className="text-sm font-medium text-foreground">
-                Add tokens to unlock Facebook Accounts, Pages, and Settings.
+                Add tokens to unlock Facebook, YouTube, and Instagram features in the sidebar.
               </p>
             </div>
             <AddTokensDialog />

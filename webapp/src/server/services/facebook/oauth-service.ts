@@ -32,7 +32,7 @@ export async function buildDirectOauthUrl(agencyId: string, host: string, protoc
     throw new Error('REQUIRED_SETTINGS_MISSING')
   }
 
-  const redirectUri = `${protocol}://${host}/agency/facebook/callback`
+  const redirectUri = `${protocol}://${host}/agency/facebook/accounts/callback`
   const scope = REQUIRED_SCOPES.join(',')
   let state = ''
   if (reconnectAccountId) {
@@ -104,7 +104,7 @@ export async function processFacebookCallback(code: string, state: string | unde
 
   const redirectUri = isMagic
     ? `${protocol}://${host}/fb-callback`
-    : `${protocol}://${host}/agency/facebook/callback`
+    : `${protocol}://${host}/agency/facebook/accounts/callback`
 
   let shortLivedToken = ''
   try {

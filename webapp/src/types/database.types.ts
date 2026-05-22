@@ -353,6 +353,273 @@ export type Database = {
         }
         Relationships: []
       }
+      token_cost_rules: {
+        Row: {
+          id: string
+          feature: string
+          platform: string
+          media_type: string
+          source_platform: string | null
+          token_cost: number
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          feature: string
+          platform: string
+          media_type?: string
+          source_platform?: string | null
+          token_cost?: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          feature?: string
+          platform?: string
+          media_type?: string
+          source_platform?: string | null
+          token_cost?: number
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      facebook_direct_posts: {
+        Row: {
+          id: string
+          agency_id: string
+          facebook_account_id: string | null
+          fb_page_id: string
+          fb_page_name: string | null
+          media_type: string
+          caption: string | null
+          first_comment: string | null
+          graph_post_id: string | null
+          status: string
+          error_message: string | null
+          tokens_charged: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          agency_id: string
+          facebook_account_id?: string | null
+          fb_page_id: string
+          fb_page_name?: string | null
+          media_type: string
+          caption?: string | null
+          first_comment?: string | null
+          graph_post_id?: string | null
+          status?: string
+          error_message?: string | null
+          tokens_charged?: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          agency_id?: string
+          facebook_account_id?: string | null
+          fb_page_id?: string
+          fb_page_name?: string | null
+          media_type?: string
+          caption?: string | null
+          first_comment?: string | null
+          graph_post_id?: string | null
+          status?: string
+          error_message?: string | null
+          tokens_charged?: number
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      facebook_direct_schedule_pages: {
+        Row: {
+          id: string
+          agency_id: string
+          facebook_account_id: string
+          fb_page_id: string
+          fb_page_name: string | null
+          fb_page_image: string | null
+          fb_page_access_token: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          agency_id: string
+          facebook_account_id: string
+          fb_page_id: string
+          fb_page_name?: string | null
+          fb_page_image?: string | null
+          fb_page_access_token: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          agency_id?: string
+          facebook_account_id?: string
+          fb_page_id?: string
+          fb_page_name?: string | null
+          fb_page_image?: string | null
+          fb_page_access_token?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      facebook_direct_schedule_posts: {
+        Row: {
+          id: string
+          agency_id: string
+          page_id: string
+          fb_page_id: string
+          media_type: string
+          media_object_key: string | null
+          caption: string | null
+          scheduled_publish_time: string
+          timezone: string
+          status: string
+          graph_post_id: string | null
+          facebook_schedule_id: string | null
+          tokens_charged: number
+          error_message: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          agency_id: string
+          page_id: string
+          fb_page_id: string
+          media_type: string
+          media_object_key?: string | null
+          caption?: string | null
+          scheduled_publish_time: string
+          timezone?: string
+          status?: string
+          graph_post_id?: string | null
+          facebook_schedule_id?: string | null
+          tokens_charged?: number
+          error_message?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          agency_id?: string
+          page_id?: string
+          fb_page_id?: string
+          media_type?: string
+          media_object_key?: string | null
+          caption?: string | null
+          scheduled_publish_time?: string
+          timezone?: string
+          status?: string
+          graph_post_id?: string | null
+          facebook_schedule_id?: string | null
+          tokens_charged?: number
+          error_message?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      facebook_inapp_schedule_pages: {
+        Row: {
+          id: string
+          agency_id: string
+          facebook_account_id: string
+          fb_page_id: string
+          fb_page_name: string | null
+          fb_page_image: string | null
+          fb_page_access_token: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          agency_id: string
+          facebook_account_id: string
+          fb_page_id: string
+          fb_page_name?: string | null
+          fb_page_image?: string | null
+          fb_page_access_token: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          agency_id?: string
+          facebook_account_id?: string
+          fb_page_id?: string
+          fb_page_name?: string | null
+          fb_page_image?: string | null
+          fb_page_access_token?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      facebook_inapp_schedule_posts: {
+        Row: {
+          id: string
+          agency_id: string
+          page_id: string
+          fb_page_id: string
+          fb_page_access_token: string
+          media_type: string
+          media_object_key: string | null
+          caption: string | null
+          first_comment: string | null
+          scheduled_at: string
+          timezone: string
+          status: string
+          retry_count: number
+          graph_post_id: string | null
+          tokens_charged: number
+          published_at: string | null
+          error_message: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          agency_id: string
+          page_id: string
+          fb_page_id: string
+          fb_page_access_token: string
+          media_type: string
+          media_object_key?: string | null
+          caption?: string | null
+          first_comment?: string | null
+          scheduled_at: string
+          timezone?: string
+          status?: string
+          retry_count?: number
+          graph_post_id?: string | null
+          tokens_charged?: number
+          published_at?: string | null
+          error_message?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          agency_id?: string
+          page_id?: string
+          fb_page_id?: string
+          fb_page_access_token?: string
+          media_type?: string
+          media_object_key?: string | null
+          caption?: string | null
+          first_comment?: string | null
+          scheduled_at?: string
+          timezone?: string
+          status?: string
+          retry_count?: number
+          graph_post_id?: string | null
+          tokens_charged?: number
+          published_at?: string | null
+          error_message?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -365,6 +632,10 @@ export type Database = {
       get_tokens_used_since: {
         Args: { p_since: string }
         Returns: number
+      }
+      claim_due_facebook_inapp_schedule_posts: {
+        Args: { p_limit?: number }
+        Returns: Database['public']['Tables']['facebook_inapp_schedule_posts']['Row'][]
       }
     }
     Enums: {

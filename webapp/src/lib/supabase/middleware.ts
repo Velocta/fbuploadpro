@@ -177,19 +177,6 @@ export async function updateSession(request: NextRequest) {
         .eq('id', user.id)
         .single()
 
-      const hasTokens = (userData?.tokens_balance ?? 0) > 0
-      const isRestrictedTokenRoute =
-        path.startsWith('/agency/facebook') ||
-        path.startsWith('/agency/pages') ||
-        path.startsWith('/agency/settings')
-
-      if (!hasTokens && isRestrictedTokenRoute) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/agency'
-        url.searchParams.set('addTokens', '1')
-        return NextResponse.redirect(url)
-      }
-
       if (userData?.subdomain) {
         const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
         const cleanMainDomain = mainDomain.replace(/^https?:\/\//, '').split(':')[0]

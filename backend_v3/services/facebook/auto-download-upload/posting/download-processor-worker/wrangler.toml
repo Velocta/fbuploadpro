@@ -1,0 +1,13 @@
+name = "fbuploadpro-fb-adu-download-processor"
+main = "src/index.js"
+compatibility_date = "2024-02-05"
+
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true
+
+[[services]]
+binding = "REEL_GETER_WORKER"
+service = "fbuploadprov2-v2-reel-geter"

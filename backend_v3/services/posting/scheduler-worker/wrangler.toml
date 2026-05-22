@@ -1,9 +1,0 @@
-name = "fbuploadprov2-v2-posting-scheduler"
-main = "src/index.js"
-compatibility_date = "2024-02-05"
-
-[triggers]
-crons = ["* * * * *"]
-
-[observability]
-enabled = true

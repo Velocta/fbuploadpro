@@ -20,6 +20,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(authUrl)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to start oauth'
-    return NextResponse.redirect(new URL(`/agency/facebook?error=${encodeURIComponent(message)}`, request.url))
+    return NextResponse.redirect(new URL(`/agency/facebook/accounts?error=${encodeURIComponent(message)}`, request.url))
   }
 }

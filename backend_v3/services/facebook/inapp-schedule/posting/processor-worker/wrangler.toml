@@ -1,0 +1,13 @@
+name = "fbuploadpro-fb-inapp-schedule-processor"
+main = "src/index.js"
+compatibility_date = "2024-02-05"
+
+[triggers]
+crons = ["* * * * *"]
+
+[observability]
+enabled = true
+
+[[r2_buckets]]
+binding = "USER_MEDIA"
+bucket_name = "fbuploadpro-user-media"

@@ -7,53 +7,58 @@ All backend services for FBUploadPro live under `backend_v3/`. Each service is i
 ```
 backend_v3/
 ├── services/
-│   ├── posting/           # Cloudflare Workers: reel download + Facebook publish
-│   ├── analytics/         # Followers metrics cron (Cloudflare Worker)
-│   └── scraper/           # VPS Puppeteer reel ingestion
-└── tests/                 # Downloader integration tests
+│   ├── facebook/
+│   │   ├── auto-download-upload/
+│   │   │   ├── posting/          # Scheduler, download, publish pipeline
+│   │   │   ├── analytics/        # Followers metrics cron
+│   │   │   └── scraping/         # VPS reels scraper
+│   │   └── inapp-schedule/
+│   │       └── posting/          # In-app scheduled publish processor
+│   ├── youtube/
+│   └── instagram/
+└── tests/
 ```
 
-## Services
+## Cloudflare worker names
 
-### Posting (`services/posting/`)
+| Worker | Wrangler name |
+|--------|----------------|
+| ADU scheduler | `fbuploadpro-fb-adu-scheduler` |
+| ADU download processor | `fbuploadpro-fb-adu-download-processor` |
+| ADU reel-geter | `fbuploadpro-fb-adu-reel-geter` |
+| ADU downloader | `fbuploadpro-fb-adu-downloader` |
+| ADU publish processor | `fbuploadpro-fb-adu-publish-processor` |
+| ADU publisher | `fbuploadpro-fb-adu-publisher` |
+| ADU analytics | `fbuploadpro-fb-adu-analytics` |
+| InApp schedule processor | `fbuploadpro-fb-inapp-schedule-processor` |
+
+## Facebook Auto Download/Upload
 
 End-to-end pipeline: schedule due pages → download source video → publish to Facebook Reels.
 
-| Worker | Wrangler name | Trigger |
-|--------|---------------|---------|
-| `scheduler-worker` | `fbuploadprov2-v2-posting-scheduler` | Cron every minute |
-| `download-processor-worker` | `fbuploadprov2-v2-download-processor` | Cron every minute |
-| `reel-geter-worker` | `fbuploadprov2-v2-reel-geter` | HTTP (internal dispatch) |
-| `downloader-service` | `fbuploadprov2-v2-downloader-service` | HTTP + Container (yt-dlp) |
-| `publish-processor-worker` | `fbuploadprov2-v2-publish-processor` | Cron every minute |
-| `publisher-worker` | `fbuploadprov2-v2-publisher` | HTTP (internal dispatch) |
+**Deploy:** `services/facebook/auto-download-upload/posting/deploy.sh`
 
-**Database:** `posting_jobs_v2`, RPCs `claim_due_reels_and_create_jobs_v2`, `claim_download_jobs_v2`, `claim_publish_jobs_v2`, `finalize_posting_job_v2`, etc.
+**Database:** `pages`, `reels`, `posting_jobs_v2` and related RPCs.
 
-**Deploy:** `services/posting/deploy-posting.sh` (requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `INTERNAL_JOB_DISPATCH_TOKEN`, Wrangler auth).
+## Facebook InApp Schedule
 
-### Analytics (`services/analytics/followers-metrics-cron-worker/`)
+Cron worker claims due rows from `facebook_inapp_schedule_posts` via `claim_due_facebook_inapp_schedule_posts`, publishes to Graph, deducts tokens, deletes R2 media.
 
-Refreshes Facebook page `fan_count` and profile images every 2 minutes via Graph API; bulk-updates via `bulk_update_page_metrics` RPC.
+**Path:** `services/facebook/inapp-schedule/posting/processor-worker/`
 
-**Deploy:** `cd services/analytics/followers-metrics-cron-worker && npm install && npx wrangler deploy`
+**Env:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `USER_MEDIA_PUBLIC_BASE_URL` (HTTPS origin Facebook can fetch for `file_url`).
 
-### Scraper (`services/scraper/reels-scraper/`)
+## Analytics
 
-Long-running VPS daemon (Puppeteer). Claims pending pages via `get_next_pending_page`, scrapes reel IDs, upserts into `reels`.
+`services/facebook/auto-download-upload/analytics/followers-metrics-cron-worker/` — deploy via `analytics/deploy.sh`.
 
-**Run:** `cd services/scraper/reels-scraper && npm install && npm start` (not Cloudflare).
+## Scraper
+
+`services/facebook/auto-download-upload/scraping/reels-scraper/` — VPS Puppeteer daemon.
 
 ## Shared requirements
 
-- **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (service role for pipeline/scraper)
+- **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - **Schema:** [`database/production_schema.sql`](../database/production_schema.sql)
-- **Docs:** [`documentation/runbooks/`](../documentation/runbooks/)
-
-## Deploy order (production)
-
-1. Posting workers (`deploy-posting.sh`)
-2. Followers metrics cron
-3. Scraper (VPS, manual)
 
 Webapp deploys separately from `webapp/` (Vercel).

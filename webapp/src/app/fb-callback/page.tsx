@@ -91,7 +91,7 @@ function FBCallbackContent() {
             </CardHeader>
             <CardContent className="pt-0 flex justify-center">
                 <button
-                    onClick={() => router.push('/agency/facebook')}
+                    onClick={() => router.push('/agency/facebook/accounts')}
                     className="text-sm font-bold text-primary hover:underline"
                 >
                     Back to Dashboard
