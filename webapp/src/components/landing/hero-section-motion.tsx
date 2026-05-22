@@ -1,0 +1,173 @@
+'use client'
+
+import Link from 'next/link'
+import { motion, useReducedMotion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+    ArrowRight,
+    LayoutDashboard,
+    ShieldCheck,
+    ServerCog,
+} from 'lucide-react'
+
+const easeStandard = [0.2, 0, 0, 1] as const
+
+export function HeroSectionMotion() {
+    const reduce = useReducedMotion()
+
+    const container = {
+        hidden: { opacity: 0 },
+        visible: {
+            opacity: 1,
+            transition: reduce
+                ? { duration: 0.18, ease: easeStandard }
+                : {
+                      staggerChildren: 0.06,
+                      delayChildren: 0.08,
+                  },
+        },
+    }
+
+    const item = {
+        hidden: reduce
+            ? { opacity: 0 }
+            : { opacity: 0, y: 18 },
+        visible: {
+            opacity: 1,
+            ...(reduce ? {} : { y: 0 }),
+            transition: reduce
+                ? { duration: 0.18, ease: easeStandard }
+                : { duration: 0.42, ease: easeStandard },
+        },
+    }
+
+    return (
+        <motion.div
+            className="container mx-auto"
+            variants={container}
+            initial="hidden"
+            animate="visible"
+        >
+            <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 md:grid-cols-[1.1fr_0.9fr] lg:gap-12">
+                <div className="max-w-2xl md:pr-2">
+                    <motion.div variants={item} className="mb-7">
+                        <Badge
+                            variant="outline"
+                            className="border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold tracking-[0.12em] text-primary"
+                        >
+                            Facebook Automation Platform
+                        </Badge>
+                    </motion.div>
+
+                    <motion.h1
+                        variants={item}
+                        className="font-display text-display-md sm:text-display-lg lg:text-display-xl mb-6 text-left font-bold tracking-tight text-balance text-foreground"
+                    >
+                        Automate Facebook pages
+                        <span className="text-primary">
+                            {' '}
+                            without heavy PC or internet.
+                        </span>
+                    </motion.h1>
+
+                    <motion.p
+                        variants={item}
+                        className="text-body-lg mb-8 max-w-xl text-left text-muted-foreground"
+                    >
+                        Use secure API to connect your Facebook accounts and pages
+                        without having to use passwords.
+                    </motion.p>
+
+                    <motion.div
+                        variants={item}
+                        className="flex flex-col items-start gap-3 sm:flex-row sm:gap-4"
+                    >
+                        <Button
+                            size="lg"
+                            className="h-12 rounded-full px-8 text-base font-semibold shadow-sm transition-all duration-200 ease-out hover:bg-primary/90 hover:shadow-md active:scale-[0.98] active:shadow-sm"
+                            asChild
+                        >
+                            <Link href="#pricing" className="group">
+                                View Pricing
+                                <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:group-hover:translate-x-0" />
+                            </Link>
+                        </Button>
+                        <Button
+                            size="lg"
+                            variant="ghost"
+                            className="h-12 rounded-full px-8 text-base font-semibold ring-0 transition-all duration-200 ease-out hover:bg-muted/80 hover:shadow-sm hover:ring-1 hover:ring-border active:scale-[0.98]"
+                            asChild
+                        >
+                            <Link href="/login" className="group">
+                                Access Dashboard
+                                <LayoutDashboard className="ml-2 h-4 w-4 text-primary transition-transform duration-200 ease-out group-hover:scale-[1.02] motion-reduce:group-hover:scale-100" />
+                            </Link>
+                        </Button>
+                    </motion.div>
+
+                    <motion.div
+                        variants={item}
+                        className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground"
+                    >
+                        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1.5">
+                            <ShieldCheck className="h-4 w-4 text-primary" />
+                            Official API auth
+                        </span>
+                    </motion.div>
+                </div>
+
+                <motion.div variants={item} className="automation-snapshot-surface">
+                    <div className="automation-snapshot-grid-layer" aria-hidden />
+                    <span className="landing-hero-panel-edge-shimmer" aria-hidden />
+                    <div className="relative z-10 space-y-5">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">
+                                Automation snapshot
+                            </p>
+                            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/90 px-2.5 py-1 text-xs text-muted-foreground">
+                                <span
+                                    className="relative flex h-2 w-2 shrink-0"
+                                    aria-hidden
+                                >
+                                    {!reduce ? (
+                                        <>
+                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/35 opacity-75 motion-reduce:animate-none" />
+                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                                        </>
+                                    ) : (
+                                        <span className="h-2 w-2 rounded-full bg-primary" />
+                                    )}
+                                </span>
+                                <ServerCog
+                                    className="h-3.5 w-3.5 shrink-0 text-primary"
+                                    aria-hidden
+                                />
+                                Live
+                            </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                            <div className="rounded-xl border border-border bg-muted/25 p-4 shadow-sm ring-0 ring-inset ring-transparent transition-shadow duration-200 ease-out hover:shadow-md hover:ring-1 hover:ring-primary/10 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15">
+                                <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-foreground">
+                                    7000+
+                                </p>
+                                <p className="mt-1 text-sm leading-snug text-muted-foreground">
+                                    Facebook pages running automated workflows
+                                </p>
+                            </div>
+                            <div className="rounded-xl border border-border bg-muted/25 p-4 shadow-sm ring-0 ring-inset ring-transparent transition-shadow duration-200 ease-out hover:shadow-md hover:ring-1 hover:ring-primary/10 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15">
+                                <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-foreground">
+                                    200+
+                                </p>
+                                <p className="mt-1 text-sm leading-snug text-muted-foreground">
+                                    Users scaling posting operations daily
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+            </div>
+        </motion.div>
+    )
+}

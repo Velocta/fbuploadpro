@@ -1,0 +1,774 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+  /* Typography scale (PROFESSIONAL_UI_UX_REFERENCE §6.2) */
+  --text-display-md: 2.5rem;
+  --text-display-md--line-height: 3rem;
+  --text-display-lg: 3rem;
+  --text-display-lg--line-height: 3.5rem;
+  --text-display-xl: 3.5rem;
+  --text-display-xl--line-height: 4rem;
+  --text-body-lg: 1.125rem;
+  --text-body-lg--line-height: 1.75rem;
+
+  /* System Tokens */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  /* Radius System */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+}
+
+:root {
+  /* Layout & Geometry */
+  --radius: 0.625rem;
+
+  /* Green Mist Light Theme */
+  --background: #F4FBF8;
+  --foreground: #10221A;
+
+  --card: #FFFFFF;
+  --card-foreground: #10221A;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #10221A;
+
+  --primary: #059669;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #ECFDF5;
+  --secondary-foreground: #065F46;
+
+  --muted: #E8F5EE;
+  --muted-foreground: #3F5A4E;
+
+  --accent: #D1FAE5;
+  --accent-foreground: #065F46;
+
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+
+  --border: #D8E8DF;
+  --input: #D8E8DF;
+  --ring: #10B981;
+
+  --chart-1: #059669;
+  --chart-2: #10B981;
+  --chart-3: #22C55E;
+  --chart-4: #0EA5E9;
+  --chart-5: #84CC16;
+
+  --sidebar: #ECFDF5;
+  --sidebar-foreground: #10221A;
+  --sidebar-primary: #059669;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #D1FAE5;
+  --sidebar-accent-foreground: #065F46;
+  --sidebar-border: #D8E8DF;
+  --sidebar-ring: #10B981;
+}
+
+.dark {
+  --background: #020617;
+  --foreground: #E6F6EE;
+
+  --card: #0B1220;
+  --card-foreground: #E6F6EE;
+
+  --popover: #0B1220;
+  --popover-foreground: #E6F6EE;
+
+  --primary: #22C55E;
+  --primary-foreground: #052E16;
+
+  --secondary: #0F172A;
+  --secondary-foreground: #86EFAC;
+
+  --muted: #111827;
+  --muted-foreground: #9CB7A9;
+
+  --accent: #1F2937;
+  --accent-foreground: #BBF7D0;
+
+  --destructive: #F87171;
+  --destructive-foreground: #0B1220;
+
+  --border: #1F2937;
+  --input: #1F2937;
+  --ring: #22C55E;
+
+  --chart-1: #10B981;
+  --chart-2: #22C55E;
+  --chart-3: #0EA5E9;
+  --chart-4: #84CC16;
+  --chart-5: #F87171;
+
+  --sidebar: #0F172A;
+  --sidebar-foreground: #E6F6EE;
+  --sidebar-primary: #22C55E;
+  --sidebar-primary-foreground: #052E16;
+  --sidebar-accent: #1F2937;
+  --sidebar-accent-foreground: #BBF7D0;
+  --sidebar-border: #1F2937;
+  --sidebar-ring: #22C55E;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Refined Typography Hierarchy */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-display font-semibold tracking-tight text-foreground;
+  }
+
+  h1 {
+    @apply text-4xl lg:text-5xl;
+  }
+
+  h2 {
+    @apply text-3xl;
+  }
+
+  /* Scrollbar Styling for a Clean SaaS Look */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/30 transition-colors;
+  }
+
+  /* Selection Color */
+  ::selection {
+    @apply bg-primary/15 text-primary;
+  }
+}
+
+@layer components {
+
+  /* Common SaaS Component Patterns */
+  .glass-panel {
+    @apply bg-background/70 backdrop-blur-md border border-border shadow-sm;
+  }
+
+  .glare-card {
+    @apply relative overflow-hidden bg-card/80 backdrop-blur-sm border border-border shadow-md transition-colors duration-200;
+  }
+
+  .glare-card::before {
+    content: "";
+    @apply absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none;
+  }
+
+  /**
+   * Hero “Automation snapshot” panel — Green Mist depth (PROFESSIONAL_UI_UX_REFERENCE §8–9).
+   * Decorative layers only; content sits in a sibling with z-10.
+   */
+  .automation-snapshot-surface {
+    @apply relative isolate overflow-hidden rounded-3xl border border-border bg-card/85 p-6 shadow-md backdrop-blur-sm ring-0 ring-inset ring-transparent transition-shadow duration-200 ease-out md:p-8;
+    @apply hover:shadow-lg hover:ring-1 hover:ring-primary/15;
+  }
+
+  .automation-snapshot-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(circle at 16% 20%, color-mix(in oklab, var(--primary) 14%, transparent) 0%, transparent 46%),
+      radial-gradient(circle at 88% 72%, color-mix(in oklab, var(--primary) 10%, transparent) 0%, transparent 50%);
+    animation: card-mist-drift 22s ease-in-out infinite;
+    will-change: transform;
+  }
+
+  .automation-snapshot-surface::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(165deg,
+        color-mix(in oklab, var(--primary) 7%, transparent) 0%,
+        transparent 38%);
+    opacity: 0.55;
+    animation: snapshot-sheen-pulse 8s ease-in-out infinite;
+  }
+
+  .automation-snapshot-grid-layer {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    opacity: 0.06;
+    /* Inline grid + mask (same as `.bg-grid-slate` / `.mask-grid`) — custom utilities are not @apply-able here */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(15 23 42 / 0.04)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+    mask-image: radial-gradient(circle at center, black, transparent 80%);
+  }
+
+  .dark .automation-snapshot-grid-layer {
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.04)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+  }
+
+  .subtle-card {
+    @apply bg-card border border-border shadow-[0_1px_3px_rgba(0,0,0,0.02),0_1px_2px_rgba(0,0,0,0.04)] transition-colors duration-200 hover:shadow-md hover:border-primary/30;
+  }
+
+  /**
+   * Auth route surfaces (PROFESSIONAL_UI_UX_REFERENCE §13.2).
+   * Static form cards: no whole-card hover lift (contrast with `.subtle-card`).
+   */
+  .auth-card-surface {
+    @apply border-border bg-card/85 text-card-foreground shadow-md backdrop-blur-sm;
+    @apply transition-[box-shadow,border-color] duration-200 ease-out;
+  }
+
+  /**
+   * Auth layout atmosphere — token-only radials, no keyframed motion
+   * (reduced-motion users see the same static layer).
+   */
+  .auth-atmosphere-radials {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background:
+      radial-gradient(circle at 18% 22%, color-mix(in oklab, var(--primary) 9%, transparent) 0%, transparent 42%),
+      radial-gradient(circle at 82% 78%, color-mix(in oklab, var(--primary) 6%, transparent) 0%, transparent 38%),
+      linear-gradient(180deg, color-mix(in oklab, var(--muted) 35%, transparent) 0%, transparent 32%);
+  }
+
+  /**
+   * Agency dashboard surfaces (PROFESSIONAL_UI_UX_REFERENCE §1.2, §13.2).
+   * Keep product cards solid/near-solid and motion restrained.
+   */
+  .agency-surface-card {
+    @apply border-border bg-card text-card-foreground shadow-sm;
+  }
+
+  .agency-surface-card-muted {
+    @apply border-border bg-muted/25 text-card-foreground;
+  }
+
+  .agency-motion-standard {
+    @apply animate-in fade-in duration-200 motion-reduce:animate-none;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors duration-200;
+  }
+
+  /**
+   * Landing marketing atmosphere — Green Mist depth (PROFESSIONAL_UI_UX_REFERENCE §8).
+   * Decorative layers only; pair with pointer-events-none + absolute inset-0 -z-10 in markup.
+   */
+
+  .landing-atmosphere-radials-hero {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    will-change: transform;
+    animation: landing-radials-hero-drift 26s ease-in-out infinite;
+    background:
+      radial-gradient(circle at 12% 18%, color-mix(in oklab, var(--primary) 14%, transparent) 0%, transparent 52%),
+      radial-gradient(circle at 88% 24%, color-mix(in oklab, var(--primary) 11%, transparent) 0%, transparent 48%),
+      radial-gradient(circle at 50% 88%, color-mix(in oklab, var(--primary) 7%, transparent) 0%, transparent 46%),
+      linear-gradient(180deg, color-mix(in oklab, var(--muted) 55%, transparent) 0%, transparent 42%),
+      linear-gradient(180deg, color-mix(in oklab, var(--secondary) 48%, transparent) 0%, transparent 38%);
+  }
+
+  .landing-atmosphere-radials-how {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    background:
+      radial-gradient(circle at 18% 40%, color-mix(in oklab, var(--primary) 12%, transparent) 0%, transparent 45%),
+      radial-gradient(circle at 82% 55%, color-mix(in oklab, var(--primary) 9%, transparent) 0%, transparent 42%),
+      radial-gradient(circle at 48% 8%, color-mix(in oklab, var(--primary) 6%, transparent) 0%, transparent 40%),
+      linear-gradient(180deg, color-mix(in oklab, var(--muted) 50%, transparent) 0%, transparent 38%);
+  }
+
+  .landing-atmosphere-radials-pricing {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    background:
+      radial-gradient(circle at 22% 35%, color-mix(in oklab, var(--primary) 12%, transparent) 0%, transparent 48%),
+      radial-gradient(circle at 78% 60%, color-mix(in oklab, var(--primary) 9%, transparent) 0%, transparent 44%),
+      radial-gradient(circle at 42% 92%, color-mix(in oklab, var(--primary) 6%, transparent) 0%, transparent 42%),
+      linear-gradient(180deg, color-mix(in oklab, var(--muted) 46%, transparent) 0%, transparent 36%);
+  }
+
+  .landing-atmosphere-grid-hero {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    mask-image: radial-gradient(circle at center, black, transparent 80%);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(15 23 42 / 0.04)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+    opacity: 0.075;
+  }
+
+  .landing-atmosphere-grid-section {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: -10;
+    mask-image: radial-gradient(circle at center, black, transparent 80%);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(15 23 42 / 0.04)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+    opacity: 0.058;
+  }
+
+  .dark .landing-atmosphere-grid-hero,
+  .dark .landing-atmosphere-grid-section {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.05)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+  }
+
+  .dark .landing-atmosphere-grid-hero {
+    opacity: 0.065;
+  }
+
+  .dark .landing-atmosphere-grid-section {
+    opacity: 0.05;
+  }
+
+  /**
+   * Hero-only film grain (static). §8: very subtle mesh/grain on marketing heroes only.
+   */
+  .landing-hero-grain {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: -9;
+    opacity: 0.045;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='a'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23a)'/%3E%3C/svg%3E");
+  }
+
+  .dark .landing-hero-grain {
+    mix-blend-mode: soft-light;
+    opacity: 0.035;
+  }
+
+  /**
+   * Soft page-level mist behind main content (no grid). Pairs with translucent section tints.
+   */
+  .landing-page-mist {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+  }
+
+  .landing-page-mist-blob-a {
+    position: absolute;
+    left: 18%;
+    top: -18%;
+    height: 28rem;
+    width: 28rem;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--primary) 5%, transparent);
+    filter: blur(64px);
+  }
+
+  .landing-page-mist-blob-b {
+    position: absolute;
+    right: -5%;
+    top: 38%;
+    height: 24rem;
+    width: 24rem;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--primary) 4.5%, transparent);
+    filter: blur(64px);
+  }
+
+  .landing-page-mist-blob-c {
+    position: absolute;
+    left: -4%;
+    bottom: 8%;
+    height: 22rem;
+    width: 22rem;
+    border-radius: 9999px;
+    background: color-mix(in oklab, var(--secondary) 55%, transparent);
+    filter: blur(56px);
+  }
+
+  /**
+   * Hero decorative lighting — dual veil + sheen (emerald-only, decorative).
+   */
+  .landing-hero-veil-a {
+    pointer-events: none;
+    position: absolute;
+    inset: -18%;
+    z-index: -10;
+    background: radial-gradient(circle at 32% 38%, color-mix(in oklab, var(--primary) 10%, transparent) 0%, transparent 52%);
+    opacity: 0.55;
+    animation: landing-veil-a 17s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .landing-hero-veil-b {
+    pointer-events: none;
+    position: absolute;
+    inset: -18%;
+    z-index: -10;
+    background: radial-gradient(circle at 72% 62%, color-mix(in oklab, var(--primary) 8%, transparent) 0%, transparent 50%);
+    opacity: 0.4;
+    animation: landing-veil-b 21s ease-in-out infinite;
+    will-change: transform, opacity;
+  }
+
+  .landing-hero-sheen {
+    pointer-events: none;
+    position: absolute;
+    inset: -25%;
+    z-index: -9;
+    background: linear-gradient(
+      118deg,
+      transparent 40%,
+      color-mix(in oklab, var(--primary) 11%, transparent) 50%,
+      transparent 60%
+    );
+    background-size: 240% 240%;
+    opacity: 0.42;
+    animation: landing-sheen-sweep 19s ease-in-out infinite;
+  }
+
+  /**
+   * Slow conic accent behind marketing cards (sibling before elevated card).
+   */
+  .marketing-card-conic-glow {
+    pointer-events: none;
+    position: absolute;
+    inset: -38%;
+    z-index: 0;
+    border-radius: inherit;
+    opacity: 0.32;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      color-mix(in oklab, var(--primary) 22%, transparent) 95deg,
+      transparent 200deg,
+      color-mix(in oklab, var(--primary) 14%, transparent) 300deg,
+      transparent 360deg
+    );
+    animation: landing-conic-rotate 78s linear infinite;
+    filter: blur(0.5px);
+  }
+
+  .dark .marketing-card-conic-glow {
+    opacity: 0.22;
+  }
+
+  /**
+   * Edge shimmer on hero automation snapshot panel (decorative).
+   */
+  .landing-hero-panel-edge-shimmer {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: inherit;
+    overflow: hidden;
+  }
+
+  .landing-hero-panel-edge-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: -45% -55%;
+    background: linear-gradient(
+      102deg,
+      transparent 44%,
+      color-mix(in oklab, var(--primary) 14%, transparent) 50%,
+      transparent 56%
+    );
+    opacity: 0.55;
+    animation: landing-edge-shimmer-move 15s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .mask-grid {
+    mask-image: radial-gradient(circle at center, black, transparent 80%);
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-float {
+      animation: none;
+    }
+
+    .animate-pulse-slow {
+      animation: none;
+    }
+
+    .animate-mist-drift {
+      animation: none;
+    }
+
+    .agency-motion-standard {
+      animation: none;
+    }
+
+    .automation-snapshot-surface::before,
+    .automation-snapshot-surface::after {
+      animation: none;
+    }
+
+    .automation-snapshot-surface::after {
+      opacity: 0.45;
+    }
+
+    .landing-hero-grain {
+      opacity: 0.03;
+    }
+
+    .dark .landing-hero-grain {
+      opacity: 0.022;
+    }
+
+    .landing-atmosphere-radials-hero {
+      animation: none;
+      will-change: auto;
+    }
+
+    .landing-hero-veil-a,
+    .landing-hero-veil-b,
+    .landing-hero-sheen {
+      animation: none;
+    }
+
+    .landing-hero-veil-a {
+      opacity: 0.62;
+      transform: none;
+    }
+
+    .landing-hero-veil-b {
+      opacity: 0.48;
+      transform: none;
+    }
+
+    .landing-hero-sheen {
+      opacity: 0.32;
+    }
+
+    .marketing-card-conic-glow {
+      animation: none;
+      opacity: 0.18;
+    }
+
+    .landing-hero-panel-edge-shimmer::after {
+      animation: none;
+      opacity: 0.35;
+    }
+  }
+
+  .animate-mist-drift {
+    animation: mist-drift 20s ease-in-out infinite;
+  }
+
+  @keyframes mist-drift {
+
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+
+    50% {
+      transform: translate(14px, -10px);
+    }
+  }
+
+  @keyframes card-mist-drift {
+
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    50% {
+      transform: translate(-10px, 8px) scale(1.03);
+    }
+  }
+
+  @keyframes snapshot-sheen-pulse {
+
+    0%,
+    100% {
+      opacity: 0.42;
+    }
+
+    50% {
+      opacity: 0.62;
+    }
+  }
+
+  @keyframes float {
+
+    0%,
+    100% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-20px);
+    }
+  }
+
+  .bg-grid-white {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(255 255 255 / 0.04)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+  }
+
+  .bg-grid-slate {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32' fill='none' stroke='rgb(15 23 42 / 0.04)'%3E%3Cpath d='M0 .5H31.5V32'/%3E%3C/svg%3E");
+  }
+
+  @keyframes landing-radials-hero-drift {
+
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    50% {
+      transform: translate(-1.2%, 0.8%) scale(1.02);
+    }
+  }
+
+  @keyframes landing-veil-a {
+
+    0%,
+    100% {
+      opacity: 0.48;
+      transform: translate(0, 0) scale(1);
+    }
+
+    50% {
+      opacity: 0.82;
+      transform: translate(-2.5%, 1.5%) scale(1.06);
+    }
+  }
+
+  @keyframes landing-veil-b {
+
+    0%,
+    100% {
+      opacity: 0.32;
+      transform: translate(0, 0);
+    }
+
+    50% {
+      opacity: 0.68;
+      transform: translate(2.2%, -2%) scale(1.04);
+    }
+  }
+
+  @keyframes landing-sheen-sweep {
+
+    0%,
+    100% {
+      background-position: 8% 35%;
+      opacity: 0.28;
+    }
+
+    50% {
+      background-position: 92% 65%;
+      opacity: 0.48;
+    }
+  }
+
+  @keyframes landing-conic-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes landing-edge-shimmer-move {
+
+    0%,
+    100% {
+      transform: translate(-6%, -4%) rotate(0deg);
+      opacity: 0.35;
+    }
+
+    50% {
+      transform: translate(6%, 5%) rotate(2deg);
+      opacity: 0.55;
+    }
+  }
+}

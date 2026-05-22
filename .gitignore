@@ -1,0 +1,30 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.local
+.cursor
+# Cloudflare Wrangler
+.wrangler/
+
+# Next.js / build artifacts
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+
+# OS and editor noise
+.DS_Store
+Thumbs.db

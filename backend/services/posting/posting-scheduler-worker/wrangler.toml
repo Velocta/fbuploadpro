@@ -1,0 +1,14 @@
+name = "fbuploadprov2-prod-posting-01-scheduler"
+main = "src/index.js"
+compatibility_date = "2024-02-05"
+
+[triggers]
+crons = ["* * * * *"] # Run every 1 minute
+
+[[queues.producers]]
+binding = "POSTING_QUEUE"
+queue = "fbuploadprov2-prod-posting-download-jobs"
+
+[[r2_buckets]]
+binding = "POSTING_MEDIA_BUCKET"
+bucket_name = "fbuploadprov2-prod-posting-media"

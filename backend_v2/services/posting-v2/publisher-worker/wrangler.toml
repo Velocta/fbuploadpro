@@ -1,0 +1,10 @@
+name = "fbuploadprov2-v2-publisher"
+main = "src/index.js"
+compatibility_date = "2024-02-05"
+
+[observability]
+enabled = true
+
+[[r2_buckets]]
+binding = "POSTING_MEDIA_BUCKET"
+bucket_name = "fbuploadprov2-v2-posting-media"

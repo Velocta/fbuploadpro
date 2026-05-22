@@ -1,0 +1,16 @@
+{
+  "name": "vinsmoke-scraper",
+  "version": "1.0.0",
+  "description": "Instagram and YouTube scraper for Vinsmoke Studio",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "lint": "node --check index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "puppeteer": "^22.0.0",
+    "@supabase/supabase-js": "^2.39.0"
+  }
+}

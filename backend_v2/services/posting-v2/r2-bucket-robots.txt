@@ -1,0 +1,15 @@
+# Meta Reels hosted upload: Facebook fetches file_url as facebookexternalhit/1.1 and reads /robots.txt on the same host.
+User-agent: facebookexternalhit/1.1
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
+
+User-agent: Facebot
+Allow: /
+
+User-agent: facebookbot
+Allow: /
+
+User-agent: *
+Allow: /
