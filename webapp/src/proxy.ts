@@ -32,7 +32,7 @@ export async function proxy(request: NextRequest) {
   }
 
   const hostname = request.headers.get('host') || ''
-  const cleanHost = hostname.split(':')[0].toLowerCase()
+  const cleanHost = (hostname.split(':')[0] ?? hostname).toLowerCase()
 
   const mainDomain = getMainDomain()
   const isMainDomain = isMainDomainHost(hostname)

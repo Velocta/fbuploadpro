@@ -4,13 +4,14 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { loginSchema } from '@/lib/validations/auth'
+import { zodErrorMessage } from '@/lib/validations/errors'
 import { getMainDomain, isLocalHost, isVercelPreviewHost } from '@/lib/config/runtime'
 
 export async function login(formData: FormData) {
   const validatedFields = loginSchema.safeParse(Object.fromEntries(formData.entries()))
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const { email, password } = validatedFields.data

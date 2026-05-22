@@ -484,9 +484,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
         const result = await createPagesBulk(formData)
 
         if (!result.success && result.failed.length > 0) {
-          setError(`${result.failed[0].pageName}: ${result.failed[0].reason}`)
+          const firstFailed = result.failed.at(0)
+          if (!firstFailed) return
+          setError(`${firstFailed.pageName}: ${firstFailed.reason}`)
           toast.error('Bulk add failed', {
-            description: `${result.failed[0].pageName}: ${result.failed[0].reason}`,
+            description: `${firstFailed.pageName}: ${firstFailed.reason}`,
           })
           return
         }

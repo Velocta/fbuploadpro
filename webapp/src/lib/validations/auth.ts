@@ -7,8 +7,9 @@ export const loginSchema = z.object({
     .max(255, 'Email is too long')
     .transform((email) => {
       const [local, domain] = email.toLowerCase().split('@')
+      if (!local || !domain) return email.toLowerCase()
       if (domain === 'gmail.com') {
-        const baseLocal = local.split('+')[0].replace(/\./g, '')
+        const baseLocal = (local.split('+')[0] ?? local).replace(/\./g, '')
         return `${baseLocal}@${domain}`
       }
       return email.toLowerCase()
@@ -23,8 +24,9 @@ export const requestResetSchema = z.object({
     .max(255, 'Email is too long')
     .transform((email) => {
       const [local, domain] = email.toLowerCase().split('@')
+      if (!local || !domain) return email.toLowerCase()
       if (domain === 'gmail.com') {
-        const baseLocal = local.split('+')[0].replace(/\./g, '')
+        const baseLocal = (local.split('+')[0] ?? local).replace(/\./g, '')
         return `${baseLocal}@${domain}`
       }
       return email.toLowerCase()
@@ -38,8 +40,9 @@ export const verifyOtpSchema = z.object({
     .max(255, 'Email is too long')
     .transform((email) => {
       const [local, domain] = email.toLowerCase().split('@')
+      if (!local || !domain) return email.toLowerCase()
       if (domain === 'gmail.com') {
-        const baseLocal = local.split('+')[0].replace(/\./g, '')
+        const baseLocal = (local.split('+')[0] ?? local).replace(/\./g, '')
         return `${baseLocal}@${domain}`
       }
       return email.toLowerCase()
@@ -65,8 +68,9 @@ export const signupSchema = z.object({
     })
     .transform((email) => {
       const [local, domain] = email.toLowerCase().split('@')
+      if (!local || !domain) return email.toLowerCase()
       if (domain === 'gmail.com') {
-        const baseLocal = local.split('+')[0].replace(/\./g, '')
+        const baseLocal = (local.split('+')[0] ?? local).replace(/\./g, '')
         return `${baseLocal}@${domain}`
       }
       return email.toLowerCase()

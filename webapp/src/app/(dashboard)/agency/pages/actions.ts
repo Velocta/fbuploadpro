@@ -12,6 +12,7 @@ import { REQUIRED_SCOPES } from '@/lib/constants/facebook'
 import { graphGet } from '@/server/integrations/facebook/graph-client'
 import { BulkPageInput } from '@/types/app.types'
 import { sanitizeToUtcHHMM } from '@/lib/posting-times'
+import { zodErrorMessage } from '@/lib/validations/errors'
 
 type AgencyAuth = {
   is_active_override: boolean | null
@@ -213,7 +214,7 @@ export async function createPage(formData: FormData) {
   const validatedFields = createPageSchema.safeParse(Object.fromEntries(formData.entries()))
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const {
@@ -291,7 +292,7 @@ export async function createPagesBulk(formData: FormData) {
       created: [],
       failed: [{
         pageName: 'bulk-input',
-        reason: validatedFields.error.issues[0].message,
+        reason: zodErrorMessage(validatedFields.error),
       }],
     }
   }
@@ -361,7 +362,7 @@ export async function deletePage(pageId: string) {
   const validatedFields = deletePageSchema.safeParse({ pageId })
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const supabase = await createClient()

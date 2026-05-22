@@ -8,6 +8,7 @@ import { format, parse } from 'date-fns'
 import { generateBalancedPostTimes } from '@/lib/scheduling'
 import { updatePageSettingsSchema, togglePageStatusSchema, updateSourceUsernameSchema } from '@/lib/validations/page'
 import { sanitizeToUtcHHMM } from '@/lib/posting-times'
+import { zodErrorMessage } from '@/lib/validations/errors'
 
 type SourcePlatform = 'instagram' | 'youtube' | 'tiktok' | 'facebook'
 
@@ -44,7 +45,7 @@ export async function updatePageSettings(formData: FormData) {
   const validatedFields = updatePageSettingsSchema.safeParse(Object.fromEntries(formData.entries()))
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const {
@@ -131,7 +132,7 @@ export async function togglePageStatus(pageId: string, currentStatus: string) {
   const validatedFields = togglePageStatusSchema.safeParse({ pageId, currentStatus })
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const supabase = await createClient()
@@ -168,7 +169,7 @@ export async function updateSourceUsername(pageId: string, newUsername: string, 
   const validatedFields = updateSourceUsernameSchema.safeParse({ pageId, newUsername, newPlatform })
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const supabase = await createClient()

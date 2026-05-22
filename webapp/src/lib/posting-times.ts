@@ -14,6 +14,7 @@ export function sanitizeToUtcHHMM(value: string, fallback = '08:00'): string {
 
   if (SIGNED_HHMM_REGEX.test(raw)) {
     const [hhRaw, mmRaw] = raw.split(':')
+    if (hhRaw === undefined || mmRaw === undefined) return fallback
     const hh = Number.parseInt(hhRaw, 10)
     const mm = Number.parseInt(mmRaw, 10)
     if (!Number.isNaN(hh) && !Number.isNaN(mm)) {

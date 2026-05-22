@@ -4,12 +4,13 @@ import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { requestResetSchema, verifyOtpSchema, updatePasswordSchema } from '@/lib/validations/auth'
+import { zodErrorMessage } from '@/lib/validations/errors'
 
 export async function requestReset(formData: FormData) {
   const validatedFields = requestResetSchema.safeParse(Object.fromEntries(formData.entries()))
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const { email } = validatedFields.data
@@ -82,7 +83,7 @@ export async function verifyOtp(formData: FormData) {
   })
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const { email, token } = validatedFields.data
@@ -145,7 +146,7 @@ export async function updatePassword(formData: FormData) {
   const validatedFields = updatePasswordSchema.safeParse(Object.fromEntries(formData.entries()))
 
   if (!validatedFields.success) {
-    return { error: validatedFields.error.issues[0].message }
+    return { error: zodErrorMessage(validatedFields.error) }
   }
 
   const { password } = validatedFields.data

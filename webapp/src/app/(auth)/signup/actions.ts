@@ -3,12 +3,13 @@
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { signupSchema } from '@/lib/validations/auth'
+import { zodErrorMessage } from '@/lib/validations/errors'
 
 export async function signUp(formData: FormData) {
     const validatedFields = signupSchema.safeParse(Object.fromEntries(formData.entries()))
 
     if (!validatedFields.success) {
-        return { error: validatedFields.error.issues[0].message }
+        return { error: zodErrorMessage(validatedFields.error) }
     }
 
     const { email, password, name, phone_number } = validatedFields.data

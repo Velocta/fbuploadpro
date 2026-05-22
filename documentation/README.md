@@ -23,8 +23,9 @@ Shared documentation for the FBUploadPro monorepo.
 7. [`runbooks/posting-deploy.md`](runbooks/posting-deploy.md)
 8. [`runbooks/posting-observability.md`](runbooks/posting-observability.md)
 9. [`webapp/architecture.md`](webapp/architecture.md)
-10. [`webapp/api-reference.md`](webapp/api-reference.md)
-11. Relevant ADRs in `adr/`
+10. [`webapp/ui-ux-reference.md`](webapp/ui-ux-reference.md)
+11. [`webapp/api-reference.md`](webapp/api-reference.md)
+12. Relevant ADRs in `adr/`
 
 ## Posting operations
 

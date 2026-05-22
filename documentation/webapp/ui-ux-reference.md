@@ -1,5 +1,7 @@
 # Webapp Professional UI/UX Reference (Green Mist Edition)
 
+**Canonical path:** `documentation/webapp/ui-ux-reference.md`
+
 This is the master UI/UX system for `webapp`.
 Use this as the source of truth for all future UI work.
 

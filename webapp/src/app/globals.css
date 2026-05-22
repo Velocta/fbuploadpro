@@ -9,7 +9,7 @@
   --font-mono: var(--font-mono);
   --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
-  /* Typography scale (PROFESSIONAL_UI_UX_REFERENCE §6.2) */
+  /* Typography scale (documentation/webapp/ui-ux-reference.md §6.2) */
   --text-display-md: 2.5rem;
   --text-display-md--line-height: 3rem;
   --text-display-lg: 3rem;
@@ -224,7 +224,7 @@
   }
 
   /**
-   * Hero “Automation snapshot” panel — Green Mist depth (PROFESSIONAL_UI_UX_REFERENCE §8–9).
+   * Hero “Automation snapshot” panel — Green Mist depth (documentation/webapp/ui-ux-reference.md §8–9).
    * Decorative layers only; content sits in a sibling with z-10.
    */
   .automation-snapshot-surface {
@@ -279,7 +279,7 @@
   }
 
   /**
-   * Auth route surfaces (PROFESSIONAL_UI_UX_REFERENCE §13.2).
+   * Auth route surfaces (documentation/webapp/ui-ux-reference.md §13.2).
    * Static form cards: no whole-card hover lift (contrast with `.subtle-card`).
    */
   .auth-card-surface {
@@ -303,7 +303,7 @@
   }
 
   /**
-   * Agency dashboard surfaces (PROFESSIONAL_UI_UX_REFERENCE §1.2, §13.2).
+   * Agency dashboard surfaces (documentation/webapp/ui-ux-reference.md §1.2, §13.2).
    * Keep product cards solid/near-solid and motion restrained.
    */
   .agency-surface-card {
@@ -323,7 +323,7 @@
   }
 
   /**
-   * Landing marketing atmosphere — Green Mist depth (PROFESSIONAL_UI_UX_REFERENCE §8).
+   * Landing marketing atmosphere — Green Mist depth (documentation/webapp/ui-ux-reference.md §8).
    * Decorative layers only; pair with pointer-events-none + absolute inset-0 -z-10 in markup.
    */
 

@@ -13,9 +13,15 @@ function parseTwelveHour(value: string): { hour: string; minute: string; meridie
   const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/)
   if (!match) return null
 
-  const hourNum = Number.parseInt(match[1], 10)
-  const minuteNum = Number.parseInt(match[2], 10)
-  const meridiem = match[3] as Meridiem
+  const hourRaw = match[1]
+  const minuteRaw = match[2]
+  const meridiemRaw = match[3]
+  if (hourRaw === undefined || minuteRaw === undefined || meridiemRaw === undefined) {
+    return null
+  }
+  const hourNum = Number.parseInt(hourRaw, 10)
+  const minuteNum = Number.parseInt(minuteRaw, 10)
+  const meridiem = meridiemRaw as Meridiem
 
   if (Number.isNaN(hourNum) || Number.isNaN(minuteNum)) return null
   if (hourNum < 1 || hourNum > 12 || minuteNum < 0 || minuteNum > 59) return null

@@ -70,6 +70,18 @@ function sourceIdentityPlaceholder(platform: SourcePlatform): string {
   return '@username'
 }
 
+function formatUtcTimeForTimezone(utcTime: string, timezone: string): string {
+  const [hours, minutes] = utcTime.split(':')
+  if (!hours || !minutes) return utcTime
+  try {
+    const date = new Date()
+    date.setUTCHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0)
+    return formatInTimeZone(date, timezone, 'hh:mm a')
+  } catch {
+    return utcTime
+  }
+}
+
 export function SettingsForm({ profile }: { profile: Page }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -87,16 +99,9 @@ export function SettingsForm({ profile }: { profile: Page }) {
   const [localPostingTimes, setLocalPostingTimes] = useState<string[]>(() => {
     const times = Array.isArray(profile.posting_times) ? profile.posting_times : []
     // Convert UTC times from DB to Local Time for editing
-    return times.map(utcTime => {
-      try {
-        const [hours, minutes] = utcTime.split(':')
-        const date = new Date()
-        date.setUTCHours(parseInt(hours), parseInt(minutes), 0, 0)
-        return formatInTimeZone(date, profile.timezone || 'UTC', 'hh:mm a')
-      } catch {
-        return utcTime
-      }
-    })
+    return times.map((utcTime) =>
+      formatUtcTimeForTimezone(utcTime, profile.timezone || 'UTC')
+    )
   })
 
   // Display times (Converted to Local)
@@ -104,16 +109,9 @@ export function SettingsForm({ profile }: { profile: Page }) {
     const times = Array.isArray(profile.posting_times) ? profile.posting_times : []
     if (times.length === 0) return null
 
-    return times.map(utcTime => {
-      try {
-        const [hours, minutes] = utcTime.split(':')
-        const date = new Date()
-        date.setUTCHours(parseInt(hours), parseInt(minutes), 0, 0)
-        return formatInTimeZone(date, profile.timezone || 'UTC', 'hh:mm a')
-      } catch {
-        return utcTime
-      }
-    })
+    return times.map((utcTime) =>
+      formatUtcTimeForTimezone(utcTime, profile.timezone || 'UTC')
+    )
   }, [profile.posting_times, profile.timezone])
 
   // Local state for Connections
@@ -169,16 +167,9 @@ export function SettingsForm({ profile }: { profile: Page }) {
     setLocalTimezone(profile.timezone || 'UTC')
 
     const times = Array.isArray(profile.posting_times) ? profile.posting_times : []
-    setLocalPostingTimes(times.map(utcTime => {
-      try {
-        const [hours, minutes] = utcTime.split(':')
-        const date = new Date()
-        date.setUTCHours(parseInt(hours), parseInt(minutes), 0, 0)
-        return formatInTimeZone(date, profile.timezone || 'UTC', 'hh:mm a')
-      } catch {
-        return utcTime
-      }
-    }))
+    setLocalPostingTimes(
+      times.map((utcTime) => formatUtcTimeForTimezone(utcTime, profile.timezone || 'UTC'))
+    )
   }
 
 

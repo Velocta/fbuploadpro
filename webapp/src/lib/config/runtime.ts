@@ -1,7 +1,9 @@
 const DEFAULT_MAIN_DOMAIN = 'fbuploadpro.com'
 
 function normalizeHost(value: string): string {
-  return value.replace(/^https?:\/\//, '').split(':')[0].toLowerCase()
+  const withoutProtocol = value.replace(/^https?:\/\//, '')
+  const host = withoutProtocol.split(':')[0] ?? withoutProtocol
+  return host.toLowerCase()
 }
 
 export function getMainDomain(): string {
