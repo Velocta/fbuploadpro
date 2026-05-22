@@ -1,25 +1,35 @@
 # Documentation Index
 
-This directory contains shared project documentation that applies across services.
+Shared documentation for the FBUploadPro monorepo.
 
 ## Sections
 
-- `architecture/`: System-level architecture, boundaries, and data flow.
-- `database/`: Migration workflow, schema governance, and RLS policy notes.
-- `adr/`: Architectural decisions with rationale and tradeoffs.
-- `runbooks/`: Operational procedures for deploy, rollback, and environment setup.
-- `webapp/`: API-first webapp architecture, endpoints, performance, and feature onboarding.
+| Directory | Contents |
+|-----------|----------|
+| `architecture/` | System boundaries and data flow |
+| `database/` | Migration workflow and RLS overview |
+| `adr/` | Architectural decision records |
+| `runbooks/` | Deploy, env, posting operations |
+| `webapp/` | Webapp architecture, API reference, performance |
 
-## Reading Order for New Contributors
+## Reading order for new contributors
 
-1. `architecture/system-overview.md`
-2. `database/migration-workflow.md`
-3. `database/rls-overview.md`
-4. `runbooks/environment.md`
-5. `runbooks/deployment.md`
-6. `runbooks/pipeline-observability.md`
-7. `runbooks/pipeline-test-injection.md`
-8. `runbooks/pipeline-cutover.md`
-9. `webapp/architecture.md`
-10. `webapp/api-reference.md`
+1. [`architecture/system-overview.md`](architecture/system-overview.md)
+2. [`database/migration-workflow.md`](database/migration-workflow.md)
+3. [`database/rls-overview.md`](database/rls-overview.md)
+4. [`../backend_v3/README.md`](../backend_v3/README.md)
+5. [`runbooks/environment.md`](runbooks/environment.md)
+6. [`runbooks/deployment.md`](runbooks/deployment.md)
+7. [`runbooks/posting-deploy.md`](runbooks/posting-deploy.md)
+8. [`runbooks/posting-observability.md`](runbooks/posting-observability.md)
+9. [`webapp/architecture.md`](webapp/architecture.md)
+10. [`webapp/api-reference.md`](webapp/api-reference.md)
 11. Relevant ADRs in `adr/`
+
+## Posting operations
+
+- [`runbooks/posting-deploy.md`](runbooks/posting-deploy.md)
+- [`runbooks/posting-test-injection.md`](runbooks/posting-test-injection.md)
+- [`runbooks/posting-rollback.md`](runbooks/posting-rollback.md)
+- [`runbooks/posting-replay-repair.md`](runbooks/posting-replay-repair.md)
+- [`runbooks/posting-observability.md`](runbooks/posting-observability.md)

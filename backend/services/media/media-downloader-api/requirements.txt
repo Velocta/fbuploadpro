@@ -1,9 +1,0 @@
-flask
-gunicorn
-curl_cffi
-requests
-certifi
-brotli
-pycryptodomex
-mutagen
-pyxattr

@@ -1,34 +1,47 @@
 # Deployment Runbook
 
-## Pre-Deploy
+## Pre-deploy
 
-- Confirm `database/migrations/` includes intended DB changes.
-- Confirm `database/production_schema.sql` matches migration head.
-- Verify environment variables/secrets are configured for target environment.
+- If the release includes DB changes: add one migration under `database/migrations/` and update `database/production_schema.sql`.
+- Confirm secrets/env for target environment (see `runbooks/environment.md`).
+- For posting releases: set `posting_v2_intake_paused = true` until smoke checks pass.
 
-## Recommended Order
+## Recommended order
 
-1. Deploy backend dependencies first (`downloader`) if interfaces changed.
-2. Deploy workers (`posting publisher`, `posting downloader`, `posting scheduler`, `followers cron`).
-3. Deploy `webapp` (Vercel preview first, then production promote).
-4. Run DB migration if release depends on DB schema change and deployment ordering requires it.
+1. **Database** — Apply new migration in staging/production when schema-dependent.
+2. **Posting workers** — `backend_v3/services/posting/deploy-posting.sh` (downloader → reel-geter → publisher → processors → scheduler).
+3. **Analytics** — `backend_v3/services/analytics/deploy-analytics.sh` or manual wrangler deploy for followers cron.
+4. **Scraper** — Restart VPS process if scraper code changed (`backend_v3/services/scraper/reels-scraper`).
+5. **Webapp** — Vercel preview, then production promote.
 
-Use release notes to choose exact ordering when API contracts change.
+Adjust order when only a subset of services changes.
 
-## Post-Deploy Smoke Checks
+## Post-deploy smoke checks
 
-- `webapp` auth works for both agency and super-admin.
-- `webapp` API v1 endpoints respond correctly (`/api/v1/agency/...`, `/api/v1/admin/...`).
-- `downloader-queue-worker` can download and callback publisher for one test reel.
-- `posting-01-scheduler` can enqueue `fbuploadprov2-prod-posting-download-jobs`.
-- `pipeline_events` receives `job_enqueued`, `download_succeeded`, and `publish_succeeded` for a test job.
-- No new RLS/policy errors in logs.
+### Webapp
 
-## Manual Test Injection
+- Agency and super-admin login.
+- `/api/v1/agency/...` and `/api/v1/admin/...` respond (503 if maintenance gate is still enabled in `proxy.ts`).
 
-- For scheduler-off testing, use `runbooks/pipeline-test-injection.md`.
-- Keep scheduler DB reads disabled and inject synthetic jobs via `POST /enqueue-test-job`.
+### Posting
 
-## Cutover Sequence
+- Downloader `GET /health` returns OK.
+- Scheduler cron runs without Supabase RPC errors.
+- One synthetic job reaches `published` (see `runbooks/posting-test-injection.md`) with intake paused first.
+- Reel `posted` and one `token_transactions` usage row per job.
 
-- Use `runbooks/pipeline-cutover.md` for full staging -> production rollout and rollback sequence.
+### Analytics
+
+- Followers cron updates `pages.followers_count` / `is_followers_updated` cycle.
+
+### Database
+
+- No unexpected RLS errors in worker logs.
+
+## Related runbooks
+
+- `posting-deploy.md` — Posting worker deploy checklist
+- `posting-test-injection.md` — Controlled test jobs
+- `posting-rollback.md` — Pause intake and disable workers
+- `posting-observability.md` — SQL health queries and backpressure
+- `posting-replay-repair.md` — Failed job recovery

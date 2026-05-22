@@ -2,50 +2,81 @@
 
 ## Webapp (`webapp/.env.example`)
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `NEXT_PUBLIC_MAIN_DOMAIN`
-- `NEXT_PUBLIC_COOKIE_DOMAIN`
-- `MAGIC_LINK_SIGNING_SECRET`
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser/SSR anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only admin operations |
+| `NEXT_PUBLIC_MAIN_DOMAIN` | e.g. `fbuploadpro.com` |
+| `NEXT_PUBLIC_COOKIE_DOMAIN` | e.g. `.fbuploadpro.com` |
+| `MAGIC_LINK_SIGNING_SECRET` | HMAC for magic-link FB connect |
 
-Webapp runtime notes:
-- Production validates required env vars at startup (`webapp/src/lib/config/env.ts`).
-- Supabase-heavy and integration-heavy API routes should run on Node.js runtime in Vercel.
+Production validates required vars in `webapp/src/lib/config/env.ts`. Integration-heavy API routes use Node.js runtime on Vercel.
 
-## Posting Scheduler Worker (`backend/services/posting/posting-scheduler-worker/.env.example`)
+## Posting workers (`backend_v3/services/posting/*/.env.example`)
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- Cloudflare Queue producer binding: `POSTING_QUEUE` (queue name `fbuploadprov2-prod-posting-download-jobs`, see `wrangler.toml`)
-- Optional: `ENVIRONMENT` (e.g. `staging`, `prod`) for `pipeline_events.env_name`
-- Optional: `SCHEDULER_TEST_API_KEY` to secure `/enqueue-test-job` (send as `x-test-api-key` header)
+Shared across scheduler, download-processor, reel-geter, publish-processor, publisher:
 
-## Posting Orchestrator Worker (`backend/services/posting/posting-orchestrator-worker/.env.example`)
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Pipeline DB access (bypasses RLS) |
+| `INTERNAL_JOB_DISPATCH_TOKEN` | Yes (except scheduler) | Auth for `/internal/v2/process-job` |
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `PUBLISH_CALLBACK_TOKEN` (shared secret for internal downloader->publisher callback auth)
-- Durable Object binding: `POSTING_PUBLISH_STATE_DO` (class `PostingPublishStateDO`) for idempotent publish locks
-- Optional: `ENVIRONMENT` for `pipeline_events.env_name`
-- Optional: `TEST_ENABLE_EXTERNAL_PUBLISH=true` to allow Facebook publish when `mode=test` (default skips publish in test)
+**Scheduler-only:**
 
-## Downloader Queue Worker (`backend/services/media/downloader-queue-worker/.env.example`)
+| Variable | Purpose |
+|----------|---------|
+| `POSTING_V2_MODE` | `prod` or `test` (default `prod`) |
 
-- Cloudflare Container binding: `POSTING_DOWNLOAD_CONTAINER` (class `PostingDownloadContainer`, image from `media-downloader-api/Dockerfile`)
-- `PUBLISH_CALLBACK_TOKEN` (must match posting orchestrator secret)
-- Cloudflare Queue consumer on queue `fbuploadprov2-prod-posting-download-jobs`
-- Service binding: `PUBLISHER` -> `fbuploadprov2-prod-posting-03-publisher`
+**Processors:**
 
-## Media Downloader API (`backend/services/media/media-downloader-api/.env.example`)
+| Variable | Purpose |
+|----------|---------|
+| `MAX_BATCH_PER_CLAIM` | Jobs per RPC claim |
+| `MAX_ROWS_PER_TICK` | Max dispatches per cron tick |
+| `MAX_TICK_SECONDS` | Wall-clock budget per tick |
+| `BACKPRESSURE_MAX_PROCESSING` | Download processor only |
 
-- `DATACENTER_PROXY`
-- `RESIDENTIAL_PROXY`
-- `PORT`
+**Reel-geter:**
 
-## Legacy Instagram Scraper (`backend/services/legacy/instagram-scraper-legacy/.env.example`)
+| Variable | Purpose |
+|----------|---------|
+| `DOWNLOAD_MAX_BYTES` | Max media size (default 200MB) |
 
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `INSTAGRAM_USERNAME`
-- `INSTAGRAM_PASSWORD`
+**Publisher:**
+
+| Variable | Purpose |
+|----------|---------|
+| `POSTING_MEDIA_UPLOAD_MODE` | `stream` (default) or `hosted` |
+| `POSTING_MEDIA_PUBLIC_BASE_URL` | Public origin for hosted mode |
+| `INTEGRITY_PAUSE_THRESHOLD` / `INTEGRITY_WINDOW_SECONDS` | Auto-pause intake on integrity errors |
+
+## Downloader service (`backend_v3/services/posting/downloader-service/.env.example`)
+
+| Variable | Purpose |
+|----------|---------|
+| `RESIDENTIAL_PROXY` | Required for YouTube downloads in container |
+
+Cloudflare bindings (see each `wrangler.toml`): R2 `fbuploadprov2-v2-posting-media`, Container `DownloaderContainer`.
+
+## Followers metrics cron (`backend_v3/services/analytics/followers-metrics-cron-worker/.env.example`)
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role for RPC `bulk_update_page_metrics` |
+
+Wrangler name: `fbuploadprov2-prod-analytics-01-followers-cron`. Cron: every 2 minutes.
+
+## Reels scraper (`backend_v3/services/scraper/reels-scraper/.env.example`)
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Scraper DB access |
+| `BROWSER_USER_DATA_DIR` | Persistent Puppeteer profile |
+| `MAX_REELS_PER_PLATFORM` | Cap per sync run |
+| `SKIP_STARTUP_LOGINS` | Skip interactive login prompts when `true` |
+
+Runs on VPS (not Wrangler). Use PM2 or similar for process supervision.

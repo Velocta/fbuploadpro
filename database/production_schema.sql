@@ -1,5 +1,7 @@
--- Vinsmoke Studio - Unified Database Migration (Updated: 2026-02-02)
--- Includes Schema, RLS, BYOC Facebook Accounts, Managed Pages, and Automated Scheduling.
+-- FBUploadPro - Canonical production schema (consolidated 2026-05-22)
+-- Single source of truth for Supabase PostgreSQL. Apply to fresh DBs or use as reference.
+-- Includes: core tables, RLS, posting_jobs_v2 pipeline RPCs, pg_cron jobs.
+-- Historical migrations were merged into this file; new changes add files under database/migrations/.
 
 -- 0. Extensions
 create extension if not exists "uuid-ossp";

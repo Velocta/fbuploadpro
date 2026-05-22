@@ -1,30 +1,93 @@
 # System Overview
 
-## Components
+## Repository layout
 
-- `webapp`: Next.js app for authentication, agency dashboard, and super-admin controls.
-- `backend/services/posting/posting-scheduler-worker`: Scheduled trigger for posting workflows.
-- `backend/services/posting/posting-orchestrator-worker`: Posting orchestration (download, publish, mark DB status).
-- `backend/services/media/downloader-queue-worker`: Queue consumer for download stage (Cloudflare Container-backed execution).
-- `backend/services/media/media-downloader-api`: Downloads media binaries from source URLs.
-- `backend/services/analytics/followers-metrics-cron-worker`: Refreshes Facebook page metrics.
-- `backend/services/legacy/instagram-scraper-legacy`: Legacy scraping daemon.
-- `database`: Supabase PostgreSQL schema, functions, triggers, and RLS.
+| Path | Role |
+|------|------|
+| `webapp/` | Next.js App Router: auth, agency/super-admin dashboards, versioned API (`/api/v1`) |
+| `backend_v3/` | Cloudflare Workers (posting, analytics) + VPS scraper |
+| `database/` | Supabase PostgreSQL: `production_schema.sql` (canonical), `migrations/` (forward changes) |
+| `documentation/` | Architecture, runbooks, ADRs, webapp docs |
 
-## Data Flow
+## Backend services (`backend_v3/`)
 
-1. Posting flow:
-   - `posting-scheduler-worker` (`fbuploadprov2-prod-posting-01-scheduler`) fetches due pages and next pending reel, writes `posting_jobs` + `pipeline_events`, enqueues a job on Cloudflare Queue `fbuploadprov2-prod-posting-download-jobs`.
-   - `downloader-queue-worker` (`fbuploadprov2-prod-posting-02-downloader`) consumes `fbuploadprov2-prod-posting-download-jobs`, downloads media via `media-downloader-api`, then POSTs `/publish-callback` to `posting-orchestrator-worker`.
-   - `posting-orchestrator-worker` (`fbuploadprov2-prod-posting-03-publisher`) acquires per-job publish lock in Durable Object (`PostingPublishStateDO`), publishes to Facebook Graph, updates reel status (prod), and records `pipeline_events`.
-2. Control flow:
-   - `webapp` manages user auth, tokens, page setup, and app settings.
-   - `webapp` reads/writes through Supabase with role checks and RLS.
-   - `webapp` now exposes versioned API endpoints under `webapp/src/app/api/v1` and keeps business logic in `webapp/src/server/services`.
+### Posting pipeline
 
-## Service Boundary Rules
+Six Cloudflare Workers plus a container-backed downloader. Job state lives in `posting_jobs_v2`.
 
-- No direct code import between `webapp` and `backend`.
-- No shared runtime business logic across backend services unless explicitly introduced as a dedicated shared package.
-- Each service owns its own DB access entrypoint and query helpers in-service.
-- Schema changes happen only in `database/migrations/`, then synced into `database/production_schema.sql`.
+| Worker | Wrangler name | Trigger |
+|--------|---------------|---------|
+| `services/posting/scheduler-worker` | `fbuploadprov2-v2-posting-scheduler` | Cron (every minute) |
+| `services/posting/download-processor-worker` | `fbuploadprov2-v2-download-processor` | Cron |
+| `services/posting/reel-geter-worker` | `fbuploadprov2-v2-reel-geter` | HTTP (internal) |
+| `services/posting/downloader-service` | `fbuploadprov2-v2-downloader-service` | HTTP + Container |
+| `services/posting/publish-processor-worker` | `fbuploadprov2-v2-publish-processor` | Cron |
+| `services/posting/publisher-worker` | `fbuploadprov2-v2-publisher` | HTTP (internal) |
+
+**Flow:**
+
+1. **Scheduler** — RPC `claim_due_reels_and_create_jobs_v2` creates jobs (`download_pending`) for due pages with pending reels.
+2. **Download processor** — Claims jobs, dispatches to reel-geter via service binding + `INTERNAL_JOB_DISPATCH_TOKEN`.
+3. **Reel-geter + downloader** — Downloads source video (yt-dlp), stores in R2 `fbuploadprov2-v2-posting-media`, sets `pending_publish`.
+4. **Publish processor** — Claims publish-ready jobs, dispatches to publisher.
+5. **Publisher** — Uploads to Facebook Reels (Graph API v19), RPC `finalize_posting_job_v2` (tokens + reel `posted`).
+
+Deploy: `backend_v3/services/posting/deploy-posting.sh`
+
+### Analytics
+
+- `services/analytics/followers-metrics-cron-worker` — Cron every 2 minutes; Graph API fan counts; RPC `bulk_update_page_metrics`.
+
+### Scraper (VPS)
+
+- `services/scraper/reels-scraper` — Puppeteer daemon; RPC `get_next_pending_page`; upserts `reels` with `status = pending`.
+
+## Webapp
+
+- Auth and multi-tenant subdomains via `webapp/src/proxy.ts` and Supabase SSR.
+- Business logic: `webapp/src/server/services`, persistence: `webapp/src/server/repositories`.
+- Facebook BYOC OAuth and page tools under `webapp/src/app/api/v1`.
+
+## Data flow (end-to-end)
+
+```mermaid
+flowchart LR
+  subgraph ingest [Ingestion]
+    Scraper[reels-scraper VPS]
+  end
+  subgraph control [Control plane]
+    Webapp[webapp]
+  end
+  subgraph post [Posting Workers]
+    Scheduler[scheduler]
+    DownloadProc[download-processor]
+    ReelGeter[reel-geter]
+    Downloader[downloader-service]
+    PublishProc[publish-processor]
+    Publisher[publisher]
+  end
+  DB[(Supabase)]
+  R2[(R2 media)]
+  FB[Facebook Graph]
+
+  Scraper --> DB
+  Webapp --> DB
+  Scheduler --> DB
+  Scheduler --> DownloadProc
+  DownloadProc --> ReelGeter
+  ReelGeter --> Downloader
+  Downloader --> R2
+  ReelGeter --> DB
+  PublishProc --> DB
+  PublishProc --> Publisher
+  Publisher --> R2
+  Publisher --> FB
+  Publisher --> DB
+```
+
+## Service boundary rules
+
+- No direct code imports between `webapp` and `backend_v3`.
+- Each backend service owns its own `src/db/` (or `db.js`) Supabase client.
+- Schema changes: add one file under `database/migrations/`, then update `database/production_schema.sql`.
+- Legacy v1 posting (`posting_jobs`, Cloudflare queue `fbuploadprov2-prod-posting-download-jobs`) is removed from the repo and database snapshot.

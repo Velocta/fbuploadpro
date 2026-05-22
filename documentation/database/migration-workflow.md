@@ -1,33 +1,37 @@
 # Database Migration Workflow
 
-Canonical database path for this repository is `database/`.
+Canonical database path: `database/`.
 
-## Source of Truth
+## Source of truth
 
-- Incremental changes: `database/migrations/`
-- Current schema snapshot: `database/production_schema.sql`
+| Artifact | Purpose |
+|----------|---------|
+| `database/production_schema.sql` | Full canonical schema for fresh installs and agent reference |
+| `database/migrations/` | One new `.sql` file per forward change (empty after 2026-05-22 consolidation) |
+
+Historical migrations were merged into `production_schema.sql` on 2026-05-22. Do not recreate deleted migration files.
 
 `supabase/` is not used as migration source in this repository.
 
-## Required Process for Any DB Change
+## Required process for any DB change
 
-1. Add exactly one new migration file in `database/migrations/`.
-2. Keep migration idempotent where practical (`if exists` / `if not exists` guards).
-3. Include any RLS/policy changes in the migration.
-4. Update `database/production_schema.sql` so it reflects the final post-migration state.
+1. Add exactly one new migration file in `database/migrations/` (dated prefix, e.g. `20260522_description.sql`).
+2. Keep migration idempotent where practical (`IF EXISTS` / `IF NOT EXISTS`).
+3. Include all affected RLS policies in the migration.
+4. Update `database/production_schema.sql` to match the final post-migration state.
 5. Verify SQL is compatible with Supabase PostgreSQL 14+.
 6. Do not add seed data unless explicitly requested.
 
-## Release Order
+## Release order
 
 1. Apply migration in staging.
-2. Validate app flows and RLS behavior.
-3. Update and review `production_schema.sql` snapshot.
-4. Deploy services depending on the new schema.
+2. Validate app flows, RLS, and worker RPCs.
+3. Update and review `production_schema.sql`.
+4. Deploy `backend_v3` workers and/or `webapp` that depend on the schema.
 5. Apply migration in production.
 
-## Policy Consistency Checklist
+## Policy consistency checklist
 
-- Table has `enable row level security`.
-- Required policies exist for intended access patterns.
-- Snapshot includes same policy definitions as migration head.
+- Table has `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`.
+- Policies cover intended roles (`agency`, `super_admin`, `service_role`).
+- Snapshot includes the same policy definitions as the migration.
