@@ -5,5 +5,6 @@ export const REQUIRED_SCOPES = [
     'pages_read_engagement',
     'pages_manage_engagement',
     'pages_manage_metadata',
-    'business_management'
+    'business_management',
+    'read_insights'
 ]

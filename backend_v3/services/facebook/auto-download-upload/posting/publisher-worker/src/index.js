@@ -24,7 +24,7 @@ function v2Log(event, fields = {}) {
 
 async function markIntegrityError(supabase, jobId, reason) {
   await supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .update({
       status: 'integrity_error',
       last_error_code: 'integrity_mismatch',

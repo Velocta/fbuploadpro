@@ -6,7 +6,7 @@ export function getSupabaseClient(env) {
 
 export async function incrementPublishRetry(supabase, jobId, code, message) {
   const { data: current, error: fetchError } = await supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .select('publish_retries')
     .eq('job_id', jobId)
     .single();
@@ -14,7 +14,7 @@ export async function incrementPublishRetry(supabase, jobId, code, message) {
   if (fetchError) return { error: fetchError };
 
   return supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .update({
       status: 'pending_publish',
       publish_started_at: null,
@@ -27,12 +27,12 @@ export async function incrementPublishRetry(supabase, jobId, code, message) {
 }
 
 export async function finalizePosted(supabase, jobId) {
-  return supabase.rpc('finalize_posting_job_v2', { p_job_id: jobId });
+  return supabase.rpc('finalize_posting_job_adu', { p_job_id: jobId, p_graph_post_id: null });
 }
 
 export async function verifyFinalization(supabase, jobId) {
   const { data: job, error: jobError } = await supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .select('job_id, reel_internal_id, status')
     .eq('job_id', jobId)
     .single();
@@ -65,7 +65,7 @@ export async function verifyFinalization(supabase, jobId) {
 export async function countRecentIntegrityIncidents(supabase, windowSeconds = 300) {
   const thresholdIso = new Date(Date.now() - windowSeconds * 1000).toISOString();
   const { count, error } = await supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .select('job_id', { count: 'exact', head: true })
     .eq('status', 'integrity_error')
     .gte('updated_at', thresholdIso);
@@ -95,7 +95,7 @@ export async function emitPublishError(supabase, message, metadata = {}) {
 export async function failPublishForVerificationRequired(supabase, jobId, pageId, message) {
   const [{ error: jobError }, { error: pageError }] = await Promise.all([
     supabase
-      .from('posting_jobs_v2')
+      .from('adu_posting_jobs')
       .update({
         status: 'failed_to_publish',
         publish_started_at: null,
@@ -116,7 +116,7 @@ export async function failPublishForVerificationRequired(supabase, jobId, pageId
 
 export async function markPublishFailedForFacebookRobots(supabase, jobId, message) {
   return supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .update({
       status: 'failed_to_publish',
       publish_started_at: null,
@@ -130,7 +130,7 @@ export async function markPublishFailedForFacebookRobots(supabase, jobId, messag
 /** Meta Graph OAuth 368 / spam throttle ("We limit how often you can post"). Terminal: failed_to_publish. */
 export async function markPublishFailedForFacebookRateLimit(supabase, jobId, message) {
   return supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .update({
       status: 'failed_to_publish',
       publish_started_at: null,

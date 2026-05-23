@@ -4,11 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../../.." && pwd)"
 POSTING_DIR="$ROOT_DIR/backend_v3/services/facebook/auto-download-upload/posting"
 SCHEDULER_DIR="$POSTING_DIR/scheduler-worker"
-DOWNLOAD_PROCESSOR_DIR="$POSTING_DIR/download-processor-worker"
-REEL_GETER_DIR="$POSTING_DIR/reel-geter-worker"
 PUBLISH_PROCESSOR_DIR="$POSTING_DIR/publish-processor-worker"
 PUBLISHER_DIR="$POSTING_DIR/publisher-worker"
-DOWNLOADER_SERVICE_DIR="$POSTING_DIR/downloader-service"
 WRANGLER="npx wrangler@4"
 
 required_vars=(
@@ -28,17 +25,17 @@ if ! $WRANGLER whoami >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Ensuring v2 R2 bucket exists..."
-$WRANGLER r2 bucket create "fbuploadprov2-v2-posting-media" >/dev/null 2>&1 || true
+echo "Ensuring ADU buffer R2 bucket exists..."
+$WRANGLER r2 bucket create "fbuploadpro-adu-buffer" >/dev/null 2>&1 || true
 
 ROBOTS_SRC="$POSTING_DIR/r2-bucket-robots.txt"
 if [[ -f "$ROBOTS_SRC" ]]; then
-  echo "Uploading R2 object robots.txt (helps Meta file_url fetch when using r2.dev or similar public URLs)..."
-  $WRANGLER r2 object put "fbuploadprov2-v2-posting-media/robots.txt" \
+  echo "Uploading R2 object robots.txt..."
+  $WRANGLER r2 object put "fbuploadpro-adu-buffer/robots.txt" \
     --file="$ROBOTS_SRC" \
     --content-type="text/plain; charset=utf-8" \
     --remote \
-    -y 2>/dev/null || echo "Warning: could not upload robots.txt to R2 (run wrangler r2 object put manually if hosted upload fails with robots.txt)."
+    -y 2>/dev/null || echo "Warning: could not upload robots.txt to R2."
 fi
 
 put_secret() {
@@ -61,38 +58,19 @@ deploy_worker() {
 }
 
 echo "Configuring worker secrets..."
-for dir in \
-  "$SCHEDULER_DIR" \
-  "$DOWNLOAD_PROCESSOR_DIR" \
-  "$REEL_GETER_DIR" \
-  "$PUBLISH_PROCESSOR_DIR" \
-  "$PUBLISHER_DIR"
-do
+for dir in "$SCHEDULER_DIR" "$PUBLISH_PROCESSOR_DIR" "$PUBLISHER_DIR"; do
   put_secret "$dir" "SUPABASE_URL" "$SUPABASE_URL"
   put_secret "$dir" "SUPABASE_SERVICE_ROLE_KEY" "$SUPABASE_SERVICE_ROLE_KEY"
 done
 
-for dir in \
-  "$DOWNLOAD_PROCESSOR_DIR" \
-  "$REEL_GETER_DIR" \
-  "$PUBLISH_PROCESSOR_DIR" \
-  "$PUBLISHER_DIR"
-do
+for dir in "$PUBLISH_PROCESSOR_DIR" "$PUBLISHER_DIR"; do
   put_secret "$dir" "INTERNAL_JOB_DISPATCH_TOKEN" "$INTERNAL_JOB_DISPATCH_TOKEN"
 done
 
-if [[ -n "${RESIDENTIAL_PROXY:-}" ]]; then
-  put_secret "$DOWNLOADER_SERVICE_DIR" "RESIDENTIAL_PROXY" "$RESIDENTIAL_PROXY"
-fi
+echo "Deploy order: publisher -> publish-processor -> scheduler"
+echo "VPS buffer downloader: see ../downloader/README.md (PM2, not Wrangler)"
+deploy_worker "adu-publisher" "$PUBLISHER_DIR"
+deploy_worker "adu-publish-processor" "$PUBLISH_PROCESSOR_DIR"
+deploy_worker "adu-scheduler" "$SCHEDULER_DIR"
 
-echo "Deploy order: downloader-service -> reel-geter -> publisher -> processors -> scheduler"
-echo "Set INTERNAL_JOB_DISPATCH_TOKEN in env before deploy (same secret on download-processor, reel-geter, publish-processor, publisher)."
-deploy_worker "v2-downloader-service" "$DOWNLOADER_SERVICE_DIR"
-deploy_worker "v2-reel-geter" "$REEL_GETER_DIR"
-deploy_worker "v2-publisher" "$PUBLISHER_DIR"
-deploy_worker "v2-download-processor" "$DOWNLOAD_PROCESSOR_DIR"
-deploy_worker "v2-publish-processor" "$PUBLISH_PROCESSOR_DIR"
-deploy_worker "v2-scheduler" "$SCHEDULER_DIR"
-
-echo "Posting pipeline deployment complete."
-echo "Important: keep posting_v2_intake_paused=true until synthetic checks pass."
+echo "ADU posting pipeline deployment complete."

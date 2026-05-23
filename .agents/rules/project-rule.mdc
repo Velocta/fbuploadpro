@@ -1,0 +1,87 @@
+---
+description: Core architecture and service-boundary rules
+alwaysApply: true
+---
+
+# Project Architecture Rules
+
+This repository is a single SaaS with cooperating services. Keep all work aligned
+with documented architecture, performance, and security standards.
+
+## Canonical Documentation
+
+- `documentation/architecture/system-overview.md`
+- `documentation/webapp/architecture.md`
+- `documentation/webapp/ui-ux-reference.md`
+- `documentation/webapp/performance.md`
+- `documentation/runbooks/deployment.md`
+- `documentation/runbooks/environment.md`
+
+## Database Access
+
+1. All services (`backend_v3/*`, `webapp`) use the same Supabase PostgreSQL database.
+2. Each service must define its own database access entry point
+   (client initialization, query helpers, repositories) inside its own folder.
+3. Shared database logic (schema, views, functions, policies) must live in
+   `database/` and be managed through migrations.
+4. No service may change database schema directly. Schema changes must:
+   - add a migration in `database/migrations/`
+   - update `database/production_schema.sql`
+5. Database access must be explicit and readable; avoid hidden mutations.
+
+## Repository Structure
+
+- `documentation/`
+- `backend_v3/`
+- `webapp/`
+- `database/`
+
+## Backend V3 Layout
+
+- `backend_v3/services/posting/` — Cloudflare Workers: scheduler, download/publish processors, reel-geter, publisher, downloader-service
+- `backend_v3/services/analytics/` — followers metrics cron worker
+- `backend_v3/services/scraper/` — VPS Puppeteer reel scraper (`reels-scraper`)
+
+See `backend_v3/README.md` and `documentation/architecture/system-overview.md`.
+
+## Service Boundaries
+
+- `backend_v3/` and `webapp/` are separate services.
+- Services may both access the shared database.
+- Services must not depend on each other's internal code.
+- Do not move files across services unless explicitly instructed.
+- Do not refactor top-level folder structure unless explicitly requested.
+
+## Webapp Folder Responsibilities
+
+- `webapp/src/app`: routing, layouts, pages, loading states; avoid deep business logic.
+- `webapp/src/app/api/v1`: versioned API handlers, auth/validation, response shaping.
+- `webapp/src/server/services`: domain orchestration and workflows.
+- `webapp/src/server/repositories`: Supabase persistence and table access.
+- `webapp/src/server/integrations`: external API clients.
+- `webapp/src/contracts`: request/response schemas.
+- `webapp/src/features`: feature-local UI/types/schemas/adapters.
+
+## Performance-Focused Development
+
+- Prefer server components and server services before adding client state.
+- Keep API payloads explicit/minimal; avoid broad `select('*')` on large tables.
+- Avoid duplicate auth/session lookups in the same render path.
+- Keep integration-heavy and Supabase-heavy API routes on Node.js runtime where needed.
+- Run verification before delivery: lint + typecheck + relevant tests/build.
+
+## Security-Focused Development
+
+- Never hardcode secrets, tokens, credentials, or proxy keys in code.
+- Use environment variables defined by each service's `.env.example`.
+- Keep auth/session logic centralized in `webapp/src/proxy.ts` and Supabase helpers.
+- Preserve and update RLS policies during any DB schema change.
+- Do not expose service-role credentials to client-side code or public APIs.
+- Validate required runtime env vars in production paths.
+
+## File Placement and Delivery Safety
+
+- Keep code changes inside the relevant service folder.
+- Do not place service-specific plans/docs at repository root.
+- Follow the git workflow rule: task branch -> local checks -> push branch ->
+  human confirmation -> update `main`.

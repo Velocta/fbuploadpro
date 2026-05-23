@@ -367,39 +367,9 @@ export async function deletePage(pageId: string) {
 
   const supabase = await createClient()
 
-  // Delete reels in chunks first to avoid a large cascade delete statement.
-  const deleteBatchSize = 300
-  for (let i = 0; i < 300; i++) {
-    const { data: batchRows, error: fetchBatchError } = await supabase
-      .from('reels')
-      .select('id')
-      .eq('page_id', pageId)
-      .order('id', { ascending: true })
-      .limit(deleteBatchSize)
-
-    if (fetchBatchError) {
-      return { error: fetchBatchError.message }
-    }
-
-    const ids = (batchRows || []).map((row) => row.id)
-    if (ids.length === 0) break
-
-    const { error: deleteBatchError } = await supabase
-      .from('reels')
-      .delete()
-      .in('id', ids)
-
-    if (deleteBatchError) {
-      return { error: deleteBatchError.message }
-    }
-
-    if (ids.length < deleteBatchSize) break
-  }
-
-  const { error } = await supabase
-    .from('pages')
-    .delete()
-    .eq('id', pageId)
+  const { error } = await supabase.rpc('delete_page_with_reels', {
+    p_page_id: pageId,
+  })
 
   if (error) {
     return { error: error.message }

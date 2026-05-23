@@ -14,13 +14,32 @@
 | `R2_ACCESS_KEY_ID` | R2 API token access key |
 | `R2_SECRET_ACCESS_KEY` | R2 API token secret key |
 | `R2_USER_MEDIA_BUCKET` | Bucket name (default: `fbuploadpro-user-media`) |
+| `R2_ADU_BUFFER_BUCKET` | ADU pre-download buffer (default: `fbuploadpro-adu-buffer`) |
 | `USER_MEDIA_PUBLIC_BASE_URL` | HTTPS origin for Facebook `file_url` fetches |
 
 Production validates required vars in `webapp/src/lib/config/env.ts`. Integration-heavy API routes use Node.js runtime on Vercel.
 
+## ADU buffer downloader (VPS)
+
+Path: `backend_v3/services/facebook/auto-download-upload/downloader/`
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Claim/update reels |
+| `R2_ACCOUNT_ID` | Yes | R2 S3 endpoint |
+| `R2_ACCESS_KEY_ID` | Yes | R2 credentials |
+| `R2_SECRET_ACCESS_KEY` | Yes | R2 credentials |
+| `R2_ADU_BUFFER_BUCKET` | Yes | Default `fbuploadpro-adu-buffer` |
+| `ADU_DOWNLOADER_LOOP_SECONDS` | No | Loop interval (default 120) |
+| `ADU_DOWNLOADER_CLAIM_BATCH` | No | Reels claimed per tick (default 10) |
+| `ADU_DOWNLOADER_CONCURRENCY` | No | Parallel downloads (default 3) |
+| `RESIDENTIAL_PROXY` | No | YouTube downloads only |
+| `IMPERSONATE_TARGET` | No | Optional yt-dlp impersonate |
+
 ## ADU Posting workers (`backend_v3/services/facebook/auto-download-upload/posting/*`)
 
-Shared across scheduler, download-processor, reel-geter, publish-processor, publisher:
+Shared across scheduler, publish-processor, publisher:
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -41,13 +60,6 @@ Shared across scheduler, download-processor, reel-geter, publish-processor, publ
 | `MAX_BATCH_PER_CLAIM` | Jobs per RPC claim |
 | `MAX_ROWS_PER_TICK` | Max dispatches per cron tick |
 | `MAX_TICK_SECONDS` | Wall-clock budget per tick |
-| `BACKPRESSURE_MAX_PROCESSING` | Download processor only |
-
-**Reel-geter:**
-
-| Variable | Purpose |
-|----------|---------|
-| `DOWNLOAD_MAX_BYTES` | Max media size (default 200MB) |
 
 **Publisher:**
 
@@ -56,14 +68,6 @@ Shared across scheduler, download-processor, reel-geter, publish-processor, publ
 | `POSTING_MEDIA_UPLOAD_MODE` | `stream` (default) or `hosted` |
 | `POSTING_MEDIA_PUBLIC_BASE_URL` | Public origin for hosted mode |
 | `INTEGRITY_PAUSE_THRESHOLD` / `INTEGRITY_WINDOW_SECONDS` | Auto-pause intake on integrity errors |
-
-## Downloader service (`backend_v3/services/facebook/auto-download-upload/posting/downloader-service`)
-
-| Variable | Purpose |
-|----------|---------|
-| `RESIDENTIAL_PROXY` | Required for YouTube downloads in container |
-
-Cloudflare bindings (see `wrangler.toml`): R2 `fbuploadprov2-v2-posting-media`, Container `DownloaderContainer`.
 
 ## InApp Schedule processor (`backend_v3/services/facebook/inapp-schedule/posting/processor-worker`)
 

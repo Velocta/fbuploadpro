@@ -181,6 +181,14 @@ export type Database = {
           reel_id: string
           status: Database["public"]["Enums"]["reel_status_enum"] | null
           username: string
+          media_object_key: string | null
+          media_size_bytes: number | null
+          media_content_type: string | null
+          media_sha256: string | null
+          reel_caption: string | null
+          downloaded_at: string | null
+          graph_post_id: string | null
+          download_retries: number
         }
         Insert: {
           id?: number
@@ -189,6 +197,14 @@ export type Database = {
           reel_id: string
           status?: Database["public"]["Enums"]["reel_status_enum"] | null
           username: string
+          media_object_key?: string | null
+          media_size_bytes?: number | null
+          media_content_type?: string | null
+          media_sha256?: string | null
+          reel_caption?: string | null
+          downloaded_at?: string | null
+          graph_post_id?: string | null
+          download_retries?: number
         }
         Update: {
           id?: number
@@ -197,6 +213,14 @@ export type Database = {
           reel_id?: string
           status?: Database["public"]["Enums"]["reel_status_enum"] | null
           username?: string
+          media_object_key?: string | null
+          media_size_bytes?: number | null
+          media_content_type?: string | null
+          media_sha256?: string | null
+          reel_caption?: string | null
+          downloaded_at?: string | null
+          graph_post_id?: string | null
+          download_retries?: number
         }
         Relationships: [
           {
@@ -554,6 +578,93 @@ export type Database = {
         }
         Relationships: []
       }
+      adu_posting_jobs: {
+        Row: {
+          job_id: string
+          trace_id: string
+          mode: string
+          agency_id: string | null
+          page_id: string
+          reel_internal_id: number
+          platform: Database["public"]["Enums"]["source_platform_enum"]
+          source_username: string
+          reel_id: string
+          fb_page_id: string
+          fb_page_access_token: string
+          status: string
+          publish_retries: number
+          media_object_key: string
+          media_url: string | null
+          media_sha256: string | null
+          media_content_type: string | null
+          media_size_bytes: number | null
+          reel_caption: string | null
+          graph_post_id: string | null
+          last_error_code: string | null
+          last_error_message: string | null
+          publish_started_at: string | null
+          published_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          job_id?: string
+          trace_id?: string
+          mode?: string
+          agency_id?: string | null
+          page_id: string
+          reel_internal_id: number
+          platform: Database["public"]["Enums"]["source_platform_enum"]
+          source_username: string
+          reel_id: string
+          fb_page_id: string
+          fb_page_access_token: string
+          status?: string
+          publish_retries?: number
+          media_object_key: string
+          media_url?: string | null
+          media_sha256?: string | null
+          media_content_type?: string | null
+          media_size_bytes?: number | null
+          reel_caption?: string | null
+          graph_post_id?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          publish_started_at?: string | null
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          job_id?: string
+          trace_id?: string
+          mode?: string
+          agency_id?: string | null
+          page_id?: string
+          reel_internal_id?: number
+          platform?: Database["public"]["Enums"]["source_platform_enum"]
+          source_username?: string
+          reel_id?: string
+          fb_page_id?: string
+          fb_page_access_token?: string
+          status?: string
+          publish_retries?: number
+          media_object_key?: string
+          media_url?: string | null
+          media_sha256?: string | null
+          media_content_type?: string | null
+          media_size_bytes?: number | null
+          reel_caption?: string | null
+          graph_post_id?: string | null
+          last_error_code?: string | null
+          last_error_message?: string | null
+          publish_started_at?: string | null
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       facebook_inapp_schedule_posts: {
         Row: {
           id: string
@@ -637,6 +748,14 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: Database['public']['Tables']['facebook_inapp_schedule_posts']['Row'][]
       }
+      delete_page_with_reels: {
+        Args: { p_page_id: string }
+        Returns: undefined
+      }
+      skip_adu_reel: {
+        Args: { p_reel_id: number }
+        Returns: undefined
+      }
     }
     Enums: {
       auth_attempt_type: "login" | "forgot_password" | "otp" | "signup" | "resend"
@@ -651,7 +770,13 @@ export type Database = {
       | "2fa_required_on_BM"
       | "check_developer_app"
       | "account_suspended"
-      reel_status_enum: "pending" | "posted" | "failed"
+      reel_status_enum:
+        | "pending"
+        | "posted"
+        | "failed"
+        | "processing"
+        | "downloaded"
+        | "download_failed"
       schedule_type_enum: "fixed" | "randomfixed" | "dailyrandom"
       source_platform_enum: "instagram" | "youtube" | "tiktok" | "facebook"
       subscription_type_enum: "new" | "renewal" | "upgrade" | "correction"

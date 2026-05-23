@@ -9,7 +9,8 @@ backend_v3/
 ├── services/
 │   ├── facebook/
 │   │   ├── auto-download-upload/
-│   │   │   ├── posting/          # Scheduler, download, publish pipeline
+│   │   │   ├── posting/          # CF scheduler + publish pipeline
+│   │   │   ├── downloader/       # VPS buffer downloader (yt-dlp → R2)
 │   │   │   ├── analytics/        # Followers metrics cron
 │   │   │   └── scraping/         # VPS reels scraper
 │   │   └── inapp-schedule/
@@ -24,9 +25,7 @@ backend_v3/
 | Worker | Wrangler name |
 |--------|----------------|
 | ADU scheduler | `fbuploadpro-fb-adu-scheduler` |
-| ADU download processor | `fbuploadpro-fb-adu-download-processor` |
-| ADU reel-geter | `fbuploadpro-fb-adu-reel-geter` |
-| ADU downloader | `fbuploadpro-fb-adu-downloader` |
+| ADU buffer downloader (VPS) | PM2 `fbuploadpro-adu-downloader` |
 | ADU publish processor | `fbuploadpro-fb-adu-publish-processor` |
 | ADU publisher | `fbuploadpro-fb-adu-publisher` |
 | ADU analytics | `fbuploadpro-fb-adu-analytics` |
@@ -34,11 +33,13 @@ backend_v3/
 
 ## Facebook Auto Download/Upload
 
-End-to-end pipeline: schedule due pages → download source video → publish to Facebook Reels.
+End-to-end pipeline: VPS pre-downloads reels to R2 (`fbuploadpro-adu-buffer`) → CF scheduler creates `adu_posting_jobs` → publish to Facebook Reels.
 
-**Deploy:** `services/facebook/auto-download-upload/posting/deploy.sh`
+**Deploy CF workers:** `services/facebook/auto-download-upload/posting/deploy.sh`
 
-**Database:** `pages`, `reels`, `posting_jobs_v2` and related RPCs.
+**Deploy VPS downloader:** `services/facebook/auto-download-upload/downloader/README.md`
+
+**Database:** `pages`, `reels`, `adu_posting_jobs` and RPCs (`create_due_adu_posting_jobs`, `claim_adu_buffer_downloads`, …).
 
 ## Facebook InApp Schedule
 

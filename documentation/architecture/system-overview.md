@@ -13,28 +13,26 @@
 
 Backend layout follows the convention: `services/{platform}/{feature}/{type}/{worker}/`
 
-### Facebook — Auto Download/Upload (posting pipeline)
+### Facebook — Auto Download/Upload (buffer + publish)
 
-Six Cloudflare Workers plus a container-backed downloader. Job state lives in `posting_jobs_v2`.
+VPS buffer downloader pre-fills R2; three Cloudflare Workers handle scheduling and publish. Job state lives in `adu_posting_jobs`.
 
-| Worker | Wrangler name | Trigger |
-|--------|---------------|---------|
-| `services/facebook/auto-download-upload/posting/scheduler-worker` | `fbuploadpro-fb-adu-scheduler` | Cron (every minute) |
-| `services/facebook/auto-download-upload/posting/download-processor-worker` | `fbuploadpro-fb-adu-download-processor` | Cron |
-| `services/facebook/auto-download-upload/posting/reel-geter-worker` | `fbuploadpro-fb-adu-reel-geter` | HTTP (internal) |
-| `services/facebook/auto-download-upload/posting/downloader-service` | `fbuploadpro-fb-adu-downloader` | HTTP + Container |
-| `services/facebook/auto-download-upload/posting/publish-processor-worker` | `fbuploadpro-fb-adu-publish-processor` | Cron |
-| `services/facebook/auto-download-upload/posting/publisher-worker` | `fbuploadpro-fb-adu-publisher` | HTTP (internal) |
+| Component | Location | Trigger |
+|-----------|----------|---------|
+| Buffer downloader | `services/facebook/auto-download-upload/downloader/` | VPS PM2 loop |
+| Scheduler | `posting/scheduler-worker` | `fbuploadpro-fb-adu-scheduler` cron |
+| Publish processor | `posting/publish-processor-worker` | Cron |
+| Publisher | `posting/publisher-worker` | HTTP (internal) |
 
 **Flow:**
 
-1. **Scheduler** — RPC `claim_due_reels_and_create_jobs_v2` creates jobs (`download_pending`) for due pages with pending reels.
-2. **Download processor** — Claims jobs, dispatches to reel-geter via service binding + `INTERNAL_JOB_DISPATCH_TOKEN`.
-3. **Reel-geter + downloader** — Downloads source video (yt-dlp), stores in R2 `fbuploadprov2-v2-posting-media`, sets `pending_publish`.
-4. **Publish processor** — Claims publish-ready jobs, dispatches to publisher.
-5. **Publisher** — Uploads to Facebook Reels (Graph API v19), RPC `finalize_posting_job_v2` (tokens + reel `posted`).
+1. **Scraper** — Inserts `reels` as `pending` (metadata only).
+2. **Buffer downloader** — For active pages below `posts_per_day × 4` downloaded reels, claims `pending` reels, yt-dlp download → R2 `fbuploadpro-adu-buffer` → `reels.status = downloaded`.
+3. **Scheduler** — RPC `create_due_adu_posting_jobs` picks `downloaded` reels, creates `adu_posting_jobs` as `pending_publish`.
+4. **Publish processor** — RPC `claim_publish_jobs_adu`, dispatches to publisher.
+5. **Publisher** — Reads R2 buffer object, publishes to Facebook Reels, RPC `finalize_posting_job_adu`.
 
-Deploy: `backend_v3/services/facebook/auto-download-upload/posting/deploy.sh`
+Deploy workers: `posting/deploy.sh`. Deploy downloader: `downloader/README.md`.
 
 ### Facebook — InApp Schedule
 
@@ -76,11 +74,9 @@ flowchart LR
   subgraph control [Control plane]
     Webapp[webapp]
   end
-  subgraph adu [ADU Posting Workers]
+  subgraph adu [ADU Pipeline]
+    BufferDL[buffer-downloader VPS]
     Scheduler[scheduler]
-    DownloadProc[download-processor]
-    ReelGeter[reel-geter]
-    Downloader[downloader-service]
     PublishProc[publish-processor]
     Publisher[publisher]
   end
@@ -94,12 +90,10 @@ flowchart LR
   Scraper --> DB
   Webapp --> DB
   Webapp --> R2
+  BufferDL --> R2
+  BufferDL --> DB
   Scheduler --> DB
-  Scheduler --> DownloadProc
-  DownloadProc --> ReelGeter
-  ReelGeter --> Downloader
-  Downloader --> R2
-  ReelGeter --> DB
+  Scheduler --> PublishProc
   PublishProc --> DB
   PublishProc --> Publisher
   Publisher --> R2

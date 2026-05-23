@@ -10,16 +10,23 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { getTimezones } from '@/lib/timezones'
 
 interface TimezoneSelectProps {
   value: string
   onValueChange: (value: string) => void
   name?: string
+  className?: string
+  triggerClassName?: string
 }
 
-export function TimezoneSelect({ value, onValueChange, name }: TimezoneSelectProps) {
+export function TimezoneSelect({
+  value,
+  onValueChange,
+  name,
+  className,
+  triggerClassName,
+}: TimezoneSelectProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const timezones = useMemo(() => getTimezones(), [])
@@ -27,73 +34,84 @@ export function TimezoneSelect({ value, onValueChange, name }: TimezoneSelectPro
   const filteredTimezones = useMemo(() => {
     if (!search) return timezones
     const lowerSearch = search.toLowerCase()
-    return timezones.filter((tz) =>
-      tz.label.toLowerCase().includes(lowerSearch) ||
-      tz.value.toLowerCase().includes(lowerSearch)
+    return timezones.filter(
+      (tz) =>
+        tz.label.toLowerCase().includes(lowerSearch) ||
+        tz.value.toLowerCase().includes(lowerSearch),
     )
   }, [search, timezones])
 
   const selectedTimezone = timezones.find((tz) => tz.value === value)
 
   return (
-    <div className="relative w-full">
-      <input type="hidden" name={name} value={value} />
+    <div className={cn('relative w-full', className)}>
+      {name ? <input type="hidden" name={name} value={value} /> : null}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="w-full justify-between h-9 text-xs font-normal"
+            className={cn(
+              'h-12 w-full justify-between rounded-xl border-border/50 bg-background/50 text-sm font-normal',
+              triggerClassName,
+            )}
           >
-            <span className="truncate">
-              {selectedTimezone ? selectedTimezone.label : "Select timezone..."}
+            <span className="truncate text-left">
+              {selectedTimezone ? selectedTimezone.label : 'Select timezone…'}
             </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-          <div className="flex items-center border-b px-3">
+        <PopoverContent
+          className="z-[250] w-[var(--radix-popover-trigger-width)] p-0"
+          align="start"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          <div className="flex items-center border-b border-border/50 px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <Input
-              placeholder="Search timezone..."
+              placeholder="Search timezone…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none border-none focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-11 flex-1 rounded-none border-0 bg-transparent py-2 text-sm shadow-none focus-visible:ring-0"
             />
           </div>
-          <ScrollArea className="h-72">
-            <div className="p-1">
-              {filteredTimezones.length === 0 ? (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  No timezone found.
-                </div>
-              ) : (
-                filteredTimezones.map((tz) => (
-                  <div
-                    key={tz.value}
+          <div
+            className="max-h-[min(16rem,45vh)] overflow-y-auto overscroll-contain p-1"
+            onWheel={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+          >
+            {filteredTimezones.length === 0 ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                No timezone found.
+              </div>
+            ) : (
+              filteredTimezones.map((tz) => (
+                <button
+                  key={tz.value}
+                  type="button"
+                  className={cn(
+                    'relative flex w-full cursor-default select-none items-center rounded-lg px-2 py-2 text-left text-xs outline-none transition-colors hover:bg-muted/60',
+                    value === tz.value && 'bg-primary/10 text-primary',
+                  )}
+                  onClick={() => {
+                    onValueChange(tz.value)
+                    setOpen(false)
+                    setSearch('')
+                  }}
+                >
+                  <Check
                     className={cn(
-                      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                      value === tz.value && "bg-accent text-accent-foreground"
+                      'mr-2 h-4 w-4 shrink-0',
+                      value === tz.value ? 'opacity-100' : 'opacity-0',
                     )}
-                    onClick={() => {
-                      onValueChange(tz.value)
-                      setOpen(false)
-                      setSearch('')
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === tz.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {tz.label}
-                  </div>
-                ))
-              )}
-            </div>
-          </ScrollArea>
+                  />
+                  <span className="truncate">{tz.label}</span>
+                </button>
+              ))
+            )}
+          </div>
         </PopoverContent>
       </Popover>
     </div>

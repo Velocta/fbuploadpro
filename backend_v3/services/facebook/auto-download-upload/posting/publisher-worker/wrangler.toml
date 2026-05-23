@@ -7,4 +7,4 @@ enabled = true
 
 [[r2_buckets]]
 binding = "POSTING_MEDIA_BUCKET"
-bucket_name = "fbuploadprov2-v2-posting-media"
+bucket_name = "fbuploadpro-adu-buffer"

@@ -1,0 +1,37 @@
+---
+description: Backend v3 folder layout by platform, feature, and worker type
+alwaysApply: true
+---
+
+# Backend Structure Convention
+
+Workers and services live under:
+
+```
+backend_v3/services/{platform}/{feature}/{type}/{worker-name}/
+```
+
+## Platforms
+
+- `facebook`, `youtube`, `instagram`
+
+## Features (examples)
+
+- `auto-download-upload` — scrape → download → publish to Facebook
+- `inapp-schedule` — queue posts published by our cron
+
+## Types
+
+- `posting` — job processors, publishers, schedulers
+- `analytics` — metrics crons
+- `scraping` — VPS scrapers
+
+## Example
+
+```
+backend_v3/services/facebook/auto-download-upload/posting/scheduler-worker/
+backend_v3/services/facebook/auto-download-upload/scraping/reels-scraper/
+backend_v3/services/facebook/inapp-schedule/posting/processor-worker/
+```
+
+Do not add flat `services/posting/` or `services/scraper/` paths for new work. Update deploy scripts when moving workers.

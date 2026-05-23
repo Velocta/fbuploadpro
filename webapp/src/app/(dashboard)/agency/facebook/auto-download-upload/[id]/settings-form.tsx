@@ -2,14 +2,17 @@
 
 import { useState, useTransition, useMemo } from 'react'
 import { updatePageSettings, updateSourceUsername } from './actions'
+import { AgencySectionCard } from '@/components/dashboard/agency'
+import { PostsPerDayPicker } from '@/components/dashboard/posts-per-day-picker'
 import { TimezoneSelect } from '@/components/dashboard/timezone-select'
+import { sanitizeSourceIdentityInput } from '@/lib/source-identity'
 import { TimeSlotInput } from '@/components/dashboard/time-slot-input'
 import { Badge } from '@/components/ui/badge'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -238,7 +241,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
       )}
 
       <Tabs defaultValue="automation" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-muted/30 p-1">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl border border-border/50 bg-muted/50 p-1 sm:grid-cols-4">
           <TabsTrigger value="automation" className="text-xs flex items-center gap-1.5">
             <Calendar className="h-3.5 w-3.5" /> Automation
           </TabsTrigger>
@@ -261,7 +264,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
         <TabsContent value="automation" forceMount className="mt-4 animate-in slide-in-from-left-2 duration-300 data-[state=inactive]:hidden">
           <form onSubmit={(e) => handleSettingsSubmit(e, 'automation')}>
             <input type="hidden" name="pageId" value={profile.id} />
-            <Card>
+            <AgencySectionCard className="rounded-2xl border-border/50 bg-card/40 shadow-2xl backdrop-blur-xl">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm">Posting Settings</CardTitle>
@@ -273,7 +276,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
                     variant="outline"
                     size="sm"
                     onClick={() => setIsEditingAutomation(true)}
-                    className="h-8 text-xs"
+                    className="h-9 rounded-xl text-xs"
                   >
                     <Pencil className="h-3 w-3 mr-1.5" /> Edit
                   </Button>
@@ -340,20 +343,11 @@ export function SettingsForm({ profile }: { profile: Page }) {
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-xs">Posts Per Day</Label>
-                      <Select
-                        value={localPostsPerDay > 0 ? localPostsPerDay.toString() : undefined}
-                        onValueChange={(v) => updatePostsPerDay(parseInt(v))}
-                      >
-                        <SelectTrigger className="h-9 text-xs">
-                          <SelectValue placeholder="Select posts per day" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                            <SelectItem key={n} value={n.toString()}>{n} Posts</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Label className="text-xs font-semibold">Posts Per Day</Label>
+                      <PostsPerDayPicker
+                        value={localPostsPerDay > 0 ? localPostsPerDay : 1}
+                        onValueChange={(v) => updatePostsPerDay(parseInt(v, 10))}
+                      />
                     </div>
 
                     {localScheduleType === 'dailyrandom' && (
@@ -392,38 +386,29 @@ export function SettingsForm({ profile }: { profile: Page }) {
                       </>
                     )}
 
-                    <div className="relative h-12 w-12 flex-shrink-0">
-                      <Image
-                        src={profile.fb_page_image || ''}
-                        alt={profile.page_name}
-                        fill
-                        className="rounded-full object-cover border border-border"
-                        unoptimized
-                      />
-                    </div>
                     <div className="flex justify-end gap-2 pt-2">
                       <Button
                         type="button"
                         variant="ghost"
-                        size="sm"
+                        className="h-11 rounded-xl"
                         onClick={resetAutomation}
                       >
                         Cancel
                       </Button>
-                      <Button type="submit" size="sm" loading={isPending}>
+                      <Button type="submit" className="h-11 rounded-xl" loading={isPending}>
                         Save Changes
                       </Button>
                     </div>
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AgencySectionCard>
           </form>
         </TabsContent>
 
         {/* 2. Connections */}
         <TabsContent value="connections" forceMount className="mt-4 animate-in slide-in-from-left-2 duration-300 data-[state=inactive]:hidden">
-          <Card>
+          <AgencySectionCard className="rounded-2xl border-border/50 bg-card/40 shadow-2xl backdrop-blur-xl">
             <CardHeader>
               <div>
                 <CardTitle className="text-sm text-primary">Facebook Identity</CardTitle>
@@ -460,12 +445,12 @@ export function SettingsForm({ profile }: { profile: Page }) {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </AgencySectionCard>
         </TabsContent>
 
         {/* 3. Source Management */}
         <TabsContent value="source" forceMount className="mt-4 animate-in slide-in-from-left-2 duration-300 data-[state=inactive]:hidden">
-          <Card>
+          <AgencySectionCard className="rounded-2xl border-border/50 bg-card/40 shadow-2xl backdrop-blur-xl">
             <CardHeader>
               <CardTitle className="text-sm flex items-center gap-2">
                 <RefreshCcw className="h-4 w-4 text-primary" />
@@ -487,9 +472,10 @@ export function SettingsForm({ profile }: { profile: Page }) {
                 </div>
                 <Dialog open={sourceDialogOpen} onOpenChange={setSourceDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="shadow-sm border-border hover:bg-accent" type="button">Update Content Source</Button>
+                    <Button variant="outline" className="h-11 rounded-xl" type="button">Update Content Source</Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[425px]">
+                  <DialogContent className="border-0 bg-transparent p-0 shadow-none sm:max-w-[425px]">
+                    <div className="rounded-3xl border border-border/50 bg-card/95 p-6 shadow-2xl backdrop-blur-xl">
                     <DialogHeader>
                       <DialogTitle>Switch {profile.source_platform.charAt(0).toUpperCase() + profile.source_platform.slice(1)} Source</DialogTitle>
                       <DialogDescription className="text-xs">
@@ -499,7 +485,13 @@ export function SettingsForm({ profile }: { profile: Page }) {
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <Label className="text-xs">Source Platform</Label>
-                        <Select value={newSourcePlatform} onValueChange={(v: SourcePlatform) => setNewSourcePlatform(v)}>
+                        <Select
+                          value={newSourcePlatform}
+                          onValueChange={(v: SourcePlatform) => {
+                            setNewSourcePlatform(v)
+                            setNewSourceUsername((prev) => sanitizeSourceIdentityInput(v, prev))
+                          }}
+                        >
                           <SelectTrigger className="h-10">
                             <SelectValue />
                           </SelectTrigger>
@@ -522,7 +514,11 @@ export function SettingsForm({ profile }: { profile: Page }) {
                           <Input
                             id="newSource"
                             value={newSourceUsername}
-                            onChange={(e) => setNewSourceUsername(e.target.value)}
+                            onChange={(e) =>
+                              setNewSourceUsername(
+                                sanitizeSourceIdentityInput(newSourcePlatform, e.target.value),
+                              )
+                            }
                             placeholder={sourceIdentityPlaceholder(newSourcePlatform)}
                             className="pl-9 h-10"
                           />
@@ -530,22 +526,23 @@ export function SettingsForm({ profile }: { profile: Page }) {
                       </div>
                     </div>
                     <DialogFooter>
-                      <Button onClick={handleSourceUpdate} loading={isPending} disabled={!newSourceUsername.trim()} type="button">
+                      <Button onClick={handleSourceUpdate} className="h-11 rounded-xl" loading={isPending} disabled={!newSourceUsername.trim()} type="button">
                         Confirm Transition
                       </Button>
                     </DialogFooter>
+                    </div>
                   </DialogContent>
                 </Dialog>
               </div>
             </CardContent>
-          </Card>
+          </AgencySectionCard>
         </TabsContent>
 
         {/* 4. Identity */}
         <TabsContent value="identity" forceMount className="mt-4 animate-in slide-in-from-left-2 duration-300 data-[state=inactive]:hidden">
           <form onSubmit={(e) => handleSettingsSubmit(e, 'identity')}>
             <input type="hidden" name="pageId" value={profile.id} />
-            <Card>
+            <AgencySectionCard className="rounded-2xl border-border/50 bg-card/40 shadow-2xl backdrop-blur-xl">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-sm">Page Identity</CardTitle>
@@ -557,7 +554,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
                     variant="outline"
                     size="sm"
                     onClick={() => setIsEditingIdentity(true)}
-                    className="h-8 text-xs"
+                    className="h-9 rounded-xl text-xs"
                   >
                     <Pencil className="h-3 w-3 mr-1.5" /> Edit
                   </Button>
@@ -573,20 +570,15 @@ export function SettingsForm({ profile }: { profile: Page }) {
               </CardContent>
               {isEditingIdentity && (
                 <CardFooter className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={resetIdentity}
-                  >
+                  <Button type="button" variant="ghost" className="h-11 rounded-xl" onClick={resetIdentity}>
                     Cancel
                   </Button>
-                  <Button type="submit" size="sm" loading={isPending}>
+                  <Button type="submit" className="h-11 rounded-xl" loading={isPending}>
                     Save Changes
                   </Button>
                 </CardFooter>
               )}
-            </Card>
+            </AgencySectionCard>
           </form>
         </TabsContent>
       </Tabs>

@@ -5,5 +5,5 @@ export function getSupabaseClient(env) {
 }
 
 export async function claimDueJobs(supabase, mode = 'prod') {
-  return supabase.rpc('claim_due_reels_and_create_jobs_v2', { p_mode: mode });
+  return supabase.rpc('create_due_adu_posting_jobs', { p_mode: mode });
 }

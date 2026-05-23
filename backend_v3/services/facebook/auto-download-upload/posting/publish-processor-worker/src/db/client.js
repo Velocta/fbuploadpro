@@ -5,19 +5,19 @@ export function getSupabaseClient(env) {
 }
 
 export async function resetStalePublishing(supabase, olderThanSeconds = 180, limit = 1000) {
-  return supabase.rpc('reset_stale_publish_jobs_v2', {
+  return supabase.rpc('reset_stale_publish_jobs_adu', {
     p_older_than_seconds: olderThanSeconds,
     p_limit: limit,
   });
 }
 
 export async function claimPublishJobs(supabase, limit) {
-  return supabase.rpc('claim_publish_jobs_v2', { p_limit: limit });
+  return supabase.rpc('claim_publish_jobs_adu', { p_limit: limit });
 }
 
 export async function getPublishBackpressureSnapshot(supabase) {
   const { data, error } = await supabase
-    .from('posting_jobs_v2')
+    .from('adu_posting_jobs')
     .select('updated_at')
     .eq('status', 'pending_publish')
     .order('updated_at', { ascending: true })

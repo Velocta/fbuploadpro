@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { motion } from 'framer-motion'
 import { deletePage } from '@/app/(dashboard)/agency/facebook/auto-download-upload/actions'
 import { useRouter } from 'next/navigation'
 import {
@@ -27,7 +28,7 @@ export function DeletePageDialog({
   pageId,
   pageName,
   redirectToHub = false,
-  trigger
+  trigger,
 }: DeletePageDialogProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -56,43 +57,60 @@ export function DeletePageDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {trigger || (
-          <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive/90 hover:bg-destructive/10 flex-1">
-            <Trash2 className="h-3.5 w-3.5 mr-2" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
             Delete
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <div className="flex items-center gap-3 text-destructive mb-2">
-            <AlertTriangle className="h-6 w-6" />
-            <DialogTitle className="text-xl">Delete Page</DialogTitle>
+      <DialogContent className="border-0 bg-transparent p-0 shadow-none sm:max-w-[440px]">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2 }}
+          className="overflow-hidden rounded-3xl border border-border/50 bg-card/95 shadow-2xl backdrop-blur-xl"
+        >
+          <DialogHeader className="space-y-4 border-b border-border/50 px-6 py-5 text-left">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 ring-1 ring-destructive/20">
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+            </div>
+            <div>
+              <DialogTitle className="font-display text-xl">Delete Page</DialogTitle>
+              <DialogDescription className="mt-2 text-muted-foreground">
+                This will permanently delete{' '}
+                <strong className="text-foreground">&quot;{pageName}&quot;</strong> and remove all
+                associated reel records from the database. This action cannot be undone.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+          <div className="mx-6 rounded-xl border border-destructive/20 bg-destructive/5 p-3">
+            <p className="text-xs font-medium text-destructive/90">
+              Warning: This action is irreversible.
+            </p>
           </div>
-          <DialogDescription className="text-sm">
-            This action cannot be undone. This will permanently delete the page
-            <span className="font-bold text-foreground"> &quot;{pageName}&quot; </span>
-            and remove all of its data from our servers.
-            the profile and all associated reel records from our database.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="mt-2 rounded-md border border-destructive/20 bg-destructive/10 p-3">
-          <p className="text-xs font-medium text-destructive/90">
-            Warning: This action is irreversible and cannot be undone.
-          </p>
-        </div>
-        <DialogFooter className="gap-2 sm:gap-0 mt-4">
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            loading={isPending}
-            className="px-6"
-          >
-            Permanently Delete
-          </Button>
-        </DialogFooter>
+          <DialogFooter className="gap-2 px-6 py-5 sm:justify-end">
+            <Button
+              variant="ghost"
+              className="rounded-xl"
+              onClick={() => setOpen(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              loading={isPending}
+              className="rounded-xl px-6"
+            >
+              Permanently Delete
+            </Button>
+          </DialogFooter>
+        </motion.div>
       </DialogContent>
     </Dialog>
   )

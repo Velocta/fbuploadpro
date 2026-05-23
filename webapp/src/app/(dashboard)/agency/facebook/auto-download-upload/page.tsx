@@ -2,8 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddPageDialog } from './add-page-dialog'
 import { PagesClient } from './pages-client'
-import { TerminalBreadcrumbs } from '@/components/dashboard/terminal-breadcrumbs'
-import { AgencyPageHeader } from '@/components/dashboard/agency'
+import { AgencyGlassPageHero } from '@/components/dashboard/agency'
+import { Download, Layers, TrendingUp, Users } from 'lucide-react'
 
 export default async function AgencyPagesPage() {
   const supabase = await createClient()
@@ -11,7 +11,6 @@ export default async function AgencyPagesPage() {
 
   if (!user) redirect('/login')
 
-  // Fetch Agency Pages with Reels Stats
   const { data: pages } = await supabase
     .from('pages')
     .select(`
@@ -42,39 +41,62 @@ export default async function AgencyPagesPage() {
     return sum + (page.followers_gained || 0)
   }, 0)
 
+  const stats = [
+    {
+      label: 'Total Pages',
+      value: (pages?.length || 0).toLocaleString(),
+      icon: Layers,
+    },
+    {
+      label: 'Followers Gained',
+      value: totalGainedFollowers.toLocaleString(),
+      icon: TrendingUp,
+    },
+    {
+      label: 'Total Followers',
+      value: totalFollowersAcrossPages.toLocaleString(),
+      icon: Users,
+    },
+  ]
+
   return (
-    <div className="space-y-6 agency-motion-standard">
-      <TerminalBreadcrumbs
+    <div className="space-y-6 pb-8 agency-motion-standard">
+      <AgencyGlassPageHero
         segments={[
           { label: 'Agency', href: '/agency' },
-          { label: 'Pages' },
+          { label: 'Auto Download/Upload' },
         ]}
-      />
-      <AgencyPageHeader
-        title="Manage pages"
-        description="Connected Facebook pages for automated posting."
+        icon={<Download className="h-7 w-7 text-primary" />}
+        title="Auto Download/Upload"
+        description="Connected Facebook pages for automated reel download and posting."
         actions={<AddPageDialog agencyId={user.id} />}
       />
 
-      {/* Pages Section */}
-      <div className="space-y-4 pt-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold flex items-center">
-            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs mr-2">
-              {pages?.length || 0} Total Pages
-            </span>
-            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs mr-2">
-              {totalGainedFollowers.toLocaleString()} Total Gained Followers
-            </span>
-            <span className="bg-primary/10 text-primary px-2 py-0.5 rounded text-xs mr-2">
-              {totalFollowersAcrossPages.toLocaleString()} Total Followers
-            </span>
-            Active Automation Pages
-          </h2>
+      <div className="relative group">
+        <div
+          className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
+          aria-hidden
+        />
+        <div className="relative grid gap-4 rounded-2xl border border-border/50 bg-card/40 p-5 shadow-2xl backdrop-blur-xl sm:grid-cols-3">
+          {stats.map((stat) => {
+            const Icon = stat.icon
+            return (
+              <div
+                key={stat.label}
+                className="rounded-xl border border-border/50 bg-background/30 p-4"
+              >
+                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <Icon className="h-4 w-4 text-primary" />
+                  {stat.label}
+                </div>
+                <p className="font-display text-2xl font-bold tracking-tight">{stat.value}</p>
+              </div>
+            )
+          })}
         </div>
-
-        <PagesClient initialPages={pages || []} />
       </div>
+
+      <PagesClient initialPages={pages || []} />
     </div>
   )
 }

@@ -30,7 +30,7 @@ export function PageToggle({ pageId, initialStatus }: { pageId: string, initialS
   const isActive = initialStatus === 'active'
 
   return (
-    <div className="agency-surface-card flex items-center space-x-3 rounded-lg p-3">
+    <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-3 backdrop-blur-sm">
       <div className="flex flex-col">
         <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Automation</Label>
         <div className="flex items-center gap-2">

@@ -1,8 +1,11 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { createPage, createPagesBulk } from './actions'
 import { TimezoneSelect } from '@/components/dashboard/timezone-select'
+import { PostsPerDayPicker } from '@/components/dashboard/posts-per-day-picker'
+import { sanitizeSourceIdentityInput } from '@/lib/source-identity'
 import { TimeSlotInput } from '@/components/dashboard/time-slot-input'
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
@@ -25,11 +28,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Plus, Facebook, Search } from 'lucide-react'
+import { Plus, Facebook, Search, Loader2, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FacebookAccount, FacebookGraphPage } from '@/types/app.types'
 import { toast } from 'sonner'
-import { Skeleton } from '@/components/ui/skeleton'
 
 type BulkSourceConfig = {
   sourceUsername: string
@@ -52,12 +54,49 @@ function sourceIdentityPlaceholder(platform: SourcePlatform): string {
   return '@username'
 }
 
+function LoadingPanel({ message, submessage }: { message: string; submessage?: string }) {
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-primary/5 px-6 py-10">
+      <motion.div
+        className="absolute inset-0 bg-gradient-to-r from-primary/10 via-transparent to-blue-500/10"
+        animate={{ x: ['-100%', '100%'] }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
+        aria-hidden
+      />
+      <div className="relative flex flex-col items-center gap-4 text-center">
+        <div className="relative flex h-14 w-14 items-center justify-center">
+          <motion.div
+            className="absolute inset-0 rounded-full border-2 border-primary/20"
+            animate={{ scale: [1, 1.2, 1], opacity: [0.6, 0, 0.6] }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
+          />
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-foreground">{message}</p>
+          {submessage ? <p className="text-xs text-muted-foreground">{submessage}</p> : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function stepSubtitle(mode: 'single' | 'bulk', step: number): string {
+  if (mode === 'single') {
+    return step === 1 ? 'Select Page' : 'Configure Settings'
+  }
+  if (step === 1) return 'Select Pages'
+  if (step === 2) return 'Add Source Usernames'
+  return 'Configure Posting Schedule'
+}
+
 export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [timezone, setTimezone] = useState('Asia/Karachi')
   const [platform, setPlatform] = useState<SourcePlatform>('instagram')
+  const [sourceUsername, setSourceUsername] = useState('')
   const [postsPerDay, setPostsPerDay] = useState('1')
   const [mode, setMode] = useState<'single' | 'bulk'>('single')
 
@@ -81,6 +120,9 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [bulkScheduleByPage, setBulkScheduleByPage] = useState<Record<string, BulkScheduleConfig>>({})
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false)
   const [step, setStep] = useState(1)
+
+  const isBusy = isPending || isLoadingPages || isLoadingAccounts
+  const totalSteps = mode === 'bulk' ? 3 : 2
 
   function ensurePostingTimesLength(times: string[], postsPerDay: number): string[] {
     const next = [...times]
@@ -230,9 +272,14 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
       postingTimes: [],
     })
     setBulkScheduleByPage({})
+    setPlatform('instagram')
+    setSourceUsername('')
+    setPostsPerDay('1')
+    setTimezone('Asia/Karachi')
   }
 
   function handleModeChange(nextMode: 'single' | 'bulk') {
+    if (isBusy) return
     setMode(nextMode)
     setStep(1)
     setSelectedPage(null)
@@ -250,14 +297,24 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   }
 
   function updateBulkSource(pageId: string, patch: Partial<BulkSourceConfig>) {
-    setBulkSourceConfig((prev) => ({
-      ...prev,
-      [pageId]: {
-        sourceUsername: prev[pageId]?.sourceUsername || '',
-        sourcePlatform: prev[pageId]?.sourcePlatform || 'instagram',
-        ...patch,
-      },
-    }))
+    setBulkSourceConfig((prev) => {
+      const current = prev[pageId] || {
+        sourceUsername: '',
+        sourcePlatform: 'instagram' as SourcePlatform,
+      }
+      const nextPlatform = patch.sourcePlatform ?? current.sourcePlatform
+      const rawUsername =
+        patch.sourceUsername !== undefined ? patch.sourceUsername : current.sourceUsername
+      return {
+        ...prev,
+        [pageId]: {
+          ...current,
+          ...patch,
+          sourcePlatform: nextPlatform,
+          sourceUsername: sanitizeSourceIdentityInput(nextPlatform, rawUsername),
+        },
+      }
+    })
   }
 
   function applyPlatformToEmptySources() {
@@ -518,55 +575,89 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : resetDialogState())}>
       <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Page
+        <Button className="group relative h-11 overflow-hidden rounded-xl bg-primary px-6 text-primary-foreground shadow-[0_0_28px_-8px_hsl(var(--primary)/0.55)] ring-1 ring-primary/25 transition-all hover:bg-primary/90 hover:shadow-[0_0_36px_-6px_hsl(var(--primary)/0.65)]">
+          <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 opacity-0 transition-opacity group-hover:opacity-100" />
+          <span className="relative flex items-center">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Page
+          </span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[650px]">
-        <DialogHeader>
-          <DialogTitle>Add New Page</DialogTitle>
-          <DialogDescription>
-            Step {step} of {mode === 'bulk' ? 3 : 2}:{' '}
-            {mode === 'single'
-              ? (step === 1 ? 'Select Page' : 'Configure Settings')
-              : (step === 1
-                ? 'Select Pages'
-                : step === 2
-                  ? 'Add Source Usernames'
-                  : 'Configure Posting Schedule')}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="flex max-h-[90vh] w-full max-w-[95vw] flex-col overflow-hidden border-0 bg-transparent p-0 shadow-none sm:max-w-[680px]">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="relative flex max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/95 shadow-2xl backdrop-blur-xl"
+        >
+          <DialogHeader className="space-y-4 border-b border-border/50 px-6 py-5 text-left">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
+                <Plus className="h-7 w-7 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="font-display text-xl">Add New Page</DialogTitle>
+                <DialogDescription className="mt-1 text-muted-foreground">
+                  Step {step} of {totalSteps}: {stepSubtitle(mode, step)}
+                </DialogDescription>
+              </div>
+            </div>
+            <div className="flex gap-1.5">
+              {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
+                <div
+                  key={s}
+                  className={cn(
+                    'h-1.5 flex-1 rounded-full transition-all',
+                    s <= step ? 'bg-primary' : 'bg-muted',
+                  )}
+                />
+              ))}
+            </div>
+          </DialogHeader>
 
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant={mode === 'single' ? 'default' : 'outline'}
-            className="h-8 px-3 text-xs"
-            onClick={() => handleModeChange('single')}
-          >
-            Single Add
-          </Button>
-          <Button
-            type="button"
-            variant={mode === 'bulk' ? 'default' : 'outline'}
-            className="h-8 px-3 text-xs"
-            onClick={() => handleModeChange('bulk')}
-          >
-            Bulk Add
-          </Button>
-          <Badge variant="outline" className="ml-auto text-xs">
-            {mode === 'single'
-              ? selectedPage ? '1 page selected' : 'No page selected'
-              : `${selectedPages.length} pages selected`}
-          </Badge>
-        </div>
+          <div className="space-y-4 px-6 pt-4">
+            <div className="flex w-full gap-1 rounded-xl border border-border/50 bg-muted/50 p-1">
+              {(['single', 'bulk'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  disabled={isBusy}
+                  className={cn(
+                    'flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-all disabled:opacity-60',
+                    mode === m
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => handleModeChange(m)}
+                >
+                  {m === 'single' ? 'Single Add' : 'Bulk Add'}
+                </button>
+              ))}
+            </div>
+            <Badge variant="outline" className="w-fit text-xs">
+              {mode === 'single'
+                ? selectedPage
+                  ? '1 page selected'
+                  : 'No page selected'
+                : `${selectedPages.length} pages selected`}
+            </Badge>
+          </div>
 
-        <form action={handleSubmit}>
+        <form action={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <input type="hidden" name="agencyId" value={agencyId} />
 
-          <div className="py-4 space-y-5">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={`${mode}-${step}`}
+                initial={{ opacity: 0, x: 16 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -16 }}
+                transition={{ duration: 0.2 }}
+                className="space-y-5"
+              >
             {step === 1 && (
+              <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -577,46 +668,51 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   </div>
 
                   {isLoadingAccounts ? (
-                    <Skeleton className="h-20 w-full rounded-xl" />
+                    <LoadingPanel message="Loading accounts…" submessage="Fetching your connected Facebook accounts" />
                   ) : (
                     <>
                       <div className="relative">
-                        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                        <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
                         <Input
                           placeholder="Search connected accounts..."
                           value={accountSearch}
                           onChange={(e) => setAccountSearch(e.target.value)}
-                          className="pl-9 h-9 text-xs"
+                          className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
                         />
                       </div>
-                      <div className="grid gap-2 max-h-[140px] overflow-y-auto pr-2">
+                      <div className="custom-scrollbar max-h-[200px] space-y-2 overflow-y-auto pr-2">
                         {filteredAccounts.map((acc) => (
-                          <div
+                          <button
                             key={acc.id}
+                            type="button"
                             onClick={() => handleAccountChange(acc.id)}
                             className={cn(
-                              'group flex items-center justify-between p-3 border rounded-xl cursor-pointer transition-all',
+                              'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
                               selectedAccountId === acc.id
                                 ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                : 'border-border/50 hover:border-primary/30 hover:bg-muted/30'
+                                : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
                             )}
                           >
-                            <div className="flex items-center gap-3">
-                              <div className="relative h-8 w-8 rounded-full overflow-hidden border">
-                                {acc.fb_user_image ? (
-                                  <Image src={acc.fb_user_image} alt={acc.fb_user_name || 'Account'} fill className="object-cover" unoptimized />
-                                ) : (
-                                  <div className="h-full w-full bg-muted flex items-center justify-center">
-                                    <Facebook className="h-4 w-4 text-muted-foreground" />
-                                  </div>
-                                )}
+                            {acc.fb_user_image ? (
+                              <Image
+                                src={acc.fb_user_image}
+                                alt={acc.fb_user_name || 'Account'}
+                                width={40}
+                                height={40}
+                                className="rounded-full ring-2 ring-transparent group-hover:ring-primary/20"
+                                unoptimized
+                              />
+                            ) : (
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                                <Facebook className="h-4 w-4 text-muted-foreground" />
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold">{acc.fb_user_name}</p>
-                                <p className="text-xs text-muted-foreground font-mono">ID: {acc.fb_user_id}</p>
-                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold">{acc.fb_user_name}</p>
+                              <p className="font-mono text-xs text-muted-foreground">{acc.fb_user_id}</p>
                             </div>
-                          </div>
+                            <ArrowRight className="h-4 w-4 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
+                          </button>
                         ))}
                       </div>
                     </>
@@ -651,55 +747,64 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                       )}
                     </div>
                     {isLoadingPages ? (
-                      <div className="grid gap-2">
-                        {[1, 2, 3].map((i) => (
-                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                        ))}
-                      </div>
+                      <LoadingPanel message="Loading pages…" submessage="Fetching managed pages for this account" />
                     ) : (
                       <>
                         <div className="relative">
-                          <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                          <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
                           <Input
                             placeholder="Search pages..."
                             value={pageSearch}
                             onChange={(e) => setPageSearch(e.target.value)}
-                            className="pl-9 h-9 text-xs"
+                            className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
                           />
                         </div>
-                        <div className="grid gap-2 max-h-[240px] overflow-y-auto pr-2">
+                        <div className="custom-scrollbar max-h-[240px] space-y-2 overflow-y-auto pr-2">
                           {filteredPages.map((page) => {
-                            const active = mode === 'single'
-                              ? selectedPage?.id === page.id
-                              : selectedPageIds.includes(page.id)
+                            const active =
+                              mode === 'single'
+                                ? selectedPage?.id === page.id
+                                : selectedPageIds.includes(page.id)
                             return (
-                              <div
+                              <button
                                 key={page.id}
-                                onClick={() => (mode === 'single' ? setSelectedPage(page) : togglePageSelection(page))}
+                                type="button"
+                                onClick={() =>
+                                  mode === 'single' ? setSelectedPage(page) : togglePageSelection(page)
+                                }
                                 className={cn(
-                                  'flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all',
-                                  active ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border hover:bg-muted/50'
+                                  'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
+                                  active
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
                                 )}
                               >
-                                <div className="flex items-center gap-3">
-                                  {page.picture ? (
-                                    <div className="relative h-10 w-10">
-                                      <Image src={page.picture || ''} alt={page.name} fill className="rounded-full object-cover border" unoptimized />
-                                    </div>
-                                  ) : (
-                                    <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center border">
-                                      <Facebook className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                  )}
-                                  <div>
-                                    <p className="text-sm font-medium">{page.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      ID: {page.id} • {page.followers_count?.toLocaleString() || 0} followers
-                                    </p>
+                                {page.picture ? (
+                                  <Image
+                                    src={page.picture || ''}
+                                    alt={page.name}
+                                    width={40}
+                                    height={40}
+                                    className="rounded-lg object-cover ring-2 ring-transparent group-hover:ring-primary/20"
+                                    unoptimized
+                                  />
+                                ) : (
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                                    <Facebook className="h-4 w-4 text-muted-foreground" />
                                   </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold">{page.name}</p>
+                                  <p className="font-mono text-xs text-muted-foreground">
+                                    {page.id} · {page.followers_count?.toLocaleString() || 0} followers
+                                  </p>
                                 </div>
-                                {active && <div className="h-2 w-2 rounded-full bg-primary" />}
-                              </div>
+                                {active ? (
+                                  <div className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+                                ) : (
+                                  <ArrowRight className="h-4 w-4 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
+                                )}
+                              </button>
                             )
                           })}
                         </div>
@@ -708,9 +813,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   </div>
                 )}
               </>
+              </div>
             )}
 
             {step === 2 && mode === 'single' && (
+              <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <div className="space-y-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right">Platform</Label>
@@ -729,32 +836,36 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                 <div className="grid grid-cols-4 items-start gap-4">
                   <Label htmlFor="sourceUsername" className="text-right pt-2">Source Identity</Label>
                   <div className="col-span-3">
-                    <Input id="sourceUsername" name="sourceUsername" placeholder={sourceIdentityPlaceholder(platform)} required />
+                    <Input
+                      id="sourceUsername"
+                      name="sourceUsername"
+                      value={sourceUsername}
+                      onChange={(e) =>
+                        setSourceUsername(sanitizeSourceIdentityInput(platform, e.target.value))
+                      }
+                      placeholder={sourceIdentityPlaceholder(platform)}
+                      required
+                    />
                   </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-xs">Posts Per Day</Label>
-                  <div className="col-span-3">
-                    <Select name="postsPerDay" value={postsPerDay} onValueChange={setPostsPerDay}>
-                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
-                          <SelectItem key={n} value={n.toString()}>{n} Posts</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Posts Per Day</Label>
+                  <PostsPerDayPicker
+                    name="postsPerDay"
+                    value={Number.parseInt(postsPerDay, 10) || 1}
+                    onValueChange={setPostsPerDay}
+                  />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right text-xs">Timezone</Label>
-                  <div className="col-span-3">
-                    <TimezoneSelect name="timezone" value={timezone} onValueChange={setTimezone} />
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Timezone</Label>
+                  <TimezoneSelect name="timezone" value={timezone} onValueChange={setTimezone} />
                 </div>
+              </div>
               </div>
             )}
 
             {step === 2 && mode === 'bulk' && (
+              <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Per-Page Source Mapping</Label>
@@ -803,16 +914,20 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                         <Input
                           placeholder={sourceIdentityPlaceholder(bulkSourceConfig[page.id]?.sourcePlatform || 'instagram')}
                           value={bulkSourceConfig[page.id]?.sourceUsername || ''}
-                          onChange={(e) => updateBulkSource(page.id, { sourceUsername: e.target.value })}
+                          onChange={(e) =>
+                            updateBulkSource(page.id, { sourceUsername: e.target.value })
+                          }
                         />
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+              </div>
             )}
 
             {step === 3 && mode === 'bulk' && (
+              <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -854,20 +969,21 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                       These settings will be used for all selected pages.
                     </p>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label className="text-xs">Posts Per Day</Label>
-                        <Select value={bulkScheduleAll.postsPerDay.toString()} onValueChange={updateBulkAllPostsPerDay}>
-                          <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
-                              <SelectItem key={n} value={n.toString()}>{n} Posts</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label className="text-sm font-semibold">Posts Per Day</Label>
+                        <PostsPerDayPicker
+                          value={bulkScheduleAll.postsPerDay}
+                          onValueChange={updateBulkAllPostsPerDay}
+                        />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Timezone</Label>
-                        <TimezoneSelect value={bulkScheduleAll.timezone} onValueChange={(value) => setBulkScheduleAll((prev) => ({ ...prev, timezone: value }))} />
+                      <div className="space-y-2 md:col-span-2">
+                        <Label className="text-sm font-semibold">Timezone</Label>
+                        <TimezoneSelect
+                          value={bulkScheduleAll.timezone}
+                          onValueChange={(tz) =>
+                            setBulkScheduleAll((prev) => ({ ...prev, timezone: tz }))
+                          }
+                        />
                       </div>
                     </div>
 
@@ -900,21 +1016,20 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                       return (
                         <div key={`schedule-${page.id}`} className="space-y-3 rounded-lg border p-3">
                           <p className="text-xs font-semibold">{page.name}</p>
-                          <div className="grid gap-3 md:grid-cols-2">
+                          <div className="grid gap-3">
                             <div className="space-y-2">
-                              <Label className="text-xs">Posts Per Day</Label>
-                              <Select value={pageSchedule.postsPerDay.toString()} onValueChange={(value) => updateBulkPagePostsPerDay(page.id, value)}>
-                                <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
-                                    <SelectItem key={n} value={n.toString()}>{n} Posts</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <Label className="text-xs font-semibold">Posts Per Day</Label>
+                              <PostsPerDayPicker
+                                value={pageSchedule.postsPerDay}
+                                onValueChange={(v) => updateBulkPagePostsPerDay(page.id, v)}
+                              />
                             </div>
                             <div className="space-y-2">
-                              <Label className="text-xs">Timezone</Label>
-                              <TimezoneSelect value={pageSchedule.timezone} onValueChange={(value) => updateBulkPageTimezone(page.id, value)} />
+                              <Label className="text-xs font-semibold">Timezone</Label>
+                              <TimezoneSelect
+                                value={pageSchedule.timezone}
+                                onValueChange={(value) => updateBulkPageTimezone(page.id, value)}
+                              />
                             </div>
                           </div>
 
@@ -944,16 +1059,25 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   </div>
                 )}
               </div>
+              </div>
             )}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
-          {error && <div className="text-destructive text-sm mb-3">{error}</div>}
+          {error && (
+            <div className="mx-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-          <DialogFooter className="flex justify-between sm:justify-between">
+          <DialogFooter className="flex shrink-0 justify-between gap-2 border-t border-border/50 bg-card/40 px-6 py-4 sm:justify-between">
             {step > 1 && (
               <Button
                 type="button"
                 variant="outline"
+                className="rounded-xl"
+                disabled={isBusy}
                 onClick={() => {
                   if (mode === 'single') {
                     setStep(1)
@@ -969,24 +1093,29 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
             {(mode === 'single' && step === 1) || (mode === 'bulk' && step < 3) ? (
               <Button
                 type="button"
+                className="rounded-xl"
                 onClick={handleNext}
                 disabled={
-                  mode === 'single'
+                  isBusy ||
+                  (mode === 'single'
                     ? !selectedPage
                     : step === 1
                       ? selectedPages.length === 0
-                      : selectedPages.some((page) => !(bulkSourceConfig[page.id]?.sourceUsername || '').trim())
+                      : selectedPages.some(
+                          (page) => !(bulkSourceConfig[page.id]?.sourceUsername || '').trim(),
+                        ))
                 }
               >
                 Next
               </Button>
             ) : (
-              <Button type="submit" loading={isPending}>
+              <Button type="submit" loading={isPending} className="rounded-xl">
                 {mode === 'single' ? 'Start Automation' : 'Create Selected Pages'}
               </Button>
             )}
           </DialogFooter>
         </form>
+        </motion.div>
       </DialogContent>
     </Dialog>
   )

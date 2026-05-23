@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -100,13 +102,13 @@
   --chart-4: #0EA5E9;
   --chart-5: #84CC16;
 
-  --sidebar: #ECFDF5;
+  --sidebar: #F4FBF7;
   --sidebar-foreground: #10221A;
   --sidebar-primary: #059669;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-accent: #D1FAE5;
   --sidebar-accent-foreground: #065F46;
-  --sidebar-border: #D8E8DF;
+  --sidebar-border: #C5E6D4;
   --sidebar-ring: #10B981;
 }
 
@@ -145,11 +147,11 @@
   --chart-4: #84CC16;
   --chart-5: #F87171;
 
-  --sidebar: #0F172A;
+  --sidebar: #0B1220;
   --sidebar-foreground: #E6F6EE;
   --sidebar-primary: #22C55E;
   --sidebar-primary-foreground: #052E16;
-  --sidebar-accent: #1F2937;
+  --sidebar-accent: #1A2332;
   --sidebar-accent-foreground: #BBF7D0;
   --sidebar-border: #1F2937;
   --sidebar-ring: #22C55E;
@@ -316,6 +318,51 @@
 
   .agency-motion-standard {
     @apply animate-in fade-in duration-200 motion-reduce:animate-none;
+  }
+
+  /**
+   * Dashboard sidebar shell (documentation/webapp/ui-ux-reference.md §1.2).
+   */
+  .dashboard-sidebar-surface {
+    @apply relative bg-sidebar/80 text-sidebar-foreground backdrop-blur-xl;
+  }
+
+  .dashboard-sidebar-surface::before {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--sidebar-primary) 6%, transparent) 0%,
+      transparent 48%
+    );
+  }
+
+  .dashboard-sidebar-surface > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .dashboard-sidebar-section-label {
+    @apply px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  .dashboard-nav-active {
+    @apply border-l-2 border-sidebar-primary bg-sidebar-accent font-medium text-sidebar-accent-foreground shadow-sm ring-1 ring-sidebar-primary/15;
+  }
+
+  .dashboard-sidebar-popover {
+    @apply min-w-56 border-border/50 bg-popover/95 shadow-lg backdrop-blur-xl;
+  }
+
+  .dashboard-sidebar-footer {
+    @apply rounded-xl border border-sidebar-border/50 bg-card/40 p-2 shadow-sm backdrop-blur-xl;
+  }
+
+  .dashboard-shell-header {
+    @apply border-b border-border/50 bg-background/60 shadow-sm backdrop-blur-xl;
   }
 
   .btn-primary {

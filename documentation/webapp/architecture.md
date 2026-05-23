@@ -33,8 +33,9 @@
 - `webapp/src/lib/r2`
   - R2 presigned URL generation, object key building, object deletion.
 - `webapp/src/components/dashboard`
-  - `shell.tsx` — sidebar-based layout (replaces former top-bar).
-  - `agency-sidebar-nav.tsx` — platform accordion navigation.
+  - `shell.tsx` — `SidebarProvider` layout (shadcn/ui Sidebar).
+  - `app-sidebar.tsx` — role-based sidebar (agency groups + super-admin flat nav).
+  - `nav-config.ts` — navigation trees; `nav-user.tsx` — footer (tokens, user, sign out).
   - `coming-soon.tsx` — reusable shell placeholder.
 
 ## Route Structure (Agency)

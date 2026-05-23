@@ -27,7 +27,8 @@ export async function publishFacebookFeedPost(params: {
 }) {
   const accessToken = params.pageToken
 
-  if (params.mediaType === 'text') {
+  try {
+    if (params.mediaType === 'text') {
     const body: Record<string, string | number | boolean> = {
       access_token: accessToken,
       message: params.message || '',
@@ -70,8 +71,14 @@ export async function publishFacebookFeedPost(params: {
     body.published = false
     body.scheduled_publish_time = params.scheduledPublishTime
   }
-  const res = await axios.post(graphUrl(`${params.pageId}/videos`), null, { params: body })
-  return String(res.data.id || '')
+    const res = await axios.post(graphUrl(`${params.pageId}/videos`), null, { params: body })
+    return String(res.data.id || '')
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+      throw new Error(error.response.data.error.message)
+    }
+    throw error
+  }
 }
 
 export async function postFacebookFirstComment(params: {
@@ -79,21 +86,35 @@ export async function postFacebookFirstComment(params: {
   pageToken: string
   message: string
 }) {
-  await axios.post(graphUrl(`${params.graphPostId}/comments`), null, {
-    params: {
-      access_token: params.pageToken,
-      message: params.message,
-    },
-  })
+  try {
+    await axios.post(graphUrl(`${params.graphPostId}/comments`), null, {
+      params: {
+        access_token: params.pageToken,
+        message: params.message,
+      },
+    })
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+      throw new Error(error.response.data.error.message)
+    }
+    throw error
+  }
 }
 
 export async function cancelFacebookScheduledPost(params: {
   graphPostId: string
   pageToken: string
 }) {
-  await axios.delete(graphUrl(params.graphPostId), {
-    params: { access_token: params.pageToken },
-  })
+  try {
+    await axios.delete(graphUrl(params.graphPostId), {
+      params: { access_token: params.pageToken },
+    })
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+      throw new Error(error.response.data.error.message)
+    }
+    throw error
+  }
 }
 
 export { FACEBOOK_GRAPH_VERSION }

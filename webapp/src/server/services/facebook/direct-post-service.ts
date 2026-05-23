@@ -106,18 +106,27 @@ export async function publishDirectPost(agencyId: string, input: DirectPostInput
   return data
 }
 
-export async function listDirectPostHistory(agencyId: string) {
+export async function listDirectPostHistory(
+  agencyId: string,
+  params?: { limit?: number; offset?: number }
+) {
+  const limit = params?.limit ?? 50
+  const offset = params?.offset ?? 0
+
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from('facebook_direct_posts')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('agency_id', agencyId)
     .order('created_at', { ascending: false })
-    .limit(50)
+    .range(offset, offset + limit - 1)
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return data ?? []
+  return {
+    posts: data ?? [],
+    totalCount: count ?? 0,
+  }
 }

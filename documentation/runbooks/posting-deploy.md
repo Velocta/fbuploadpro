@@ -2,12 +2,12 @@
 
 ## Pre-deploy checklist
 
-- Confirm `database/production_schema.sql` includes `posting_jobs_v2` and V2 RPCs.
-- Cloudflare account has R2 bucket `fbuploadprov2-v2-posting-media`.
-- Worker service bindings match names in each `wrangler.toml` under `backend_v3/services/facebook/auto-download-upload/posting/`.
-- Set `posting_v2_intake_paused = true` before deploying workers.
+- Confirm `database/production_schema.sql` includes `adu_posting_jobs`, buffer columns on `reels`, and ADU RPCs.
+- Apply migration `database/migrations/20260523120000_adu_buffer_pipeline.sql` to Supabase.
+- Cloudflare account has R2 bucket `fbuploadpro-adu-buffer`.
+- VPS has `yt-dlp`, `ffmpeg`, `aria2c`, and Python deps for `downloader/`.
 
-## Deploy
+## Deploy Cloudflare workers
 
 From repo root, with env vars set:
 
@@ -15,24 +15,26 @@ From repo root, with env vars set:
 export SUPABASE_URL=...
 export SUPABASE_SERVICE_ROLE_KEY=...
 export INTERNAL_JOB_DISPATCH_TOKEN=...
-# optional: export RESIDENTIAL_PROXY=...
 
 ./backend_v3/services/facebook/auto-download-upload/posting/deploy.sh
 ```
 
-**Order (script):** downloader-service → reel-geter → publisher → download-processor → publish-processor → scheduler.
+**Order (script):** publisher → publish-processor → scheduler.
 
-## Post-deploy (intake paused)
+## Deploy VPS buffer downloader
 
-- Scheduler logs: `claim_due_reels_and_create_jobs_v2` without errors.
-- Download/publish processors complete cron ticks.
-- Downloader `GET /health` → `{ ok: true }`.
-- `posting_jobs_v2` queryable.
+See `backend_v3/services/facebook/auto-download-upload/downloader/README.md` (PM2 + `.env`).
+
+## Post-deploy verification
+
+- Downloader logs: `claim_ok` / `download_ok` events.
+- Scheduler logs: `create_due_adu_posting_jobs` without errors.
+- Publish processor completes cron ticks; publisher receives internal jobs.
+- `adu_posting_jobs` and `reels.status = downloaded` rows appear for active pages.
 
 ## Controlled bring-up
 
-1. Keep `posting_v2_intake_paused = true`.
-2. Run one synthetic job (`posting-test-injection.md`).
-3. Confirm: `download_pending` → … → `published`, reel `posted`, one usage `token_transactions` row.
-4. Set `posting_v2_intake_paused = false`.
-5. Observe job status distribution and worker logs for 30+ minutes (`posting-observability.md`).
+1. Optionally keep `posting_v2_intake_paused = true` on `system_settings` (scheduler respects pause).
+2. Confirm buffer downloader fills `downloaded` reels for a test page.
+3. Run one publish cycle; confirm job `published`, reel `posted`, usage in `token_transactions`.
+4. Observe worker logs for 30+ minutes (`posting-observability.md`).
