@@ -1,11 +1,19 @@
-import { ComingSoon } from '@/components/dashboard/coming-soon'
-import { AgencyPageHeader } from '@/components/dashboard/agency'
+import { AgencyComingSoon } from '@/components/dashboard/agency'
+import { Youtube } from 'lucide-react'
 
 export default function YoutubeByocShell() {
   return (
-    <div className="space-y-6">
-      <AgencyPageHeader title="YouTube BYOC" description="Bring your own YouTube API app (coming soon)." />
-      <ComingSoon title="YouTube BYOC" />
-    </div>
+    <AgencyComingSoon
+      segments={[
+        { label: 'Agency', href: '/agency' },
+        { label: 'Settings', href: '/agency/settings' },
+        { label: 'YouTube BYOC' },
+      ]}
+      icon={<Youtube className="h-7 w-7 text-primary" />}
+      title="YouTube BYOC"
+      description="Bring your own YouTube API application credentials."
+      platformLabel="YouTube BYOC"
+      cardDescription="temporarily unavailable for general public for now"
+    />
   )
 }

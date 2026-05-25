@@ -1,4 +1,4 @@
-const HUB_ROUTES = ['/agency', '/super-admin', '/admin'] as const
+const HUB_ROUTES = ['/agency', '/super-admin'] as const
 
 /**
  * Hub routes match exactly; feature routes match self or nested paths.

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { ADD_TOKENS_HREF } from '@/components/dashboard/nav-config'
+import { ADD_TOKENS_HREF, SIDEBAR_LOCKED_TOOLTIP } from '@/components/dashboard/nav-config'
 import {
   sidebarMenuButtonActiveClass,
   sidebarSubButtonActiveClass,
@@ -51,7 +51,7 @@ export function SidebarFlatNavItem({
         <Link
           href={locked ? ADD_TOKENS_HREF : href}
           aria-disabled={locked}
-          title={locked ? 'Add tokens to unlock' : undefined}
+          title={locked ? SIDEBAR_LOCKED_TOOLTIP : undefined}
         >
           <Icon />
           <span>{title}</span>
@@ -83,7 +83,7 @@ export function SidebarSubNavItem({
         <Link
           href={locked ? ADD_TOKENS_HREF : href}
           aria-disabled={locked}
-          title={locked ? 'Add tokens to unlock' : undefined}
+          title={locked ? SIDEBAR_LOCKED_TOOLTIP : undefined}
         >
           <Icon />
           <span>{title}</span>

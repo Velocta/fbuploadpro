@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
+import Link from 'next/link'
 
+import { HubLinkPendingOverlay } from '@/components/dashboard/hub-link-pending-overlay'
 import { CardContent, CardDescription, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AgencySectionCard } from './agency-section-card'
@@ -9,11 +11,13 @@ export function AgencyEmptyState({
   title,
   description,
   action,
+  actionHref,
 }: {
   icon: ReactNode
   title: string
   description: string
   action?: { label: string; onClick: () => void }
+  actionHref?: { label: string; href: string }
 }) {
   return (
     <AgencySectionCard className="border-dashed py-10">
@@ -26,6 +30,14 @@ export function AgencyEmptyState({
         {action ? (
           <Button variant="link" className="mt-2 h-9" onClick={action.onClick}>
             {action.label}
+          </Button>
+        ) : null}
+        {actionHref ? (
+          <Button variant="link" className="relative mt-2 h-9" asChild>
+            <Link href={actionHref.href} className="relative inline-flex items-center">
+              {actionHref.label}
+              <HubLinkPendingOverlay className="rounded-md" />
+            </Link>
           </Button>
         ) : null}
       </CardContent>

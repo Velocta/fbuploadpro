@@ -1,11 +1,18 @@
-import { ComingSoon } from '@/components/dashboard/coming-soon'
-import { AgencyPageHeader } from '@/components/dashboard/agency'
+import { AgencyComingSoon } from '@/components/dashboard/agency'
+import { Youtube } from 'lucide-react'
 
 export default function YoutubeDirectPostShell() {
   return (
-    <div className="space-y-6">
-      <AgencyPageHeader title="YouTube — Direct Post" description="Coming soon." />
-      <ComingSoon title="YouTube Direct Post" />
-    </div>
+    <AgencyComingSoon
+      segments={[
+        { label: 'Agency', href: '/agency' },
+        { label: 'YouTube' },
+        { label: 'Direct Post' },
+      ]}
+      icon={<Youtube className="h-7 w-7 text-primary" />}
+      title="YouTube Direct Post"
+      description="Publish to YouTube channels immediately."
+      platformLabel="YouTube Direct Post"
+    />
   )
 }

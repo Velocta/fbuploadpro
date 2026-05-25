@@ -11,6 +11,9 @@ import {
   Settings,
   Trash2,
   Youtube,
+  Wand2,
+  Rss,
+  Wallet,
 } from 'lucide-react'
 
 export type NavBadge = 'soon'
@@ -20,6 +23,7 @@ export type NavItemConfig = {
   href: string
   icon: LucideIcon
   requiresTokens?: boolean
+  requiresRssAutoposter?: boolean
   badge?: NavBadge
 }
 
@@ -62,50 +66,59 @@ export const agencyNavGroups: NavGroupConfig[] = [
       { title: 'Direct Post', href: '/agency/facebook/direct-post', icon: Send, requiresTokens: true },
       { title: 'Direct Schedule', href: '/agency/facebook/direct-schedule', icon: Calendar, requiresTokens: true },
       { title: 'InApp Schedule', href: '/agency/facebook/inapp-schedule', icon: CalendarClock, requiresTokens: true },
+      { title: 'AI Text/Image Posts', href: '/agency/facebook/ai-posts', icon: Wand2, requiresTokens: true },
+      {
+        title: 'RSS Auto Poster',
+        href: '/agency/facebook/rss-autoposter',
+        icon: Rss,
+        requiresTokens: true,
+        requiresRssAutoposter: true,
+      },
+      { title: 'Payout Transfer', href: '/agency/facebook/payout-transfer', icon: Wallet, requiresTokens: true },
     ],
   },
   {
     id: 'youtube',
     title: 'YouTube',
     icon: Youtube,
+    requiresTokens: true,
     items: [
-      { title: 'Accounts', href: '/agency/youtube/accounts', icon: Building2 },
-      { title: 'Direct Post', href: '/agency/youtube/direct-post', icon: Send },
-      { title: 'Direct Schedule', href: '/agency/youtube/direct-schedule', icon: Calendar },
-      { title: 'InApp Schedule', href: '/agency/youtube/inapp-schedule', icon: CalendarClock },
+      { title: 'Accounts', href: '/agency/youtube/accounts', icon: Building2, requiresTokens: true },
+      { title: 'Direct Post', href: '/agency/youtube/direct-post', icon: Send, requiresTokens: true },
+      { title: 'Direct Schedule', href: '/agency/youtube/direct-schedule', icon: Calendar, requiresTokens: true },
+      { title: 'InApp Schedule', href: '/agency/youtube/inapp-schedule', icon: CalendarClock, requiresTokens: true },
     ],
   },
   {
     id: 'instagram',
     title: 'Instagram',
     icon: Instagram,
+    requiresTokens: true,
     items: [
-      { title: 'Accounts', href: '/agency/instagram/accounts', icon: Building2 },
-      { title: 'Direct Post', href: '/agency/instagram/direct-post', icon: Send },
-      { title: 'Direct Schedule', href: '/agency/instagram/direct-schedule', icon: Calendar },
-      { title: 'InApp Schedule', href: '/agency/instagram/inapp-schedule', icon: CalendarClock },
+      { title: 'Accounts', href: '/agency/instagram/accounts', icon: Building2, requiresTokens: true },
+      { title: 'Direct Post', href: '/agency/instagram/direct-post', icon: Send, requiresTokens: true },
+      { title: 'Direct Schedule', href: '/agency/instagram/direct-schedule', icon: Calendar, requiresTokens: true },
+      { title: 'InApp Schedule', href: '/agency/instagram/inapp-schedule', icon: CalendarClock, requiresTokens: true },
     ],
   },
   {
     id: 'settings',
     title: 'Settings',
     icon: Settings,
+    requiresTokens: true,
     items: [
-      { title: 'Facebook BYOC', href: '/agency/settings/facebook-byoc', icon: Facebook },
-      { title: 'YouTube BYOC', href: '/agency/settings/youtube-byoc', icon: Youtube },
-      { title: 'Instagram BYOC', href: '/agency/settings/instagram-byoc', icon: Instagram },
+      { title: 'Facebook BYOC', href: '/agency/settings/facebook-byoc', icon: Facebook, requiresTokens: true },
+      { title: 'YouTube BYOC', href: '/agency/settings/youtube-byoc', icon: Youtube, requiresTokens: true },
+      { title: 'Instagram BYOC', href: '/agency/settings/instagram-byoc', icon: Instagram, requiresTokens: true },
     ],
   },
 ]
 
+export const SIDEBAR_LOCKED_TOOLTIP = 'Feature locked — add tokens to unlock'
+
 export const superAdminNavItems: FlatNavItemConfig[] = [
   { title: 'Overview', href: '/super-admin', icon: BarChart3 },
   { title: 'Agencies', href: '/super-admin/agencies', icon: Building2 },
-]
-
-export const adminNavItems: FlatNavItemConfig[] = [
-  { title: 'Overview', href: '/admin', icon: BarChart3 },
-  { title: 'Agencies', href: '/admin/agencies', icon: Building2 },
 ]
 
 export const STORAGE_GROUPS_KEY = 'fbuploadpro-sidebar-groups'

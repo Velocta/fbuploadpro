@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { createPage, createPagesBulk } from './actions'
 import { TimezoneSelect } from '@/components/dashboard/timezone-select'
@@ -120,6 +120,9 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [bulkScheduleByPage, setBulkScheduleByPage] = useState<Record<string, BulkScheduleConfig>>({})
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false)
   const [step, setStep] = useState(1)
+  const submittingRef = useRef(false)
+  const pagesFetchGeneration = useRef(0)
+  const pagesAbortRef = useRef<AbortController | null>(null)
 
   const isBusy = isPending || isLoadingPages || isLoadingAccounts
   const totalSteps = mode === 'bulk' ? 3 : 2
@@ -170,6 +173,9 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   }
 
   async function handleAccountChange(accountId: string) {
+    pagesAbortRef.current?.abort()
+    const generation = ++pagesFetchGeneration.current
+
     setSelectedAccountId(accountId)
     setStep(1)
     setSelectedPage(null)
@@ -179,10 +185,17 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setFbPages([])
     if (!accountId) return
 
+    const controller = new AbortController()
+    pagesAbortRef.current = controller
+
     setIsLoadingPages(true)
     setError(null)
     try {
-      const res = await fetch(`/api/v1/agency/facebook/accounts/${accountId}/pages`)
+      const res = await fetch(`/api/v1/agency/facebook/accounts/${accountId}/pages`, {
+        signal: controller.signal,
+      })
+      if (generation !== pagesFetchGeneration.current) return
+
       const result = await res.json()
       if (res.ok && result.pages) {
         setFbPages(result.pages)
@@ -193,14 +206,18 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
           description: errorMsg,
         })
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      if (generation !== pagesFetchGeneration.current) return
       const errorMsg = 'An unexpected error occurred while fetching pages'
       setError(errorMsg)
       toast.error('Error', {
         description: errorMsg,
       })
     } finally {
-      setIsLoadingPages(false)
+      if (generation === pagesFetchGeneration.current) {
+        setIsLoadingPages(false)
+      }
     }
   }
 
@@ -254,7 +271,10 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setBulkScheduleByPage({})
   }
 
-  function resetDialogState() {
+  function resetDialogState(force = false) {
+    if (!force && (isPending || isLoadingPages || isLoadingAccounts)) return
+    pagesAbortRef.current?.abort()
+    pagesAbortRef.current = null
     setOpen(false)
     setStep(1)
     setMode('single')
@@ -464,8 +484,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   }
 
   const handleSubmit = (formData: FormData) => {
+    if (submittingRef.current || isPending) return
+    submittingRef.current = true
     setError(null)
     startTransition(async () => {
+      try {
       formData.set('agencyId', agencyId)
       formData.set('facebookAccountId', selectedAccountId)
 
@@ -561,8 +584,22 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
         }
       }
 
-      resetDialogState()
+      resetDialogState(true)
+      } finally {
+        submittingRef.current = false
+      }
     })
+  }
+
+  function handleDialogOpenChange(nextOpen: boolean) {
+    if (!nextOpen && (isPending || isLoadingPages || isLoadingAccounts)) {
+      toast.warning('Please wait', {
+        description: 'Finish loading or saving before closing.',
+      })
+      return
+    }
+    if (nextOpen) setOpen(true)
+    else resetDialogState()
   }
 
   const filteredAccounts = fbAccounts.filter((acc) =>
@@ -573,7 +610,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   )
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? setOpen(true) : resetDialogState())}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
         <Button className="group relative h-11 overflow-hidden rounded-xl bg-primary px-6 text-primary-foreground shadow-[0_0_28px_-8px_hsl(var(--primary)/0.55)] ring-1 ring-primary/25 transition-all hover:bg-primary/90 hover:shadow-[0_0_36px_-6px_hsl(var(--primary)/0.65)]">
           <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/15 to-white/0 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -1066,8 +1103,34 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
           </div>
 
           {error && (
-            <div className="mx-6 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {error}
+            <div className="mx-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <span className="min-w-0 flex-1">{error}</span>
+              <div className="flex shrink-0 gap-2">
+                {selectedAccountId && step === 1 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    disabled={isBusy}
+                    onClick={() => {
+                      setError(null)
+                      void handleAccountChange(selectedAccountId)
+                    }}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7"
+                  onClick={() => setError(null)}
+                >
+                  Dismiss
+                </Button>
+              </div>
             </div>
           )}
 

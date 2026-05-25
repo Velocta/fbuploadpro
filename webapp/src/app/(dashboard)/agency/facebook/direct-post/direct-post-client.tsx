@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
-import { AgencyInlineStatus } from '@/components/dashboard/agency'
+import { HubActionPendingOverlay } from '@/components/dashboard/hub-action-pending-overlay'
+import { AgencyEmptyState, AgencyInlineStatus } from '@/components/dashboard/agency'
 import { 
   Send, Type, Image as ImageIcon, Video, AlertCircle, 
   UploadCloud, FileImage, FileVideo, Trash2, Link as LinkIcon, ChevronDown, ChevronUp,
@@ -270,6 +271,20 @@ export function DirectPostClient() {
     return pages.filter((item) => item.name.toLowerCase().includes(needle))
   }, [pageSearch, pages])
 
+  if (hasLoadedAccounts && !loadingAccounts && accounts.length === 0) {
+    return (
+      <AgencyEmptyState
+        icon={<Facebook className="h-7 w-7" />}
+        title="No Facebook accounts connected"
+        description="Connect a Facebook account before publishing direct posts."
+        actionHref={{
+          label: 'Go to FB Accounts',
+          href: '/agency/facebook/accounts',
+        }}
+      />
+    )
+  }
+
   return (
     <div className="w-full relative pb-32">
       {/* SELECTION WIZARD */}
@@ -296,6 +311,10 @@ export function DirectPostClient() {
                   <div className="relative group">
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <div className="relative bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl">
+                      <HubActionPendingOverlay
+                        show={loadingAccounts}
+                        message="Loading accounts…"
+                      />
                       <div className="flex items-center gap-3 mb-6">
                         <Facebook className="text-blue-500" />
                         <h2 className="text-xl font-semibold">Select Account</h2>
@@ -318,7 +337,9 @@ export function DirectPostClient() {
                         ) : loadingAccounts ? (
                           <div className="flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground" /></div>
                         ) : filteredAccounts.length === 0 ? (
-                          <div className="text-center p-8 text-muted-foreground">No accounts found</div>
+                          <div className="text-center p-8 text-muted-foreground">
+                            No accounts match your search
+                          </div>
                         ) : (
                           filteredAccounts.map((acc) => (
                             <button
@@ -350,6 +371,7 @@ export function DirectPostClient() {
                    <div className="relative group">
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <div className="relative bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl">
+                      <HubActionPendingOverlay show={loadingPages} message="Loading pages…" />
                       <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
                           <Layers className="text-primary" />
@@ -372,7 +394,23 @@ export function DirectPostClient() {
                         {loadingPages ? (
                           <div className="col-span-2 flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground" /></div>
                         ) : filteredPages.length === 0 ? (
-                          <div className="col-span-2 text-center p-8 text-muted-foreground">No pages found</div>
+                          pages.length === 0 ? (
+                            <div className="col-span-2">
+                              <AgencyEmptyState
+                                icon={<Layers className="h-7 w-7" />}
+                                title="No pages on this account"
+                                description="This Facebook account has no managed pages available for direct post."
+                                actionHref={{
+                                  label: 'Go to FB Accounts',
+                                  href: '/agency/facebook/accounts',
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="col-span-2 text-center p-8 text-muted-foreground">
+                              No pages match your search
+                            </div>
+                          )
                         ) : (
                           filteredPages.map((page) => (
                             <button

@@ -4,10 +4,17 @@ import { useMemo, useState, useTransition } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Facebook, Trash2, Calendar, User, RefreshCw, Search } from 'lucide-react'
+import {
+  Facebook,
+  Trash2,
+  Calendar,
+  User,
+  RefreshCw,
+  Search,
+  Settings2,
+} from 'lucide-react'
 import { format } from 'date-fns'
 import Image from 'next/image'
-import { FacebookAccount } from '@/types/app.types'
 import { toast } from 'sonner'
 import { AddFacebookAccountDialog } from './add-fb-account-dialog'
 import {
@@ -21,24 +28,48 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { AgencyEmptyState } from '@/components/dashboard/agency'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { AgencyEmptyState, AgencyInlineStatus } from '@/components/dashboard/agency'
+import { fbAccountStatusLabel } from '@/lib/fb-account-status-labels'
+import type { FacebookAccountWithPageStats } from '@/server/services/agency/facebook-accounts'
+import { cn } from '@/lib/utils'
 
 const ACCOUNTS_PAGE_SIZE = 9
 
-export function FacebookAccountsList({ accounts }: { accounts: FacebookAccount[] }) {
+type StatusFilter = 'all' | 'active' | 'invalid_token'
+
+export function FacebookAccountsList({
+  accounts,
+  summary,
+  hasFacebookApp,
+}: {
+  accounts: FacebookAccountWithPageStats[]
+  summary: { total: number; active: number; invalidToken: number }
+  hasFacebookApp: boolean
+}) {
   const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [page, setPage] = useState(1)
 
   const filteredAccounts = useMemo(() => {
     const needle = search.trim().toLowerCase()
-    if (!needle) return accounts
-    return accounts.filter(
-      (account) =>
+    return accounts.filter((account) => {
+      const matchesSearch =
+        !needle ||
         account.fb_user_name?.toLowerCase().includes(needle) ||
-        account.fb_user_id?.toLowerCase().includes(needle),
-    )
-  }, [accounts, search])
+        account.fb_user_id?.toLowerCase().includes(needle)
+      const matchesStatus =
+        statusFilter === 'all' || account.status === statusFilter
+      return matchesSearch && matchesStatus
+    })
+  }, [accounts, search, statusFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredAccounts.length / ACCOUNTS_PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -48,6 +79,7 @@ export function FacebookAccountsList({ accounts }: { accounts: FacebookAccount[]
   )
 
   const handleDelete = (id: string, accountName: string) => {
+    if (isPending) return
     startTransition(async () => {
       const result = await fetch(`/api/v1/agency/facebook/accounts/${id}`, { method: 'DELETE' })
       const payload = await result.json().catch(() => null)
@@ -62,6 +94,20 @@ export function FacebookAccountsList({ accounts }: { accounts: FacebookAccount[]
         window.location.reload()
       }
     })
+  }
+
+  if (!hasFacebookApp) {
+    return (
+      <AgencyEmptyState
+        icon={<Settings2 className="h-7 w-7" />}
+        title="Connect your Facebook app"
+        description="Add your Facebook App ID and App Secret in Settings before you can connect accounts."
+        actionHref={{
+          label: 'Connect app in Settings',
+          href: '/agency/settings/facebook-byoc',
+        }}
+      />
+    )
   }
 
   if (accounts.length === 0) {
@@ -81,13 +127,27 @@ export function FacebookAccountsList({ accounts }: { accounts: FacebookAccount[]
       transition={{ duration: 0.2 }}
       className="space-y-6 pb-8"
     >
+      <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-card/40 px-5 py-4 shadow-lg backdrop-blur-xl">
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-foreground">{summary.total}</span> connected
+          {' · '}
+          <span className="text-primary">{summary.active} active</span>
+          {summary.invalidToken > 0 ? (
+            <>
+              {' · '}
+              <span className="text-destructive">{summary.invalidToken} need reconnect</span>
+            </>
+          ) : null}
+        </p>
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, delay: 0.05 }}
         className="relative group"
       >
-        <motion.div
+        <div
           className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
           aria-hidden
         />
@@ -104,143 +164,191 @@ export function FacebookAccountsList({ accounts }: { accounts: FacebookAccount[]
               </div>
             </div>
           </div>
-          <div className="relative">
-            <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
-              placeholder="Search accounts by name or ID..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
+                placeholder="Search accounts by name or ID..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(v: StatusFilter) => {
+                setStatusFilter(v)
                 setPage(1)
               }}
-            />
+            >
+              <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 sm:w-44">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="invalid_token">Invalid token</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </motion.div>
 
       {filteredAccounts.length === 0 ? (
         <div className="rounded-3xl border border-dashed bg-muted/10 py-20 text-center">
-          <p className="text-muted-foreground">No accounts match your search.</p>
+          <p className="text-muted-foreground">No accounts match your filters.</p>
         </div>
       ) : (
         <>
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {paginatedAccounts.map((account, index) => (
-              <motion.div
-                key={account.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: index * 0.04 }}
-                className="group relative"
-              >
-                <div
-                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
-                  aria-hidden
-                />
-                <div className="relative flex h-full flex-col rounded-2xl border border-border/50 bg-card/40 p-5 shadow-2xl backdrop-blur-xl transition-all hover:border-primary/30">
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex items-start justify-between gap-3"
+            {paginatedAccounts.map((account, index) => {
+              const statusDisplay = fbAccountStatusLabel(account.status)
+              const needsReconnect = account.status === 'invalid_token'
+
+              return (
+                <motion.div
+                  key={account.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: index * 0.04 }}
+                  className="group relative"
+                >
+                  <div
+                    className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
+                    aria-hidden
+                  />
+                  <div
+                    className={cn(
+                      'relative flex h-full flex-col rounded-2xl border bg-card/40 p-5 shadow-2xl backdrop-blur-xl transition-all hover:border-primary/30',
+                      needsReconnect
+                        ? 'border-destructive/35 ring-1 ring-destructive/15'
+                        : 'border-border/50',
+                    )}
                   >
-                    <div className="flex min-w-0 items-center gap-4">
-                      {account.fb_user_image ? (
-                        <Image
-                          src={account.fb_user_image}
-                          alt={account.fb_user_name || 'Facebook user image'}
-                          width={48}
-                          height={48}
-                          className="rounded-full shadow-sm ring-2 ring-transparent transition-all group-hover:ring-primary/20"
-                          unoptimized
-                        />
-                      ) : (
-                        <motion.div
-                          initial={{ scale: 0.95 }}
-                          animate={{ scale: 1 }}
-                          className="flex h-12 w-12 items-center justify-center rounded-full bg-muted ring-2 ring-transparent transition-all group-hover:ring-primary/20"
-                        >
-                          <User className="h-5 w-5 text-muted-foreground" />
-                        </motion.div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate text-lg font-semibold">{account.fb_user_name}</p>
-                        <p className="mt-0.5 truncate font-mono text-sm text-muted-foreground">
-                          {account.fb_user_id}
-                        </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-4">
+                        {account.fb_user_image ? (
+                          <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full shadow-sm ring-2 ring-transparent transition-all group-hover:ring-primary/20">
+                            <Image
+                              src={account.fb_user_image}
+                              alt={account.fb_user_name || 'Facebook user image'}
+                              fill
+                              sizes="48px"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted ring-2 ring-transparent transition-all group-hover:ring-primary/20">
+                            <User className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-semibold">{account.fb_user_name}</p>
+                          <p className="mt-0.5 truncate font-mono text-sm text-muted-foreground">
+                            {account.fb_user_id}
+                          </p>
+                        </div>
+                      </div>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                            disabled={isPending}
+                            title="Disconnect account"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="rounded-2xl border-border/50 bg-card/95 backdrop-blur-xl">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="font-display">
+                              Disconnect Facebook Account?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-muted-foreground">
+                              Are you sure you want to disconnect{' '}
+                              <strong>{account.fb_user_name}</strong>? All associated pages will
+                              also be removed. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="h-11 rounded-xl px-6 font-bold">
+                              Cancel
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() =>
+                                handleDelete(account.id, account.fb_user_name || 'this account')
+                              }
+                              className="h-11 rounded-xl bg-destructive px-6 font-bold text-destructive-foreground hover:bg-destructive/90"
+                              disabled={isPending}
+                            >
+                              {isPending ? 'Disconnecting...' : 'Disconnect'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <AgencyInlineStatus
+                        label={statusDisplay.label}
+                        tone={statusDisplay.tone}
+                      />
+                    </div>
+
+                    {account.linkedPagesCount > 0 ? (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {account.linkedPagesCount} linked page
+                        {account.linkedPagesCount === 1 ? '' : 's'}
+                        {account.invalidTokenPagesCount > 0
+                          ? ` · ${account.invalidTokenPagesCount} with invalid token`
+                          : ''}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-muted-foreground">No linked pages yet</p>
+                    )}
+
+                    {needsReconnect ? (
+                      <p className="mt-2 text-xs font-medium text-destructive">
+                        Token expired — reconnect to restore linked pages.
+                      </p>
+                    ) : null}
+
+                    <div className="mt-4 border-t border-border/50 pt-4">
+                      <div className="flex items-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        <Calendar className="mr-2 h-3.5 w-3.5 text-primary/50" />
+                        Connected{' '}
+                        {format(new Date(account.created_at ?? new Date()), 'MMM dd, yyyy')}
                       </div>
                     </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          disabled={isPending}
-                          title="Disconnect account"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="rounded-2xl border-border/50 bg-card/95 backdrop-blur-xl">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="font-display">
-                            Disconnect Facebook Account?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="text-muted-foreground">
-                            Are you sure you want to disconnect{' '}
-                            <strong>{account.fb_user_name}</strong>? All associated pages will also
-                            be removed. This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="h-11 rounded-xl px-6 font-bold">
-                            Cancel
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() =>
-                              handleDelete(account.id, account.fb_user_name || 'this account')
-                            }
-                            className="h-11 rounded-xl bg-destructive px-6 font-bold text-destructive-foreground hover:bg-destructive/90"
-                            disabled={isPending}
-                          >
-                            {isPending ? 'Disconnecting...' : 'Disconnect'}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </motion.div>
 
-                  <div className="mt-4 border-t border-border/50 pt-4">
-                    <div className="flex items-center text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      <Calendar className="mr-2 h-3.5 w-3.5 text-primary/50" />
-                      Connected {format(new Date(account.created_at ?? new Date()), 'MMM dd, yyyy')}
+                    <div className="mt-4">
+                      <AddFacebookAccountDialog
+                        reconnectAccountId={account.id}
+                        reconnectAccountName={account.fb_user_name || undefined}
+                      >
+                        <Button
+                          variant={needsReconnect ? 'default' : 'outline'}
+                          size="sm"
+                          className={cn(
+                            'w-full rounded-full',
+                            needsReconnect && 'bg-destructive hover:bg-destructive/90',
+                          )}
+                        >
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Reconnect
+                        </Button>
+                      </AddFacebookAccountDialog>
                     </div>
                   </div>
-
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                    className="mt-4"
-                  >
-                    <AddFacebookAccountDialog
-                      reconnectAccountId={account.id}
-                      reconnectAccountName={account.fb_user_name || undefined}
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full rounded-full"
-                      >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Reconnect
-                      </Button>
-                    </AddFacebookAccountDialog>
-                  </motion.div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              )
+            })}
           </div>
 
           {filteredAccounts.length > ACCOUNTS_PAGE_SIZE && (

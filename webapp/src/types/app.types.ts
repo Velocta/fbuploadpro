@@ -9,6 +9,11 @@ export type FacebookAccount = Tables<'facebook_accounts'> & {
   fb_app_id?: string | null
 }
 
+export type FacebookAccountPageStats = {
+  linkedPagesCount: number
+  invalidTokenPagesCount: number
+}
+
 /**
  * Facebook Page from Graph API
  */

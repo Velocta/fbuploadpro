@@ -139,6 +139,44 @@ Base path: `/api/v1`
   - Role: `agency | super_admin`
   - Returns: CSV attachment (`text/csv`)
 
+## Agency — Facebook RSS Auto Poster
+
+- `GET /api/v1/agency/facebook/rss-autoposter/pages`
+  - Role: `agency`
+  - Returns: `{ pages: [...] }`
+
+- `POST /api/v1/agency/facebook/rss-autoposter/pages`
+  - Role: `agency`
+  - Body: connect payload (page, feed URL, schedule, `templateDefinition`, `canvasAspectRatio`)
+  - Returns: `{ page }`
+
+- `PATCH /api/v1/agency/facebook/rss-autoposter/pages/:id`
+  - Role: `agency`
+  - Returns: `{ page }`
+
+- `DELETE /api/v1/agency/facebook/rss-autoposter/pages?id=`
+  - Role: `agency`
+
+- `POST /api/v1/agency/facebook/rss-autoposter/validate-feed`
+  - Role: `agency`
+  - Body: `{ rssFeedUrl }`
+
+- `POST /api/v1/agency/facebook/rss-autoposter/preview`
+  - Role: `agency`
+  - Body: template + sample RSS fields
+  - Returns: `{ pngBase64 }`
+
+- `GET /api/v1/agency/facebook/rss-autoposter/presets`
+  - Role: `agency`
+  - Returns built-in single-image template presets
+
+## Internal — RSS render (worker)
+
+- `POST /api/v1/internal/facebook/rss-autoposter/render`
+  - Header: `x-rss-worker-secret`
+  - Body: `{ agencyId, templateDefinition, variables }`
+  - Returns: `{ objectKey }` (R2 user-media key)
+
 ## Public OAuth Endpoints
 
 - `GET /api/v1/public/facebook/oauth/start`

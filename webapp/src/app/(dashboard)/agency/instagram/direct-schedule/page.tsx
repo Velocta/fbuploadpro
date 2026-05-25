@@ -1,11 +1,18 @@
-import { ComingSoon } from '@/components/dashboard/coming-soon'
-import { AgencyPageHeader } from '@/components/dashboard/agency'
+import { AgencyComingSoon } from '@/components/dashboard/agency'
+import { Instagram } from 'lucide-react'
 
 export default function InstagramDirectScheduleShell() {
   return (
-    <div className="space-y-6">
-      <AgencyPageHeader title="Instagram — Direct Schedule" description="Coming soon." />
-      <ComingSoon title="Instagram Direct Schedule" />
-    </div>
+    <AgencyComingSoon
+      segments={[
+        { label: 'Agency', href: '/agency' },
+        { label: 'Instagram' },
+        { label: 'Direct Schedule' },
+      ]}
+      icon={<Instagram className="h-7 w-7 text-primary" />}
+      title="Instagram Direct Schedule"
+      description="Schedule Instagram posts in advance."
+      platformLabel="Instagram Direct Schedule"
+    />
   )
 }

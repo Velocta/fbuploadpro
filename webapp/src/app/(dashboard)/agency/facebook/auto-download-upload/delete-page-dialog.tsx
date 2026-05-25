@@ -35,6 +35,7 @@ export function DeletePageDialog({
   const router = useRouter()
 
   const handleDelete = () => {
+    if (isPending) return
     startTransition(async () => {
       const result = await deletePage(pageId)
       if (result?.success) {
@@ -53,13 +54,23 @@ export function DeletePageDialog({
     })
   }
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next && isPending) return
+    setOpen(next)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        {trigger || (
+        {trigger ? (
+          <span className={isPending ? 'pointer-events-none inline-flex opacity-50' : 'inline-flex'}>
+            {trigger}
+          </span>
+        ) : (
           <Button
             variant="outline"
             size="sm"
+            disabled={isPending}
             className="rounded-full border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />

@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: true,
+  // Native addons — must not be bundled by Turbopack/webpack
+  serverExternalPackages: [
+    '@napi-rs/canvas',
+    '@napi-rs/canvas-linux-x64-gnu',
+    'sharp',
+  ],
   experimental: {
     optimizePackageImports: ['lucide-react'],
   },

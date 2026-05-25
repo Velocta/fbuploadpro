@@ -106,11 +106,63 @@ export async function cancelFacebookScheduledPost(params: {
   pageToken: string
 }) {
   try {
-    await axios.delete(graphUrl(params.graphPostId), {
+    // Scheduled posts often cannot be deleted using the {page_id}_{post_id} format.
+    // We should use just the post_id part if an underscore is present.
+    const actualPostId = params.graphPostId.includes('_') 
+      ? params.graphPostId.split('_')[1] || params.graphPostId
+      : params.graphPostId
+
+    await axios.delete(graphUrl(actualPostId), {
       params: { access_token: params.pageToken },
     })
   } catch (error: unknown) {
     if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+      // If it fails with the split ID, try with the full ID as a fallback just in case
+      if (params.graphPostId.includes('_')) {
+        try {
+          await axios.delete(graphUrl(params.graphPostId), {
+            params: { access_token: params.pageToken },
+          })
+          return // Success on fallback
+        } catch (fallbackError) {
+          // Ignore fallback error and throw the original error
+        }
+      }
+      throw new Error(error.response.data.error.message)
+    }
+    throw error
+  }
+}
+
+export async function rescheduleFacebookPost(params: {
+  graphPostId: string
+  pageToken: string
+  scheduledPublishTime: number
+}) {
+  try {
+    const actualPostId = params.graphPostId.includes('_') 
+      ? params.graphPostId.split('_')[1] || params.graphPostId
+      : params.graphPostId
+
+    await axios.post(graphUrl(actualPostId), null, {
+      params: { 
+        access_token: params.pageToken,
+        scheduled_publish_time: params.scheduledPublishTime
+      },
+    })
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.data?.error?.message) {
+      if (params.graphPostId.includes('_')) {
+        try {
+          await axios.post(graphUrl(params.graphPostId), null, {
+            params: { 
+              access_token: params.pageToken,
+              scheduled_publish_time: params.scheduledPublishTime
+            },
+          })
+          return
+        } catch (fallbackError) {}
+      }
       throw new Error(error.response.data.error.message)
     }
     throw error

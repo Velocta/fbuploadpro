@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { PanelLeftClose } from 'lucide-react'
 
 import {
-  adminNavItems,
   agencyDashboardItem,
   agencyNavGroups,
   STORAGE_GROUPS_KEY,
@@ -30,13 +29,15 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import { filterAgencyNavGroups } from '@/lib/filter-agency-nav'
 import { findActiveGroupId, isNavActive } from '@/lib/nav-active'
 
-export type DashboardRole = 'agency' | 'super-admin' | 'admin'
+export type DashboardRole = 'agency' | 'super-admin'
 
 type AppSidebarProps = {
   role: DashboardRole
   hasTokens: boolean
+  rssAutoposterEnabled?: boolean
   userName: string
   userRole: string
   tokensBalance: number
@@ -50,11 +51,21 @@ const DEFAULT_OPEN_GROUPS: Record<string, boolean> = {
   settings: true,
 }
 
-function AgencySidebarContent({ hasTokens }: { hasTokens: boolean }) {
+function AgencySidebarContent({
+  hasTokens,
+  rssAutoposterEnabled,
+}: {
+  hasTokens: boolean
+  rssAutoposterEnabled: boolean
+}) {
   const pathname = usePathname()
   const { state, isMobile } = useSidebar()
   const iconCollapsed = state === 'collapsed' && !isMobile
   const [openGroups, setOpenGroups] = useState(DEFAULT_OPEN_GROUPS)
+  const navGroups = useMemo(
+    () => filterAgencyNavGroups(agencyNavGroups, { rssAutoposterEnabled }),
+    [rssAutoposterEnabled]
+  )
 
   useEffect(() => {
     try {
@@ -68,7 +79,7 @@ function AgencySidebarContent({ hasTokens }: { hasTokens: boolean }) {
   }, [])
 
   useEffect(() => {
-    const activeGroupId = findActiveGroupId(pathname, agencyNavGroups)
+    const activeGroupId = findActiveGroupId(pathname, navGroups)
     if (!activeGroupId) return
     setOpenGroups((prev) => {
       if (prev[activeGroupId]) return prev
@@ -80,7 +91,7 @@ function AgencySidebarContent({ hasTokens }: { hasTokens: boolean }) {
       }
       return next
     })
-  }, [pathname])
+  }, [pathname, navGroups])
 
   const setGroupOpen = (id: string, open: boolean) => {
     setOpenGroups((prev) => {
@@ -119,7 +130,7 @@ function AgencySidebarContent({ hasTokens }: { hasTokens: boolean }) {
       </SidebarGroup>
 
       <SidebarPlatformGroups
-        groups={agencyNavGroups}
+        groups={navGroups}
         hasTokens={hasTokens}
         iconCollapsed={iconCollapsed}
         openGroups={openGroups}
@@ -173,6 +184,7 @@ function FlatSidebarNav({ items }: { items: typeof superAdminNavItems }) {
 export function AppSidebar({
   role,
   hasTokens,
+  rssAutoposterEnabled = false,
   userName,
   userRole,
   tokensBalance,
@@ -180,7 +192,6 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const homeHref = useMemo(() => {
     if (role === 'super-admin') return '/super-admin'
-    if (role === 'admin') return '/admin'
     return '/agency'
   }, [role])
 
@@ -194,11 +205,12 @@ export function AppSidebar({
         <ScrollArea className="h-full">
           <div className="flex flex-col gap-2 p-2">
             {role === 'agency' ? (
-              <AgencySidebarContent hasTokens={hasTokens} />
-            ) : role === 'super-admin' ? (
-              <FlatSidebarNav items={superAdminNavItems} />
+              <AgencySidebarContent
+                hasTokens={hasTokens}
+                rssAutoposterEnabled={rssAutoposterEnabled}
+              />
             ) : (
-              <FlatSidebarNav items={adminNavItems} />
+              <FlatSidebarNav items={superAdminNavItems} />
             )}
           </div>
         </ScrollArea>

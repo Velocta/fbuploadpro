@@ -6,6 +6,7 @@ import { ChevronRight, Lock } from 'lucide-react'
 
 import {
   ADD_TOKENS_HREF,
+  SIDEBAR_LOCKED_TOOLTIP,
   type NavGroupConfig,
   type NavItemConfig,
 } from '@/components/dashboard/nav-config'
@@ -81,7 +82,7 @@ export function SidebarPlatformGroupCollapsed({
               <DropdownMenuItem asChild>
                 <Link href={ADD_TOKENS_HREF} className="gap-2">
                   <Lock className="size-4" />
-                  Add tokens to unlock
+                  {SIDEBAR_LOCKED_TOOLTIP}
                 </Link>
               </DropdownMenuItem>
             </>

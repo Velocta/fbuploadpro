@@ -7,13 +7,24 @@ import {
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireApiRole(['agency'])
   if (auth.error) return auth.error
 
   try {
-    const posts = await listDirectSchedulePosts(auth.user.id)
-    return NextResponse.json({ posts })
+    const { searchParams } = new URL(request.url)
+    const pageId = searchParams.get('pageId') || undefined
+    const bulkBatchId = searchParams.get('bulkBatchId') || undefined
+    const limit = parseInt(searchParams.get('limit') || '50', 10)
+    const offset = parseInt(searchParams.get('offset') || '0', 10)
+
+    const { posts, totalCount } = await listDirectSchedulePosts(auth.user.id, {
+      pageId,
+      bulkBatchId,
+      limit,
+      offset,
+    })
+    return NextResponse.json({ posts, totalCount })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to list scheduled posts'
     return NextResponse.json({ error: message }, { status: 500 })

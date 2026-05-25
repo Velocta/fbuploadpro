@@ -159,6 +159,7 @@ export async function togglePageStatus(pageId: string, currentStatus: string) {
   }
 
   revalidatePath(`/agency/facebook/auto-download-upload/${pageId}`)
+  revalidatePath('/agency/facebook/auto-download-upload')
   return { success: true }
 }
 

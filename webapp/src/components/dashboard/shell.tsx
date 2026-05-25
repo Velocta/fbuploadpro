@@ -3,25 +3,22 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Coins } from 'lucide-react'
-
 import { AppSidebar, type DashboardRole } from '@/components/dashboard/app-sidebar'
+import { ShellTokenBadge } from '@/components/dashboard/shell-token-badge'
 import { LEGACY_COLLAPSED_KEY } from '@/components/dashboard/nav-config'
-import { Badge } from '@/components/ui/badge'
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { cn } from '@/lib/utils'
-
 interface DashboardShellProps {
   children: React.ReactNode
   user: {
     name: string
     role: string
     tokens_balance: number
+    rss_autoposter_enabled: boolean
   }
 }
 
@@ -29,15 +26,11 @@ function resolveDashboardRole(pathname: string, profileRole: string): DashboardR
   if (pathname.startsWith('/super-admin') || profileRole === 'super_admin') {
     return 'super-admin'
   }
-  if (pathname.startsWith('/admin')) {
-    return 'admin'
-  }
   return 'agency'
 }
 
 function roleLabel(role: DashboardRole): string {
   if (role === 'super-admin') return 'Super Admin'
-  if (role === 'admin') return 'Admin'
   return 'Agency'
 }
 
@@ -96,6 +89,7 @@ function DashboardShellInner({
       <AppSidebar
         role={role}
         hasTokens={hasTokens}
+        rssAutoposterEnabled={user.rss_autoposter_enabled}
         userName={user.name}
         userRole={user.role}
         tokensBalance={user.tokens_balance}
@@ -110,19 +104,7 @@ function DashboardShellInner({
               {roleLabel(role)}
             </span>
           </div>
-          {isAgency ? (
-            <Badge
-              variant="outline"
-              className={cn(
-                'shrink-0 tabular-nums',
-                'border-primary/20 text-primary',
-                user.tokens_balance === 0 && 'border-destructive/30 text-destructive'
-              )}
-            >
-              <Coins className="mr-1 size-3 shrink-0" />
-              <span className="truncate">{user.tokens_balance.toLocaleString()}</span>
-            </Badge>
-          ) : null}
+          {isAgency ? <ShellTokenBadge tokensBalance={user.tokens_balance} /> : null}
         </header>
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
       </SidebarInset>

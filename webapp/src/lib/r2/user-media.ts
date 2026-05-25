@@ -59,6 +59,22 @@ export async function createPresignedDownloadUrl(objectKey: string) {
   return getSignedUrl(client, command, { expiresIn: PRESIGN_DOWNLOAD_SECONDS })
 }
 
+export async function putUserMediaObject(params: {
+  objectKey: string
+  body: Buffer | Uint8Array
+  contentType: string
+}) {
+  const client = getR2Client()
+  await client.send(
+    new PutObjectCommand({
+      Bucket: getUserMediaBucket(),
+      Key: params.objectKey,
+      Body: params.body,
+      ContentType: params.contentType,
+    })
+  )
+}
+
 export async function deleteUserMediaObject(objectKey: string) {
   const client = getR2Client()
   await client.send(

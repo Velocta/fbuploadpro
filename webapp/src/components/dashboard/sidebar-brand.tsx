@@ -33,6 +33,7 @@ export function SidebarBrand({ homeHref, trailing }: SidebarBrandProps) {
                   width={22}
                   height={22}
                   className="size-5"
+                  priority
                 />
               </div>
               <div className="flex flex-col gap-0.5 leading-none group-data-[collapsible=icon]:hidden">

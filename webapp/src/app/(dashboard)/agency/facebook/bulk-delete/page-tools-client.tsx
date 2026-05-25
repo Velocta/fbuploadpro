@@ -16,6 +16,8 @@ import {
   RefreshCw, X, ArrowRight, ChevronDown, CheckSquare, Layers, Facebook, Check
 } from 'lucide-react'
 
+import { HubActionPendingOverlay } from '@/components/dashboard/hub-action-pending-overlay'
+import { AgencyEmptyState } from '@/components/dashboard/agency'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -500,6 +502,27 @@ export function PageToolsClient() {
 
   const progressPercent = runProgress?.total ? Math.round((runProgress.processed / runProgress.total) * 100) : 0
 
+  useEffect(() => {
+    void loadAccounts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (hasLoadedAccounts && !loadingAccounts && accounts.length === 0) {
+    return (
+      <AgencyEmptyState
+        icon={<Facebook className="h-7 w-7" />}
+        title="No Facebook accounts connected"
+        description="Connect a Facebook account to use bulk delete on your pages."
+        actionHref={{
+          label: 'Go to FB Accounts',
+          href: '/agency/facebook/accounts',
+        }}
+      />
+    )
+  }
+
+  const workspaceLoading = previewLoading || loadingBrowse
+
   // ---------------------------------------------------------------------------
   // RENDER HELPERS
   // ---------------------------------------------------------------------------
@@ -568,6 +591,10 @@ export function PageToolsClient() {
                   <div className="relative group">
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <div className="relative bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl">
+                      <HubActionPendingOverlay
+                        show={loadingAccounts}
+                        message="Loading accounts…"
+                      />
                       <div className="flex items-center gap-3 mb-6">
                         <Facebook className="text-blue-500" />
                         <h2 className="text-xl font-semibold">Select Account</h2>
@@ -582,18 +609,17 @@ export function PageToolsClient() {
                         />
                       </div>
                       <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                        {!hasLoadedAccounts ? (
-                          <div className="flex flex-col items-center justify-center p-8 gap-4">
-                            <p className="text-sm text-muted-foreground text-center">Click below to fetch your connected accounts.</p>
-                            <Button onClick={() => void loadAccounts()} disabled={loadingAccounts}>
-                              {loadingAccounts ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : null}
-                              Load Accounts
-                            </Button>
+                        {!hasLoadedAccounts || loadingAccounts ? (
+                          <div className="flex flex-col items-center justify-center gap-4 p-8">
+                            <p className="text-center text-sm text-muted-foreground">
+                              Loading your connected accounts…
+                            </p>
+                            <Loader2 className="animate-spin text-muted-foreground" />
                           </div>
-                        ) : loadingAccounts ? (
-                          <div className="flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground" /></div>
                         ) : filteredAccounts.length === 0 ? (
-                          <div className="text-center p-8 text-muted-foreground">No accounts found</div>
+                          <div className="text-center p-8 text-muted-foreground">
+                            No accounts match your search
+                          </div>
                         ) : (
                           filteredAccounts.map((acc) => (
                             <button
@@ -625,6 +651,7 @@ export function PageToolsClient() {
                    <div className="relative group">
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <div className="relative bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl">
+                      <HubActionPendingOverlay show={loadingPages} message="Loading pages…" />
                       <div className="flex items-center justify-between mb-6">
                         <div className="flex items-center gap-3">
                           <Layers className="text-primary" />
@@ -647,7 +674,23 @@ export function PageToolsClient() {
                         {loadingPages ? (
                           <div className="col-span-2 flex justify-center p-8"><Loader2 className="animate-spin text-muted-foreground" /></div>
                         ) : filteredPages.length === 0 ? (
-                          <div className="col-span-2 text-center p-8 text-muted-foreground">No pages found</div>
+                          pages.length === 0 ? (
+                            <div className="col-span-2">
+                              <AgencyEmptyState
+                                icon={<Layers className="h-7 w-7" />}
+                                title="No pages on this account"
+                                description="This Facebook account has no managed pages available for bulk delete."
+                                actionHref={{
+                                  label: 'Go to FB Accounts',
+                                  href: '/agency/facebook/accounts',
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div className="col-span-2 p-8 text-center text-muted-foreground">
+                              No pages match your search
+                            </div>
+                          )
                         ) : (
                           filteredPages.map((page) => (
                             <button
@@ -711,8 +754,13 @@ export function PageToolsClient() {
         <motion.div 
           initial={{ opacity: 0, filter: 'blur(10px)' }}
           animate={{ opacity: 1, filter: 'blur(0px)' }}
-          className="flex-1 flex flex-col space-y-8"
+          className="relative flex-1 flex flex-col space-y-8"
         >
+          <HubActionPendingOverlay
+            show={workspaceLoading}
+            message="Loading page content…"
+            className="rounded-xl"
+          />
           {/* SEGMENTED CONTROL */}
           <div className="flex justify-center">
             <div className="bg-muted/50 p-1 rounded-full inline-flex relative shadow-inner border border-border/30 backdrop-blur-sm">

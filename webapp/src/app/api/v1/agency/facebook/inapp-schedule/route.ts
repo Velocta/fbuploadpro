@@ -7,13 +7,26 @@ import {
 
 export const runtime = 'nodejs'
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireApiRole(['agency'])
   if (auth.error) return auth.error
 
   try {
-    const posts = await listInappSchedulePosts(auth.user.id)
-    return NextResponse.json({ posts })
+    const { searchParams } = new URL(request.url)
+    const pageId = searchParams.get('pageId') || undefined
+    const status = searchParams.get('status') || undefined
+    const bulkBatchId = searchParams.get('bulkBatchId') || undefined
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!, 10) : undefined
+    const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset')!, 10) : undefined
+
+    const posts = await listInappSchedulePosts(auth.user.id, {
+      pageId,
+      limit,
+      offset,
+      status,
+      bulkBatchId,
+    })
+    return NextResponse.json({ posts: posts.posts, totalCount: posts.totalCount })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to list queue'
     return NextResponse.json({ error: message }, { status: 500 })

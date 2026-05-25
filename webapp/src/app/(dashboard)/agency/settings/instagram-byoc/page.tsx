@@ -1,11 +1,19 @@
-import { ComingSoon } from '@/components/dashboard/coming-soon'
-import { AgencyPageHeader } from '@/components/dashboard/agency'
+import { AgencyComingSoon } from '@/components/dashboard/agency'
+import { Instagram } from 'lucide-react'
 
 export default function InstagramByocShell() {
   return (
-    <div className="space-y-6">
-      <AgencyPageHeader title="Instagram BYOC" description="Bring your own Instagram API app (coming soon)." />
-      <ComingSoon title="Instagram BYOC" />
-    </div>
+    <AgencyComingSoon
+      segments={[
+        { label: 'Agency', href: '/agency' },
+        { label: 'Settings', href: '/agency/settings' },
+        { label: 'Instagram BYOC' },
+      ]}
+      icon={<Instagram className="h-7 w-7 text-primary" />}
+      title="Instagram BYOC"
+      description="Bring your own Instagram Graph API application credentials."
+      platformLabel="Instagram BYOC"
+      cardDescription="temporarily unavailable for general public for now"
+    />
   )
 }

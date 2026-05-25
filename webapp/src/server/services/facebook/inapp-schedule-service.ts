@@ -1,6 +1,11 @@
 import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
+import { createPresignedDownloadUrl } from '@/lib/r2/user-media'
+import {
+  generateBulkScheduleTimestamps,
+  type BulkScheduleConfig,
+} from '@/lib/direct-schedule-bulk'
 import { requireAgencyHasTokens } from '@/server/services/tokens/token-cost-service'
 
 const MIN_SCHEDULE_MS = 10 * 60 * 1000
@@ -17,11 +22,24 @@ function assertScheduleWindow(scheduledAt: Date) {
   }
 }
 
+type SavedInappPage = {
+  id: string
+  fb_page_id: string
+  fb_page_access_token: string
+}
+
+type InappQueueItem = {
+  mediaType: 'text' | 'image' | 'video'
+  caption?: string
+  firstComment?: string
+  mediaObjectKey?: string
+}
+
 export async function listInappSchedulePages(agencyId: string) {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('facebook_inapp_schedule_pages')
-    .select('*')
+    .select('*, facebook_accounts(fb_user_name, fb_user_image)')
     .eq('agency_id', agencyId)
     .order('created_at', { ascending: false })
 
@@ -71,34 +89,23 @@ export async function deleteInappSchedulePage(agencyId: string, pageRowId: strin
   if (error) throw new Error(error.message)
 }
 
-export async function createInappSchedulePost(
-  agencyId: string,
-  input: {
-    savedPageId: string
-    mediaType: 'text' | 'image' | 'video'
-    caption?: string
-    firstComment?: string
-    mediaObjectKey?: string
-    scheduledAt: string
-    timezone: string
-  }
-) {
-  await requireAgencyHasTokens(agencyId)
+function resolveFirstComment(
+  item: InappQueueItem,
+  scheduleFirstComment?: string
+): string | null {
+  const value = item.firstComment?.trim() || scheduleFirstComment?.trim()
+  return value || null
+}
 
+async function queueOneInappPost(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  agencyId: string,
+  savedPage: SavedInappPage,
+  input: InappQueueItem & { scheduledAt: string; timezone: string },
+  options?: { bulkBatchId?: string; scheduleFirstComment?: string }
+) {
   const scheduledAt = new Date(input.scheduledAt)
   assertScheduleWindow(scheduledAt)
-
-  const supabase = await createClient()
-  const { data: savedPage, error: pageError } = await supabase
-    .from('facebook_inapp_schedule_pages')
-    .select('*')
-    .eq('id', input.savedPageId)
-    .eq('agency_id', agencyId)
-    .single()
-
-  if (pageError || !savedPage) {
-    throw new Error('Saved page not found')
-  }
 
   if (input.mediaType !== 'text' && !input.mediaObjectKey) {
     throw new Error('Media file is required for image and video posts')
@@ -113,11 +120,12 @@ export async function createInappSchedulePost(
       fb_page_access_token: savedPage.fb_page_access_token,
       media_type: input.mediaType,
       caption: input.caption ?? null,
-      first_comment: input.firstComment ?? null,
+      first_comment: resolveFirstComment(input, options?.scheduleFirstComment),
       media_object_key: input.mediaObjectKey ?? null,
       scheduled_at: scheduledAt.toISOString(),
       timezone: input.timezone,
       status: 'pending',
+      bulk_batch_id: options?.bulkBatchId ?? null,
     })
     .select('*')
     .single()
@@ -126,17 +134,142 @@ export async function createInappSchedulePost(
   return data
 }
 
-export async function listInappSchedulePosts(agencyId: string) {
+export async function createInappSchedulePost(
+  agencyId: string,
+  input: {
+    savedPageId: string
+    mediaType: 'text' | 'image' | 'video'
+    caption?: string
+    firstComment?: string
+    mediaObjectKey?: string
+    scheduledAt: string
+    timezone: string
+  }
+) {
+  await requireAgencyHasTokens(agencyId)
+
   const supabase = await createClient()
+  const { data: savedPage, error: pageError } = await supabase
+    .from('facebook_inapp_schedule_pages')
+    .select('id, fb_page_id, fb_page_access_token')
+    .eq('id', input.savedPageId)
+    .eq('agency_id', agencyId)
+    .single()
+
+  if (pageError || !savedPage) {
+    throw new Error('Saved page not found')
+  }
+
+  return queueOneInappPost(supabase, agencyId, savedPage, input)
+}
+
+export async function bulkCreateInappSchedulePosts(
+  agencyId: string,
+  input: {
+    savedPageId: string
+    items: InappQueueItem[]
+    schedule: BulkScheduleConfig & { firstComment?: string }
+  }
+) {
+  await requireAgencyHasTokens(agencyId)
+
+  const supabase = await createClient()
+  const { data: savedPage, error: pageError } = await supabase
+    .from('facebook_inapp_schedule_pages')
+    .select('id, fb_page_id, fb_page_access_token')
+    .eq('id', input.savedPageId)
+    .eq('agency_id', agencyId)
+    .single()
+
+  if (pageError || !savedPage) {
+    throw new Error('Saved page not found')
+  }
+
+  const timestamps = generateBulkScheduleTimestamps(input.items.length, input.schedule)
+  const bulkBatchId = crypto.randomUUID()
+  const scheduleFirstComment = input.schedule.firstComment
+
+  const rows = input.items.map((item, index) => ({
+    agency_id: agencyId,
+    page_id: savedPage.id,
+    fb_page_id: savedPage.fb_page_id,
+    fb_page_access_token: savedPage.fb_page_access_token,
+    media_type: item.mediaType,
+    caption: item.caption ?? null,
+    first_comment: resolveFirstComment(item, scheduleFirstComment),
+    media_object_key: item.mediaObjectKey ?? null,
+    scheduled_at: timestamps[index]!,
+    timezone: input.schedule.timezone,
+    status: 'pending' as const,
+    bulk_batch_id: bulkBatchId,
+  }))
+
   const { data, error } = await supabase
     .from('facebook_inapp_schedule_posts')
-    .select('*, facebook_inapp_schedule_pages(fb_page_name)')
-    .eq('agency_id', agencyId)
-    .order('scheduled_at', { ascending: false })
-    .limit(100)
+    .insert(rows)
+    .select('*')
 
   if (error) throw new Error(error.message)
-  return data ?? []
+
+  return {
+    batchId: bulkBatchId,
+    posts: data ?? [],
+    summary: { queued: data?.length ?? 0 },
+  }
+}
+
+export async function listInappSchedulePosts(
+  agencyId: string,
+  options?: {
+    pageId?: string
+    limit?: number
+    offset?: number
+    status?: string
+    bulkBatchId?: string
+  }
+) {
+  const limit = options?.limit ?? 50
+  const offset = options?.offset ?? 0
+
+  const supabase = await createClient()
+  let query = supabase
+    .from('facebook_inapp_schedule_posts')
+    .select('*, facebook_inapp_schedule_pages(fb_page_name)', { count: 'exact' })
+    .eq('agency_id', agencyId)
+    .order('scheduled_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (options?.pageId) {
+    query = query.eq('page_id', options.pageId)
+  }
+
+  if (options?.status && options.status !== 'all') {
+    query = query.eq('status', options.status)
+  }
+
+  if (options?.bulkBatchId) {
+    query = query.eq('bulk_batch_id', options.bulkBatchId)
+  }
+
+  const { data, count, error } = await query
+
+  if (error) throw new Error(error.message)
+
+  const posts = await Promise.all(
+    (data ?? []).map(async (post) => {
+      let media_url: string | null = null
+      if (post.media_object_key) {
+        try {
+          media_url = await createPresignedDownloadUrl(post.media_object_key)
+        } catch (e) {
+          console.error('Failed to get presigned URL for', post.media_object_key)
+        }
+      }
+      return { ...post, media_url }
+    })
+  )
+
+  return { posts, totalCount: count ?? 0 }
 }
 
 export async function cancelInappSchedulePost(agencyId: string, postId: string) {
@@ -211,4 +344,45 @@ export async function updateInappSchedulePost(
 
   if (error) throw new Error(error.message)
   return data
+}
+
+export async function getAgencyInappScheduleStats(agencyId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('facebook_inapp_schedule_posts')
+    .select('status')
+    .eq('agency_id', agencyId)
+
+  if (error) throw new Error(error.message)
+
+  let pending = 0
+  let failed = 0
+
+  data?.forEach((post) => {
+    if (post.status === 'pending') pending++
+    if (post.status === 'failed') failed++
+  })
+
+  return { pending, failed }
+}
+
+export async function getInappSchedulePageStats(agencyId: string, pageId: string) {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('facebook_inapp_schedule_posts')
+    .select('status')
+    .eq('agency_id', agencyId)
+    .eq('page_id', pageId)
+
+  if (error) throw new Error(error.message)
+
+  let pending = 0
+  let failed = 0
+
+  data?.forEach((post) => {
+    if (post.status === 'pending') pending++
+    if (post.status === 'failed') failed++
+  })
+
+  return { pending, failed }
 }

@@ -3,3 +3,8 @@ export { AgencyGlassPageHero, type AgencyBreadcrumbSegment } from './agency-glas
 export { AgencySectionCard } from './agency-section-card'
 export { AgencyEmptyState } from './agency-empty-state'
 export { AgencyInlineStatus } from './agency-inline-status'
+export { AgencyComingSoon } from './agency-coming-soon'
+export {
+  FacebookPageInsightsTab,
+  type FacebookPageInsightsTabProps,
+} from './facebook-page-insights-tab'

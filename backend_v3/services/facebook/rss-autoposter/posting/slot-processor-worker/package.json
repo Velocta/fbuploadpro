@@ -1,0 +1,9 @@
+{
+  "name": "fbuploadpro-fb-rss-autoposter-slot-processor",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0",
+    "rss-parser": "^3.13.0"
+  }
+}

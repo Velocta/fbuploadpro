@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireApiRole } from '@/server/auth/guards'
+import { requireRssAutoposterApiAccess } from '@/server/auth/rss-autoposter-access'
 import { createAgencyUploadPresign } from '@/server/services/uploads/presign-service'
 
 export const runtime = 'nodejs'
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
 
     if (!filename || !contentType || !feature) {
       return NextResponse.json({ error: 'filename, contentType, and feature are required' }, { status: 400 })
+    }
+
+    if (feature === 'rss-autoposter') {
+      const rssAccess = await requireRssAutoposterApiAccess(auth.user.id)
+      if (rssAccess) return rssAccess
     }
 
     const result = await createAgencyUploadPresign({

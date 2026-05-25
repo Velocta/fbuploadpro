@@ -44,6 +44,7 @@ export type Database = {
           fb_user_name: string | null
           fb_user_image: string | null
           fb_user_access_token: string
+          status: Database["public"]["Enums"]["profile_status_enum"]
           created_at: string | null
           updated_at: string | null
         }
@@ -54,6 +55,7 @@ export type Database = {
           fb_user_name?: string | null
           fb_user_image?: string | null
           fb_user_access_token: string
+          status?: Database["public"]["Enums"]["profile_status_enum"]
           created_at?: string | null
           updated_at?: string | null
         }
@@ -64,6 +66,7 @@ export type Database = {
           fb_user_name?: string | null
           fb_user_image?: string | null
           fb_user_access_token?: string
+          status?: Database["public"]["Enums"]["profile_status_enum"]
           created_at?: string | null
           updated_at?: string | null
         }
@@ -341,6 +344,7 @@ export type Database = {
           name: string | null
           phone_number: string
           role: Database["public"]["Enums"]["user_role_enum"]
+          rss_autoposter_enabled: boolean
           tokens_balance: number | null
           subdomain: string | null
           updated_at: string | null
@@ -356,6 +360,7 @@ export type Database = {
           name?: string | null
           phone_number?: string
           role?: Database["public"]["Enums"]["user_role_enum"]
+          rss_autoposter_enabled?: boolean
           tokens_balance?: number | null
           subdomain?: string | null
           updated_at?: string | null
@@ -371,6 +376,7 @@ export type Database = {
           name?: string | null
           phone_number?: string
           role?: Database["public"]["Enums"]["user_role_enum"]
+          rss_autoposter_enabled?: boolean
           tokens_balance?: number | null
           subdomain?: string | null
           updated_at?: string | null
@@ -507,6 +513,7 @@ export type Database = {
           facebook_schedule_id: string | null
           tokens_charged: number
           error_message: string | null
+          bulk_batch_id: string | null
           created_at: string | null
         }
         Insert: {
@@ -524,6 +531,7 @@ export type Database = {
           facebook_schedule_id?: string | null
           tokens_charged?: number
           error_message?: string | null
+          bulk_batch_id?: string | null
           created_at?: string | null
         }
         Update: {
@@ -541,6 +549,7 @@ export type Database = {
           facebook_schedule_id?: string | null
           tokens_charged?: number
           error_message?: string | null
+          bulk_batch_id?: string | null
           created_at?: string | null
         }
         Relationships: []
@@ -575,6 +584,150 @@ export type Database = {
           fb_page_image?: string | null
           fb_page_access_token?: string
           created_at?: string | null
+        }
+        Relationships: []
+      }
+      facebook_rss_autoposter_pages: {
+        Row: {
+          id: string
+          agency_id: string
+          facebook_account_id: string
+          fb_page_id: string
+          fb_page_name: string | null
+          fb_page_image: string | null
+          fb_page_access_token: string
+          rss_feed_url: string
+          status: string
+          timezone: string
+          posts_per_day: number
+          schedule_type: Database['public']['Enums']['schedule_type_enum']
+          posting_times: Json
+          template_definition: Json
+          template_preset_key: string | null
+          canvas_aspect_ratio: string
+          brand_logo_object_key: string | null
+          brand_site_url: string | null
+          first_comment: string | null
+          last_fetch_error: string | null
+          feed_etag: string | null
+          feed_last_modified: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          agency_id: string
+          facebook_account_id: string
+          fb_page_id: string
+          fb_page_name?: string | null
+          fb_page_image?: string | null
+          fb_page_access_token: string
+          rss_feed_url: string
+          status?: string
+          timezone?: string
+          posts_per_day?: number
+          schedule_type?: Database['public']['Enums']['schedule_type_enum']
+          posting_times?: Json
+          template_definition?: Json
+          template_preset_key?: string | null
+          canvas_aspect_ratio?: string
+          brand_logo_object_key?: string | null
+          brand_site_url?: string | null
+          first_comment?: string | null
+          last_fetch_error?: string | null
+          feed_etag?: string | null
+          feed_last_modified?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          agency_id?: string
+          facebook_account_id?: string
+          fb_page_id?: string
+          fb_page_name?: string | null
+          fb_page_image?: string | null
+          fb_page_access_token?: string
+          rss_feed_url?: string
+          status?: string
+          timezone?: string
+          posts_per_day?: number
+          schedule_type?: Database['public']['Enums']['schedule_type_enum']
+          posting_times?: Json
+          template_definition?: Json
+          template_preset_key?: string | null
+          canvas_aspect_ratio?: string
+          brand_logo_object_key?: string | null
+          brand_site_url?: string | null
+          first_comment?: string | null
+          last_fetch_error?: string | null
+          feed_etag?: string | null
+          feed_last_modified?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      facebook_rss_autoposter_items: {
+        Row: {
+          id: string
+          page_id: string
+          agency_id: string
+          item_guid: string
+          title: string | null
+          description: string | null
+          link: string | null
+          source_image_url: string | null
+          status: string
+          scheduled_at: string
+          rendered_object_key: string | null
+          graph_post_id: string | null
+          tokens_charged: number
+          error_message: string | null
+          retry_count: number
+          published_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          page_id: string
+          agency_id: string
+          item_guid: string
+          title?: string | null
+          description?: string | null
+          link?: string | null
+          source_image_url?: string | null
+          status?: string
+          scheduled_at?: string
+          rendered_object_key?: string | null
+          graph_post_id?: string | null
+          tokens_charged?: number
+          error_message?: string | null
+          retry_count?: number
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          page_id?: string
+          agency_id?: string
+          item_guid?: string
+          title?: string | null
+          description?: string | null
+          link?: string | null
+          source_image_url?: string | null
+          status?: string
+          scheduled_at?: string
+          rendered_object_key?: string | null
+          graph_post_id?: string | null
+          tokens_charged?: number
+          error_message?: string | null
+          retry_count?: number
+          published_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -684,6 +837,7 @@ export type Database = {
           tokens_charged: number
           published_at: string | null
           error_message: string | null
+          bulk_batch_id: string | null
           created_at: string | null
           updated_at: string | null
         }
@@ -705,6 +859,7 @@ export type Database = {
           tokens_charged?: number
           published_at?: string | null
           error_message?: string | null
+          bulk_batch_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -726,6 +881,7 @@ export type Database = {
           tokens_charged?: number
           published_at?: string | null
           error_message?: string | null
+          bulk_batch_id?: string | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -747,6 +903,27 @@ export type Database = {
       claim_due_facebook_inapp_schedule_posts: {
         Args: { p_limit?: number }
         Returns: Database['public']['Tables']['facebook_inapp_schedule_posts']['Row'][]
+      }
+      get_facebook_rss_autoposter_pages_due_posting: {
+        Args: Record<string, never>
+        Returns: Database['public']['Tables']['facebook_rss_autoposter_pages']['Row'][]
+      }
+      is_rss_item_posted_in_window: {
+        Args: { p_page_id: string; p_item_guid: string; p_days?: number }
+        Returns: boolean
+      }
+      finalize_facebook_rss_autoposter_item: {
+        Args: {
+          p_item_id: string
+          p_graph_post_id: string
+          p_rendered_object_key: string
+          p_tokens_charged?: number
+        }
+        Returns: undefined
+      }
+      cleanup_old_facebook_rss_autoposter_items: {
+        Args: Record<string, never>
+        Returns: number
       }
       delete_page_with_reels: {
         Args: { p_page_id: string }

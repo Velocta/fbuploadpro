@@ -18,7 +18,7 @@ export default async function DashboardLayout({
   // Fetch role, name and tokens
   const { data: profile } = await supabase
     .from('users')
-    .select('name, role, tokens_balance')
+    .select('name, role, tokens_balance, rss_autoposter_enabled')
     .eq('id', user.id)
     .single()
 
@@ -27,7 +27,8 @@ export default async function DashboardLayout({
       user={{
         name: profile?.name || 'User',
         role: profile?.role || 'agency',
-        tokens_balance: profile?.tokens_balance || 0
+        tokens_balance: profile?.tokens_balance || 0,
+        rss_autoposter_enabled: profile?.rss_autoposter_enabled ?? false,
       }}
     >
       {children}

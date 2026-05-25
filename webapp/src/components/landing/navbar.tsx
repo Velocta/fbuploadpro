@@ -48,7 +48,14 @@ export function Navbar() {
       <div className="container mx-auto px-4 flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md">
           <div className="relative w-8 h-8">
-            <Image src="/logo.svg" alt="FBupload Pro Logo" width={32} height={32} className="h-8 w-8" />
+            <Image
+              src="/logo.svg"
+              alt="FBupload Pro Logo"
+              width={32}
+              height={32}
+              className="h-8 w-8"
+              priority
+            />
           </div>
           <span className="text-xl font-display font-bold tracking-tight whitespace-nowrap">FBupload Pro</span>
         </Link>

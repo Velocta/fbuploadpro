@@ -3,6 +3,8 @@ import { REQUIRED_SCOPES } from '@/lib/constants/facebook'
 import { graphGet } from '@/server/integrations/facebook/graph-client'
 import { signData, verifyData } from '@/lib/utils/signing'
 import { AxiosError } from 'axios'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/database.types'
 
 type UserSettings = {
   fb_app_id: string | null
@@ -45,6 +47,75 @@ export async function buildDirectOauthUrl(agencyId: string, host: string, protoc
 export async function buildMagicConnectLink(agencyId: string, host: string, protocol: string, reconnectAccountId?: string) {
   const token = signData({ agencyId, reconnectAccountId }, 10 * 60 * 1000)
   return `${protocol}://${host}/fb-connect?token=${token}`
+}
+
+type AdminClient = SupabaseClient<Database>
+
+type LinkedPageRow = {
+  id: string
+  fb_page_id: string
+  status: string | null
+}
+
+/** Refreshes page access tokens from the user token; only invalid_token pages become active. */
+export async function refreshLinkedPageTokens(
+  supabase: AdminClient,
+  accountId: string,
+  agencyId: string,
+  userAccessToken: string,
+) {
+  const { data: pagesToSync } = await supabase
+    .from('pages')
+    .select('id, fb_page_id, status')
+    .eq('agency_id', agencyId)
+    .eq('facebook_account_id', accountId)
+
+  for (const page of (pagesToSync || []) as LinkedPageRow[]) {
+    try {
+      const tokenRes = await graphGet<{ access_token: string }>(page.fb_page_id, {
+        fields: 'access_token',
+        access_token: userAccessToken,
+      })
+      const updates: {
+        fb_page_access_token: string
+        updated_at: string
+        status?: Database['public']['Enums']['profile_status_enum']
+      } = {
+        fb_page_access_token: tokenRes.data.access_token,
+        updated_at: new Date().toISOString(),
+      }
+      if (page.status === 'invalid_token') {
+        updates.status = 'active'
+      }
+      await supabase.from('pages').update(updates).eq('id', page.id)
+    } catch {
+      /* per-page Graph failures are non-fatal */
+    }
+  }
+
+  const { data: rssPages } = await supabase
+    .from('facebook_rss_autoposter_pages')
+    .select('id, fb_page_id')
+    .eq('agency_id', agencyId)
+    .eq('facebook_account_id', accountId)
+
+  for (const rssPage of rssPages || []) {
+    try {
+      const tokenRes = await graphGet<{ access_token: string }>(rssPage.fb_page_id, {
+        fields: 'access_token',
+        access_token: userAccessToken,
+      })
+      await supabase
+        .from('facebook_rss_autoposter_pages')
+        .update({
+          fb_page_access_token: tokenRes.data.access_token,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', rssPage.id)
+    } catch {
+      /* per-page Graph failures are non-fatal */
+    }
+  }
 }
 
 export async function buildMagicOauthUrl(token: string, host: string, protocol: string) {
@@ -179,6 +250,7 @@ export async function processFacebookCallback(code: string, state: string | unde
         fb_user_name: fbUser.name,
         fb_user_access_token: longLivedToken,
         fb_user_image: profilePicture,
+        status: 'active',
       },
       { onConflict: 'agency_id,fb_user_id' }
     )
@@ -189,26 +261,5 @@ export async function processFacebookCallback(code: string, state: string | unde
     throw new Error('Failed to save account to database.')
   }
 
-  const { data: pagesToSync } = await supabase
-    .from('pages')
-    .select('id, fb_page_id, status')
-    .eq('agency_id', agencyId)
-    .eq('facebook_account_id', upsertedAccount.id)
-
-  for (const page of pagesToSync || []) {
-    try {
-      const tokenRes = await graphGet<{ access_token: string }>(page.fb_page_id, {
-        fields: 'access_token',
-        access_token: longLivedToken,
-      })
-      const updates: { fb_page_access_token: string; updated_at: string; status?: 'active' } = {
-        fb_page_access_token: tokenRes.data.access_token,
-        updated_at: new Date().toISOString(),
-      }
-      if (page.status === 'invalid_token' || page.status === 'fb_verification_required') {
-        updates.status = 'active'
-      }
-      await supabase.from('pages').update(updates).eq('id', page.id)
-    } catch {}
-  }
+  await refreshLinkedPageTokens(supabase, upsertedAccount.id, agencyId, longLivedToken)
 }

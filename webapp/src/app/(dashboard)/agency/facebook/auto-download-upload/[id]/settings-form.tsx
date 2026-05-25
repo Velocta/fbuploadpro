@@ -86,7 +86,9 @@ function formatUtcTimeForTimezone(utcTime: string, timezone: string): string {
 }
 
 export function SettingsForm({ profile }: { profile: Page }) {
-  const [isPending, startTransition] = useTransition()
+  const [automationPending, startAutomationTransition] = useTransition()
+  const [identityPending, startIdentityTransition] = useTransition()
+  const [sourcePending, startSourceTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [isEditingAutomation, setIsEditingAutomation] = useState(false)
   const [isEditingIdentity, setIsEditingIdentity] = useState(false)
@@ -122,8 +124,10 @@ export function SettingsForm({ profile }: { profile: Page }) {
   // Local state for Identity
   const [localPageName, setLocalPageName] = useState(profile.page_name || '')
 
-  const handleSettingsSubmit = (e: React.FormEvent<HTMLFormElement>, tab: string) => {
+  const handleSettingsSubmit = (e: React.FormEvent<HTMLFormElement>, tab: 'automation' | 'identity') => {
     e.preventDefault()
+    if (tab === 'automation' && automationPending) return
+    if (tab === 'identity' && identityPending) return
     setError(null)
 
     const formData = new FormData(e.currentTarget)
@@ -146,6 +150,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
       formData.set('timezone', localTimezone)
     }
 
+    const startTransition = tab === 'automation' ? startAutomationTransition : startIdentityTransition
     startTransition(async () => {
       const result = await updatePageSettings(formData)
       if (result?.error) {
@@ -182,6 +187,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
   }
 
   const handleSourceUpdate = () => {
+    if (sourcePending) return
     setError(null)
     if (!newSourceUsername.trim()) {
       setError("Please enter a valid source username.")
@@ -190,7 +196,7 @@ export function SettingsForm({ profile }: { profile: Page }) {
       })
       return
     }
-    startTransition(async () => {
+    startSourceTransition(async () => {
       const result = await updateSourceUsername(profile.id, newSourceUsername, newSourcePlatform)
       if (result?.error) {
         setError(result.error)
@@ -392,10 +398,11 @@ export function SettingsForm({ profile }: { profile: Page }) {
                         variant="ghost"
                         className="h-11 rounded-xl"
                         onClick={resetAutomation}
+                        disabled={automationPending}
                       >
                         Cancel
                       </Button>
-                      <Button type="submit" className="h-11 rounded-xl" loading={isPending}>
+                      <Button type="submit" className="h-11 rounded-xl" loading={automationPending}>
                         Save Changes
                       </Button>
                     </div>
@@ -470,9 +477,17 @@ export function SettingsForm({ profile }: { profile: Page }) {
                     {sourceIdentityLabel(profile.source_platform, profile.source_username)}
                   </p>
                 </div>
-                <Dialog open={sourceDialogOpen} onOpenChange={setSourceDialogOpen}>
+                <Dialog
+                  open={sourceDialogOpen}
+                  onOpenChange={(next) => {
+                    if (!next && sourcePending) return
+                    setSourceDialogOpen(next)
+                  }}
+                >
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="h-11 rounded-xl" type="button">Update Content Source</Button>
+                    <Button variant="outline" className="h-11 rounded-xl" type="button" disabled={sourcePending}>
+                      Update Content Source
+                    </Button>
                   </DialogTrigger>
                   <DialogContent className="border-0 bg-transparent p-0 shadow-none sm:max-w-[425px]">
                     <div className="rounded-3xl border border-border/50 bg-card/95 p-6 shadow-2xl backdrop-blur-xl">
@@ -525,8 +540,23 @@ export function SettingsForm({ profile }: { profile: Page }) {
                         </div>
                       </div>
                     </div>
-                    <DialogFooter>
-                      <Button onClick={handleSourceUpdate} className="h-11 rounded-xl" loading={isPending} disabled={!newSourceUsername.trim()} type="button">
+                    <DialogFooter className="gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-11 rounded-xl"
+                        disabled={sourcePending}
+                        onClick={() => setSourceDialogOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSourceUpdate}
+                        className="h-11 rounded-xl"
+                        loading={sourcePending}
+                        disabled={!newSourceUsername.trim() || sourcePending}
+                        type="button"
+                      >
                         Confirm Transition
                       </Button>
                     </DialogFooter>
@@ -570,10 +600,10 @@ export function SettingsForm({ profile }: { profile: Page }) {
               </CardContent>
               {isEditingIdentity && (
                 <CardFooter className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="ghost" className="h-11 rounded-xl" onClick={resetIdentity}>
+                  <Button type="button" variant="ghost" className="h-11 rounded-xl" onClick={resetIdentity} disabled={identityPending}>
                     Cancel
                   </Button>
-                  <Button type="submit" className="h-11 rounded-xl" loading={isPending}>
+                  <Button type="submit" className="h-11 rounded-xl" loading={identityPending}>
                     Save Changes
                   </Button>
                 </CardFooter>

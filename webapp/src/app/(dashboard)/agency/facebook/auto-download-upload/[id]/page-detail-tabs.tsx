@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   Activity,
   BarChart3,
@@ -74,18 +73,21 @@ export function PageDetailTabs({
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.2 }}
-          className="agency-motion-standard"
+      {TABS.map((tab) => (
+        <div
+          key={tab.id}
+          id={`adu-tab-${tab.id}`}
+          role="tabpanel"
+          aria-labelledby={`adu-tab-btn-${tab.id}`}
+          hidden={activeTab !== tab.id}
+          className={cn(
+            'agency-motion-standard',
+            activeTab === tab.id ? 'block animate-in fade-in duration-200' : 'hidden',
+          )}
         >
-          {panels[activeTab]}
-        </motion.div>
-      </AnimatePresence>
+          {panels[tab.id]}
+        </div>
+      ))}
     </div>
   )
 }

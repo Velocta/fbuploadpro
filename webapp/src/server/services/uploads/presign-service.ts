@@ -6,7 +6,12 @@ import {
   USER_MEDIA_MAX_BYTES,
 } from '@/lib/r2/user-media'
 
-const ALLOWED_FEATURES = new Set(['direct-post', 'direct-schedule', 'inapp-schedule'])
+const ALLOWED_FEATURES = new Set([
+  'direct-post',
+  'direct-schedule',
+  'inapp-schedule',
+  'rss-autoposter',
+])
 
 export async function createAgencyUploadPresign(params: {
   agencyId: string

@@ -1,11 +1,18 @@
-import { ComingSoon } from '@/components/dashboard/coming-soon'
-import { AgencyPageHeader } from '@/components/dashboard/agency'
+import { AgencyComingSoon } from '@/components/dashboard/agency'
+import { Youtube } from 'lucide-react'
 
 export default function YoutubeDirectScheduleShell() {
   return (
-    <div className="space-y-6">
-      <AgencyPageHeader title="YouTube — Direct Schedule" description="Coming soon." />
-      <ComingSoon title="YouTube Direct Schedule" />
-    </div>
+    <AgencyComingSoon
+      segments={[
+        { label: 'Agency', href: '/agency' },
+        { label: 'YouTube' },
+        { label: 'Direct Schedule' },
+      ]}
+      icon={<Youtube className="h-7 w-7 text-primary" />}
+      title="YouTube Direct Schedule"
+      description="Schedule YouTube uploads in advance."
+      platformLabel="YouTube Direct Schedule"
+    />
   )
 }

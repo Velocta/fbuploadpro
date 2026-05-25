@@ -4,7 +4,7 @@ import { DirectPostClient } from './direct-post-client'
 
 export default function FacebookDirectPostPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8 agency-motion-standard">
       <AgencyGlassPageHero
         icon={<Send className="h-6 w-6 text-primary" />}
         title="Direct Post"

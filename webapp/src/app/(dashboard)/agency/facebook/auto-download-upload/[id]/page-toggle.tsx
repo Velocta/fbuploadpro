@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { togglePageStatus } from './actions'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -8,26 +9,39 @@ import { RefreshCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { AgencyInlineStatus } from '@/components/dashboard/agency'
 
-export function PageToggle({ pageId, initialStatus }: { pageId: string, initialStatus: string }) {
+export function PageToggle({ pageId, initialStatus }: { pageId: string; initialStatus: string }) {
+  const [status, setStatus] = useState(initialStatus)
   const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+
+  useEffect(() => {
+    setStatus(initialStatus)
+  }, [initialStatus])
 
   const handleToggle = () => {
-    const newStatus = initialStatus === 'active' ? 'paused' : 'active'
+    if (isPending) return
+
+    const previousStatus = status
+    const nextStatus = status === 'active' ? 'inactive' : 'active'
+    setStatus(nextStatus)
+
     startTransition(async () => {
-      const result = await togglePageStatus(pageId, initialStatus)
+      const result = await togglePageStatus(pageId, previousStatus)
       if (result?.error) {
+        setStatus(previousStatus)
         toast.error('Failed to update status', {
           description: result.error,
         })
       } else {
-        toast.success(`Automation ${newStatus}`, {
-          description: `Page automation has been ${newStatus === 'active' ? 'activated' : 'paused'}.`,
+        toast.success(`Automation ${nextStatus === 'active' ? 'activated' : 'paused'}`, {
+          description: `Page automation is now ${nextStatus === 'active' ? 'active' : 'inactive'}.`,
         })
+        router.refresh()
       }
     })
   }
 
-  const isActive = initialStatus === 'active'
+  const isActive = status === 'active'
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-3 backdrop-blur-sm">

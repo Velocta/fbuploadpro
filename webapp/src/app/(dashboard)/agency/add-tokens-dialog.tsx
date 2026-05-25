@@ -23,11 +23,23 @@ import {
     Wallet,
     Globe
 } from "lucide-react"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 
-export function AddTokensDialog() {
-    const [open, setOpen] = useState(false)
+type AddTokensDialogProps = {
+    trigger?: ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+}
+
+export function AddTokensDialog({
+    trigger,
+    open: controlledOpen,
+    onOpenChange,
+}: AddTokensDialogProps = {}) {
+    const [internalOpen, setInternalOpen] = useState(false)
+    const open = controlledOpen ?? internalOpen
+    const setOpen = onOpenChange ?? setInternalOpen
     const [region, setRegion] = useState<'pakistan' | 'other'>('pakistan')
     const whatsappUrl = "https://wa.me/923278644204"
     const facebookUrl = "https://www.facebook.com/shahzaib.pyc"
@@ -49,14 +61,20 @@ export function AddTokensDialog() {
         toast.success(`${label} copied to clipboard`)
     }
 
+    const defaultTrigger = (
+        <Button className="h-12 px-6 font-bold shadow-xl shadow-primary/20">
+            <Coins className="mr-2 h-5 w-5" />
+            Add Tokens
+        </Button>
+    )
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button className="h-12 px-6 font-bold shadow-xl shadow-primary/20">
-                    <Coins className="mr-2 h-5 w-5" />
-                    Add Tokens
-                </Button>
-            </DialogTrigger>
+            {trigger !== undefined ? (
+                trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null
+            ) : (
+                <DialogTrigger asChild>{defaultTrigger}</DialogTrigger>
+            )}
             <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-hidden flex flex-col border-border bg-card p-0">
                 <div className="p-6 pb-2">
                     <DialogHeader>
