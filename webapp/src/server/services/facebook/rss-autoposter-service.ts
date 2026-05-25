@@ -22,6 +22,8 @@ import {
 } from '@/server/repositories/rss-autoposter-repository'
 import { requireAgencyHasTokens } from '@/server/services/tokens/token-cost-service'
 
+type RssPageUpdate = Database['public']['Tables']['facebook_rss_autoposter_pages']['Update']
+
 const parser = new Parser({
   customFields: {
     item: [
@@ -137,13 +139,15 @@ export async function updateRssAutoposterPageSettings(
   const existing = await getRssAutoposterPage(agencyId, pageId)
   if (!existing) throw new Error('Page not found')
 
-  const row: Record<string, unknown> = {}
+  const row: RssPageUpdate = {}
   if (patch.rssFeedUrl) {
     await fetchAndValidateRssFeed(patch.rssFeedUrl)
     row.rss_feed_url = patch.rssFeedUrl
   }
   if (patch.timezone) row.timezone = patch.timezone
-  if (patch.templateDefinition) row.template_definition = patch.templateDefinition
+  if (patch.templateDefinition) {
+    row.template_definition = patch.templateDefinition as Database['public']['Tables']['facebook_rss_autoposter_pages']['Insert']['template_definition']
+  }
   if (patch.templatePresetKey !== undefined) row.template_preset_key = patch.templatePresetKey
   if (patch.canvasAspectRatio) row.canvas_aspect_ratio = patch.canvasAspectRatio
   if (patch.brandLogoObjectKey !== undefined) row.brand_logo_object_key = patch.brandLogoObjectKey

@@ -58,10 +58,12 @@ export async function insertRssAutoposterPage(row: RssPageInsert) {
   return data
 }
 
+type RssPageUpdate = Database['public']['Tables']['facebook_rss_autoposter_pages']['Update']
+
 export async function updateRssAutoposterPage(
   agencyId: string,
   pageId: string,
-  patch: Record<string, unknown>
+  patch: RssPageUpdate
 ) {
   const supabase = await createClient()
   const { data, error } = await supabase

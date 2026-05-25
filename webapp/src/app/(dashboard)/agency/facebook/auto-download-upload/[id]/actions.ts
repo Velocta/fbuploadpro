@@ -9,8 +9,10 @@ import { generateBalancedPostTimes } from '@/lib/scheduling'
 import { updatePageSettingsSchema, togglePageStatusSchema, updateSourceUsernameSchema } from '@/lib/validations/page'
 import { sanitizeToUtcHHMM } from '@/lib/posting-times'
 import { zodErrorMessage } from '@/lib/validations/errors'
+import type { Database } from '@/types/database.types'
 
 type SourcePlatform = 'instagram' | 'youtube' | 'tiktok' | 'facebook'
+type PageUpdate = Database['public']['Tables']['pages']['Update']
 
 type DebuggableError = {
   message: string
@@ -61,7 +63,7 @@ export async function updatePageSettings(formData: FormData) {
 
   const supabase = await createClient()
 
-  const updateData: Record<string, unknown> = {}
+  const updateData: PageUpdate = {}
 
   // Identity Fields
   if (pageName !== undefined) updateData.page_name = pageName.trim()
