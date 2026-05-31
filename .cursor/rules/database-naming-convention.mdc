@@ -1,0 +1,29 @@
+---
+description: Feature-prefixed table names and legacy table ownership
+alwaysApply: true
+---
+
+# Database Naming Convention
+
+## New tables
+
+Any table specific to a feature MUST use that feature name as a prefix:
+
+- `facebook_direct_posts`, `facebook_direct_schedule_pages`, `facebook_inapp_schedule_posts`
+- `token_cost_rules` (platform-wide billing config)
+
+## Legacy tables (Auto Download/Upload)
+
+These tables belong to the **Auto Download/Upload** feature but are **not renamed** (avoids cross-service blast radius):
+
+- `public.pages` — managed destinations + source username + schedule
+- `public.reels` — scraped reel IDs per page
+- `public.posting_jobs_v2` — download/publish pipeline jobs
+
+When adding columns or RPCs for Auto Download/Upload, keep using these table names. Do not rename to `auto_download_upload_*` without an explicit migration project.
+
+## Migrations
+
+- One new file per change in `database/migrations/`
+- Update `database/production_schema.sql` to match
+- Include RLS for all new tables

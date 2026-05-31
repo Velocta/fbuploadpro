@@ -1,0 +1,19 @@
+---
+description: Load domain skills before implementing or reviewing work
+alwaysApply: true
+---
+
+# Use Relevant Skills
+
+Before implementing or reviewing changes, read and follow the matching skill(s) under `.cursor/skills/` (or workspace skills) for the area you are touching:
+
+| Area | When to load | Examples |
+|------|----------------|----------|
+| **Webapp** (`webapp/`) | UI, Next.js routes, API v1, auth, performance | `vercel-react-best-practices`, `using-ui-stack`, `shadcn`, `supabase`, `frontend-design`, `web-design-guidelines` |
+| **Backend** (`backend_v3/`) | Workers, posting, analytics, scraper | `workers-best-practices`, `wrangler`, `cloudflare` |
+| **Database** (`database/`) | Schema, migrations, RLS, queries | `supabase`, `supabase-postgres-best-practices`, `postgresql`, `database-design` |
+| **Documentation** (`documentation/`) | Architecture, runbooks, ADRs | `architecture-decision-records`, `doc-coauthoring` |
+
+Also apply repo rules: git branch workflow, database migration rules, deployed webapp testing playbook (when validating production), and `documentation/webapp/ui-ux-reference.md` for any `webapp/src` UI work.
+
+Do not skip skills for "small" changes when the skill covers the task (e.g. Supabase schema changes, Worker deploys, security headers).
