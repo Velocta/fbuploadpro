@@ -1,5 +1,15 @@
 import os
 
+
+def _bounded_int(name: str, default: str, *, minimum: int = 1, maximum: int | None = None) -> int:
+    value = int(os.environ.get(name, default))
+    if value < minimum:
+        return minimum
+    if maximum is not None and value > maximum:
+        return maximum
+    return value
+
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 
@@ -8,9 +18,37 @@ R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET = os.environ.get("R2_ADU_BUFFER_BUCKET", "fbuploadpro-adu-buffer").strip()
 
-LOOP_INTERVAL_SECONDS = int(os.environ.get("ADU_DOWNLOADER_LOOP_SECONDS", "120"))
-CLAIM_BATCH_SIZE = int(os.environ.get("ADU_DOWNLOADER_CLAIM_BATCH", "10"))
-MAX_CONCURRENT = int(os.environ.get("ADU_DOWNLOADER_CONCURRENCY", "3"))
-DOWNLOAD_MAX_BYTES = int(os.environ.get("ADU_DOWNLOAD_MAX_BYTES", "209715200"))
+# Sleep only when a claim tick returns zero rows (no work in buffer queue).
+IDLE_WAIT_SECONDS = _bounded_int("ADU_DOWNLOADER_IDLE_WAIT_SECONDS", "60", minimum=1)
+# Match claim batch to concurrency so one tick can fill the worker pool.
+CLAIM_BATCH_SIZE = _bounded_int("ADU_DOWNLOADER_CLAIM_BATCH", "30", minimum=1, maximum=200)
+MAX_CONCURRENT = _bounded_int("ADU_DOWNLOADER_CONCURRENCY", "30", minimum=1, maximum=200)
+# Per-claim download attempts before mark_adu_reel_download_failed (separate from DB download_retries).
+DOWNLOAD_ATTEMPT_RETRIES = _bounded_int("ADU_DOWNLOADER_ATTEMPT_RETRIES", "4", minimum=1, maximum=20)
+DOWNLOAD_MAX_BYTES = _bounded_int("ADU_DOWNLOAD_MAX_BYTES", "209715200", minimum=1)
+
+# aria2: lower -x/-s per file so 30 parallel jobs do not open thousands of TCP connections.
+ARIA2_MAX_CONNECTION = _bounded_int("ADU_ARIA2_MAX_CONNECTION", "4", minimum=1, maximum=16)
+ARIA2_SPLIT = _bounded_int("ADU_ARIA2_SPLIT", "4", minimum=1, maximum=16)
+
+# R2 upload: stream from disk in chunks (peak RAM ~ chunk size per active upload, not file size).
+R2_UPLOAD_CHUNK_BYTES = _bounded_int(
+    "ADU_R2_UPLOAD_CHUNK_BYTES",
+    str(8 * 1024 * 1024),
+    minimum=256 * 1024,
+    maximum=64 * 1024 * 1024,
+)
+
 RESIDENTIAL_PROXY = os.environ.get("RESIDENTIAL_PROXY", "").strip() or None
 IMPERSONATE_TARGET = os.environ.get("IMPERSONATE_TARGET", "").strip() or None
+
+
+def aria2_cli_args() -> list[str]:
+    return ["-x", str(ARIA2_MAX_CONNECTION), "-s", str(ARIA2_SPLIT), "-k1M"]
+
+
+def yt_dlp_aria2_downloader_args() -> str:
+    return (
+        f"aria2c:--summary-interval=0 -x{ARIA2_MAX_CONNECTION} "
+        f"-s{ARIA2_SPLIT} -k1M"
+    )

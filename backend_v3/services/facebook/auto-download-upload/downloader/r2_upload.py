@@ -1,7 +1,9 @@
 import hashlib
 import mimetypes
+import os
 
 import boto3
+from boto3.s3.transfer import TransferConfig
 from botocore.config import Config
 
 from config import (
@@ -9,7 +11,29 @@ from config import (
     R2_ACCOUNT_ID,
     R2_BUCKET,
     R2_SECRET_ACCESS_KEY,
+    R2_UPLOAD_CHUNK_BYTES,
 )
+
+
+class _HashingReader:
+    """File-like wrapper: read in chunks, update SHA-256, forward to boto3 upload_fileobj."""
+
+    __slots__ = ("_file", "_hasher")
+
+    def __init__(self, file_obj):
+        self._file = file_obj
+        self._hasher = hashlib.sha256()
+
+    def read(self, amt=None):
+        if amt is None or amt < 0:
+            amt = R2_UPLOAD_CHUNK_BYTES
+        chunk = self._file.read(amt)
+        if chunk:
+            self._hasher.update(chunk)
+        return chunk
+
+    def readable(self):
+        return True
 
 
 def get_s3_client():
@@ -31,15 +55,22 @@ def object_key(page_id: str, reel_internal_id: int) -> str:
 
 
 def upload_file(local_path: str, key: str) -> tuple[int, str, str]:
-    with open(local_path, "rb") as f:
-        data = f.read()
-    sha256 = hashlib.sha256(data).hexdigest()
+    file_size = os.path.getsize(local_path)
     content_type = mimetypes.guess_type(local_path)[0] or "video/mp4"
     client = get_s3_client()
-    client.put_object(
-        Bucket=R2_BUCKET,
-        Key=key,
-        Body=data,
-        ContentType=content_type,
+    transfer_config = TransferConfig(
+        multipart_threshold=R2_UPLOAD_CHUNK_BYTES,
+        multipart_chunksize=R2_UPLOAD_CHUNK_BYTES,
+        max_concurrency=1,
     )
-    return len(data), content_type, sha256
+    with open(local_path, "rb") as raw_file:
+        reader = _HashingReader(raw_file)
+        client.upload_fileobj(
+            reader,
+            R2_BUCKET,
+            key,
+            ExtraArgs={"ContentType": content_type},
+            Config=transfer_config,
+        )
+        sha256 = reader._hasher.hexdigest()
+    return file_size, content_type, sha256

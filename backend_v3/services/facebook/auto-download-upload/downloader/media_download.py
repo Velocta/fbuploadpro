@@ -8,6 +8,8 @@ import base64
 from urllib.parse import urlsplit, urlunsplit
 from flask import Flask, request as req_flask, send_file, jsonify
 
+from config import aria2_cli_args, yt_dlp_aria2_downloader_args
+
 app = Flask(__name__)
 
 PLATFORM_PROFILES = {
@@ -167,7 +169,7 @@ def download_with_yt_dlp(url, proxy, impersonate_target, output_template, profil
         "--downloader",
         "aria2c",
         "--downloader-args",
-        "aria2c:--summary-interval=0 -x16 -s16 -k1M",
+        yt_dlp_aria2_downloader_args(),
         "--merge-output-format",
         "mp4",
         "--print-json",
@@ -226,11 +228,11 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 v_path = os.path.join(tmp_dir, f"{unique_id}_v.mp4")
                 a_path = os.path.join(tmp_dir, f"{unique_id}_a.m4a")
                 subprocess.run(
-                    ["aria2c", "-q", "-x16", "-s16", "-k1M", "--user-agent", user_agent, v_url, "-o", f"{unique_id}_v.mp4", "-d", tmp_dir],
+                    ["aria2c", "-q", *aria2_cli_args(), "--user-agent", user_agent, v_url, "-o", f"{unique_id}_v.mp4", "-d", tmp_dir],
                     check=True,
                 )
                 subprocess.run(
-                    ["aria2c", "-q", "-x16", "-s16", "-k1M", "--user-agent", user_agent, a_url, "-o", f"{unique_id}_a.m4a", "-d", tmp_dir],
+                    ["aria2c", "-q", *aria2_cli_args(), "--user-agent", user_agent, a_url, "-o", f"{unique_id}_a.m4a", "-d", tmp_dir],
                     check=True,
                 )
                 filename = os.path.join(tmp_dir, f"{unique_id}.mp4")
@@ -241,7 +243,7 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                     raise RuntimeError("Unable to extract direct video URL from Instagram metadata")
                 filename = os.path.join(tmp_dir, f"{unique_id}.mp4")
                 subprocess.run(
-                    ["aria2c", "-q", "-x16", "-s16", "-k1M", "--user-agent", user_agent, url_to_dl, "-o", f"{unique_id}.mp4", "-d", tmp_dir],
+                    ["aria2c", "-q", *aria2_cli_args(), "--user-agent", user_agent, url_to_dl, "-o", f"{unique_id}.mp4", "-d", tmp_dir],
                     check=True,
                 )
         else:

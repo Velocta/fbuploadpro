@@ -23,6 +23,21 @@ cp .env.example .env  # fill values
 python worker.py
 ```
 
+The worker claims batches in a tight loop and only sleeps **60 seconds** when no reels are available.
+
+**Defaults (tuned for ~8 GB RAM VPS, 30 parallel reels):**
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `ADU_DOWNLOADER_CONCURRENCY` | 30 | Parallel reel jobs |
+| `ADU_DOWNLOADER_CLAIM_BATCH` | 30 | Reels claimed per tick (match concurrency) |
+| `ADU_ARIA2_MAX_CONNECTION` / `ADU_ARIA2_SPLIT` | 4 | aria2 connections per file (not 16) |
+| `ADU_R2_UPLOAD_CHUNK_BYTES` | 8 MiB | Stream uploads; ~8 MB RAM per upload, not full file |
+
+Each claimed reel gets up to **4** in-process download attempts before `mark_adu_reel_download_failed`; that is separate from the DB `download_retries` column (still max **3** claims before `download_failed`).
+
+**Capacity notes:** 30 jobs still need disk under `/tmp` for temp files (often 30–100 MB each while downloading). Ensure adequate free space on the temp volume. If RAM is tight, lower concurrency or chunk size; if downloads are slow, try `ADU_ARIA2_MAX_CONNECTION=6` (watch connection limits).
+
 ## PM2
 
 ```bash
