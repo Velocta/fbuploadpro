@@ -97,5 +97,7 @@ Wrangler name: `fbuploadpro-fb-adu-analytics`. Cron: every 2 minutes.
 | `BROWSER_USER_DATA_DIR` | Persistent Puppeteer profile |
 | `MAX_REELS_PER_PLATFORM` | Cap per sync run |
 | `SKIP_STARTUP_LOGINS` | Skip interactive login prompts when `true` |
+| `YTDLP_BIN` | yt-dlp binary for TikTok/YouTube ID discovery (default `yt-dlp`) |
+| `YTDLP_TIMEOUT_MS` | yt-dlp subprocess timeout ms (default `120000`) |
 
-Runs on VPS (not Wrangler). Use PM2 or similar for process supervision.
+Runs on VPS (not Wrangler). Requires **yt-dlp** on PATH (shared with buffer-downloader). Discovery order: TikTok/YouTube try yt-dlp flat-playlist first; failures queue `browser_pending` for Puppeteer. Instagram/Facebook use browser only. Stuck `processing` rows (>1h) are reset to `browser_pending` via `reset_stuck_pages` cron. Use PM2 or similar for process supervision.

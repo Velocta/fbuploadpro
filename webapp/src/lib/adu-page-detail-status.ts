@@ -61,6 +61,16 @@ export function getAduPageStatusBadge(profile: AduPageStatusInput): AduPageStatu
     }
   }
 
+  if (sync_status === 'browser_pending') {
+    return {
+      label: 'Browser scrape queued',
+      variant: 'secondary',
+      className: 'bg-secondary text-secondary-foreground border-none',
+      iconKind: 'clock',
+      tone: 'muted',
+    }
+  }
+
   if (sync_status === 'synced') {
     switch (status) {
       case 'active':
@@ -125,6 +135,16 @@ export function getAduPageStatusAlert(profile: AduPageStatusInput): AduPageStatu
     return {
       title: 'Scraping Pending',
       description: 'Your reels will be scraped soon. Please wait.',
+      variant: 'default',
+      iconKind: 'clock',
+    }
+  }
+
+  if (sync_status === 'browser_pending') {
+    return {
+      title: 'Retrying With Browser',
+      description:
+        'Fast listing did not return reels. The scraper will retry using the logged-in browser session.',
       variant: 'default',
       iconKind: 'clock',
     }

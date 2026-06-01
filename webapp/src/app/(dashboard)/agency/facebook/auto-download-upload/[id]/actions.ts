@@ -276,7 +276,7 @@ export async function updateSourceUsername(pageId: string, newUsername: string, 
     const updatePayload: {
       source_username: string
       status: 'active' | 'inactive' | 'fb_verification_required' | 'invalid_token' | 'invalid_username' | 'completed'
-      sync_status: 'pending' | 'synced' | 'processing' | 'error'
+      sync_status: 'pending' | 'browser_pending' | 'synced' | 'processing' | 'error'
       source_platform?: SourcePlatform
     } = {
       source_username: normalizedUsername,

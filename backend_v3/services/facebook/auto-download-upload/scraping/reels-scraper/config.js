@@ -27,3 +27,8 @@ export const BROWSER_CONFIG = {
 export const LOGIN_CONFIG = {
   SKIP_STARTUP_LOGINS: toBoolean(process.env.SKIP_STARTUP_LOGINS),
 };
+
+export const YTDLP_CONFIG = {
+  BIN: process.env.YTDLP_BIN || 'yt-dlp',
+  TIMEOUT_MS: Number(process.env.YTDLP_TIMEOUT_MS || 120000),
+};

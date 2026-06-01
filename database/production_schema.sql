@@ -13,7 +13,7 @@ create type public.user_role_enum as enum ('super_admin', 'agency');
 create type public.subscription_type_enum as enum ('new', 'renewal', 'upgrade', 'correction');
 create type public.schedule_type_enum as enum ('fixed', 'randomfixed', 'dailyrandom');
 create type public.reel_status_enum as enum ('pending', 'posted', 'failed', 'processing', 'downloaded', 'download_failed');
-create type public.sync_status_enum as enum ('pending', 'synced', 'processing', 'error');
+create type public.sync_status_enum as enum ('pending', 'browser_pending', 'synced', 'processing', 'error');
 create type public.profile_status_enum as enum ('active', 'inactive', 'fb_verification_required', 'invalid_token', 'invalid_username', 'completed', '2fa_required_on_BM', 'check_developer_app', 'account_suspended');
 create type public.platform_enum as enum ('instagram', 'youtube', 'tiktok', 'facebook');
 create type public.source_platform_enum as enum ('instagram', 'youtube', 'tiktok', 'facebook');
@@ -553,7 +553,7 @@ create or replace function public.reset_stuck_pages()
 returns void as $$
 begin
   update public.pages
-  set sync_status = 'pending'
+  set sync_status = 'browser_pending'
   where sync_status = 'processing'
     and updated_at < now() - interval '1 hour';
 end;
@@ -570,6 +570,24 @@ begin
     select p.id
     from public.pages p
     where p.sync_status = 'pending'
+    and (p_platform is null or p.source_platform = p_platform)
+    limit 1
+    for update skip locked
+  )
+  returning public.pages.id, public.pages.source_username, public.pages.source_platform;
+end;
+$$ language plpgsql security definer;
+
+create or replace function public.get_next_browser_pending_page(p_platform public.source_platform_enum default null)
+returns table (id uuid, source_username text, source_platform public.source_platform_enum) as $$
+begin
+  return query
+  update public.pages
+  set sync_status = 'processing'
+  where public.pages.id = (
+    select p.id
+    from public.pages p
+    where p.sync_status = 'browser_pending'
     and (p_platform is null or p.source_platform = p_platform)
     limit 1
     for update skip locked

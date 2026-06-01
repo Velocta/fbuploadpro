@@ -957,7 +957,7 @@ export type Database = {
       schedule_type_enum: "fixed" | "randomfixed" | "dailyrandom"
       source_platform_enum: "instagram" | "youtube" | "tiktok" | "facebook"
       subscription_type_enum: "new" | "renewal" | "upgrade" | "correction"
-      sync_status_enum: "pending" | "synced" | "processing" | "error"
+      sync_status_enum: "pending" | "browser_pending" | "synced" | "processing" | "error"
       user_role_enum: "super_admin" | "agency"
     }
     CompositeTypes: {
