@@ -12,9 +12,13 @@ Shared documentation for the FBUploadPro monorepo.
 | `runbooks/` | Deploy, env, posting operations, InApp schedule |
 | `webapp/` | Webapp architecture, API reference, performance, UI/UX |
 
+## For AI agents
+
+Start with **[`for_agent.md`](for_agent.md)** — consolidated product, architecture, boundaries, and conventions for working in this repo.
+
 ## Reading order for new contributors
 
-1. [`architecture/system-overview.md`](architecture/system-overview.md)
+1. [`for_agent.md`](for_agent.md) or [`architecture/system-overview.md`](architecture/system-overview.md)
 2. [`database/migration-workflow.md`](database/migration-workflow.md)
 3. [`database/rls-overview.md`](database/rls-overview.md)
 4. [`../backend_v3/README.md`](../backend_v3/README.md)

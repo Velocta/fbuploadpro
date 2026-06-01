@@ -22,6 +22,44 @@ import {
 import { getMainDomain } from '@/lib/config/runtime'
 import { AgencyEmptyState, AgencySectionCard } from '@/components/dashboard/agency'
 
+function FacebookOAuthRedirectUrls({
+    callbackUrl,
+    magicCallbackUrl,
+}: {
+    callbackUrl: string
+    magicCallbackUrl: string
+}) {
+    return (
+        <div className="space-y-3">
+            <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
+                OAuth redirect URIs
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+                Add both URLs under <strong>Facebook Login for Business &gt; Settings</strong> as{' '}
+                <strong>Valid OAuth Redirect URIs</strong>.
+            </p>
+            <div className="space-y-3">
+                <div className="space-y-1">
+                    <p className="text-xs uppercase font-semibold text-muted-foreground tracking-tight">
+                        Direct Connection Callback
+                    </p>
+                    <code className="block break-all select-all bg-background px-2 py-1.5 rounded border text-xs font-mono text-primary shadow-sm hover:border-primary/50 transition-colors">
+                        {callbackUrl || 'Loading...'}
+                    </code>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-xs uppercase font-semibold text-muted-foreground tracking-tight">
+                        Magic Link Callback
+                    </p>
+                    <code className="block break-all select-all bg-background px-2 py-1.5 rounded border text-xs font-mono text-primary shadow-sm hover:border-primary/50 transition-colors">
+                        {magicCallbackUrl || 'Loading...'}
+                    </code>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 export function AgencySettingsClient({ initialSettings }: { initialSettings: AgencySettings | null }) {
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState<string | null>(null)
@@ -254,21 +292,14 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
                                             </div>
                                             <p className="text-xs text-muted-foreground pl-14 leading-relaxed">
                                                 Go to <strong>Facebook Login for Business &gt; Settings</strong>.
-                                                Paste this URL into <strong>Valid OAuth Redirect URIs</strong> and click <strong>Save changes</strong>:
+                                                Paste both URLs into <strong>Valid OAuth Redirect URIs</strong> and click{' '}
+                                                <strong>Save changes</strong>:
                                             </p>
-                                            <div className="pl-14 space-y-3">
-                                                <div className="space-y-1">
-                                                    <p className="text-xs uppercase font-semibold text-muted-foreground tracking-tight">Direct Connection Callback</p>
-                                                    <code className="block break-all select-all bg-background px-2 py-1.5 rounded border text-xs font-mono text-primary shadow-sm hover:border-primary/50 transition-colors">
-                                                        {callbackUrl || 'Loading...'}
-                                                    </code>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <p className="text-xs uppercase font-semibold text-muted-foreground tracking-tight">Magic Link Callback</p>
-                                                    <code className="block break-all select-all bg-background px-2 py-1.5 rounded border text-xs font-mono text-primary shadow-sm hover:border-primary/50 transition-colors">
-                                                        {magicCallbackUrl || 'Loading...'}
-                                                    </code>
-                                                </div>
+                                            <div className="pl-14">
+                                                <FacebookOAuthRedirectUrls
+                                                    callbackUrl={callbackUrl}
+                                                    magicCallbackUrl={magicCallbackUrl}
+                                                />
                                             </div>
                                         </div>
                                     </div>
@@ -277,6 +308,14 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
                                 {/* STEP 5 / EDIT: CREDENTIALS */}
                                 {(step === 5 || hasCredentials) && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+                                        {hasCredentials && (
+                                            <div className="px-4 py-4 bg-muted/20 border rounded-lg">
+                                                <FacebookOAuthRedirectUrls
+                                                    callbackUrl={callbackUrl}
+                                                    magicCallbackUrl={magicCallbackUrl}
+                                                />
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <Label htmlFor="fb_app_id">Facebook App ID</Label>
                                             <Input
@@ -352,6 +391,13 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
                                     >
                                         {showSecret ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                                     </Button>
+                                </div>
+
+                                <div className="px-4 py-4 bg-muted/20 border rounded-lg">
+                                    <FacebookOAuthRedirectUrls
+                                        callbackUrl={callbackUrl}
+                                        magicCallbackUrl={magicCallbackUrl}
+                                    />
                                 </div>
                             </div>
                         )}
