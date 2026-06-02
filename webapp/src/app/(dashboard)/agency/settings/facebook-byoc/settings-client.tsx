@@ -71,7 +71,6 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
     const hasCredentials = !!initialSettings?.fb_app_id
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMounted(true)
     }, [])
 

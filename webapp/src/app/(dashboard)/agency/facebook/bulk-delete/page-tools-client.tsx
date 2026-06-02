@@ -222,7 +222,6 @@ export function PageToolsClient() {
     if (selectedPage && selectedAccountId && viewMode === 'manual') {
       void loadBrowseContent(browseType, true)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPage, selectedAccountId, viewMode, browseType])
 
   async function loadAccounts() {

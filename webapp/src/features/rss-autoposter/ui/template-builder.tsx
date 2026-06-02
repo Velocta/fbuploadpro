@@ -256,7 +256,6 @@ export function TemplateBuilder({
             ) : previewError ? (
               <p className="p-4 text-sm text-destructive">{previewError}</p>
             ) : previewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewUrl}
                 alt="Template preview"
