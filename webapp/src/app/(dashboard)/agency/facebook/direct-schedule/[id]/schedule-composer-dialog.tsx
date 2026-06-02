@@ -68,16 +68,6 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
     }
   }, [open])
 
-  useEffect(() => {
-    if (mediaFile && (postType === 'image' || postType === 'video')) {
-      const url = URL.createObjectURL(mediaFile)
-      setMediaPreviewUrl(url)
-      handleUpload(mediaFile)
-      return () => URL.revokeObjectURL(url)
-    }
-    return () => {}
-  }, [mediaFile])
-
   function resetState() {
     setPostType('text')
     setCaption('')
@@ -88,7 +78,7 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
     setUploadProgress(0)
   }
 
-  const handleUpload = async (file: File) => {
+  async function handleUpload(file: File) {
     if (isUploading || uploadedKey) return
     setIsUploading(true)
     setUploadProgress(0)
@@ -108,6 +98,16 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
       setIsUploading(false)
     }
   }
+
+  useEffect(() => {
+    if (mediaFile && (postType === 'image' || postType === 'video')) {
+      const url = URL.createObjectURL(mediaFile)
+      setMediaPreviewUrl(url)
+      handleUpload(mediaFile)
+      return () => URL.revokeObjectURL(url)
+    }
+    return () => {}
+  }, [mediaFile, postType])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {

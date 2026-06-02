@@ -219,12 +219,6 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     return { facebookAccountId, fbPageId }
   }
 
-  useEffect(() => {
-    if (open) {
-      loadAccounts()
-    }
-  }, [open])
-
   async function loadAccounts() {
     setIsLoadingAccounts(true)
     try {
@@ -245,6 +239,12 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
       setIsLoadingAccounts(false)
     }
   }
+
+  useEffect(() => {
+    if (open) {
+      loadAccounts()
+    }
+  }, [open])
 
   async function handleAccountChange(accountId: string) {
     pagesAbortRef.current?.abort()

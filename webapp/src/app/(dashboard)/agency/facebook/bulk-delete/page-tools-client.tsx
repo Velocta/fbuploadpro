@@ -504,7 +504,7 @@ export function PageToolsClient() {
 
   useEffect(() => {
     void loadAccounts()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   if (hasLoadedAccounts && !loadingAccounts && accounts.length === 0) {

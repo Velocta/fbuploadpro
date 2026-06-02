@@ -68,12 +68,6 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
 
   const router = useRouter()
 
-  useEffect(() => {
-    if (open) {
-      loadAccounts()
-    }
-  }, [open])
-
   async function loadAccounts() {
     setIsLoadingAccounts(true)
     try {
@@ -90,6 +84,12 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
       setIsLoadingAccounts(false)
     }
   }
+
+  useEffect(() => {
+    if (open) {
+      loadAccounts()
+    }
+  }, [open])
 
   async function handleAccountChange(accountId: string) {
     setSelectedAccountId(accountId)

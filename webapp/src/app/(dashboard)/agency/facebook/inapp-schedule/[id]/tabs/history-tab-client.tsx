@@ -38,10 +38,6 @@ export function HistoryTabClient({ pageId }: { pageId: string }) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const limit = 10
 
-  useEffect(() => {
-    fetchPosts()
-  }, [page, statusFilter, pageId])
-
   async function fetchPosts() {
     setLoading(true)
     try {
@@ -62,6 +58,10 @@ export function HistoryTabClient({ pageId }: { pageId: string }) {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchPosts()
+  }, [page, statusFilter, pageId])
 
   const totalPages = Math.ceil(totalCount / limit) || 1
 
