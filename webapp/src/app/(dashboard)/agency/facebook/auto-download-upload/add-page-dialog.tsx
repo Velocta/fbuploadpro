@@ -210,6 +210,15 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     return `${facebookAccountId}:${fbPageId}`
   }
 
+  function parseAccountPageKey(key: string): { facebookAccountId: string; fbPageId: string } | null {
+    const separatorIndex = key.indexOf(':')
+    if (separatorIndex <= 0) return null
+    const facebookAccountId = key.slice(0, separatorIndex)
+    const fbPageId = key.slice(separatorIndex + 1)
+    if (!facebookAccountId || !fbPageId) return null
+    return { facebookAccountId, fbPageId }
+  }
+
   useEffect(() => {
     if (open) {
       loadAccounts()
@@ -345,7 +354,9 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const selectedPages = fbPages.filter((page) => selectedPageIds.includes(page.id))
   const selectedMultiEntries: SelectedPageEntry[] = selectedMultiPageKeys
     .map((key) => {
-      const [facebookAccountId, fbPageId] = key.split(':')
+      const parsed = parseAccountPageKey(key)
+      if (!parsed) return null
+      const { facebookAccountId, fbPageId } = parsed
       const page = (multiAccountPages[facebookAccountId] || []).find((entry) => entry.id === fbPageId)
       const account = fbAccounts.find((entry) => entry.id === facebookAccountId)
       if (!page || !account) return null
