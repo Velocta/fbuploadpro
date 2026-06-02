@@ -105,7 +105,7 @@ function LoadingPanel({ message, submessage }: { message: string; submessage?: s
   )
 }
 
-function stepSubtitle(mode: 'single' | 'bulk', step: number): string {
+function stepSubtitle(mode: AddPageMode, step: number): string {
   if (mode === 'multiAccountBulk') {
     if (step === 1) return 'Select Accounts & Pages'
     if (step === 2) return 'Map Sources (CSV + Manual)'
