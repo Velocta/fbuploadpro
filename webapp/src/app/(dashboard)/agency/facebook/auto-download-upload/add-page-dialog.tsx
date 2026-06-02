@@ -157,6 +157,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [importedKeys, setImportedKeys] = useState<Set<string>>(new Set())
   const [editedKeys, setEditedKeys] = useState<Set<string>>(new Set())
   const [retryFailedKeys, setRetryFailedKeys] = useState<Set<string>>(new Set())
+  const [isSelectedAccountsDialogOpen, setIsSelectedAccountsDialogOpen] = useState(false)
   const submittingRef = useRef(false)
   const pagesFetchGeneration = useRef(0)
   const pagesAbortRef = useRef<AbortController | null>(null)
@@ -349,6 +350,61 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
       ...prev,
       [entry.key]: prev[entry.key] || createBulkScheduleConfig(),
     }))
+  }
+
+  async function selectAllMultiAccounts() {
+    const idsToSelect = filteredAccounts.map((account) => account.id)
+    if (idsToSelect.length === 0) return
+
+    setSelectedAccountIds((prev) => Array.from(new Set([...prev, ...idsToSelect])))
+
+    const accountsToFetch = idsToSelect.filter((id) => !multiAccountPages[id])
+    if (accountsToFetch.length === 0) return
+
+    setIsLoadingPages(true)
+    try {
+      await Promise.all(accountsToFetch.map((id) => fetchPagesForAccount(id)))
+    } finally {
+      setIsLoadingPages(false)
+    }
+  }
+
+  function clearMultiAccountSelection() {
+    setSelectedAccountIds([])
+    setSelectedMultiPageKeys([])
+  }
+
+  function selectAllMultiPages() {
+    if (filteredMultiPages.length === 0) return
+
+    setSelectedMultiPageKeys((prev) => {
+      const next = new Set(prev)
+      for (const entry of filteredMultiPages) next.add(entry.key)
+      return Array.from(next)
+    })
+
+    setBulkSourceConfig((prev) => {
+      const next = { ...prev }
+      for (const entry of filteredMultiPages) {
+        next[entry.key] = next[entry.key] || {
+          sourceUsername: '',
+          sourcePlatform: platform,
+        }
+      }
+      return next
+    })
+
+    setBulkScheduleByPage((prev) => {
+      const next = { ...prev }
+      for (const entry of filteredMultiPages) {
+        next[entry.key] = next[entry.key] || createBulkScheduleConfig()
+      }
+      return next
+    })
+  }
+
+  function clearMultiPageSelection() {
+    setSelectedMultiPageKeys([])
   }
 
   const selectedPages = fbPages.filter((page) => selectedPageIds.includes(page.id))
@@ -1028,6 +1084,18 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const filteredPages = fbPages.filter((page) =>
     page.name.toLowerCase().includes(pageSearch.toLowerCase())
   )
+  const filteredMultiPages = multiPagesFlat.filter((entry) =>
+    entry.page.name.toLowerCase().includes(pageSearch.toLowerCase())
+  )
+  const selectedAccountDetails = selectedAccountIds
+    .map((id) => fbAccounts.find((account) => account.id === id))
+    .filter((account): account is FacebookAccount => Boolean(account))
+  const areAllFilteredAccountsSelected =
+    filteredAccounts.length > 0 &&
+    filteredAccounts.every((account) => selectedAccountIds.includes(account.id))
+  const areAllFilteredPagesSelected =
+    filteredMultiPages.length > 0 &&
+    filteredMultiPages.every((entry) => selectedMultiPageKeys.includes(entry.key))
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -1121,7 +1189,42 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                 {mode === 'multiAccountBulk' ? (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Select Facebook Accounts</Label>
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-sm font-semibold">Select Facebook Accounts</Label>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 px-3 text-xs"
+                            onClick={() => setIsSelectedAccountsDialogOpen(true)}
+                            disabled={selectedAccountIds.length === 0}
+                          >
+                            Selected accounts ({selectedAccountIds.length})
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-8 px-3 text-xs"
+                            onClick={() =>
+                              areAllFilteredAccountsSelected
+                                ? clearMultiAccountSelection()
+                                : void selectAllMultiAccounts()
+                            }
+                            disabled={filteredAccounts.length === 0 || isLoadingPages}
+                          >
+                            {areAllFilteredAccountsSelected ? 'Deselect all accounts' : 'Select all accounts'}
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search connected accounts..."
+                          value={accountSearch}
+                          onChange={(e) => setAccountSearch(e.target.value)}
+                          className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
+                        />
+                      </div>
                       <div className="custom-scrollbar max-h-[220px] space-y-2 overflow-y-auto pr-2">
                         {filteredAccounts.map((acc) => {
                           const active = selectedAccountIds.includes(acc.id)
@@ -1148,9 +1251,33 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold">Select Managed Pages</Label>
+                      <div className="flex items-center justify-between gap-2">
+                        <Label className="text-sm font-semibold">Select Managed Pages</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 px-3 text-xs"
+                          onClick={() =>
+                            areAllFilteredPagesSelected
+                              ? clearMultiPageSelection()
+                              : selectAllMultiPages()
+                          }
+                          disabled={filteredMultiPages.length === 0 || isLoadingPages}
+                        >
+                          {areAllFilteredPagesSelected ? 'Deselect all pages' : 'Select all pages'}
+                        </Button>
+                      </div>
+                      <div className="relative">
+                        <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search pages..."
+                          value={pageSearch}
+                          onChange={(e) => setPageSearch(e.target.value)}
+                          className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
+                        />
+                      </div>
                       <div className="custom-scrollbar max-h-[260px] space-y-2 overflow-y-auto pr-2">
-                        {multiPagesFlat.map((entry) => {
+                        {filteredMultiPages.map((entry) => {
                           const active = selectedMultiPageKeys.includes(entry.key)
                           return (
                             <button
@@ -1660,6 +1787,37 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
               </motion.div>
             </AnimatePresence>
           </div>
+
+          <Dialog open={isSelectedAccountsDialogOpen} onOpenChange={setIsSelectedAccountsDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Selected Facebook Accounts</DialogTitle>
+                <DialogDescription>
+                  {selectedAccountIds.length} account{selectedAccountIds.length === 1 ? '' : 's'} selected
+                </DialogDescription>
+              </DialogHeader>
+              <div className="custom-scrollbar max-h-72 space-y-2 overflow-y-auto pr-1">
+                {selectedAccountDetails.length > 0 ? (
+                  selectedAccountDetails.map((account) => (
+                    <div
+                      key={account.id}
+                      className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2"
+                    >
+                      <p className="text-sm font-medium">{account.fb_user_name || 'Facebook account'}</p>
+                      <p className="font-mono text-xs text-muted-foreground">{account.fb_user_id}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">No accounts selected.</p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setIsSelectedAccountsDialogOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {error && (
             <div className="mx-6 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
