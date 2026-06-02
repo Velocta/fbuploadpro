@@ -517,6 +517,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setImportedKeys(new Set())
     setEditedKeys(new Set())
     setRetryFailedKeys(new Set())
+    setIsSelectedAccountsDialogOpen(false)
   }
 
   function handleModeChange(nextMode: AddPageMode) {
