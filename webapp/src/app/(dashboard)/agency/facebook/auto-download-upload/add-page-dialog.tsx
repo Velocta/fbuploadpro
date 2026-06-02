@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { createPage, createPagesBulk } from './actions'
+import { createPage, createPagesBulk, createPagesBulkMultiAccount } from './actions'
 import { TimezoneSelect } from '@/components/dashboard/timezone-select'
 import { PostsPerDayPicker } from '@/components/dashboard/posts-per-day-picker'
 import { sanitizeSourceIdentityInput } from '@/lib/source-identity'
@@ -41,6 +41,30 @@ type BulkSourceConfig = {
 type SourcePlatform = 'instagram' | 'youtube' | 'tiktok' | 'facebook'
 type BulkScheduleType = 'dailyrandom' | 'fixed'
 type BulkTimingScope = 'all' | 'separate'
+type AddPageMode = 'single' | 'bulk' | 'multiAccountBulk'
+
+type CsvPreviewRow = {
+  rowNumber: number
+  csvPageName: string
+  matchedKey: string | null
+  normalizedPlatform: SourcePlatform | null
+  normalizedUsername: string
+  warnings: string[]
+}
+
+type CsvPreviewState = {
+  rows: CsvPreviewRow[]
+  warningGroups: Record<string, string[]>
+  matchedCount: number
+  unmatchedCount: number
+}
+
+type SelectedPageEntry = {
+  key: string
+  facebookAccountId: string
+  accountName: string
+  page: FacebookGraphPage
+}
 
 type BulkScheduleConfig = {
   postsPerDay: number
@@ -82,6 +106,11 @@ function LoadingPanel({ message, submessage }: { message: string; submessage?: s
 }
 
 function stepSubtitle(mode: 'single' | 'bulk', step: number): string {
+  if (mode === 'multiAccountBulk') {
+    if (step === 1) return 'Select Accounts & Pages'
+    if (step === 2) return 'Map Sources (CSV + Manual)'
+    return 'Configure Posting Schedule'
+  }
   if (mode === 'single') {
     return step === 1 ? 'Select Page' : 'Configure Settings'
   }
@@ -98,16 +127,19 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [platform, setPlatform] = useState<SourcePlatform>('instagram')
   const [sourceUsername, setSourceUsername] = useState('')
   const [postsPerDay, setPostsPerDay] = useState('1')
-  const [mode, setMode] = useState<'single' | 'bulk'>('single')
+  const [mode, setMode] = useState<AddPageMode>('single')
 
   const [fbAccounts, setFbAccounts] = useState<FacebookAccount[]>([])
   const [accountSearch, setAccountSearch] = useState('')
   const [pageSearch, setPageSearch] = useState('')
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
   const [fbPages, setFbPages] = useState<FacebookGraphPage[]>([])
+  const [multiAccountPages, setMultiAccountPages] = useState<Record<string, FacebookGraphPage[]>>({})
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
   const [isLoadingPages, setIsLoadingPages] = useState(false)
   const [selectedPage, setSelectedPage] = useState<FacebookGraphPage | null>(null)
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>([])
+  const [selectedMultiPageKeys, setSelectedMultiPageKeys] = useState<string[]>([])
   const [bulkSourceConfig, setBulkSourceConfig] = useState<Record<string, BulkSourceConfig>>({})
   const [bulkPlatformForEmpty, setBulkPlatformForEmpty] = useState<SourcePlatform>('instagram')
   const [bulkScheduleType, setBulkScheduleType] = useState<BulkScheduleType>('dailyrandom')
@@ -120,12 +152,17 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [bulkScheduleByPage, setBulkScheduleByPage] = useState<Record<string, BulkScheduleConfig>>({})
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(false)
   const [step, setStep] = useState(1)
+  const [csvPreview, setCsvPreview] = useState<CsvPreviewState | null>(null)
+  const [showCsvWarnings, setShowCsvWarnings] = useState(false)
+  const [importedKeys, setImportedKeys] = useState<Set<string>>(new Set())
+  const [editedKeys, setEditedKeys] = useState<Set<string>>(new Set())
+  const [retryFailedKeys, setRetryFailedKeys] = useState<Set<string>>(new Set())
   const submittingRef = useRef(false)
   const pagesFetchGeneration = useRef(0)
   const pagesAbortRef = useRef<AbortController | null>(null)
 
   const isBusy = isPending || isLoadingPages || isLoadingAccounts
-  const totalSteps = mode === 'bulk' ? 3 : 2
+  const totalSteps = mode === 'single' ? 2 : 3
 
   function ensurePostingTimesLength(times: string[], postsPerDay: number): string[] {
     const next = [...times]
@@ -143,6 +180,34 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
       timezone: 'Asia/Karachi',
       postingTimes: [],
     }
+  }
+
+  function normalizeMatchText(value: string): string {
+    return value.trim().replace(/\s+/g, ' ').toLowerCase()
+  }
+
+  function normalizeHeader(value: string): string {
+    return value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  }
+
+  function resolvePlatformAlias(value: string): SourcePlatform | null {
+    const normalized = value.trim().toLowerCase()
+    const aliasMap: Record<string, SourcePlatform> = {
+      instagram: 'instagram',
+      ig: 'instagram',
+      insta: 'instagram',
+      youtube: 'youtube',
+      yt: 'youtube',
+      tiktok: 'tiktok',
+      tt: 'tiktok',
+      facebook: 'facebook',
+      fb: 'facebook',
+    }
+    return aliasMap[normalized] ?? null
+  }
+
+  function accountPageKey(facebookAccountId: string, fbPageId: string): string {
+    return `${facebookAccountId}:${fbPageId}`
   }
 
   useEffect(() => {
@@ -221,7 +286,88 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     }
   }
 
+  async function fetchPagesForAccount(accountId: string) {
+    try {
+      const res = await fetch(`/api/v1/agency/facebook/accounts/${accountId}/pages`)
+      const result = await res.json()
+      if (res.ok && result.pages) {
+        setMultiAccountPages((prev) => ({
+          ...prev,
+          [accountId]: result.pages as FacebookGraphPage[],
+        }))
+        return
+      }
+      throw new Error(result.error || 'Failed to fetch pages')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch pages'
+      toast.error('Account pages failed', { description: message })
+    }
+  }
+
+  async function toggleMultiAccount(accountId: string) {
+    const isSelected = selectedAccountIds.includes(accountId)
+    if (isSelected) {
+      setSelectedAccountIds((prev) => prev.filter((id) => id !== accountId))
+      setSelectedMultiPageKeys((prev) =>
+        prev.filter((key) => !key.startsWith(`${accountId}:`))
+      )
+      return
+    }
+
+    setSelectedAccountIds((prev) => [...prev, accountId])
+    if (!multiAccountPages[accountId]) {
+      setIsLoadingPages(true)
+      await fetchPagesForAccount(accountId)
+      setIsLoadingPages(false)
+    }
+  }
+
+  function toggleMultiPageSelection(entry: SelectedPageEntry) {
+    setSelectedMultiPageKeys((prev) => {
+      if (prev.includes(entry.key)) return prev.filter((id) => id !== entry.key)
+      return [...prev, entry.key]
+    })
+
+    setBulkSourceConfig((prev) => ({
+      ...prev,
+      [entry.key]: prev[entry.key] || {
+        sourceUsername: '',
+        sourcePlatform: platform,
+      },
+    }))
+
+    setBulkScheduleByPage((prev) => ({
+      ...prev,
+      [entry.key]: prev[entry.key] || createBulkScheduleConfig(),
+    }))
+  }
+
   const selectedPages = fbPages.filter((page) => selectedPageIds.includes(page.id))
+  const selectedMultiEntries: SelectedPageEntry[] = selectedMultiPageKeys
+    .map((key) => {
+      const [facebookAccountId, fbPageId] = key.split(':')
+      const page = (multiAccountPages[facebookAccountId] || []).find((entry) => entry.id === fbPageId)
+      const account = fbAccounts.find((entry) => entry.id === facebookAccountId)
+      if (!page || !account) return null
+      return {
+        key,
+        facebookAccountId,
+        accountName: account.fb_user_name || 'Facebook account',
+        page,
+      }
+    })
+    .filter((entry): entry is SelectedPageEntry => Boolean(entry))
+
+  const multiPagesFlat: SelectedPageEntry[] = selectedAccountIds.flatMap((facebookAccountId) => {
+    const account = fbAccounts.find((entry) => entry.id === facebookAccountId)
+    const accountPages = multiAccountPages[facebookAccountId] || []
+    return accountPages.map((page) => ({
+      key: accountPageKey(facebookAccountId, page.id),
+      facebookAccountId,
+      accountName: account?.fb_user_name || 'Facebook account',
+      page,
+    }))
+  })
 
   function togglePageSelection(page: FacebookGraphPage) {
     setSelectedPageIds((prev) => {
@@ -282,8 +428,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setSelectedAccountId('')
     setSelectedPage(null)
     setSelectedPageIds([])
+    setSelectedMultiPageKeys([])
+    setSelectedAccountIds([])
     setBulkSourceConfig({})
     setFbPages([])
+    setMultiAccountPages({})
     setBulkScheduleType('dailyrandom')
     setBulkTimingScope('all')
     setBulkScheduleAll({
@@ -296,14 +445,22 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setSourceUsername('')
     setPostsPerDay('1')
     setTimezone('Asia/Karachi')
+    setCsvPreview(null)
+    setShowCsvWarnings(false)
+    setImportedKeys(new Set())
+    setEditedKeys(new Set())
+    setRetryFailedKeys(new Set())
   }
 
-  function handleModeChange(nextMode: 'single' | 'bulk') {
+  function handleModeChange(nextMode: AddPageMode) {
     if (isBusy) return
     setMode(nextMode)
     setStep(1)
     setSelectedPage(null)
     setSelectedPageIds([])
+    setSelectedMultiPageKeys([])
+    setSelectedAccountIds([])
+    setMultiAccountPages({})
     setBulkSourceConfig({})
     setBulkScheduleType('dailyrandom')
     setBulkTimingScope('all')
@@ -314,6 +471,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     })
     setBulkScheduleByPage({})
     setError(null)
+    setCsvPreview(null)
+    setShowCsvWarnings(false)
+    setImportedKeys(new Set())
+    setEditedKeys(new Set())
+    setRetryFailedKeys(new Set())
   }
 
   function updateBulkSource(pageId: string, patch: Partial<BulkSourceConfig>) {
@@ -335,18 +497,28 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
         },
       }
     })
+    setEditedKeys((prev) => new Set(prev).add(pageId))
+    setRetryFailedKeys((prev) => {
+      if (!prev.has(pageId)) return prev
+      const next = new Set(prev)
+      next.delete(pageId)
+      return next
+    })
   }
 
   function applyPlatformToEmptySources() {
+    const keys = mode === 'multiAccountBulk'
+      ? selectedMultiEntries.map((entry) => entry.key)
+      : selectedPages.map((page) => page.id)
     setBulkSourceConfig((prev) => {
       const next = { ...prev }
-      for (const page of selectedPages) {
-        const current = next[page.id] || {
+      for (const key of keys) {
+        const current = next[key] || {
           sourceUsername: '',
           sourcePlatform: 'instagram' as SourcePlatform,
         }
         if (!current.sourceUsername.trim()) {
-          next[page.id] = {
+          next[key] = {
             ...current,
             sourcePlatform: bulkPlatformForEmpty,
           }
@@ -369,7 +541,8 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     }
 
     if (step === 1) {
-      if (selectedPages.length === 0) {
+      const selectedCount = mode === 'multiAccountBulk' ? selectedMultiEntries.length : selectedPages.length
+      if (selectedCount === 0) {
         setError('Please select at least one Facebook page before proceeding.')
         return
       }
@@ -379,7 +552,10 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     }
 
     if (step === 2) {
-      const invalid = selectedPages.find((page) => !(bulkSourceConfig[page.id]?.sourceUsername || '').trim())
+      const currentSelected = mode === 'multiAccountBulk'
+        ? selectedMultiEntries.map((entry) => ({ id: entry.key, name: entry.page.name }))
+        : selectedPages.map((page) => ({ id: page.id, name: page.name }))
+      const invalid = currentSelected.find((page) => !(bulkSourceConfig[page.id]?.sourceUsername || '').trim())
       if (invalid) {
         setError(`Please add source username for "${invalid.name}".`)
         return
@@ -483,6 +659,173 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     })
   }
 
+  async function handleCsvFileSelect(file: File | null) {
+    if (!file) return
+    if (selectedMultiEntries.length === 0) {
+      toast.warning('Select pages first', {
+        description: 'Select at least one page before importing CSV.',
+      })
+      return
+    }
+
+    const text = await file.text()
+    const lines = text.split(/\r?\n/).filter((line) => line.trim())
+    if (lines.length < 2) {
+      toast.error('Invalid CSV', { description: 'CSV must include headers and at least one row.' })
+      return
+    }
+    if (lines.length > 1001) {
+      toast.error('CSV too large', { description: 'Maximum 1000 rows are supported.' })
+      return
+    }
+
+    const headerLine = lines[0]
+    const delimiter = headerLine.includes(';') ? ';' : headerLine.includes('\t') ? '\t' : ','
+    const rawHeaders = headerLine.split(delimiter).map((header) => normalizeHeader(header))
+    const required = ['page_name', 'source_platform', 'source_username']
+    const headerAliases: Record<string, string> = {
+      page: 'page_name',
+      page_name: 'page_name',
+      source: 'source_username',
+      source_username: 'source_username',
+      source_user_name: 'source_username',
+      sourceplatform: 'source_platform',
+      source_platform: 'source_platform',
+      source_platform_name: 'source_platform',
+    }
+    const headers = rawHeaders.map((header) => headerAliases[header] || header)
+    const missing = required.filter((key) => !headers.includes(key))
+    if (missing.length > 0) {
+      toast.error('Missing CSV headers', { description: `Missing: ${missing.join(', ')}` })
+      return
+    }
+
+    const pageNameIndex = headers.indexOf('page_name')
+    const platformIndex = headers.indexOf('source_platform')
+    const usernameIndex = headers.indexOf('source_username')
+
+    const byNormalizedName = new Map<string, SelectedPageEntry[]>()
+    for (const entry of selectedMultiEntries) {
+      const normalized = normalizeMatchText(entry.page.name)
+      const existing = byNormalizedName.get(normalized) || []
+      existing.push(entry)
+      byNormalizedName.set(normalized, existing)
+    }
+
+    const matchedCursor = new Map<string, number>()
+    const rows: CsvPreviewRow[] = []
+    const warningGroups: Record<string, string[]> = {
+      unmatched: [],
+      invalid_platform: [],
+      duplicate_csv_page: [],
+      empty_source: [],
+    }
+    const seenCsvNames = new Set<string>()
+    let matchedCount = 0
+
+    for (let i = 1; i < lines.length; i++) {
+      const columns = lines[i].split(delimiter).map((column) => column.trim())
+      const csvPageName = columns[pageNameIndex] || ''
+      const normalizedPageName = normalizeMatchText(csvPageName)
+      const warnings: string[] = []
+
+      if (!csvPageName) continue
+      if (seenCsvNames.has(normalizedPageName)) {
+        warningGroups.duplicate_csv_page.push(`Row ${i + 1}: duplicate page "${csvPageName}" ignored.`)
+        continue
+      }
+      seenCsvNames.add(normalizedPageName)
+
+      const platform = resolvePlatformAlias(columns[platformIndex] || '')
+      const username = columns[usernameIndex] || ''
+      let matchedKey: string | null = null
+
+      const matches = byNormalizedName.get(normalizedPageName) || []
+      if (matches.length === 0) {
+        warnings.push('unknown-page')
+        warningGroups.unmatched.push(`Row ${i + 1}: "${csvPageName}" does not match selected pages.`)
+      } else {
+        const cursor = matchedCursor.get(normalizedPageName) || 0
+        const target = matches[cursor] || matches[0]
+        matchedKey = target.key
+        matchedCursor.set(normalizedPageName, cursor + 1)
+        matchedCount += 1
+      }
+
+      if (!platform) {
+        warnings.push('invalid-platform')
+        warningGroups.invalid_platform.push(`Row ${i + 1}: invalid platform "${columns[platformIndex] || ''}".`)
+      }
+      if (!username.trim()) {
+        warnings.push('empty-source')
+        warningGroups.empty_source.push(`Row ${i + 1}: source username is empty.`)
+      }
+
+      rows.push({
+        rowNumber: i + 1,
+        csvPageName,
+        matchedKey,
+        normalizedPlatform: platform,
+        normalizedUsername: username,
+        warnings,
+      })
+    }
+
+    setCsvPreview({
+      rows,
+      warningGroups,
+      matchedCount,
+      unmatchedCount: warningGroups.unmatched.length,
+    })
+    setShowCsvWarnings(true)
+    toast.success('CSV parsed', {
+      description: `${rows.length} rows parsed. Review and apply import.`,
+    })
+  }
+
+  function clearImportedPreview() {
+    setCsvPreview(null)
+    setShowCsvWarnings(false)
+  }
+
+  function applyCsvPreview() {
+    if (!csvPreview) return
+    const nextImported = new Set(importedKeys)
+    let appliedCount = 0
+    setBulkSourceConfig((prev) => {
+      const next = { ...prev }
+      for (const row of csvPreview.rows) {
+        if (!row.matchedKey || !row.normalizedPlatform) continue
+        const normalizedUsername = sanitizeSourceIdentityInput(
+          row.normalizedPlatform,
+          row.normalizedUsername
+        )
+        if (!normalizedUsername.trim()) continue
+        const current = next[row.matchedKey] || {
+          sourceUsername: '',
+          sourcePlatform: row.normalizedPlatform,
+        }
+        next[row.matchedKey] = {
+          ...current,
+          sourcePlatform: row.normalizedPlatform,
+          sourceUsername: normalizedUsername,
+        }
+        nextImported.add(row.matchedKey)
+        appliedCount += 1
+      }
+      return next
+    })
+    setImportedKeys(nextImported)
+    setEditedKeys((prev) => {
+      const next = new Set(prev)
+      for (const key of nextImported) next.delete(key)
+      return next
+    })
+    toast.success('CSV import applied', {
+      description: `${appliedCount} rows mapped.${csvPreview.unmatchedCount ? ` ${csvPreview.unmatchedCount} unmatched.` : ''}`,
+    })
+  }
+
   const handleSubmit = (formData: FormData) => {
     if (submittingRef.current || isPending) return
     submittingRef.current = true
@@ -519,11 +862,23 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
           description: `${selectedPage.name} has been added and automation will start soon.`,
         })
       } else {
-        const pagesPayload = selectedPages.map((page) => ({
+        const currentSelection = mode === 'multiAccountBulk'
+          ? selectedMultiEntries.map((entry) => ({
+              id: entry.key,
+              facebookAccountId: entry.facebookAccountId,
+              page: entry.page,
+            }))
+          : selectedPages.map((page) => ({
+              id: page.id,
+              facebookAccountId: selectedAccountId,
+              page,
+            }))
+
+        const pagesPayload = currentSelection.map(({ id, facebookAccountId, page }) => ({
           ...(() => {
             const scheduleConfig = bulkTimingScope === 'all'
               ? bulkScheduleAll
-              : (bulkScheduleByPage[page.id] || createBulkScheduleConfig())
+              : (bulkScheduleByPage[id] || createBulkScheduleConfig())
             return {
               postsPerDay: scheduleConfig.postsPerDay,
               timezone: scheduleConfig.timezone,
@@ -531,13 +886,14 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
               postingTimes: bulkScheduleType === 'fixed' ? scheduleConfig.postingTimes : [],
             }
           })(),
+              facebookAccountId,
           pageName: page.name,
           fbPageId: page.id,
           fbPageAccessToken: page.access_token,
           fbPageImage: page.picture || '',
           followersCount: page.followers_count || 0,
-          sourceUsername: (bulkSourceConfig[page.id]?.sourceUsername || '').trim(),
-          sourcePlatform: bulkSourceConfig[page.id]?.sourcePlatform || 'instagram',
+              sourceUsername: (bulkSourceConfig[id]?.sourceUsername || '').trim(),
+              sourcePlatform: bulkSourceConfig[id]?.sourcePlatform || 'instagram',
         }))
 
         const invalid = pagesPayload.find((p) => !p.sourceUsername)
@@ -560,13 +916,32 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
           }
         }
 
-        formData.set('pages', JSON.stringify(pagesPayload))
-        const result = await createPagesBulk(formData)
+        const payloadForSubmit = retryFailedKeys.size > 0
+          ? pagesPayload.filter((entry) =>
+              retryFailedKeys.has(accountPageKey(entry.facebookAccountId, entry.fbPageId))
+            )
+          : pagesPayload
+        formData.set('pages', JSON.stringify(payloadForSubmit))
+        const result = mode === 'multiAccountBulk'
+          ? await createPagesBulkMultiAccount(formData)
+          : await createPagesBulk(formData)
 
         if (!result.success && result.failed.length > 0) {
           const firstFailed = result.failed.at(0)
           if (!firstFailed) return
           setError(`${firstFailed.pageName}: ${firstFailed.reason}`)
+          if (mode === 'multiAccountBulk') {
+            setRetryFailedKeys(
+              new Set(
+                result.failed
+                  .map((failed) => {
+                    const hit = currentSelection.find((entry) => entry.page.name === failed.pageName)
+                    return hit ? accountPageKey(hit.facebookAccountId, hit.page.id) : null
+                  })
+                  .filter((key): key is string => Boolean(key))
+              )
+            )
+          }
           toast.error('Bulk add failed', {
             description: `${firstFailed.pageName}: ${firstFailed.reason}`,
           })
@@ -574,17 +949,35 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
         }
 
         if (result.failed.length > 0) {
+          if (mode === 'multiAccountBulk') {
+            setRetryFailedKeys(
+              new Set(
+                result.failed
+                  .map((failed) => {
+                    const hit = currentSelection.find((entry) => entry.page.name === failed.pageName)
+                    return hit ? accountPageKey(hit.facebookAccountId, hit.page.id) : null
+                  })
+                  .filter((key): key is string => Boolean(key))
+              )
+            )
+          }
           toast.warning('Bulk add partially completed', {
             description: `${result.created.length} created, ${result.failed.length} failed.`,
           })
+          setError(`${result.failed.length} page(s) failed. Fix and retry failed pages.`)
         } else {
           toast.success('Bulk add completed', {
             description: `${result.created.length} pages were added successfully.`,
           })
+          if (retryFailedKeys.size > 0 && mode === 'multiAccountBulk') {
+            resetDialogState(true)
+            return
+          }
+          setRetryFailedKeys(new Set())
+          resetDialogState(true)
         }
       }
 
-      resetDialogState(true)
       } finally {
         submittingRef.current = false
       }
@@ -654,7 +1047,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
 
           <div className="space-y-4 px-6 pt-4">
             <div className="flex w-full gap-1 rounded-xl border border-border/50 bg-muted/50 p-1">
-              {(['single', 'bulk'] as const).map((m) => (
+              {(['single', 'bulk', 'multiAccountBulk'] as const).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -667,7 +1060,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   )}
                   onClick={() => handleModeChange(m)}
                 >
-                  {m === 'single' ? 'Single Add' : 'Bulk Add'}
+                  {m === 'single' ? 'Single Add' : m === 'bulk' ? 'Bulk Add' : 'Multi-Account + CSV'}
                 </button>
               ))}
             </div>
@@ -676,7 +1069,9 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                 ? selectedPage
                   ? '1 page selected'
                   : 'No page selected'
-                : `${selectedPages.length} pages selected`}
+                : mode === 'bulk'
+                  ? `${selectedPages.length} pages selected`
+                  : `${selectedMultiEntries.length} pages selected`}
             </Badge>
           </div>
 
@@ -696,6 +1091,68 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
             {step === 1 && (
               <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <>
+                {mode === 'multiAccountBulk' ? (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Select Facebook Accounts</Label>
+                      <div className="custom-scrollbar max-h-[220px] space-y-2 overflow-y-auto pr-2">
+                        {filteredAccounts.map((acc) => {
+                          const active = selectedAccountIds.includes(acc.id)
+                          return (
+                            <button
+                              key={acc.id}
+                              type="button"
+                              onClick={() => void toggleMultiAccount(acc.id)}
+                              className={cn(
+                                'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
+                                active
+                                  ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                  : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold">{acc.fb_user_name}</p>
+                                <p className="font-mono text-xs text-muted-foreground">{acc.fb_user_id}</p>
+                              </div>
+                              {active ? <div className="h-2 w-2 rounded-full bg-primary" /> : null}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold">Select Managed Pages</Label>
+                      <div className="custom-scrollbar max-h-[260px] space-y-2 overflow-y-auto pr-2">
+                        {multiPagesFlat.map((entry) => {
+                          const active = selectedMultiPageKeys.includes(entry.key)
+                          return (
+                            <button
+                              key={entry.key}
+                              type="button"
+                              onClick={() => toggleMultiPageSelection(entry)}
+                              className={cn(
+                                'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
+                                active
+                                  ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                  : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
+                              )}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold">{entry.page.name}</p>
+                                <p className="text-xs text-muted-foreground">{entry.accountName}</p>
+                              </div>
+                              {active ? <div className="h-2 w-2 rounded-full bg-primary" /> : null}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {isLoadingPages ? (
+                        <p className="text-xs text-muted-foreground">Loading pages for selected accounts...</p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label className="text-sm font-semibold">Select Facebook Account</Label>
@@ -849,6 +1306,8 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                     )}
                   </div>
                 )}
+                  </>
+                )}
               </>
               </div>
             )}
@@ -901,13 +1360,62 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
               </div>
             )}
 
-            {step === 2 && mode === 'bulk' && (
+            {step === 2 && mode !== 'single' && (
               <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Per-Page Source Mapping</Label>
-                  <Badge variant="outline" className="text-xs">{selectedPages.length} pages</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {mode === 'bulk' ? selectedPages.length : selectedMultiEntries.length} pages
+                  </Badge>
                 </div>
+                {mode === 'multiAccountBulk' ? (
+                  <div className="space-y-3 rounded-lg border border-border/50 bg-background/20 p-3">
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p className="font-semibold text-foreground">CSV format</p>
+                      <p>`page_name,source_platform,source_username`</p>
+                      <p>Example: `My FB Page,instagram,my_source_handle`</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="file"
+                        accept=".csv,text/csv"
+                        disabled={selectedMultiEntries.length === 0}
+                        className="max-w-[260px]"
+                        onChange={(e) => void handleCsvFileSelect(e.target.files?.[0] || null)}
+                      />
+                      <Button type="button" variant="ghost" size="sm" onClick={clearImportedPreview}>
+                        Clear Imported Preview
+                      </Button>
+                      {csvPreview ? (
+                        <Button type="button" size="sm" onClick={applyCsvPreview}>
+                          Apply Import ({Object.values(csvPreview.warningGroups).reduce((acc, list) => acc + list.length, 0)} warnings)
+                        </Button>
+                      ) : null}
+                    </div>
+                    {csvPreview ? (
+                      <div className="space-y-2 text-xs">
+                        <p className="text-muted-foreground">
+                          Parsed {csvPreview.rows.length} rows, matched {csvPreview.matchedCount}, unmatched {csvPreview.unmatchedCount}.
+                        </p>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setShowCsvWarnings((prev) => !prev)}>
+                          {showCsvWarnings ? 'Hide warnings' : 'Show warnings'}
+                        </Button>
+                        {showCsvWarnings ? (
+                          <div className="max-h-36 space-y-1 overflow-y-auto rounded border p-2">
+                            {Object.entries(csvPreview.warningGroups).map(([group, values]) =>
+                              values.length ? (
+                                <p key={group} className="text-muted-foreground">
+                                  <span className="font-medium text-foreground">{group.replace(/_/g, ' ')}:</span> {values[0]}
+                                </p>
+                              ) : null
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-2">
                   <Select value={bulkPlatformForEmpty} onValueChange={(v: SourcePlatform) => setBulkPlatformForEmpty(v)}>
                     <SelectTrigger className="h-9 w-[170px]">
@@ -930,14 +1438,35 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   </Button>
                 </div>
                 <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
-                  {selectedPages.map((page) => (
-                    <div key={page.id} className="border rounded-lg p-3 space-y-2">
-                      <p className="text-xs font-semibold">{page.name}</p>
+                  {(mode === 'bulk' ? selectedPages.map((page) => ({
+                    key: page.id,
+                    pageName: page.name,
+                    accountName: null as string | null,
+                    page,
+                  })) : selectedMultiEntries.map((entry) => ({
+                    key: entry.key,
+                    pageName: entry.page.name,
+                    accountName: entry.accountName,
+                    page: entry.page,
+                  }))).map((row) => (
+                    <div key={row.key} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold">{row.pageName}</p>
+                        <div className="flex items-center gap-1">
+                          {importedKeys.has(row.key) && !editedKeys.has(row.key) ? (
+                            <Badge variant="outline" className="text-[10px]">Imported</Badge>
+                          ) : null}
+                          {editedKeys.has(row.key) ? <Badge variant="secondary" className="text-[10px]">Edited</Badge> : null}
+                        </div>
+                      </div>
+                      {row.accountName ? (
+                        <p className="text-[10px] text-muted-foreground">{row.accountName}</p>
+                      ) : null}
                       <div className="grid grid-cols-2 gap-2">
                         <Select
-                          value={bulkSourceConfig[page.id]?.sourcePlatform || 'instagram'}
+                          value={bulkSourceConfig[row.key]?.sourcePlatform || 'instagram'}
                           onValueChange={(value: SourcePlatform) =>
-                            updateBulkSource(page.id, { sourcePlatform: value })
+                            updateBulkSource(row.key, { sourcePlatform: value })
                           }
                         >
                           <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
@@ -949,10 +1478,10 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                           </SelectContent>
                         </Select>
                         <Input
-                          placeholder={sourceIdentityPlaceholder(bulkSourceConfig[page.id]?.sourcePlatform || 'instagram')}
-                          value={bulkSourceConfig[page.id]?.sourceUsername || ''}
+                          placeholder={sourceIdentityPlaceholder(bulkSourceConfig[row.key]?.sourcePlatform || 'instagram')}
+                          value={bulkSourceConfig[row.key]?.sourceUsername || ''}
                           onChange={(e) =>
-                            updateBulkSource(page.id, { sourceUsername: e.target.value })
+                            updateBulkSource(row.key, { sourceUsername: e.target.value })
                           }
                         />
                       </div>
@@ -963,7 +1492,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
               </div>
             )}
 
-            {step === 3 && mode === 'bulk' && (
+            {step === 3 && mode !== 'single' && (
               <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
               <div className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -1047,25 +1576,28 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-[320px] overflow-y-auto pr-2">
-                    {selectedPages.map((page) => {
-                      const pageSchedule = bulkScheduleByPage[page.id] || createBulkScheduleConfig()
+                    {(mode === 'bulk'
+                      ? selectedPages.map((page) => ({ key: page.id, label: page.name }))
+                      : selectedMultiEntries.map((entry) => ({ key: entry.key, label: `${entry.page.name} · ${entry.accountName}` }))
+                    ).map((page) => {
+                      const pageSchedule = bulkScheduleByPage[page.key] || createBulkScheduleConfig()
                       const pageTimes = ensurePostingTimesLength(pageSchedule.postingTimes, pageSchedule.postsPerDay)
                       return (
-                        <div key={`schedule-${page.id}`} className="space-y-3 rounded-lg border p-3">
-                          <p className="text-xs font-semibold">{page.name}</p>
+                        <div key={`schedule-${page.key}`} className="space-y-3 rounded-lg border p-3">
+                          <p className="text-xs font-semibold">{page.label}</p>
                           <div className="grid gap-3">
                             <div className="space-y-2">
                               <Label className="text-xs font-semibold">Posts Per Day</Label>
                               <PostsPerDayPicker
                                 value={pageSchedule.postsPerDay}
-                                onValueChange={(v) => updateBulkPagePostsPerDay(page.id, v)}
+                                onValueChange={(v) => updateBulkPagePostsPerDay(page.key, v)}
                               />
                             </div>
                             <div className="space-y-2">
                               <Label className="text-xs font-semibold">Timezone</Label>
                               <TimezoneSelect
                                 value={pageSchedule.timezone}
-                                onValueChange={(value) => updateBulkPageTimezone(page.id, value)}
+                                onValueChange={(value) => updateBulkPageTimezone(page.key, value)}
                               />
                             </div>
                           </div>
@@ -1076,13 +1608,13 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                 {pageTimes.map((time, index) => (
                                   <TimeSlotInput
-                                    key={`${page.id}-time-${index}`}
-                                    idPrefix={`add-bulk-page-${page.id}-time-${index}`}
+                                    key={`${page.key}-time-${index}`}
+                                    idPrefix={`add-bulk-page-${page.key}-time-${index}`}
                                     value={time || ''}
-                                    onChange={(value) => updateBulkPagePostingTime(page.id, index, value)}
+                                    onChange={(value) => updateBulkPagePostingTime(page.key, index, value)}
                                     nextFieldId={
                                       index < pageTimes.length - 1
-                                        ? `add-bulk-page-${page.id}-time-${index + 1}-field`
+                                        ? `add-bulk-page-${page.key}-time-${index + 1}-field`
                                         : undefined
                                     }
                                   />
@@ -1153,7 +1685,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
               </Button>
             )}
             <div className="flex-1" />
-            {(mode === 'single' && step === 1) || (mode === 'bulk' && step < 3) ? (
+            {(mode === 'single' && step === 1) || (mode !== 'single' && step < 3) ? (
               <Button
                 type="button"
                 className="rounded-xl"
@@ -1163,17 +1695,27 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                   (mode === 'single'
                     ? !selectedPage
                     : step === 1
-                      ? selectedPages.length === 0
-                      : selectedPages.some(
-                          (page) => !(bulkSourceConfig[page.id]?.sourceUsername || '').trim(),
-                        ))
+                      ? mode === 'bulk'
+                        ? selectedPages.length === 0
+                        : selectedMultiEntries.length === 0
+                      : (mode === 'bulk'
+                        ? selectedPages.some(
+                            (page) => !(bulkSourceConfig[page.id]?.sourceUsername || '').trim(),
+                          )
+                        : selectedMultiEntries.some(
+                            (entry) => !(bulkSourceConfig[entry.key]?.sourceUsername || '').trim(),
+                          )))
                 }
               >
                 Next
               </Button>
             ) : (
               <Button type="submit" loading={isPending} className="rounded-xl">
-                {mode === 'single' ? 'Start Automation' : 'Create Selected Pages'}
+                {mode === 'single'
+                  ? 'Start Automation'
+                  : retryFailedKeys.size > 0 && mode === 'multiAccountBulk'
+                    ? 'Retry Failed Pages'
+                    : 'Create Selected Pages'}
               </Button>
             )}
           </DialogFooter>

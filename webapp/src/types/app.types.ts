@@ -80,6 +80,7 @@ export type UserSettings = {
 }
 
 export type BulkPageInput = {
+  facebookAccountId?: string
   pageName: string
   fbPageId: string
   fbPageAccessToken: string
@@ -91,6 +92,10 @@ export type BulkPageInput = {
   timezone: string
   scheduleType: 'dailyrandom' | 'fixed'
   postingTimes?: string[]
+}
+
+export type MultiAccountBulkPageInput = Omit<BulkPageInput, 'facebookAccountId'> & {
+  facebookAccountId: string
 }
 
 export type BulkPageFailure = {

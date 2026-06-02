@@ -6,11 +6,11 @@ import { validateRole } from '@/lib/supabase/guards'
 import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { format, parse } from 'date-fns'
 import { generateBalancedPostTimes } from '@/lib/scheduling'
-import { createPageSchema, createPagesBulkSchema, deletePageSchema } from '@/lib/validations/page'
+import { createPageSchema, createPagesBulkMultiAccountSchema, createPagesBulkSchema, deletePageSchema } from '@/lib/validations/page'
 import { AxiosError } from 'axios'
 import { REQUIRED_SCOPES } from '@/lib/constants/facebook'
 import { graphGet } from '@/server/integrations/facebook/graph-client'
-import { BulkPageInput } from '@/types/app.types'
+import { BulkPageInput, MultiAccountBulkPageInput } from '@/types/app.types'
 import { sanitizeToUtcHHMM } from '@/lib/posting-times'
 import { zodErrorMessage } from '@/lib/validations/errors'
 
@@ -326,6 +326,94 @@ export async function createPagesBulk(formData: FormData) {
       {
         agencyId,
         facebookAccountId,
+        timezone: page.timezone,
+        postsPerDay: page.postsPerDay,
+        scheduleType: page.scheduleType,
+        postingTimes: page.postingTimes || [],
+        pageName: page.pageName,
+        sourceUsername: page.sourceUsername,
+        sourcePlatform: page.sourcePlatform,
+        fbPageId: page.fbPageId,
+        fbPageAccessToken: page.fbPageAccessToken,
+        fbPageImage: page.fbPageImage,
+        followersCount: page.followersCount,
+      },
+      agency
+    )
+
+    if (result.success) {
+      created.push({ pageName: page.pageName })
+    } else {
+      failed.push({ pageName: page.pageName, reason: result.error || 'Unknown error' })
+    }
+  }
+
+  revalidatePath('/agency/facebook/auto-download-upload')
+  return {
+    success: created.length > 0,
+    created,
+    failed,
+  }
+}
+
+export async function createPagesBulkMultiAccount(formData: FormData) {
+  await validateRole(['agency', 'super_admin'])
+
+  let parsedPages: MultiAccountBulkPageInput[] = []
+  try {
+    parsedPages = JSON.parse((formData.get('pages') as string) || '[]')
+  } catch {
+    return {
+      success: false,
+      created: [],
+      failed: [{ pageName: 'bulk-input', reason: 'Invalid bulk payload format.' }],
+    }
+  }
+
+  const validatedFields = createPagesBulkMultiAccountSchema.safeParse({
+    agencyId: formData.get('agencyId'),
+    pages: parsedPages,
+  })
+
+  if (!validatedFields.success) {
+    return {
+      success: false,
+      created: [],
+      failed: [{
+        pageName: 'bulk-input',
+        reason: zodErrorMessage(validatedFields.error),
+      }],
+    }
+  }
+
+  const { agencyId, pages } = validatedFields.data
+  const supabase = await createClient()
+  const { agency, error: authError } = await loadAgencyAuth(supabase, agencyId)
+  if (authError || !agency) {
+    return {
+      success: false,
+      created: [],
+      failed: [{ pageName: 'bulk-input', reason: authError || 'Failed to verify agency account status.' }],
+    }
+  }
+
+  const created: Array<{ pageName: string }> = []
+  const failed: Array<{ pageName: string; reason: string }> = []
+
+  for (const page of pages) {
+    if (!Intl.supportedValuesOf('timeZone').includes(page.timezone)) {
+      failed.push({
+        pageName: page.pageName,
+        reason: 'Invalid Timezone selected. Please refresh and try again.',
+      })
+      continue
+    }
+
+    const result = await validateAndInsertPage(
+      supabase,
+      {
+        agencyId,
+        facebookAccountId: page.facebookAccountId,
         timezone: page.timezone,
         postsPerDay: page.postsPerDay,
         scheduleType: page.scheduleType,

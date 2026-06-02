@@ -51,6 +51,41 @@ export const createPagesBulkSchema = z.object({
   })).min(1, 'Select at least one page'),
 })
 
+export const createPagesBulkMultiAccountSchema = z.object({
+  agencyId: z.string().uuid(),
+  pages: z.array(z.object({
+    facebookAccountId: z.string().uuid(),
+    pageName: z.string().min(1, 'Page name is required'),
+    fbPageId: z.string().min(1, 'Facebook Page ID is required'),
+    fbPageAccessToken: z.string().min(1, 'Page Access Token is required'),
+    fbPageImage: z.string().optional(),
+    followersCount: z.coerce.number().optional(),
+    sourceUsername: z.string().min(1, 'Source username is required'),
+    sourcePlatform: z.enum(['instagram', 'youtube', 'tiktok', 'facebook']),
+    postsPerDay: z.coerce.number().min(1).max(12),
+    timezone: z.string().min(1, 'Timezone is required'),
+    scheduleType: z.enum(['dailyrandom', 'fixed']).default('dailyrandom'),
+    postingTimes: z.array(z.string()).optional().default([]),
+  }).superRefine((page, ctx) => {
+    if (page.scheduleType !== 'fixed') return
+    if (!page.postingTimes || page.postingTimes.length !== page.postsPerDay) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Fixed posting requires ${page.postsPerDay} posting times.`,
+        path: ['postingTimes'],
+      })
+      return
+    }
+    if (page.postingTimes.some((time) => !String(time || '').trim())) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'All fixed posting times are required.',
+        path: ['postingTimes'],
+      })
+    }
+  })).min(1, 'Select at least one page'),
+})
+
 export const deletePageSchema = z.object({
   pageId: z.string().uuid(),
 })
