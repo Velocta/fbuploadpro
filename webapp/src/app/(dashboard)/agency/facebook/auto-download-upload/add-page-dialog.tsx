@@ -690,7 +690,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
       return
     }
 
-    const headerLine = lines[0]
+    const headerLine = lines.at(0)
+    if (!headerLine) {
+      toast.error('Invalid CSV', { description: 'CSV header row is missing.' })
+      return
+    }
     const delimiter = headerLine.includes(';') ? ';' : headerLine.includes('\t') ? '\t' : ','
     const rawHeaders = headerLine.split(delimiter).map((header) => normalizeHeader(header))
     const required = ['page_name', 'source_platform', 'source_username']
@@ -725,7 +729,12 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
 
     const matchedCursor = new Map<string, number>()
     const rows: CsvPreviewRow[] = []
-    const warningGroups: Record<string, string[]> = {
+    const warningGroups: {
+      unmatched: string[]
+      invalid_platform: string[]
+      duplicate_csv_page: string[]
+      empty_source: string[]
+    } = {
       unmatched: [],
       invalid_platform: [],
       duplicate_csv_page: [],
@@ -735,7 +744,9 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     let matchedCount = 0
 
     for (let i = 1; i < lines.length; i++) {
-      const columns = lines[i].split(delimiter).map((column) => column.trim())
+      const line = lines[i]
+      if (!line) continue
+      const columns = line.split(delimiter).map((column) => column.trim())
       const csvPageName = columns[pageNameIndex] || ''
       const normalizedPageName = normalizeMatchText(csvPageName)
       const warnings: string[] = []
@@ -758,6 +769,11 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
       } else {
         const cursor = matchedCursor.get(normalizedPageName) || 0
         const target = matches[cursor] || matches[0]
+        if (!target) {
+          warnings.push('unknown-page')
+          warningGroups.unmatched.push(`Row ${i + 1}: "${csvPageName}" does not match selected pages.`)
+          continue
+        }
         matchedKey = target.key
         matchedCursor.set(normalizedPageName, cursor + 1)
         matchedCount += 1
