@@ -41,7 +41,6 @@ R2_UPLOAD_CHUNK_BYTES = _bounded_int(
 
 RESIDENTIAL_PROXY = os.environ.get("RESIDENTIAL_PROXY", "").strip() or None
 DATACENTER_PROXY = os.environ.get("DATACENTER_PROXY", "").strip() or None
-IMPERSONATE_TARGET = os.environ.get("IMPERSONATE_TARGET", "").strip() or None
 
 
 def aria2_cli_args() -> list[str]:

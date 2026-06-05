@@ -5,14 +5,16 @@ Pre-downloads reels into R2 (`fbuploadpro-adu-buffer`) so the posting scheduler 
 ## Requirements
 
 - Python 3.11+
-- `yt-dlp`, `ffmpeg`, `aria2c` on PATH
+- `yt-dlp` (via `requirements.txt`, includes curl-cffi for `--impersonate chrome`), `ffmpeg`, `aria2c` on PATH
 - Supabase service role + R2 S3 API credentials
 
 ## Setup
 
+Linux quick start (see **PM2** section for Windows, reboot persistence, and deploy):
+
 ```bash
 cd backend_v3/services/facebook/auto-download-upload/downloader
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # fill values
 ```
@@ -59,11 +61,176 @@ Each claimed reel gets up to **4** in-process download attempts before `mark_adu
 
 If a proxy env var is unset, that step runs without a proxy. Only Instagram uses metadata + aria2; TikTok and Facebook always download through yt-dlp (Facebook may use generic extractor fallback).
 
-**Capacity notes:** Parallel jobs need disk under `/tmp` for temp files (often 30–100 MB each while downloading). If RAM is tight, lower concurrency or chunk size.
+**Capacity notes:** Parallel jobs need disk under `/tmp` (Linux) or `%TEMP%` (Windows) for temp files (often 30–100 MB each while downloading). If RAM is tight, lower concurrency or chunk size.
 
-## PM2
+## PM2 (keep the worker running)
+
+[PM2](https://pm2.keymetrics.io/) is a process manager: it runs `worker.py` in the background, restarts it on crash, and (with extra setup) brings it back after a server reboot.
+
+`ecosystem.config.cjs` starts one app:
+
+| Setting | Value |
+|---------|--------|
+| Name | `fbuploadpro-adu-downloader` |
+| Script | `worker.py` |
+| Python | `.venv` interpreter if present, else `python3` (Linux) / `python` (Windows) |
+| Env | `downloader/.env` via `env_file` |
+| Restart | `autorestart: true`, `max_restarts: 20` |
+
+### 1. Install PM2
+
+**Linux (VPS — recommended for production)**
+
+```bash
+# Node.js 20+ (pick one)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Or: sudo apt install nodejs npm   (distro package)
+
+sudo npm install -g pm2
+pm2 -v
+```
+
+**Windows (dev or small host)**
+
+1. Install [Node.js LTS](https://nodejs.org/) (includes npm).
+2. Open **PowerShell** or **cmd** as a normal user:
+
+```powershell
+npm install -g pm2
+pm2 -v
+```
+
+On Windows, run PM2 commands from the same shell type you used to install it (PowerShell is fine).
+
+### 2. System tools (before PM2)
+
+**Linux**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv ffmpeg aria2
+```
+
+**Windows**
+
+- Install [Python 3.11+](https://www.python.org/downloads/) — check **Add python.exe to PATH**.
+- Install ffmpeg and aria2 and add them to PATH, e.g.:
+
+```powershell
+winget install Gyan.FFmpeg
+winget install aria2.aria2
+```
+
+(Or use Chocolatey / manual downloads; `ffmpeg`, `aria2c`, and `yt-dlp` must work in a new terminal.)
+
+### 3. Python app setup (both platforms)
+
+From the repo root, `cd` into this folder:
+
+```bash
+cd backend_v3/services/facebook/auto-download-upload/downloader
+```
+
+**Linux**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # edit with real credentials
+```
+
+**Windows (PowerShell)**
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+copy .env.example .env   # edit with real credentials
+```
+
+Apply migration `20260605120000_adu_buffer_claim_improvements.sql` on Supabase before starting the worker.
+
+Smoke-test once in the foreground (Ctrl+C to stop):
+
+```bash
+python worker.py
+```
+
+### 4. Start with PM2
+
+Run from **`downloader/`** (where `ecosystem.config.cjs` lives):
 
 ```bash
 pm2 start ecosystem.config.cjs
+pm2 status
+pm2 logs fbuploadpro-adu-downloader
+```
+
+What each command does:
+
+- **`pm2 start ecosystem.config.cjs`** — reads the config and starts `worker.py` under the name `fbuploadpro-adu-downloader`.
+- **`pm2 status`** — shows running/stopped apps, CPU, memory, restarts.
+- **`pm2 logs …`** — tails stdout/stderr (download errors, claim counts).
+
+### 5. Survive reboot
+
+**`pm2 save`** writes the current process list to `~/.pm2/dump.pm2` so PM2 can restore it later. It does **not** by itself start PM2 on boot — you need a startup hook once per machine.
+
+**Linux**
+
+```bash
+pm2 save
+pm2 startup
+# Run the command PM2 prints (usually sudo env PATH=... pm2 startup systemd -u YOUR_USER --hp /home/YOUR_USER)
 pm2 save
 ```
+
+After reboot: `pm2 status` should show `fbuploadpro-adu-downloader` online.
+
+**Windows**
+
+Native `pm2 startup` is limited on Windows. Common options:
+
+1. **Task Scheduler** — trigger `pm2 resurrect` at logon (after `pm2 save` once while the app is running).
+2. **`pm2-windows-startup`** (community helper):
+
+```powershell
+npm install -g pm2-windows-startup
+pm2-startup install
+pm2 save
+```
+
+Or run PM2 manually after reboot for dev machines.
+
+### 6. Day-to-day commands
+
+```bash
+pm2 restart fbuploadpro-adu-downloader   # after git pull / .env change
+pm2 stop fbuploadpro-adu-downloader
+pm2 delete fbuploadpro-adu-downloader    # remove from PM2 list
+pm2 save                               # persist list after stop/delete/start changes
+```
+
+Deploy update (Linux example):
+
+```bash
+cd backend_v3/services/facebook/auto-download-upload/downloader
+git pull
+source .venv/bin/activate && pip install -r requirements.txt
+pm2 restart fbuploadpro-adu-downloader
+```
+
+Windows: use `.\.venv\Scripts\Activate.ps1` instead of `source`.
+
+### 7. Troubleshooting
+
+| Symptom | Check |
+|---------|--------|
+| App `errored` / rapid restarts | `pm2 logs fbuploadpro-adu-downloader --lines 100` — missing `.env`, Supabase/R2 creds, or migration not applied |
+| `yt-dlp` / impersonate errors | `pip install -r requirements.txt` in `.venv`; `yt-dlp --list-impersonate-targets` |
+| `ffmpeg` / `aria2c` not found | Install system binaries and ensure they are on PATH for the PM2 user |
+| Wrong Python | PM2 uses `.venv/bin/python` (Linux) or `.venv\Scripts\python.exe` (Windows) when the venv exists |
+| Changes not picked up | `pm2 restart fbuploadpro-adu-downloader` after code or `.env` edits |

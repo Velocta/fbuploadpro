@@ -7,11 +7,13 @@ from urllib.parse import urlsplit, urlunsplit
 
 from config import (
     DATACENTER_PROXY,
-    IMPERSONATE_TARGET,
     RESIDENTIAL_PROXY,
     aria2_cli_args,
     yt_dlp_aria2_downloader_args,
 )
+
+# Flexible target: yt-dlp/curl_cffi pick a compatible Chrome version automatically.
+YT_DLP_IMPERSONATE = "chrome"
 
 PLATFORM_PROFILES = {
     "instagram": {
@@ -55,10 +57,6 @@ PLATFORM_PROFILES = {
         "generic_extractor_fallback": True
     },
 }
-
-def get_optional_impersonate_target():
-    return IMPERSONATE_TARGET
-
 
 def run_command(args):
     try:
@@ -117,10 +115,12 @@ def parse_json_from_stdout(stdout):
     raise RuntimeError("yt-dlp did not return parsable JSON output")
 
 
-def build_common_yt_dlp_args(profile, proxy, impersonate_target):
+def build_common_yt_dlp_args(profile, proxy):
     args = [
         "--no-warnings",
         "--quiet",
+        "--impersonate",
+        YT_DLP_IMPERSONATE,
         "--retries",
         str(profile.get("retries", 1)),
         "--extractor-retries",
@@ -132,26 +132,24 @@ def build_common_yt_dlp_args(profile, proxy, impersonate_target):
     ]
     if proxy:
         args.extend(["--proxy", proxy])
-    if impersonate_target:
-        args.extend(["--impersonate", impersonate_target])
     for header_name, header_value in profile.get("headers", {}).items():
         args.extend(["--add-header", f"{header_name}: {header_value}"])
     return args
 
 
-def fetch_metadata(url, proxy, impersonate_target, profile):
+def fetch_metadata(url, proxy, profile):
     args = [
         "yt-dlp",
         url,
         "--dump-single-json",
         "--skip-download",
     ]
-    args.extend(build_common_yt_dlp_args(profile, proxy, impersonate_target))
+    args.extend(build_common_yt_dlp_args(profile, proxy))
     result = run_command(args)
     return parse_json_from_stdout(result.stdout)
 
 
-def download_with_yt_dlp(url, proxy, impersonate_target, output_template, profile, format_selector, use_generic_extractor=False):
+def download_with_yt_dlp(url, proxy, output_template, profile, format_selector, use_generic_extractor=False):
     args = [
         "yt-dlp",
         url,
@@ -168,7 +166,7 @@ def download_with_yt_dlp(url, proxy, impersonate_target, output_template, profil
         "mp4",
         "--print-json",
     ]
-    args.extend(build_common_yt_dlp_args(profile, proxy, impersonate_target))
+    args.extend(build_common_yt_dlp_args(profile, proxy))
     if use_generic_extractor:
         args.append("--force-generic-extractor")
     result = run_command(args)
@@ -235,11 +233,10 @@ def download_via_metadata_then_aria2(
     url: str,
     profile: dict,
     metadata_proxy: str | None,
-    impersonate_target: str | None,
     tmp_dir: str,
     unique_id: str,
 ) -> tuple[str, str]:
-    info = fetch_metadata(url, metadata_proxy, impersonate_target, profile)
+    info = fetch_metadata(url, metadata_proxy, profile)
     return download_from_metadata_info(info, tmp_dir, unique_id)
 
 
@@ -247,7 +244,6 @@ def download_with_ytdlp_formats(
     url: str,
     profile: dict,
     proxy: str | None,
-    impersonate_target: str | None,
     tmp_dir: str,
     unique_id: str,
     *,
@@ -266,7 +262,6 @@ def download_with_ytdlp_formats(
             info = download_with_yt_dlp(
                 url,
                 proxy,
-                impersonate_target,
                 output_template,
                 profile,
                 format_selector,
@@ -289,7 +284,6 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
     if platform not in PLATFORM_PROFILES:
         raise ValueError(f"unsupported platform: {platform}")
 
-    impersonate_target = get_optional_impersonate_target()
     unique_id = uuid.uuid4().hex
     tmp_dir = tempfile.mkdtemp(prefix="adu-dl-")
     try:
@@ -301,7 +295,6 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 url,
                 profile,
                 DATACENTER_PROXY,
-                impersonate_target,
                 tmp_dir,
                 unique_id,
             )
@@ -310,7 +303,6 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 url,
                 profile,
                 RESIDENTIAL_PROXY,
-                impersonate_target,
                 tmp_dir,
                 unique_id,
             )
@@ -320,7 +312,6 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 url,
                 profile,
                 DATACENTER_PROXY,
-                impersonate_target,
                 tmp_dir,
                 unique_id,
                 include_generic_fallback=platform == "facebook",
