@@ -183,8 +183,12 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
       if (!finishRes.ok || !finishData.success) {
         throw new Error(`facebook_finish_failed ${JSON.stringify(finishData)}`);
       }
-      fbLog(ctx, 'fb_reels_publish_ok', { attempt: attempts, upload_mode: mode });
-      return;
+      fbLog(ctx, 'fb_reels_publish_ok', {
+        attempt: attempts,
+        upload_mode: mode,
+        video_id: startData.video_id,
+      });
+      return String(startData.video_id);
     } catch (error) {
       const message = String(error?.message || '');
       fbLog(ctx, 'fb_reels_attempt_error', {

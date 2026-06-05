@@ -144,12 +144,16 @@ async function processPublishJob(env, job) {
           getObject: () => env.POSTING_MEDIA_BUCKET.get(mediaObjectKey),
         };
 
-  await publishToFacebook(job.fb_page_id, job.fb_page_access_token, mediaSpec, 6, caption, {
+  const graphVideoId = await publishToFacebook(job.fb_page_id, job.fb_page_access_token, mediaSpec, 6, caption, {
     job_id: jobId,
   });
-  v2Log('publish_job_facebook_ok', { job_id: jobId });
+  v2Log('publish_job_facebook_ok', { job_id: jobId, graph_video_id: graphVideoId ?? null });
 
-  const { data: finalizeResult, error: finalizeError } = await finalizePosted(supabase, job.job_id);
+  const { data: finalizeResult, error: finalizeError } = await finalizePosted(
+    supabase,
+    job.job_id,
+    graphVideoId
+  );
   if (finalizeError) {
     v2Log('publish_job_error', {
       job_id: jobId,
@@ -278,9 +282,18 @@ export default {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
 
-        const { error: retryError } = await incrementPublishRetry(supabase, job.job_id, code, errMsg.slice(0, 500));
+        const { error: retryError, exhausted: retriesExhausted } = await incrementPublishRetry(
+          supabase,
+          job.job_id,
+          code,
+          errMsg.slice(0, 500)
+        );
         if (retryError) {
           v2Log('increment_publish_retry_error', { job_id: job.job_id ?? null, message: retryError.message });
+        }
+        if (retriesExhausted) {
+          v2Log('publish_retries_exhausted', { job_id: job.job_id ?? null });
+          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
         v2Log('internal_job_response', { job_id: job.job_id ?? null, http_status: 500, ok: false });
         return Response.json({ ok: false, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) }, { status: 500 });

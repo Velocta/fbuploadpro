@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
+/** Must match claim_publish_jobs_adu filter (publish_retries <= 5). */
+export const MAX_PUBLISH_RETRIES = 5;
+
 export function getSupabaseClient(env) {
   return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 }
@@ -11,23 +14,35 @@ export async function incrementPublishRetry(supabase, jobId, code, message) {
     .eq('job_id', jobId)
     .single();
 
-  if (fetchError) return { error: fetchError };
+  if (fetchError) return { error: fetchError, data: null, exhausted: false };
 
-  return supabase
+  const nextRetries = Number(current?.publish_retries || 0) + 1;
+  const exhausted = nextRetries > MAX_PUBLISH_RETRIES;
+
+  const { error, data } = await supabase
     .from('adu_posting_jobs')
     .update({
-      status: 'pending_publish',
+      status: exhausted ? 'failed_to_publish' : 'pending_publish',
       publish_started_at: null,
-      publish_retries: Number(current?.publish_retries || 0) + 1,
-      last_error_code: code ?? null,
-      last_error_message: message ?? null,
+      publish_retries: nextRetries,
+      last_error_code: exhausted ? 'publish_retries_exhausted' : (code ?? null),
+      last_error_message: exhausted
+        ? String(message || 'Maximum publish retries exceeded').slice(0, 500)
+        : (message ?? null),
     })
     .eq('job_id', jobId)
-    .eq('status', 'publishing');
+    .eq('status', 'publishing')
+    .select('job_id')
+    .maybeSingle();
+
+  return { error, data, exhausted };
 }
 
-export async function finalizePosted(supabase, jobId) {
-  return supabase.rpc('finalize_posting_job_adu', { p_job_id: jobId, p_graph_post_id: null });
+export async function finalizePosted(supabase, jobId, graphPostId = null) {
+  return supabase.rpc('finalize_posting_job_adu', {
+    p_job_id: jobId,
+    p_graph_post_id: graphPostId,
+  });
 }
 
 export async function verifyFinalization(supabase, jobId) {

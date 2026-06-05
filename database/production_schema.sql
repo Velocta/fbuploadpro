@@ -301,16 +301,65 @@ end;
 $$ language plpgsql security definer;
 
 -- Atomic Posting & Deduction RPC
+create or replace function public.resolve_token_cost(
+  p_feature text,
+  p_platform text default 'facebook',
+  p_media_type text default '*',
+  p_source_platform text default null
+)
+returns int
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_cost int;
+begin
+  select r.token_cost
+  into v_cost
+  from public.token_cost_rules r
+  where r.feature = p_feature
+    and r.platform = p_platform
+    and r.media_type = p_media_type
+    and coalesce(r.source_platform, '') = coalesce(p_source_platform, '')
+  limit 1;
+
+  if v_cost is null and p_media_type is distinct from '*' then
+    select r.token_cost
+    into v_cost
+    from public.token_cost_rules r
+    where r.feature = p_feature
+      and r.platform = p_platform
+      and r.media_type = '*'
+      and coalesce(r.source_platform, '') = coalesce(p_source_platform, '')
+    limit 1;
+  end if;
+
+  if v_cost is null then
+    raise exception 'token_cost_rule_not_found feature=% platform=% media_type=% source_platform=%',
+      p_feature, p_platform, p_media_type, p_source_platform;
+  end if;
+
+  return v_cost;
+end;
+$$;
+
+grant execute on function public.resolve_token_cost(text, text, text, text) to authenticated;
+
 create or replace function public.mark_reel_posted_with_token(p_reel_id bigint)
-returns boolean as $$
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
 declare
     v_user_id uuid;
     v_current_tokens bigint;
-    v_platform public.platform_enum;
+    v_source_platform public.platform_enum;
     v_deduction int;
 begin
-    -- A. Identify the user (Agency) and Platform
-    select p.agency_id, r.platform into v_user_id, v_platform
+    select p.agency_id, r.platform into v_user_id, v_source_platform
     from public.pages p
     join public.reels r on r.page_id = p.id
     where r.id = p_reel_id;
@@ -319,46 +368,44 @@ begin
         raise exception 'Reel or linked Agency not found';
     end if;
 
-    -- B. Determine Deduction Amount
-    v_deduction := case 
-        when v_platform = 'instagram' then 1
-        when v_platform = 'tiktok' then 3
-        when v_platform = 'youtube' then 6
-        when v_platform = 'facebook' then 2
-        else 1 -- Fallback
-    end;
+    v_deduction := public.resolve_token_cost(
+        'auto_download_upload',
+        'facebook',
+        '*',
+        v_source_platform::text
+    );
 
-    -- C. Check balance
-    select tokens_balance into v_current_tokens 
+    select tokens_balance into v_current_tokens
     from public.users where id = v_user_id;
 
     if v_current_tokens < v_deduction then
         raise exception 'Insufficient tokens for user %. Required: %, Available: %', v_user_id, v_deduction, v_current_tokens;
     end if;
 
-    -- D. Update Reel Status
-    update public.reels 
-    set status = 'posted' 
-    where id = p_reel_id 
+    update public.reels
+    set status = 'posted'
+    where id = p_reel_id
       and status != 'posted';
 
     if not found then
         return false;
     end if;
 
-    -- E. Deduct Tokens
-    update public.users 
+    update public.users
     set tokens_balance = tokens_balance - v_deduction
     where id = v_user_id;
 
-    -- F. Log Transaction
     insert into public.token_transactions (user_id, amount, type, reel_id, metadata)
     VALUES (
-        v_user_id, 
-        -v_deduction, 
-        'usage', 
+        v_user_id,
+        -v_deduction,
+        'usage',
         p_reel_id,
-        jsonb_build_object('platform', v_platform, 'reel_id_internal', p_reel_id)
+        jsonb_build_object(
+            'feature', 'auto_download_upload',
+            'platform', v_source_platform,
+            'reel_id_internal', p_reel_id
+        )
     );
 
     return true;
@@ -366,7 +413,7 @@ exception
     when others then
         raise;
 end;
-$$ language plpgsql security definer;
+$$;
 
 -- Token Balance Protection Trigger Function
 create or replace function public.protect_user_tokens_balance()
@@ -1128,6 +1175,7 @@ from (values
   ('auto_download_upload'::text, 'facebook'::text, '*'::text, 'instagram'::text, 1),
   ('auto_download_upload', 'facebook', '*', 'youtube', 2),
   ('auto_download_upload', 'facebook', '*', 'tiktok', 2),
+  ('auto_download_upload', 'facebook', '*', 'facebook', 2),
   ('direct_post', 'facebook', '*', null::text, 0),
   ('direct_schedule', 'facebook', '*', null, 0),
   ('inapp_schedule', 'facebook', '*', null, 1)
@@ -1648,6 +1696,19 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
+  update public.adu_posting_jobs j
+  set
+    status = 'failed_to_publish',
+    publish_started_at = null,
+    last_error_code = coalesce(j.last_error_code, 'publish_retries_exhausted'),
+    last_error_message = coalesce(
+      nullif(trim(j.last_error_message), ''),
+      'Maximum publish retries exceeded'
+    ),
+    updated_at = now()
+  where j.status = 'pending_publish'
+    and j.publish_retries > 5;
+
   return query
   with locked as (
     select j.job_id
