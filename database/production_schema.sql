@@ -1618,6 +1618,12 @@ begin
     where p.id in (select dp.id from due_pages dp)
       and p.id not in (select cr.page_id from candidate_reels cr)
       and p.status = 'active'
+      and not exists (
+        select 1
+        from public.reels r
+        where r.page_id = p.id
+          and r.status in ('pending', 'processing')
+      )
     returning p.id
   ),
   inserted_jobs as (
