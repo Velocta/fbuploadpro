@@ -14,6 +14,13 @@ def get_client():
     return _client
 
 
+def reset_stale_reel_downloads(stale_minutes: int):
+    return get_client().rpc(
+        "reset_stale_adu_reel_downloads",
+        {"p_stale_minutes": stale_minutes},
+    ).execute()
+
+
 def claim_buffer_downloads(limit: int):
     return get_client().rpc("claim_adu_buffer_downloads", {"p_limit": limit}).execute()
 

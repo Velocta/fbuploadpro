@@ -10,15 +10,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config import (
     ARIA2_MAX_CONNECTION,
     ARIA2_SPLIT,
-    CLAIM_BATCH_SIZE,
     DOWNLOAD_ATTEMPT_RETRIES,
     DOWNLOAD_MAX_BYTES,
     IDLE_WAIT_SECONDS,
     MAX_CONCURRENT,
     R2_UPLOAD_CHUNK_BYTES,
-    RESIDENTIAL_PROXY,
+    STALE_MINUTES,
 )
-from db import claim_buffer_downloads, mark_download_failed, mark_downloaded
+from db import claim_buffer_downloads, mark_download_failed, mark_downloaded, reset_stale_reel_downloads
 from media_download import download_reel_media
 from r2_upload import object_key, upload_file
 from sources import source_url
@@ -60,9 +59,6 @@ def process_one(row: dict) -> None:
             }
         )
     )
-
-    if RESIDENTIAL_PROXY:
-        os.environ["RESIDENTIAL_PROXY"] = RESIDENTIAL_PROXY
 
     last_error: Exception | None = None
 
@@ -117,19 +113,46 @@ def process_one(row: dict) -> None:
     mark_download_failed(reel_id)
 
 
-def run_tick() -> int:
-    result = claim_buffer_downloads(CLAIM_BATCH_SIZE)
-    rows = result.data or []
-    if not rows:
-        log.info(json.dumps({"event": "claim_empty"}))
-        return 0
+def _drain_completed(in_flight: set) -> None:
+    done = {future for future in in_flight if future.done()}
+    for future in done:
+        future.result()
+        in_flight.discard(future)
 
-    log.info(json.dumps({"event": "claim_ok", "count": len(rows)}))
+
+def run_loop() -> None:
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT) as pool:
-        futures = [pool.submit(process_one, row) for row in rows]
-        for future in as_completed(futures):
-            future.result()
-    return len(rows)
+        in_flight: set = set()
+        while True:
+            try:
+                reset_result = reset_stale_reel_downloads(STALE_MINUTES)
+                reset_data = reset_result.data
+                reset_count = reset_data if isinstance(reset_data, int) else (reset_data or 0)
+                if reset_count:
+                    log.info(json.dumps({"event": "stale_reset", "count": reset_count, "stale_minutes": STALE_MINUTES}))
+
+                _drain_completed(in_flight)
+
+                free_slots = MAX_CONCURRENT - len(in_flight)
+                claimed = []
+                if free_slots > 0:
+                    result = claim_buffer_downloads(free_slots)
+                    claimed = result.data or []
+                    if claimed:
+                        log.info(json.dumps({"event": "claim_ok", "count": len(claimed), "free_slots": free_slots}))
+                    elif not in_flight:
+                        log.info(json.dumps({"event": "claim_empty"}))
+
+                for row in claimed:
+                    in_flight.add(pool.submit(process_one, row))
+
+                if not in_flight and not claimed:
+                    time.sleep(IDLE_WAIT_SECONDS)
+                elif in_flight:
+                    next(as_completed(in_flight, timeout=1), None)
+            except Exception:
+                log.exception(json.dumps({"event": "loop_error"}))
+                time.sleep(IDLE_WAIT_SECONDS)
 
 
 def main() -> None:
@@ -139,7 +162,7 @@ def main() -> None:
                 "event": "loop_start",
                 "idle_wait_seconds": IDLE_WAIT_SECONDS,
                 "concurrency": MAX_CONCURRENT,
-                "claim_batch": CLAIM_BATCH_SIZE,
+                "stale_minutes": STALE_MINUTES,
                 "download_attempt_retries": DOWNLOAD_ATTEMPT_RETRIES,
                 "aria2_max_connection": ARIA2_MAX_CONNECTION,
                 "aria2_split": ARIA2_SPLIT,
@@ -147,15 +170,7 @@ def main() -> None:
             }
         )
     )
-    while True:
-        try:
-            processed = run_tick()
-        except Exception:
-            log.exception(json.dumps({"event": "tick_error"}))
-            processed = 0
-
-        if processed == 0:
-            time.sleep(IDLE_WAIT_SECONDS)
+    run_loop()
 
 
 if __name__ == "__main__":

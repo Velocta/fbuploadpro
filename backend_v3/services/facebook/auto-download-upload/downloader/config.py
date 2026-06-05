@@ -18,14 +18,14 @@ R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET = os.environ.get("R2_ADU_BUFFER_BUCKET", "fbuploadpro-adu-buffer").strip()
 
-# Sleep only when a claim tick returns zero rows (no work in buffer queue).
+# Sleep only when no in-flight work and claim returned zero rows.
 IDLE_WAIT_SECONDS = _bounded_int("ADU_DOWNLOADER_IDLE_WAIT_SECONDS", "60", minimum=1)
-# Match claim batch to concurrency so one tick can fill the worker pool.
-CLAIM_BATCH_SIZE = _bounded_int("ADU_DOWNLOADER_CLAIM_BATCH", "30", minimum=1, maximum=200)
 MAX_CONCURRENT = _bounded_int("ADU_DOWNLOADER_CONCURRENCY", "30", minimum=1, maximum=200)
 # Per-claim download attempts before mark_adu_reel_download_failed (separate from DB download_retries).
 DOWNLOAD_ATTEMPT_RETRIES = _bounded_int("ADU_DOWNLOADER_ATTEMPT_RETRIES", "4", minimum=1, maximum=20)
 DOWNLOAD_MAX_BYTES = _bounded_int("ADU_DOWNLOAD_MAX_BYTES", "209715200", minimum=1)
+# Reset reels stuck in processing back to pending (worker calls reset_stale_adu_reel_downloads each loop).
+STALE_MINUTES = _bounded_int("ADU_DOWNLOADER_STALE_MINUTES", "40", minimum=1, maximum=24 * 60)
 
 # aria2: lower -x/-s per file so 30 parallel jobs do not open thousands of TCP connections.
 ARIA2_MAX_CONNECTION = _bounded_int("ADU_ARIA2_MAX_CONNECTION", "4", minimum=1, maximum=16)
@@ -40,6 +40,7 @@ R2_UPLOAD_CHUNK_BYTES = _bounded_int(
 )
 
 RESIDENTIAL_PROXY = os.environ.get("RESIDENTIAL_PROXY", "").strip() or None
+DATACENTER_PROXY = os.environ.get("DATACENTER_PROXY", "").strip() or None
 IMPERSONATE_TARGET = os.environ.get("IMPERSONATE_TARGET", "").strip() or None
 
 

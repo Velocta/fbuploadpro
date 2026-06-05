@@ -31,14 +31,15 @@ Path: `backend_v3/services/facebook/auto-download-upload/downloader/`
 | `R2_ACCESS_KEY_ID` | Yes | R2 credentials |
 | `R2_SECRET_ACCESS_KEY` | Yes | R2 credentials |
 | `R2_ADU_BUFFER_BUCKET` | Yes | Default `fbuploadpro-adu-buffer` |
-| `ADU_DOWNLOADER_IDLE_WAIT_SECONDS` | No | Sleep when no reels to claim (default 60); no sleep between batches |
-| `ADU_DOWNLOADER_CLAIM_BATCH` | No | Reels claimed per tick (default 30; match concurrency) |
-| `ADU_DOWNLOADER_CONCURRENCY` | No | Parallel downloads (default 30; tuned for ~8 GB RAM with streaming R2 upload) |
+| `ADU_DOWNLOADER_IDLE_WAIT_SECONDS` | No | Sleep when no in-flight work and claim empty (default 60) |
+| `ADU_DOWNLOADER_CONCURRENCY` | No | Max parallel downloads (default 30); claim limit = free slots |
+| `ADU_DOWNLOADER_STALE_MINUTES` | No | Reset stuck `processing` reels to `pending` (default 40) |
 | `ADU_DOWNLOADER_ATTEMPT_RETRIES` | No | In-process download attempts per claim (default 4); separate from DB `download_retries` |
 | `ADU_ARIA2_MAX_CONNECTION` | No | aria2 `-x` per file (default 4) |
 | `ADU_ARIA2_SPLIT` | No | aria2 `-s` per file (default 4) |
 | `ADU_R2_UPLOAD_CHUNK_BYTES` | No | R2 upload read chunk size (default 8388608); avoids loading whole file into RAM |
-| `RESIDENTIAL_PROXY` | No | YouTube downloads only |
+| `RESIDENTIAL_PROXY` | No | YouTube yt-dlp downloads only |
+| `DATACENTER_PROXY` | No | Instagram/TikTok/Facebook metadata URL resolution only (aria2 CDN fetch is direct) |
 | `IMPERSONATE_TARGET` | No | Optional yt-dlp impersonate |
 
 ## ADU Posting workers (`backend_v3/services/facebook/auto-download-upload/posting/*`)

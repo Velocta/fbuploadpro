@@ -136,13 +136,14 @@ create table public.reels (
   downloaded_at timestamptz,
   graph_post_id text,
   download_retries int not null default 0,
-  
+  download_claimed_at timestamptz,
+
   constraint unique_reel_per_page unique (page_id, reel_id)
 );
 
-create index if not exists idx_reels_page_status_downloaded
+create index if not exists idx_reels_page_status_buffer
   on public.reels (page_id, status, id)
-  where status in ('pending', 'downloaded');
+  where status in ('pending', 'downloaded', 'processing');
 -- Token Transactions Table
 create table public.token_transactions (
     id uuid default uuid_generate_v4() primary key,
@@ -1761,6 +1762,29 @@ begin
 end;
 $$;
 
+create or replace function public.reset_stale_adu_reel_downloads(p_stale_minutes int default 40)
+returns integer
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_reset_count integer;
+begin
+  update public.reels
+  set
+    status = 'pending',
+    download_claimed_at = null
+  where status = 'processing'
+    and download_claimed_at is not null
+    and download_claimed_at < now() - make_interval(mins => p_stale_minutes)
+    and download_retries < 3;
+
+  get diagnostics v_reset_count = row_count;
+  return v_reset_count;
+end;
+$$;
+
 create or replace function public.claim_adu_buffer_downloads(p_limit int default 10)
 returns table (
   reel_internal_id bigint,
@@ -1774,6 +1798,10 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
+  if coalesce(p_limit, 0) <= 0 then
+    return;
+  end if;
+
   return query
   with active_pages as (
     select
@@ -1781,6 +1809,7 @@ begin
       coalesce(p.posts_per_day, 0) * 4 as buffer_target
     from public.pages p
     where p.status = 'active'
+      and p.sync_status = 'synced'
       and coalesce(p.posts_per_day, 0) > 0
   ),
   page_buffer as (
@@ -1789,7 +1818,8 @@ begin
     where (
       select count(*)::int
       from public.reels r
-      where r.page_id = ap.id and r.status = 'downloaded'
+      where r.page_id = ap.id
+        and r.status in ('downloaded', 'processing')
     ) < ap.buffer_target
   ),
   locked as (
@@ -1799,11 +1829,14 @@ begin
     where r.status = 'pending'
       and r.download_retries < 3
     order by r.id asc
-    limit greatest(1, p_limit)
+    limit p_limit
     for update skip locked
   )
   update public.reels r
-  set download_retries = r.download_retries + 1
+  set
+    status = 'processing',
+    download_retries = r.download_retries + 1,
+    download_claimed_at = now()
   from locked l
   where r.id = l.id
   returning r.id, r.page_id, r.platform, r.username, r.reel_id;
@@ -1833,7 +1866,8 @@ begin
     media_sha256 = p_media_sha256,
     reel_caption = coalesce(nullif(trim(p_reel_caption), ''), reel_caption, '...'),
     downloaded_at = now(),
-    download_retries = 0
+    download_retries = 0,
+    download_claimed_at = null
   where id = p_reel_id
     and status in ('pending', 'processing');
 end;
@@ -1847,7 +1881,12 @@ set search_path = public, pg_temp
 as $$
 begin
   update public.reels
-  set status = case when download_retries >= 3 then 'download_failed'::public.reel_status_enum else status end
+  set
+    status = case
+      when download_retries >= 3 then 'download_failed'::public.reel_status_enum
+      else 'pending'::public.reel_status_enum
+    end,
+    download_claimed_at = null
   where id = p_reel_id;
 end;
 $$;
