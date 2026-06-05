@@ -1,46 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildYtdlpFlatPlaylistArgs } from './ytdlp-args.js';
+import { buildTiktokYtdlpArgs, TIKTOK_YTDLP_USER_AGENT } from './ytdlp-args.js';
 
-const BASE_CONFIG = {
-  RETRIES: 1,
-  EXTRACTOR_RETRIES: 3,
-  SOCKET_TIMEOUT: 30,
-  USER_AGENT: 'Mozilla/5.0 PuppeteerAutomation',
-  COOKIES_FROM_BROWSER: 'chromium:/abs/.browser-profile',
-  SLEEP_REQUESTS: 5,
-  DOWNLOAD_ARCHIVE: '',
-  YOUTUBE_PLAYER_CLIENT: '',
-  YOUTUBE_PO_TOKEN: '',
-};
+const PROFILE_URL = 'https://www.tiktok.com/@user';
 
-test('buildYtdlpFlatPlaylistArgs includes flat-playlist JSON flags', () => {
-  const args = buildYtdlpFlatPlaylistArgs(
-    'tiktok',
-    'https://www.tiktok.com/@user',
-    BASE_CONFIG,
-  );
+test('buildTiktokYtdlpArgs matches main-scraper flat-playlist flags', () => {
+  const args = buildTiktokYtdlpArgs(PROFILE_URL, 500);
   assert.ok(args.includes('--flat-playlist'));
   assert.ok(args.includes('-J'));
-  assert.equal(args.at(-1), 'https://www.tiktok.com/@user');
+  assert.ok(args.includes('--quiet'));
+  assert.ok(args.includes('--no-check-certificates'));
+  assert.equal(args.at(-1), PROFILE_URL);
 });
 
-test('buildYtdlpFlatPlaylistArgs uses automation browser cookies and UA', () => {
-  const args = buildYtdlpFlatPlaylistArgs('tiktok', 'https://www.tiktok.com/@user', BASE_CONFIG);
+test('buildTiktokYtdlpArgs sets playlist-items and user-agent', () => {
+  const args = buildTiktokYtdlpArgs(PROFILE_URL, 250);
+  assert.ok(args.includes('--playlist-items'));
+  assert.ok(args.includes('1:250'));
   assert.ok(args.includes('--user-agent'));
-  assert.ok(args.includes('Mozilla/5.0 PuppeteerAutomation'));
-  assert.ok(args.includes('--cookies-from-browser'));
-  assert.ok(args.includes('chromium:/abs/.browser-profile'));
-  assert.ok(args.includes('Referer:https://www.tiktok.com/'));
-});
-
-test('buildYtdlpFlatPlaylistArgs applies youtube extractor args without proxy', () => {
-  const args = buildYtdlpFlatPlaylistArgs('youtube', 'https://www.youtube.com/@u/shorts', {
-    ...BASE_CONFIG,
-    YOUTUBE_PLAYER_CLIENT: 'mweb',
-    YOUTUBE_PO_TOKEN: 'web.gvs+TOKEN',
-  });
-  assert.equal(args.includes('--proxy'), false);
-  assert.ok(args.includes('--extractor-args'));
-  assert.ok(args.includes('youtube:player_client=mweb;po_token=web.gvs+TOKEN'));
+  assert.ok(args.includes(TIKTOK_YTDLP_USER_AGENT));
 });

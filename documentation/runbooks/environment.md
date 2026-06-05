@@ -101,11 +101,7 @@ Wrangler name: `fbuploadpro-fb-adu-analytics`. Cron: every 2 minutes.
 | `BROWSER_USER_DATA_DIR` | Persistent Puppeteer profile |
 | `MAX_REELS_PER_PLATFORM` | Cap per sync run |
 | `SKIP_STARTUP_LOGINS` | Skip interactive login prompts when `true` |
-| `BROWSER_USER_AGENT` | Puppeteer UA; yt-dlp uses the same value |
-| `YTDLP_BIN` | yt-dlp binary for TikTok/YouTube ID discovery (default `yt-dlp`) |
-| `YTDLP_TIMEOUT_MS` | yt-dlp subprocess timeout ms (default `120000`) |
-| `YTDLP_SLEEP_REQUESTS` | Delay between yt-dlp HTTP requests (default `5`) |
-| `YTDLP_DOWNLOAD_ARCHIVE_DIR` | Per-page download-archive for incremental discovery |
-| `YTDLP_YOUTUBE_PLAYER_CLIENT` / `YTDLP_YOUTUBE_PO_TOKEN` | YouTube extractor client + optional PO token |
+| `YTDLP_BIN` | yt-dlp binary for TikTok ID discovery (default `yt-dlp`) |
+| `YTDLP_TIMEOUT_MS` | yt-dlp subprocess timeout ms (default `600000`) |
 
-Runs on VPS (not Wrangler). Requires **yt-dlp** on PATH. yt-dlp discovery always reads cookies from the Puppeteer Chromium profile (`chromium:BROWSER_USER_DATA_DIR`). Discovery order: TikTok/YouTube try yt-dlp flat-playlist first; failures queue `browser_pending` for Puppeteer. Instagram/Facebook use browser only. Stuck `processing` rows (>1h) are reset to `browser_pending` via `reset_stuck_pages` cron. Use PM2 or similar for process supervision.
+Runs on VPS (not Wrangler). Requires **yt-dlp** on PATH (or `python3 -m yt_dlp`). TikTok `pending` jobs use yt-dlp flat-playlist discovery (same flags as `main-scraper`); failures queue `browser_pending` for Puppeteer. YouTube/Instagram/Facebook use browser only on `pending`. Stuck `processing` rows (>1h) are reset to `browser_pending` via `reset_stuck_pages` cron. Use PM2 or similar for process supervision.

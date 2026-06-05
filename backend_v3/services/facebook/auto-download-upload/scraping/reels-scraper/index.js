@@ -122,12 +122,11 @@ async function scrapeWithBrowser(page, platform, sourceUsername) {
   return scrapedData.uniqueLinks;
 }
 
-async function runYtdlpDiscovery(platform, sourceUsername, pageId) {
+async function runYtdlpDiscovery(platform, sourceUsername) {
   return discoverReelIdsWithYtdlp(
     platform,
     sourceUsername,
     SCRAPER_CONFIG.MAX_REELS_PER_PLATFORM,
-    { pageId },
   );
 }
 
@@ -151,7 +150,7 @@ async function processJob(page, job, platform, claimSource) {
 
   // claimSource === 'pending'
   if (supportsYtdlpDiscovery(platform)) {
-    const ytdlpResult = await runYtdlpDiscovery(platform, job.source_username, job.id);
+    const ytdlpResult = await runYtdlpDiscovery(platform, job.source_username);
 
     if (ytdlpResult.ok) {
       await upsertReelsAndMarkSynced(job, platform, ytdlpResult.ids);

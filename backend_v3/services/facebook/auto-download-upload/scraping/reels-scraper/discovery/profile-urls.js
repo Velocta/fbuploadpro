@@ -1,23 +1,22 @@
 /** Platforms that attempt yt-dlp flat-playlist discovery before Puppeteer. */
-export const YTDLP_DISCOVERY_PLATFORMS = new Set(['tiktok', 'youtube']);
+export const YTDLP_DISCOVERY_PLATFORMS = new Set(['tiktok']);
 
 export function supportsYtdlpDiscovery(platform) {
   return YTDLP_DISCOVERY_PLATFORMS.has((platform || '').toLowerCase());
 }
 
+export function buildTiktokProfileUrl(sourceUsername) {
+  const handle = String(sourceUsername || '').trim().replace(/^@+/, '');
+  if (!handle) {
+    return null;
+  }
+  return `https://www.tiktok.com/@${handle}`;
+}
+
+/** @deprecated Use buildTiktokProfileUrl — kept for callers passing platform. */
 export function buildYtdlpProfileUrl(platform, sourceUsername) {
-  const p = (platform || '').toLowerCase();
-  const cleaned = (sourceUsername || '').trim().replace(/\s/g, '');
-
-  if (p === 'tiktok') {
-    const handle = cleaned.startsWith('@') ? cleaned : `@${cleaned}`;
-    return `https://www.tiktok.com/${handle}`;
+  if ((platform || '').toLowerCase() !== 'tiktok') {
+    return null;
   }
-
-  if (p === 'youtube') {
-    const handle = cleaned.startsWith('@') ? cleaned : `@${cleaned}`;
-    return `https://www.youtube.com/${handle}/shorts`;
-  }
-
-  return null;
+  return buildTiktokProfileUrl(sourceUsername);
 }

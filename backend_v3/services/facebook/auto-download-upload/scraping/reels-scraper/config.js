@@ -42,14 +42,8 @@ export const LOGIN_CONFIG = {
   SKIP_STARTUP_LOGINS: toBoolean(process.env.SKIP_STARTUP_LOGINS),
 };
 
+/** TikTok-only yt-dlp discovery (see main-scraper/scrapers/tiktok-ytdlp.js). */
 export const YTDLP_CONFIG = {
   BIN: process.env.YTDLP_BIN || 'yt-dlp',
-  TIMEOUT_MS: boundedInt(process.env.YTDLP_TIMEOUT_MS, 120000, { min: 10000, max: 600000 }),
-  RETRIES: boundedInt(process.env.YTDLP_RETRIES, 1, { min: 0, max: 10 }),
-  EXTRACTOR_RETRIES: boundedInt(process.env.YTDLP_EXTRACTOR_RETRIES, 3, { min: 0, max: 20 }),
-  SOCKET_TIMEOUT: boundedInt(process.env.YTDLP_SOCKET_TIMEOUT, 30, { min: 5, max: 300 }),
-  SLEEP_REQUESTS: boundedInt(process.env.YTDLP_SLEEP_REQUESTS, 5, { min: 0, max: 60 }),
-  DOWNLOAD_ARCHIVE_DIR: (process.env.YTDLP_DOWNLOAD_ARCHIVE_DIR || '').trim(),
-  YOUTUBE_PLAYER_CLIENT: (process.env.YTDLP_YOUTUBE_PLAYER_CLIENT || 'mweb').trim(),
-  YOUTUBE_PO_TOKEN: (process.env.YTDLP_YOUTUBE_PO_TOKEN || '').trim(),
+  TIMEOUT_MS: boundedInt(process.env.YTDLP_TIMEOUT_MS, 600_000, { min: 10_000, max: 600_000 }),
 };
