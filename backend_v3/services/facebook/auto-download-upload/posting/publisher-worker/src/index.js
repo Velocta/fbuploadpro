@@ -3,6 +3,7 @@ import {
   emitIntegrityAlert,
   emitPublishError,
   failPublishForInvalidToken,
+  failPublishForMissingMedia,
   failPublishForVerificationRequired,
   finalizePosted,
   getSupabaseClient,
@@ -198,6 +199,16 @@ async function processPublishJob(env, job) {
     console.error('[v2-publisher] integrity incident:', job.job_id, verification.reason, finalizeResult);
   } else {
     v2Log('publish_job_ok', { job_id: jobId });
+    try {
+      await env.POSTING_MEDIA_BUCKET.delete(mediaObjectKey);
+      v2Log('publish_job_r2_deleted', { job_id: jobId, media_object_key: mediaObjectKey });
+    } catch (deleteErr) {
+      v2Log('publish_job_r2_delete_error', {
+        job_id: jobId,
+        media_object_key: mediaObjectKey,
+        message: String(deleteErr?.message || deleteErr),
+      });
+    }
   }
 }
 
@@ -265,6 +276,7 @@ export default {
             supabase,
             job.job_id,
             job.page_id,
+            job.reel_internal_id,
             errMsg
           );
           if (terminalError) {
@@ -299,8 +311,35 @@ export default {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
 
+        if (code === 'media_object_missing') {
+          const { error: missingError } = await failPublishForMissingMedia(
+            supabase,
+            job.job_id,
+            job.reel_internal_id,
+            errMsg
+          );
+          if (missingError) {
+            v2Log('fail_missing_media_error', {
+              job_id: job.job_id ?? null,
+              reel_internal_id: job.reel_internal_id ?? null,
+              message: missingError.message,
+            });
+          } else {
+            v2Log('missing_media_redownload_ok', {
+              job_id: job.job_id ?? null,
+              reel_internal_id: job.reel_internal_id ?? null,
+            });
+          }
+          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
+        }
+
         if (isFacebookRobotsTxtBlocked(errMsg)) {
-          const { error: robotsError } = await markPublishFailedForFacebookRobots(supabase, job.job_id, errMsg);
+          const { error: robotsError } = await markPublishFailedForFacebookRobots(
+            supabase,
+            job.job_id,
+            job.reel_internal_id,
+            errMsg
+          );
           if (robotsError) {
             v2Log('mark_publish_failed_robots_error', {
               job_id: job.job_id ?? null,
@@ -314,6 +353,7 @@ export default {
           const { error: limitError } = await markPublishFailedForFacebookRateLimit(
             supabase,
             job.job_id,
+            job.reel_internal_id,
             errMsg
           );
           if (limitError) {
@@ -328,6 +368,7 @@ export default {
         const { error: retryError, exhausted: retriesExhausted } = await incrementPublishRetry(
           supabase,
           job.job_id,
+          job.reel_internal_id,
           code,
           errMsg.slice(0, 500)
         );
