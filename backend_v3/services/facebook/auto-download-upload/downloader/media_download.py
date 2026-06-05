@@ -295,7 +295,17 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
     try:
         profile = PLATFORM_PROFILES[platform]
 
-        if platform == "youtube":
+        if platform == "instagram":
+            # Metadata via yt-dlp (optional datacenter proxy), then direct CDN fetch via aria2.
+            filename, description = download_via_metadata_then_aria2(
+                url,
+                profile,
+                DATACENTER_PROXY,
+                impersonate_target,
+                tmp_dir,
+                unique_id,
+            )
+        elif platform == "youtube":
             filename, description = download_with_ytdlp_formats(
                 url,
                 profile,
@@ -305,27 +315,16 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 unique_id,
             )
         else:
-            try:
-                filename, description = download_via_metadata_then_aria2(
-                    url,
-                    profile,
-                    DATACENTER_PROXY,
-                    impersonate_target,
-                    tmp_dir,
-                    unique_id,
-                )
-            except RuntimeError:
-                if platform == "instagram":
-                    raise
-                filename, description = download_with_ytdlp_formats(
-                    url,
-                    profile,
-                    None,
-                    impersonate_target,
-                    tmp_dir,
-                    unique_id,
-                    include_generic_fallback=platform == "facebook",
-                )
+            # TikTok and Facebook: full yt-dlp download (optional datacenter proxy on yt-dlp).
+            filename, description = download_with_ytdlp_formats(
+                url,
+                profile,
+                DATACENTER_PROXY,
+                impersonate_target,
+                tmp_dir,
+                unique_id,
+                include_generic_fallback=platform == "facebook",
+            )
 
         if not os.path.exists(filename):
             raise RuntimeError("Failed to download video")

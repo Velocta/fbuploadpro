@@ -39,7 +39,7 @@ Path: `backend_v3/services/facebook/auto-download-upload/downloader/`
 | `ADU_ARIA2_SPLIT` | No | aria2 `-s` per file (default 4) |
 | `ADU_R2_UPLOAD_CHUNK_BYTES` | No | R2 upload read chunk size (default 8388608); avoids loading whole file into RAM |
 | `RESIDENTIAL_PROXY` | No | YouTube yt-dlp downloads only |
-| `DATACENTER_PROXY` | No | Instagram/TikTok/Facebook metadata URL resolution only (aria2 CDN fetch is direct) |
+| `DATACENTER_PROXY` | No | Instagram metadata only (aria2 CDN fetch is direct); TikTok/Facebook full yt-dlp |
 | `IMPERSONATE_TARGET` | No | Optional yt-dlp impersonate |
 
 ## ADU Posting workers (`backend_v3/services/facebook/auto-download-upload/posting/*`)

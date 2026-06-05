@@ -54,9 +54,10 @@ Each claimed reel gets up to **4** in-process download attempts before `mark_adu
 | Variable | Platforms | Used for |
 |----------|-----------|----------|
 | `RESIDENTIAL_PROXY` | YouTube | Full yt-dlp download |
-| `DATACENTER_PROXY` | Instagram, TikTok, Facebook | yt-dlp metadata / URL resolution only; CDN fetch via aria2 is direct |
+| `DATACENTER_PROXY` | Instagram | yt-dlp metadata / URL resolution only; CDN fetch via aria2 is direct |
+| `DATACENTER_PROXY` | TikTok, Facebook | Full yt-dlp download |
 
-If a proxy env var is unset, that step runs without a proxy. Instagram/TikTok/Facebook fall back to full yt-dlp without proxy when metadata+aria2 fails (Facebook may use generic extractor).
+If a proxy env var is unset, that step runs without a proxy. Only Instagram uses metadata + aria2; TikTok and Facebook always download through yt-dlp (Facebook may use generic extractor fallback).
 
 **Capacity notes:** Parallel jobs need disk under `/tmp` for temp files (often 30–100 MB each while downloading). If RAM is tight, lower concurrency or chunk size.
 
