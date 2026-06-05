@@ -32,6 +32,7 @@ Path: `backend_v3/services/facebook/auto-download-upload/downloader/`
 | `R2_SECRET_ACCESS_KEY` | Yes | R2 credentials |
 | `R2_ADU_BUFFER_BUCKET` | Yes | Default `fbuploadpro-adu-buffer` |
 | `ADU_DOWNLOADER_IDLE_WAIT_SECONDS` | No | Sleep when no in-flight work and claim empty (default 60) |
+| `ADU_DOWNLOADER_IN_FLIGHT_POLL_SECONDS` | No | Wait for in-flight jobs before next claim top-up (default 20) |
 | `ADU_DOWNLOADER_CONCURRENCY` | No | Max parallel downloads (default 30); claim limit = free slots |
 | `ADU_DOWNLOADER_STALE_MINUTES` | No | Reset stuck `processing` reels to `pending` (default 40) |
 | `ADU_DOWNLOADER_ATTEMPT_RETRIES` | No | In-process download attempts per claim (default 4); separate from DB `download_retries` |
@@ -40,6 +41,12 @@ Path: `backend_v3/services/facebook/auto-download-upload/downloader/`
 | `ADU_R2_UPLOAD_CHUNK_BYTES` | No | R2 upload read chunk size (default 8388608); avoids loading whole file into RAM |
 | `RESIDENTIAL_PROXY` | No | YouTube yt-dlp downloads only |
 | `DATACENTER_PROXY` | No | Instagram metadata only (aria2 CDN fetch is direct); TikTok/Facebook full yt-dlp |
+| `ADU_DOWNLOADER_LOG_DIR` | No | Rotating log directory (default `downloader/logs/`) |
+| `ADU_DOWNLOADER_LOG_MAX_BYTES` | No | Max size per log file before rotation (default 10 MiB) |
+| `ADU_DOWNLOADER_LOG_BACKUP_COUNT` | No | Rotated log files to keep (default 5) |
+| `ADU_DOWNLOADER_JS_RUNTIME` | No | yt-dlp `--js-runtimes` value (default `node`; YouTube EJS requires Node or Deno on PATH) |
+
+System binaries on the VPS (not env vars): **Node.js**, `ffmpeg`, `aria2c`, plus Python venv `yt-dlp`.
 
 ## ADU Posting workers (`backend_v3/services/facebook/auto-download-upload/posting/*`)
 

@@ -25,6 +25,8 @@ R2_ACCESS_KEY_ID = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
 R2_SECRET_ACCESS_KEY = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
 R2_BUCKET = os.environ.get("R2_ADU_BUFFER_BUCKET", "fbuploadpro-adu-buffer").strip()
 
+# Wait for in-flight downloads before topping up claims (avoids claim spam while batch runs).
+IN_FLIGHT_POLL_SECONDS = _bounded_int("ADU_DOWNLOADER_IN_FLIGHT_POLL_SECONDS", "20", minimum=1, maximum=300)
 # Sleep only when no in-flight work and claim returned zero rows.
 IDLE_WAIT_SECONDS = _bounded_int("ADU_DOWNLOADER_IDLE_WAIT_SECONDS", "60", minimum=1)
 MAX_CONCURRENT = _bounded_int("ADU_DOWNLOADER_CONCURRENCY", "30", minimum=1, maximum=200)
@@ -49,6 +51,22 @@ R2_UPLOAD_CHUNK_BYTES = _bounded_int(
 RESIDENTIAL_PROXY = os.environ.get("RESIDENTIAL_PROXY", "").strip() or None
 DATACENTER_PROXY = os.environ.get("DATACENTER_PROXY", "").strip() or None
 
+# yt-dlp EJS: YouTube (and some other extractors) need a JS runtime on PATH.
+# Format: RUNTIME or RUNTIME:/path/to/binary (see yt-dlp --help).
+YT_DLP_JS_RUNTIME = os.environ.get("ADU_DOWNLOADER_JS_RUNTIME", "node").strip()
+
+# Rotating log files (default: downloader/logs/). Relative paths resolve under downloader/.
+_downloader_dir = Path(__file__).resolve().parent
+_log_dir_env = os.environ.get("ADU_DOWNLOADER_LOG_DIR", "").strip()
+if _log_dir_env:
+    LOG_DIR = Path(_log_dir_env).expanduser()
+    if not LOG_DIR.is_absolute():
+        LOG_DIR = _downloader_dir / LOG_DIR
+else:
+    LOG_DIR = _downloader_dir / "logs"
+LOG_MAX_BYTES = _bounded_int("ADU_DOWNLOADER_LOG_MAX_BYTES", str(10 * 1024 * 1024), minimum=256 * 1024)
+LOG_BACKUP_COUNT = _bounded_int("ADU_DOWNLOADER_LOG_BACKUP_COUNT", "5", minimum=1, maximum=50)
+
 
 def aria2_cli_args() -> list[str]:
     return ["-x", str(ARIA2_MAX_CONNECTION), "-s", str(ARIA2_SPLIT), "-k1M"]
@@ -59,3 +77,9 @@ def yt_dlp_aria2_downloader_args() -> str:
         f"aria2c:--summary-interval=0 -x{ARIA2_MAX_CONNECTION} "
         f"-s{ARIA2_SPLIT} -k1M"
     )
+
+
+def yt_dlp_js_runtime_args() -> list[str]:
+    if not YT_DLP_JS_RUNTIME:
+        return []
+    return ["--js-runtimes", YT_DLP_JS_RUNTIME]

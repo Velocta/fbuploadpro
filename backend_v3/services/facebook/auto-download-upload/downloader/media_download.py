@@ -3,13 +3,13 @@ import tempfile
 import uuid
 import json
 import subprocess
-from urllib.parse import urlsplit, urlunsplit
 
 from config import (
     DATACENTER_PROXY,
     RESIDENTIAL_PROXY,
     aria2_cli_args,
     yt_dlp_aria2_downloader_args,
+    yt_dlp_js_runtime_args,
 )
 
 # Flexible target: yt-dlp/curl_cffi pick a compatible Chrome version automatically.
@@ -67,16 +67,31 @@ def run_command(args):
             text=True,
         )
     except subprocess.CalledProcessError as exc:
-        sanitized_cmd = " ".join(_sanitize_arg(arg) for arg in exc.cmd)
-        stderr_tail = _truncate_for_error(exc.stderr)
-        stdout_tail = _truncate_for_error(exc.stdout)
-        raise RuntimeError(
-            "Command failed "
-            f"(exit_code={exc.returncode}). "
-            f"cmd={sanitized_cmd}. "
-            f"stderr={stderr_tail or '(empty)'}. "
-            f"stdout={stdout_tail or '(empty)'}"
-        ) from exc
+        raise RuntimeError(_extract_process_error_message(exc)) from exc
+
+
+def _extract_process_error_message(exc: subprocess.CalledProcessError, *, limit: int = 500) -> str:
+    """Prefer yt-dlp/tool ERROR lines over full command dumps in logs."""
+    stderr = exc.stderr or ""
+    for line in reversed(stderr.splitlines()):
+        stripped = line.strip()
+        if stripped.startswith("ERROR:"):
+            return _truncate_for_error(stripped, limit)
+
+    stderr_tail = _truncate_for_error(stderr, limit)
+    if stderr_tail:
+        return stderr_tail
+
+    stdout_tail = _truncate_for_error(exc.stdout or "", limit)
+    if stdout_tail:
+        return stdout_tail
+
+    return f"process exited with code {exc.returncode}"
+
+
+def run_ffmpeg(*args: str):
+    """Mux/transcode via ffmpeg without banner noise; stderr captured only on failure."""
+    return run_command(["ffmpeg", "-hide_banner", "-loglevel", "error", *args])
 
 
 def _truncate_for_error(text, limit=1200):
@@ -86,21 +101,6 @@ def _truncate_for_error(text, limit=1200):
     if len(collapsed) <= limit:
         return collapsed
     return f"{collapsed[:limit]}... [truncated]"
-
-
-def _sanitize_arg(arg):
-    if "://" not in arg or "@" not in arg:
-        return arg
-    try:
-        parsed = urlsplit(arg)
-    except Exception:
-        return arg
-
-    if not parsed.username or parsed.password is None:
-        return arg
-
-    redacted_netloc = parsed.netloc.replace(f"{parsed.username}:{parsed.password}@", "***:***@")
-    return urlunsplit((parsed.scheme, redacted_netloc, parsed.path, parsed.query, parsed.fragment))
 
 
 def parse_json_from_stdout(stdout):
@@ -119,6 +119,7 @@ def build_common_yt_dlp_args(profile, proxy):
     args = [
         "--no-warnings",
         "--quiet",
+        *yt_dlp_js_runtime_args(),
         "--impersonate",
         YT_DLP_IMPERSONATE,
         "--retries",
@@ -216,7 +217,7 @@ def download_from_metadata_info(info: dict, tmp_dir: str, unique_id: str) -> tup
             check=True,
         )
         filename = os.path.join(tmp_dir, f"{unique_id}.mp4")
-        subprocess.run(["ffmpeg", "-y", "-i", v_path, "-i", a_path, "-c", "copy", "-f", "mp4", filename], check=True)
+        run_ffmpeg("-y", "-i", v_path, "-i", a_path, "-c", "copy", "-f", "mp4", filename)
     else:
         url_to_dl = info.get("url")
         if not url_to_dl:
@@ -256,7 +257,7 @@ def download_with_ytdlp_formats(
 
     filename = None
     description = "..."
-    attempt_errors = []
+    last_error: str | None = None
     for format_selector, use_generic_extractor in attempts:
         try:
             info = download_with_yt_dlp(
@@ -271,11 +272,11 @@ def download_with_ytdlp_formats(
             filename = resolve_downloaded_filename(tmp_dir, unique_id, info)
             if filename:
                 return filename, description
-            attempt_errors.append(f"format={format_selector}: output file not found")
+            last_error = "yt-dlp finished but output file was not found"
         except RuntimeError as exc:
-            attempt_errors.append(f"format={format_selector}: {exc}")
+            last_error = str(exc)
 
-    raise RuntimeError("All yt-dlp profile attempts failed. " + " | ".join(attempt_errors[-3:]))
+    raise RuntimeError(last_error or "yt-dlp download failed")
 
 
 def download_reel_media(platform: str, url: str) -> tuple[str, str]:

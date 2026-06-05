@@ -5,6 +5,7 @@ Pre-downloads reels into R2 (`fbuploadpro-adu-buffer`) so the posting scheduler 
 ## Requirements
 
 - Python 3.11+
+- **Node.js** on PATH (yt-dlp `--js-runtimes node` for YouTube JS challenges; required since yt-dlp EJS)
 - `yt-dlp` (via `requirements.txt`, includes curl-cffi for `--impersonate chrome`), `ffmpeg`, `aria2c` on PATH
 - Supabase service role + R2 S3 API credentials
 
@@ -32,8 +33,30 @@ python worker.py
 The worker keeps a **persistent thread pool** at `ADU_DOWNLOADER_CONCURRENCY`. Each loop iteration:
 
 1. **`reset_stale_adu_reel_downloads`** — reels in `processing` longer than `ADU_DOWNLOADER_STALE_MINUTES` (default 40) return to `pending`
-2. **`claim_adu_buffer_downloads(free_slots)`** — one RPC per top-up, where `free_slots = concurrency − in-flight downloads`
-3. Sleep **60 seconds** only when nothing is in flight and claim returned zero rows
+2. If downloads are **in flight**, wait up to **`ADU_DOWNLOADER_IN_FLIGHT_POLL_SECONDS`** (default 20) for at least one to finish, then drain completed jobs
+3. **`claim_adu_buffer_downloads(free_slots)`** — top up the pool, where `free_slots = concurrency − in-flight downloads`
+4. Sleep **60 seconds** only when nothing is in flight and claim returned zero rows
+
+### Logs (console + files)
+
+The worker logs to **stdout** and to rotating files under `downloader/logs/` (same on Linux and Windows):
+
+| File | Levels | Purpose |
+|------|--------|---------|
+| `adu-downloader.log` | INFO+ | Full operational history |
+| `adu-downloader.error.log` | WARNING+ | Failures and retries only |
+
+Files rotate at **10 MiB** (keeps 5 backups). Override with `ADU_DOWNLOADER_LOG_DIR`, `ADU_DOWNLOADER_LOG_MAX_BYTES`, `ADU_DOWNLOADER_LOG_BACKUP_COUNT` in `.env`.
+
+```bash
+# Linux
+tail -f logs/adu-downloader.error.log
+
+# Windows PowerShell
+Get-Content logs\adu-downloader.error.log -Wait
+```
+
+`pm2 logs` still shows stdout; use the files above for persisted warnings/errors after restart.
 
 ### Claim rules (Postgres RPC)
 
@@ -47,9 +70,12 @@ The worker keeps a **persistent thread pool** at `ADU_DOWNLOADER_CONCURRENCY`. E
 | Setting | Default | Purpose |
 |---------|---------|---------|
 | `ADU_DOWNLOADER_CONCURRENCY` | 30 | Max parallel reel jobs |
+| `ADU_DOWNLOADER_IN_FLIGHT_POLL_SECONDS` | 20 | Wait for in-flight jobs before topping up claims |
 | `ADU_DOWNLOADER_STALE_MINUTES` | 40 | Stuck `processing` → `pending` |
 | `ADU_ARIA2_MAX_CONNECTION` / `ADU_ARIA2_SPLIT` | 4 | aria2 connections per file |
 | `ADU_R2_UPLOAD_CHUNK_BYTES` | 8 MiB | Stream uploads; ~8 MB RAM per upload |
+| `ADU_DOWNLOADER_LOG_DIR` | `downloader/logs/` | Rotating log files |
+| `ADU_DOWNLOADER_JS_RUNTIME` | `node` | yt-dlp JS runtime (`node`, `deno`, or `node:/path/to/node`) |
 
 Each claimed reel gets up to **4** in-process download attempts before `mark_adu_reel_download_failed`; that is separate from the DB `download_retries` column (max **3** claims before `download_failed`).
 
@@ -112,8 +138,10 @@ On Windows, run PM2 commands from the same shell type you used to install it (Po
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y python3 python3-venv ffmpeg aria2
+sudo apt-get install -y python3 python3-venv ffmpeg aria2 nodejs
 ```
+
+Fedora/RHEL: `sudo dnf install python3 ffmpeg aria2 nodejs`
 
 **Windows**
 
@@ -123,9 +151,10 @@ sudo apt-get install -y python3 python3-venv ffmpeg aria2
 ```powershell
 winget install Gyan.FFmpeg
 winget install aria2.aria2
+winget install OpenJS.NodeJS.LTS
 ```
 
-(Or use Chocolatey / manual downloads; `ffmpeg`, `aria2c`, and `yt-dlp` must work in a new terminal.)
+(Or use Chocolatey / manual downloads; `node`, `ffmpeg`, `aria2c`, and `yt-dlp` must work in a new terminal.)
 
 ### 3. Python app setup (both platforms)
 
@@ -234,6 +263,8 @@ Windows: use `.\.venv\Scripts\Activate.ps1` instead of `source`.
 | App `errored` / rapid restarts | `pm2 logs fbuploadpro-adu-downloader --lines 100` — missing `.env`, Supabase/R2 creds, or migration not applied |
 | `SUPABASE_URL` / env missing | `.env` must be **`downloader/.env`** (same folder as `worker.py`), not repo root; run `pip install -r requirements.txt` after pull |
 | `yt-dlp` / impersonate errors | `pip install -r requirements.txt` in `.venv`; `yt-dlp --list-impersonate-targets` |
+| YouTube “not available” / no formats | Install **Node.js** on PATH; verify `node --version` and `yt-dlp --js-runtimes node -F 'https://www.youtube.com/shorts/…'` |
 | `ffmpeg` / `aria2c` not found | Install system binaries and ensure they are on PATH for the PM2 user |
+| `node` not found | Install Node.js; optional override `ADU_DOWNLOADER_JS_RUNTIME=node:/full/path/to/node` |
 | Wrong Python | PM2 uses `.venv/bin/python` (Linux) or `.venv\Scripts\python.exe` (Windows) when the venv exists |
 | Changes not picked up | `pm2 restart fbuploadpro-adu-downloader` after code or `.env` edits |

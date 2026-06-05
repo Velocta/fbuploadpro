@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import shutil
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -13,21 +12,18 @@ from config import (
     DOWNLOAD_ATTEMPT_RETRIES,
     DOWNLOAD_MAX_BYTES,
     IDLE_WAIT_SECONDS,
+    IN_FLIGHT_POLL_SECONDS,
     MAX_CONCURRENT,
     R2_UPLOAD_CHUNK_BYTES,
     STALE_MINUTES,
 )
 from db import claim_buffer_downloads, mark_download_failed, mark_downloaded, reset_stale_reel_downloads
+from logging_setup import LOGGER_NAME, configure_logging
 from media_download import download_reel_media
 from r2_upload import object_key, upload_file
 from sources import source_url
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    stream=sys.stdout,
-)
-log = logging.getLogger("adu-downloader")
+log = logging.getLogger(LOGGER_NAME)
 
 
 def _cleanup_local_path(local_path: str | None) -> None:
@@ -77,6 +73,7 @@ def process_one(row: dict) -> None:
                     {
                         "event": "download_ok",
                         "reel_internal_id": reel_id,
+                        "platform": platform,
                         "media_object_key": key,
                         "size_bytes": size_bytes,
                         "attempt": attempt,
@@ -91,6 +88,7 @@ def process_one(row: dict) -> None:
                     {
                         "event": "download_attempt_failed",
                         "reel_internal_id": reel_id,
+                        "platform": platform,
                         "attempt": attempt,
                         "max_attempts": DOWNLOAD_ATTEMPT_RETRIES,
                         "message": str(exc)[:500],
@@ -105,10 +103,10 @@ def process_one(row: dict) -> None:
             {
                 "event": "download_error",
                 "reel_internal_id": reel_id,
+                "platform": platform,
                 "message": str(last_error)[:500] if last_error else "unknown",
             }
-        ),
-        exc_info=last_error is not None,
+        )
     )
     mark_download_failed(reel_id)
 
@@ -118,6 +116,18 @@ def _drain_completed(in_flight: set) -> None:
     for future in done:
         future.result()
         in_flight.discard(future)
+
+
+def _wait_for_in_flight(in_flight: set, timeout_seconds: int) -> None:
+    """Block up to timeout_seconds for at least one download to finish (no exception on timeout)."""
+    if not in_flight:
+        return
+    if any(future.done() for future in in_flight):
+        return
+    try:
+        next(as_completed(in_flight, timeout=timeout_seconds))
+    except TimeoutError:
+        pass
 
 
 def run_loop() -> None:
@@ -131,7 +141,9 @@ def run_loop() -> None:
                 if reset_count:
                     log.info(json.dumps({"event": "stale_reset", "count": reset_count, "stale_minutes": STALE_MINUTES}))
 
-                _drain_completed(in_flight)
+                if in_flight:
+                    _wait_for_in_flight(in_flight, IN_FLIGHT_POLL_SECONDS)
+                    _drain_completed(in_flight)
 
                 free_slots = MAX_CONCURRENT - len(in_flight)
                 claimed = []
@@ -148,19 +160,20 @@ def run_loop() -> None:
 
                 if not in_flight and not claimed:
                     time.sleep(IDLE_WAIT_SECONDS)
-                elif in_flight:
-                    next(as_completed(in_flight, timeout=1), None)
             except Exception:
                 log.exception(json.dumps({"event": "loop_error"}))
                 time.sleep(IDLE_WAIT_SECONDS)
 
 
 def main() -> None:
+    log_dir = configure_logging()
     log.info(
         json.dumps(
             {
                 "event": "loop_start",
+                "log_dir": str(log_dir),
                 "idle_wait_seconds": IDLE_WAIT_SECONDS,
+                "in_flight_poll_seconds": IN_FLIGHT_POLL_SECONDS,
                 "concurrency": MAX_CONCURRENT,
                 "stale_minutes": STALE_MINUTES,
                 "download_attempt_retries": DOWNLOAD_ATTEMPT_RETRIES,
