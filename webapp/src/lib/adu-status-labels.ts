@@ -11,14 +11,9 @@ export function syncStatusLabel(status: string | null | undefined): {
     }
   }
   if (status === 'processing') return { label: 'Scraping', variant: 'outline' }
-  if (status === 'browser_pending') {
-    return {
-      label: 'Browser scrape queued',
-      tooltip: 'Fast listing did not return reels; queued for browser scraping.',
-      variant: 'outline',
-    }
+  if (status === 'pending' || status === 'browser_pending') {
+    return { label: 'Pending scrape', variant: 'outline' }
   }
-  if (status === 'pending') return { label: 'Pending scrape', variant: 'outline' }
   if (status === 'synced') return { label: 'Synced', variant: 'default' }
   return { label: status || 'Unknown', variant: 'outline' }
 }
