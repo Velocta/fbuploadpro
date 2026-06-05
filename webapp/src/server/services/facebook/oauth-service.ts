@@ -57,6 +57,35 @@ type LinkedPageRow = {
   status: string | null
 }
 
+const PAGE_TOKEN_FETCH_MAX_ATTEMPTS = 3
+const PAGE_TOKEN_FETCH_RETRY_DELAY_MS = 500
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchPageAccessTokenWithRetry(
+  fbPageId: string,
+  userAccessToken: string,
+): Promise<string | null> {
+  for (let attempt = 1; attempt <= PAGE_TOKEN_FETCH_MAX_ATTEMPTS; attempt++) {
+    try {
+      const tokenRes = await graphGet<{ access_token: string }>(fbPageId, {
+        fields: 'access_token',
+        access_token: userAccessToken,
+      })
+      if (tokenRes.data.access_token) {
+        return tokenRes.data.access_token
+      }
+    } catch {
+      if (attempt < PAGE_TOKEN_FETCH_MAX_ATTEMPTS) {
+        await sleep(PAGE_TOKEN_FETCH_RETRY_DELAY_MS * attempt)
+      }
+    }
+  }
+  return null
+}
+
 /** Refreshes page access tokens from the user token; only invalid_token pages become active. */
 export async function refreshLinkedPageTokens(
   supabase: AdminClient,
@@ -71,26 +100,21 @@ export async function refreshLinkedPageTokens(
     .eq('facebook_account_id', accountId)
 
   for (const page of (pagesToSync || []) as LinkedPageRow[]) {
-    try {
-      const tokenRes = await graphGet<{ access_token: string }>(page.fb_page_id, {
-        fields: 'access_token',
-        access_token: userAccessToken,
-      })
-      const updates: {
-        fb_page_access_token: string
-        updated_at: string
-        status?: Database['public']['Enums']['profile_status_enum']
-      } = {
-        fb_page_access_token: tokenRes.data.access_token,
-        updated_at: new Date().toISOString(),
-      }
-      if (page.status === 'invalid_token') {
-        updates.status = 'active'
-      }
-      await supabase.from('pages').update(updates).eq('id', page.id)
-    } catch {
-      /* per-page Graph failures are non-fatal */
+    const pageAccessToken = await fetchPageAccessTokenWithRetry(page.fb_page_id, userAccessToken)
+    if (!pageAccessToken) continue
+
+    const updates: {
+      fb_page_access_token: string
+      updated_at: string
+      status?: Database['public']['Enums']['profile_status_enum']
+    } = {
+      fb_page_access_token: pageAccessToken,
+      updated_at: new Date().toISOString(),
     }
+    if (page.status === 'invalid_token') {
+      updates.status = 'active'
+    }
+    await supabase.from('pages').update(updates).eq('id', page.id)
   }
 
   const { data: rssPages } = await supabase
@@ -100,21 +124,16 @@ export async function refreshLinkedPageTokens(
     .eq('facebook_account_id', accountId)
 
   for (const rssPage of rssPages || []) {
-    try {
-      const tokenRes = await graphGet<{ access_token: string }>(rssPage.fb_page_id, {
-        fields: 'access_token',
-        access_token: userAccessToken,
+    const pageAccessToken = await fetchPageAccessTokenWithRetry(rssPage.fb_page_id, userAccessToken)
+    if (!pageAccessToken) continue
+
+    await supabase
+      .from('facebook_rss_autoposter_pages')
+      .update({
+        fb_page_access_token: pageAccessToken,
+        updated_at: new Date().toISOString(),
       })
-      await supabase
-        .from('facebook_rss_autoposter_pages')
-        .update({
-          fb_page_access_token: tokenRes.data.access_token,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', rssPage.id)
-    } catch {
-      /* per-page Graph failures are non-fatal */
-    }
+      .eq('id', rssPage.id)
   }
 }
 
