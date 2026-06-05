@@ -18,6 +18,7 @@ venv/
 # Cloudflare Wrangler
 .wrangler/
 
+.firecrawl/
 # Next.js / build artifacts
 .next/
 out/
