@@ -2,6 +2,7 @@ import {
   countRecentIntegrityIncidents,
   emitIntegrityAlert,
   emitPublishError,
+  failPublishForInvalidToken,
   failPublishForVerificationRequired,
   finalizePosted,
   getSupabaseClient,
@@ -70,6 +71,25 @@ function isFacebookRobotsTxtBlocked(message) {
     m.includes('robots.txt') ||
     m.includes('restricted by robots') ||
     m.includes('fileurlprocessingerror')
+  );
+}
+
+/** OAuth 190 / missing page permissions — terminal invalid_token (cascades via DB trigger). */
+function isFacebookInvalidTokenError(message) {
+  const m = String(message || '').toLowerCase();
+  if (m.includes('your identity before you can publish')) return false;
+  const missingPagePermissions =
+    m.includes('pages_read_engagement') ||
+    m.includes('pages_manage_metadata') ||
+    m.includes('pages_read_user_content') ||
+    m.includes('pages_manage_ads') ||
+    m.includes('pages_show_list') ||
+    m.includes('pages_messaging') ||
+    m.includes('must be granted before impersonating');
+  if (missingPagePermissions) return true;
+  return (
+    (m.includes('"code":190') || m.includes('"code": 190')) &&
+    (m.includes('oauthexception') || m.includes('error validating access token') || m.includes('session has expired'))
   );
 }
 
@@ -251,6 +271,29 @@ export default {
             v2Log('fail_verification_required_error', {
               job_id: job.job_id ?? null,
               message: terminalError.message,
+            });
+          }
+          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
+        }
+
+        if (isFacebookInvalidTokenError(errMsg)) {
+          const { error: tokenError } = await failPublishForInvalidToken(
+            supabase,
+            job.job_id,
+            job.page_id,
+            job.reel_internal_id,
+            errMsg
+          );
+          if (tokenError) {
+            v2Log('fail_invalid_token_error', {
+              job_id: job.job_id ?? null,
+              page_id: job.page_id ?? null,
+              message: tokenError.message,
+            });
+          } else {
+            v2Log('invalid_token_cascade_ok', {
+              job_id: job.job_id ?? null,
+              page_id: job.page_id ?? null,
             });
           }
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });

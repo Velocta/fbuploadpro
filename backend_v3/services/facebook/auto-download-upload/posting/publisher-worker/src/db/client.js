@@ -129,6 +129,37 @@ export async function failPublishForVerificationRequired(supabase, jobId, pageId
   return { error: jobError || pageError || null };
 }
 
+/**
+ * OAuth permission/token failure: mark job terminal, page invalid_token.
+ * DB trigger cascade_page_invalid_token_to_account marks the linked facebook_accounts
+ * row and sibling pages (except completed / fb_verification_required).
+ */
+export async function failPublishForInvalidToken(supabase, jobId, pageId, reelInternalId, message) {
+  const [{ error: jobError }, { error: pageError }, { error: reelError }] = await Promise.all([
+    supabase
+      .from('adu_posting_jobs')
+      .update({
+        status: 'failed_to_publish',
+        publish_started_at: null,
+        last_error_code: 'facebook_oauth_190_invalid_token',
+        last_error_message: String(message || '').slice(0, 500),
+      })
+      .eq('job_id', jobId)
+      .eq('status', 'publishing'),
+    pageId
+      ? supabase.from('pages').update({ status: 'invalid_token' }).eq('id', pageId)
+      : Promise.resolve({ error: null }),
+    reelInternalId
+      ? supabase
+          .from('reels')
+          .update({ status: 'downloaded' })
+          .eq('id', reelInternalId)
+          .eq('status', 'processing')
+      : Promise.resolve({ error: null }),
+  ]);
+  return { error: jobError || pageError || reelError || null };
+}
+
 export async function markPublishFailedForFacebookRobots(supabase, jobId, message) {
   return supabase
     .from('adu_posting_jobs')
