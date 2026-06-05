@@ -24,10 +24,10 @@ backend_v3/
 
 | Worker | Wrangler name |
 |--------|----------------|
-| ADU scheduler | `fbuploadpro-fb-adu-scheduler` |
+| ADU publisher (deploy 1) | `fbuploadpro-adu-1-publisher` |
+| ADU publish processor (deploy 2) | `fbuploadpro-adu-2-publish-processor` |
+| ADU scheduler (deploy 3) | `fbuploadpro-adu-3-scheduler` |
 | ADU buffer downloader (VPS) | PM2 `fbuploadpro-adu-downloader` |
-| ADU publish processor | `fbuploadpro-fb-adu-publish-processor` |
-| ADU publisher | `fbuploadpro-fb-adu-publisher` |
 | ADU analytics | `fbuploadpro-fb-adu-analytics` |
 | InApp schedule processor | `fbuploadpro-fb-inapp-schedule-processor` |
 

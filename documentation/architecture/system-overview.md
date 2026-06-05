@@ -20,9 +20,9 @@ VPS buffer downloader pre-fills R2; three Cloudflare Workers handle scheduling a
 | Component | Location | Trigger |
 |-----------|----------|---------|
 | Buffer downloader | `services/facebook/auto-download-upload/downloader/` | VPS PM2 loop |
-| Scheduler | `posting/scheduler-worker` | `fbuploadpro-fb-adu-scheduler` cron |
-| Publish processor | `posting/publish-processor-worker` | Cron |
-| Publisher | `posting/publisher-worker` | HTTP (internal) |
+| Publisher (deploy 1) | `posting/publisher-worker` | `fbuploadpro-adu-1-publisher` HTTP (internal) |
+| Publish processor (deploy 2) | `posting/publish-processor-worker` | `fbuploadpro-adu-2-publish-processor` cron |
+| Scheduler (deploy 3) | `posting/scheduler-worker` | `fbuploadpro-adu-3-scheduler` cron |
 
 **Flow:**
 

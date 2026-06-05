@@ -97,7 +97,7 @@ End-to-end flow:
 | Publisher | `posting/publisher-worker/` |
 | Analytics | `analytics/followers-metrics-cron-worker/` |
 
-Wrangler names (examples): `fbuploadpro-fb-adu-scheduler`, `fbuploadpro-fb-adu-publish-processor`, `fbuploadpro-fb-adu-publisher`, `fbuploadpro-fb-adu-analytics`.
+Wrangler names (ADU posting, deploy order): `fbuploadpro-adu-1-publisher`, `fbuploadpro-adu-2-publish-processor`, `fbuploadpro-adu-3-scheduler`. Analytics: `fbuploadpro-fb-adu-analytics`.
 
 ### InApp Schedule
 

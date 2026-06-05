@@ -67,10 +67,11 @@ for dir in "$PUBLISH_PROCESSOR_DIR" "$PUBLISHER_DIR"; do
   put_secret "$dir" "INTERNAL_JOB_DISPATCH_TOKEN" "$INTERNAL_JOB_DISPATCH_TOKEN"
 done
 
-echo "Deploy order: publisher -> publish-processor -> scheduler"
+echo "Deploy order (1→2→3): ADU publisher → publish-processor → scheduler"
+echo "Cloudflare worker names: fbuploadpro-adu-1-publisher, fbuploadpro-adu-2-publish-processor, fbuploadpro-adu-3-scheduler"
 echo "VPS buffer downloader: see ../downloader/README.md (PM2, not Wrangler)"
-deploy_worker "adu-publisher" "$PUBLISHER_DIR"
-deploy_worker "adu-publish-processor" "$PUBLISH_PROCESSOR_DIR"
-deploy_worker "adu-scheduler" "$SCHEDULER_DIR"
+deploy_worker "fbuploadpro-adu-1-publisher" "$PUBLISHER_DIR"
+deploy_worker "fbuploadpro-adu-2-publish-processor" "$PUBLISH_PROCESSOR_DIR"
+deploy_worker "fbuploadpro-adu-3-scheduler" "$SCHEDULER_DIR"
 
 echo "ADU posting pipeline deployment complete."
