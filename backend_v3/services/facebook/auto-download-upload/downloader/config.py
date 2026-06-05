@@ -1,4 +1,11 @@
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Always load downloader/.env (works for `python worker.py` and PM2 on Linux/Windows).
+ENV_FILE = Path(__file__).resolve().parent / ".env"
+load_dotenv(ENV_FILE, override=False)
 
 
 def _bounded_int(name: str, default: str, *, minimum: int = 1, maximum: int | None = None) -> int:

@@ -19,7 +19,6 @@ module.exports = {
       script: 'worker.py',
       interpreter,
       cwd: __dirname,
-      env_file: '.env',
       autorestart: true,
       max_restarts: 20,
     },

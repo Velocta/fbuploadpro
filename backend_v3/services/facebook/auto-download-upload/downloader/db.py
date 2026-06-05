@@ -1,6 +1,6 @@
 from supabase import create_client
 
-from config import SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
+from config import ENV_FILE, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_URL
 
 _client = None
 
@@ -9,7 +9,10 @@ def get_client():
     global _client
     if _client is None:
         if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-            raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required")
+            raise RuntimeError(
+                f"SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required; "
+                f"set them in {ENV_FILE} (file exists: {ENV_FILE.is_file()})"
+            )
         _client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     return _client
 

@@ -16,8 +16,10 @@ Linux quick start (see **PM2** section for Windows, reboot persistence, and depl
 cd backend_v3/services/facebook/auto-download-upload/downloader
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # fill values
+cp .env.example .env  # fill values — must live in this `downloader/` folder
 ```
+
+The worker loads **`downloader/.env` automatically** via `python-dotenv` in `config.py` (same path on Linux and Windows). You do not need to export variables in the shell or rely on PM2 to inject them.
 
 Apply the ADU buffer migration (`20260605120000_adu_buffer_claim_improvements.sql`) before running the worker.
 
@@ -74,7 +76,7 @@ If a proxy env var is unset, that step runs without a proxy. Only Instagram uses
 | Name | `fbuploadpro-adu-downloader` |
 | Script | `worker.py` |
 | Python | `.venv` interpreter if present, else `python3` (Linux) / `python` (Windows) |
-| Env | `downloader/.env` via `env_file` |
+| Env | `downloader/.env` loaded by Python (`config.py` → `python-dotenv`) |
 | Restart | `autorestart: true`, `max_restarts: 20` |
 
 ### 1. Install PM2
@@ -230,6 +232,7 @@ Windows: use `.\.venv\Scripts\Activate.ps1` instead of `source`.
 | Symptom | Check |
 |---------|--------|
 | App `errored` / rapid restarts | `pm2 logs fbuploadpro-adu-downloader --lines 100` — missing `.env`, Supabase/R2 creds, or migration not applied |
+| `SUPABASE_URL` / env missing | `.env` must be **`downloader/.env`** (same folder as `worker.py`), not repo root; run `pip install -r requirements.txt` after pull |
 | `yt-dlp` / impersonate errors | `pip install -r requirements.txt` in `.venv`; `yt-dlp --list-impersonate-targets` |
 | `ffmpeg` / `aria2c` not found | Install system binaries and ensure they are on PATH for the PM2 user |
 | Wrong Python | PM2 uses `.venv/bin/python` (Linux) or `.venv\Scripts\python.exe` (Windows) when the venv exists |
