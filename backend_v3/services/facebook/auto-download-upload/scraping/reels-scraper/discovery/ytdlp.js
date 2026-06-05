@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
-import { YTDLP_CONFIG } from '../config.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { BROWSER_CONFIG, YTDLP_CONFIG } from '../config.js';
 import { buildYtdlpProfileUrl, supportsYtdlpDiscovery } from './profile-urls.js';
 import { extractIdsFromYtdlpJson } from './extract-ids.js';
+import { buildYtdlpFlatPlaylistArgs } from './ytdlp-args.js';
 
 function parseYtdlpStdout(stdout) {
   const trimmed = (stdout || '').trim();
@@ -25,12 +28,44 @@ function parseYtdlpStdout(stdout) {
   return null;
 }
 
-function runYtdlpFlatPlaylist(profileUrl) {
+/** Puppeteer launches Chromium; yt-dlp reads cookies from the same profile. */
+function resolveAutomationBrowserCookies() {
+  const profileDir = path.resolve(BROWSER_CONFIG.USER_DATA_DIR);
+  return `chromium:${profileDir}`;
+}
+
+function resolveDownloadArchive(platform, pageId, config) {
+  if (!config.DOWNLOAD_ARCHIVE_DIR || !pageId) {
+    return '';
+  }
+
+  const archivePath = path.join(config.DOWNLOAD_ARCHIVE_DIR, `${platform}-${pageId}.txt`);
+  fs.mkdirSync(config.DOWNLOAD_ARCHIVE_DIR, { recursive: true });
+  return archivePath;
+}
+
+function buildRuntimeConfig(platform, pageId) {
+  return {
+    RETRIES: YTDLP_CONFIG.RETRIES,
+    EXTRACTOR_RETRIES: YTDLP_CONFIG.EXTRACTOR_RETRIES,
+    SOCKET_TIMEOUT: YTDLP_CONFIG.SOCKET_TIMEOUT,
+    USER_AGENT: BROWSER_CONFIG.USER_AGENT,
+    COOKIES_FROM_BROWSER: resolveAutomationBrowserCookies(),
+    SLEEP_REQUESTS: YTDLP_CONFIG.SLEEP_REQUESTS,
+    DOWNLOAD_ARCHIVE: resolveDownloadArchive(platform, pageId, YTDLP_CONFIG),
+    YOUTUBE_PLAYER_CLIENT: YTDLP_CONFIG.YOUTUBE_PLAYER_CLIENT,
+    YOUTUBE_PO_TOKEN: YTDLP_CONFIG.YOUTUBE_PO_TOKEN,
+  };
+}
+
+function runYtdlpFlatPlaylist(platform, profileUrl, pageId) {
   const bin = YTDLP_CONFIG.BIN;
   const timeoutMs = YTDLP_CONFIG.TIMEOUT_MS;
+  const runtimeConfig = buildRuntimeConfig(platform, pageId);
+  const args = buildYtdlpFlatPlaylistArgs(platform, profileUrl, runtimeConfig);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, ['--flat-playlist', '-J', profileUrl], {
+    const child = spawn(bin, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -74,9 +109,13 @@ function runYtdlpFlatPlaylist(profileUrl) {
 
 /**
  * Discover reel IDs via yt-dlp (TikTok / YouTube only).
+ * @param {string} platform
+ * @param {string} sourceUsername
+ * @param {number} maxCount
+ * @param {{ pageId?: string }} [options]
  * @returns {Promise<{ ok: true, ids: string[] } | { ok: false, reason: string }>}
  */
-export async function discoverReelIdsWithYtdlp(platform, sourceUsername, maxCount) {
+export async function discoverReelIdsWithYtdlp(platform, sourceUsername, maxCount, options = {}) {
   const p = (platform || '').toLowerCase();
 
   if (!supportsYtdlpDiscovery(p)) {
@@ -91,7 +130,7 @@ export async function discoverReelIdsWithYtdlp(platform, sourceUsername, maxCoun
   let stdout;
   try {
     console.log(`📡 yt-dlp discovery: ${profileUrl}`);
-    stdout = await runYtdlpFlatPlaylist(profileUrl);
+    stdout = await runYtdlpFlatPlaylist(p, profileUrl, options.pageId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`⚠️ yt-dlp failed for ${profileUrl}: ${message}`);

@@ -54,10 +54,18 @@ Profile URLs for yt-dlp match the browser scrapers (`@user` on TikTok, `/@handle
 | `SUPABASE_URL` | Project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Admin key (bypasses RLS) |
 | `BROWSER_USER_DATA_DIR` | Persistent Puppeteer profile |
+| `BROWSER_USER_AGENT` | Puppeteer + default yt-dlp User-Agent |
 | `MAX_REELS_PER_PLATFORM` | Cap per discovery run (default `1000`) |
 | `SKIP_STARTUP_LOGINS` | Skip interactive login prompts when `true` |
 | `YTDLP_BIN` | yt-dlp binary (default `yt-dlp`) |
 | `YTDLP_TIMEOUT_MS` | Subprocess timeout (default `120000`) |
+| `YTDLP_RETRIES` / `YTDLP_EXTRACTOR_RETRIES` / `YTDLP_SOCKET_TIMEOUT` | Network resilience |
+| `YTDLP_SLEEP_REQUESTS` | Seconds between HTTP requests (default `5`) |
+| `YTDLP_DOWNLOAD_ARCHIVE_DIR` | Per-page archive files for incremental ID discovery |
+| `YTDLP_YOUTUBE_PLAYER_CLIENT` | YouTube client (default `mweb`) |
+| `YTDLP_YOUTUBE_PO_TOKEN` | Optional YouTube PO token when required by extractor |
+
+yt-dlp always reuses the Puppeteer automation session: `--cookies-from-browser chromium:<BROWSER_USER_DATA_DIR>` and `--user-agent <BROWSER_USER_AGENT>`. No separate cookie files or proxies.
 
 ## Database RPCs
 
@@ -68,6 +76,7 @@ Profile URLs for yt-dlp match the browser scrapers (`@user` on TikTok, `/@handle
 ## Modules
 
 - `discovery/ytdlp.js` — spawn yt-dlp, parse JSON, extract IDs
+- `discovery/ytdlp-args.js` — build yt-dlp argv (automation browser cookies + UA)
 - `discovery/profile-urls.js` — profile URL builders
 - `discovery/extract-ids.js` — parse flat-playlist JSON
 - `scrapers/*.js` — Puppeteer per platform
