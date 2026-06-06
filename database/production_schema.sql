@@ -14,7 +14,7 @@ create type public.subscription_type_enum as enum ('new', 'renewal', 'upgrade', 
 create type public.schedule_type_enum as enum ('fixed', 'randomfixed', 'dailyrandom');
 create type public.reel_status_enum as enum ('pending', 'posted', 'failed', 'processing', 'downloaded', 'download_failed');
 create type public.sync_status_enum as enum ('pending', 'browser_pending', 'synced', 'processing', 'error');
-create type public.profile_status_enum as enum ('active', 'inactive', 'fb_verification_required', 'invalid_token', 'invalid_username', 'completed', '2fa_required_on_BM', 'check_developer_app', 'account_suspended');
+create type public.profile_status_enum as enum ('active', 'inactive', 'fb_verification_required', 'invalid_token', 'invalid_username', 'completed', '2fa_required_on_BM', 'check_developer_app', 'account_suspended', 'creator_suspended');
 create type public.platform_enum as enum ('instagram', 'youtube', 'tiktok', 'facebook');
 create type public.source_platform_enum as enum ('instagram', 'youtube', 'tiktok', 'facebook');
 create type public.auth_attempt_type as enum ('login', 'forgot_password', 'otp', 'signup', 'resend');
@@ -137,9 +137,14 @@ create table public.reels (
   graph_post_id text,
   download_retries int not null default 0,
   download_claimed_at timestamptz,
+  download_failed_at timestamptz,
 
   constraint unique_reel_per_page unique (page_id, reel_id)
 );
+
+create index if not exists idx_reels_page_download_failed_at
+  on public.reels (page_id, download_failed_at desc)
+  where status = 'download_failed';
 
 create index if not exists idx_reels_page_status_buffer
   on public.reels (page_id, status, id)
@@ -713,7 +718,8 @@ begin
           'completed',
           '2fa_required_on_BM',
           'check_developer_app',
-          'account_suspended'
+          'account_suspended',
+          'creator_suspended'
         )
         then (item->>'status')::public.profile_status_enum
         else null
@@ -2036,6 +2042,19 @@ begin
     return;
   end if;
 
+  update public.pages p
+  set
+    status = 'creator_suspended',
+    updated_at = now()
+  where p.status = 'active'
+    and (
+      select count(*)::int
+      from public.reels r
+      where r.page_id = p.id
+        and r.status = 'download_failed'
+        and r.download_failed_at >= now() - interval '24 hours'
+    ) > 30;
+
   return query
   with active_pages as (
     select
@@ -2045,6 +2064,13 @@ begin
     where p.status = 'active'
       and p.sync_status = 'synced'
       and coalesce(p.posts_per_day, 0) > 0
+      and (
+        select count(*)::int
+        from public.reels r
+        where r.page_id = p.id
+          and r.status = 'download_failed'
+          and r.download_failed_at >= now() - interval '24 hours'
+      ) <= 7
   ),
   page_buffer as (
     select ap.id as page_id, ap.buffer_target
@@ -2122,6 +2148,10 @@ begin
     status = case
       when download_retries >= 3 then 'download_failed'::public.reel_status_enum
       else 'pending'::public.reel_status_enum
+    end,
+    download_failed_at = case
+      when download_retries >= 3 then now()
+      else null
     end,
     download_claimed_at = null
   where id = p_reel_id;

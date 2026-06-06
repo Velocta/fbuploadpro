@@ -22,7 +22,7 @@ cp .env.example .env  # fill values — must live in this `downloader/` folder
 
 The worker loads **`downloader/.env` automatically** via `python-dotenv` in `config.py` (same path on Linux and Windows). You do not need to export variables in the shell or rely on PM2 to inject them.
 
-Apply the ADU buffer migration (`20260605120000_adu_buffer_claim_improvements.sql`) before running the worker.
+Apply the ADU buffer migration (`20260605120000_adu_buffer_claim_improvements.sql`) and source circuit breaker (`20260606140000_adu_downloader_source_circuit_breaker.sql`) before running the worker.
 
 ## Run
 
@@ -61,6 +61,7 @@ Get-Content logs\adu-downloader.error.log -Wait
 ### Claim rules (Postgres RPC)
 
 - Pages must be **`status = active`**, **`sync_status = synced`**, and `posts_per_day > 0` (aligned with the posting scheduler)
+- **Source circuit breaker (24h rolling):** pages with **>7** `download_failed` reels in the last 24 hours are skipped; **>30** failures sets page `status = creator_suspended` (source creator unavailable — not the same as Facebook `account_suspended`)
 - Buffer target per page: **`posts_per_day × 4`**, counting reels in **`downloaded`** or **`processing`**
 - Claimed reels move to **`processing`** with `download_claimed_at = now()`
 - Failed downloads reset to **`pending`** (or **`download_failed`** after 3 claims)

@@ -83,6 +83,8 @@ export function getAduPageStatusBadge(profile: AduPageStatusInput): AduPageStatu
         return { label: 'Check developer app', variant: 'destructive', iconKind: 'alert-circle', tone: 'destructive' }
       case 'account_suspended':
         return { label: 'Account suspended', variant: 'destructive', iconKind: 'user-x', tone: 'destructive' }
+      case 'creator_suspended':
+        return { label: 'Creator suspended', variant: 'destructive', iconKind: 'user-x', tone: 'destructive' }
       case 'invalid_username':
         return { label: 'Source disabled', variant: 'destructive', iconKind: 'user-x', tone: 'destructive' }
       case 'completed':
@@ -178,6 +180,14 @@ export function getAduPageStatusAlert(profile: AduPageStatusInput): AduPageStatu
           title: 'Facebook Account Suspended',
           description:
             'The connected Facebook user is not allowed to create valid sessions right now. Confirm the account is active/verified in Facebook and reconnect from the Facebook Accounts section.',
+          variant: 'destructive',
+          iconKind: 'user-x',
+        }
+      case 'creator_suspended':
+        return {
+          title: 'Source Creator Unavailable',
+          description:
+            'Too many reels failed to download from this source in the last 24 hours. The source creator may be suspended or unavailable. Update Settings > Source to a different account, then reactivate posting.',
           variant: 'destructive',
           iconKind: 'user-x',
         }

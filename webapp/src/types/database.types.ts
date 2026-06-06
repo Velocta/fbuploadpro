@@ -947,6 +947,7 @@ export type Database = {
       | "2fa_required_on_BM"
       | "check_developer_app"
       | "account_suspended"
+      | "creator_suspended"
       reel_status_enum:
         | "pending"
         | "posted"

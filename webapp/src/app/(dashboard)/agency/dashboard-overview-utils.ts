@@ -37,6 +37,7 @@ const STATUS_LABELS: Record<string, string> = {
   '2fa_required_on_BM': '2FA required on BM',
   check_developer_app: 'Check developer app',
   account_suspended: 'Account suspended',
+  creator_suspended: 'Creator suspended',
 }
 
 export type NonActivePageTone = 'success' | 'destructive'
