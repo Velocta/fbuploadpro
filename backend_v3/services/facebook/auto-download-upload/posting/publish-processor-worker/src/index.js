@@ -1,4 +1,4 @@
-import { claimPublishJobs, getSupabaseClient, resetStalePublishing } from './db/client.js';
+import { claimPublishJobs, getSupabaseClient, releasePublishJob, resetStalePublishing } from './db/client.js';
 
 const PUBLISHER_INTERNAL_URL = 'https://v2-publisher.internal/internal/v2/process-job';
 
@@ -11,7 +11,7 @@ function v2Log(event, fields = {}) {
   console.log(JSON.stringify({ service: 'v2-publish-processor', event, ts: new Date().toISOString(), ...fields }));
 }
 
-function dispatchPublisherJob(ctx, env, job) {
+function dispatchPublisherJob(ctx, env, job, supabase) {
   if (!env.PUBLISHER_WORKER) {
     v2Log('dispatch_skipped', { reason: 'missing_PUBLISHER_WORKER_binding' });
     return;
@@ -28,19 +28,45 @@ function dispatchPublisherJob(ctx, env, job) {
     },
     body: JSON.stringify(job),
   })
-    .then((res) => {
+    .then(async (res) => {
       v2Log('publisher_dispatch_http', {
         job_id: job.job_id ?? null,
         reel_internal_id: job.reel_internal_id ?? null,
         http_status: res.status,
         ok: res.ok,
       });
+      if (!res.ok && (res.status === 403 || res.status === 400)) {
+        const { error } = await releasePublishJob(
+          supabase,
+          job.job_id,
+          'publisher_dispatch_rejected',
+          `publisher returned HTTP ${res.status}`
+        );
+        if (error) {
+          v2Log('release_publish_job_error', {
+            job_id: job.job_id ?? null,
+            message: error.message,
+          });
+        }
+      }
     })
-    .catch((err) => {
+    .catch(async (err) => {
       v2Log('publisher_dispatch_network_error', {
         job_id: job.job_id ?? null,
         message: String(err?.message || err),
       });
+      const { error } = await releasePublishJob(
+        supabase,
+        job.job_id,
+        'publisher_dispatch_network_error',
+        String(err?.message || err).slice(0, 500)
+      );
+      if (error) {
+        v2Log('release_publish_job_error', {
+          job_id: job.job_id ?? null,
+          message: error.message,
+        });
+      }
     });
   ctx.waitUntil(promise);
 }
@@ -97,7 +123,7 @@ export default {
       });
 
       for (const job of jobs) {
-        dispatchPublisherJob(ctx, env, job);
+        dispatchPublisherJob(ctx, env, job, supabase);
         dispatched += 1;
       }
     }

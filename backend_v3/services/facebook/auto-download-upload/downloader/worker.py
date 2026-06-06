@@ -2,7 +2,6 @@
 import json
 import logging
 import os
-import shutil
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -18,6 +17,7 @@ from config import (
     STALE_MINUTES,
 )
 from db import claim_buffer_downloads, mark_download_failed, mark_downloaded, reset_stale_reel_downloads
+from local_cache import has_cached, media_path, read_caption, remove as remove_cached, save_from_download
 from logging_setup import LOGGER_NAME, configure_logging
 from media_download import download_reel_media
 from r2_upload import object_key, upload_file
@@ -26,13 +26,62 @@ from sources import source_url
 log = logging.getLogger(LOGGER_NAME)
 
 
-def _cleanup_local_path(local_path: str | None) -> None:
-    if not local_path or not os.path.exists(local_path):
-        return
-    parent = os.path.dirname(local_path)
-    os.remove(local_path)
-    if parent and parent.startswith("/tmp/adu-dl-"):
-        shutil.rmtree(parent, ignore_errors=True)
+def _ensure_media(reel_external_id: str, platform: str, url: str) -> tuple[str, str] | None:
+    if has_cached(reel_external_id):
+        path = str(media_path(reel_external_id))
+        log.info(
+            json.dumps(
+                {
+                    "event": "cache_hit",
+                    "reel_id": reel_external_id,
+                    "path": path,
+                }
+            )
+        )
+        return path, read_caption(reel_external_id)
+
+    last_error: Exception | None = None
+    for attempt in range(1, DOWNLOAD_ATTEMPT_RETRIES + 1):
+        try:
+            local_path, caption = download_reel_media(platform, url)
+            cached_path = save_from_download(reel_external_id, local_path, caption)
+            log.info(
+                json.dumps(
+                    {
+                        "event": "download_cached",
+                        "reel_id": reel_external_id,
+                        "path": cached_path,
+                        "attempt": attempt,
+                    }
+                )
+            )
+            return cached_path, caption
+        except Exception as exc:
+            last_error = exc
+            log.warning(
+                json.dumps(
+                    {
+                        "event": "download_attempt_failed",
+                        "reel_id": reel_external_id,
+                        "platform": platform,
+                        "attempt": attempt,
+                        "max_attempts": DOWNLOAD_ATTEMPT_RETRIES,
+                        "message": str(exc)[:500],
+                    }
+                )
+            )
+
+    log.error(
+        json.dumps(
+            {
+                "event": "download_error",
+                "reel_id": reel_external_id,
+                "platform": platform,
+                "message": str(last_error)[:500] if last_error else "unknown",
+            }
+        )
+    )
+    return None
 
 
 def process_one(row: dict) -> None:
@@ -49,6 +98,7 @@ def process_one(row: dict) -> None:
             {
                 "event": "download_begin",
                 "reel_internal_id": reel_id,
+                "reel_id": reel_external_id,
                 "page_id": str(page_id),
                 "platform": platform,
                 "attempt_retries": DOWNLOAD_ATTEMPT_RETRIES,
@@ -56,23 +106,29 @@ def process_one(row: dict) -> None:
         )
     )
 
+    media = _ensure_media(reel_external_id, platform, url)
+    if media is None:
+        mark_download_failed(reel_id)
+        return
+
+    local_path, caption = media
     last_error: Exception | None = None
 
     for attempt in range(1, DOWNLOAD_ATTEMPT_RETRIES + 1):
-        local_path = None
         try:
-            local_path, caption = download_reel_media(platform, url)
             size = os.path.getsize(local_path)
             if size > DOWNLOAD_MAX_BYTES:
                 raise RuntimeError("media_too_large")
 
             size_bytes, content_type, sha256 = upload_file(local_path, key)
             mark_downloaded(reel_id, key, size_bytes, content_type, sha256, caption)
+            remove_cached(reel_external_id)
             log.info(
                 json.dumps(
                     {
                         "event": "download_ok",
                         "reel_internal_id": reel_id,
+                        "reel_id": reel_external_id,
                         "platform": platform,
                         "media_object_key": key,
                         "size_bytes": size_bytes,
@@ -86,8 +142,9 @@ def process_one(row: dict) -> None:
             log.warning(
                 json.dumps(
                     {
-                        "event": "download_attempt_failed",
+                        "event": "upload_attempt_failed",
                         "reel_internal_id": reel_id,
+                        "reel_id": reel_external_id,
                         "platform": platform,
                         "attempt": attempt,
                         "max_attempts": DOWNLOAD_ATTEMPT_RETRIES,
@@ -95,16 +152,16 @@ def process_one(row: dict) -> None:
                     }
                 )
             )
-        finally:
-            _cleanup_local_path(local_path)
 
     log.error(
         json.dumps(
             {
-                "event": "download_error",
+                "event": "upload_error",
                 "reel_internal_id": reel_id,
+                "reel_id": reel_external_id,
                 "platform": platform,
                 "message": str(last_error)[:500] if last_error else "unknown",
+                "cache_retained": True,
             }
         )
     )
@@ -114,7 +171,17 @@ def process_one(row: dict) -> None:
 def _drain_completed(in_flight: set) -> None:
     done = {future for future in in_flight if future.done()}
     for future in done:
-        future.result()
+        try:
+            future.result()
+        except Exception as exc:
+            log.exception(
+                json.dumps(
+                    {
+                        "event": "worker_task_error",
+                        "message": str(exc)[:500],
+                    }
+                )
+            )
         in_flight.discard(future)
 
 

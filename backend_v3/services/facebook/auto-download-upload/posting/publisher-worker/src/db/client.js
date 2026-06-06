@@ -105,6 +105,21 @@ export async function finalizePosted(supabase, jobId, graphPostId = null) {
   });
 }
 
+export async function recordPublishGraphId(supabase, jobId, graphPostId) {
+  return supabase.rpc('record_adu_publish_graph_id', {
+    p_job_id: jobId,
+    p_graph_post_id: graphPostId,
+  });
+}
+
+export async function releasePublishJob(supabase, jobId, errorCode = null, errorMessage = null) {
+  return supabase.rpc('release_publish_job_adu', {
+    p_job_id: jobId,
+    p_error_code: errorCode,
+    p_error_message: errorMessage,
+  });
+}
+
 export async function verifyFinalization(supabase, jobId) {
   const { data: job, error: jobError } = await supabase
     .from('adu_posting_jobs')
@@ -127,7 +142,10 @@ export async function verifyFinalization(supabase, jobId) {
   if (txError) return { ok: false, reason: `usage_lookup_failed ${txError.message}` };
 
   const usageCount = txRows?.length ?? 0;
-  const ok = job.status === 'published' && reel?.status === 'posted' && usageCount === 1;
+  const ok =
+    job.status === 'published' &&
+    reel?.status === 'posted' &&
+    (usageCount === 1 || usageCount === 0);
   if (!ok) {
     return {
       ok: false,
@@ -196,6 +214,14 @@ export async function failPublishForMissingMedia(supabase, jobId, reelInternalId
   return { error: jobError || reelError || null };
 }
 
+export async function failPublishForInactivePage(supabase, jobId, reelInternalId, message) {
+  const [{ error: jobError }, { error: reelError }] = await Promise.all([
+    markPublishJobTerminal(supabase, jobId, 'page_not_active', message),
+    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
+  ]);
+  return { error: jobError || reelError || null };
+}
+
 /**
  * OAuth permission/token failure: mark job terminal, page invalid_token.
  * DB trigger cascade_page_invalid_token_to_account marks the linked facebook_accounts
@@ -215,15 +241,6 @@ export async function failPublishForInvalidToken(supabase, jobId, pageId, reelIn
 export async function markPublishFailedForFacebookRobots(supabase, jobId, reelInternalId, message) {
   const [{ error: jobError }, { error: reelError }] = await Promise.all([
     markPublishJobTerminal(supabase, jobId, 'facebook_file_url_robots', message),
-    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
-  ]);
-  return { error: jobError || reelError || null };
-}
-
-/** Meta Graph OAuth 368 / spam throttle ("We limit how often you can post"). Terminal: failed_to_publish. */
-export async function markPublishFailedForFacebookRateLimit(supabase, jobId, reelInternalId, message) {
-  const [{ error: jobError }, { error: reelError }] = await Promise.all([
-    markPublishJobTerminal(supabase, jobId, 'facebook_oauth_368', message),
     releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
   ]);
   return { error: jobError || reelError || null };

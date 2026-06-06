@@ -14,3 +14,11 @@ export async function resetStalePublishing(supabase, olderThanSeconds = 180, lim
 export async function claimPublishJobs(supabase, limit) {
   return supabase.rpc('claim_publish_jobs_adu', { p_limit: limit });
 }
+
+export async function releasePublishJob(supabase, jobId, errorCode = null, errorMessage = null) {
+  return supabase.rpc('release_publish_job_adu', {
+    p_job_id: jobId,
+    p_error_code: errorCode,
+    p_error_message: errorMessage,
+  });
+}

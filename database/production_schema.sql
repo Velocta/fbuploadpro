@@ -378,10 +378,6 @@ begin
     select tokens_balance into v_current_tokens
     from public.users where id = v_user_id;
 
-    if v_current_tokens < v_deduction then
-        raise exception 'Insufficient tokens for user %. Required: %, Available: %', v_user_id, v_deduction, v_current_tokens;
-    end if;
-
     update public.reels
     set status = 'posted'
     where id = p_reel_id
@@ -391,22 +387,24 @@ begin
         return false;
     end if;
 
-    update public.users
-    set tokens_balance = tokens_balance - v_deduction
-    where id = v_user_id;
+    if coalesce(v_current_tokens, 0) >= v_deduction then
+        update public.users
+        set tokens_balance = tokens_balance - v_deduction
+        where id = v_user_id;
 
-    insert into public.token_transactions (user_id, amount, type, reel_id, metadata)
-    VALUES (
-        v_user_id,
-        -v_deduction,
-        'usage',
-        p_reel_id,
-        jsonb_build_object(
-            'feature', 'auto_download_upload',
-            'platform', v_source_platform,
-            'reel_id_internal', p_reel_id
-        )
-    );
+        insert into public.token_transactions (user_id, amount, type, reel_id, metadata)
+        values (
+            v_user_id,
+            -v_deduction,
+            'usage',
+            p_reel_id,
+            jsonb_build_object(
+                'feature', 'auto_download_upload',
+                'platform', v_source_platform,
+                'reel_id_internal', p_reel_id
+            )
+        );
+    end if;
 
     return true;
 exception
@@ -675,10 +673,10 @@ begin
       select 1
       from jsonb_array_elements_text(p.posting_times) as t(schedule_time)
       where
-        schedule_time::time between
-          now()::time
-          and
-          (now() + interval '1 minute')::time
+        (date_trunc('day', now()) + schedule_time::time)
+          between now() and now() + interval '1 minute'
+        or (date_trunc('day', now()) + interval '1 day' + schedule_time::time)
+          between now() and now() + interval '1 minute'
     );
 end;
 $$ language plpgsql security definer;
@@ -1443,7 +1441,7 @@ create index if not exists idx_adu_posting_jobs_status_publish_retries
 
 create unique index if not exists ux_adu_posting_jobs_active_page_reel
   on public.adu_posting_jobs (page_id, reel_internal_id)
-  where status not in ('published', 'failed_to_publish', 'integrity_error');
+  where status not in ('published', 'failed_to_publish');
 
 create unique index if not exists ux_adu_posting_jobs_published_reel
   on public.adu_posting_jobs (reel_internal_id)
@@ -1622,7 +1620,7 @@ begin
         select 1
         from public.reels r
         where r.page_id = p.id
-          and r.status in ('pending', 'processing')
+          and r.status in ('pending', 'processing', 'failed')
       )
     returning p.id
   ),
@@ -1668,6 +1666,24 @@ begin
     on conflict do nothing
     returning *
   ),
+  skipped_inserts as (
+    insert into public.errors (error_message, error_phase, metadata)
+    select
+      'adu_posting_job_insert_skipped',
+      'posting_v2_schedule',
+      jsonb_build_object(
+        'page_id', cr.page_id,
+        'reel_internal_id', cr.reel_internal_id,
+        'reel_id', cr.reel_id
+      )
+    from candidate_reels cr
+    where not exists (
+      select 1
+      from inserted_jobs ij
+      where ij.reel_internal_id = cr.reel_internal_id
+    )
+    returning id
+  ),
   mark_reels as (
     update public.reels r
     set status = 'processing'
@@ -1702,35 +1718,55 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  update public.adu_posting_jobs j
-  set
-    status = 'failed_to_publish',
-    publish_started_at = null,
-    last_error_code = coalesce(j.last_error_code, 'publish_retries_exhausted'),
-    last_error_message = coalesce(
-      nullif(trim(j.last_error_message), ''),
-      'Maximum publish retries exceeded'
-    ),
-    updated_at = now()
-  where j.status = 'pending_publish'
-    and j.publish_retries > 5;
+  with exhausted as (
+    update public.adu_posting_jobs j
+    set
+      status = 'failed_to_publish',
+      publish_started_at = null,
+      last_error_code = coalesce(j.last_error_code, 'publish_retries_exhausted'),
+      last_error_message = coalesce(
+        nullif(trim(j.last_error_message), ''),
+        'Maximum publish retries exceeded'
+      ),
+      updated_at = now()
+    where j.status = 'pending_publish'
+      and j.publish_retries > 5
+    returning j.reel_internal_id
+  )
+  update public.reels r
+  set status = 'downloaded'
+  from exhausted e
+  where r.id = e.reel_internal_id
+    and r.status = 'processing';
 
   return query
   with locked as (
     select j.job_id
     from public.adu_posting_jobs j
+    join public.pages p on p.id = j.page_id
+    join public.users u on u.id = j.agency_id
+    cross join public.system_settings s
     where j.status = 'pending_publish'
       and j.publish_retries <= 5
+      and s.id = 1
+      and s.posting_v2_intake_paused = false
+      and p.status = 'active'
+      and p.sync_status = 'synced'
+      and u.is_active_override = true
     order by j.updated_at asc
     limit greatest(1, p_limit)
-    for update skip locked
+    for update of j skip locked
   )
   update public.adu_posting_jobs j
   set
     status = 'publishing',
     publish_started_at = now(),
+    fb_page_access_token = p.fb_page_access_token,
+    fb_page_id = p.fb_page_id,
     updated_at = now()
-  where j.job_id in (select l.job_id from locked l)
+  from locked l
+  join public.pages p on p.id = j.page_id
+  where j.job_id = l.job_id
   returning j.*;
 end;
 $$;
@@ -1745,21 +1781,34 @@ declare
   v_count int := 0;
 begin
   with stale as (
-    select j.job_id
+    select j.job_id, j.reel_internal_id, j.graph_post_id
     from public.adu_posting_jobs j
     where j.status = 'publishing'
       and coalesce(j.publish_started_at, j.updated_at) < now() - make_interval(secs => greatest(1, p_older_than_seconds))
     order by j.updated_at asc
     limit greatest(1, p_limit)
+  ),
+  reset_jobs as (
+    update public.adu_posting_jobs j
+    set
+      status = 'pending_publish',
+      publish_started_at = null,
+      updated_at = now()
+    from stale s
+    where j.job_id = s.job_id
+    returning j.job_id, j.reel_internal_id, j.graph_post_id
+  ),
+  released_reels as (
+    update public.reels r
+    set status = 'downloaded'
+    from reset_jobs rj
+    where r.id = rj.reel_internal_id
+      and r.status = 'processing'
+      and rj.graph_post_id is null
+    returning r.id
   )
-  update public.adu_posting_jobs j
-  set
-    status = 'pending_publish',
-    publish_started_at = null,
-    updated_at = now()
-  where j.job_id in (select s.job_id from stale s);
+  select count(*)::int into v_count from reset_jobs;
 
-  get diagnostics v_count = row_count;
   return v_count;
 end;
 $$;
@@ -1777,6 +1826,7 @@ as $$
 declare
   v_job public.adu_posting_jobs%rowtype;
   v_marked boolean := false;
+  v_graph_id text;
 begin
   select *
   into v_job
@@ -1793,12 +1843,27 @@ begin
     return;
   end if;
 
+  if v_job.status = 'pending_publish' and v_job.graph_post_id is null then
+    raise exception 'job_not_ready_to_finalize';
+  end if;
+
+  if v_job.status not in ('publishing', 'pending_publish') then
+    raise exception 'job_not_ready_to_finalize';
+  end if;
+
+  v_graph_id := coalesce(nullif(trim(p_graph_post_id), ''), v_job.graph_post_id);
+
   select public.mark_reel_posted_with_token(v_job.reel_internal_id)
     into v_marked;
 
   if v_marked then
     update public.reels
-    set graph_post_id = coalesce(p_graph_post_id, graph_post_id)
+    set
+      graph_post_id = coalesce(v_graph_id, graph_post_id),
+      media_object_key = null,
+      media_size_bytes = null,
+      media_content_type = null,
+      media_sha256 = null
     where id = v_job.reel_internal_id;
 
     update public.adu_posting_jobs
@@ -1806,7 +1871,7 @@ begin
       status = 'published',
       published_at = now(),
       publish_started_at = null,
-      graph_post_id = coalesce(p_graph_post_id, graph_post_id),
+      graph_post_id = coalesce(v_graph_id, graph_post_id),
       last_error_code = null,
       last_error_message = null,
       updated_at = now()
@@ -1821,13 +1886,104 @@ begin
     status = 'published',
     published_at = now(),
     publish_started_at = null,
-    graph_post_id = coalesce(p_graph_post_id, graph_post_id),
+    graph_post_id = coalesce(v_graph_id, graph_post_id),
     updated_at = now()
   where adu_posting_jobs.job_id = p_job_id;
 
   return query select p_job_id, true, false;
 end;
 $$;
+
+create or replace function public.record_adu_publish_graph_id(
+  p_job_id uuid,
+  p_graph_post_id text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_job public.adu_posting_jobs%rowtype;
+begin
+  if nullif(trim(p_graph_post_id), '') is null then
+    raise exception 'graph_post_id_required';
+  end if;
+
+  select *
+  into v_job
+  from public.adu_posting_jobs
+  where job_id = p_job_id
+  for update;
+
+  if not found then
+    raise exception 'posting_job_not_found';
+  end if;
+
+  if v_job.status = 'published' then
+    return true;
+  end if;
+
+  if v_job.status <> 'publishing' then
+    raise exception 'job_not_publishing';
+  end if;
+
+  if v_job.graph_post_id is not null and v_job.graph_post_id <> p_graph_post_id then
+    raise exception 'graph_post_id_mismatch';
+  end if;
+
+  update public.adu_posting_jobs
+  set
+    graph_post_id = coalesce(graph_post_id, p_graph_post_id),
+    updated_at = now()
+  where job_id = p_job_id;
+
+  return true;
+end;
+$$;
+
+create or replace function public.release_publish_job_adu(
+  p_job_id uuid,
+  p_error_code text default null,
+  p_error_message text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_job public.adu_posting_jobs%rowtype;
+begin
+  update public.adu_posting_jobs j
+  set
+    status = 'pending_publish',
+    publish_started_at = null,
+    last_error_code = coalesce(nullif(trim(p_error_code), ''), j.last_error_code),
+    last_error_message = coalesce(nullif(trim(p_error_message), ''), j.last_error_message),
+    updated_at = now()
+  where j.job_id = p_job_id
+    and j.status = 'publishing'
+  returning j.*
+  into v_job;
+
+  if not found then
+    return false;
+  end if;
+
+  if v_job.graph_post_id is null then
+    update public.reels r
+    set status = 'downloaded'
+    where r.id = v_job.reel_internal_id
+      and r.status = 'processing';
+  end if;
+
+  return true;
+end;
+$$;
+
+grant execute on function public.record_adu_publish_graph_id(uuid, text) to service_role;
+grant execute on function public.release_publish_job_adu(uuid, text, text) to service_role;
 
 create or replace function public.reset_stale_adu_reel_downloads(p_stale_minutes int default 40)
 returns integer
@@ -1886,7 +2042,10 @@ begin
       select count(*)::int
       from public.reels r
       where r.page_id = ap.id
-        and r.status in ('downloaded', 'processing')
+        and (
+          r.status = 'downloaded'
+          or (r.status = 'processing' and r.download_claimed_at is not null)
+        )
     ) < ap.buffer_target
   ),
   locked as (

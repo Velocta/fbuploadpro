@@ -2,15 +2,17 @@ import {
   countRecentIntegrityIncidents,
   emitIntegrityAlert,
   emitPublishError,
+  failPublishForInactivePage,
   failPublishForInvalidToken,
   failPublishForMissingMedia,
   failPublishForVerificationRequired,
   finalizePosted,
   getSupabaseClient,
   incrementPublishRetry,
-  markPublishFailedForFacebookRateLimit,
   markPublishFailedForFacebookRobots,
   pauseIntake,
+  recordPublishGraphId,
+  releasePublishJob,
   verifyFinalization,
 } from './db/client.js';
 import { publishToFacebook } from './integrations/facebook.js';
@@ -44,6 +46,68 @@ async function maybePauseIntake(supabase, threshold, windowSeconds) {
   }
   if (count < threshold) return;
   await pauseIntake(supabase);
+}
+
+async function deleteR2Object(env, jobId, mediaObjectKey) {
+  if (!mediaObjectKey) return;
+  try {
+    await env.POSTING_MEDIA_BUCKET.delete(mediaObjectKey);
+    v2Log('publish_job_r2_deleted', { job_id: jobId, media_object_key: mediaObjectKey });
+  } catch (deleteErr) {
+    v2Log('publish_job_r2_delete_error', {
+      job_id: jobId,
+      media_object_key: mediaObjectKey,
+      message: String(deleteErr?.message || deleteErr),
+    });
+  }
+}
+
+async function finalizeAndVerify(env, supabase, job, graphVideoId, anomalyPauseThreshold, anomalyWindowSeconds) {
+  const jobId = job.job_id ?? null;
+  const mediaObjectKey = String(job.media_object_key || '');
+
+  const { data: finalizeResult, error: finalizeError } = await finalizePosted(
+    supabase,
+    job.job_id,
+    graphVideoId
+  );
+  if (finalizeError) {
+    v2Log('publish_job_error', {
+      job_id: jobId,
+      phase: 'finalize_rpc',
+      code: 'finalize_rpc_failed',
+      message: finalizeError.message,
+    });
+    await releasePublishJob(supabase, job.job_id, 'finalize_rpc_failed', finalizeError.message);
+    throw new Error(`finalize_rpc_failed ${finalizeError.message}`);
+  }
+  v2Log('publish_job_finalize_rpc_ok', { job_id: jobId, finalize_result: finalizeResult ?? null });
+
+  const verification = await verifyFinalization(supabase, job.job_id);
+  if (!verification.ok) {
+    v2Log('publish_job_integrity_mismatch', { job_id: jobId, reason: verification.reason });
+    await markIntegrityError(supabase, job.job_id, verification.reason);
+    await emitIntegrityAlert(supabase, 'integrity_mismatch_after_finalize_success', {
+      job_id: job.job_id,
+      reel_internal_id: job.reel_internal_id ?? null,
+      reason: verification.reason,
+    });
+    await maybePauseIntake(supabase, anomalyPauseThreshold, anomalyWindowSeconds);
+    console.error('[v2-publisher] integrity incident:', job.job_id, verification.reason, finalizeResult);
+
+    const { data: reel } = await supabase
+      .from('reels')
+      .select('status')
+      .eq('id', job.reel_internal_id)
+      .maybeSingle();
+    if (reel?.status === 'posted') {
+      await deleteR2Object(env, jobId, mediaObjectKey);
+    }
+    return;
+  }
+
+  v2Log('publish_job_ok', { job_id: jobId });
+  await deleteR2Object(env, jobId, mediaObjectKey);
 }
 
 function internalTokenOk(env, request) {
@@ -103,12 +167,41 @@ async function processPublishJob(env, job) {
   const anomalyPauseThreshold = Number.parseInt(env.INTEGRITY_PAUSE_THRESHOLD || '3', 10);
   const anomalyWindowSeconds = Number.parseInt(env.INTEGRITY_WINDOW_SECONDS || '300', 10);
   const jobId = job.job_id ?? null;
+  const existingGraphId = String(job.graph_post_id || '').trim();
 
   const mediaObjectKey = String(job.media_object_key || '');
   const caption = String(job.reel_caption || '').trim() || '...';
-  if (!mediaObjectKey) {
+  if (!mediaObjectKey && !existingGraphId) {
     v2Log('publish_job_error', { job_id: jobId, phase: 'validate', code: 'missing_media_object_key' });
     throw new Error('missing_media_object_key');
+  }
+
+  const { data: page, error: pageError } = await supabase
+    .from('pages')
+    .select('status')
+    .eq('id', job.page_id)
+    .maybeSingle();
+  if (pageError || page?.status !== 'active') {
+    v2Log('publish_job_error', {
+      job_id: jobId,
+      phase: 'validate',
+      code: 'page_not_active',
+      page_status: page?.status ?? null,
+    });
+    throw new Error('page_not_active');
+  }
+
+  if (existingGraphId) {
+    v2Log('publish_job_finalize_only', { job_id: jobId, graph_post_id: existingGraphId });
+    await finalizeAndVerify(
+      env,
+      supabase,
+      job,
+      existingGraphId,
+      anomalyPauseThreshold,
+      anomalyWindowSeconds
+    );
+    return;
   }
 
   const uploadModeRaw = String(env.POSTING_MEDIA_UPLOAD_MODE || 'stream').trim().toLowerCase();
@@ -142,6 +235,17 @@ async function processPublishJob(env, job) {
         }
       })(),
     });
+
+    const preflight = await fetch(hostedFileUrl, { method: 'HEAD' });
+    if (!preflight.ok) {
+      v2Log('publish_job_error', {
+        job_id: jobId,
+        phase: 'hosted_preflight',
+        code: 'hosted_media_preflight_failed',
+        http_status: preflight.status,
+      });
+      throw new Error(`hosted_media_preflight_failed status=${preflight.status}`);
+    }
   } else {
     v2Log('publish_job_upload_mode', { job_id: jobId, upload_mode: uploadMode, media_object_key: mediaObjectKey });
   }
@@ -170,46 +274,25 @@ async function processPublishJob(env, job) {
   });
   v2Log('publish_job_facebook_ok', { job_id: jobId, graph_video_id: graphVideoId ?? null });
 
-  const { data: finalizeResult, error: finalizeError } = await finalizePosted(
-    supabase,
-    job.job_id,
-    graphVideoId
-  );
-  if (finalizeError) {
+  const { error: recordError } = await recordPublishGraphId(supabase, job.job_id, graphVideoId);
+  if (recordError) {
     v2Log('publish_job_error', {
       job_id: jobId,
-      phase: 'finalize_rpc',
-      code: 'finalize_rpc_failed',
-      message: finalizeError.message,
+      phase: 'record_graph_id',
+      code: 'record_graph_id_failed',
+      message: recordError.message,
     });
-    throw new Error(`finalize_rpc_failed ${finalizeError.message}`);
+    throw new Error(`record_graph_id_failed ${recordError.message}`);
   }
-  v2Log('publish_job_finalize_rpc_ok', { job_id: jobId, finalize_result: finalizeResult ?? null });
 
-  const verification = await verifyFinalization(supabase, job.job_id);
-  if (!verification.ok) {
-    v2Log('publish_job_integrity_mismatch', { job_id: jobId, reason: verification.reason });
-    await markIntegrityError(supabase, job.job_id, verification.reason);
-    await emitIntegrityAlert(supabase, 'integrity_mismatch_after_finalize_success', {
-      job_id: job.job_id,
-      reel_internal_id: job.reel_internal_id ?? null,
-      reason: verification.reason,
-    });
-    await maybePauseIntake(supabase, anomalyPauseThreshold, anomalyWindowSeconds);
-    console.error('[v2-publisher] integrity incident:', job.job_id, verification.reason, finalizeResult);
-  } else {
-    v2Log('publish_job_ok', { job_id: jobId });
-    try {
-      await env.POSTING_MEDIA_BUCKET.delete(mediaObjectKey);
-      v2Log('publish_job_r2_deleted', { job_id: jobId, media_object_key: mediaObjectKey });
-    } catch (deleteErr) {
-      v2Log('publish_job_r2_delete_error', {
-        job_id: jobId,
-        media_object_key: mediaObjectKey,
-        message: String(deleteErr?.message || deleteErr),
-      });
-    }
-  }
+  await finalizeAndVerify(
+    env,
+    supabase,
+    job,
+    graphVideoId,
+    anomalyPauseThreshold,
+    anomalyWindowSeconds
+  );
 }
 
 export default {
@@ -311,7 +394,7 @@ export default {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
 
-        if (code === 'media_object_missing') {
+        if (code === 'media_object_missing' || code === 'missing_media_object_key') {
           const { error: missingError } = await failPublishForMissingMedia(
             supabase,
             job.job_id,
@@ -333,6 +416,22 @@ export default {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
 
+        if (code === 'page_not_active') {
+          const { error: inactiveError } = await failPublishForInactivePage(
+            supabase,
+            job.job_id,
+            job.reel_internal_id,
+            errMsg
+          );
+          if (inactiveError) {
+            v2Log('fail_inactive_page_error', {
+              job_id: job.job_id ?? null,
+              message: inactiveError.message,
+            });
+          }
+          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
+        }
+
         if (isFacebookRobotsTxtBlocked(errMsg)) {
           const { error: robotsError } = await markPublishFailedForFacebookRobots(
             supabase,
@@ -349,20 +448,35 @@ export default {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
 
+        if (code === 'finalize_rpc_failed') {
+          v2Log('publish_finalize_retry_scheduled', { job_id: job.job_id ?? null });
+          return Response.json(
+            { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
+            { status: 200 }
+          );
+        }
+
         if (isFacebookPublishRateLimited(errMsg)) {
-          const { error: limitError } = await markPublishFailedForFacebookRateLimit(
+          const { error: limitError, exhausted: retriesExhausted } = await incrementPublishRetry(
             supabase,
             job.job_id,
             job.reel_internal_id,
-            errMsg
+            'facebook_oauth_368_deferred',
+            errMsg.slice(0, 500)
           );
           if (limitError) {
-            v2Log('mark_publish_failed_rate_limit_error', {
+            v2Log('rate_limit_retry_error', {
               job_id: job.job_id ?? null,
               message: limitError.message,
             });
           }
-          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
+          if (retriesExhausted) {
+            return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
+          }
+          return Response.json(
+            { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
+            { status: 200 }
+          );
         }
 
         const { error: retryError, exhausted: retriesExhausted } = await incrementPublishRetry(
@@ -379,8 +493,11 @@ export default {
           v2Log('publish_retries_exhausted', { job_id: job.job_id ?? null });
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
-        v2Log('internal_job_response', { job_id: job.job_id ?? null, http_status: 500, ok: false });
-        return Response.json({ ok: false, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) }, { status: 500 });
+        v2Log('internal_job_response', { job_id: job.job_id ?? null, http_status: 200, ok: false, retry: true });
+        return Response.json(
+          { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
+          { status: 200 }
+        );
       }
     }
 

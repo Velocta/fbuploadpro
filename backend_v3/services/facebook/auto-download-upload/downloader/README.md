@@ -79,6 +79,13 @@ Get-Content logs\adu-downloader.error.log -Wait
 
 Each claimed reel gets up to **4** in-process download attempts before `mark_adu_reel_download_failed`; that is separate from the DB `download_retries` column (max **3** claims before `download_failed`).
 
+### Resilience (network + cache)
+
+- **Supabase RPC retries** — `claim`, `mark_downloaded`, and `mark_download_failed` retry on transient `httpx`/socket errors (exponential backoff; see `ADU_DOWNLOADER_RPC_RETRIES`).
+- **Thread-local Supabase clients** — one client per worker thread (avoids shared-socket issues on Windows).
+- **Local disk cache** — after a successful download, media is stored under `downloader/cache/` as `{reel_id}.mp4` (+ `.caption`). Upload/DB failures reuse the cache on the next claim; cache is deleted only after `mark_adu_reel_downloaded` succeeds.
+- **Worker task isolation** — a failed in-flight job is logged and does not stop the main loop.
+
 ### Proxies (optional)
 
 | Variable | Platforms | Used for |

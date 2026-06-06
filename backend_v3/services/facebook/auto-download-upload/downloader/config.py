@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 ENV_FILE = Path(__file__).resolve().parent / ".env"
 load_dotenv(ENV_FILE, override=False)
 
+_downloader_dir = Path(__file__).resolve().parent
+
 
 def _bounded_int(name: str, default: str, *, minimum: int = 1, maximum: int | None = None) -> int:
     value = int(os.environ.get(name, default))
@@ -36,6 +38,19 @@ DOWNLOAD_MAX_BYTES = _bounded_int("ADU_DOWNLOAD_MAX_BYTES", "209715200", minimum
 # Reset reels stuck in processing back to pending (worker calls reset_stale_adu_reel_downloads each loop).
 STALE_MINUTES = _bounded_int("ADU_DOWNLOADER_STALE_MINUTES", "40", minimum=1, maximum=24 * 60)
 
+# Supabase RPC retries (transient httpx/network errors, especially on Windows).
+RPC_MAX_RETRIES = _bounded_int("ADU_DOWNLOADER_RPC_RETRIES", "5", minimum=1, maximum=20)
+RPC_BACKOFF_SECONDS = _bounded_int("ADU_DOWNLOADER_RPC_BACKOFF_SECONDS", "1", minimum=1, maximum=60)
+
+# Local disk cache keyed by source reel_id (skip re-download when upload/DB update fails).
+_cache_dir_env = os.environ.get("ADU_DOWNLOADER_CACHE_DIR", "").strip()
+if _cache_dir_env:
+    CACHE_DIR = Path(_cache_dir_env).expanduser()
+    if not CACHE_DIR.is_absolute():
+        CACHE_DIR = _downloader_dir / CACHE_DIR
+else:
+    CACHE_DIR = _downloader_dir / "cache"
+
 # aria2: lower -x/-s per file so 30 parallel jobs do not open thousands of TCP connections.
 ARIA2_MAX_CONNECTION = _bounded_int("ADU_ARIA2_MAX_CONNECTION", "4", minimum=1, maximum=16)
 ARIA2_SPLIT = _bounded_int("ADU_ARIA2_SPLIT", "4", minimum=1, maximum=16)
@@ -56,7 +71,6 @@ DATACENTER_PROXY = os.environ.get("DATACENTER_PROXY", "").strip() or None
 YT_DLP_JS_RUNTIME = os.environ.get("ADU_DOWNLOADER_JS_RUNTIME", "node").strip()
 
 # Rotating log files (default: downloader/logs/). Relative paths resolve under downloader/.
-_downloader_dir = Path(__file__).resolve().parent
 _log_dir_env = os.environ.get("ADU_DOWNLOADER_LOG_DIR", "").strip()
 if _log_dir_env:
     LOG_DIR = Path(_log_dir_env).expanduser()
