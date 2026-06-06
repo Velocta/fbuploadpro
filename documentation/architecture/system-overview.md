@@ -27,7 +27,7 @@ VPS buffer downloader pre-fills R2; three Cloudflare Workers handle scheduling a
 **Flow:**
 
 1. **Scraper** — Inserts `reels` as `pending` (metadata only).
-2. **Buffer downloader** — For active pages below `posts_per_day × 4` downloaded reels, claims `pending` reels, yt-dlp download → R2 `fbuploadpro-adu-buffer` → `reels.status = downloaded`.
+2. **Buffer downloader** — For active pages below `posts_per_day × 1` downloaded reels, claims `pending` reels, yt-dlp download → R2 `fbuploadpro-adu-buffer` → `reels.status = downloaded`.
 3. **Scheduler** — RPC `create_due_adu_posting_jobs` picks `downloaded` reels, creates `adu_posting_jobs` as `pending_publish`.
 4. **Publish processor** — RPC `claim_publish_jobs_adu`, dispatches to publisher.
 5. **Publisher** — Reads R2 buffer object, publishes to Facebook Reels, RPC `finalize_posting_job_adu`.

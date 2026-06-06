@@ -62,7 +62,7 @@ Get-Content logs\adu-downloader.error.log -Wait
 
 - Pages must be **`status = active`**, **`sync_status = synced`**, and `posts_per_day > 0` (aligned with the posting scheduler)
 - **Source circuit breaker (24h rolling):** pages with **>7** `download_failed` reels in the last 24 hours are skipped; **>30** failures sets page `status = creator_suspended` (source creator unavailable — not the same as Facebook `account_suspended`)
-- Buffer target per page: **`posts_per_day × 4`**, counting reels in **`downloaded`** or **`processing`**
+- Buffer target per page: **`posts_per_day × 1`**, counting reels in **`downloaded`** or **`processing`**
 - Claimed reels move to **`processing`** with `download_claimed_at = now()`
 - Failed downloads reset to **`pending`** (or **`download_failed`** after 3 claims)
 

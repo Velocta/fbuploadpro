@@ -2059,7 +2059,7 @@ begin
   with active_pages as (
     select
       p.id,
-      coalesce(p.posts_per_day, 0) * 4 as buffer_target
+      coalesce(p.posts_per_day, 0) * 1 as buffer_target
     from public.pages p
     where p.status = 'active'
       and p.sync_status = 'synced'
