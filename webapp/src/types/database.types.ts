@@ -953,6 +953,7 @@ export type Database = {
         | "posted"
         | "failed"
         | "processing"
+        | "publishing"
         | "downloaded"
         | "download_failed"
       schedule_type_enum: "fixed" | "randomfixed" | "dailyrandom"

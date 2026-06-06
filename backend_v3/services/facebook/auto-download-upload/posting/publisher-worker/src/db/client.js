@@ -8,7 +8,7 @@ export function getSupabaseClient(env) {
 }
 
 /**
- * Release a reel stuck in processing after a terminal publish failure.
+ * Release a reel stuck in publishing after a terminal publish failure.
  * - redownload: clear buffer metadata and queue for VPS downloader again
  * - default: restore to downloaded when R2 media may still exist
  */
@@ -32,14 +32,14 @@ export async function releaseReelAfterTerminalPublishFailure(
         download_claimed_at: null,
       })
       .eq('id', reelInternalId)
-      .eq('status', 'processing');
+      .eq('status', 'publishing');
   }
 
   return supabase
     .from('reels')
     .update({ status: 'downloaded' })
     .eq('id', reelInternalId)
-    .eq('status', 'processing');
+    .eq('status', 'publishing');
 }
 
 async function markPublishJobTerminal(supabase, jobId, errorCode, message) {

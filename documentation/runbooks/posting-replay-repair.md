@@ -156,7 +156,7 @@ where job_id = :job_id
 update public.reels
 set status = 'downloaded'
 where id = :reel_internal_id
-  and status = 'processing';
+  and status = 'publishing';
 ```
 
 ### Release stuck `publishing` job

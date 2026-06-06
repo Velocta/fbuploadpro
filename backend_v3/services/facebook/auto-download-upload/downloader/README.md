@@ -22,7 +22,9 @@ cp .env.example .env  # fill values — must live in this `downloader/` folder
 
 The worker loads **`downloader/.env` automatically** via `python-dotenv` in `config.py` (same path on Linux and Windows). You do not need to export variables in the shell or rely on PM2 to inject them.
 
-Apply the ADU buffer migration (`20260605120000_adu_buffer_claim_improvements.sql`) and source circuit breaker (`20260606140000_adu_downloader_source_circuit_breaker.sql`) before running the worker.
+Apply the ADU buffer migration (`20260605120000_adu_buffer_claim_improvements.sql`) and source circuit breaker (`20260606140000_adu_downloader_source_circuit_breaker.sql`) before running the worker. For fair buffer claims and the claim-empty deadlock fix, also apply `20260606160000_adu_buffer_level_fair_claim.sql` and `20260606170000_adu_buffer_skip_unclaimable_hungry_pages.sql`. Apply `20260606190000_adu_reel_publishing_status.sql` so posting uses `publishing` on reels (downloader keeps `processing`).
+
+**One-time reel re-queue** (`20260606180000_adu_requeue_stuck_reels_one_time.sql`): pauses are recommended — stop the downloader, run the migration in Supabase, then restart. It moves all `failed`, `download_failed`, and `processing` reels on active synced pages back to `pending` (resets download retries and clears stale media metadata).
 
 ## Run
 
@@ -62,7 +64,9 @@ Get-Content logs\adu-downloader.error.log -Wait
 
 - Pages must be **`status = active`**, **`sync_status = synced`**, and `posts_per_day > 0` (aligned with the posting scheduler)
 - **Source circuit breaker (24h rolling):** pages with **>7** `download_failed` reels in the last 24 hours are skipped; **>30** failures sets page `status = creator_suspended` (source creator unavailable — not the same as Facebook `account_suspended`)
-- Buffer target per page: **`posts_per_day × 1`**, counting reels in **`downloaded`** or **`processing`**
+- Buffer target per page: **`posts_per_day × 1`**, counting reels in **`downloaded`** or **`processing`** (downloader in-flight only)
+- **Reel statuses:** `processing` = downloading; `publishing` = scheduled or actively posting; do not mix the two
+- **Level-fair claims:** only pages at the minimum `buffer_filled` among hungry pages; max one pending reel per page per batch; `random()` tie-break. Hungry pages with **no claimable pending** reels are excluded so they cannot pin `min_level`
 - Claimed reels move to **`processing`** with `download_claimed_at = now()`
 - Failed downloads reset to **`pending`** (or **`download_failed`** after 3 claims)
 

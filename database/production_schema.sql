@@ -12,7 +12,7 @@ create extension if not exists pg_cron;
 create type public.user_role_enum as enum ('super_admin', 'agency');
 create type public.subscription_type_enum as enum ('new', 'renewal', 'upgrade', 'correction');
 create type public.schedule_type_enum as enum ('fixed', 'randomfixed', 'dailyrandom');
-create type public.reel_status_enum as enum ('pending', 'posted', 'failed', 'processing', 'downloaded', 'download_failed');
+create type public.reel_status_enum as enum ('pending', 'posted', 'failed', 'processing', 'publishing', 'downloaded', 'download_failed');
 create type public.sync_status_enum as enum ('pending', 'browser_pending', 'synced', 'processing', 'error');
 create type public.profile_status_enum as enum ('active', 'inactive', 'fb_verification_required', 'invalid_token', 'invalid_username', 'completed', '2fa_required_on_BM', 'check_developer_app', 'account_suspended', 'creator_suspended');
 create type public.platform_enum as enum ('instagram', 'youtube', 'tiktok', 'facebook');
@@ -761,6 +761,7 @@ UPDATE public.users SET role = role;
 -- 7. Posting Pipeline V2 (2026-05-07)
 
 alter type public.reel_status_enum add value if not exists 'processing';
+alter type public.reel_status_enum add value if not exists 'publishing';
 
 alter table public.system_settings
   add column if not exists posting_v2_intake_paused boolean not null default false;
@@ -1626,7 +1627,7 @@ begin
         select 1
         from public.reels r
         where r.page_id = p.id
-          and r.status in ('pending', 'processing', 'failed')
+          and r.status in ('pending', 'processing', 'publishing')
       )
       and not exists (
         select 1
@@ -1698,7 +1699,7 @@ begin
   ),
   mark_reels as (
     update public.reels r
-    set status = 'processing'
+    set status = 'publishing'
     where r.id in (select ij.reel_internal_id from inserted_jobs ij)
       and r.status = 'downloaded'
     returning r.id
@@ -1749,7 +1750,7 @@ begin
   set status = 'downloaded'
   from exhausted e
   where r.id = e.reel_internal_id
-    and r.status = 'processing';
+    and r.status = 'publishing';
 
   return query
   with locked as (
@@ -1817,7 +1818,7 @@ begin
     set status = 'downloaded'
     from reset_jobs rj
     where r.id = rj.reel_internal_id
-      and r.status = 'processing'
+      and r.status = 'publishing'
       and rj.graph_post_id is null
     returning r.id
   )
@@ -1989,7 +1990,7 @@ begin
     update public.reels r
     set status = 'downloaded'
     where r.id = v_job.reel_internal_id
-      and r.status = 'processing';
+      and r.status = 'publishing';
   end if;
 
   return true;
@@ -2016,9 +2017,11 @@ begin
     status = 'pending',
     download_claimed_at = null
   where status = 'processing'
-    and download_claimed_at is not null
-    and download_claimed_at < now() - make_interval(mins => p_stale_minutes)
-    and download_retries < 3;
+    and download_retries < 3
+    and (
+      download_claimed_at is null
+      or download_claimed_at < now() - make_interval(mins => p_stale_minutes)
+    );
 
   get diagnostics v_reset_count = row_count;
   return v_reset_count;
@@ -2073,27 +2076,55 @@ begin
       ) <= 7
   ),
   page_buffer as (
-    select ap.id as page_id, ap.buffer_target
+    select
+      ap.id as page_id,
+      ap.buffer_target,
+      (
+        select count(*)::int
+        from public.reels r
+        where r.page_id = ap.id
+          and r.status in ('downloaded', 'processing')
+      ) as buffer_filled
     from active_pages ap
-    where (
-      select count(*)::int
-      from public.reels r
-      where r.page_id = ap.id
-        and (
-          r.status = 'downloaded'
-          or (r.status = 'processing' and r.download_claimed_at is not null)
-        )
-    ) < ap.buffer_target
+  ),
+  hungry_pages as (
+    select pb.page_id, pb.buffer_filled
+    from page_buffer pb
+    where pb.buffer_filled < pb.buffer_target
+      and exists (
+        select 1
+        from public.reels r
+        where r.page_id = pb.page_id
+          and r.status = 'pending'
+          and r.download_retries < 3
+      )
+  ),
+  min_level as (
+    select min(hp.buffer_filled) as level
+    from hungry_pages hp
+  ),
+  eligible_pages as (
+    select hp.page_id
+    from hungry_pages hp
+    cross join min_level ml
+    where hp.buffer_filled = ml.level
+  ),
+  one_per_page as (
+    select distinct on (r.page_id)
+      r.id
+    from eligible_pages ep
+    join public.reels r on r.page_id = ep.page_id
+    where r.status = 'pending'
+      and r.download_retries < 3
+    order by r.page_id, r.id asc
   ),
   locked as (
     select r.id
-    from page_buffer pb
-    join public.reels r on r.page_id = pb.page_id
-    where r.status = 'pending'
-      and r.download_retries < 3
-    order by r.id asc
+    from one_per_page opp
+    join public.reels r on r.id = opp.id
+    order by random()
     limit p_limit
-    for update skip locked
+    for update of r skip locked
   )
   update public.reels r
   set
