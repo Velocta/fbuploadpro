@@ -2073,7 +2073,7 @@ begin
         where r.page_id = p.id
           and r.status = 'download_failed'
           and r.download_failed_at >= now() - interval '24 hours'
-      ) <= 7
+      ) <= 13
   ),
   page_buffer as (
     select
