@@ -13,11 +13,13 @@ function v2Log(event, fields = {}) {
 
 function dispatchPublisherJob(ctx, env, job, supabase) {
   if (!env.PUBLISHER_WORKER) {
-    v2Log('dispatch_skipped', { reason: 'missing_PUBLISHER_WORKER_binding' });
+    v2Log('dispatch_skipped', { reason: 'missing_PUBLISHER_WORKER_binding', job_id: job.job_id ?? null });
+    void releasePublishJob(supabase, job.job_id, 'dispatch_skipped', 'missing_PUBLISHER_WORKER_binding');
     return;
   }
   if (!env.INTERNAL_JOB_DISPATCH_TOKEN) {
-    v2Log('dispatch_skipped', { reason: 'missing_INTERNAL_JOB_DISPATCH_TOKEN' });
+    v2Log('dispatch_skipped', { reason: 'missing_INTERNAL_JOB_DISPATCH_TOKEN', job_id: job.job_id ?? null });
+    void releasePublishJob(supabase, job.job_id, 'dispatch_skipped', 'missing_INTERNAL_JOB_DISPATCH_TOKEN');
     return;
   }
   const promise = env.PUBLISHER_WORKER.fetch(PUBLISHER_INTERNAL_URL, {

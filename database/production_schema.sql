@@ -1622,6 +1622,12 @@ begin
         where r.page_id = p.id
           and r.status in ('pending', 'processing', 'failed')
       )
+      and not exists (
+        select 1
+        from public.adu_posting_jobs aj
+        where aj.page_id = p.id
+          and aj.status in ('pending_publish', 'publishing')
+      )
     returning p.id
   ),
   inserted_jobs as (
@@ -1741,7 +1747,10 @@ begin
 
   return query
   with locked as (
-    select j.job_id
+    select
+      j.job_id,
+      p.fb_page_access_token,
+      p.fb_page_id
     from public.adu_posting_jobs j
     join public.pages p on p.id = j.page_id
     join public.users u on u.id = j.agency_id
@@ -1761,11 +1770,10 @@ begin
   set
     status = 'publishing',
     publish_started_at = now(),
-    fb_page_access_token = p.fb_page_access_token,
-    fb_page_id = p.fb_page_id,
+    fb_page_access_token = l.fb_page_access_token,
+    fb_page_id = l.fb_page_id,
     updated_at = now()
   from locked l
-  join public.pages p on p.id = j.page_id
   where j.job_id = l.job_id
   returning j.*;
 end;
@@ -1984,6 +1992,9 @@ $$;
 
 grant execute on function public.record_adu_publish_graph_id(uuid, text) to service_role;
 grant execute on function public.release_publish_job_adu(uuid, text, text) to service_role;
+grant execute on function public.claim_publish_jobs_adu(int) to service_role;
+grant execute on function public.reset_stale_publish_jobs_adu(int, int) to service_role;
+grant execute on function public.create_due_adu_posting_jobs(text) to service_role;
 
 create or replace function public.reset_stale_adu_reel_downloads(p_stale_minutes int default 40)
 returns integer

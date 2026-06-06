@@ -6,6 +6,77 @@ This runbook covers **legacy Posting V2** (`posting_jobs_v2`) and **ADU buffer p
 
 ## ADU Auto Download/Upload (`adu_posting_jobs`)
 
+### Jobs not picked by publish-processor
+
+`claim_publish_jobs_adu` only claims jobs when **all** of these are true:
+
+| Check | Requirement |
+|-------|-------------|
+| Job | `status = pending_publish`, `publish_retries <= 5` |
+| Page | `status = active`, `sync_status = synced` |
+| Agency | `users.is_active_override = true` |
+| System | `system_settings.posting_v2_intake_paused = false` |
+
+**Diagnose blocked jobs:**
+
+```sql
+select
+  j.job_id,
+  j.status,
+  j.publish_retries,
+  j.publish_started_at,
+  j.updated_at,
+  p.page_name,
+  p.status as page_status,
+  p.sync_status,
+  u.is_active_override,
+  s.posting_v2_intake_paused,
+  case
+    when j.status = 'pending_publish'
+      and j.publish_retries <= 5
+      and p.status = 'active'
+      and p.sync_status = 'synced'
+      and u.is_active_override = true
+      and s.posting_v2_intake_paused = false
+    then 'claimable'
+    else 'blocked'
+  end as claim_state
+from public.adu_posting_jobs j
+join public.pages p on p.id = j.page_id
+join public.users u on u.id = j.agency_id
+cross join public.system_settings s
+where s.id = 1
+  and j.status in ('pending_publish', 'publishing')
+order by j.updated_at desc
+limit 100;
+```
+
+**Common fixes:**
+
+1. **Page marked `completed` while job still pending** — reactivate:
+
+```sql
+update public.pages p
+set status = 'active', updated_at = now()
+where p.status = 'completed'
+  and exists (
+    select 1
+    from public.adu_posting_jobs aj
+    where aj.page_id = p.id
+      and aj.status in ('pending_publish', 'publishing')
+  );
+```
+
+2. **Jobs stuck in `publishing`** — reset stale (or wait 5 min for worker cron):
+
+```sql
+select public.reset_stale_publish_jobs_adu(300, 1000);
+```
+
+3. **Intake paused** — `update system_settings set posting_v2_intake_paused = false where id = 1;`
+
+4. **Workers / migrations** — deploy publisher → publish-processor → scheduler; apply migrations through `20260606120000_adu_posting_claim_guard.sql`.
+
 ### Identify failing jobs
 
 ```sql
