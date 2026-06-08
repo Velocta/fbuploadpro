@@ -3,6 +3,7 @@ import re
 import shutil
 from pathlib import Path
 
+from caption_utils import DEFAULT_REEL_CAPTION, normalize_reel_caption
 from config import CACHE_DIR
 
 
@@ -27,8 +28,8 @@ def has_cached(reel_id: str) -> bool:
 def read_caption(reel_id: str) -> str:
     path = caption_path(reel_id)
     if path.is_file():
-        return path.read_text(encoding="utf-8")
-    return "..."
+        return normalize_reel_caption(path.read_text(encoding="utf-8"), reel_external_id=reel_id)
+    return DEFAULT_REEL_CAPTION
 
 
 def save_from_download(reel_id: str, source_path: str, caption: str) -> str:
@@ -36,7 +37,10 @@ def save_from_download(reel_id: str, source_path: str, caption: str) -> str:
     dest = media_path(reel_id)
     parent = os.path.dirname(os.path.abspath(source_path))
     shutil.move(source_path, dest)
-    caption_path(reel_id).write_text(caption or "...", encoding="utf-8")
+    caption_path(reel_id).write_text(
+        normalize_reel_caption(caption, reel_external_id=reel_id),
+        encoding="utf-8",
+    )
     if os.path.abspath(parent) != os.path.abspath(str(CACHE_DIR)):
         shutil.rmtree(parent, ignore_errors=True)
     return str(dest)

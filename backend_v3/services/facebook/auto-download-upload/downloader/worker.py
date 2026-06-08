@@ -16,6 +16,7 @@ from config import (
     R2_UPLOAD_CHUNK_BYTES,
     STALE_MINUTES,
 )
+from caption_utils import normalize_reel_caption
 from db import claim_buffer_downloads, mark_download_failed, mark_downloaded, reset_stale_reel_downloads
 from local_cache import has_cached, media_path, read_caption, remove as remove_cached, save_from_download
 from logging_setup import LOGGER_NAME, configure_logging
@@ -38,12 +39,13 @@ def _ensure_media(reel_external_id: str, platform: str, url: str) -> tuple[str, 
                 }
             )
         )
-        return path, read_caption(reel_external_id)
+        return path, normalize_reel_caption(read_caption(reel_external_id), reel_external_id=reel_external_id)
 
     last_error: Exception | None = None
     for attempt in range(1, DOWNLOAD_ATTEMPT_RETRIES + 1):
         try:
-            local_path, caption = download_reel_media(platform, url)
+            local_path, caption = download_reel_media(platform, url, reel_external_id=reel_external_id)
+            caption = normalize_reel_caption(caption, reel_external_id=reel_external_id)
             cached_path = save_from_download(reel_external_id, local_path, caption)
             log.info(
                 json.dumps(
@@ -112,6 +114,7 @@ def process_one(row: dict) -> None:
         return
 
     local_path, caption = media
+    caption = normalize_reel_caption(caption, reel_external_id=reel_external_id)
     last_error: Exception | None = None
 
     for attempt in range(1, DOWNLOAD_ATTEMPT_RETRIES + 1):

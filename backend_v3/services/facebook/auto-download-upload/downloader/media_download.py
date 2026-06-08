@@ -4,6 +4,7 @@ import uuid
 import json
 import subprocess
 
+from caption_utils import DEFAULT_REEL_CAPTION, caption_from_yt_dlp_info, normalize_reel_caption
 from config import (
     DATACENTER_PROXY,
     RESIDENTIAL_PROXY,
@@ -198,9 +199,15 @@ def resolve_downloaded_filename(tmp_dir, unique_id, info):
 
     return None
 
-def download_from_metadata_info(info: dict, tmp_dir: str, unique_id: str) -> tuple[str, str]:
+def download_from_metadata_info(
+    info: dict,
+    tmp_dir: str,
+    unique_id: str,
+    *,
+    reel_external_id: str | None = None,
+) -> tuple[str, str]:
     """Resolve CDN URLs from yt-dlp metadata and download via aria2 (no proxy on file fetch)."""
-    description = info.get("description") or info.get("title") or "..."
+    description = caption_from_yt_dlp_info(info, reel_external_id=reel_external_id)
     user_agent = info.get("http_headers", {}).get("User-Agent", "Mozilla/5.0")
     requested_formats = info.get("requested_formats")
     if requested_formats and len(requested_formats) > 1:
@@ -236,9 +243,11 @@ def download_via_metadata_then_aria2(
     metadata_proxy: str | None,
     tmp_dir: str,
     unique_id: str,
+    *,
+    reel_external_id: str | None = None,
 ) -> tuple[str, str]:
     info = fetch_metadata(url, metadata_proxy, profile)
-    return download_from_metadata_info(info, tmp_dir, unique_id)
+    return download_from_metadata_info(info, tmp_dir, unique_id, reel_external_id=reel_external_id)
 
 
 def download_with_ytdlp_formats(
@@ -249,6 +258,7 @@ def download_with_ytdlp_formats(
     unique_id: str,
     *,
     include_generic_fallback: bool = False,
+    reel_external_id: str | None = None,
 ) -> tuple[str, str]:
     output_template = os.path.join(tmp_dir, f"{unique_id}.%(ext)s")
     attempts = [(fmt, False) for fmt in profile.get("format_candidates", ["bv*+ba/b"])]
@@ -256,7 +266,7 @@ def download_with_ytdlp_formats(
         attempts.append((profile["format_candidates"][-1], True))
 
     filename = None
-    description = "..."
+    description = DEFAULT_REEL_CAPTION
     last_error: str | None = None
     for format_selector, use_generic_extractor in attempts:
         try:
@@ -268,7 +278,7 @@ def download_with_ytdlp_formats(
                 format_selector,
                 use_generic_extractor=use_generic_extractor,
             )
-            description = info.get("description") or info.get("title") or "..."
+            description = caption_from_yt_dlp_info(info, reel_external_id=reel_external_id)
             filename = resolve_downloaded_filename(tmp_dir, unique_id, info)
             if filename:
                 return filename, description
@@ -279,7 +289,7 @@ def download_with_ytdlp_formats(
     raise RuntimeError(last_error or "yt-dlp download failed")
 
 
-def download_reel_media(platform: str, url: str) -> tuple[str, str]:
+def download_reel_media(platform: str, url: str, *, reel_external_id: str | None = None) -> tuple[str, str]:
     """Download reel to a temp file; returns (absolute_path, caption). Caller must delete the file."""
     platform = (platform or "instagram").lower()
     if platform not in PLATFORM_PROFILES:
@@ -298,6 +308,7 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 DATACENTER_PROXY,
                 tmp_dir,
                 unique_id,
+                reel_external_id=reel_external_id,
             )
         elif platform == "youtube":
             filename, description = download_with_ytdlp_formats(
@@ -306,6 +317,7 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 RESIDENTIAL_PROXY,
                 tmp_dir,
                 unique_id,
+                reel_external_id=reel_external_id,
             )
         else:
             # TikTok and Facebook: full yt-dlp download (optional datacenter proxy on yt-dlp).
@@ -316,11 +328,12 @@ def download_reel_media(platform: str, url: str) -> tuple[str, str]:
                 tmp_dir,
                 unique_id,
                 include_generic_fallback=platform == "facebook",
+                reel_external_id=reel_external_id,
             )
 
         if not os.path.exists(filename):
             raise RuntimeError("Failed to download video")
-        return filename, description
+        return filename, normalize_reel_caption(description, reel_external_id=reel_external_id)
     except Exception:
         import shutil
         shutil.rmtree(tmp_dir, ignore_errors=True)
