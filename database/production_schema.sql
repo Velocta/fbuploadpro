@@ -1922,10 +1922,6 @@ begin
     return;
   end if;
 
-  if v_job.status = 'pending_publish' and v_job.graph_post_id is null then
-    raise exception 'job_not_ready_to_finalize';
-  end if;
-
   if v_job.status not in ('publishing', 'pending_publish') then
     raise exception 'job_not_ready_to_finalize';
   end if;

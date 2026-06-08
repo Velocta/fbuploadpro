@@ -12,7 +12,7 @@ import {
   loadPublishJob,
   markPublishFailedForFacebookRobots,
   pauseIntake,
-  persistPublishGraphId,
+  recordPublishGraphId,
   releasePublishJob,
   verifyFinalization,
 } from './db/client.js';
@@ -181,7 +181,28 @@ async function processPublishJob(env, job) {
   }
   job = { ...job, ...dbJob };
 
+  if (dbJob.status === 'published') {
+    v2Log('publish_job_already_published', { job_id: jobId });
+    return;
+  }
+
   const existingGraphId = String(job.graph_post_id || '').trim();
+
+  if (job.status === 'pending_publish' && job.last_error_code === 'finalize_rpc_failed') {
+    v2Log('publish_job_finalize_retry', {
+      job_id: jobId,
+      graph_post_id: existingGraphId || null,
+    });
+    await finalizeAndVerify(
+      env,
+      supabase,
+      job,
+      existingGraphId || null,
+      anomalyPauseThreshold,
+      anomalyWindowSeconds
+    );
+    return;
+  }
 
   const mediaObjectKey = String(job.media_object_key || '');
   const caption = String(job.reel_caption || '').trim() || '...';
@@ -288,39 +309,12 @@ async function processPublishJob(env, job) {
   });
   v2Log('publish_job_facebook_ok', { job_id: jobId, graph_video_id: graphVideoId ?? null });
 
-  const persistResult = await persistPublishGraphId(supabase, job.job_id, graphVideoId);
-  if (!persistResult.ok) {
-    const { data: refreshed } = await loadPublishJob(supabase, job.job_id);
-    const recoveredGraphId = String(refreshed?.graph_post_id || '').trim();
-    if (recoveredGraphId) {
-      v2Log('publish_job_record_graph_id_recovered', {
-        job_id: jobId,
-        graph_post_id: recoveredGraphId,
-      });
-      await releasePublishJob(
-        supabase,
-        job.job_id,
-        'record_graph_id_failed',
-        persistResult.error?.message ?? 'record_graph_id_failed'
-      );
-      throw new Error(`record_graph_id_failed ${persistResult.error?.message ?? 'unknown'}`);
-    }
-
-    v2Log('publish_job_error', {
+  const { error: recordError } = await recordPublishGraphId(supabase, job.job_id, graphVideoId);
+  if (recordError) {
+    v2Log('publish_job_record_graph_id_skipped', {
       job_id: jobId,
-      phase: 'record_graph_id',
-      code: 'record_graph_id_unreconciled',
-      message: persistResult.error?.message ?? 'unknown',
-      graph_video_id: graphVideoId,
+      message: recordError.message,
     });
-    await emitPublishError(supabase, 'record_graph_id_unreconciled after facebook upload', {
-      service: 'publisher_worker',
-      job_id: jobId,
-      graph_video_id: graphVideoId,
-      page_id: job.page_id ?? null,
-      reel_internal_id: job.reel_internal_id ?? null,
-    });
-    throw new Error(`record_graph_id_unreconciled graph_video_id=${graphVideoId}`);
   }
 
   await finalizeAndVerify(
@@ -486,21 +480,10 @@ export default {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
 
-        if (code === 'finalize_rpc_failed' || code === 'record_graph_id_failed') {
-          v2Log('publish_finalize_retry_scheduled', {
-            job_id: job.job_id ?? null,
-            error_code: code,
-          });
+        if (code === 'finalize_rpc_failed') {
+          v2Log('publish_finalize_retry_scheduled', { job_id: job.job_id ?? null });
           return Response.json(
             { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
-            { status: 200 }
-          );
-        }
-
-        if (code === 'record_graph_id_unreconciled') {
-          v2Log('publish_record_graph_id_unreconciled', { job_id: job.job_id ?? null });
-          return Response.json(
-            { ok: false, terminal: true, needs_manual_repair: true, job_id: job.job_id ?? null },
             { status: 200 }
           );
         }
