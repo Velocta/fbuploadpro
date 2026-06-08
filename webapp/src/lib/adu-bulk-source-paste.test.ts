@@ -97,7 +97,7 @@ describe('assignBulkSourcesRandomly', () => {
 })
 
 describe('buildBulkSourcePastePreview', () => {
-  it('returns overflow error when sources exceed pages', () => {
+  it('returns overflow error when sources exceed empty page slots', () => {
     const preview = buildBulkSourcePastePreview(
       'instagram|a\ninstagram|b\ninstagram|c\ninstagram|d',
       pages.slice(0, 2),
@@ -107,11 +107,57 @@ describe('buildBulkSourcePastePreview', () => {
     expect(canApplyBulkSourcePastePreview(preview)).toBe(false)
   })
 
+  it('assigns only to empty pages when some pages already have sources', () => {
+    const preview = buildBulkSourcePastePreview(
+      'instagram|new1\ninstagram|new2',
+      pages,
+      'instagram',
+      {
+        'a:1': { sourcePlatform: 'facebook', sourceUsername: 'filled' },
+      },
+      () => 0,
+    )
+    expect(preview.assignments).toHaveLength(2)
+    expect(preview.assignments.every((row) => row.pageKey !== 'a:1')).toBe(true)
+    expect(canApplyBulkSourcePastePreview(preview)).toBe(true)
+  })
+
+  it('ignores pasted sources that already exist on a selected page', () => {
+    const preview = buildBulkSourcePastePreview(
+      'instagram|ronaldo\ninstagram|messi',
+      pages.slice(0, 2),
+      'instagram',
+      {
+        'a:1': { sourcePlatform: 'instagram', sourceUsername: 'ronaldo' },
+      },
+      () => 0,
+    )
+    expect(preview.sources).toHaveLength(1)
+    expect(preview.sources[0]?.username).toBe('messi')
+    expect(preview.warnings.some((w) => w.includes('already on Page A'))).toBe(true)
+    expect(preview.assignments).toHaveLength(1)
+    expect(preview.assignments[0]?.pageKey).toBe('a:2')
+  })
+
+  it('blocks overflow against empty slots not total selected pages', () => {
+    const preview = buildBulkSourcePastePreview(
+      'instagram|a\ninstagram|b\ninstagram|c',
+      pages,
+      'instagram',
+      {
+        'a:1': { sourcePlatform: 'facebook', sourceUsername: 'filled' },
+      },
+    )
+    expect(preview.overflowError).toContain('only 2 empty page slots')
+    expect(canApplyBulkSourcePastePreview(preview)).toBe(false)
+  })
+
   it('builds assignments when counts are valid', () => {
     const preview = buildBulkSourcePastePreview(
       'instagram|a\nfacebook|b',
       pages,
       'instagram',
+      {},
       () => 0,
     )
     expect(preview.overflowError).toBeNull()

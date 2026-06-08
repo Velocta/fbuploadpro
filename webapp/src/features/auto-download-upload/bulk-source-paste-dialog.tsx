@@ -11,16 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -64,21 +54,19 @@ export function BulkSourcePasteDialog({
   onApply,
 }: BulkSourcePasteDialogProps) {
   const [text, setText] = useState('')
-  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  const emptyPageCount = useMemo(
+    () =>
+      pages.filter((page) => !existingByPageKey[page.key]?.sourceUsername?.trim()).length,
+    [pages, existingByPageKey],
+  )
 
   const preview = useMemo(
-    () => buildBulkSourcePastePreview(text, pages, defaultPlatform),
-    [text, pages, defaultPlatform],
+    () => buildBulkSourcePastePreview(text, pages, defaultPlatform, existingByPageKey),
+    [text, pages, defaultPlatform, existingByPageKey],
   )
 
   const canApply = canApplyBulkSourcePastePreview(preview)
-
-  function wouldOverwriteExisting(): boolean {
-    return Object.keys(preview.assignmentByPageKey).some((pageKey) => {
-      const existing = existingByPageKey[pageKey]
-      return Boolean(existing?.sourceUsername?.trim())
-    })
-  }
 
   function applyAssignment() {
     const mapped: Record<string, BulkSourcePasteAssignment> = {}
@@ -95,10 +83,6 @@ export function BulkSourcePasteDialog({
 
   function handleApplyClick() {
     if (!canApply) return
-    if (wouldOverwriteExisting()) {
-      setConfirmOpen(true)
-      return
-    }
     applyAssignment()
   }
 
@@ -120,7 +104,8 @@ export function BulkSourcePasteDialog({
           <DialogHeader>
             <DialogTitle>Paste sources (random assign)</DialogTitle>
             <DialogDescription>
-              One source per line. Sources are assigned randomly to your selected pages.
+              One source per line. Sources are assigned randomly to empty page slots only.
+              Lines that match a source already on a selected page are skipped.
             </DialogDescription>
           </DialogHeader>
 
@@ -171,15 +156,22 @@ export function BulkSourcePasteDialog({
 
                 {preview.sources.length > 0 ? (
                   <p className="text-muted-foreground">
-                    {preview.sources.length} valid source{preview.sources.length === 1 ? '' : 's'},{' '}
-                    {pages.length} page{pages.length === 1 ? '' : 's'} selected.
+                    {preview.sources.length} new source{preview.sources.length === 1 ? '' : 's'},{' '}
+                    {emptyPageCount} empty page slot{emptyPageCount === 1 ? '' : 's'}.
+                  </p>
+                ) : null}
+
+                {emptyPageCount === 0 && pages.length > 0 ? (
+                  <p className="text-muted-foreground">
+                    All selected pages already have sources. Paste only fills empty slots.
                   </p>
                 ) : null}
 
                 {preview.assignments.length > 0 ? (
                   <>
                     <p className="font-semibold text-foreground">
-                      Assigned {preview.assignments.length} of {pages.length} pages
+                      Assigned {preview.assignments.length} of {emptyPageCount} empty page
+                      {emptyPageCount === 1 ? '' : 's'}
                     </p>
                     {preview.unassignedPageKeys.length > 0 ? (
                       <p className="text-muted-foreground">
@@ -232,28 +224,6 @@ export function BulkSourcePasteDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Replace existing sources?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will replace sources on pages included in the new random assignment. Continue?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setConfirmOpen(false)
-                applyAssignment()
-              }}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }

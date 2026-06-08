@@ -495,9 +495,11 @@ In **Add Page → Multi-Account + CSV**, step 2 offers CSV import (page-name mat
 
 - Paste format: one line per source — `platform|username` (also `,` or `:`). Example: `instagram|ronaldo`, `facebook|messi`. Plain username lines use the default platform control.
 - Paste assigns sources **randomly** to selected Facebook pages (agencies that do not care which source maps to which page).
-- If pasted sources **exceed** selected page count, block apply and tell the user how many lines to remove.
-- If pasted sources are **fewer** than selected pages, assign the available sources randomly; remaining pages stay empty until the user pastes more or fills manually. **Next** still requires every selected page to have a source before schedule step.
-- Re-paste over existing mappings shows a confirm dialog. CSV and paste can be used independently.
+- Paste only fills **empty** page slots — pages that already have a source are left unchanged.
+- Pasted lines that match a source already on a selected page are **skipped** (warning shown).
+- If pasted sources **exceed** empty page slot count, block apply and tell the user how many lines to remove.
+- If pasted sources are **fewer** than empty slots, assign randomly to empty pages only; remaining empty pages stay blank until the user pastes more or fills manually. **Next** still requires every selected page to have a source before schedule step.
+- CSV and paste can be used independently.
 
 Implementation: `src/lib/adu-bulk-source-paste.ts`, `src/features/auto-download-upload/bulk-source-paste-dialog.tsx`, wired in `add-page-dialog.tsx`.
 

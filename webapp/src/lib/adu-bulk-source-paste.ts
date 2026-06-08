@@ -19,6 +19,11 @@ export type BulkSourcePastePageTarget = {
   pageName: string
 }
 
+export type BulkSourcePasteExistingAssignment = {
+  sourcePlatform: SourcePlatform
+  sourceUsername: string
+}
+
 export type BulkSourcePasteAssignmentPreview = {
   pageKey: string
   pageName: string
@@ -70,8 +75,50 @@ function splitPasteLine(rawLine: string): { platformPart: string; usernamePart: 
   return { platformPart: '', usernamePart: trimmed }
 }
 
-function buildDedupeKey(platform: SourcePlatform, username: string): string {
+export function buildBulkSourceDedupeKey(platform: SourcePlatform, username: string): string {
   return `${platform}:${username.toLowerCase()}`
+}
+
+function pageHasSource(existing: BulkSourcePasteExistingAssignment | undefined): boolean {
+  return Boolean(existing?.sourceUsername?.trim())
+}
+
+function filterSourcesNotAlreadyOnPages(
+  sources: ParsedBulkSource[],
+  pages: BulkSourcePastePageTarget[],
+  existingByPageKey: Record<string, BulkSourcePasteExistingAssignment | undefined>,
+): { sources: ParsedBulkSource[]; warnings: string[] } {
+  const existingKeys = new Map<string, string>()
+  for (const page of pages) {
+    const existing = existingByPageKey[page.key]
+    if (!pageHasSource(existing)) continue
+    const key = buildBulkSourceDedupeKey(
+      existing!.sourcePlatform,
+      sanitizeSourceIdentityInput(existing!.sourcePlatform, existing!.sourceUsername),
+    )
+    existingKeys.set(key, page.pageName)
+  }
+
+  const warnings: string[] = []
+  const next: ParsedBulkSource[] = []
+  for (const source of sources) {
+    const pageName = existingKeys.get(source.dedupeKey)
+    if (pageName !== undefined) {
+      warnings.push(
+        `Line ${source.lineNumber} (${source.platform}|${source.username}) already on ${pageName} — ignored.`,
+      )
+      continue
+    }
+    next.push(source)
+  }
+  return { sources: next, warnings }
+}
+
+function emptyPagesForPaste(
+  pages: BulkSourcePastePageTarget[],
+  existingByPageKey: Record<string, BulkSourcePasteExistingAssignment | undefined>,
+): BulkSourcePastePageTarget[] {
+  return pages.filter((page) => !pageHasSource(existingByPageKey[page.key]))
 }
 
 export function parseBulkSourcePasteLines(
@@ -122,7 +169,7 @@ export function parseBulkSourcePasteLines(
       continue
     }
 
-    const dedupeKey = buildDedupeKey(platform, username)
+    const dedupeKey = buildBulkSourceDedupeKey(platform, username)
     const firstLine = seenKeys.get(dedupeKey)
     if (firstLine !== undefined) {
       warnings.push(`Line ${lineNumber} duplicates line ${firstLine} (${platform}|${username}) — ignored.`)
@@ -195,35 +242,48 @@ export function buildBulkSourcePastePreview(
   text: string,
   pages: BulkSourcePastePageTarget[],
   defaultPlatform: SourcePlatform,
+  existingByPageKey: Record<string, BulkSourcePasteExistingAssignment | undefined> = {},
   randomFn?: () => number,
 ): BulkSourcePastePreview {
-  const { sources, errors, warnings } = parseBulkSourcePasteLines(text, defaultPlatform)
+  const parsed = parseBulkSourcePasteLines(text, defaultPlatform)
+  const errors = parsed.errors
+  const warnings = [...parsed.warnings]
+
+  const { sources: assignableSources, warnings: existingWarnings } = filterSourcesNotAlreadyOnPages(
+    parsed.sources,
+    pages,
+    existingByPageKey,
+  )
+  warnings.push(...existingWarnings)
+
+  const emptyPages = emptyPagesForPaste(pages, existingByPageKey)
 
   let overflowError: string | null = null
-  if (sources.length > pages.length) {
-    overflowError = `You have ${sources.length} sources but only ${pages.length} pages selected. Remove ${sources.length - pages.length} line(s) and try again.`
+  if (assignableSources.length > emptyPages.length) {
+    const slotLabel = emptyPages.length === 1 ? 'empty page slot' : 'empty page slots'
+    overflowError = `You have ${assignableSources.length} sources but only ${emptyPages.length} ${slotLabel}. Remove ${assignableSources.length - emptyPages.length} line(s) and try again.`
   }
 
-  if (overflowError || sources.length === 0) {
+  if (overflowError || assignableSources.length === 0 || emptyPages.length === 0) {
     return {
-      sources,
+      sources: assignableSources,
       errors,
       warnings,
       overflowError,
       assignments: [],
-      unassignedPageKeys: pages.map((page) => page.key),
+      unassignedPageKeys: emptyPages.map((page) => page.key),
       assignmentByPageKey: {},
     }
   }
 
   const { assignments, unassignedPageKeys, assignmentByPageKey } = assignBulkSourcesRandomly(
-    sources,
-    pages,
+    assignableSources,
+    emptyPages,
     randomFn,
   )
 
   return {
-    sources,
+    sources: assignableSources,
     errors,
     warnings,
     overflowError,
