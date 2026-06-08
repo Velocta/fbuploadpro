@@ -112,6 +112,71 @@ export async function recordPublishGraphId(supabase, jobId, graphPostId) {
   });
 }
 
+const PERSIST_GRAPH_ID_BACKOFF_MS = [250, 500, 1000];
+
+async function sleepMs(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Persist Meta graph id after a successful upload. Retries RPC, then falls back to a direct
+ * update so a retry never re-uploads to Facebook when the video is already live.
+ */
+export async function persistPublishGraphId(supabase, jobId, graphPostId) {
+  const graphId = String(graphPostId || '').trim();
+  if (!graphId) {
+    return { ok: false, error: new Error('graph_post_id_required') };
+  }
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= PERSIST_GRAPH_ID_BACKOFF_MS.length; attempt++) {
+    const { error } = await recordPublishGraphId(supabase, jobId, graphId);
+    if (!error) return { ok: true, error: null };
+    lastError = error;
+    if (attempt < PERSIST_GRAPH_ID_BACKOFF_MS.length) {
+      await sleepMs(PERSIST_GRAPH_ID_BACKOFF_MS[attempt]);
+    }
+  }
+
+  const { data: directRow, error: directError } = await supabase
+    .from('adu_posting_jobs')
+    .update({
+      graph_post_id: graphId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('job_id', jobId)
+    .eq('status', 'publishing')
+    .is('graph_post_id', null)
+    .select('job_id')
+    .maybeSingle();
+
+  if (!directError && directRow?.job_id) {
+    return { ok: true, error: null };
+  }
+
+  const { data: existing, error: readError } = await supabase
+    .from('adu_posting_jobs')
+    .select('graph_post_id')
+    .eq('job_id', jobId)
+    .maybeSingle();
+
+  if (!readError && existing?.graph_post_id) {
+    if (existing.graph_post_id === graphId) {
+      return { ok: true, error: null };
+    }
+    return {
+      ok: false,
+      error: new Error(`graph_post_id_mismatch expected=${graphId} actual=${existing.graph_post_id}`),
+    };
+  }
+
+  return { ok: false, error: lastError ?? directError ?? readError ?? new Error('record_graph_id_failed') };
+}
+
+export async function loadPublishJob(supabase, jobId) {
+  return supabase.from('adu_posting_jobs').select('*').eq('job_id', jobId).maybeSingle();
+}
+
 export async function releasePublishJob(supabase, jobId, errorCode = null, errorMessage = null) {
   return supabase.rpc('release_publish_job_adu', {
     p_job_id: jobId,

@@ -1432,6 +1432,7 @@ create table if not exists public.adu_posting_jobs (
   media_size_bytes bigint,
   reel_caption text,
   graph_post_id text,
+  schedule_slot_at timestamptz,
   last_error_code text,
   last_error_message text,
   publish_started_at timestamptz,
@@ -1453,6 +1454,10 @@ create unique index if not exists ux_adu_posting_jobs_active_page_reel
 create unique index if not exists ux_adu_posting_jobs_published_reel
   on public.adu_posting_jobs (reel_internal_id)
   where status = 'published';
+
+create unique index if not exists ux_adu_posting_jobs_page_schedule_slot
+  on public.adu_posting_jobs (page_id, schedule_slot_at)
+  where schedule_slot_at is not null;
 
 drop trigger if exists tr_adu_posting_jobs_updated_at on public.adu_posting_jobs;
 create trigger tr_adu_posting_jobs_updated_at
@@ -1590,14 +1595,70 @@ begin
     select *
     from public.get_pages_due_posting()
   ),
-  candidate_reels as (
+  due_pages_with_slot as (
     select
+      dp.id,
       dp.agency_id,
-      dp.id as page_id,
-      dp.source_platform as platform,
-      dp.source_username,
       dp.fb_page_id,
       dp.fb_page_access_token,
+      dp.source_username,
+      dp.source_platform,
+      (
+        select min(matched.slot_at)
+        from (
+          select (date_trunc('day', now()) + t.schedule_time::time) as slot_at
+          from jsonb_array_elements_text(p.posting_times) as t(schedule_time)
+          where (date_trunc('day', now()) + t.schedule_time::time)
+            between now() and now() + interval '1 minute'
+          union all
+          select (date_trunc('day', now()) + interval '1 day' + t.schedule_time::time)
+          from jsonb_array_elements_text(p.posting_times) as t(schedule_time)
+          where (date_trunc('day', now()) + interval '1 day' + t.schedule_time::time)
+            between now() and now() + interval '1 minute'
+        ) matched
+      ) as schedule_slot_at
+    from due_pages dp
+    join public.pages p on p.id = dp.id
+  ),
+  eligible_due_pages as (
+    select dps.*
+    from due_pages_with_slot dps
+    where dps.schedule_slot_at is not null
+      and not exists (
+        select 1
+        from public.adu_posting_jobs aj
+        where aj.page_id = dps.id
+          and aj.schedule_slot_at = dps.schedule_slot_at
+      )
+  ),
+  skipped_slot_intake as (
+    insert into public.errors (error_message, error_phase, metadata)
+    select
+      'adu_posting_slot_already_intaken',
+      'posting_v2_schedule',
+      jsonb_build_object(
+        'page_id', dps.id,
+        'schedule_slot_at', dps.schedule_slot_at
+      )
+    from due_pages_with_slot dps
+    where dps.schedule_slot_at is not null
+      and exists (
+        select 1
+        from public.adu_posting_jobs aj
+        where aj.page_id = dps.id
+          and aj.schedule_slot_at = dps.schedule_slot_at
+      )
+    returning id
+  ),
+  candidate_reels as (
+    select
+      edp.agency_id,
+      edp.id as page_id,
+      edp.source_platform as platform,
+      edp.source_username,
+      edp.fb_page_id,
+      edp.fb_page_access_token,
+      edp.schedule_slot_at,
       r.id as reel_internal_id,
       r.reel_id,
       r.media_object_key,
@@ -1605,11 +1666,11 @@ begin
       r.media_content_type,
       r.media_sha256,
       coalesce(nullif(trim(r.reel_caption), ''), '...') as reel_caption
-    from due_pages dp
+    from eligible_due_pages edp
     join lateral (
       select rr.*
       from public.reels rr
-      where rr.page_id = dp.id
+      where rr.page_id = edp.id
         and rr.status = 'downloaded'
         and rr.media_object_key is not null
       order by rr.id asc
@@ -1655,7 +1716,8 @@ begin
       media_size_bytes,
       media_content_type,
       media_sha256,
-      reel_caption
+      reel_caption,
+      schedule_slot_at
     )
     select
       gen_random_uuid(),
@@ -1674,9 +1736,10 @@ begin
       cr.media_size_bytes,
       cr.media_content_type,
       cr.media_sha256,
-      cr.reel_caption
+      cr.reel_caption,
+      cr.schedule_slot_at
     from candidate_reels cr
-    on conflict do nothing
+    on conflict (page_id, schedule_slot_at) do nothing
     returning *
   ),
   skipped_inserts as (
@@ -1687,7 +1750,8 @@ begin
       jsonb_build_object(
         'page_id', cr.page_id,
         'reel_internal_id', cr.reel_internal_id,
-        'reel_id', cr.reel_id
+        'reel_id', cr.reel_id,
+        'schedule_slot_at', cr.schedule_slot_at
       )
     from candidate_reels cr
     where not exists (
