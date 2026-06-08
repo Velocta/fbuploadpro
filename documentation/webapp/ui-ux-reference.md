@@ -489,6 +489,18 @@ These areas follow the **same** Green Mist tokens, typography (§6), spacing (§
 
 For **routing, layouts, and API boundaries**, use `documentation/webapp/architecture.md` and `documentation/webapp/performance.md` alongside this file.
 
+#### Auto Download/Upload — Multi-Account bulk add (paste sources)
+
+In **Add Page → Multi-Account + CSV**, step 2 offers CSV import (page-name matched) and **Paste sources** (random assign):
+
+- Paste format: one line per source — `platform|username` (also `,` or `:`). Example: `instagram|ronaldo`, `facebook|messi`. Plain username lines use the default platform control.
+- Paste assigns sources **randomly** to selected Facebook pages (agencies that do not care which source maps to which page).
+- If pasted sources **exceed** selected page count, block apply and tell the user how many lines to remove.
+- If pasted sources are **fewer** than selected pages, assign the available sources randomly; remaining pages stay empty until the user pastes more or fills manually. **Next** still requires every selected page to have a source before schedule step.
+- Re-paste over existing mappings shows a confirm dialog. CSV and paste can be used independently.
+
+Implementation: `src/lib/adu-bulk-source-paste.ts`, `src/features/auto-download-upload/bulk-source-paste-dialog.tsx`, wired in `add-page-dialog.tsx`.
+
 ## 14) Do Not Reintroduce
 
 - Pink/purple **synthetic / “AI”** gradients and rainbow mesh unrelated to the brand.

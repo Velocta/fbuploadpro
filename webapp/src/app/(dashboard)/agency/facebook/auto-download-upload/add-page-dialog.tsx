@@ -32,6 +32,10 @@ import { Plus, Facebook, Search, Loader2, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FacebookAccount, FacebookGraphPage } from '@/types/app.types'
 import { toast } from 'sonner'
+import {
+  BulkSourcePasteDialog,
+  type BulkSourcePasteAssignment,
+} from '@/features/auto-download-upload/bulk-source-paste-dialog'
 
 type BulkSourceConfig = {
   sourceUsername: string
@@ -108,7 +112,7 @@ function LoadingPanel({ message, submessage }: { message: string; submessage?: s
 function stepSubtitle(mode: AddPageMode, step: number): string {
   if (mode === 'multiAccountBulk') {
     if (step === 1) return 'Select Accounts & Pages'
-    if (step === 2) return 'Map Sources (CSV + Manual)'
+    if (step === 2) return 'Map Sources (CSV + Paste + Manual)'
     return 'Configure Posting Schedule'
   }
   if (mode === 'single') {
@@ -154,6 +158,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
   const [step, setStep] = useState(1)
   const [csvPreview, setCsvPreview] = useState<CsvPreviewState | null>(null)
   const [showCsvWarnings, setShowCsvWarnings] = useState(false)
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false)
   const [importedKeys, setImportedKeys] = useState<Set<string>>(new Set())
   const [editedKeys, setEditedKeys] = useState<Set<string>>(new Set())
   const [retryFailedKeys, setRetryFailedKeys] = useState<Set<string>>(new Set())
@@ -514,6 +519,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setTimezone('Asia/Karachi')
     setCsvPreview(null)
     setShowCsvWarnings(false)
+    setPasteDialogOpen(false)
     setImportedKeys(new Set())
     setEditedKeys(new Set())
     setRetryFailedKeys(new Set())
@@ -541,6 +547,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     setError(null)
     setCsvPreview(null)
     setShowCsvWarnings(false)
+    setPasteDialogOpen(false)
     setImportedKeys(new Set())
     setEditedKeys(new Set())
     setRetryFailedKeys(new Set())
@@ -907,6 +914,33 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
     })
     toast.success('CSV import applied', {
       description: `${appliedCount} rows mapped.${csvPreview.unmatchedCount ? ` ${csvPreview.unmatchedCount} unmatched.` : ''}`,
+    })
+  }
+
+  function applyPastePreview(assignmentByPageKey: Record<string, BulkSourcePasteAssignment>) {
+    const assignedKeys = Object.keys(assignmentByPageKey)
+    if (assignedKeys.length === 0) return
+
+    const nextImported = new Set(importedKeys)
+    setBulkSourceConfig((prev) => {
+      const next = { ...prev }
+      for (const [pageKey, assignment] of Object.entries(assignmentByPageKey)) {
+        next[pageKey] = {
+          sourcePlatform: assignment.sourcePlatform,
+          sourceUsername: assignment.sourceUsername,
+        }
+        nextImported.add(pageKey)
+      }
+      return next
+    })
+    setImportedKeys(nextImported)
+    setEditedKeys((prev) => {
+      const next = new Set(prev)
+      for (const key of assignedKeys) next.delete(key)
+      return next
+    })
+    toast.success('Paste assignment applied', {
+      description: `${assignedKeys.length} page${assignedKeys.length === 1 ? '' : 's'} assigned randomly.`,
     })
   }
 
@@ -1547,6 +1581,19 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                           Apply Import ({Object.values(csvPreview.warningGroups).reduce((acc, list) => acc + list.length, 0)} warnings)
                         </Button>
                       ) : null}
+                      <BulkSourcePasteDialog
+                        open={pasteDialogOpen}
+                        onOpenChange={setPasteDialogOpen}
+                        disabled={selectedMultiEntries.length === 0}
+                        pages={selectedMultiEntries.map((entry) => ({
+                          key: entry.key,
+                          pageName: entry.page.name,
+                        }))}
+                        defaultPlatform={bulkPlatformForEmpty}
+                        onDefaultPlatformChange={setBulkPlatformForEmpty}
+                        existingByPageKey={bulkSourceConfig}
+                        onApply={applyPastePreview}
+                      />
                     </div>
                     {csvPreview ? (
                       <div className="space-y-2 text-xs">
