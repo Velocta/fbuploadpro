@@ -220,54 +220,23 @@ export async function updateSourceUsername(pageId: string, newUsername: string, 
     return { error: `The source account "${normalizedUsername}" is already being used by another one of your pages on this platform.` }
   }
 
-  // 3. Delete all reels for the old source tied to this page in chunks.
+  // 3. Delete pending reels for the old source via security-definer RPC (skips row trigger, batches internally).
   const oldSourceUsername = String(profile.source_username || '').trim()
   if (oldSourceUsername) {
-    const deleteBatchSize = 300
-    for (let i = 0; i < 200; i++) {
-      const { data: batchRows, error: fetchBatchError } = await supabase
-        .from('reels')
-        .select('id')
-        .eq('page_id', pageId)
-        .eq('username', oldSourceUsername)
-        .eq('status', 'pending')
-        .order('id', { ascending: true })
-        .limit(deleteBatchSize)
+    const { error: deleteBatchError } = await supabase.rpc('delete_old_source_reels_batch', {
+      p_page_id: pageId,
+      p_old_username: oldSourceUsername,
+      p_batch_size: 500,
+    })
 
-      if (fetchBatchError) {
-        const formatted = formatDebugError('fetch_old_source_reel_batch', fetchBatchError, {
-          requestId: debugRequestId,
-          pageId,
-          oldSourceUsername,
-          batchIndex: i,
-        })
-        console.error(formatted.logMessage)
-        return { error: `${formatted.clientMessage} [request_id=${debugRequestId}]` }
-      }
-
-      const ids = (batchRows || []).map((row) => row.id)
-      if (ids.length === 0) break
-
-      const { error: deleteBatchError } = await supabase
-        .from('reels')
-        .delete()
-        .in('id', ids)
-
-      if (deleteBatchError) {
-        const formatted = formatDebugError('delete_old_source_reels_batch', deleteBatchError, {
-          requestId: debugRequestId,
-          pageId,
-          oldSourceUsername,
-          batchIndex: i,
-          batchSize: ids.length,
-        })
-        console.error(formatted.logMessage)
-        return { error: `${formatted.clientMessage} [request_id=${debugRequestId}]` }
-      }
-
-      if (ids.length < deleteBatchSize) {
-        break
-      }
+    if (deleteBatchError) {
+      const formatted = formatDebugError('delete_old_source_reels_batch', deleteBatchError, {
+        requestId: debugRequestId,
+        pageId,
+        oldSourceUsername,
+      })
+      console.error(formatted.logMessage)
+      return { error: `${formatted.clientMessage} [request_id=${debugRequestId}]` }
     }
   }
 

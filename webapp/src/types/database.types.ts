@@ -929,6 +929,18 @@ export type Database = {
         Args: { p_page_id: string }
         Returns: undefined
       }
+      delete_old_source_reels_batch: {
+        Args: {
+          p_page_id: string
+          p_old_username: string
+          p_batch_size?: number
+        }
+        Returns: number
+      }
+      refresh_page_reel_counts: {
+        Args: { p_page_id: string }
+        Returns: undefined
+      }
       skip_adu_reel: {
         Args: { p_reel_id: number }
         Returns: undefined
