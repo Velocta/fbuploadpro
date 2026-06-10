@@ -3,8 +3,20 @@ import { createClient } from '@supabase/supabase-js';
 /** Must match claim_publish_jobs_adu filter (publish_retries <= 5). */
 export const MAX_PUBLISH_RETRIES = 5;
 
+/** Must match claim_publish_jobs_adu filter (publish_transient_retries <= 11). */
+export const MAX_TRANSIENT_PUBLISH_RETRIES = 11;
+
+const TRANSIENT_BACKOFF_BASE_MS = 30_000;
+const TRANSIENT_BACKOFF_MAX_MS = 15 * 60_000;
+
 export function getSupabaseClient(env) {
   return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function transientBackoffIso(retryCount) {
+  const exp = Math.min(TRANSIENT_BACKOFF_MAX_MS, TRANSIENT_BACKOFF_BASE_MS * 2 ** Math.max(0, retryCount - 1));
+  const jitter = Math.floor(Math.random() * 5_000);
+  return new Date(Date.now() + exp + jitter).toISOString();
 }
 
 /**
@@ -42,17 +54,98 @@ export async function releaseReelAfterTerminalPublishFailure(
     .eq('status', 'publishing');
 }
 
-async function markPublishJobTerminal(supabase, jobId, errorCode, message) {
+/**
+ * Handled classified failure: failed_to_publish, reel downloaded, optional page status.
+ * Never writes to public.errors.
+ */
+export async function completeHandledPublishFailure(
+  supabase,
+  jobId,
+  pageId,
+  reelInternalId,
+  { pageStatus = null, rateLimitedUntil = null, redownload = false } = {},
+) {
+  const pageUpdate = {};
+  if (pageStatus) pageUpdate.status = pageStatus;
+  if (rateLimitedUntil) pageUpdate.rate_limited_until = rateLimitedUntil;
+
+  const tasks = [
+    supabase
+      .from('adu_posting_jobs')
+      .update({
+        status: 'failed_to_publish',
+        publish_started_at: null,
+        last_error_code: null,
+        last_error_message: null,
+        next_publish_attempt_at: null,
+      })
+      .eq('job_id', jobId)
+      .in('status', ['publishing', 'pending_publish']),
+    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId, { redownload }),
+  ];
+
+  if (pageId && Object.keys(pageUpdate).length > 0) {
+    tasks.push(supabase.from('pages').update(pageUpdate).eq('id', pageId));
+  }
+
+  const results = await Promise.all(tasks);
+  const error = results.find((r) => r.error)?.error ?? null;
+  return { error };
+}
+
+/**
+ * Unhandled failure: publish_error + errors table + last_error_* on job.
+ */
+export async function completeUnhandledPublishFailure(
+  supabase,
+  job,
+  code,
+  message,
+  metadata = {},
+) {
+  const jobId = job?.job_id;
+  const reelInternalId = job?.reel_internal_id;
+
+  const [{ error: jobError }, { error: reelError }, { error: logError }] = await Promise.all([
+    supabase
+      .from('adu_posting_jobs')
+      .update({
+        status: 'publish_error',
+        publish_started_at: null,
+        last_error_code: code,
+        last_error_message: String(message || '').slice(0, 500),
+      })
+      .eq('job_id', jobId)
+      .in('status', ['publishing', 'pending_publish']),
+    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
+    emitPublishError(supabase, message, {
+      service: 'publisher_worker',
+      job_id: jobId ?? null,
+      page_id: job?.page_id ?? null,
+      reel_internal_id: reelInternalId ?? null,
+      fb_page_id: job?.fb_page_id ?? null,
+      source_platform: job?.platform ?? null,
+      error_code: code,
+      ...metadata,
+    }),
+  ]);
+
+  return { error: jobError || reelError || logError || null };
+}
+
+/** Mark duplicate job published when reel is already posted (E1.16). */
+export async function supersedeDuplicatePublishJob(supabase, jobId, graphPostId = null) {
   return supabase
     .from('adu_posting_jobs')
     .update({
-      status: 'failed_to_publish',
+      status: 'published',
+      published_at: new Date().toISOString(),
       publish_started_at: null,
-      last_error_code: errorCode,
-      last_error_message: String(message || '').slice(0, 500),
+      graph_post_id: graphPostId,
+      last_error_code: null,
+      last_error_message: null,
     })
-    .eq('job_id', jobId)
-    .eq('status', 'publishing');
+    .eq('job_id', jobId);
 }
 
 export async function incrementPublishRetry(supabase, jobId, reelInternalId, code, message) {
@@ -66,36 +159,68 @@ export async function incrementPublishRetry(supabase, jobId, reelInternalId, cod
 
   const nextRetries = Number(current?.publish_retries || 0) + 1;
   const exhausted = nextRetries > MAX_PUBLISH_RETRIES;
-  const errorCode = exhausted ? 'publish_retries_exhausted' : (code ?? null);
-  const errorMessage = exhausted
-    ? String(message || 'Maximum publish retries exceeded').slice(0, 500)
-    : (message ?? null);
+  if (exhausted) {
+    return { error: null, data: null, exhausted: true };
+  }
 
   const { error, data } = await supabase
     .from('adu_posting_jobs')
     .update({
-      status: exhausted ? 'failed_to_publish' : 'pending_publish',
+      status: 'pending_publish',
       publish_started_at: null,
       publish_retries: nextRetries,
-      last_error_code: errorCode,
-      last_error_message: errorMessage,
+      last_error_code: null,
+      last_error_message: null,
+      next_publish_attempt_at: null,
     })
     .eq('job_id', jobId)
     .eq('status', 'publishing')
     .select('job_id')
     .maybeSingle();
 
-  if (error) return { error, data, exhausted };
+  if (error) return { error, data, exhausted: false };
 
-  if (exhausted && reelInternalId) {
-    const redownload = code === 'media_object_missing';
-    const { error: reelError } = await releaseReelAfterTerminalPublishFailure(supabase, reelInternalId, {
-      redownload,
-    });
-    if (reelError) return { error: reelError, data, exhausted };
+  return { error: null, data, exhausted: false };
+}
+
+export async function incrementTransientPublishRetry(supabase, jobId, reelInternalId, code, message) {
+  const { data: current, error: fetchError } = await supabase
+    .from('adu_posting_jobs')
+    .select('publish_transient_retries')
+    .eq('job_id', jobId)
+    .single();
+
+  if (fetchError) return { error: fetchError, data: null, exhausted: false };
+
+  const nextRetries = Number(current?.publish_transient_retries || 0) + 1;
+  const exhausted = nextRetries > MAX_TRANSIENT_PUBLISH_RETRIES;
+  if (exhausted) {
+    return { error: null, data: null, exhausted: true };
   }
 
-  return { error: null, data, exhausted };
+  const { error, data } = await supabase
+    .from('adu_posting_jobs')
+    .update({
+      status: 'pending_publish',
+      publish_started_at: null,
+      publish_transient_retries: nextRetries,
+      last_error_code: null,
+      last_error_message: null,
+      next_publish_attempt_at: transientBackoffIso(nextRetries),
+    })
+    .eq('job_id', jobId)
+    .eq('status', 'publishing')
+    .select('job_id')
+    .maybeSingle();
+
+  if (error) return { error, data, exhausted: false };
+
+  if (reelInternalId) {
+    const { error: reelError } = await releaseReelAfterTerminalPublishFailure(supabase, reelInternalId);
+    if (reelError) return { error: reelError, data, exhausted: false };
+  }
+
+  return { error: null, data, exhausted: false };
 }
 
 export async function finalizePosted(supabase, jobId, graphPostId = null) {
@@ -110,6 +235,19 @@ export async function recordPublishGraphId(supabase, jobId, graphPostId) {
     p_job_id: jobId,
     p_graph_post_id: graphPostId,
   });
+}
+
+export async function recordPublishGraphIdWithRetry(supabase, jobId, graphPostId, attempts = 3) {
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    const { error } = await recordPublishGraphId(supabase, jobId, graphPostId);
+    if (!error) return { error: null };
+    lastError = error;
+    if (i < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
+    }
+  }
+  return { error: lastError };
 }
 
 export async function loadPublishJob(supabase, jobId) {
@@ -189,63 +327,43 @@ export async function emitPublishError(supabase, message, metadata = {}) {
   });
 }
 
-export async function failPublishForVerificationRequired(
-  supabase,
-  jobId,
-  pageId,
-  reelInternalId,
-  message,
-) {
-  const [{ error: jobError }, { error: pageError }, { error: reelError }] = await Promise.all([
-    markPublishJobTerminal(supabase, jobId, 'facebook_verification_required', message),
-    pageId
-      ? supabase
-          .from('pages')
-          .update({ status: 'fb_verification_required' })
-          .eq('id', pageId)
-      : Promise.resolve({ error: null }),
-    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
-  ]);
-  return { error: jobError || pageError || reelError || null };
+export async function failPublishForVerificationRequired(supabase, jobId, pageId, reelInternalId) {
+  return completeHandledPublishFailure(supabase, jobId, pageId, reelInternalId, {
+    pageStatus: 'fb_verification_required',
+  });
 }
 
-/** R2 object missing — terminal immediately; re-queue reel for download (do not retry publish). */
-export async function failPublishForMissingMedia(supabase, jobId, reelInternalId, message) {
-  const [{ error: jobError }, { error: reelError }] = await Promise.all([
-    markPublishJobTerminal(supabase, jobId, 'media_object_missing', message),
-    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId, { redownload: true }),
-  ]);
-  return { error: jobError || reelError || null };
+export async function failPublishForMissingMedia(supabase, jobId, reelInternalId) {
+  return completeHandledPublishFailure(supabase, jobId, null, reelInternalId, { redownload: true });
 }
 
-export async function failPublishForInactivePage(supabase, jobId, reelInternalId, message) {
-  const [{ error: jobError }, { error: reelError }] = await Promise.all([
-    markPublishJobTerminal(supabase, jobId, 'page_not_active', message),
-    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
-  ]);
-  return { error: jobError || reelError || null };
+export async function failPublishForInactivePage(supabase, jobId, reelInternalId) {
+  return completeHandledPublishFailure(supabase, jobId, null, reelInternalId);
 }
 
-/**
- * OAuth permission/token failure: mark job terminal, page invalid_token.
- * DB trigger cascade_page_invalid_token_to_account marks the linked facebook_accounts
- * row and sibling pages (except completed / fb_verification_required).
- */
-export async function failPublishForInvalidToken(supabase, jobId, pageId, reelInternalId, message) {
-  const [{ error: jobError }, { error: pageError }, { error: reelError }] = await Promise.all([
-    markPublishJobTerminal(supabase, jobId, 'facebook_oauth_190_invalid_token', message),
-    pageId
-      ? supabase.from('pages').update({ status: 'invalid_token' }).eq('id', pageId)
-      : Promise.resolve({ error: null }),
-    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
-  ]);
-  return { error: jobError || pageError || reelError || null };
+export async function failPublishForInvalidToken(supabase, jobId, pageId, reelInternalId) {
+  return completeHandledPublishFailure(supabase, jobId, pageId, reelInternalId, {
+    pageStatus: 'invalid_token',
+  });
+}
+
+export async function failPublishForPageNotAccessible(supabase, jobId, pageId, reelInternalId) {
+  return completeHandledPublishFailure(supabase, jobId, pageId, reelInternalId, {
+    pageStatus: 'page_not_accessible',
+  });
+}
+
+export async function failPublishForRateLimited(supabase, jobId, pageId, reelInternalId, rateLimitedUntil) {
+  return completeHandledPublishFailure(supabase, jobId, pageId, reelInternalId, {
+    pageStatus: 'fb_rate_limited',
+    rateLimitedUntil,
+  });
+}
+
+export async function failPublishForSecurity368(supabase, jobId, pageId, reelInternalId, pageStatus) {
+  return completeHandledPublishFailure(supabase, jobId, pageId, reelInternalId, { pageStatus });
 }
 
 export async function markPublishFailedForFacebookRobots(supabase, jobId, reelInternalId, message) {
-  const [{ error: jobError }, { error: reelError }] = await Promise.all([
-    markPublishJobTerminal(supabase, jobId, 'facebook_file_url_robots', message),
-    releaseReelAfterTerminalPublishFailure(supabase, reelInternalId),
-  ]);
-  return { error: jobError || reelError || null };
+  return completeUnhandledPublishFailure(supabase, { job_id: jobId, reel_internal_id: reelInternalId }, 'facebook_file_url_robots', message);
 }

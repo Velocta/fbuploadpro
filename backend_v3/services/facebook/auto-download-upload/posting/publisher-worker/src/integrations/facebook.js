@@ -21,6 +21,18 @@ function fbLog(logCtx, event, fields = {}) {
   );
 }
 
+function isTransientNetworkError(message) {
+  const m = String(message || '').toLowerCase();
+  return (
+    m.includes('network connection lost') ||
+    m.includes('connection reset') ||
+    m.includes('econnreset') ||
+    m.includes('etimedout') ||
+    m.includes('fetch failed') ||
+    m.includes('socket hang up')
+  );
+}
+
 /** OAuth 368 / Meta spam throttle — do not retry inside this worker. */
 function isFacebookRateLimitMessage(message) {
   const m = String(message || '').toLowerCase();
@@ -120,33 +132,38 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
           throw new Error(`facebook_hosted_upload_failed status=${uploadRes.status} ${JSON.stringify(uploadData)}`);
         }
       } else {
-        const obj = await mediaSpec.getObject();
-        if (!obj || !obj.body) {
-          throw new Error('facebook_stream_upload_missing_r2_body');
-        }
-        const fileSize = typeof obj.size === 'number' && obj.size > 0 ? obj.size : null;
-        if (!fileSize) {
-          throw new Error('facebook_stream_upload_missing_file_size');
-        }
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `OAuth ${token}`,
-            offset: '0',
-            file_size: String(fileSize),
-            'Content-Type': 'application/octet-stream',
-          },
-          body: obj.body,
-        });
-        const uploadText = await uploadRes.text();
-        let uploadData = {};
-        if (uploadText.trim()) {
-          try {
-            uploadData = JSON.parse(uploadText);
-          } catch {
-            uploadData = { _raw: uploadText.slice(0, 200) };
+        async function streamUploadOnce() {
+          const obj = await mediaSpec.getObject();
+          if (!obj || !obj.body) {
+            throw new Error('facebook_stream_upload_missing_r2_body');
           }
+          const fileSize = typeof obj.size === 'number' && obj.size > 0 ? obj.size : null;
+          if (!fileSize) {
+            throw new Error('facebook_stream_upload_missing_file_size');
+          }
+          const uploadRes = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: `OAuth ${token}`,
+              offset: '0',
+              file_size: String(fileSize),
+              'Content-Type': 'application/octet-stream',
+            },
+            body: obj.body,
+          });
+          const uploadText = await uploadRes.text();
+          let uploadData = {};
+          if (uploadText.trim()) {
+            try {
+              uploadData = JSON.parse(uploadText);
+            } catch {
+              uploadData = { _raw: uploadText.slice(0, 200) };
+            }
+          }
+          return { uploadRes, uploadText, uploadData, fileSize };
         }
+
+        let { uploadRes, uploadText, uploadData, fileSize } = await streamUploadOnce();
         fbLog(ctx, 'fb_reels_rupload_http', {
           attempt: attempts,
           http_status: uploadRes.status,
@@ -156,7 +173,20 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
           file_size: fileSize,
         });
         if (!uploadRes.ok) {
-          throw new Error(`facebook_binary_upload_failed status=${uploadRes.status} ${uploadText.slice(0, 300)}`);
+          const uploadErr = new Error(
+            `facebook_binary_upload_failed status=${uploadRes.status} ${uploadText.slice(0, 300)}`
+          );
+          if (isTransientNetworkError(uploadErr.message)) {
+            fbLog(ctx, 'fb_reels_rupload_transient_retry', { attempt: attempts });
+            ({ uploadRes, uploadText, uploadData } = await streamUploadOnce());
+            if (!uploadRes.ok) {
+              throw new Error(
+                `facebook_binary_upload_failed status=${uploadRes.status} ${uploadText.slice(0, 300)}`
+              );
+            }
+          } else {
+            throw uploadErr;
+          }
         }
         if (uploadData && Object.prototype.hasOwnProperty.call(uploadData, 'success') && uploadData.success !== true) {
           throw new Error(`facebook_binary_upload_failed ${JSON.stringify(uploadData)}`);
@@ -203,6 +233,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
       if (isFacebookRateLimitMessage(message)) throw error;
       if (mode === 'hosted' && isFacebookRobotsOrFileUrlFetchBlocked(message)) throw error;
       if (authTerminal || verificationTerminal) throw error;
+      if (isTransientNetworkError(message)) throw error;
       if (attempts >= maxRetries) {
         throw new Error(`facebook_publish_retries_exhausted ${message}`);
       }

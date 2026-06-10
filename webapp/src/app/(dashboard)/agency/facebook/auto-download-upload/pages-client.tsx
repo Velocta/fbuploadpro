@@ -135,6 +135,8 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
                 <SelectItem value="fb_verification_required">Verification Req.</SelectItem>
+                <SelectItem value="fb_rate_limited">Rate Limited</SelectItem>
+                <SelectItem value="page_not_accessible">Page Not Accessible</SelectItem>
                 <SelectItem value="invalid_token">Invalid Token</SelectItem>
                 <SelectItem value="invalid_username">Invalid Username</SelectItem>
                 <SelectItem value="creator_suspended">Creator Suspended</SelectItem>

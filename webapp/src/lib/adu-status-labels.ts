@@ -26,6 +26,8 @@ export function pageStatusLabel(status: string | null | undefined): {
   if (normalized === 'active') return { label: 'Active', tone: 'default' }
   if (normalized === 'fb_verification_required') return { label: 'Verification required', tone: 'destructive' }
   if (normalized === 'invalid_token') return { label: 'Invalid token', tone: 'destructive' }
+  if (normalized === 'fb_rate_limited') return { label: 'Rate limited', tone: 'destructive' }
+  if (normalized === 'page_not_accessible') return { label: 'Page not accessible', tone: 'destructive' }
   if (normalized === 'invalid_username') return { label: 'Invalid username', tone: 'destructive' }
   if (normalized === 'creator_suspended') return { label: 'Creator suspended', tone: 'destructive' }
   if (normalized === 'completed') return { label: 'Completed', tone: 'muted' }

@@ -149,6 +149,13 @@ export async function togglePageStatus(pageId: string, currentStatus: string) {
     if (!profile?.fb_page_access_token || !profile?.source_username) {
       return { error: 'Cannot activate: Missing credentials or source.' }
     }
+
+    if (profile.status === 'fb_rate_limited') {
+      return {
+        error:
+          'Cannot activate while rate limited. Meta is throttling this page — automation resumes automatically after the cooldown.',
+      }
+    }
   }
 
   const { error } = await supabase
@@ -244,7 +251,15 @@ export async function updateSourceUsername(pageId: string, newUsername: string, 
   try {
     const updatePayload: {
       source_username: string
-      status: 'active' | 'inactive' | 'fb_verification_required' | 'invalid_token' | 'invalid_username' | 'completed'
+      status:
+        | 'active'
+        | 'inactive'
+        | 'fb_verification_required'
+        | 'fb_rate_limited'
+        | 'page_not_accessible'
+        | 'invalid_token'
+        | 'invalid_username'
+        | 'completed'
       sync_status: 'pending' | 'browser_pending' | 'synced' | 'processing' | 'error'
       source_platform?: SourcePlatform
     } = {

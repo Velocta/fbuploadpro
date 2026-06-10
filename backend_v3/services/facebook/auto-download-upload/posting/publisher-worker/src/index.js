@@ -1,26 +1,43 @@
 import {
+  completeHandledPublishFailure,
+  completeUnhandledPublishFailure,
   countRecentIntegrityIncidents,
   emitIntegrityAlert,
-  emitPublishError,
   failPublishForInactivePage,
   failPublishForInvalidToken,
   failPublishForMissingMedia,
+  failPublishForPageNotAccessible,
+  failPublishForRateLimited,
+  failPublishForSecurity368,
   failPublishForVerificationRequired,
   finalizePosted,
   getSupabaseClient,
   incrementPublishRetry,
+  incrementTransientPublishRetry,
   loadPublishJob,
   markPublishFailedForFacebookRobots,
   pauseIntake,
-  recordPublishGraphId,
+  recordPublishGraphIdWithRetry,
   releasePublishJob,
+  supersedeDuplicatePublishJob,
   verifyFinalization,
 } from './db/client.js';
+import {
+  isFacebookInvalidTokenError,
+  isFacebookPageNotAccessible,
+  isFacebookRobotsTxtBlocked,
+  isFacebookSecurity368,
+  isFacebookSpamRateLimit368,
+  isFacebookTemporarilyBlocked,
+  isFacebookVerificationRequired,
+  isTransientNetworkError,
+  rateLimitUntilIso,
+  resolveSecurity368PageStatus,
+} from './error-classification.js';
 import { publishToFacebook } from './integrations/facebook.js';
 
 const INTERNAL_JOB_PATH = '/internal/v2/process-job';
 
-/** Default public media origin: apex R2 custom domain (https://vinsmokemedia.online). Override with POSTING_MEDIA_PUBLIC_BASE_URL. */
 const DEFAULT_POSTING_MEDIA_PUBLIC_BASE_URL = 'https://vinsmokemedia.online';
 
 function v2Log(event, fields = {}) {
@@ -63,6 +80,33 @@ async function deleteR2Object(env, jobId, mediaObjectKey) {
   }
 }
 
+async function tryRepairIntegrityAfterFinalize(supabase, job, graphVideoId) {
+  const { data: reel } = await supabase
+    .from('reels')
+    .select('status')
+    .eq('id', job.reel_internal_id)
+    .maybeSingle();
+
+  if (reel?.status === 'posted') {
+    await supersedeDuplicatePublishJob(supabase, job.job_id, graphVideoId || job.graph_post_id);
+    return true;
+  }
+
+  if (job.graph_post_id || graphVideoId) {
+    const { error: retryFinalizeError } = await finalizePosted(
+      supabase,
+      job.job_id,
+      graphVideoId || job.graph_post_id
+    );
+    if (!retryFinalizeError) {
+      const verification = await verifyFinalization(supabase, job.job_id);
+      return verification.ok;
+    }
+  }
+
+  return false;
+}
+
 async function finalizeAndVerify(env, supabase, job, graphVideoId, anomalyPauseThreshold, anomalyWindowSeconds) {
   const jobId = job.job_id ?? null;
   const mediaObjectKey = String(job.media_object_key || '');
@@ -79,6 +123,14 @@ async function finalizeAndVerify(env, supabase, job, graphVideoId, anomalyPauseT
       code: 'finalize_rpc_failed',
       message: finalizeError.message,
     });
+
+    const repaired = await tryRepairIntegrityAfterFinalize(supabase, job, graphVideoId);
+    if (repaired) {
+      v2Log('publish_job_finalize_repaired', { job_id: jobId });
+      await deleteR2Object(env, jobId, mediaObjectKey);
+      return;
+    }
+
     await releasePublishJob(supabase, job.job_id, 'finalize_rpc_failed', finalizeError.message);
     throw new Error(`finalize_rpc_failed ${finalizeError.message}`);
   }
@@ -86,6 +138,13 @@ async function finalizeAndVerify(env, supabase, job, graphVideoId, anomalyPauseT
 
   const verification = await verifyFinalization(supabase, job.job_id);
   if (!verification.ok) {
+    const repaired = await tryRepairIntegrityAfterFinalize(supabase, job, graphVideoId);
+    if (repaired) {
+      v2Log('publish_job_integrity_auto_repaired', { job_id: jobId, reason: verification.reason });
+      await deleteR2Object(env, jobId, mediaObjectKey);
+      return;
+    }
+
     v2Log('publish_job_integrity_mismatch', { job_id: jobId, reason: verification.reason });
     await markIntegrityError(supabase, job.job_id, verification.reason);
     await emitIntegrityAlert(supabase, 'integrity_mismatch_after_finalize_success', {
@@ -122,47 +181,6 @@ function internalTokenOk(env, request) {
   return diff === 0;
 }
 
-function isFacebookPublishRateLimited(message) {
-  const m = String(message || '').toLowerCase();
-  return (
-    m.includes('we limit how often you can post') ||
-    m.includes('"code":368') ||
-    m.includes('"code": 368')
-  );
-}
-
-function isFacebookRobotsTxtBlocked(message) {
-  const m = String(message || '').toLowerCase();
-  return (
-    m.includes('robots.txt') ||
-    m.includes('restricted by robots') ||
-    m.includes('fileurlprocessingerror')
-  );
-}
-
-/** OAuth 190 / missing page permissions — terminal invalid_token (cascades via DB trigger). */
-function isFacebookInvalidTokenError(message) {
-  const m = String(message || '').toLowerCase();
-  if (m.includes('your identity before you can publish')) return false;
-  const missingPagePermissions =
-    m.includes('pages_read_engagement') ||
-    m.includes('pages_manage_metadata') ||
-    m.includes('pages_read_user_content') ||
-    m.includes('pages_manage_ads') ||
-    m.includes('pages_show_list') ||
-    m.includes('pages_messaging') ||
-    m.includes('must be granted before impersonating');
-  if (missingPagePermissions) return true;
-  return (
-    (m.includes('"code":190') || m.includes('"code": 190')) &&
-    (m.includes('oauthexception') || m.includes('error validating access token') || m.includes('session has expired'))
-  );
-}
-
-/**
- * One job: R2 object → Meta Reels rupload (stream binary or hosted file_url) → finalize RPC + integrity checks.
- * Invoked once per service-binding fetch from publish-processor.
- */
 async function processPublishJob(env, job) {
   const supabase = getSupabaseClient(env);
   const anomalyPauseThreshold = Number.parseInt(env.INTEGRITY_PAUSE_THRESHOLD || '3', 10);
@@ -188,7 +206,10 @@ async function processPublishJob(env, job) {
 
   const existingGraphId = String(job.graph_post_id || '').trim();
 
-  if (job.status === 'pending_publish' && job.last_error_code === 'finalize_rpc_failed') {
+  if (
+    job.status === 'pending_publish' &&
+    (job.last_error_code === 'finalize_rpc_failed' || existingGraphId)
+  ) {
     v2Log('publish_job_finalize_retry', {
       job_id: jobId,
       graph_post_id: existingGraphId || null,
@@ -257,19 +278,6 @@ async function processPublishJob(env, job) {
       String(env.POSTING_MEDIA_PUBLIC_BASE_URL || '').trim() || DEFAULT_POSTING_MEDIA_PUBLIC_BASE_URL;
     const baseWithSlash = publicBase.replace(/\/*$/, '/');
     hostedFileUrl = new URL(encodeURI(mediaObjectKey), baseWithSlash).href;
-    v2Log('publish_job_public_url', {
-      job_id: jobId,
-      upload_mode: uploadMode,
-      public_base: publicBase,
-      media_object_key: mediaObjectKey,
-      hosted_file_url_host: (() => {
-        try {
-          return new URL(hostedFileUrl).host;
-        } catch {
-          return 'invalid_url';
-        }
-      })(),
-    });
 
     const preflight = await fetch(hostedFileUrl, { method: 'HEAD' });
     if (!preflight.ok) {
@@ -281,8 +289,6 @@ async function processPublishJob(env, job) {
       });
       throw new Error(`hosted_media_preflight_failed status=${preflight.status}`);
     }
-  } else {
-    v2Log('publish_job_upload_mode', { job_id: jobId, upload_mode: uploadMode, media_object_key: mediaObjectKey });
   }
 
   const head = await env.POSTING_MEDIA_BUCKET.head(mediaObjectKey);
@@ -290,11 +296,6 @@ async function processPublishJob(env, job) {
     v2Log('publish_job_error', { job_id: jobId, phase: 'r2_head', code: 'media_object_missing' });
     throw new Error('media_object_missing');
   }
-  v2Log('publish_job_r2_head_ok', {
-    job_id: jobId,
-    content_type: head.httpMetadata?.contentType ?? null,
-    content_length: head.size ?? null,
-  });
 
   const mediaSpec =
     uploadMode === 'hosted'
@@ -309,12 +310,18 @@ async function processPublishJob(env, job) {
   });
   v2Log('publish_job_facebook_ok', { job_id: jobId, graph_video_id: graphVideoId ?? null });
 
-  const { error: recordError } = await recordPublishGraphId(supabase, job.job_id, graphVideoId);
+  const { error: recordError } = await recordPublishGraphIdWithRetry(supabase, job.job_id, graphVideoId);
   if (recordError) {
-    v2Log('publish_job_record_graph_id_skipped', {
+    v2Log('publish_job_record_graph_id_failed', {
       job_id: jobId,
       message: recordError.message,
     });
+    const { data: reloaded } = await loadPublishJob(supabase, job.job_id);
+    if (reloaded?.graph_post_id) {
+      job = { ...job, ...reloaded };
+    } else {
+      throw new Error(`record_graph_id_failed ${recordError.message}`);
+    }
   }
 
   await finalizeAndVerify(
@@ -325,6 +332,104 @@ async function processPublishJob(env, job) {
     anomalyPauseThreshold,
     anomalyWindowSeconds
   );
+}
+
+async function handlePublishError(env, supabase, job, errMsg) {
+  const code = errMsg.split(' ')[0];
+
+  if (isFacebookVerificationRequired(errMsg)) {
+    await failPublishForVerificationRequired(supabase, job.job_id, job.page_id, job.reel_internal_id);
+    return { terminal: true };
+  }
+
+  if (isFacebookInvalidTokenError(errMsg)) {
+    await failPublishForInvalidToken(supabase, job.job_id, job.page_id, job.reel_internal_id);
+    return { terminal: true };
+  }
+
+  if (isFacebookPageNotAccessible(errMsg)) {
+    await failPublishForPageNotAccessible(supabase, job.job_id, job.page_id, job.reel_internal_id);
+    return { terminal: true };
+  }
+
+  if (isFacebookSpamRateLimit368(errMsg) || isFacebookTemporarilyBlocked(errMsg)) {
+    await failPublishForRateLimited(
+      supabase,
+      job.job_id,
+      job.page_id,
+      job.reel_internal_id,
+      rateLimitUntilIso()
+    );
+    return { terminal: true };
+  }
+
+  if (isFacebookSecurity368(errMsg)) {
+    const pageStatus = resolveSecurity368PageStatus(errMsg);
+    await failPublishForSecurity368(supabase, job.job_id, job.page_id, job.reel_internal_id, pageStatus);
+    return { terminal: true };
+  }
+
+  if (code === 'media_object_missing' || code === 'missing_media_object_key') {
+    await failPublishForMissingMedia(supabase, job.job_id, job.reel_internal_id);
+    return { terminal: true };
+  }
+
+  if (code === 'page_not_active') {
+    await failPublishForInactivePage(supabase, job.job_id, job.reel_internal_id);
+    return { terminal: true };
+  }
+
+  if (isFacebookRobotsTxtBlocked(errMsg)) {
+    await markPublishFailedForFacebookRobots(supabase, job.job_id, job.reel_internal_id, errMsg);
+    return { terminal: true };
+  }
+
+  if (code === 'finalize_rpc_failed') {
+    return { retry: true };
+  }
+
+  if (code === 'record_graph_id_failed' && job.graph_post_id) {
+    return { retry: true };
+  }
+
+  if (isTransientNetworkError(errMsg)) {
+    const { error: retryError, exhausted } = await incrementTransientPublishRetry(
+      supabase,
+      job.job_id,
+      job.reel_internal_id,
+      code,
+      errMsg.slice(0, 500)
+    );
+    if (retryError) {
+      v2Log('transient_retry_error', { job_id: job.job_id, message: retryError.message });
+    }
+    if (exhausted) {
+      await completeUnhandledPublishFailure(
+        supabase,
+        job,
+        'publish_transient_retries_exhausted',
+        errMsg
+      );
+      return { terminal: true };
+    }
+    return { retry: true };
+  }
+
+  const { error: retryError, exhausted } = await incrementPublishRetry(
+    supabase,
+    job.job_id,
+    job.reel_internal_id,
+    code,
+    errMsg.slice(0, 500)
+  );
+  if (retryError) {
+    v2Log('increment_publish_retry_error', { job_id: job.job_id, message: retryError.message });
+  }
+  if (exhausted) {
+    await completeUnhandledPublishFailure(supabase, job, 'publish_retries_exhausted', errMsg);
+    return { terminal: true };
+  }
+  return { retry: true };
 }
 
 export default {
@@ -358,178 +463,27 @@ export default {
         return Response.json({ ok: true, job_id: job.job_id ?? null });
       } catch (error) {
         const errMsg = String(error?.message || 'publish_failed');
-        const code = errMsg.split(' ')[0];
-        const verificationRequired = errMsg.toLowerCase().includes('your identity before you can publish as this page');
 
         v2Log('internal_job_error', {
           job_id: job.job_id ?? null,
-          error_code: code,
+          error_code: errMsg.split(' ')[0],
           message: errMsg.slice(0, 500),
-          verification_required: verificationRequired,
         });
 
-        const isFacebookError =
-          errMsg.startsWith('facebook_') ||
-          errMsg.includes('OAuthException') ||
-          errMsg.includes('fbtrace_id');
-        if (isFacebookError && !verificationRequired) {
-          const { error: logError } = await emitPublishError(supabase, errMsg, {
-            service: 'publisher_worker',
-            job_id: job.job_id ?? null,
-            page_id: job.page_id ?? null,
-            reel_internal_id: job.reel_internal_id ?? null,
-            fb_page_id: job.fb_page_id ?? null,
-            source_platform: job.platform ?? null,
-          });
-          if (logError) {
-            v2Log('emit_publish_error_failed', { job_id: job.job_id ?? null, message: logError.message });
-          }
-        }
+        const outcome = await handlePublishError(env, supabase, job, errMsg);
 
-        if (verificationRequired) {
-          const { error: terminalError } = await failPublishForVerificationRequired(
-            supabase,
-            job.job_id,
-            job.page_id,
-            job.reel_internal_id,
-            errMsg
-          );
-          if (terminalError) {
-            v2Log('fail_verification_required_error', {
-              job_id: job.job_id ?? null,
-              message: terminalError.message,
-            });
-          }
+        if (outcome.terminal) {
           return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
         }
-
-        if (isFacebookInvalidTokenError(errMsg)) {
-          const { error: tokenError } = await failPublishForInvalidToken(
-            supabase,
-            job.job_id,
-            job.page_id,
-            job.reel_internal_id,
-            errMsg
-          );
-          if (tokenError) {
-            v2Log('fail_invalid_token_error', {
-              job_id: job.job_id ?? null,
-              page_id: job.page_id ?? null,
-              message: tokenError.message,
-            });
-          } else {
-            v2Log('invalid_token_cascade_ok', {
-              job_id: job.job_id ?? null,
-              page_id: job.page_id ?? null,
-            });
-          }
-          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
-        }
-
-        if (code === 'media_object_missing' || code === 'missing_media_object_key') {
-          const { error: missingError } = await failPublishForMissingMedia(
-            supabase,
-            job.job_id,
-            job.reel_internal_id,
-            errMsg
-          );
-          if (missingError) {
-            v2Log('fail_missing_media_error', {
-              job_id: job.job_id ?? null,
-              reel_internal_id: job.reel_internal_id ?? null,
-              message: missingError.message,
-            });
-          } else {
-            v2Log('missing_media_redownload_ok', {
-              job_id: job.job_id ?? null,
-              reel_internal_id: job.reel_internal_id ?? null,
-            });
-          }
-          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
-        }
-
-        if (code === 'page_not_active') {
-          const { error: inactiveError } = await failPublishForInactivePage(
-            supabase,
-            job.job_id,
-            job.reel_internal_id,
-            errMsg
-          );
-          if (inactiveError) {
-            v2Log('fail_inactive_page_error', {
-              job_id: job.job_id ?? null,
-              message: inactiveError.message,
-            });
-          }
-          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
-        }
-
-        if (isFacebookRobotsTxtBlocked(errMsg)) {
-          const { error: robotsError } = await markPublishFailedForFacebookRobots(
-            supabase,
-            job.job_id,
-            job.reel_internal_id,
-            errMsg
-          );
-          if (robotsError) {
-            v2Log('mark_publish_failed_robots_error', {
-              job_id: job.job_id ?? null,
-              message: robotsError.message,
-            });
-          }
-          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
-        }
-
-        if (code === 'finalize_rpc_failed') {
-          v2Log('publish_finalize_retry_scheduled', { job_id: job.job_id ?? null });
+        if (outcome.retry) {
           return Response.json(
             { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
             { status: 200 }
           );
         }
 
-        if (isFacebookPublishRateLimited(errMsg)) {
-          const { error: limitError, exhausted: retriesExhausted } = await incrementPublishRetry(
-            supabase,
-            job.job_id,
-            job.reel_internal_id,
-            'facebook_oauth_368_deferred',
-            errMsg.slice(0, 500)
-          );
-          if (limitError) {
-            v2Log('rate_limit_retry_error', {
-              job_id: job.job_id ?? null,
-              message: limitError.message,
-            });
-          }
-          if (retriesExhausted) {
-            return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
-          }
-          return Response.json(
-            { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
-            { status: 200 }
-          );
-        }
-
-        const { error: retryError, exhausted: retriesExhausted } = await incrementPublishRetry(
-          supabase,
-          job.job_id,
-          job.reel_internal_id,
-          code,
-          errMsg.slice(0, 500)
-        );
-        if (retryError) {
-          v2Log('increment_publish_retry_error', { job_id: job.job_id ?? null, message: retryError.message });
-        }
-        if (retriesExhausted) {
-          v2Log('publish_retries_exhausted', { job_id: job.job_id ?? null });
-          return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
-        }
-        v2Log('internal_job_response', { job_id: job.job_id ?? null, http_status: 200, ok: false, retry: true });
-        return Response.json(
-          { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
-          { status: 200 }
-        );
+        await completeUnhandledPublishFailure(supabase, job, errMsg.split(' ')[0], errMsg);
+        return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
       }
     }
 

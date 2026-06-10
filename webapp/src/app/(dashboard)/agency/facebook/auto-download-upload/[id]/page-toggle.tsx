@@ -42,6 +42,7 @@ export function PageToggle({ pageId, initialStatus }: { pageId: string; initialS
   }
 
   const isActive = status === 'active'
+  const toggleLocked = status === 'fb_rate_limited'
 
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 px-4 py-3 backdrop-blur-sm">
@@ -55,7 +56,7 @@ export function PageToggle({ pageId, initialStatus }: { pageId: string; initialS
       <Switch
         checked={isActive}
         onCheckedChange={handleToggle}
-        disabled={isPending}
+        disabled={isPending || toggleLocked}
       />
     </div>
   )

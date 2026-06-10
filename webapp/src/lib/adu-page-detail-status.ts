@@ -77,6 +77,10 @@ export function getAduPageStatusBadge(profile: AduPageStatusInput): AduPageStatu
         return { label: 'Verification required', variant: 'destructive', iconKind: 'shield', tone: 'destructive' }
       case 'invalid_token':
         return { label: 'Invalid token', variant: 'destructive', iconKind: 'key', tone: 'destructive' }
+      case 'fb_rate_limited':
+        return { label: 'Rate limited', variant: 'destructive', iconKind: 'clock', tone: 'destructive' }
+      case 'page_not_accessible':
+        return { label: 'Page not accessible', variant: 'destructive', iconKind: 'alert-circle', tone: 'destructive' }
       case '2fa_required_on_BM':
         return { label: 'BM 2FA required', variant: 'destructive', iconKind: 'shield', tone: 'destructive' }
       case 'check_developer_app':
@@ -147,15 +151,31 @@ export function getAduPageStatusAlert(profile: AduPageStatusInput): AduPageStatu
         return {
           title: 'Facebook Verification Required',
           description:
-            'Please log in to your Facebook page using a mobile device to confirm verification, then activate automation.',
+            'Complete identity or phone verification in the Meta app on your mobile device. This is not a token error — do not reconnect. After verification, turn automation on using the toggle.',
           variant: 'destructive',
           iconKind: 'shield',
+        }
+      case 'fb_rate_limited':
+        return {
+          title: 'Facebook Rate Limited',
+          description:
+            'Meta is limiting how often this page can post. Automation pauses for about 3 days and will resume automatically when the cooldown ends.',
+          variant: 'destructive',
+          iconKind: 'clock',
+        }
+      case 'page_not_accessible':
+        return {
+          title: 'Facebook Page Not Accessible',
+          description:
+            'This page may have been removed or your account may no longer have admin access. Confirm the page exists and you have admin rights, then reconnect your Facebook account and enable automation.',
+          variant: 'destructive',
+          iconKind: 'alert-circle',
         }
       case 'invalid_token':
         return {
           title: 'Access Token Expired',
           description:
-            'Please go to the Facebook Accounts section and reconnect your account. Your access token has expired or been revoked.',
+            'Reconnect your Facebook account in Facebook Accounts. Your page access token has expired or been revoked.',
           variant: 'destructive',
           iconKind: 'key',
         }

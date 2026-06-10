@@ -100,6 +100,7 @@ export type Database = {
           | null
           source_username: string
           status: Database["public"]["Enums"]["profile_status_enum"] | null
+          rate_limited_until: string | null
           sync_status: Database["public"]["Enums"]["sync_status_enum"] | null
           timezone: string
           updated_at: string | null
@@ -126,6 +127,7 @@ export type Database = {
           | null
           source_username: string
           status?: Database["public"]["Enums"]["profile_status_enum"] | null
+          rate_limited_until?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status_enum"] | null
           timezone?: string
           updated_at?: string | null
@@ -152,6 +154,7 @@ export type Database = {
           | null
           source_username?: string
           status?: Database["public"]["Enums"]["profile_status_enum"] | null
+          rate_limited_until?: string | null
           sync_status?: Database["public"]["Enums"]["sync_status_enum"] | null
           timezone?: string
           updated_at?: string | null
@@ -746,6 +749,8 @@ export type Database = {
           fb_page_access_token: string
           status: string
           publish_retries: number
+          publish_transient_retries: number
+          next_publish_attempt_at: string | null
           media_object_key: string
           media_url: string | null
           media_sha256: string | null
@@ -774,6 +779,8 @@ export type Database = {
           fb_page_access_token: string
           status?: string
           publish_retries?: number
+          publish_transient_retries?: number
+          next_publish_attempt_at?: string | null
           media_object_key: string
           media_url?: string | null
           media_sha256?: string | null
@@ -802,6 +809,8 @@ export type Database = {
           fb_page_access_token?: string
           status?: string
           publish_retries?: number
+          publish_transient_retries?: number
+          next_publish_attempt_at?: string | null
           media_object_key?: string
           media_url?: string | null
           media_sha256?: string | null
@@ -960,6 +969,8 @@ export type Database = {
       | "check_developer_app"
       | "account_suspended"
       | "creator_suspended"
+      | "fb_rate_limited"
+      | "page_not_accessible"
       reel_status_enum:
         | "pending"
         | "posted"

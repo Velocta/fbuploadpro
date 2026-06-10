@@ -1,4 +1,4 @@
-import { claimDueJobs, getSupabaseClient } from './db/client.js';
+import { claimDueJobs, getSupabaseClient, resumeRateLimitedPages } from './db/client.js';
 
 export default {
   async fetch() {
@@ -14,6 +14,13 @@ export default {
     }
 
     v2Log('scheduled_tick_begin', { mode });
+
+    const { data: resumedCount, error: resumeError } = await resumeRateLimitedPages(supabase);
+    if (resumeError) {
+      v2Log('resume_rate_limited_pages_failed', { message: resumeError.message });
+    } else if (resumedCount > 0) {
+      v2Log('resume_rate_limited_pages_ok', { resumed_pages: resumedCount });
+    }
 
     // Single RPC per cron tick: create_due_adu_posting_jobs is idempotent per (page, schedule_slot_at).
     // Retrying after a successful commit caused duplicate jobs for the same schedule slot.
