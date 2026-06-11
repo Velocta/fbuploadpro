@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/database.types'
 
 export type FacebookAccountWithPageStats = {
@@ -28,7 +28,7 @@ export type FacebookAccountsListResult = {
 export async function listAgencyFacebookAccountsEnriched(
   agencyId: string,
 ): Promise<FacebookAccountsListResult> {
-  const supabase = await createClient()
+  const supabase = await createAdminClient()
 
   const { data: accounts, error } = await supabase
     .from('facebook_accounts')

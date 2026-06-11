@@ -58,6 +58,7 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
     .from('adu_posting_jobs')
     .select('status')
     .eq('page_id', id)
+    .in('status', ['published', 'failed_to_publish', 'publish_error', 'integrity_error'])
     .gte('updated_at', pageMidnight.toISOString())
 
   let postedToday = 0

@@ -36,12 +36,13 @@ export default async function AgencyPagesPage() {
     .eq('agency_id', user.id)
     .order('created_at', { ascending: false })
 
-  // Fetch all jobs updated/published in the last 48 hours for pages belonging to this agency
+  // Fetch only finished posting jobs updated/published in the last 48 hours for pages belonging to this agency
   const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000)
   const { data: recentJobs } = await supabase
     .from('adu_posting_jobs')
     .select('page_id, status, updated_at')
     .eq('agency_id', user.id)
+    .in('status', ['published', 'failed_to_publish', 'publish_error', 'integrity_error'])
     .gte('updated_at', fortyEightHoursAgo.toISOString())
 
   const pagesWithTodayStats = (pages || []).map((p) => {
