@@ -4,6 +4,7 @@ import { AddPageDialog } from './add-page-dialog'
 import { PagesClient } from './pages-client'
 import { AgencyGlassPageHero } from '@/components/dashboard/agency'
 import { Download, Layers, TrendingUp, Users } from 'lucide-react'
+import { getStartOfTodayInTimezone } from '@/lib/timezones'
 
 export default async function AgencyPagesPage() {
   const supabase = await createClient()
@@ -29,40 +30,44 @@ export default async function AgencyPagesPage() {
       posted_reels_count,
       failed_reels_count,
       posts_per_day,
+      timezone,
       facebook_accounts(fb_user_name, fb_user_image)
     `)
     .eq('agency_id', user.id)
     .order('created_at', { ascending: false })
 
-  const startOfToday = new Date()
-  startOfToday.setUTCHours(0, 0, 0, 0)
-
-  // Fetch all jobs updated/published today for pages belonging to this agency
-  const { data: todayJobs } = await supabase
+  // Fetch all jobs updated/published in the last 48 hours for pages belonging to this agency
+  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000)
+  const { data: recentJobs } = await supabase
     .from('adu_posting_jobs')
-    .select('page_id, status')
+    .select('page_id, status, updated_at')
     .eq('agency_id', user.id)
-    .gte('updated_at', startOfToday.toISOString())
-
-  const todayStatsByPage = new Map<string, { postedToday: number; failedToday: number }>()
-
-  for (const job of todayJobs || []) {
-    const pId = job.page_id
-    const current = todayStatsByPage.get(pId) ?? { postedToday: 0, failedToday: 0 }
-    if (job.status === 'published') {
-      current.postedToday += 1
-    } else if (['failed_to_publish', 'publish_error', 'integrity_error'].includes(job.status)) {
-      current.failedToday += 1
-    }
-    todayStatsByPage.set(pId, current)
-  }
+    .gte('updated_at', fortyEightHoursAgo.toISOString())
 
   const pagesWithTodayStats = (pages || []).map((p) => {
-    const statsToday = todayStatsByPage.get(p.id) ?? { postedToday: 0, failedToday: 0 }
+    const timezone = p.timezone || 'UTC'
+    const pageMidnight = getStartOfTodayInTimezone(timezone)
+    
+    let postedToday = 0
+    let failedToday = 0
+    
+    for (const job of recentJobs || []) {
+      if (job.page_id !== p.id) continue
+      
+      const jobTime = new Date(job.updated_at)
+      if (jobTime >= pageMidnight) {
+        if (job.status === 'published') {
+          postedToday += 1
+        } else if (['failed_to_publish', 'publish_error', 'integrity_error'].includes(job.status)) {
+          failedToday += 1
+        }
+      }
+    }
+
     return {
       ...p,
-      posted_today: statsToday.postedToday,
-      failed_today: statsToday.failedToday,
+      posted_today: postedToday,
+      failed_today: failedToday,
     }
   })
 

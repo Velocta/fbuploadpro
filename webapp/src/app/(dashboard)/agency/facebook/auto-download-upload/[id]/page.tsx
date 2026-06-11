@@ -9,6 +9,7 @@ import { PageDetailTabs } from './page-detail-tabs'
 import { ReelsTab } from './reels-tab'
 import { SettingsForm, type Page } from './settings-form'
 import { FailedPostsTab } from './failed-posts-tab'
+import { getStartOfTodayInTimezone } from '@/lib/timezones'
 
 export default async function PageDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -50,15 +51,14 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
   const startingFollowers = profile.followers_count || 0
   const followersDelta = currentFollowers - startingFollowers
 
-  const startOfToday = new Date()
-  startOfToday.setUTCHours(0, 0, 0, 0)
+  const pageMidnight = getStartOfTodayInTimezone(profile.timezone || 'UTC')
 
-  // Fetch today's posting jobs to count posted and failed today
+  // Fetch today's posting jobs to count posted and failed today (using page timezone midnight)
   const { data: todayJobs } = await supabase
     .from('adu_posting_jobs')
     .select('status')
     .eq('page_id', id)
-    .gte('updated_at', startOfToday.toISOString())
+    .gte('updated_at', pageMidnight.toISOString())
 
   let postedToday = 0
   let failedToday = 0

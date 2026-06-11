@@ -96,23 +96,23 @@ export function PageDetailOverview({
 
   const todayStats: StatTile[] = [
     {
-      label: 'To Make Today',
-      value: postsPerDay,
-      description: 'Configured posts per day',
+      label: 'Pending Today',
+      value: Math.max(0, postsPerDay - postedToday),
+      description: 'Remaining scheduled posts today',
       icon: Clock,
       accent: 'default',
     },
     {
       label: 'Posted Today',
       value: postedToday,
-      description: 'Published since midnight UTC',
+      description: 'Published since page local midnight',
       icon: CheckCircle2,
       accent: 'primary',
     },
     {
       label: 'Failed Today',
       value: failedToday,
-      description: 'Errors since midnight UTC',
+      description: 'Errors since page local midnight',
       icon: XCircle,
       accent: 'destructive',
     },

@@ -402,7 +402,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                           <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Today's Stats</p>
                           <div className="grid grid-cols-3 gap-2">
                             {[
-                              { label: 'To Make', value: pageItem.posts_per_day || 0, className: 'text-primary/95' },
+                              { label: 'Pending', value: Math.max(0, (pageItem.posts_per_day || 0) - (pageItem.posted_today || 0)), className: 'text-primary/95' },
                               { label: 'Posted', value: pageItem.posted_today || 0, className: 'text-foreground' },
                               { label: 'Failed', value: pageItem.failed_today || 0, className: 'text-destructive/95' },
                             ].map((stat) => (
