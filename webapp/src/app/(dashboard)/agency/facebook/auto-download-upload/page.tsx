@@ -28,23 +28,56 @@ export default async function AgencyPagesPage() {
       pending_reels_count,
       posted_reels_count,
       failed_reels_count,
+      posts_per_day,
       facebook_accounts(fb_user_name, fb_user_image)
     `)
     .eq('agency_id', user.id)
     .order('created_at', { ascending: false })
 
-  const totalGainedFollowers = (pages || []).reduce((sum, page) => {
+  const startOfToday = new Date()
+  startOfToday.setUTCHours(0, 0, 0, 0)
+
+  // Fetch all jobs updated/published today for pages belonging to this agency
+  const { data: todayJobs } = await supabase
+    .from('adu_posting_jobs')
+    .select('page_id, status')
+    .eq('agency_id', user.id)
+    .gte('updated_at', startOfToday.toISOString())
+
+  const todayStatsByPage = new Map<string, { postedToday: number; failedToday: number }>()
+
+  for (const job of todayJobs || []) {
+    const pId = job.page_id
+    const current = todayStatsByPage.get(pId) ?? { postedToday: 0, failedToday: 0 }
+    if (job.status === 'published') {
+      current.postedToday += 1
+    } else if (['failed_to_publish', 'publish_error', 'integrity_error'].includes(job.status)) {
+      current.failedToday += 1
+    }
+    todayStatsByPage.set(pId, current)
+  }
+
+  const pagesWithTodayStats = (pages || []).map((p) => {
+    const statsToday = todayStatsByPage.get(p.id) ?? { postedToday: 0, failedToday: 0 }
+    return {
+      ...p,
+      posted_today: statsToday.postedToday,
+      failed_today: statsToday.failedToday,
+    }
+  })
+
+  const totalGainedFollowers = pagesWithTodayStats.reduce((sum, page) => {
     const gained = Math.max((page.followers_gained || 0) - (page.followers_count || 0), 0)
     return sum + gained
   }, 0)
-  const totalFollowersAcrossPages = (pages || []).reduce((sum, page) => {
+  const totalFollowersAcrossPages = pagesWithTodayStats.reduce((sum, page) => {
     return sum + (page.followers_gained || 0)
   }, 0)
 
   const stats = [
     {
       label: 'Total Pages',
-      value: (pages?.length || 0).toLocaleString(),
+      value: (pagesWithTodayStats.length || 0).toLocaleString(),
       icon: Layers,
     },
     {
@@ -96,7 +129,7 @@ export default async function AgencyPagesPage() {
         </div>
       </div>
 
-      <PagesClient initialPages={pages || []} />
+      <PagesClient initialPages={pagesWithTodayStats} />
     </div>
   )
 }

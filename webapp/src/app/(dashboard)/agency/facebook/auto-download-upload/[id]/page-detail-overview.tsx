@@ -51,13 +51,19 @@ export function PageDetailOverview({
   postedReels,
   failedReels,
   followersDelta,
+  postsPerDay = 0,
+  postedToday = 0,
+  failedToday = 0,
 }: {
   pendingReels: number
   postedReels: number
   failedReels: number
   followersDelta: number
+  postsPerDay?: number
+  postedToday?: number
+  failedToday?: number
 }) {
-  const stats: StatTile[] = [
+  const totalStats: StatTile[] = [
     {
       label: 'Total Pending',
       value: pendingReels,
@@ -88,16 +94,66 @@ export function PageDetailOverview({
     },
   ]
 
+  const todayStats: StatTile[] = [
+    {
+      label: 'To Make Today',
+      value: postsPerDay,
+      description: 'Configured posts per day',
+      icon: Clock,
+      accent: 'default',
+    },
+    {
+      label: 'Posted Today',
+      value: postedToday,
+      description: 'Published since midnight UTC',
+      icon: CheckCircle2,
+      accent: 'primary',
+    },
+    {
+      label: 'Failed Today',
+      value: failedToday,
+      description: 'Errors since midnight UTC',
+      icon: XCircle,
+      accent: 'destructive',
+    },
+  ]
+
   return (
-    <div className="relative group">
-      <div
-        className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
-        aria-hidden
-      />
-      <div className="relative grid gap-4 rounded-2xl border border-border/50 bg-card/40 p-5 shadow-2xl backdrop-blur-xl sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <StatTileCard key={stat.label} stat={stat} />
-        ))}
+    <div className="space-y-6">
+      {/* Total Stats Section */}
+      <div className="relative group">
+        <div
+          className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/10 to-blue-500/10 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
+          aria-hidden
+        />
+        <div className="relative rounded-2xl border border-border/50 bg-card/40 p-5 shadow-2xl backdrop-blur-xl">
+          <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
+            Total Statistics
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {totalStats.map((stat) => (
+              <StatTileCard key={stat.label} stat={stat} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Today's Stats Section */}
+      <div className="relative group">
+        <div
+          className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/10 to-blue-500/10 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
+          aria-hidden
+        />
+        <div className="relative rounded-2xl border border-border/50 bg-card/40 p-5 shadow-2xl backdrop-blur-xl">
+          <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
+            Today's Statistics
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-3">
+            {todayStats.map((stat) => (
+              <StatTileCard key={stat.label} stat={stat} />
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   )

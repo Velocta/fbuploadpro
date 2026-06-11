@@ -73,6 +73,53 @@ function dispatchPublisherJob(ctx, env, job, supabase) {
   ctx.waitUntil(promise);
 }
 
+async function retryFailedR2Deletions(env, supabase) {
+  if (!env.POSTING_MEDIA_BUCKET) {
+    v2Log('retry_deletions_skipped', { reason: 'missing_POSTING_MEDIA_BUCKET_binding' });
+    return;
+  }
+
+  const { data: failedDeletes, error } = await supabase
+    .from('failed_r2_deletions')
+    .select('*')
+    .lt('retry_count', 5)
+    .order('created_at', { ascending: true })
+    .limit(10);
+
+  if (error) {
+    v2Log('retry_deletions_fetch_error', { message: error.message });
+    return;
+  }
+
+  if (!failedDeletes || failedDeletes.length === 0) {
+    return;
+  }
+
+  v2Log('retry_deletions_begin', { count: failedDeletes.length });
+
+  for (const record of failedDeletes) {
+    try {
+      await env.POSTING_MEDIA_BUCKET.delete(record.object_key);
+      await supabase.from('failed_r2_deletions').delete().eq('id', record.id);
+      v2Log('retry_deletion_success', { object_key: record.object_key });
+    } catch (err) {
+      v2Log('retry_deletion_failed', {
+        object_key: record.object_key,
+        message: String(err?.message || err),
+        retry_count: record.retry_count + 1,
+      });
+      await supabase
+        .from('failed_r2_deletions')
+        .update({
+          retry_count: record.retry_count + 1,
+          last_error: String(err?.message || err).slice(0, 1000),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', record.id);
+    }
+  }
+}
+
 export default {
   async fetch() {
     return new Response('Posting V2 Publish Processor Active', { status: 200 });
@@ -95,6 +142,8 @@ export default {
       max_rows_per_tick: maxRows,
       max_tick_seconds: maxTickSeconds,
     });
+
+    ctx.waitUntil(retryFailedR2Deletions(env, supabase));
 
     const stale = await resetStalePublishing(supabase, 300, 1000);
     if (stale.error) {
@@ -137,3 +186,4 @@ export default {
     });
   },
 };
+

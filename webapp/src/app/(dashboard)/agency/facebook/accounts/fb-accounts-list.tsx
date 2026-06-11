@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  ExternalLink,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Image from 'next/image'
@@ -247,7 +248,19 @@ export function FacebookAccountsList({
                           </div>
                         )}
                         <div className="min-w-0">
-                          <p className="truncate text-lg font-semibold">{account.fb_user_name}</p>
+                          {account.fb_user_url ? (
+                            <a
+                              href={account.fb_user_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="truncate text-lg font-semibold hover:underline hover:text-primary inline-flex items-center gap-1.5"
+                            >
+                              {account.fb_user_name}
+                              <ExternalLink className="h-3.5 w-3.5 opacity-60" />
+                            </a>
+                          ) : (
+                            <p className="truncate text-lg font-semibold">{account.fb_user_name}</p>
+                          )}
                           <p className="mt-0.5 truncate font-mono text-sm text-muted-foreground">
                             {account.fb_user_id}
                           </p>
@@ -303,14 +316,14 @@ export function FacebookAccountsList({
 
                     {account.linkedPagesCount > 0 ? (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        {account.linkedPagesCount} linked page
+                        {account.linkedPagesCount} ADU connected page
                         {account.linkedPagesCount === 1 ? '' : 's'}
                         {account.invalidTokenPagesCount > 0
                           ? ` · ${account.invalidTokenPagesCount} with invalid token`
                           : ''}
                       </p>
                     ) : (
-                      <p className="mt-2 text-xs text-muted-foreground">No linked pages yet</p>
+                      <p className="mt-2 text-xs text-muted-foreground">0 ADU connected pages</p>
                     )}
 
                     {needsReconnect ? (

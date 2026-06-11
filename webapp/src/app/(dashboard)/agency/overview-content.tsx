@@ -37,60 +37,7 @@ function formatFetchedAt(date: Date): string {
   })
 }
 
-function PipelineFunnelBar({
-  pending,
-  downloaded,
-  posted,
-  failed,
-}: {
-  pending: number
-  downloaded: number
-  posted: number
-  failed: number
-}) {
-  const total = pending + downloaded + posted + failed
-  if (total === 0) {
-    return (
-      <p className="text-xs text-muted-foreground">No reels in pipeline yet.</p>
-    )
-  }
 
-  const segments = [
-    { key: 'pending', value: pending, className: 'bg-amber-500/80' },
-    { key: 'downloaded', value: downloaded, className: 'bg-blue-500/80' },
-    { key: 'posted', value: posted, className: 'bg-primary/80' },
-  ] as const
-
-  return (
-    <div className="space-y-2">
-      <div className="flex h-2 overflow-hidden rounded-full bg-muted/50">
-        {segments.map((seg) => {
-          const pct = (seg.value / total) * 100
-          if (pct <= 0) return null
-          return (
-            <div
-              key={seg.key}
-              className={cn('h-full transition-all', seg.className)}
-              style={{ width: `${pct}%` }}
-              title={`${seg.key}: ${seg.value}`}
-            />
-          )
-        })}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-sm bg-amber-500/80" />
-          Pending → Downloaded → Posted
-        </span>
-        {failed > 0 ? (
-          <span className="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 text-destructive">
-            Failed {failed.toLocaleString()}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  )
-}
 
 export async function DashboardOverviewContent({
   userId,
@@ -114,7 +61,6 @@ export async function DashboardOverviewContent({
 
   const [
     { data: pagesRaw },
-    { count: downloadedReelsCount, error: downloadedReelsError },
     { count: inAppPending },
     { count: directScheduled },
   ] = await Promise.all([
@@ -124,11 +70,6 @@ export async function DashboardOverviewContent({
         'id, page_name, fb_page_image, status, sync_status, pending_reels_count, posted_reels_count, failed_reels_count, followers_count, followers_gained',
       )
       .eq('agency_id', userId),
-    supabase
-      .from('reels')
-      .select('id, pages!inner(agency_id)', { count: 'exact', head: true })
-      .eq('status', 'downloaded')
-      .eq('pages.agency_id', userId),
     supabase
       .from('facebook_inapp_schedule_posts')
       .select('id', { count: 'exact', head: true })
@@ -142,9 +83,7 @@ export async function DashboardOverviewContent({
   ])
 
   const pages = (pagesRaw ?? []) as OverviewPageRow[]
-  const downloadedReels =
-    downloadedReelsError != null ? 0 : (downloadedReelsCount ?? 0)
-  const stats = aggregateOverviewStats(pages, downloadedReels)
+  const stats = aggregateOverviewStats(pages)
   const scheduleAttentionCount = (inAppPending ?? 0) + (directScheduled ?? 0)
   const attentionMeta = deriveAttentionSectionTitle(
     stats.nonActiveCount,
@@ -178,36 +117,7 @@ export async function DashboardOverviewContent({
     },
   ] as const
 
-  const aduPipelineMetrics = [
-    {
-      label: 'Pending',
-      value: stats.pendingReels,
-      percent: stats.pipelinePercents.pending,
-      description: 'Discovered on source, not downloaded yet',
-      href: `${ADU_HUB}?reelStatus=pending`,
-    },
-    {
-      label: 'Downloaded',
-      value: stats.downloadedReels,
-      percent: stats.pipelinePercents.downloaded,
-      description: 'Downloaded and in queue, waiting to be published',
-      href: `${ADU_HUB}?reelStatus=downloaded`,
-    },
-    {
-      label: 'Posted',
-      value: stats.postedReels,
-      percent: stats.pipelinePercents.posted,
-      description: 'Successfully published to Facebook',
-      href: `${ADU_HUB}?reelStatus=posted`,
-    },
-    {
-      label: 'Failed',
-      value: stats.failedReels,
-      percent: stats.pipelinePercents.failed,
-      description: 'Failed to download or publish',
-      href: `${ADU_HUB}?reelStatus=failed`,
-    },
-  ] as const
+
 
   const nonActiveListItems = stats.nonActivePages.map((p) => ({
     id: p.id,
@@ -274,49 +184,7 @@ export async function DashboardOverviewContent({
               />
             ) : null}
 
-            <div className="rounded-xl border border-border/50 bg-background/30 p-4">
-              <div className="mb-4 flex items-start gap-2">
-                <Download className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div className="flex-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    ADU pipeline
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Reel totals across all Auto Download/Upload pages
-                  </p>
-                </div>
-              </div>
-              <div className="mb-4">
-                <PipelineFunnelBar
-                  pending={stats.pendingReels}
-                  downloaded={stats.downloadedReels}
-                  posted={stats.postedReels}
-                  failed={stats.failedReels}
-                />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {aduPipelineMetrics.map((metric) => (
-                  <Link
-                    key={metric.label}
-                    href={metric.href}
-                    className="group/metric rounded-lg border border-border/40 bg-card/50 px-4 py-3 transition-colors hover:border-primary/30"
-                  >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {metric.label}
-                    </p>
-                    <p className="mt-1 font-display text-2xl font-bold tabular-nums tracking-tight text-foreground">
-                      {metric.value.toLocaleString()}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {stats.totalReels > 0 ? `${metric.percent}% of reels` : '—'}
-                    </p>
-                    <p className="mt-1 text-xs leading-snug text-muted-foreground">
-                      {metric.description}
-                    </p>
-                  </Link>
-                ))}
-              </div>
-            </div>
+
           </div>
         </div>
       )}

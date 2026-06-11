@@ -26,26 +26,21 @@ describe('tokenBalanceKpiSubcopy', () => {
 })
 
 describe('aggregateOverviewStats', () => {
-  it('computes pipeline percents', () => {
-    const stats = aggregateOverviewStats(
-      [
-        {
-          id: '1',
-          page_name: 'A',
-          fb_page_image: null,
-          status: 'active',
-          sync_status: null,
-          pending_reels_count: 2,
-          posted_reels_count: 1,
-          failed_reels_count: 1,
-          followers_count: 10,
-          followers_gained: 15,
-        },
-      ],
-      2,
-    )
-    expect(stats.totalReels).toBe(6)
-    expect(stats.pipelinePercents.pending).toBe(33)
+  it('computes total followers gained', () => {
+    const stats = aggregateOverviewStats([
+      {
+        id: '1',
+        page_name: 'A',
+        fb_page_image: null,
+        status: 'active',
+        sync_status: null,
+        pending_reels_count: 2,
+        posted_reels_count: 1,
+        failed_reels_count: 1,
+        followers_count: 10,
+        followers_gained: 15,
+      },
+    ])
     expect(stats.totalFollowersGained).toBe(5)
   })
 })

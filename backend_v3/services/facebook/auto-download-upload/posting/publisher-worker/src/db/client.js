@@ -9,8 +9,13 @@ export const MAX_TRANSIENT_PUBLISH_RETRIES = 11;
 const TRANSIENT_BACKOFF_BASE_MS = 30_000;
 const TRANSIENT_BACKOFF_MAX_MS = 15 * 60_000;
 
+let cachedSupabase = null;
+
 export function getSupabaseClient(env) {
-  return createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!cachedSupabase) {
+    cachedSupabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  }
+  return cachedSupabase;
 }
 
 function transientBackoffIso(retryCount) {

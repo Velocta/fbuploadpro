@@ -14,6 +14,7 @@ import {
   Music,
   Users,
   Layers,
+  Link2,
 } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -141,6 +142,9 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                 <SelectItem value="invalid_username">Invalid Username</SelectItem>
                 <SelectItem value="creator_suspended">Creator Suspended</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="2fa_required_on_BM">2FA Req. on BM</SelectItem>
+                <SelectItem value="check_developer_app">Check Dev App</SelectItem>
+                <SelectItem value="account_suspended">Account Suspended</SelectItem>
               </SelectContent>
             </Select>
             <Select
@@ -322,6 +326,23 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                         </div>
                       ) : null}
 
+                      {pageItem.fb_page_id ? (
+                        <div className="mt-2 pointer-events-auto relative z-[3]">
+                          <a
+                            href={`https://facebook.com/${pageItem.fb_page_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group flex items-center justify-between gap-1.5 rounded-lg border border-border/50 bg-background/30 px-3 py-2 text-xs font-semibold text-primary transition-colors hover:border-primary/30 w-full"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Facebook className="h-3.5 w-3.5" />
+                              <span>Facebook Page</span>
+                            </span>
+                            <Link2 className="h-3 w-3 opacity-60 group-hover:opacity-100 transition-opacity" />
+                          </a>
+                        </div>
+                      ) : null}
+
                       <div className="mt-3 flex items-center justify-between rounded-lg bg-muted/30 p-2 text-xs">
                         <div className="flex items-center text-muted-foreground">
                           {pageItem.source_platform === 'instagram' && (
@@ -351,24 +372,54 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                         </Badge>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-3 gap-2">
-                        {[
-                          { label: 'Posted', value: postedCount, className: 'text-primary' },
-                          { label: 'Pending', value: pendingCount, className: 'text-foreground' },
-                          { label: 'Failed', value: failedCount, className: 'text-destructive' },
-                        ].map((stat) => (
-                          <div
-                            key={stat.label}
-                            className="flex flex-col items-center rounded-lg border border-border/50 bg-background/30 p-2"
-                          >
-                            <span className={cn('text-lg font-bold leading-none', stat.className)}>
-                              {stat.value}
-                            </span>
-                            <span className="mt-1 text-[10px] font-semibold uppercase tracking-tight text-muted-foreground">
-                              {stat.label}
-                            </span>
+                      <div className="mt-4 space-y-3">
+                        {/* Total Stats */}
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Total Stats</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { label: 'Posted', value: postedCount, className: 'text-primary' },
+                              { label: 'Pending', value: pendingCount, className: 'text-foreground' },
+                              { label: 'Failed', value: failedCount, className: 'text-destructive' },
+                            ].map((stat) => (
+                              <div
+                                key={stat.label}
+                                className="flex flex-col items-center rounded-lg border border-border/50 bg-background/30 p-1.5"
+                              >
+                                <span className={cn('text-base font-bold leading-none', stat.className)}>
+                                  {stat.value}
+                                </span>
+                                <span className="mt-1 text-[9px] font-medium uppercase tracking-tight text-muted-foreground">
+                                  {stat.label}
+                                </span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
+                        </div>
+
+                        {/* Today's Stats */}
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Today's Stats</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[
+                              { label: 'To Make', value: pageItem.posts_per_day || 0, className: 'text-primary/95' },
+                              { label: 'Posted', value: pageItem.posted_today || 0, className: 'text-foreground' },
+                              { label: 'Failed', value: pageItem.failed_today || 0, className: 'text-destructive/95' },
+                            ].map((stat) => (
+                              <div
+                                key={stat.label}
+                                className="flex flex-col items-center rounded-lg border border-border/50 bg-background/30 p-1.5"
+                              >
+                                <span className={cn('text-base font-bold leading-none', stat.className)}>
+                                  {stat.value}
+                                </span>
+                                <span className="mt-1 text-[9px] font-medium uppercase tracking-tight text-muted-foreground">
+                                  {stat.label}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     </div>

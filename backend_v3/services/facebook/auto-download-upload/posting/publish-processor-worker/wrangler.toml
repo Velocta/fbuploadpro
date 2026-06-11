@@ -12,3 +12,8 @@ enabled = true
 [[services]]
 binding = "PUBLISHER_WORKER"
 service = "fbuploadpro-adu-1-publisher"
+
+[[r2_buckets]]
+binding = "POSTING_MEDIA_BUCKET"
+bucket_name = "fbuploadpro-adu-buffer"
+

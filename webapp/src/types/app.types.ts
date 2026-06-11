@@ -38,6 +38,8 @@ export type PageWithReels = Partial<Tables<'pages'>> &
       fb_user_name: string | null
       fb_user_image: string | null
     } | null
+    posted_today?: number
+    failed_today?: number
   }
 
 /**

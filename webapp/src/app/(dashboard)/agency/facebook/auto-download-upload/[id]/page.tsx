@@ -8,6 +8,7 @@ import { PageDetailOverview } from './page-detail-overview'
 import { PageDetailTabs } from './page-detail-tabs'
 import { ReelsTab } from './reels-tab'
 import { SettingsForm, type Page } from './settings-form'
+import { FailedPostsTab } from './failed-posts-tab'
 
 export default async function PageDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -49,6 +50,34 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
   const startingFollowers = profile.followers_count || 0
   const followersDelta = currentFollowers - startingFollowers
 
+  const startOfToday = new Date()
+  startOfToday.setUTCHours(0, 0, 0, 0)
+
+  // Fetch today's posting jobs to count posted and failed today
+  const { data: todayJobs } = await supabase
+    .from('adu_posting_jobs')
+    .select('status')
+    .eq('page_id', id)
+    .gte('updated_at', startOfToday.toISOString())
+
+  let postedToday = 0
+  let failedToday = 0
+  for (const job of todayJobs || []) {
+    if (job.status === 'published') {
+      postedToday += 1
+    } else if (['failed_to_publish', 'publish_error', 'integrity_error'].includes(job.status)) {
+      failedToday += 1
+    }
+  }
+
+  // Fetch all failed jobs and reasons
+  const { data: failedJobs } = await supabase
+    .from('adu_posting_jobs')
+    .select('job_id, reel_id, reel_caption, status, last_error_code, last_error_message, updated_at')
+    .eq('page_id', id)
+    .in('status', ['failed_to_publish', 'publish_error', 'integrity_error'])
+    .order('updated_at', { ascending: false })
+
   const pageProfile = profile as unknown as Page & {
     sync_status: string | null
     created_at: string | null
@@ -67,6 +96,9 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
             postedReels={postedReels}
             failedReels={failedReels}
             followersDelta={followersDelta}
+            postsPerDay={profile.posts_per_day || 0}
+            postedToday={postedToday}
+            failedToday={failedToday}
           />
         }
         insights={
@@ -76,6 +108,7 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
           />
         }
         reels={<ReelsTab pageId={profile.id} />}
+        failedPosts={<FailedPostsTab failedJobs={failedJobs || []} />}
         settings={<SettingsForm profile={pageProfile} />}
       />
     </div>

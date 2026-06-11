@@ -21,6 +21,25 @@ function fbLog(logCtx, event, fields = {}) {
   );
 }
 
+export async function fetchWithTimeout(url, options = {}, timeoutMs = 45000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return res;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(`fetch_timeout Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
 function isTransientNetworkError(message) {
   const m = String(message || '').toLowerCase();
   return (
@@ -78,7 +97,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
         upload_mode: mode,
       });
 
-      const startRes = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${fbPageId}/video_reels`, {
+      const startRes = await fetchWithTimeout(`https://graph.facebook.com/${META_GRAPH_VERSION}/${fbPageId}/video_reels`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,7 +126,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
         if (!fileUrl) {
           throw new Error('facebook_publish_missing_hosted_file_url');
         }
-        const uploadRes = await fetch(uploadUrl, {
+        const uploadRes = await fetchWithTimeout(uploadUrl, {
           method: 'POST',
           headers: {
             Authorization: `OAuth ${token}`,
@@ -141,7 +160,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
           if (!fileSize) {
             throw new Error('facebook_stream_upload_missing_file_size');
           }
-          const uploadRes = await fetch(uploadUrl, {
+          const uploadRes = await fetchWithTimeout(uploadUrl, {
             method: 'POST',
             headers: {
               Authorization: `OAuth ${token}`,
@@ -201,7 +220,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
         description: caption || '...',
       });
       const finishUrl = `https://graph.facebook.com/${META_GRAPH_VERSION}/${fbPageId}/video_reels?${finishParams.toString()}`;
-      const finishRes = await fetch(finishUrl, { method: 'POST' });
+      const finishRes = await fetchWithTimeout(finishUrl, { method: 'POST' });
       const finishData = await finishRes.json();
       fbLog(ctx, 'fb_reels_finish_http', {
         attempt: attempts,

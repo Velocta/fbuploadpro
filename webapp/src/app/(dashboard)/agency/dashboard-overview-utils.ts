@@ -52,19 +52,13 @@ export function pageNonActiveStatusDisplay(
   return { reason, tone }
 }
 
-export function aggregateOverviewStats(pages: OverviewPageRow[], downloadedReels: number) {
-  let pendingReels = 0
-  let postedReels = 0
-  let failedReels = 0
+export function aggregateOverviewStats(pages: OverviewPageRow[]) {
   let activePages = 0
   let totalFollowersGained = 0
 
   const nonActivePages: Array<OverviewPageRow & { reason: string; tone: NonActivePageTone }> = []
 
   for (const page of pages) {
-    pendingReels += page.pending_reels_count ?? 0
-    postedReels += page.posted_reels_count ?? 0
-    failedReels += page.failed_reels_count ?? 0
     if (page.status === 'active') activePages += 1
     totalFollowersGained += Math.max((page.followers_gained ?? 0) - (page.followers_count ?? 0), 0)
 
@@ -74,24 +68,9 @@ export function aggregateOverviewStats(pages: OverviewPageRow[], downloadedReels
 
   nonActivePages.sort((a, b) => a.page_name.localeCompare(b.page_name))
 
-  const totalReels = pendingReels + downloadedReels + postedReels + failedReels
-
-  const pipelinePercents = {
-    pending: totalReels > 0 ? Math.round((pendingReels / totalReels) * 100) : 0,
-    downloaded: totalReels > 0 ? Math.round((downloadedReels / totalReels) * 100) : 0,
-    posted: totalReels > 0 ? Math.round((postedReels / totalReels) * 100) : 0,
-    failed: totalReels > 0 ? Math.round((failedReels / totalReels) * 100) : 0,
-  }
-
   return {
     totalPages: pages.length,
     activePages,
-    pendingReels,
-    downloadedReels,
-    postedReels,
-    failedReels,
-    totalReels,
-    pipelinePercents,
     totalFollowersGained,
     nonActivePages,
     nonActiveCount: nonActivePages.length,

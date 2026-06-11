@@ -33,8 +33,9 @@ import {
   isTransientNetworkError,
   rateLimitUntilIso,
   resolveSecurity368PageStatus,
+  parseFacebookError,
 } from './error-classification.js';
-import { publishToFacebook } from './integrations/facebook.js';
+import { publishToFacebook, fetchWithTimeout } from './integrations/facebook.js';
 
 const INTERNAL_JOB_PATH = '/internal/v2/process-job';
 
@@ -77,6 +78,19 @@ async function deleteR2Object(env, jobId, mediaObjectKey) {
       media_object_key: mediaObjectKey,
       message: String(deleteErr?.message || deleteErr),
     });
+    const supabase = getSupabaseClient(env);
+    try {
+      await supabase.from('failed_r2_deletions').insert({
+        bucket_name: 'fbuploadpro-adu-buffer',
+        object_key: mediaObjectKey,
+        last_error: String(deleteErr?.message || deleteErr).slice(0, 1000),
+      });
+    } catch (dbErr) {
+      v2Log('failed_r2_deletion_db_record_error', {
+        job_id: jobId,
+        message: String(dbErr?.message || dbErr),
+      });
+    }
   }
 }
 
@@ -279,7 +293,7 @@ async function processPublishJob(env, job) {
     const baseWithSlash = publicBase.replace(/\/*$/, '/');
     hostedFileUrl = new URL(encodeURI(mediaObjectKey), baseWithSlash).href;
 
-    const preflight = await fetch(hostedFileUrl, { method: 'HEAD' });
+    const preflight = await fetchWithTimeout(hostedFileUrl, { method: 'HEAD' });
     if (!preflight.ok) {
       v2Log('publish_job_error', {
         job_id: jobId,
@@ -336,6 +350,7 @@ async function processPublishJob(env, job) {
 
 async function handlePublishError(env, supabase, job, errMsg) {
   const code = errMsg.split(' ')[0];
+  const cleanErrMsg = parseFacebookError(errMsg);
 
   if (isFacebookVerificationRequired(errMsg)) {
     await failPublishForVerificationRequired(supabase, job.job_id, job.page_id, job.reel_internal_id);
@@ -380,7 +395,7 @@ async function handlePublishError(env, supabase, job, errMsg) {
   }
 
   if (isFacebookRobotsTxtBlocked(errMsg)) {
-    await markPublishFailedForFacebookRobots(supabase, job.job_id, job.reel_internal_id, errMsg);
+    await markPublishFailedForFacebookRobots(supabase, job.job_id, job.reel_internal_id, cleanErrMsg);
     return { terminal: true };
   }
 
@@ -398,7 +413,7 @@ async function handlePublishError(env, supabase, job, errMsg) {
       job.job_id,
       job.reel_internal_id,
       code,
-      errMsg.slice(0, 500)
+      cleanErrMsg.slice(0, 500)
     );
     if (retryError) {
       v2Log('transient_retry_error', { job_id: job.job_id, message: retryError.message });
@@ -408,7 +423,7 @@ async function handlePublishError(env, supabase, job, errMsg) {
         supabase,
         job,
         'publish_transient_retries_exhausted',
-        errMsg
+        cleanErrMsg
       );
       return { terminal: true };
     }
@@ -420,13 +435,13 @@ async function handlePublishError(env, supabase, job, errMsg) {
     job.job_id,
     job.reel_internal_id,
     code,
-    errMsg.slice(0, 500)
+    cleanErrMsg.slice(0, 500)
   );
   if (retryError) {
     v2Log('increment_publish_retry_error', { job_id: job.job_id, message: retryError.message });
   }
   if (exhausted) {
-    await completeUnhandledPublishFailure(supabase, job, 'publish_retries_exhausted', errMsg);
+    await completeUnhandledPublishFailure(supabase, job, 'publish_retries_exhausted', cleanErrMsg);
     return { terminal: true };
   }
   return { retry: true };
@@ -463,11 +478,12 @@ export default {
         return Response.json({ ok: true, job_id: job.job_id ?? null });
       } catch (error) {
         const errMsg = String(error?.message || 'publish_failed');
+        const cleanErrMsg = parseFacebookError(errMsg);
 
         v2Log('internal_job_error', {
           job_id: job.job_id ?? null,
           error_code: errMsg.split(' ')[0],
-          message: errMsg.slice(0, 500),
+          message: cleanErrMsg.slice(0, 500),
         });
 
         const outcome = await handlePublishError(env, supabase, job, errMsg);
@@ -477,12 +493,12 @@ export default {
         }
         if (outcome.retry) {
           return Response.json(
-            { ok: false, retry: true, job_id: job.job_id ?? null, error: errMsg.slice(0, 500) },
+            { ok: false, retry: true, job_id: job.job_id ?? null, error: cleanErrMsg.slice(0, 500) },
             { status: 200 }
           );
         }
 
-        await completeUnhandledPublishFailure(supabase, job, errMsg.split(' ')[0], errMsg);
+        await completeUnhandledPublishFailure(supabase, job, errMsg.split(' ')[0], cleanErrMsg);
         return Response.json({ ok: false, terminal: true, job_id: job.job_id ?? null }, { status: 200 });
       }
     }

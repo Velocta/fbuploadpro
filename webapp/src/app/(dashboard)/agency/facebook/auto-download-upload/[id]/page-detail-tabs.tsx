@@ -6,17 +6,19 @@ import {
   BarChart3,
   Film,
   Settings2,
+  AlertTriangle,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
-type TabId = 'overview' | 'insights' | 'reels' | 'settings'
+type TabId = 'overview' | 'insights' | 'reels' | 'failed-posts' | 'settings'
 
 const TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'insights', label: 'Insights', icon: BarChart3 },
   { id: 'reels', label: 'Reels', icon: Film },
+  { id: 'failed-posts', label: 'Failed Posts Reasons', icon: AlertTriangle },
   { id: 'settings', label: 'Settings', icon: Settings2 },
 ]
 
@@ -24,11 +26,13 @@ export function PageDetailTabs({
   overview,
   insights,
   reels,
+  failedPosts,
   settings,
 }: {
   overview: ReactNode
   insights: ReactNode
   reels: ReactNode
+  failedPosts: ReactNode
   settings: ReactNode
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
@@ -37,6 +41,7 @@ export function PageDetailTabs({
     overview,
     insights,
     reels,
+    'failed-posts': failedPosts,
     settings,
   }
 

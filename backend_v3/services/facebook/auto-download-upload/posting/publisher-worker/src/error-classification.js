@@ -137,3 +137,36 @@ export function isFacebookRobotsTxtBlocked(message) {
     m.includes('fileurlprocessingerror')
   );
 }
+
+export function parseFacebookError(message) {
+  const m = String(message || '');
+  const jsonStart = m.indexOf('{');
+  if (jsonStart !== -1) {
+    try {
+      const jsonStr = m.substring(jsonStart);
+      const data = JSON.parse(jsonStr);
+      const fbErr = data?.error;
+      if (fbErr) {
+        const parts = [];
+        if (fbErr.error_user_title) {
+          parts.push(fbErr.error_user_title);
+        }
+        if (fbErr.error_user_msg) {
+          parts.push(fbErr.error_user_msg);
+        }
+        if (fbErr.message) {
+          parts.push(fbErr.message);
+        }
+        if (parts.length > 0) {
+          const detailedMsg = parts.join(' - ');
+          const prefix = m.substring(0, jsonStart).trim();
+          return `${prefix}: ${detailedMsg}`;
+        }
+      }
+    } catch (e) {
+      // Ignore JSON parse error and fallback
+    }
+  }
+  return m;
+}
+
