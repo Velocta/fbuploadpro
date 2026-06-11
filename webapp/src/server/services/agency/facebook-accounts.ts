@@ -7,7 +7,6 @@ export type FacebookAccountWithPageStats = {
   fb_user_id: string
   fb_user_name: string | null
   fb_user_image: string | null
-  fb_user_url: string | null
   fb_user_access_token: string
   status: Database['public']['Enums']['profile_status_enum']
   created_at: string | null
@@ -80,7 +79,6 @@ export async function listAgencyFacebookAccountsEnriched(
     return {
       ...account,
       status: account.status ?? 'invalid_token',
-      fb_user_url: (account as any).fb_user_url ?? null,
       linkedPagesCount: counts.linked,
       invalidTokenPagesCount: counts.invalidToken,
     }

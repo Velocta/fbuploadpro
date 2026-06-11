@@ -71,7 +71,6 @@ create table public.facebook_accounts (
   fb_user_id text not null,
   fb_user_name text,
   fb_user_image text,
-  fb_user_url text,
   fb_user_access_token text not null, -- Long-lived token
   status profile_status_enum not null default 'invalid_token',
 
@@ -712,7 +711,6 @@ begin
       end as id,
       nullif(item->>'fb_user_name', '') as fb_user_name,
       nullif(item->>'fb_user_image', '') as fb_user_image,
-      nullif(item->>'fb_user_url', '') as fb_user_url,
       case
         when coalesce(item->>'status', '') in ('active', 'invalid_token', 'fb_verification_required', '2fa_required_on_BM', 'check_developer_app', 'account_suspended')
         then (item->>'status')::public.profile_status_enum
@@ -725,7 +723,6 @@ begin
   set
     fb_user_name = coalesce(payload.fb_user_name, fa.fb_user_name),
     fb_user_image = coalesce(payload.fb_user_image, fa.fb_user_image),
-    fb_user_url = coalesce(payload.fb_user_url, fa.fb_user_url),
     status = coalesce(payload.status, fa.status),
     updated_at = now()
   from payload

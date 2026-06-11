@@ -12,7 +12,6 @@ import {
   RefreshCw,
   Search,
   Settings2,
-  ExternalLink,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Image from 'next/image'
@@ -248,22 +247,7 @@ export function FacebookAccountsList({
                           </div>
                         )}
                         <div className="min-w-0">
-                          {(() => {
-                            const profileUrl = account.fb_user_url || (account.fb_user_id ? `https://facebook.com/${account.fb_user_id}` : null)
-                            return profileUrl ? (
-                              <a
-                                href={profileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="truncate text-lg font-semibold hover:underline hover:text-primary inline-flex items-center gap-1.5"
-                              >
-                                {account.fb_user_name}
-                                <ExternalLink className="h-3.5 w-3.5 opacity-60" />
-                              </a>
-                            ) : (
-                              <p className="truncate text-lg font-semibold">{account.fb_user_name}</p>
-                            )
-                          })()}
+                          <p className="truncate text-lg font-semibold">{account.fb_user_name}</p>
                           <p className="mt-0.5 truncate font-mono text-sm text-muted-foreground">
                             {account.fb_user_id}
                           </p>

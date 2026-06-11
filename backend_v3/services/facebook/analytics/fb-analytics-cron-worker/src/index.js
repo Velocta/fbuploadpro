@@ -37,14 +37,12 @@ async function processAccount(account) {
 
   try {
     const { userName, userImage } = await getAccountMetrics(account.fb_user_access_token);
-    const fbUserUrl = account.fb_user_id ? `https://facebook.com/${account.fb_user_id}` : null;
     return {
       ok: true,
       payload: {
         id: account.id,
         fb_user_name: userName,
         fb_user_image: userImage,
-        fb_user_url: fbUserUrl,
       },
     };
   } catch (error) {
