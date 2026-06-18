@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AppSidebar, type DashboardRole } from '@/components/dashboard/app-sidebar'
 import { ShellTokenBadge } from '@/components/dashboard/shell-token-badge'
@@ -76,16 +76,22 @@ function DashboardShellInner({
   user,
 }: DashboardShellProps) {
   const pathname = usePathname()
-  const router = useRouter()
   const supabase = createClient()
   const role = resolveDashboardRole(pathname, user.role)
   const hasTokens = user.tokens_balance > 0
   const isAgency = role === 'agency'
 
+  const [isSignOutPending, setIsSignOutPending] = useState(false)
+
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.refresh()
-    router.push('/login')
+    if (isSignOutPending) return
+    setIsSignOutPending(true)
+    try {
+      await supabase.auth.signOut()
+      window.location.href = '/login'
+    } catch {
+      setIsSignOutPending(false)
+    }
   }
 
   return (
@@ -100,6 +106,7 @@ function DashboardShellInner({
         userRole={user.role}
         tokensBalance={user.tokens_balance}
         onSignOut={() => void handleSignOut()}
+        isSignOutPending={isSignOutPending}
       />
       <SidebarInset className="min-w-0">
         <header className="dashboard-shell-header sticky top-0 z-40 flex h-14 min-w-0 items-center gap-2 overflow-hidden px-4 md:gap-3 md:px-6">

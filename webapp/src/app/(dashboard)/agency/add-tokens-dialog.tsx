@@ -6,7 +6,6 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -21,9 +20,10 @@ import {
     Youtube,
     CheckCircle2,
     Wallet,
-    Globe
+    Globe,
+    Loader2
 } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import React, { useState, type ReactNode } from "react"
 import { toast } from "sonner"
 
 type AddTokensDialogProps = {
@@ -61,6 +61,18 @@ export function AddTokensDialog({
         toast.success(`${label} copied to clipboard`)
     }
 
+    const [isPending, setIsPending] = useState(false)
+
+    const handleTriggerClick = (e: React.MouseEvent) => {
+        e.preventDefault()
+        if (isPending || open) return
+        setIsPending(true)
+        setTimeout(() => {
+            setOpen(true)
+            setIsPending(false)
+        }, 300)
+    }
+
     const defaultTrigger = (
         <Button className="h-12 px-6 font-bold shadow-xl shadow-primary/20">
             <Coins className="mr-2 h-5 w-5" />
@@ -68,13 +80,43 @@ export function AddTokensDialog({
         </Button>
     )
 
+    const renderTrigger = () => {
+        const triggerElement = trigger !== undefined ? trigger : defaultTrigger
+        if (!triggerElement) return null
+
+        if (React.isValidElement(triggerElement)) {
+            const el = triggerElement as React.ReactElement<{
+                disabled?: boolean
+                onClick?: React.MouseEventHandler
+                'aria-haspopup'?: string
+                'aria-expanded'?: boolean
+                children?: React.ReactNode
+            }>
+            const children = el.props.children
+            return React.cloneElement(el, {
+                disabled: isPending || open || el.props.disabled,
+                onClick: (e: React.MouseEvent) => {
+                    if (el.props.onClick) {
+                        el.props.onClick(e)
+                    }
+                    handleTriggerClick(e)
+                },
+                'aria-haspopup': 'dialog',
+                'aria-expanded': open,
+                children: isPending ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />
+                        Please wait...
+                    </>
+                ) : children
+            })
+        }
+        return triggerElement
+    }
+
     return (
         <Dialog open={open} onOpenChange={setOpen}>
-            {trigger !== undefined ? (
-                trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null
-            ) : (
-                <DialogTrigger asChild>{defaultTrigger}</DialogTrigger>
-            )}
+            {renderTrigger()}
             <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-hidden flex flex-col border-border bg-card p-0">
                 <div className="p-6 pb-2">
                     <DialogHeader>

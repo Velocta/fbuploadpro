@@ -1,13 +1,12 @@
 import { Suspense } from 'react'
-import { AddTokensDialog } from './add-tokens-dialog'
+import { DashboardActionsClient } from './dashboard-actions-client'
 import { AddTokensAutoOpen } from './add-tokens-auto-open'
 import { DashboardOverviewContent } from './overview-content'
 import { DashboardTokenBanner } from './dashboard-token-banner'
 import { DashboardByocSetupCard } from './dashboard-byoc-setup-card'
 import { DashboardSkeleton } from '@/components/dashboard/dashboard-skeleton'
 import { createClient, getSessionUser } from '@/lib/supabase/server'
-import { BarChart3, FileDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { BarChart3 } from 'lucide-react'
 import { AgencyGlassPageHero } from '@/components/dashboard/agency'
 import {
   deriveTokenBalanceTier,
@@ -50,17 +49,7 @@ export default async function AgencyDashboard() {
         icon={<BarChart3 className="h-7 w-7 text-primary" />}
         title={`Welcome, ${profile?.name ?? 'Agency'}`}
         description="Monitor automation health and page status at a glance."
-        actions={
-          <>
-            <Button variant="outline" asChild>
-              <a href="/api/v1/agency/usage/export.csv" download>
-                <FileDown className="mr-2 h-4 w-4 text-muted-foreground" />
-                Download usage CSV
-              </a>
-            </Button>
-            <AddTokensDialog />
-          </>
-        }
+        actions={<DashboardActionsClient />}
       />
 
       {tokenTier === 'zero' || tokenTier === 'low' ? (

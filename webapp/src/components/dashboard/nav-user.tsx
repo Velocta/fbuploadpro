@@ -1,6 +1,6 @@
 'use client'
 
-import { Coins, LogOut } from 'lucide-react'
+import { Coins, LogOut, Loader2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,7 @@ type NavUserProps = {
   tokensBalance?: number
   showTokens?: boolean
   onSignOut: () => void
+  isSignOutPending?: boolean
 }
 
 function TokensBadge({
@@ -57,6 +58,7 @@ export function NavUser({
   tokensBalance = 0,
   showTokens = false,
   onSignOut,
+  isSignOutPending = false,
 }: NavUserProps) {
   const { state } = useSidebar()
   const collapsed = state === 'collapsed'
@@ -89,9 +91,14 @@ export function NavUser({
                   size="icon"
                   className="size-8 w-full text-muted-foreground hover:text-destructive"
                   onClick={onSignOut}
+                  disabled={isSignOutPending}
                   aria-label="Sign out"
                 >
-                  <LogOut className="size-4" />
+                  {isSignOutPending ? (
+                    <Loader2 className="size-4 animate-spin text-destructive" />
+                  ) : (
+                    <LogOut className="size-4" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right">Sign out</TooltipContent>
@@ -116,9 +123,14 @@ export function NavUser({
           variant="ghost"
           className="w-full justify-start text-muted-foreground hover:text-destructive"
           onClick={onSignOut}
+          disabled={isSignOutPending}
         >
-          <LogOut className="size-4" />
-          <span className="ml-2">Sign out</span>
+          {isSignOutPending ? (
+            <Loader2 className="size-4 animate-spin text-destructive" />
+          ) : (
+            <LogOut className="size-4" />
+          )}
+          <span className="ml-2">{isSignOutPending ? 'Signing out...' : 'Sign out'}</span>
         </Button>
       </div>
     </SidebarFooter>

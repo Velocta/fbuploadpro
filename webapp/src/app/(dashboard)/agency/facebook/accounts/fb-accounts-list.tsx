@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -55,27 +55,49 @@ export function FacebookAccountsList({
   summary: { total: number; active: number; invalidToken: number }
   hasFacebookApp: boolean
 }) {
-  const [isPending, startTransition] = useTransition()
+  const [isPending, setIsPending] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const search = searchParams.get('q') || ''
-  const statusFilter = (searchParams.get('status') as StatusFilter) || 'all'
+  const initialSearch = searchParams.get('q') || ''
+  const initialStatusFilter = (searchParams.get('status') as StatusFilter) || 'all'
   const pageParam = searchParams.get('page')
-  const page = pageParam ? parseInt(pageParam, 10) || 1 : 1
+  const initialPage = pageParam ? parseInt(pageParam, 10) || 1 : 1
 
-  const [searchInput, setSearchInput] = useState(search)
+  // Client-side local states for instantaneous responsiveness
+  const [search, setSearch] = useState(initialSearch)
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
+  const [page, setPage] = useState(initialPage)
+
+  const [searchInput, setSearchInput] = useState(initialSearch)
+
+  // Sync state if URL changes externally
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearch(initialSearch)
+    setSearchInput(initialSearch)
+  }, [initialSearch])
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setSearchInput(search)
-    }, 0)
-    return () => clearTimeout(t)
-  }, [search])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatusFilter(initialStatusFilter)
+  }, [initialStatusFilter])
 
-  const updateFilters = (updates: { q?: string | null; status?: string | null; page?: number | null }) => {
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(initialPage)
+  }, [initialPage])
+
+  // Reset navigation loading state when URL params or data updates
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsPending(false)
+  }, [searchParams, accounts])
+
+  const updateFiltersUrl = (updates: { q?: string | null; status?: string | null; page?: number | null }) => {
+    setIsPending(true)
     const params = new URLSearchParams(searchParams.toString())
     if ('q' in updates) {
       const qVal = updates.q?.trim()
@@ -94,6 +116,17 @@ export function FacebookAccountsList({
     }
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
+
+  // Debounce URL updates for search queries to keep typing fluid
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (search !== initialSearch) {
+        updateFiltersUrl({ q: search, page: 1 })
+      }
+    }, 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, initialSearch])
 
   const filteredAccounts = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -115,29 +148,27 @@ export function FacebookAccountsList({
     currentPage * ACCOUNTS_PAGE_SIZE,
   )
 
-  const handleDelete = (id: string, accountName: string) => {
+  const handleDelete = async (id: string, accountName: string) => {
     if (isPending || deletingId) return
     setDeletingId(id)
-    startTransition(async () => {
-      try {
-        const result = await fetch(`/api/v1/agency/facebook/accounts/${id}`, { method: 'DELETE' })
-        const payload = await result.json().catch(() => null)
-        if (!result.ok) {
-          toast.error('Failed to disconnect account', {
-            description: payload?.error || 'Unknown error',
-          })
-        } else {
-          toast.success('Account disconnected', {
-            description: `${accountName} has been disconnected successfully.`,
-          })
-          router.refresh()
-        }
-      } catch {
-        toast.error('An unexpected error occurred while disconnecting')
-      } finally {
-        setDeletingId(null)
+    try {
+      const result = await fetch(`/api/v1/agency/facebook/accounts/${id}`, { method: 'DELETE' })
+      const payload = await result.json().catch(() => null)
+      if (!result.ok) {
+        toast.error('Failed to disconnect account', {
+          description: payload?.error || 'Unknown error',
+        })
+      } else {
+        toast.success('Account disconnected', {
+          description: `${accountName} has been disconnected successfully.`,
+        })
+        router.refresh()
       }
-    })
+    } catch {
+      toast.error('An unexpected error occurred while disconnecting')
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   if (!hasFacebookApp) {
@@ -216,15 +247,19 @@ export function FacebookAccountsList({
                 placeholder="Search accounts by name or ID..."
                 value={searchInput}
                 onChange={(e) => {
-                  setSearchInput(e.target.value)
-                  updateFilters({ q: e.target.value })
+                  const val = e.target.value
+                  setSearchInput(val)
+                  setSearch(val)
+                  setPage(1)
                 }}
               />
             </div>
             <Select
               value={statusFilter}
               onValueChange={(v: StatusFilter) => {
-                updateFilters({ status: v })
+                setStatusFilter(v)
+                setPage(1)
+                updateFiltersUrl({ status: v, page: 1 })
               }}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 sm:w-44">
@@ -403,9 +438,14 @@ export function FacebookAccountsList({
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => updateFilters({ page: Math.max(1, currentPage - 1) })}
-                disabled={currentPage === 1}
+                onClick={() => {
+                  const newPage = Math.max(1, currentPage - 1)
+                  setPage(newPage)
+                  updateFiltersUrl({ page: newPage })
+                }}
+                disabled={currentPage === 1 || isPending}
               >
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />}
                 Previous
               </Button>
               <span className="text-sm text-muted-foreground">
@@ -415,9 +455,14 @@ export function FacebookAccountsList({
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => updateFilters({ page: Math.min(totalPages, currentPage + 1) })}
-                disabled={currentPage >= totalPages}
+                onClick={() => {
+                  const newPage = Math.min(totalPages, currentPage + 1)
+                  setPage(newPage)
+                  updateFiltersUrl({ page: newPage })
+                }}
+                disabled={currentPage >= totalPages || isPending}
               >
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />}
                 Next
               </Button>
             </div>

@@ -42,6 +42,7 @@ type AppSidebarProps = {
   userRole: string
   tokensBalance: number
   onSignOut: () => void
+  isSignOutPending?: boolean
 }
 
 const DEFAULT_OPEN_GROUPS: Record<string, boolean> = {
@@ -196,6 +197,7 @@ export function AppSidebar({
   userRole,
   tokensBalance,
   onSignOut,
+  isSignOutPending = false,
 }: AppSidebarProps) {
   const homeHref = useMemo(() => {
     if (role === 'super-admin') return '/super-admin'
@@ -229,6 +231,7 @@ export function AppSidebar({
         tokensBalance={tokensBalance}
         showTokens={role === 'agency'}
         onSignOut={onSignOut}
+        isSignOutPending={isSignOutPending}
       />
     </Sidebar>
   )
