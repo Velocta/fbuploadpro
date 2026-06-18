@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
   Settings2,
+  Loader2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import Image from 'next/image'
@@ -55,6 +56,7 @@ export function FacebookAccountsList({
   hasFacebookApp: boolean
 }) {
   const [isPending, startTransition] = useTransition()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -114,19 +116,26 @@ export function FacebookAccountsList({
   )
 
   const handleDelete = (id: string, accountName: string) => {
-    if (isPending) return
+    if (isPending || deletingId) return
+    setDeletingId(id)
     startTransition(async () => {
-      const result = await fetch(`/api/v1/agency/facebook/accounts/${id}`, { method: 'DELETE' })
-      const payload = await result.json().catch(() => null)
-      if (!result.ok) {
-        toast.error('Failed to disconnect account', {
-          description: payload?.error || 'Unknown error',
-        })
-      } else {
-        toast.success('Account disconnected', {
-          description: `${accountName} has been disconnected successfully.`,
-        })
-        window.location.reload()
+      try {
+        const result = await fetch(`/api/v1/agency/facebook/accounts/${id}`, { method: 'DELETE' })
+        const payload = await result.json().catch(() => null)
+        if (!result.ok) {
+          toast.error('Failed to disconnect account', {
+            description: payload?.error || 'Unknown error',
+          })
+        } else {
+          toast.success('Account disconnected', {
+            description: `${accountName} has been disconnected successfully.`,
+          })
+          router.refresh()
+        }
+      } catch {
+        toast.error('An unexpected error occurred while disconnecting')
+      } finally {
+        setDeletingId(null)
       }
     })
   }
@@ -273,6 +282,7 @@ export function FacebookAccountsList({
                               sizes="48px"
                               className="object-cover"
                               unoptimized
+                              priority={index < 3}
                             />
                           </div>
                         ) : (
@@ -293,10 +303,14 @@ export function FacebookAccountsList({
                             variant="ghost"
                             size="icon"
                             className="h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            disabled={isPending}
+                            disabled={isPending || deletingId !== null}
                             title="Disconnect account"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            {deletingId === account.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-destructive" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent className="rounded-2xl border-border/50 bg-card/95 backdrop-blur-xl">
@@ -319,9 +333,9 @@ export function FacebookAccountsList({
                                 handleDelete(account.id, account.fb_user_name || 'this account')
                               }
                               className="h-11 rounded-xl bg-destructive px-6 font-bold text-destructive-foreground hover:bg-destructive/90"
-                              disabled={isPending}
+                              disabled={isPending || deletingId !== null}
                             >
-                              {isPending ? 'Disconnecting...' : 'Disconnect'}
+                              {deletingId === account.id ? 'Disconnecting...' : 'Disconnect'}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -370,6 +384,7 @@ export function FacebookAccountsList({
                             'w-full rounded-full',
                             needsReconnect && 'bg-destructive hover:bg-destructive/90',
                           )}
+                          disabled={isPending || deletingId !== null}
                         >
                           <RefreshCw className="mr-2 h-4 w-4" />
                           Reconnect

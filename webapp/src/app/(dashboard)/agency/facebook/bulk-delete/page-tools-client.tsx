@@ -244,6 +244,7 @@ export function PageToolsClient() {
 
   useEffect(() => {
     if (selectedPage && selectedAccountId && viewMode === 'manual') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void loadBrowseContent(browseType, true)
     }
   }, [selectedPage, selectedAccountId, viewMode, browseType, loadBrowseContent])

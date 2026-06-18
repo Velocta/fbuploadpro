@@ -7,7 +7,7 @@ export type FacebookAccountWithPageStats = {
   fb_user_id: string
   fb_user_name: string | null
   fb_user_image: string | null
-  fb_user_access_token: string
+  fb_user_access_token?: string
   status: Database['public']['Enums']['profile_status_enum']
   created_at: string | null
   updated_at: string | null
@@ -31,7 +31,7 @@ export async function listAgencyFacebookAccountsEnriched(
 
   const { data: accounts, error } = await supabase
     .from('facebook_accounts')
-    .select('*')
+    .select('id, agency_id, fb_user_id, fb_user_name, fb_user_image, status, created_at, updated_at')
     .eq('agency_id', agencyId)
     .order('created_at', { ascending: false })
 

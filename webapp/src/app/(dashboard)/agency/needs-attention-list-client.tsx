@@ -83,7 +83,7 @@ export function NeedsAttentionListClient({
         <p className="text-sm text-muted-foreground">No pages match this filter.</p>
       ) : (
         <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
-          {filtered.map((page) => {
+          {filtered.map((page, index) => {
             const isCompleted = page.tone === 'success'
             return (
               <li key={page.id}>
@@ -104,6 +104,7 @@ export function NeedsAttentionListClient({
                       height={40}
                       className="h-10 w-10 shrink-0 rounded-lg object-cover ring-1 ring-border/50"
                       unoptimized
+                      priority={index < 2}
                     />
                   ) : (
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted ring-1 ring-border/50">

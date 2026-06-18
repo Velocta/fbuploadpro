@@ -20,21 +20,24 @@ export default async function AgencyDashboard() {
 
   const supabase = await createClient()
 
-  const { data: profile } = await supabase
-    .from('users')
-    .select('name, tokens_balance, fb_app_id, fb_app_secret, rss_autoposter_enabled')
-    .eq('id', user.id)
-    .single()
+  const [profileResult, fbAccountsResult] = await Promise.all([
+    supabase
+      .from('users')
+      .select('name, tokens_balance, fb_app_id, fb_app_secret, rss_autoposter_enabled')
+      .eq('id', user.id)
+      .single(),
+    supabase
+      .from('facebook_accounts')
+      .select('id', { count: 'exact', head: true })
+      .eq('agency_id', user.id),
+  ])
 
+  const profile = profileResult.data
   const tokensBalance = profile?.tokens_balance ?? 0
   const hasTokens = tokensBalance > 0
   const tokenTier = deriveTokenBalanceTier(tokensBalance)
   const hasFacebookApp = hasFacebookByocConfigured(profile)
-
-  const { count: fbAccountsCount } = await supabase
-    .from('facebook_accounts')
-    .select('id', { count: 'exact', head: true })
-    .eq('agency_id', user.id)
+  const fbAccountsCount = fbAccountsResult.count
 
   return (
     <div className="space-y-6 agency-motion-standard pb-8">
