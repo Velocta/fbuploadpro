@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { AppSidebar, type DashboardRole } from '@/components/dashboard/app-sidebar'
@@ -82,15 +82,19 @@ function DashboardShellInner({
   const isAgency = role === 'agency'
 
   const [isSignOutPending, setIsSignOutPending] = useState(false)
+  const signOutLockRef = useRef(false)
 
   const handleSignOut = async () => {
-    if (isSignOutPending) return
+    if (signOutLockRef.current) return
+    signOutLockRef.current = true
     setIsSignOutPending(true)
     try {
-      await supabase.auth.signOut()
+      // Sign out locally immediately so it bypasses network latency and redirects instantly
+      await supabase.auth.signOut({ scope: 'local' })
       window.location.href = '/login'
     } catch {
       setIsSignOutPending(false)
+      signOutLockRef.current = false
     }
   }
 

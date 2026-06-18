@@ -20,8 +20,7 @@ import {
     Youtube,
     CheckCircle2,
     Wallet,
-    Globe,
-    Loader2
+    Globe
 } from "lucide-react"
 import React, { useState, type ReactNode } from "react"
 import { toast } from "sonner"
@@ -61,16 +60,10 @@ export function AddTokensDialog({
         toast.success(`${label} copied to clipboard`)
     }
 
-    const [isPending, setIsPending] = useState(false)
-
     const handleTriggerClick = (e: React.MouseEvent) => {
         e.preventDefault()
-        if (isPending || open) return
-        setIsPending(true)
-        setTimeout(() => {
-            setOpen(true)
-            setIsPending(false)
-        }, 300)
+        if (open) return
+        setOpen(true)
     }
 
     const defaultTrigger = (
@@ -92,9 +85,7 @@ export function AddTokensDialog({
                 'aria-expanded'?: boolean
                 children?: React.ReactNode
             }>
-            const children = el.props.children
             return React.cloneElement(el, {
-                disabled: isPending || open || el.props.disabled,
                 onClick: (e: React.MouseEvent) => {
                     if (el.props.onClick) {
                         el.props.onClick(e)
@@ -103,12 +94,6 @@ export function AddTokensDialog({
                 },
                 'aria-haspopup': 'dialog',
                 'aria-expanded': open,
-                children: isPending ? (
-                    <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />
-                        Please wait...
-                    </>
-                ) : children
             })
         }
         return triggerElement

@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { FileDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AddTokensDialog } from './add-tokens-dialog'
 
 export function DashboardActionsClient() {
   const [isDownloading, setIsDownloading] = useState(false)
+  const downloadLockRef = useRef(false)
 
   const handleDownload = async () => {
-    if (isDownloading) return
+    if (downloadLockRef.current) return
+    downloadLockRef.current = true
     setIsDownloading(true)
     
     try {
@@ -31,6 +33,7 @@ export function DashboardActionsClient() {
       // Small timeout to keep visual feedback visible and prevent double clicks
       setTimeout(() => {
         setIsDownloading(false)
+        downloadLockRef.current = false
       }, 500)
     }
   }

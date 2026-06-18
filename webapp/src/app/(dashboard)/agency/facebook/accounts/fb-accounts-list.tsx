@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -55,7 +55,7 @@ export function FacebookAccountsList({
   summary: { total: number; active: number; invalidToken: number }
   hasFacebookApp: boolean
 }) {
-  const [isPending, setIsPending] = useState(false)
+  const [isPageChanging, setIsPageChanging] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const router = useRouter()
   const pathname = usePathname()
@@ -73,16 +73,22 @@ export function FacebookAccountsList({
 
   const [searchInput, setSearchInput] = useState(initialSearch)
 
+  const lastPersistedSearchRef = useRef(initialSearch)
+  const lastPersistedStatusRef = useRef(initialStatusFilter)
+  const paginationLockRef = useRef(false)
+
   // Sync state if URL changes externally
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSearch(initialSearch)
     setSearchInput(initialSearch)
+    lastPersistedSearchRef.current = initialSearch
   }, [initialSearch])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatusFilter(initialStatusFilter)
+    lastPersistedStatusRef.current = initialStatusFilter
   }, [initialStatusFilter])
 
   useEffect(() => {
@@ -90,43 +96,39 @@ export function FacebookAccountsList({
     setPage(initialPage)
   }, [initialPage])
 
-  // Reset navigation loading state when URL params or data updates
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsPending(false)
-  }, [searchParams, accounts])
-
   const updateFiltersUrl = (updates: { q?: string | null; status?: string | null; page?: number | null }) => {
-    setIsPending(true)
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(window.location.search)
     if ('q' in updates) {
       const qVal = updates.q?.trim()
       if (qVal) params.set('q', qVal)
       else params.delete('q')
       params.delete('page')
+      lastPersistedSearchRef.current = qVal || ''
     }
     if ('status' in updates) {
       if (updates.status && updates.status !== 'all') params.set('status', updates.status)
       else params.delete('status')
       params.delete('page')
+      lastPersistedStatusRef.current = (updates.status as StatusFilter) || 'all'
     }
     if ('page' in updates) {
       if (updates.page && updates.page > 1) params.set('page', String(updates.page))
       else params.delete('page')
     }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    const newUrl = `${pathname}?${params.toString()}`
+    window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl)
   }
 
   // Debounce URL updates for search queries to keep typing fluid
   useEffect(() => {
     const t = setTimeout(() => {
-      if (search !== initialSearch) {
+      if (search !== lastPersistedSearchRef.current) {
         updateFiltersUrl({ q: search, page: 1 })
       }
     }, 400)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, initialSearch])
+  }, [search])
 
   const filteredAccounts = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -148,8 +150,22 @@ export function FacebookAccountsList({
     currentPage * ACCOUNTS_PAGE_SIZE,
   )
 
+  const handlePageChange = (newPage: number) => {
+    if (paginationLockRef.current) return
+    paginationLockRef.current = true
+    setIsPageChanging(true)
+
+    setPage(newPage)
+    updateFiltersUrl({ page: newPage })
+
+    setTimeout(() => {
+      setIsPageChanging(false)
+      paginationLockRef.current = false
+    }, 250)
+  }
+
   const handleDelete = async (id: string, accountName: string) => {
-    if (isPending || deletingId) return
+    if (deletingId) return
     setDeletingId(id)
     try {
       const result = await fetch(`/api/v1/agency/facebook/accounts/${id}`, { method: 'DELETE' })
@@ -338,7 +354,7 @@ export function FacebookAccountsList({
                             variant="ghost"
                             size="icon"
                             className="h-10 w-10 shrink-0 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                            disabled={isPending || deletingId !== null}
+                            disabled={deletingId !== null}
                             title="Disconnect account"
                           >
                             {deletingId === account.id ? (
@@ -368,7 +384,7 @@ export function FacebookAccountsList({
                                 handleDelete(account.id, account.fb_user_name || 'this account')
                               }
                               className="h-11 rounded-xl bg-destructive px-6 font-bold text-destructive-foreground hover:bg-destructive/90"
-                              disabled={isPending || deletingId !== null}
+                              disabled={deletingId !== null}
                             >
                               {deletingId === account.id ? 'Disconnecting...' : 'Disconnect'}
                             </AlertDialogAction>
@@ -419,7 +435,7 @@ export function FacebookAccountsList({
                             'w-full rounded-full',
                             needsReconnect && 'bg-destructive hover:bg-destructive/90',
                           )}
-                          disabled={isPending || deletingId !== null}
+                          disabled={deletingId !== null}
                         >
                           <RefreshCw className="mr-2 h-4 w-4" />
                           Reconnect
@@ -440,12 +456,11 @@ export function FacebookAccountsList({
                 className="rounded-full"
                 onClick={() => {
                   const newPage = Math.max(1, currentPage - 1)
-                  setPage(newPage)
-                  updateFiltersUrl({ page: newPage })
+                  handlePageChange(newPage)
                 }}
-                disabled={currentPage === 1 || isPending}
+                disabled={currentPage === 1 || isPageChanging}
               >
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />}
+                {isPageChanging && <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />}
                 Previous
               </Button>
               <span className="text-sm text-muted-foreground">
@@ -457,12 +472,11 @@ export function FacebookAccountsList({
                 className="rounded-full"
                 onClick={() => {
                   const newPage = Math.min(totalPages, currentPage + 1)
-                  setPage(newPage)
-                  updateFiltersUrl({ page: newPage })
+                  handlePageChange(newPage)
                 }}
-                disabled={currentPage >= totalPages || isPending}
+                disabled={currentPage >= totalPages || isPageChanging}
               >
-                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />}
+                {isPageChanging && <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />}
                 Next
               </Button>
             </div>
