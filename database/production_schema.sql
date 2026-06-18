@@ -2360,6 +2360,8 @@ begin
     return;
   end if;
 
+  -- Source creator likely suspended/unavailable: stop downloads and posting for this page.
+  -- Changed from > 30 failures in 24 hours to > 50 failures in all time (no 24h limit) to avoid deadlock with the skip threshold.
   update public.pages p
   set
     status = 'creator_suspended',
@@ -2370,8 +2372,7 @@ begin
       from public.reels r
       where r.page_id = p.id
         and r.status = 'download_failed'
-        and r.download_failed_at >= now() - interval '24 hours'
-    ) > 30;
+    ) > 50;
 
   return query
   with active_pages as (
@@ -2382,13 +2383,14 @@ begin
     where p.status = 'active'
       and p.sync_status = 'synced'
       and coalesce(p.posts_per_day, 0) > 0
+      -- Skip claiming new downloads for pages that have > 10 failed downloads in the last 24 hours.
       and (
         select count(*)::int
         from public.reels r
         where r.page_id = p.id
           and r.status = 'download_failed'
           and r.download_failed_at >= now() - interval '24 hours'
-      ) <= 13
+      ) <= 10
   ),
   page_buffer as (
     select

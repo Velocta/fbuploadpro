@@ -6,6 +6,9 @@ compatibility_date = "2024-02-05"
 [observability]
 enabled = true
 
+[vars]
+R2_ACCOUNT_ID = "50f3ec3bd038829035ed1f6b9694e943"
+
 [[r2_buckets]]
 binding = "POSTING_MEDIA_BUCKET"
 bucket_name = "fbuploadpro-adu-buffer"

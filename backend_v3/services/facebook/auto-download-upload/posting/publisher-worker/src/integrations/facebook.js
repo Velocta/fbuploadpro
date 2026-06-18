@@ -80,11 +80,10 @@ function isFacebookRobotsOrFileUrlFetchBlocked(message) {
  * @param {string} [caption]
  * @param {object} [logCtx]
  */
-export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries = 6, caption = '...', logCtx = {}) {
+export async function publishToFacebook(fbPageId, token, hostedFileUrl, maxRetries = 6, caption = '...', logCtx = {}) {
   const ctx = { ...logCtx, fb_page_id: fbPageId };
-  const mode = mediaSpec && typeof mediaSpec === 'object' ? mediaSpec.mode : null;
-  if (mode !== 'hosted' && mode !== 'stream') {
-    throw new Error('facebook_publish_invalid_media_spec');
+  if (!hostedFileUrl) {
+    throw new Error('facebook_publish_missing_hosted_file_url');
   }
 
   let attempts = 0;
@@ -94,7 +93,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
       fbLog(ctx, 'fb_reels_attempt_begin', {
         attempt: attempts,
         max_retries: maxRetries,
-        upload_mode: mode,
+        upload_mode: 'hosted_presigned',
       });
 
       const startRes = await fetchWithTimeout(`https://graph.facebook.com/${META_GRAPH_VERSION}/${fbPageId}/video_reels`, {
@@ -121,95 +120,29 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
         startData.upload_url ||
         `https://rupload.facebook.com/video-upload/${META_GRAPH_VERSION}/${startData.video_id}`;
 
-      if (mode === 'hosted') {
-        const fileUrl = String(mediaSpec.hostedFileUrl || '').trim();
-        if (!fileUrl) {
-          throw new Error('facebook_publish_missing_hosted_file_url');
-        }
-        const uploadRes = await fetchWithTimeout(uploadUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `OAuth ${token}`,
-            file_url: fileUrl,
-          },
-        });
-        const uploadText = await uploadRes.text();
-        let uploadData;
-        try {
-          uploadData = uploadText ? JSON.parse(uploadText) : {};
-        } catch {
-          throw new Error(`facebook_hosted_upload_bad_json status=${uploadRes.status} body=${uploadText.slice(0, 200)}`);
-        }
-        fbLog(ctx, 'fb_reels_rupload_http', {
-          attempt: attempts,
-          http_status: uploadRes.status,
-          ok: uploadRes.ok,
-          rupload_success: Boolean(uploadData.success),
-          upload_kind: 'hosted_file_url',
-        });
-        if (!uploadRes.ok || !uploadData.success) {
-          throw new Error(`facebook_hosted_upload_failed status=${uploadRes.status} ${JSON.stringify(uploadData)}`);
-        }
-      } else {
-        async function streamUploadOnce() {
-          const obj = await mediaSpec.getObject();
-          if (!obj || !obj.body) {
-            throw new Error('facebook_stream_upload_missing_r2_body');
-          }
-          const fileSize = typeof obj.size === 'number' && obj.size > 0 ? obj.size : null;
-          if (!fileSize) {
-            throw new Error('facebook_stream_upload_missing_file_size');
-          }
-          const uploadRes = await fetchWithTimeout(uploadUrl, {
-            method: 'POST',
-            headers: {
-              Authorization: `OAuth ${token}`,
-              offset: '0',
-              file_size: String(fileSize),
-              'Content-Type': 'application/octet-stream',
-            },
-            body: obj.body,
-          });
-          const uploadText = await uploadRes.text();
-          let uploadData = {};
-          if (uploadText.trim()) {
-            try {
-              uploadData = JSON.parse(uploadText);
-            } catch {
-              uploadData = { _raw: uploadText.slice(0, 200) };
-            }
-          }
-          return { uploadRes, uploadText, uploadData, fileSize };
-        }
-
-        let { uploadRes, uploadText, uploadData, fileSize } = await streamUploadOnce();
-        fbLog(ctx, 'fb_reels_rupload_http', {
-          attempt: attempts,
-          http_status: uploadRes.status,
-          ok: uploadRes.ok,
-          rupload_success: uploadData.success !== false && uploadRes.ok,
-          upload_kind: 'stream_octet_stream',
-          file_size: fileSize,
-        });
-        if (!uploadRes.ok) {
-          const uploadErr = new Error(
-            `facebook_binary_upload_failed status=${uploadRes.status} ${uploadText.slice(0, 300)}`
-          );
-          if (isTransientNetworkError(uploadErr.message)) {
-            fbLog(ctx, 'fb_reels_rupload_transient_retry', { attempt: attempts });
-            ({ uploadRes, uploadText, uploadData } = await streamUploadOnce());
-            if (!uploadRes.ok) {
-              throw new Error(
-                `facebook_binary_upload_failed status=${uploadRes.status} ${uploadText.slice(0, 300)}`
-              );
-            }
-          } else {
-            throw uploadErr;
-          }
-        }
-        if (uploadData && Object.prototype.hasOwnProperty.call(uploadData, 'success') && uploadData.success !== true) {
-          throw new Error(`facebook_binary_upload_failed ${JSON.stringify(uploadData)}`);
-        }
+      const uploadRes = await fetchWithTimeout(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `OAuth ${token}`,
+          file_url: hostedFileUrl,
+        },
+      });
+      const uploadText = await uploadRes.text();
+      let uploadData;
+      try {
+        uploadData = uploadText ? JSON.parse(uploadText) : {};
+      } catch {
+        throw new Error(`facebook_hosted_upload_bad_json status=${uploadRes.status} body=${uploadText.slice(0, 200)}`);
+      }
+      fbLog(ctx, 'fb_reels_rupload_http', {
+        attempt: attempts,
+        http_status: uploadRes.status,
+        ok: uploadRes.ok,
+        rupload_success: Boolean(uploadData.success),
+        upload_kind: 'hosted_presigned',
+      });
+      if (!uploadRes.ok || !uploadData.success) {
+        throw new Error(`facebook_hosted_upload_failed status=${uploadRes.status} ${JSON.stringify(uploadData)}`);
       }
 
       const finishParams = new URLSearchParams({
@@ -234,7 +167,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
       }
       fbLog(ctx, 'fb_reels_publish_ok', {
         attempt: attempts,
-        upload_mode: mode,
+        upload_mode: 'hosted_presigned',
         video_id: startData.video_id,
       });
       return String(startData.video_id);
@@ -250,7 +183,7 @@ export async function publishToFacebook(fbPageId, token, mediaSpec, maxRetries =
         (message.includes('"code":190') || message.includes('"code": 190'));
       const verificationTerminal = message.toLowerCase().includes('confirm your identity');
       if (isFacebookRateLimitMessage(message)) throw error;
-      if (mode === 'hosted' && isFacebookRobotsOrFileUrlFetchBlocked(message)) throw error;
+      if (isFacebookRobotsOrFileUrlFetchBlocked(message)) throw error;
       if (authTerminal || verificationTerminal) throw error;
       if (isTransientNetworkError(message)) throw error;
       if (attempts >= maxRetries) {

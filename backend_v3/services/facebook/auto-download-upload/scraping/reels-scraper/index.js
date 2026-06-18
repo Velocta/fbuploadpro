@@ -10,6 +10,71 @@ import { discoverReelIdsWithYtdlp } from './discovery/ytdlp.js';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function cleanSourceUsername(sourcePlatform, sourceUsername) {
+  if (!sourceUsername) return '';
+  
+  let cleaned = sourceUsername.trim();
+  
+  // Handle leading @ if it exists (e.g. @https://... or @username)
+  if (cleaned.startsWith('@')) {
+    cleaned = cleaned.substring(1).trim();
+  }
+  
+  // Clean internal whitespaces if it's not a URL
+  const isUrl = cleaned.includes('http') || cleaned.includes('.');
+  if (!isUrl) {
+    cleaned = cleaned.replace(/\s/g, '');
+  }
+
+  try {
+    // If it looks like a URL or has domain components, try to parse it
+    if (isUrl) {
+      const urlString = cleaned.startsWith('http') ? cleaned : 'https://' + cleaned;
+      const url = new URL(urlString);
+      
+      if (sourcePlatform === 'facebook') {
+        if (url.searchParams.has('id')) {
+          return url.searchParams.get('id') || '';
+        }
+        let pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts.length > 1 && ['people', 'pages', 'groups', 'profile'].includes(pathParts[0].toLowerCase())) {
+          pathParts.shift();
+        }
+        if (pathParts[0]) {
+          return pathParts[0];
+        }
+      } else if (sourcePlatform === 'instagram') {
+        let pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts[0]) {
+          return pathParts[0];
+        }
+      } else if (sourcePlatform === 'tiktok') {
+        let pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts[0]) {
+          return pathParts[0].replace(/^@+/, '');
+        }
+      } else if (sourcePlatform === 'youtube') {
+        let pathParts = url.pathname.split('/').filter(Boolean);
+        if (pathParts.length > 1 && ['c', 'channel', 'user'].includes(pathParts[0].toLowerCase())) {
+          pathParts.shift();
+        }
+        if (pathParts[0]) {
+          return pathParts[0].replace(/^@+/, '');
+        }
+      }
+    }
+  } catch (e) {
+    // Fall back to text parsing if URL parsing fails
+  }
+
+  // Text-based fallback (e.g. "username/shorts" or "@username")
+  const slashParts = cleaned.split('/');
+  const firstSegment = slashParts[0] || cleaned;
+  
+  return firstSegment.replace(/\s/g, '').replace(/^@+/, '');
+}
+
+
 const PLATFORM_HANDLERS = {
   instagram: {
     login: loginToInstagram,
@@ -131,8 +196,22 @@ async function runYtdlpDiscovery(platform, sourceUsername) {
 }
 
 async function processJob(page, job, platform, claimSource) {
+  const cleanUsername = cleanSourceUsername(platform, job.source_username);
+  if (cleanUsername !== job.source_username) {
+    console.log(`🧹 Normalizing legacy source_username in database: "${job.source_username}" -> "${cleanUsername}"`);
+    const { error: updateError } = await supabase
+      .from('pages')
+      .update({ source_username: cleanUsername })
+      .eq('id', job.id);
+    if (updateError) {
+      console.error(`❌ Failed to update normalized source_username:`, updateError);
+    }
+    job.source_username = cleanUsername;
+  }
+
   const label = `[${claimSource} → ${platform}] ${job.source_username}`;
   console.log(`🎬 Processing ${label}`);
+
 
   if (claimSource === 'browser_pending') {
     const browserIds = await scrapeWithBrowser(page, platform, job.source_username);

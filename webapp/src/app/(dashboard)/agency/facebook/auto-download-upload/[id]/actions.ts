@@ -10,6 +10,8 @@ import { updatePageSettingsSchema, togglePageStatusSchema, updateSourceUsernameS
 import { sanitizeToUtcHHMM } from '@/lib/posting-times'
 import { zodErrorMessage } from '@/lib/validations/errors'
 import type { Database } from '@/types/database.types'
+import { sanitizeSourceIdentityInput } from '@/lib/source-identity'
+
 
 type SourcePlatform = 'instagram' | 'youtube' | 'tiktok' | 'facebook'
 type PageUpdate = Database['public']['Tables']['pages']['Update']
@@ -36,9 +38,7 @@ function formatDebugError(stage: string, err: unknown, context: Record<string, u
 }
 
 function normalizeSourceUsername(sourcePlatform: SourcePlatform, sourceUsername: string): string {
-  const cleaned = (sourceUsername || '').trim().replace(/\s/g, '')
-  if (sourcePlatform === 'facebook') return cleaned
-  return cleaned.replace(/^@/, '')
+  return sanitizeSourceIdentityInput(sourcePlatform, sourceUsername)
 }
 
 export async function updatePageSettings(formData: FormData) {

@@ -36,6 +36,7 @@ import {
   parseFacebookError,
 } from './error-classification.js';
 import { publishToFacebook, fetchWithTimeout } from './integrations/facebook.js';
+import { getR2PresignedUrl } from './integrations/r2-presign.js';
 
 const INTERNAL_JOB_PATH = '/internal/v2/process-job';
 
@@ -274,8 +275,9 @@ async function processPublishJob(env, job) {
     return;
   }
 
-  const uploadModeRaw = String(env.POSTING_MEDIA_UPLOAD_MODE || 'stream').trim().toLowerCase();
-  const uploadMode = uploadModeRaw === 'hosted' ? 'hosted' : 'stream';
+  const r2AccountId = String(env.R2_ACCOUNT_ID || '').trim();
+  const r2AccessKeyId = String(env.R2_ACCESS_KEY_ID || '').trim();
+  const r2SecretAccessKey = String(env.R2_SECRET_ACCESS_KEY || '').trim();
 
   v2Log('publish_job_begin', {
     job_id: jobId,
@@ -283,26 +285,37 @@ async function processPublishJob(env, job) {
     page_id: job.page_id ?? null,
     fb_page_id: job.fb_page_id ?? null,
     platform: job.platform ?? null,
-    upload_mode: uploadMode,
+    upload_mode: 'hosted_presigned',
   });
 
-  let hostedFileUrl = null;
-  if (uploadMode === 'hosted') {
-    const publicBase =
-      String(env.POSTING_MEDIA_PUBLIC_BASE_URL || '').trim() || DEFAULT_POSTING_MEDIA_PUBLIC_BASE_URL;
-    const baseWithSlash = publicBase.replace(/\/*$/, '/');
-    hostedFileUrl = new URL(encodeURI(mediaObjectKey), baseWithSlash).href;
+  if (!r2AccountId || !r2AccessKeyId || !r2SecretAccessKey) {
+    v2Log('publish_job_error', {
+      job_id: jobId,
+      phase: 'hosted_presign',
+      code: 'missing_r2_credentials',
+      message: 'R2 S3 credentials are not configured in environment variables or secrets.'
+    });
+    throw new Error('missing_r2_credentials');
+  }
 
-    const preflight = await fetchWithTimeout(hostedFileUrl, { method: 'HEAD' });
-    if (!preflight.ok) {
-      v2Log('publish_job_error', {
-        job_id: jobId,
-        phase: 'hosted_preflight',
-        code: 'hosted_media_preflight_failed',
-        http_status: preflight.status,
-      });
-      throw new Error(`hosted_media_preflight_failed status=${preflight.status}`);
-    }
+  let hostedFileUrl = null;
+  try {
+    hostedFileUrl = await getR2PresignedUrl({
+      accountId: r2AccountId,
+      accessKeyId: r2AccessKeyId,
+      secretAccessKey: r2SecretAccessKey,
+      bucketName: 'fbuploadpro-adu-buffer',
+      objectKey: mediaObjectKey,
+      expiresInSeconds: 3600
+    });
+  } catch (presignError) {
+    v2Log('publish_job_error', {
+      job_id: jobId,
+      phase: 'hosted_presign',
+      code: 'presign_failed',
+      message: String(presignError?.message || presignError)
+    });
+    throw new Error(`presign_failed ${presignError?.message || presignError}`);
   }
 
   const head = await env.POSTING_MEDIA_BUCKET.head(mediaObjectKey);
@@ -311,15 +324,7 @@ async function processPublishJob(env, job) {
     throw new Error('media_object_missing');
   }
 
-  const mediaSpec =
-    uploadMode === 'hosted'
-      ? { mode: 'hosted', hostedFileUrl }
-      : {
-          mode: 'stream',
-          getObject: () => env.POSTING_MEDIA_BUCKET.get(mediaObjectKey),
-        };
-
-  const graphVideoId = await publishToFacebook(job.fb_page_id, job.fb_page_access_token, mediaSpec, 6, caption, {
+  const graphVideoId = await publishToFacebook(job.fb_page_id, job.fb_page_access_token, hostedFileUrl, 6, caption, {
     job_id: jobId,
   });
   v2Log('publish_job_facebook_ok', { job_id: jobId, graph_video_id: graphVideoId ?? null });

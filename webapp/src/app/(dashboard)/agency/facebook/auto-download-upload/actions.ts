@@ -13,6 +13,8 @@ import { graphGet } from '@/server/integrations/facebook/graph-client'
 import { BulkPageInput, MultiAccountBulkPageInput } from '@/types/app.types'
 import { sanitizeToUtcHHMM } from '@/lib/posting-times'
 import { zodErrorMessage } from '@/lib/validations/errors'
+import { sanitizeSourceIdentityInput } from '@/lib/source-identity'
+
 
 type AgencyAuth = {
   is_active_override: boolean | null
@@ -24,9 +26,7 @@ type SourcePlatform = 'instagram' | 'youtube' | 'tiktok' | 'facebook'
 type ScheduleType = 'dailyrandom' | 'fixed'
 
 function normalizeSourceUsername(sourcePlatform: SourcePlatform, sourceUsername: string): string {
-  const cleaned = (sourceUsername || '').trim().replace(/\s/g, '')
-  if (sourcePlatform === 'facebook') return cleaned
-  return cleaned.replace(/^@/, '')
+  return sanitizeSourceIdentityInput(sourcePlatform, sourceUsername)
 }
 
 function buildRandomPostingTimes(timezone: string, postsPerDay: number): string[] {

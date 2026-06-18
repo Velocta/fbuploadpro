@@ -67,6 +67,12 @@ for dir in "$PUBLISH_PROCESSOR_DIR" "$PUBLISHER_DIR"; do
   put_secret "$dir" "INTERNAL_JOB_DISPATCH_TOKEN" "$INTERNAL_JOB_DISPATCH_TOKEN"
 done
 
+if [[ -n "${R2_ACCESS_KEY_ID:-}" ]] && [[ -n "${R2_SECRET_ACCESS_KEY:-}" ]]; then
+  echo "Configuring R2 S3 secrets for publisher..."
+  put_secret "$PUBLISHER_DIR" "R2_ACCESS_KEY_ID" "$R2_ACCESS_KEY_ID"
+  put_secret "$PUBLISHER_DIR" "R2_SECRET_ACCESS_KEY" "$R2_SECRET_ACCESS_KEY"
+fi
+
 echo "Deploy order (1→2→3): ADU publisher → publish-processor → scheduler"
 echo "Cloudflare worker names: fbuploadpro-adu-1-publisher, fbuploadpro-adu-2-publish-processor, fbuploadpro-adu-3-scheduler"
 echo "VPS buffer downloader: see ../downloader/README.md (PM2, not Wrangler)"
