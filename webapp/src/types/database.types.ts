@@ -7,6 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
   public: {
     Tables: {
       auth_attempts: {
@@ -285,16 +289,19 @@ export type Database = {
       system_settings: {
         Row: {
           id: number
+          posting_v2_intake_paused: boolean
           token_price_pkr: number
           updated_at: string | null
         }
         Insert: {
           id?: number
+          posting_v2_intake_paused?: boolean
           token_price_pkr?: number
           updated_at?: string | null
         }
         Update: {
           id?: number
+          posting_v2_intake_paused?: boolean
           token_price_pkr?: number
           updated_at?: string | null
         }
@@ -306,7 +313,8 @@ export type Database = {
           created_at: string | null
           id: string
           metadata: Json | null
-          type: string
+          reel_id: number | null
+          type: Database["public"]["Enums"]["token_transaction_type"]
           user_id: string
         }
         Insert: {
@@ -314,7 +322,8 @@ export type Database = {
           created_at?: string | null
           id?: string
           metadata?: Json | null
-          type: string
+          reel_id?: number | null
+          type: Database["public"]["Enums"]["token_transaction_type"]
           user_id: string
         }
         Update: {
@@ -322,15 +331,235 @@ export type Database = {
           created_at?: string | null
           id?: string
           metadata?: Json | null
-          type?: string
+          reel_id?: number | null
+          type?: Database["public"]["Enums"]["token_transaction_type"]
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "token_transactions_reel_id_fkey"
+            columns: ["reel_id"]
+            isOneToOne: false
+            referencedRelation: "reels"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "token_transactions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      errors: {
+        Row: {
+          agency_id: string | null
+          created_at: string | null
+          error_message: string
+          error_phase: string | null
+          id: string
+          metadata: Json | null
+          page_id: string | null
+          reel_id: number | null
+          retry_count: number | null
+          stack_trace: string | null
+        }
+        Insert: {
+          agency_id?: string | null
+          created_at?: string | null
+          error_message: string
+          error_phase?: string | null
+          id?: string
+          metadata?: Json | null
+          page_id?: string | null
+          reel_id?: number | null
+          retry_count?: number | null
+          stack_trace?: string | null
+        }
+        Update: {
+          agency_id?: string | null
+          created_at?: string | null
+          error_message?: string
+          error_phase?: string | null
+          id?: string
+          metadata?: Json | null
+          page_id?: string | null
+          reel_id?: number | null
+          retry_count?: number | null
+          stack_trace?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "errors_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "errors_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "errors_reel_id_fkey"
+            columns: ["reel_id"]
+            isOneToOne: false
+            referencedRelation: "reels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      failed_r2_deletions: {
+        Row: {
+          bucket_name: string
+          created_at: string
+          id: string
+          last_error: string | null
+          object_key: string
+          retry_count: number
+          updated_at: string
+        }
+        Insert: {
+          bucket_name: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          object_key: string
+          retry_count?: number
+          updated_at?: string
+        }
+        Update: {
+          bucket_name?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          object_key?: string
+          retry_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      posting_jobs_v2: {
+        Row: {
+          agency_id: string | null
+          contract_version: string | null
+          created_at: string
+          download_retries: number
+          download_started_at: string | null
+          fb_page_access_token: string
+          fb_page_id: string
+          job_id: string
+          last_error_code: string | null
+          last_error_message: string | null
+          media_content_type: string | null
+          media_duration_ms: number | null
+          media_object_key: string | null
+          media_sha256: string | null
+          media_size_bytes: number | null
+          media_url: string | null
+          mode: string
+          page_id: string
+          platform: Database["public"]["Enums"]["source_platform_enum"]
+          publish_retries: number
+          publish_started_at: string | null
+          published_at: string | null
+          reel_caption: string | null
+          reel_id: string
+          reel_internal_id: number
+          source_fingerprint: string | null
+          source_username: string
+          status: string
+          trace_id: string
+          updated_at: string
+        }
+        Insert: {
+          agency_id?: string | null
+          contract_version?: string | null
+          created_at?: string
+          download_retries?: number
+          download_started_at?: string | null
+          fb_page_access_token: string
+          fb_page_id: string
+          job_id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          media_content_type?: string | null
+          media_duration_ms?: number | null
+          media_object_key?: string | null
+          media_sha256?: string | null
+          media_size_bytes?: number | null
+          media_url?: string | null
+          mode?: string
+          page_id: string
+          platform: Database["public"]["Enums"]["source_platform_enum"]
+          publish_retries?: number
+          publish_started_at?: string | null
+          published_at?: string | null
+          reel_caption?: string | null
+          reel_id: string
+          reel_internal_id: number
+          source_fingerprint?: string | null
+          source_username: string
+          status?: string
+          trace_id?: string
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string | null
+          contract_version?: string | null
+          created_at?: string
+          download_retries?: number
+          download_started_at?: string | null
+          fb_page_access_token?: string
+          fb_page_id?: string
+          job_id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          media_content_type?: string | null
+          media_duration_ms?: number | null
+          media_object_key?: string | null
+          media_sha256?: string | null
+          media_size_bytes?: number | null
+          media_url?: string | null
+          mode?: string
+          page_id?: string
+          platform?: Database["public"]["Enums"]["source_platform_enum"]
+          publish_retries?: number
+          publish_started_at?: string | null
+          published_at?: string | null
+          reel_caption?: string | null
+          reel_id?: string
+          reel_internal_id?: number
+          source_fingerprint?: string | null
+          source_username?: string
+          status?: string
+          trace_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "posting_jobs_v2_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posting_jobs_v2_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posting_jobs_v2_reel_internal_id_fkey"
+            columns: ["reel_internal_id"]
+            isOneToOne: false
+            referencedRelation: "reels"
             referencedColumns: ["id"]
           },
         ]
@@ -1012,6 +1241,7 @@ export type Database = {
       schedule_type_enum: "fixed" | "randomfixed" | "dailyrandom"
       source_platform_enum: "instagram" | "youtube" | "tiktok" | "facebook"
       subscription_type_enum: "new" | "renewal" | "upgrade" | "correction"
+      token_transaction_type: "purchase" | "usage" | "refund" | "adjustment"
       sync_status_enum: "pending" | "browser_pending" | "synced" | "processing" | "error"
       user_role_enum: "super_admin" | "agency"
     }
@@ -1021,32 +1251,119 @@ export type Database = {
   }
 }
 
-type PublicSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
-  PublicTableNameOrOptions extends
-  | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-  | { schema: keyof Database },
-  TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
-  ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-    Database[PublicTableNameOrOptions["schema"]]["Views"])
-  : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
-    Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-  ? R
-  : never
-  : PublicTableNameOrOptions extends keyof (PublicSchema["Tables"] &
-    PublicSchema["Views"])
-  ? (PublicSchema["Tables"] &
-    PublicSchema["Views"])[PublicTableNameOrOptions] extends {
-      Row: infer R
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
     }
-  ? R
-  : never
-  : never
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
 
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
 
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
 
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
