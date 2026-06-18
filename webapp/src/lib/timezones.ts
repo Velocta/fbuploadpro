@@ -100,7 +100,7 @@ export function getStartOfTodayInTimezone(timezone: string = 'UTC'): Date {
     )
 
     return new Date(midnightTz - offsetMs)
-  } catch (e) {
+  } catch {
     const fallback = new Date()
     fallback.setUTCHours(0, 0, 0, 0)
     return fallback

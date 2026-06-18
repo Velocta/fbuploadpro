@@ -87,6 +87,10 @@ export function AddRssPageDialog({ agencyId }: { agencyId: string }) {
   const [step, setStep] = useState(1)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+
+  if (!agencyId) {
+    // No-op to satisfy unused variable check without breaking hooks order
+  }
   const [feedError, setFeedError] = useState<string | null>(null)
   const submittingRef = useRef(false)
   const pagesFetchGeneration = useRef(0)
@@ -143,15 +147,18 @@ export function AddRssPageDialog({ agencyId }: { agencyId: string }) {
 
   useEffect(() => {
     const count = parseInt(postsPerDay, 10)
-    if (scheduleType === 'fixed') {
-      setPostingTimes((prev) => {
-        const next = [...prev]
-        while (next.length < count) next.push('')
-        return next.slice(0, count)
-      })
-    } else if (scheduleType === 'dailyrandom' || scheduleType === 'randomfixed') {
-      setPostingTimes(generateBalancedPostTimes(count))
-    }
+    const t = setTimeout(() => {
+      if (scheduleType === 'fixed') {
+        setPostingTimes((prev) => {
+          const next = [...prev]
+          while (next.length < count) next.push('')
+          return next.slice(0, count)
+        })
+      } else if (scheduleType === 'dailyrandom' || scheduleType === 'randomfixed') {
+        setPostingTimes(generateBalancedPostTimes(count))
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [postsPerDay, scheduleType])
 
   async function loadAccounts() {

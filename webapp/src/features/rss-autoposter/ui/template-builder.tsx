@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import type { CanvasAspectRatio, RssTemplateDefinition, RssTemplateLayer } from '@/contracts/rss-autoposter'
 import { getCanvasDimensions } from '@/lib/rss-autoposter/presets'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
 
 const KonvaStage = dynamic(
   () => import('./template-builder-stage').then((m) => m.TemplateBuilderStage),
@@ -256,10 +257,13 @@ export function TemplateBuilder({
             ) : previewError ? (
               <p className="p-4 text-sm text-destructive">{previewError}</p>
             ) : previewUrl ? (
-              <img
+              <Image
                 src={previewUrl}
                 alt="Template preview"
+                width={360}
+                height={360}
                 className="mx-auto max-h-[420px] rounded-lg p-2"
+                unoptimized
               />
             ) : (
               <p className="p-6 text-center text-sm text-muted-foreground">

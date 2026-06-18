@@ -124,7 +124,7 @@ export async function cancelFacebookScheduledPost(params: {
             params: { access_token: params.pageToken },
           })
           return // Success on fallback
-        } catch (fallbackError) {
+        } catch {
           // Ignore fallback error and throw the original error
         }
       }
@@ -161,7 +161,7 @@ export async function rescheduleFacebookPost(params: {
             },
           })
           return
-        } catch (fallbackError) {}
+        } catch {}
       }
       throw new Error(error.response.data.error.message)
     }

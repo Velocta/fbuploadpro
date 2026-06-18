@@ -58,6 +58,7 @@ export default function UpdatePasswordPage() {
                 name="password"
                 type="password"
                 required
+                maxLength={100}
               />
             </div>
             <div className="space-y-2">
@@ -67,6 +68,7 @@ export default function UpdatePasswordPage() {
                 name="confirm"
                 type="password"
                 required
+                maxLength={100}
               />
             </div>
             <AuthErrorAlert message={error} />

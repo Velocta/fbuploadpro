@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CalendarClock,
@@ -9,9 +9,7 @@ import {
   Facebook,
   Ban,
   Clock,
-  Type,
-  Image as ImageIcon,
-  Video
+  Type
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { format } from 'date-fns'
@@ -59,11 +57,7 @@ export function LiveScheduledTab({
   )
   const [isRescheduling, setIsRescheduling] = useState(false)
 
-  useEffect(() => {
-    fetchScheduledPosts()
-  }, [fbPageId, pageAccessToken])
-
-  async function fetchScheduledPosts() {
+  const fetchScheduledPosts = useCallback(async () => {
     if (!fbPageId || !pageAccessToken) {
       setError('Missing page credentials')
       setLoading(false)
@@ -92,7 +86,16 @@ export function LiveScheduledTab({
     } finally {
       setLoading(false)
     }
-  }
+  }, [fbPageId, pageAccessToken])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetchScheduledPosts()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [fetchScheduledPosts])
+
+
 
   const handleDelete = async (graphId: string) => {
     setCancelingId(graphId)
@@ -104,7 +107,7 @@ export function LiveScheduledTab({
       toast.success('Post deleted from Facebook')
       fetchScheduledPosts()
     } catch (e) {
-      toast.error('Could not delete post')
+      toast.error('Could not delete post', { description: e instanceof Error ? e.message : 'Unknown error' })
     } finally {
       setCancelingId(null)
     }
@@ -148,7 +151,7 @@ export function LiveScheduledTab({
       <div className="flex items-center gap-3 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-sm text-blue-600 dark:text-blue-400">
         <Facebook className="h-5 w-5 shrink-0" />
         <p>
-          These are the actual posts currently waiting in Facebook's native scheduling queue for this page.
+          These are the actual posts currently waiting in Facebook&apos;s native scheduling queue for this page.
         </p>
       </div>
 

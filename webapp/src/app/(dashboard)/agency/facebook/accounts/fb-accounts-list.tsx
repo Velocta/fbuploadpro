@@ -67,7 +67,10 @@ export function FacebookAccountsList({
   const [searchInput, setSearchInput] = useState(search)
 
   useEffect(() => {
-    setSearchInput(search)
+    const t = setTimeout(() => {
+      setSearchInput(search)
+    }, 0)
+    return () => clearTimeout(t)
   }, [search])
 
   const updateFilters = (updates: { q?: string | null; status?: string | null; page?: number | null }) => {

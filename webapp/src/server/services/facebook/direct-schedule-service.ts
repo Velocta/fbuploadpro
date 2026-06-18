@@ -327,7 +327,7 @@ export async function listDirectSchedulePosts(
       if (post.media_object_key) {
         try {
           media_url = await createPresignedDownloadUrl(post.media_object_key)
-        } catch (e) {
+        } catch {
           console.error('Failed to get presigned URL for', post.media_object_key)
         }
       }

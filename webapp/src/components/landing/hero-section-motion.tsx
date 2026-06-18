@@ -4,9 +4,10 @@ import Link from 'next/link'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useTransition, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
     ArrowRight,
-    LayoutDashboard,
     ShieldCheck,
     ServerCog,
 } from 'lucide-react'
@@ -15,6 +16,16 @@ const easeStandard = [0.2, 0, 0, 1] as const
 
 export function HeroSectionMotion() {
     const reduce = useReducedMotion()
+    const router = useRouter()
+    const [isPending, startTransition] = useTransition()
+    const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
+
+    const handleNavigation = (href: string) => {
+        setNavigatingTo(href)
+        startTransition(() => {
+            router.push(href)
+        })
+    }
 
     const container = {
         hidden: { opacity: 0 },
@@ -97,12 +108,11 @@ export function HeroSectionMotion() {
                             size="lg"
                             variant="ghost"
                             className="h-12 rounded-full px-8 text-base font-semibold ring-0 transition-all duration-200 ease-out hover:bg-muted/80 hover:shadow-sm hover:ring-1 hover:ring-border active:scale-[0.98]"
-                            asChild
+                            loading={isPending && navigatingTo === '/signup'}
+                            onClick={() => handleNavigation('/signup')}
                         >
-                            <Link href="/login" className="group">
-                                Access Dashboard
-                                <LayoutDashboard className="ml-2 h-4 w-4 text-primary transition-transform duration-200 ease-out group-hover:scale-[1.02] motion-reduce:group-hover:scale-100" />
-                            </Link>
+                            Sign up
+                            <ArrowRight className="ml-2 h-4 w-4 text-primary transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:group-hover:translate-x-0" />
                         </Button>
                     </motion.div>
 

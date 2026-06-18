@@ -11,7 +11,10 @@ export function AddTokensAutoOpen() {
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (shouldOpen) setOpen(true)
+    if (shouldOpen) {
+      const t = setTimeout(() => setOpen(true), 0)
+      return () => clearTimeout(t)
+    }
   }, [shouldOpen])
 
   if (!shouldOpen && !open) return null

@@ -6,3 +6,6 @@ globs: **/*
 - **No Env Access**: NEVER check for `.env` files or try to get environment variables from the user's terminal/system.
 - **No Agent Deployment**: NEVER deploy workers, services, or code yourself. Instead, always provide the exact deployment commands for the developer to run.
 - **Read-Only Supabase MCP**: NEVER create, update, delete, or perform any schema modifications/migrations using Supabase model context protocol (MCP) tools. You are restricted to read-only queries.
+- **No Browser Access**: NEVER open the browser or start/use any browser subagents/tools (like `browser_subagent`).
+- **No Dev/Build Commands**: NEVER run `npm run dev` or `npm run build` on the user's workspace/system.
+

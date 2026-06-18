@@ -19,7 +19,6 @@ import {
   Copy,
   CheckCircle2,
   Globe,
-  RefreshCw,
   Loader2,
   ShieldCheck,
   Monitor,

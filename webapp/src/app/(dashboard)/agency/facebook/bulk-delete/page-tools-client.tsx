@@ -218,13 +218,37 @@ export function PageToolsClient() {
   const [showFailureDetails, setShowFailureDetails] = useState(false)
   const [runInProgress, setRunInProgress] = useState(false)
 
+  const loadBrowseContent = useCallback(async (type: ContentType, reset: boolean) => {
+    if (!selectedAccountId || !selectedPage) return
+    setLoadingBrowse(true)
+    try {
+      const cursorPart = !reset && browseAfterCursor ? `&after=${encodeURIComponent(browseAfterCursor)}` : ''
+      const response = await fetch(
+        `/api/v1/agency/page-tools/accounts/${selectedAccountId}/pages/${selectedPage.id}/content?type=${type}&limit=25${cursorPart}`,
+        {
+          headers: selectedPage.access_token ? { 'x-page-access-token': selectedPage.access_token } : {},
+        }
+      )
+      const data = (await response.json()) as ContentResponse & { error?: string }
+      if (!response.ok) throw new Error(data.error || 'Failed to load page content')
+      const incoming = data.items || []
+      setBrowseItems((prev) => (reset ? incoming : [...prev, ...incoming]))
+      if (reset) setBrowseSelectedIds([])
+      setBrowseAfterCursor(getAfterCursorFromPaging(data.paging))
+    } catch {
+      toast.error('Unable to load page content')
+    } finally {
+      setLoadingBrowse(false)
+    }
+  }, [selectedAccountId, selectedPage, browseAfterCursor])
+
   useEffect(() => {
     if (selectedPage && selectedAccountId && viewMode === 'manual') {
       void loadBrowseContent(browseType, true)
     }
-  }, [selectedPage, selectedAccountId, viewMode, browseType])
+  }, [selectedPage, selectedAccountId, viewMode, browseType, loadBrowseContent])
 
-  async function loadAccounts() {
+  const loadAccounts = useCallback(async () => {
     setLoadingAccounts(true)
     try {
       const response = await fetch('/api/v1/agency/facebook/accounts')
@@ -239,7 +263,7 @@ export function PageToolsClient() {
     } finally {
       setLoadingAccounts(false)
     }
-  }
+  }, [])
 
   async function loadPagesForAccount(accountId: string) {
     if (!accountId) return
@@ -249,7 +273,7 @@ export function PageToolsClient() {
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Failed to load pages')
       setPages(data.pages || [])
-    } catch (error) {
+    } catch {
       toast.error('Unable to load managed pages')
       setPages([])
     } finally {
@@ -302,7 +326,7 @@ export function PageToolsClient() {
       setBrowseItems((prev) => (reset ? incoming : [...prev, ...incoming]))
       if (reset) setBrowseSelectedIds([])
       setBrowseAfterCursor(getAfterCursorFromPaging(data.paging))
-    } catch (error) {
+    } catch {
       toast.error('Unable to load page content')
     } finally {
       setLoadingBrowse(false)
@@ -502,9 +526,11 @@ export function PageToolsClient() {
   const progressPercent = runProgress?.total ? Math.round((runProgress.processed / runProgress.total) * 100) : 0
 
   useEffect(() => {
-    void loadAccounts()
-     
-  }, [])
+    const t = setTimeout(() => {
+      void loadAccounts()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [loadAccounts])
 
   if (hasLoadedAccounts && !loadingAccounts && accounts.length === 0) {
     return (
@@ -973,7 +999,7 @@ export function PageToolsClient() {
                      <div className="col-span-full text-center py-32 border border-dashed rounded-3xl bg-muted/10">
                        <FileText className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
                        <p className="text-lg font-medium">No {browseType} found</p>
-                       <p className="text-muted-foreground mt-1">This page doesn't have any {browseType} to display.</p>
+                       <p className="text-muted-foreground mt-1">This page doesn&apos;t have any {browseType} to display.</p>
                      </div>
                   )}
                 </div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   CalendarClock,
@@ -38,7 +38,7 @@ export function HistoryTabClient({ pageId }: { pageId: string }) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const limit = 10
 
-  async function fetchPosts() {
+  const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetch(`/api/v1/agency/facebook/inapp-schedule?pageId=${pageId}&limit=${limit}&offset=${(page - 1) * limit}${statusFilter !== 'all' ? `&status=${statusFilter}` : ''}`)
@@ -46,22 +46,25 @@ export function HistoryTabClient({ pageId }: { pageId: string }) {
       if (res.ok) {
         // Exclude pending if 'all' is selected, to act like a true history tab
         const filteredPosts = statusFilter === 'all' 
-          ? data.posts.filter((p: any) => p.status !== 'pending')
+          ? data.posts.filter((p: InappPostHistory) => p.status !== 'pending')
           : data.posts
 
         setPosts(filteredPosts)
         setTotalCount(statusFilter === 'all' ? filteredPosts.length : data.totalCount) // Approximation
       }
-    } catch (e) {
+    } catch {
       toast.error('Failed to load history')
     } finally {
       setLoading(false)
     }
-  }
+  }, [pageId, page, statusFilter])
 
   useEffect(() => {
-    fetchPosts()
-  }, [page, statusFilter, pageId])
+    const t = setTimeout(() => {
+      void fetchPosts()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [fetchPosts])
 
   const totalPages = Math.ceil(totalCount / limit) || 1
 

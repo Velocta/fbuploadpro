@@ -15,7 +15,10 @@ export function PageToggle({ pageId, initialStatus }: { pageId: string; initialS
   const router = useRouter()
 
   useEffect(() => {
-    setStatus(initialStatus)
+    const t = setTimeout(() => {
+      setStatus(initialStatus)
+    }, 0)
+    return () => clearTimeout(t)
   }, [initialStatus])
 
   const handleToggle = () => {

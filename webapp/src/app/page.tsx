@@ -1,9 +1,22 @@
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { Navbar } from '@/components/landing/navbar'
-import { PricingSection } from '@/components/landing/pricing-section'
 import { HeroSection } from '@/components/landing/hero-section'
-import { HowItWorksSection } from '@/components/landing/how-it-works'
-import { FooterSection } from '@/components/landing/footer-section'
+
+const HowItWorksSection = dynamic(() => import('@/components/landing/how-it-works').then((mod) => mod.HowItWorksSection), {
+  ssr: true,
+  loading: () => <div className="min-h-[400px] animate-pulse bg-muted/10" />
+})
+
+const PricingSection = dynamic(() => import('@/components/landing/pricing-section').then((mod) => mod.PricingSection), {
+  ssr: true,
+  loading: () => <div className="min-h-[500px] animate-pulse bg-muted/10" />
+})
+
+const FooterSection = dynamic(() => import('@/components/landing/footer-section').then((mod) => mod.FooterSection), {
+  ssr: true,
+  loading: () => <div className="min-h-[200px] animate-pulse bg-muted/10" />
+})
 
 export default function LandingPage() {
   return (

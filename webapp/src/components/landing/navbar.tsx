@@ -12,7 +12,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 
 const navLinks = [
   { name: 'How It Works', href: '#how-it-works' },
@@ -25,6 +26,16 @@ const easeStandard = [0.2, 0, 0, 1] as const
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
   const reduceMotion = useReducedMotion()
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
+
+  const handleNavigation = (href: string) => {
+    setNavigatingTo(href)
+    startTransition(() => {
+      router.push(href)
+    })
+  }
 
   useEffect(() => {
     const handleScroll = () => {
@@ -75,14 +86,21 @@ export function Navbar() {
           </div>
           <div className="h-4 w-[1px] bg-border" />
           <div className="flex items-center gap-4">
-            <Button variant="ghost" className="text-sm font-semibold px-4" asChild>
-              <Link href="/login">Log in</Link>
+            <Button
+              variant="ghost"
+              className="text-sm font-semibold px-4"
+              loading={isPending && navigatingTo === '/login'}
+              onClick={() => handleNavigation('/login')}
+            >
+              Log in
             </Button>
-            <Button className="text-sm font-semibold px-6 rounded-full group" asChild>
-              <Link href="/login">
-                Dashboard
-                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-              </Link>
+            <Button
+              className="text-sm font-semibold px-6 rounded-full group"
+              loading={isPending && navigatingTo === '/signup'}
+              onClick={() => handleNavigation('/signup')}
+            >
+              Sign up
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Button>
           </div>
         </div>
@@ -98,7 +116,7 @@ export function Navbar() {
               <SheetContent side="right" className="w-[300px] border-l border-border bg-background">
               <SheetHeader className="text-left mb-12">
                 <SheetTitle className="text-2xl font-display font-bold tracking-tight flex items-center gap-3">
-                  <Image src="/logo.svg" alt="Logo" width={32} height={32} />
+                  <Image src="/logo.svg" alt="Logo" width={32} height={32} priority />
                   FBupload Pro
                 </SheetTitle>
               </SheetHeader>
@@ -113,11 +131,20 @@ export function Navbar() {
                   </Link>
                 ))}
                 <div className="h-[1px] w-full bg-border my-2" />
-                <Button variant="outline" className="w-full text-md font-semibold h-14 rounded-xl border-border" asChild>
-                  <Link href="/login">Login</Link>
+                <Button
+                  variant="outline"
+                  className="w-full text-md font-semibold h-14 rounded-xl border-border"
+                  loading={isPending && navigatingTo === '/login'}
+                  onClick={() => handleNavigation('/login')}
+                >
+                  Login
                 </Button>
-                <Button className="w-full text-md font-semibold h-14 rounded-xl" asChild>
-                  <Link href="/login">Go to Dashboard</Link>
+                <Button
+                  className="w-full text-md font-semibold h-14 rounded-xl"
+                  loading={isPending && navigatingTo === '/signup'}
+                  onClick={() => handleNavigation('/signup')}
+                >
+                  Sign up
                 </Button>
               </div>
             </SheetContent>

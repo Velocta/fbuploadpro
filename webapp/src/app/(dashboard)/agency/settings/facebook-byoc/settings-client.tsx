@@ -71,7 +71,10 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
     const hasCredentials = !!initialSettings?.fb_app_id
 
     useEffect(() => {
-        setMounted(true)
+        const t = setTimeout(() => {
+            setMounted(true)
+        }, 0)
+        return () => clearTimeout(t)
     }, [])
 
     const mainDomain = getMainDomain()

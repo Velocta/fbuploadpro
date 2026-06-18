@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useCallback, useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,7 +19,6 @@ import {
   Image as ImageIcon,
   Video,
   UploadCloud,
-  X,
   FileCheck,
   CheckCircle2,
   Trash2,
@@ -63,8 +63,11 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
     if (open) {
       // Default to 1 hour from now
       const defaultTime = addMinutes(new Date(), 60)
-      setScheduleDate(format(defaultTime, 'yyyy-MM-dd'))
-      setScheduleTime(format(defaultTime, 'HH:mm'))
+      const t = setTimeout(() => {
+        setScheduleDate(format(defaultTime, 'yyyy-MM-dd'))
+        setScheduleTime(format(defaultTime, 'HH:mm'))
+      }, 0)
+      return () => clearTimeout(t)
     }
   }, [open])
 
@@ -78,36 +81,54 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
     setUploadProgress(0)
   }
 
-  async function handleUpload(file: File) {
+  const removeMedia = useCallback(() => {
+    setMediaFile(null)
+    setUploadedKey(null)
+    setMediaPreviewUrl(null)
+    setUploadProgress(0)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }, [])
+
+  const handleUpload = useCallback(async (file: File) => {
     if (isUploading || uploadedKey) return
     setIsUploading(true)
     setUploadProgress(0)
 
     try {
-      const typeStr = postType === 'video' ? 'videos' : 'images'
       const objectKey = await uploadViaPresign({
         file,
         feature: 'direct-schedule',
         onProgress: (pct: number) => setUploadProgress(pct),
       })
       setUploadedKey(objectKey)
-    } catch (err) {
+    } catch {
       toast.error('Upload failed', { description: 'Could not upload media. Please try again.' })
       removeMedia()
     } finally {
       setIsUploading(false)
     }
-  }
+  }, [isUploading, uploadedKey, removeMedia])
 
   useEffect(() => {
     if (mediaFile && (postType === 'image' || postType === 'video')) {
       const url = URL.createObjectURL(mediaFile)
-      setMediaPreviewUrl(url)
-      handleUpload(mediaFile)
-      return () => URL.revokeObjectURL(url)
+      const t = setTimeout(() => {
+        setMediaPreviewUrl(url)
+      }, 0)
+      const t2 = setTimeout(() => {
+        void handleUpload(mediaFile)
+      }, 0)
+      return () => {
+        clearTimeout(t)
+        clearTimeout(t2)
+        URL.revokeObjectURL(url)
+      }
     }
-    return () => {}
-  }, [mediaFile, postType])
+    const t = setTimeout(() => {
+      setMediaPreviewUrl(null)
+    }, 0)
+    return () => clearTimeout(t)
+  }, [mediaFile, postType, handleUpload])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -124,13 +145,7 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
     }
   }
 
-  const removeMedia = () => {
-    setMediaFile(null)
-    setUploadedKey(null)
-    setMediaPreviewUrl(null)
-    setUploadProgress(0)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -170,7 +185,7 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
         setOpen(false)
         resetState()
         router.refresh()
-      } catch (err) {
+      } catch {
         toast.error('Failed to schedule due to a network error.')
       }
     })
@@ -291,10 +306,13 @@ export function ScheduleComposerDialog({ pageId, children }: ScheduleComposerDia
                       ) : (
                         <div className="relative mt-2 flex items-center gap-4 rounded-xl border border-border/50 bg-background/50 p-4">
                           {mediaPreviewUrl && postType === 'image' ? (
-                            <img
+                            <Image
                               src={mediaPreviewUrl}
                               alt="Preview"
+                              width={64}
+                              height={64}
                               className="h-16 w-16 rounded-lg object-cover ring-1 ring-border"
+                              unoptimized
                             />
                           ) : (
                             <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-muted ring-1 ring-border">

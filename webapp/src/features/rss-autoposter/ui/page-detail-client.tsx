@@ -90,15 +90,18 @@ export function RssPageDetailClient({
 
   useEffect(() => {
     const count = parseInt(postsPerDay, 10)
-    if (scheduleType === 'fixed') {
-      setPostingTimes((prev) => {
-        const next = [...prev]
-        while (next.length < count) next.push('')
-        return next.slice(0, count)
-      })
-    } else if (scheduleType === 'dailyrandom' || scheduleType === 'randomfixed') {
-      setPostingTimes(generateBalancedPostTimes(count))
-    }
+    const t = setTimeout(() => {
+      if (scheduleType === 'fixed') {
+        setPostingTimes((prev) => {
+          const next = [...prev]
+          while (next.length < count) next.push('')
+          return next.slice(0, count)
+        })
+      } else if (scheduleType === 'dailyrandom' || scheduleType === 'randomfixed') {
+        setPostingTimes(generateBalancedPostTimes(count))
+      }
+    }, 0)
+    return () => clearTimeout(t)
   }, [postsPerDay, scheduleType])
 
   const fixedTimesIncomplete =

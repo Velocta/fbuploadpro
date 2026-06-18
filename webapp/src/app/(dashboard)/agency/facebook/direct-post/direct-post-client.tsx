@@ -84,7 +84,7 @@ export function DirectPostClient() {
 
   const HISTORY_PAGE_SIZE = 10
 
-  const loadHistory = async (page = 1) => {
+  const loadHistory = useCallback(async (page = 1) => {
     const offset = (page - 1) * HISTORY_PAGE_SIZE
     const res = await fetch(`/api/v1/agency/facebook/direct-post?limit=${HISTORY_PAGE_SIZE}&offset=${offset}`)
     if (res.ok) {
@@ -92,13 +92,16 @@ export function DirectPostClient() {
       setHistory(data.posts || [])
       setHistoryTotal(data.totalCount || 0)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    void loadHistory(historyPage)
-  }, [historyPage])
+    const t = setTimeout(() => {
+      void loadHistory(historyPage)
+    }, 0)
+    return () => clearTimeout(t)
+  }, [historyPage, loadHistory])
 
-  const loadAccounts = async () => {
+  const loadAccounts = useCallback(async () => {
     setLoadingAccounts(true)
     try {
       const response = await fetch('/api/v1/agency/facebook/accounts')
@@ -113,11 +116,14 @@ export function DirectPostClient() {
     } finally {
       setLoadingAccounts(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    void loadAccounts()
-  }, [])
+    const t = setTimeout(() => {
+      void loadAccounts()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [loadAccounts])
 
   const loadPagesForAccount = async (accountId: string) => {
     if (!accountId) return
@@ -150,10 +156,18 @@ export function DirectPostClient() {
   useEffect(() => {
     if (file && mediaType === 'image') {
       const url = URL.createObjectURL(file)
-      setFilePreview(url)
-      return () => URL.revokeObjectURL(url)
+      const t = setTimeout(() => {
+        setFilePreview(url)
+      }, 0)
+      return () => {
+        clearTimeout(t)
+        URL.revokeObjectURL(url)
+      }
     }
-    setFilePreview(null)
+    const t = setTimeout(() => {
+      setFilePreview(null)
+    }, 0)
+    return () => clearTimeout(t)
   }, [file, mediaType])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

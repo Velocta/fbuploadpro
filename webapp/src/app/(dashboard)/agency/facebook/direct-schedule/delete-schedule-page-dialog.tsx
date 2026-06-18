@@ -83,7 +83,7 @@ export function DeleteSchedulePageDialog({
               <DialogDescription className="mt-2 text-muted-foreground">
                 This will remove{' '}
                 <strong className="text-foreground">&quot;{pageName}&quot;</strong> from Direct Schedule.
-                Scheduled posts that haven't been published yet will no longer be visible here.
+                Scheduled posts that haven&apos;t been published yet will no longer be visible here.
               </DialogDescription>
             </div>
           </DialogHeader>

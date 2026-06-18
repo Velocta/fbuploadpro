@@ -59,7 +59,7 @@ export function sanitizeSourceIdentityInput(
         }
       }
     }
-  } catch (e) {
+  } catch {
     // Fall back to text parsing if URL parsing fails
   }
 

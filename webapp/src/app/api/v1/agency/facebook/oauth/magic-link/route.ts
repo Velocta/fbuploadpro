@@ -5,7 +5,7 @@ import { buildMagicConnectLink } from '@/server/services/facebook/oauth-service'
 
 export const runtime = 'nodejs'
 
-export async function POST(request: Request) {
+export async function POST() {
   const auth = await requireApiRole(['agency'])
   if (auth.error) return auth.error
 

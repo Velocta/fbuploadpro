@@ -50,7 +50,54 @@ interface DemographicsData {
 
 interface ChartDataPoint {
   date: string
-  [key: string]: any
+  [key: string]: string | number | boolean | undefined
+}
+
+interface FacebookInsightMetric {
+  name: string
+  values?: {
+    end_time: string
+    value?: number
+  }[]
+}
+
+interface FacebookDemoValue {
+  value?: Record<string, number>
+}
+
+interface FacebookDemoMetric {
+  name: string
+  values?: FacebookDemoValue[]
+}
+
+interface TooltipPayloadItem {
+  color?: string
+  name: string
+  value?: number
+}
+
+interface CustomTooltipProps {
+  active?: boolean
+  payload?: TooltipPayloadItem[]
+  label?: string
+}
+
+function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-popover border border-border shadow-md rounded-lg p-3 text-sm">
+        <p className="font-semibold mb-2">{label}</p>
+        {payload.map((entry, index) => (
+          <div key={index} className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="text-muted-foreground capitalize">{entry.name.replace(/_/g, ' ')}:</span>
+            <span className="font-medium text-foreground ml-auto">{entry.value?.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return null
 }
 
 const METRICS_LIST = [
@@ -89,8 +136,10 @@ export function FacebookPageInsightsTab({ fbPageId, pageAccessToken }: FacebookP
 
   useEffect(() => {
     if (loading) {
-      setChartsReady(false)
-      return
+      const t = setTimeout(() => {
+        setChartsReady(false)
+      }, 0)
+      return () => clearTimeout(t)
     }
     let frame2 = 0
     const frame1 = requestAnimationFrame(() => {
@@ -158,8 +207,8 @@ export function FacebookPageInsightsTab({ fbPageId, pageAccessToken }: FacebookP
           daysMap.set(dateStr, { date: dateStr })
         }
 
-        insightsData.data?.forEach((metric: any) => {
-          metric.values?.forEach((val: any) => {
+        insightsData.data?.forEach((metric: FacebookInsightMetric) => {
+          metric.values?.forEach((val) => {
             const dateStr = format(new Date(val.end_time), 'MMM dd')
             if (daysMap.has(dateStr)) {
               const dayData = daysMap.get(dateStr)!
@@ -178,11 +227,11 @@ export function FacebookPageInsightsTab({ fbPageId, pageAccessToken }: FacebookP
         if (!demoRes.ok) throw new Error('Failed to fetch demographics.')
         const demoData = await demoRes.json()
 
-        const rawCountryData = demoData.data?.find((d: any) => d.name === 'page_follows_country')
-        const rawCityData = demoData.data?.find((d: any) => d.name === 'page_follows_city')
+        const rawCountryData = demoData.data?.find((d: FacebookDemoMetric) => d.name === 'page_follows_country')
+        const rawCityData = demoData.data?.find((d: FacebookDemoMetric) => d.name === 'page_follows_city')
 
         // Parse Demographics
-        const parseDemo = (rawData: any) => {
+        const parseDemo = (rawData: FacebookDemoMetric | undefined) => {
           const map = rawData?.values?.[0]?.value || {}
           const parsed = Object.entries(map).map(([name, count]) => ({
             name,
@@ -203,10 +252,10 @@ export function FacebookPageInsightsTab({ fbPageId, pageAccessToken }: FacebookP
           city: parseDemo(rawCityData),
         })
 
-      } catch (err: any) {
-        if (err.name === 'AbortError') return
+      } catch (err) {
+        if (err && typeof err === 'object' && 'name' in err && err.name === 'AbortError') return
         console.error('Error fetching Facebook Page insights:', err)
-        setError(err.message || 'An error occurred while fetching insights.')
+        setError(err instanceof Error ? err.message : 'An error occurred while fetching insights.')
       } finally {
         if (!signal.aborted) {
           setLoading(false)
@@ -243,24 +292,7 @@ export function FacebookPageInsightsTab({ fbPageId, pageAccessToken }: FacebookP
     }
   }
 
-  // Common chart components
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-popover border border-border shadow-md rounded-lg p-3 text-sm">
-          <p className="font-semibold mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <div key={index} className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-              <span className="text-muted-foreground capitalize">{entry.name.replace(/_/g, ' ')}:</span>
-              <span className="font-medium text-foreground ml-auto">{entry.value?.toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      )
-    }
-    return null
-  }
+
 
   const dateRangeSelector = (
     <div className="flex flex-col items-center justify-between gap-4 rounded-2xl border border-border/50 bg-card/40 p-4 shadow-lg backdrop-blur-xl sm:flex-row">

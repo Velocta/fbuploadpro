@@ -45,6 +45,17 @@ export default async function FacebookDirectSchedulePage() {
     },
   ]
 
+  const formattedPages = (pages || []).map((p) => ({
+    id: p.id,
+    fb_page_id: p.fb_page_id,
+    fb_page_name: p.fb_page_name,
+    fb_page_image: p.fb_page_image,
+    created_at: p.created_at,
+    facebook_accounts: Array.isArray(p.facebook_accounts)
+      ? p.facebook_accounts[0] || null
+      : p.facebook_accounts || null,
+  }))
+
   return (
     <div className="space-y-6 pb-8 agency-motion-standard">
       <AgencyGlassPageHero
@@ -82,7 +93,7 @@ export default async function FacebookDirectSchedulePage() {
         </div>
       </div>
 
-      <SchedulePagesClient initialPages={(pages as any) || []} />
+      <SchedulePagesClient initialPages={formattedPages} />
     </div>
   )
 }

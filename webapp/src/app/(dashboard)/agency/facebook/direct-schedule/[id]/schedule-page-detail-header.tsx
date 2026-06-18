@@ -8,11 +8,24 @@ import { DeleteSchedulePageDialog } from '../delete-schedule-page-dialog'
 import { ScheduleComposerDialog } from './schedule-composer-dialog'
 import { BulkScheduleComposerDialog } from './bulk-schedule-composer-dialog'
 
+interface FacebookAccount {
+  fb_user_name: string | null
+  fb_user_image: string | null
+}
+
+interface SchedulePage {
+  id: string
+  fb_page_id: string
+  fb_page_name: string | null
+  fb_page_image: string | null
+  facebook_accounts: FacebookAccount | FacebookAccount[] | null
+}
+
 export function SchedulePageDetailHeader({
   page,
   stats,
 }: {
-  page: any
+  page: SchedulePage
   stats: { scheduled: number; failed: number }
 }) {
   const fbAccount = Array.isArray(page.facebook_accounts)

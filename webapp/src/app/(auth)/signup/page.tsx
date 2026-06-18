@@ -154,6 +154,7 @@ function SignupContent() {
                     placeholder="John Doe"
                     required
                     disabled={isPending}
+                    maxLength={100}
                   />
                 </div>
                 <div className="space-y-2">
@@ -165,6 +166,7 @@ function SignupContent() {
                     placeholder="yourname@gmail.com"
                     required
                     disabled={isPending}
+                    maxLength={255}
                   />
                   <p className="text-xs font-medium leading-relaxed text-muted-foreground">
                     Only @gmail.com addresses are accepted.
@@ -183,7 +185,7 @@ function SignupContent() {
                       onValueChange={setCountryCode}
                       disabled={isPending}
                     >
-                      <SelectTrigger className="col-span-1">
+                      <SelectTrigger className="col-span-1 w-full">
                         <SelectValue placeholder="Code" />
                       </SelectTrigger>
                       <SelectContent>
@@ -203,6 +205,7 @@ function SignupContent() {
                       onChange={(e) => setLocalPhoneNumber(e.target.value.replace(/\D/g, ''))}
                       disabled={isPending}
                       className="col-span-2"
+                      maxLength={15}
                     />
                   </div>
                   <p className="text-xs font-medium leading-relaxed text-muted-foreground">
@@ -218,6 +221,7 @@ function SignupContent() {
                     placeholder="••••••••"
                     required
                     disabled={isPending}
+                    maxLength={100}
                   />
                 </div>
                 <AuthErrorAlert message={error} />

@@ -7,6 +7,10 @@ import { AgencyGlassPageHero } from '@/components/dashboard/agency'
 import { Download, Layers, TrendingUp, Users } from 'lucide-react'
 import { getStartOfTodayInTimezone } from '@/lib/timezones'
 
+function getFortyEightHoursAgo() {
+  return new Date(Date.now() - 48 * 60 * 60 * 1000)
+}
+
 export default async function AgencyPagesPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -38,7 +42,7 @@ export default async function AgencyPagesPage() {
     .order('created_at', { ascending: false })
 
   // Fetch only finished posting jobs updated/published in the last 48 hours for pages belonging to this agency
-  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000)
+  const fortyEightHoursAgo = getFortyEightHoursAgo()
   const { data: recentJobs } = await supabase
     .from('adu_posting_jobs')
     .select('page_id, status, updated_at')

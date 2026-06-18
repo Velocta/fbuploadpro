@@ -12,7 +12,6 @@ import {
   Image as ImageIcon,
   Video,
   Type,
-  ExternalLink,
   Ban,
   AlertTriangle,
 } from 'lucide-react'
@@ -51,14 +50,15 @@ export function HistoryTab({ pageId }: { pageId: string }) {
   const limit = 10
 
   useEffect(() => {
-    if (bulkBatchFromUrl) setBulkBatchFilter(bulkBatchFromUrl)
+    if (bulkBatchFromUrl) {
+      const t = setTimeout(() => {
+        setBulkBatchFilter(bulkBatchFromUrl)
+      }, 0)
+      return () => clearTimeout(t)
+    }
   }, [bulkBatchFromUrl])
 
-  useEffect(() => {
-    fetchPosts()
-  }, [page, statusFilter, pageId, bulkBatchFilter])
-
-  async function fetchPosts() {
+  const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -74,12 +74,19 @@ export function HistoryTab({ pageId }: { pageId: string }) {
         setPosts(data.posts)
         setTotalCount(data.totalCount)
       }
-    } catch (e) {
+    } catch {
       toast.error('Failed to load history')
     } finally {
       setLoading(false)
     }
-  }
+  }, [page, statusFilter, pageId, bulkBatchFilter])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetchPosts()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [fetchPosts])
 
   const handleCancel = async (postId: string) => {
     setCancelingId(postId)
@@ -88,7 +95,7 @@ export function HistoryTab({ pageId }: { pageId: string }) {
       if (!res.ok) throw new Error('Failed to cancel')
       toast.success('Post cancelled')
       fetchPosts()
-    } catch (e) {
+    } catch {
       toast.error('Could not cancel post')
     } finally {
       setCancelingId(null)

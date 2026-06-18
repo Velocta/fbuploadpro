@@ -248,7 +248,10 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
 
   useEffect(() => {
     if (open) {
-      loadAccounts()
+      const t = setTimeout(() => {
+        loadAccounts()
+      }, 0)
+      return () => clearTimeout(t)
     }
   }, [open])
 

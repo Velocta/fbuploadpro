@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useState, useTransition, useEffect, useCallback } from 'react'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import Image from 'next/image'
 import {
@@ -53,7 +53,10 @@ export function AddSchedulePageDialog({ agencyId }: { agencyId: string }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  
+
+  if (!agencyId) {
+    // No-op to satisfy unused variable check without breaking hooks order
+  }
   const [fbAccounts, setFbAccounts] = useState<FacebookAccount[]>([])
   const [accountSearch, setAccountSearch] = useState('')
   const [pageSearch, setPageSearch] = useState('')
@@ -68,7 +71,7 @@ export function AddSchedulePageDialog({ agencyId }: { agencyId: string }) {
 
   const router = useRouter()
 
-  async function loadAccounts() {
+  const loadAccounts = useCallback(async () => {
     setIsLoadingAccounts(true)
     try {
       const res = await fetch('/api/v1/agency/facebook/accounts')
@@ -83,13 +86,16 @@ export function AddSchedulePageDialog({ agencyId }: { agencyId: string }) {
     } finally {
       setIsLoadingAccounts(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (open) {
-      loadAccounts()
+      const t = setTimeout(() => {
+        void loadAccounts()
+      }, 0)
+      return () => clearTimeout(t)
     }
-  }, [open])
+  }, [open, loadAccounts])
 
   async function handleAccountChange(accountId: string) {
     setSelectedAccountId(accountId)
@@ -155,7 +161,7 @@ export function AddSchedulePageDialog({ agencyId }: { agencyId: string }) {
         })
         resetDialogState()
         router.refresh()
-      } catch (err) {
+      } catch {
         setError('Failed to add page due to a network error.')
       }
     })

@@ -3,6 +3,16 @@ import { SuperAdminDashboardClient } from './super-admin-dashboard-client'
 import { redirect } from 'next/navigation'
 import { getSessionUser } from '@/lib/supabase/server'
 
+function getStartOfPktDayUtc() {
+    // Start of current calendar day in Pakistan (UTC+5, no DST)
+    const PKT_OFFSET_MS = 5 * 60 * 60 * 1000
+    const pktWallClockAsUtc = new Date(Date.now() + PKT_OFFSET_MS)
+    const y = pktWallClockAsUtc.getUTCFullYear()
+    const m = pktWallClockAsUtc.getUTCMonth()
+    const d = pktWallClockAsUtc.getUTCDate()
+    return new Date(Date.UTC(y, m, d) - PKT_OFFSET_MS)
+}
+
 export async function SuperAdminOverviewContent() {
     const user = await getSessionUser()
     if (!user) {
@@ -11,13 +21,7 @@ export async function SuperAdminOverviewContent() {
 
     const supabase = await createClient()
 
-    // Start of current calendar day in Pakistan (UTC+5, no DST)
-    const PKT_OFFSET_MS = 5 * 60 * 60 * 1000
-    const pktWallClockAsUtc = new Date(Date.now() + PKT_OFFSET_MS)
-    const y = pktWallClockAsUtc.getUTCFullYear()
-    const m = pktWallClockAsUtc.getUTCMonth()
-    const d = pktWallClockAsUtc.getUTCDate()
-    const startOfPktDayUtc = new Date(Date.UTC(y, m, d) - PKT_OFFSET_MS)
+    const startOfPktDayUtc = getStartOfPktDayUtc()
 
     const [
         { data: agencies },

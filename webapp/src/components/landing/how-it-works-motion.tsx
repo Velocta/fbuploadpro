@@ -5,7 +5,6 @@ import { AtSign, CalendarClock, Link2 } from 'lucide-react'
 
 const easeStandard = [0.2, 0, 0, 1] as const
 
-const viewport = { once: true, margin: '-64px 0px' } as const
 
 export type HowItWorksStep = {
     number: string
@@ -62,8 +61,7 @@ export function HowItWorksSectionMotion({ steps }: Props) {
                 className="mx-auto mb-14 max-w-3xl text-center"
                 variants={headerBlock}
                 initial="hidden"
-                whileInView="visible"
-                viewport={viewport}
+                animate="visible"
             >
                 <p className="mb-4 text-xs font-semibold uppercase tracking-[0.12em] text-primary">
                     How It Works
@@ -79,7 +77,7 @@ export function HowItWorksSectionMotion({ steps }: Props) {
                 </p>
             </motion.div>
 
-            <motion.ol className="mx-auto max-w-3xl list-none space-y-0 p-0 lg:max-w-5xl" variants={listContainer} initial="hidden" whileInView="visible" viewport={viewport}>
+            <motion.ol className="mx-auto max-w-3xl list-none space-y-0 p-0 lg:max-w-5xl" variants={listContainer} initial="hidden" animate="visible">
                 {steps.map((step, index) => {
                     const Icon = stepIcons[index] ?? Link2
                     const isLast = index === steps.length - 1

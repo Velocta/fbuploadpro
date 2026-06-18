@@ -1,0 +1,213 @@
+
+> fbuploadpro@0.1.0 lint
+> eslint
+
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/accounts/add-fb-account-dialog.tsx
+  22:3  warning  'RefreshCw' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/bulk-delete/page-tools-client.tsx
+  238:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  276:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  329:14  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/schedule-composer-dialog.tsx
+  118:12  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/schedule-composer-dialog.tsx:118:12
+  116 |         setMediaPreviewUrl(url)
+  117 |       }, 0)
+> 118 |       void handleUpload(mediaFile)
+      |            ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  119 |       return () => {
+  120 |         clearTimeout(t)
+  121 |         URL.revokeObjectURL(url)  react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/schedule-page-detail-header.tsx
+  15:9  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/tabs/history-tab.tsx
+  85:10  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/tabs/history-tab.tsx:85:10
+  83 |
+  84 |   useEffect(() => {
+> 85 |     void fetchPosts()
+     |          ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  86 |   }, [fetchPosts])
+  87 |
+  88 |   const handleCancel = async (postId: string) => {  react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/tabs/live-scheduled-tab.tsx
+  92:10  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/[id]/tabs/live-scheduled-tab.tsx:92:10
+  90 |
+  91 |   useEffect(() => {
+> 92 |     void fetchScheduledPosts()
+     |          ^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  93 |   }, [fetchScheduledPosts])
+  94 |
+  95 |  react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/add-schedule-page-dialog.tsx
+  52:51  warning  '_agencyId' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/delete-schedule-page-dialog.tsx
+  86:43  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/direct-schedule/page.tsx
+  85:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/inapp-composer-dialog.tsx
+  118:12  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/inapp-composer-dialog.tsx:118:12
+  116 |         setMediaPreviewUrl(url)
+  117 |       }, 0)
+> 118 |       void handleUpload(mediaFile)
+      |            ^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  119 |       return () => {
+  120 |         clearTimeout(t)
+  121 |         URL.revokeObjectURL(url)  react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/inapp-page-detail-header.tsx
+  15:9  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/tabs/history-tab-client.tsx
+  49:35  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @typescript-eslint/no-explicit-any
+  63:10  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/tabs/history-tab-client.tsx:63:10
+  61 |
+  62 |   useEffect(() => {
+> 63 |     void fetchPosts()
+     |          ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  64 |   }, [fetchPosts])
+  65 |
+  66 |   const totalPages = Math.ceil(totalCount / limit) || 1  react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/tabs/queue-tab-client.tsx
+  48:27  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/tabs/queue-tab-client.tsx:48:27
+  46 |
+  47 |   useEffect(() => {
+> 48 |     if (bulkBatchFromUrl) setBulkBatchFilter(bulkBatchFromUrl)
+     |                           ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  49 |   }, [bulkBatchFromUrl])
+  50 |
+  51 |   const fetchPosts = useCallback(async () => {  react-hooks/set-state-in-effect
+  75:10  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/[id]/tabs/queue-tab-client.tsx:75:10
+  73 |
+  74 |   useEffect(() => {
+> 75 |     void fetchPosts()
+     |          ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  76 |   }, [fetchPosts])
+  77 |
+  78 |                                                                                                                         react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/add-inapp-page-dialog.tsx
+  52:48  warning  '_agencyId' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/facebook/inapp-schedule/delete-inapp-page-dialog.tsx
+  86:43  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/(dashboard)/agency/overview-content.tsx
+  12:10  warning  'cn' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/app/api/v1/agency/facebook/oauth/magic-link/route.ts
+  8:28  warning  'request' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/components/landing/footer-section.tsx
+  8:7  warning  'viewport' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/components/landing/how-it-works-motion.tsx
+  8:7  warning  'viewport' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/components/landing/pricing-section-motion.tsx
+  12:7  warning  'viewport' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/components/ui/sidebar.tsx
+  613:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/components/ui/sidebar.tsx:613:5
+  611 |
+  612 |   React.useEffect(() => {
+> 613 |     setWidth(`${Math.floor(Math.random() * 40) + 50}%`)
+      |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  614 |   }, [])
+  615 |
+  616 |   return (  react-hooks/set-state-in-effect
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/features/rss-autoposter/ui/add-rss-page-dialog.tsx
+  84:46  warning  '_agencyId' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/lib/source-identity.ts
+  62:12  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/lib/timezones.ts
+  103:12  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/server/integrations/facebook/page-publish.ts
+  127:18  warning  'fallbackError' is defined but never used  @typescript-eslint/no-unused-vars
+  164:18  warning  'fallbackError' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/server/services/facebook/direct-schedule-service.ts
+  330:18  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+/home/invictus/Documents/WORK/PROJECTS/fb-upload-pro-v3/webapp/src/server/services/facebook/inapp-schedule-service.ts
+  264:18  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 32 problems (14 errors, 18 warnings)
+

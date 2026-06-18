@@ -71,7 +71,11 @@ function AgencySidebarContent({
     try {
       const raw = localStorage.getItem(STORAGE_GROUPS_KEY)
       if (raw) {
-        setOpenGroups((prev) => ({ ...prev, ...JSON.parse(raw) }))
+        const parsed = JSON.parse(raw)
+        const t = setTimeout(() => {
+          setOpenGroups((prev) => ({ ...prev, ...parsed }))
+        }, 0)
+        return () => clearTimeout(t)
       }
     } catch {
       /* ignore */
@@ -81,16 +85,19 @@ function AgencySidebarContent({
   useEffect(() => {
     const activeGroupId = findActiveGroupId(pathname, navGroups)
     if (!activeGroupId) return
-    setOpenGroups((prev) => {
-      if (prev[activeGroupId]) return prev
-      const next = { ...prev, [activeGroupId]: true }
-      try {
-        localStorage.setItem(STORAGE_GROUPS_KEY, JSON.stringify(next))
-      } catch {
-        /* ignore */
-      }
-      return next
-    })
+    const t = setTimeout(() => {
+      setOpenGroups((prev) => {
+        if (prev[activeGroupId]) return prev
+        const next = { ...prev, [activeGroupId]: true }
+        try {
+          localStorage.setItem(STORAGE_GROUPS_KEY, JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
+        return next
+      })
+    }, 0)
+    return () => clearTimeout(t)
   }, [pathname, navGroups])
 
   const setGroupOpen = (id: string, open: boolean) => {

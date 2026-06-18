@@ -1,8 +1,7 @@
 'use client'
 
-import { AlertCircle, Calendar, CheckCircle2, Copy, ExternalLink, Hash, Info } from 'lucide-react'
+import { AlertCircle, Calendar, CheckCircle2, Copy, Hash, Info } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 
 export type FailedJob = {
@@ -111,7 +110,7 @@ export function FailedPostsTab({ failedJobs }: { failedJobs: FailedJob[] }) {
 
                     {job.reel_caption && (
                       <p className="text-sm font-medium text-foreground line-clamp-2 italic bg-muted/20 rounded-lg p-2 border border-border/20">
-                        "{job.reel_caption}"
+                        &ldquo;{job.reel_caption}&rdquo;
                       </p>
                     )}
 

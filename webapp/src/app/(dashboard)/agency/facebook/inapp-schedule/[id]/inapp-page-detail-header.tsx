@@ -8,11 +8,24 @@ import { DeleteInappPageDialog } from '../delete-inapp-page-dialog'
 import { InappComposerDialog } from './inapp-composer-dialog'
 import { BulkInappComposerDialog } from './bulk-inapp-composer-dialog'
 
+interface FacebookAccount {
+  fb_user_name: string | null
+  fb_user_image: string | null
+}
+
+interface InappPage {
+  id: string
+  fb_page_id: string
+  fb_page_name: string | null
+  fb_page_image: string | null
+  facebook_accounts: FacebookAccount | FacebookAccount[] | null
+}
+
 export function InappPageDetailHeader({
   page,
   stats,
 }: {
-  page: any
+  page: InappPage
   stats: { pending: number; failed: number }
 }) {
   const fbAccount = Array.isArray(page.facebook_accounts)

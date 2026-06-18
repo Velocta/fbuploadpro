@@ -5,14 +5,32 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Coins, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import Link from 'next/link'
-import { MonthlyPriceCalculatorSection } from '@/components/landing/monthly-price-calculator-section'
+import dynamic from 'next/dynamic'
+import { useTransition, useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+const MonthlyPriceCalculatorSection = dynamic(
+  () => import('@/components/landing/monthly-price-calculator-section').then((mod) => mod.MonthlyPriceCalculatorSection),
+  {
+    ssr: true,
+    loading: () => <div className="min-h-[300px] animate-pulse bg-muted/10 rounded-xl" />
+  }
+)
 
 const easeStandard = [0.2, 0, 0, 1] as const
-const viewport = { once: true, margin: '-64px 0px' } as const
 
 export function PricingSectionMotion() {
   const reduce = useReducedMotion()
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
+
+  const handleNavigation = (href: string) => {
+    setNavigatingTo(href)
+    startTransition(() => {
+      router.push(href)
+    })
+  }
 
   const headerBlock = {
     hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
@@ -51,8 +69,7 @@ export function PricingSectionMotion() {
         className="mx-auto mb-12 max-w-3xl text-center"
         variants={headerBlock}
         initial="hidden"
-        whileInView="visible"
-        viewport={viewport}
+        animate="visible"
       >
         <Badge
           variant="outline"
@@ -74,8 +91,7 @@ export function PricingSectionMotion() {
         className="grid items-start gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12"
         variants={gridContainer}
         initial="hidden"
-        whileInView="visible"
-        viewport={viewport}
+        animate="visible"
       >
         <motion.div variants={column}>
           <div className="relative overflow-hidden rounded-xl">
@@ -115,9 +131,10 @@ export function PricingSectionMotion() {
                   </p>
                   <Button
                     className="h-12 w-full rounded-lg text-sm font-semibold shadow-sm transition-[background-color,box-shadow,transform] duration-200 ease-out hover:bg-primary/90 motion-reduce:active:scale-100 active:scale-[0.98]"
-                    asChild
+                    loading={isPending && navigatingTo === '/signup'}
+                    onClick={() => handleNavigation('/signup')}
                   >
-                    <Link href="/signup">Sign Up Now</Link>
+                    Sign Up Now
                   </Button>
                 </div>
               </CardContent>

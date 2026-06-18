@@ -52,6 +52,7 @@ export default function ForgotPasswordPage() {
                 type="email"
                 placeholder="m@example.com"
                 required
+                maxLength={255}
               />
             </div>
             <AuthErrorAlert message={error} />

@@ -61,6 +61,7 @@ export default function LoginPage() {
                 type="email"
                 placeholder="m@example.com"
                 required
+                maxLength={255}
               />
             </div>
             <div className="space-y-2">
@@ -75,6 +76,7 @@ export default function LoginPage() {
                 name="password"
                 type="password"
                 required
+                maxLength={100}
               />
             </div>
             <AuthErrorAlert message={error} />

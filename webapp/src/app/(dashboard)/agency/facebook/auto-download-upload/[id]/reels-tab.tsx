@@ -88,9 +88,12 @@ export function ReelsTab({ pageId }: Props) {
 
   useEffect(() => {
     hasLoadedRef.current = false
-    setInitialLoading(true)
-    load()
+    const t = setTimeout(() => {
+      setInitialLoading(true)
+      load()
+    }, 0)
     return () => {
+      clearTimeout(t)
       abortRef.current?.abort()
     }
   }, [load])

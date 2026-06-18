@@ -146,7 +146,7 @@ export function PageDetailOverview({
         />
         <div className="relative rounded-2xl border border-border/50 bg-card/40 p-5 shadow-2xl backdrop-blur-xl">
           <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground/80">
-            Today's Statistics
+            Today&apos;s Statistics
           </h3>
           <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-3">
             {todayStats.map((stat) => (

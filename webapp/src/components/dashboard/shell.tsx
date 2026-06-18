@@ -40,7 +40,8 @@ function SidebarMobileCloser() {
 
   useEffect(() => {
     if (isMobile) {
-      setOpenMobile(false)
+      const t = setTimeout(() => setOpenMobile(false), 0)
+      return () => clearTimeout(t)
     }
   }, [pathname, isMobile, setOpenMobile])
 
@@ -54,8 +55,13 @@ function SidebarLegacyMigrator() {
     try {
       const legacy = localStorage.getItem(LEGACY_COLLAPSED_KEY)
       if (legacy === '1') {
-        setOpen(false)
-        localStorage.removeItem(LEGACY_COLLAPSED_KEY)
+        const t = setTimeout(() => {
+          setOpen(false)
+          try {
+            localStorage.removeItem(LEGACY_COLLAPSED_KEY)
+          } catch {}
+        }, 0)
+        return () => clearTimeout(t)
       }
     } catch {
       /* ignore */
@@ -119,14 +125,16 @@ export function DashboardShell({ children, user }: DashboardShellProps) {
     try {
       const legacy = localStorage.getItem(LEGACY_COLLAPSED_KEY)
       if (legacy === '1') {
-        setDefaultOpen(false)
-        return
+        const t = setTimeout(() => setDefaultOpen(false), 0)
+        return () => clearTimeout(t)
       }
       const match = document.cookie
         .split('; ')
         .find((row) => row.startsWith('sidebar_state='))
       if (match) {
-        setDefaultOpen(match.split('=')[1] === 'true')
+        const val = match.split('=')[1] === 'true'
+        const t = setTimeout(() => setDefaultOpen(val), 0)
+        return () => clearTimeout(t)
       }
     } catch {
       /* ignore */

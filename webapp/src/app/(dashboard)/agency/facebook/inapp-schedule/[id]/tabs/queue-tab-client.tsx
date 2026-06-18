@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -12,7 +12,6 @@ import {
   Video,
   Type,
   Ban,
-  Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,14 +45,15 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
   const limit = 10
 
   useEffect(() => {
-    if (bulkBatchFromUrl) setBulkBatchFilter(bulkBatchFromUrl)
+    if (bulkBatchFromUrl) {
+      const t = setTimeout(() => {
+        setBulkBatchFilter(bulkBatchFromUrl)
+      }, 0)
+      return () => clearTimeout(t)
+    }
   }, [bulkBatchFromUrl])
 
-  useEffect(() => {
-    fetchPosts()
-  }, [page, pageId, bulkBatchFilter])
-
-  async function fetchPosts() {
+  const fetchPosts = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -69,12 +69,21 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
         setPosts(data.posts)
         setTotalCount(data.totalCount)
       }
-    } catch (e) {
+    } catch {
       toast.error('Failed to load queue')
     } finally {
       setLoading(false)
     }
-  }
+  }, [pageId, page, bulkBatchFilter])
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetchPosts()
+    }, 0)
+    return () => clearTimeout(t)
+  }, [fetchPosts])
+
+
 
   const handleCancel = async (postId: string) => {
     setCancelingId(postId)
@@ -85,7 +94,7 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
       if (!res.ok) throw new Error('Failed to cancel')
       toast.success('Post cancelled')
       fetchPosts()
-    } catch (e) {
+    } catch {
       toast.error('Could not cancel post')
     } finally {
       setCancelingId(null)
@@ -137,7 +146,7 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
             <CalendarClock className="h-10 w-10 text-muted-foreground/50" />
             <h3 className="mt-4 font-semibold">Queue is empty</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              You don't have any pending posts scheduled.
+              You don&apos;t have any pending posts scheduled.
             </p>
           </div>
         ) : (

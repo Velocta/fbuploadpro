@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import Image from 'next/image'
+import { motion } from 'framer-motion'
 import { format, addDays } from 'date-fns'
 import { formatInTimeZone } from 'date-fns-tz'
 import { useRouter } from 'next/navigation'
@@ -42,7 +43,6 @@ import {
 import { PostsPerDayPicker } from '@/components/dashboard/posts-per-day-picker'
 import { TimezoneSelect } from '@/components/dashboard/timezone-select'
 import { TimeSlotInput } from '@/components/dashboard/time-slot-input'
-import { cn } from '@/lib/utils'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
 import {
   BULK_SCHEDULE_MAX_ITEMS,
@@ -217,8 +217,10 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
 
   useEffect(() => {
     if (items.length === 0) {
-      setPreviewError(null)
-      return
+      const t = setTimeout(() => {
+        setPreviewError(null)
+      }, 0)
+      return () => clearTimeout(t)
     }
     try {
       generateBulkScheduleTimestamps(items.length, {
@@ -228,9 +230,16 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
         postingTimes: ensurePostingTimesLength(postingTimes, cappedPostsPerDay),
         timezone,
       })
-      setPreviewError(null)
+      const t = setTimeout(() => {
+        setPreviewError(null)
+      }, 0)
+      return () => clearTimeout(t)
     } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : 'Invalid schedule')
+      const msg = err instanceof Error ? err.message : 'Invalid schedule'
+      const t = setTimeout(() => {
+        setPreviewError(msg)
+      }, 0)
+      return () => clearTimeout(t)
     }
   }, [items.length, startDate, cappedPostsPerDay, scheduleType, postingTimes, timezone])
 
@@ -394,7 +403,7 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
                         >
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                             {row.previewUrl && row.mediaType === 'image' ? (
-                              <img src={row.previewUrl} alt="" className="h-full w-full object-cover" />
+                              <Image src={row.previewUrl} alt="" width={56} height={56} className="h-full w-full object-cover" unoptimized />
                             ) : (
                               <Icon className="h-6 w-6 text-muted-foreground" />
                             )}

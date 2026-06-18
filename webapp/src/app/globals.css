@@ -484,6 +484,8 @@
     border-radius: 9999px;
     background: color-mix(in oklab, var(--primary) 5%, transparent);
     filter: blur(64px);
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
   }
 
   .landing-page-mist-blob-b {
@@ -495,6 +497,8 @@
     border-radius: 9999px;
     background: color-mix(in oklab, var(--primary) 4.5%, transparent);
     filter: blur(64px);
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
   }
 
   .landing-page-mist-blob-c {
@@ -506,6 +510,8 @@
     border-radius: 9999px;
     background: color-mix(in oklab, var(--secondary) 55%, transparent);
     filter: blur(56px);
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
   }
 
   /**
@@ -547,6 +553,8 @@
     background-size: 240% 240%;
     opacity: 0.42;
     animation: landing-sheen-sweep 19s ease-in-out infinite;
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
   }
 
   /**
@@ -569,6 +577,8 @@
     );
     animation: landing-conic-rotate 78s linear infinite;
     filter: blur(0.5px);
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
   }
 
   .dark .marketing-card-conic-glow {

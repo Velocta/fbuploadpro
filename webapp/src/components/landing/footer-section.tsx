@@ -5,7 +5,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 
 const easeStandard = [0.2, 0, 0, 1] as const
-const viewport = { once: true, margin: '-48px 0px' } as const
 
 export function FooterSection() {
   const reduce = useReducedMotion()
@@ -48,8 +47,7 @@ export function FooterSection() {
           className="grid gap-10 md:grid-cols-2 lg:grid-cols-4"
           variants={gridContainer}
           initial="hidden"
-          whileInView="visible"
-          viewport={viewport}
+          animate="visible"
         >
           <motion.div variants={column} className="space-y-5">
             <Link
@@ -140,8 +138,7 @@ export function FooterSection() {
           className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground md:flex-row"
           variants={bottomBar}
           initial="hidden"
-          whileInView="visible"
-          viewport={viewport}
+          animate="visible"
         >
           <span>© {new Date().getFullYear()} FBupload Pro</span>
           <span>Secure operations • Encrypted workflows • Automated publishing</span>

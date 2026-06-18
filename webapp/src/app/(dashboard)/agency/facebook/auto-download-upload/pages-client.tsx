@@ -50,7 +50,10 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
   const [searchInput, setSearchInput] = useState(search)
 
   useEffect(() => {
-    setSearchInput(search)
+    const t = setTimeout(() => {
+      setSearchInput(search)
+    }, 0)
+    return () => clearTimeout(t)
   }, [search])
 
   const updateFilters = (updates: { q?: string | null; sort?: string | null; status?: string | null; page?: number | null }) => {
@@ -432,7 +435,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
 
                         {/* Today's Stats */}
                         <div>
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Today's Stats</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Today&apos;s Stats</p>
                           <div className="grid grid-cols-3 gap-2">
                             {[
                               { label: 'Pending', value: Math.max(0, (pageItem.posts_per_day || 0) - (pageItem.posted_today || 0)), className: 'text-primary/95' },

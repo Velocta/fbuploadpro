@@ -1,7 +1,7 @@
 'use client'
 
 import { useReducedMotion } from 'framer-motion'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 
 function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n))
@@ -11,22 +11,23 @@ const HERO_SELECTOR = '[data-hero-ambient-root]'
 
 export function HeroPointerAmbient() {
   const reduceMotion = useReducedMotion()
-  const [spot, setSpot] = useState({ x: 50, y: 42 })
+  const ambientRef = useRef<HTMLDivElement>(null)
   const raf = useRef<number | null>(null)
   const pending = useRef<{ x: number; y: number } | null>(null)
-
-  const flush = useCallback(() => {
-    raf.current = null
-    const next = pending.current
-    if (!next) return
-    pending.current = null
-    setSpot(next)
-  }, [])
 
   useEffect(() => {
     if (reduceMotion) return
     if (typeof window === 'undefined') return
     if (window.matchMedia('(pointer: coarse)').matches) return
+
+    const flush = () => {
+      raf.current = null
+      const next = pending.current
+      if (!next || !ambientRef.current) return
+      pending.current = null
+      ambientRef.current.style.setProperty('--spot-x', `${next.x}%`)
+      ambientRef.current.style.setProperty('--spot-y', `${next.y}%`)
+    }
 
     const onMove = (event: MouseEvent) => {
       const root = document.querySelector<HTMLElement>(HERO_SELECTOR)
@@ -50,17 +51,19 @@ export function HeroPointerAmbient() {
       }
       pending.current = null
     }
-  }, [reduceMotion, flush])
+  }, [reduceMotion])
 
   if (reduceMotion) return null
 
   return (
     <div
+      ref={ambientRef}
       aria-hidden
       className="pointer-events-none absolute inset-0 z-[-8]"
       style={{
-        background: `radial-gradient(520px circle at ${spot.x}% ${spot.y}%, color-mix(in oklab, var(--primary) 8%, transparent), transparent 58%)`,
-      }}
+        background: `radial-gradient(520px circle at var(--spot-x, 50%) var(--spot-y, 42%), color-mix(in oklab, var(--primary) 8%, transparent), transparent 58%)`,
+      } as React.CSSProperties}
     />
   )
 }
+
