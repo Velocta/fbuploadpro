@@ -1,7 +1,7 @@
 import { AgencyGlassPageHero } from '@/components/dashboard/agency'
-import { Download } from 'lucide-react'
+import { CalendarClock } from 'lucide-react'
 
-function PagesSkeleton() {
+function InappScheduleSkeleton() {
   return (
     <div className="space-y-6">
       {/* Stats Skeleton */}
@@ -16,8 +16,8 @@ function PagesSkeleton() {
 
       {/* Pages Grid Skeleton */}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <div key={i} className="h-[340px] rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-[200px] rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
             <div className="flex gap-3">
               <div className="h-12 w-12 bg-muted/20 rounded-lg" />
               <div className="space-y-2 flex-1">
@@ -25,10 +25,7 @@ function PagesSkeleton() {
                 <div className="h-3 w-20 bg-muted/20 rounded" />
               </div>
             </div>
-            <div className="space-y-3">
-              <div className="h-10 bg-muted/20 rounded-lg" />
-              <div className="h-10 bg-muted/20 rounded-lg" />
-            </div>
+            <div className="h-10 bg-muted/20 rounded-lg w-full" />
           </div>
         ))}
       </div>
@@ -36,19 +33,19 @@ function PagesSkeleton() {
   )
 }
 
-export default function AutoDownloadUploadLoading() {
+export default function InappScheduleLoading() {
   return (
     <div className="space-y-6 pb-8 agency-motion-standard">
       <AgencyGlassPageHero
         segments={[
           { label: 'Agency', href: '/agency' },
-          { label: 'Auto Download/Upload' },
+          { label: 'InApp Schedule' },
         ]}
-        icon={<Download className="h-7 w-7 text-primary" />}
-        title="Auto Download/Upload"
-        description="Connected Facebook pages for automated reel download and posting."
+        icon={<CalendarClock className="h-7 w-7 text-primary" />}
+        title="InApp Schedule"
+        description="Schedule posts through our internal queue system."
       />
-      <PagesSkeleton />
+      <InappScheduleSkeleton />
     </div>
   )
 }
