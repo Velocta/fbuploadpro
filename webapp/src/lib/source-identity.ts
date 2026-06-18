@@ -30,7 +30,7 @@ export function sanitizeSourceIdentityInput(
         if (url.searchParams.has('id')) {
           return url.searchParams.get('id') || ''
         }
-        let pathParts = url.pathname.split('/').filter(Boolean)
+        const pathParts = url.pathname.split('/').filter(Boolean)
         const first = pathParts[0]
         if (first && pathParts.length > 1 && ['people', 'pages', 'groups', 'profile'].includes(first.toLowerCase())) {
           pathParts.shift()
@@ -39,17 +39,17 @@ export function sanitizeSourceIdentityInput(
           return pathParts[0]
         }
       } else if (sourcePlatform === 'instagram') {
-        let pathParts = url.pathname.split('/').filter(Boolean)
+        const pathParts = url.pathname.split('/').filter(Boolean)
         if (pathParts[0]) {
           return pathParts[0]
         }
       } else if (sourcePlatform === 'tiktok') {
-        let pathParts = url.pathname.split('/').filter(Boolean)
+        const pathParts = url.pathname.split('/').filter(Boolean)
         if (pathParts[0]) {
           return pathParts[0].replace(/^@+/, '')
         }
       } else if (sourcePlatform === 'youtube') {
-        let pathParts = url.pathname.split('/').filter(Boolean)
+        const pathParts = url.pathname.split('/').filter(Boolean)
         const first = pathParts[0]
         if (first && pathParts.length > 1 && ['c', 'channel', 'user'].includes(first.toLowerCase())) {
           pathParts.shift()
