@@ -22,6 +22,7 @@ interface DeleteSchedulePageDialogProps {
   pageName: string
   redirectToHub?: boolean
   trigger?: React.ReactNode
+  onSuccess?: () => void
 }
 
 export function DeleteSchedulePageDialog({
@@ -29,6 +30,7 @@ export function DeleteSchedulePageDialog({
   pageName,
   redirectToHub = false,
   trigger,
+  onSuccess,
 }: DeleteSchedulePageDialogProps) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -42,6 +44,9 @@ export function DeleteSchedulePageDialog({
           description: `${pageName} has been removed from direct scheduling.`,
         })
         setOpen(false)
+        if (onSuccess) {
+          onSuccess()
+        }
         if (redirectToHub) {
           router.push('/agency/facebook/direct-schedule')
         }

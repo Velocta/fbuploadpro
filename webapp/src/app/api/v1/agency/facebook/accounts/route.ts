@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireApiRole } from '@/server/auth/guards'
-import { listAgencyFacebookAccounts } from '@/server/services/agency/facebook-accounts'
+import { listAgencyFacebookAccountsEnriched } from '@/server/services/agency/facebook-accounts'
 
 export const runtime = 'nodejs'
 
@@ -9,10 +9,11 @@ export async function GET() {
   if (auth.error) return auth.error
 
   try {
-    const accounts = await listAgencyFacebookAccounts(auth.user.id)
-    return NextResponse.json({ accounts })
+    const { accounts, summary } = await listAgencyFacebookAccountsEnriched(auth.user.id)
+    return NextResponse.json({ accounts, summary })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+

@@ -49,7 +49,7 @@ function LoadingPanel({ message, submessage }: { message: string; submessage?: s
   )
 }
 
-export function AddSchedulePageDialog({ agencyId }: { agencyId: string }) {
+export function AddSchedulePageDialog({ agencyId, onSuccess }: { agencyId: string; onSuccess?: () => void }) {
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -160,6 +160,9 @@ export function AddSchedulePageDialog({ agencyId }: { agencyId: string }) {
           description: `${selectedPage.name} is now available for direct scheduling.`,
         })
         resetDialogState()
+        if (onSuccess) {
+          onSuccess()
+        }
         router.refresh()
       } catch {
         setError('Failed to add page due to a network error.')
