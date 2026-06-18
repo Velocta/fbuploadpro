@@ -312,41 +312,43 @@ export async function createPagesBulk(formData: FormData) {
   const created: Array<{ pageName: string }> = []
   const failed: Array<{ pageName: string; reason: string }> = []
 
-  for (const page of pages) {
-    if (!Intl.supportedValuesOf('timeZone').includes(page.timezone)) {
-      failed.push({
-        pageName: page.pageName,
-        reason: 'Invalid Timezone selected. Please refresh and try again.',
-      })
-      continue
-    }
+  await Promise.all(
+    pages.map(async (page) => {
+      if (!Intl.supportedValuesOf('timeZone').includes(page.timezone)) {
+        failed.push({
+          pageName: page.pageName,
+          reason: 'Invalid Timezone selected. Please refresh and try again.',
+        })
+        return
+      }
 
-    const result = await validateAndInsertPage(
-      supabase,
-      {
-        agencyId,
-        facebookAccountId,
-        timezone: page.timezone,
-        postsPerDay: page.postsPerDay,
-        scheduleType: page.scheduleType,
-        postingTimes: page.postingTimes || [],
-        pageName: page.pageName,
-        sourceUsername: page.sourceUsername,
-        sourcePlatform: page.sourcePlatform,
-        fbPageId: page.fbPageId,
-        fbPageAccessToken: page.fbPageAccessToken,
-        fbPageImage: page.fbPageImage,
-        followersCount: page.followersCount,
-      },
-      agency
-    )
+      const result = await validateAndInsertPage(
+        supabase,
+        {
+          agencyId,
+          facebookAccountId,
+          timezone: page.timezone,
+          postsPerDay: page.postsPerDay,
+          scheduleType: page.scheduleType,
+          postingTimes: page.postingTimes || [],
+          pageName: page.pageName,
+          sourceUsername: page.sourceUsername,
+          sourcePlatform: page.sourcePlatform,
+          fbPageId: page.fbPageId,
+          fbPageAccessToken: page.fbPageAccessToken,
+          fbPageImage: page.fbPageImage,
+          followersCount: page.followersCount,
+        },
+        agency
+      )
 
-    if (result.success) {
-      created.push({ pageName: page.pageName })
-    } else {
-      failed.push({ pageName: page.pageName, reason: result.error || 'Unknown error' })
-    }
-  }
+      if (result.success) {
+        created.push({ pageName: page.pageName })
+      } else {
+        failed.push({ pageName: page.pageName, reason: result.error || 'Unknown error' })
+      }
+    })
+  )
 
   revalidatePath('/agency/facebook/auto-download-upload')
   return {
@@ -400,41 +402,43 @@ export async function createPagesBulkMultiAccount(formData: FormData) {
   const created: Array<{ pageName: string }> = []
   const failed: Array<{ pageName: string; reason: string }> = []
 
-  for (const page of pages) {
-    if (!Intl.supportedValuesOf('timeZone').includes(page.timezone)) {
-      failed.push({
-        pageName: page.pageName,
-        reason: 'Invalid Timezone selected. Please refresh and try again.',
-      })
-      continue
-    }
+  await Promise.all(
+    pages.map(async (page) => {
+      if (!Intl.supportedValuesOf('timeZone').includes(page.timezone)) {
+        failed.push({
+          pageName: page.pageName,
+          reason: 'Invalid Timezone selected. Please refresh and try again.',
+        })
+        return
+      }
 
-    const result = await validateAndInsertPage(
-      supabase,
-      {
-        agencyId,
-        facebookAccountId: page.facebookAccountId,
-        timezone: page.timezone,
-        postsPerDay: page.postsPerDay,
-        scheduleType: page.scheduleType,
-        postingTimes: page.postingTimes || [],
-        pageName: page.pageName,
-        sourceUsername: page.sourceUsername,
-        sourcePlatform: page.sourcePlatform,
-        fbPageId: page.fbPageId,
-        fbPageAccessToken: page.fbPageAccessToken,
-        fbPageImage: page.fbPageImage,
-        followersCount: page.followersCount,
-      },
-      agency
-    )
+      const result = await validateAndInsertPage(
+        supabase,
+        {
+          agencyId,
+          facebookAccountId: page.facebookAccountId,
+          timezone: page.timezone,
+          postsPerDay: page.postsPerDay,
+          scheduleType: page.scheduleType,
+          postingTimes: page.postingTimes || [],
+          pageName: page.pageName,
+          sourceUsername: page.sourceUsername,
+          sourcePlatform: page.sourcePlatform,
+          fbPageId: page.fbPageId,
+          fbPageAccessToken: page.fbPageAccessToken,
+          fbPageImage: page.fbPageImage,
+          followersCount: page.followersCount,
+        },
+        agency
+      )
 
-    if (result.success) {
-      created.push({ pageName: page.pageName })
-    } else {
-      failed.push({ pageName: page.pageName, reason: result.error || 'Unknown error' })
-    }
-  }
+      if (result.success) {
+        created.push({ pageName: page.pageName })
+      } else {
+        failed.push({ pageName: page.pageName, reason: result.error || 'Unknown error' })
+      }
+    })
+  )
 
   revalidatePath('/agency/facebook/auto-download-upload')
   return {

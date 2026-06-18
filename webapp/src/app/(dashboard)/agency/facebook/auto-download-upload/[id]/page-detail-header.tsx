@@ -78,7 +78,7 @@ export function PageDetailHeader({ profile }: { profile: PageDetailProfile }) {
       leading={
         profile.fb_page_image ? (
           <div className="relative h-16 w-16 overflow-hidden rounded-2xl ring-2 ring-primary/20">
-            <Image src={profile.fb_page_image} alt="" fill className="object-cover" unoptimized />
+            <Image src={profile.fb_page_image} alt="" fill className="object-cover" unoptimized priority />
           </div>
         ) : (
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 ring-2 ring-primary/20">

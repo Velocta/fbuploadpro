@@ -47,18 +47,19 @@ export async function listAduReels(pageId: string, view: 'queue' | 'history') {
 
   if (error) throw new Error(error.message)
 
-  const rows: AduReelRow[] = []
-  for (const reel of data || []) {
-    let media_url: string | null = null
-    if (view === 'queue' && reel.media_object_key) {
-      try {
-        media_url = await createAduBufferDownloadUrl(reel.media_object_key)
-      } catch {
-        media_url = null
+  const rows = await Promise.all(
+    (data || []).map(async (reel) => {
+      let media_url: string | null = null
+      if (view === 'queue' && reel.media_object_key) {
+        try {
+          media_url = await createAduBufferDownloadUrl(reel.media_object_key)
+        } catch {
+          media_url = null
+        }
       }
-    }
-    rows.push({ ...reel, media_url })
-  }
+      return { ...reel, media_url }
+    })
+  )
   return rows
 }
 

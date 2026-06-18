@@ -15,32 +15,45 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: profile } = await supabase
-    .from('pages')
-    .select(`
-      id, 
-      page_name, 
-      source_platform, 
-      source_username, 
-      fb_page_access_token, 
-      fb_page_id, 
-      posts_per_day, 
-      schedule_type, 
-      status, 
-      timezone, 
-      posting_times, 
-      fb_page_image, 
-      sync_status, 
-      created_at,
-      followers_count,
-      followers_gained,
-      pending_reels_count,
-      posted_reels_count,
-      failed_reels_count,
-      facebook_accounts(fb_user_name, fb_user_id, fb_user_image)
-    `)
-    .eq('id', id)
-    .single()
+  // Stage 1: Fetch profile details and failedJobs (limited to 50 to prevent database clogging) in parallel
+  const [profileRes, failedJobsRes] = await Promise.all([
+    supabase
+      .from('pages')
+      .select(`
+        id, 
+        page_name, 
+        source_platform, 
+        source_username, 
+        fb_page_access_token, 
+        fb_page_id, 
+        posts_per_day, 
+        schedule_type, 
+        status, 
+        timezone, 
+        posting_times, 
+        fb_page_image, 
+        sync_status, 
+        created_at,
+        followers_count,
+        followers_gained,
+        pending_reels_count,
+        posted_reels_count,
+        failed_reels_count,
+        facebook_accounts(fb_user_name, fb_user_id, fb_user_image)
+      `)
+      .eq('id', id)
+      .single(),
+    supabase
+      .from('adu_posting_jobs')
+      .select('job_id, reel_id, reel_caption, status, last_error_code, last_error_message, updated_at')
+      .eq('page_id', id)
+      .in('status', ['failed_to_publish', 'publish_error', 'integrity_error'])
+      .order('updated_at', { ascending: false })
+      .limit(50)
+  ])
+
+  const profile = profileRes.data
+  const failedJobs = failedJobsRes.data
 
   if (!profile) return notFound()
 
@@ -53,7 +66,7 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
 
   const pageMidnight = getStartOfTodayInTimezone(profile.timezone || 'UTC')
 
-  // Fetch today's posting jobs to count posted and failed today (using page timezone midnight)
+  // Stage 2: Fetch today's posting jobs to count posted and failed today (using page timezone midnight)
   const { data: todayJobs } = await supabase
     .from('adu_posting_jobs')
     .select('status')
@@ -70,14 +83,6 @@ export default async function PageDetailsPage({ params }: { params: Promise<{ id
       failedToday += 1
     }
   }
-
-  // Fetch all failed jobs and reasons
-  const { data: failedJobs } = await supabase
-    .from('adu_posting_jobs')
-    .select('job_id, reel_id, reel_caption, status, last_error_code, last_error_message, updated_at')
-    .eq('page_id', id)
-    .in('status', ['failed_to_publish', 'publish_error', 'integrity_error'])
-    .order('updated_at', { ascending: false })
 
   const pageProfile = profile as unknown as Page & {
     sync_status: string | null

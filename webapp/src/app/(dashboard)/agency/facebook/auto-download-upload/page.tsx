@@ -17,38 +17,41 @@ export default async function AgencyPagesPage() {
 
   if (!user) redirect('/login')
 
-  const { data: pages } = await supabase
-    .from('pages')
-    .select(`
-      id,
-      page_name,
-      fb_page_id,
-      fb_page_image,
-      followers_count,
-      followers_gained,
-      created_at,
-      status,
-      sync_status,
-      source_platform,
-      source_username,
-      pending_reels_count,
-      posted_reels_count,
-      failed_reels_count,
-      posts_per_day,
-      timezone,
-      facebook_accounts(fb_user_name, fb_user_image)
-    `)
-    .eq('agency_id', user.id)
-    .order('created_at', { ascending: false })
-
-  // Fetch only finished posting jobs updated/published in the last 48 hours for pages belonging to this agency
   const fortyEightHoursAgo = getFortyEightHoursAgo()
-  const { data: recentJobs } = await supabase
-    .from('adu_posting_jobs')
-    .select('page_id, status, updated_at')
-    .eq('agency_id', user.id)
-    .in('status', ['published', 'failed_to_publish', 'publish_error', 'integrity_error'])
-    .gte('updated_at', fortyEightHoursAgo.toISOString())
+  const [pagesRes, recentJobsRes] = await Promise.all([
+    supabase
+      .from('pages')
+      .select(`
+        id,
+        page_name,
+        fb_page_id,
+        fb_page_image,
+        followers_count,
+        followers_gained,
+        created_at,
+        status,
+        sync_status,
+        source_platform,
+        source_username,
+        pending_reels_count,
+        posted_reels_count,
+        failed_reels_count,
+        posts_per_day,
+        timezone,
+        facebook_accounts(fb_user_name, fb_user_image)
+      `)
+      .eq('agency_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('adu_posting_jobs')
+      .select('page_id, status, updated_at')
+      .eq('agency_id', user.id)
+      .in('status', ['published', 'failed_to_publish', 'publish_error', 'integrity_error'])
+      .gte('updated_at', fortyEightHoursAgo.toISOString())
+  ])
+
+  const pages = pagesRes.data
+  const recentJobs = recentJobsRes.data
 
   const pagesWithTodayStats = (pages || []).map((p) => {
     const timezone = p.timezone || 'UTC'

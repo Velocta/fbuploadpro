@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
@@ -38,6 +38,7 @@ const PAGES_PAGE_SIZE = 9
 
 export function PagesClient({ initialPages }: { initialPages: PageWithReels[] }) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -78,7 +79,9 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
       if (updates.page && updates.page > 1) params.set('page', String(updates.page))
       else params.delete('page')
     }
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    startTransition(() => {
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+    })
   }
 
   const filteredPages = useMemo(() => {
@@ -221,7 +224,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
         </div>
       ) : (
         <>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cn("grid gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-opacity duration-200", isPending && "opacity-50 pointer-events-none")}>
             {paginatedPages.map((pageItem, index) => {
               const postedCount = pageItem.posted_reels_count || 0
               const pendingCount = pageItem.pending_reels_count || 0
@@ -281,6 +284,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                               height={48}
                               className="rounded-lg shadow-sm ring-2 ring-transparent transition-all group-hover:ring-primary/20"
                               unoptimized
+                              priority={index < 3}
                             />
                           ) : (
                             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted ring-2 ring-transparent transition-all group-hover:ring-primary/20">
