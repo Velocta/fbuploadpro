@@ -274,12 +274,12 @@ export function FacebookPageInsightsTab({ fbPageId, pageAccessToken }: FacebookP
   const aggregateStats = useMemo(() => {
     if (!chartData.length) return null
     return chartData.reduce((acc, curr) => ({
-      reach: (acc.reach || 0) + (curr.page_total_media_view_unique || 0),
-      engagements: (acc.engagements || 0) + (curr.page_post_engagements || 0),
-      videoViews: (acc.videoViews || 0) + (curr.page_video_views || 0),
-      profileViews: (acc.profileViews || 0) + (curr.page_views_total || 0),
-      follows: (acc.follows || 0) + (curr.page_daily_follows_unique || 0),
-      unfollows: (acc.unfollows || 0) + (curr.page_daily_unfollows_unique || 0),
+      reach: (acc.reach || 0) + Number(curr.page_total_media_view_unique || 0),
+      engagements: (acc.engagements || 0) + Number(curr.page_post_engagements || 0),
+      videoViews: (acc.videoViews || 0) + Number(curr.page_video_views || 0),
+      profileViews: (acc.profileViews || 0) + Number(curr.page_views_total || 0),
+      follows: (acc.follows || 0) + Number(curr.page_daily_follows_unique || 0),
+      unfollows: (acc.unfollows || 0) + Number(curr.page_daily_unfollows_unique || 0),
     }), {} as Record<string, number>)
   }, [chartData])
 

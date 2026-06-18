@@ -498,7 +498,22 @@ export type Database = {
           fb_page_access_token?: string
           created_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "facebook_direct_schedule_pages_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facebook_direct_schedule_pages_facebook_account_id_fkey"
+            columns: ["facebook_account_id"]
+            isOneToOne: false
+            referencedRelation: "facebook_accounts"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       facebook_direct_schedule_posts: {
         Row: {
@@ -588,7 +603,22 @@ export type Database = {
           fb_page_access_token?: string
           created_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "facebook_inapp_schedule_pages_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facebook_inapp_schedule_pages_facebook_account_id_fkey"
+            columns: ["facebook_account_id"]
+            isOneToOne: false
+            referencedRelation: "facebook_accounts"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       facebook_rss_autoposter_pages: {
         Row: {

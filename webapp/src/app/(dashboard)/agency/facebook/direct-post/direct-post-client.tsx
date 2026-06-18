@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,8 +12,8 @@ import { toast } from 'sonner'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
 import { HubActionPendingOverlay } from '@/components/dashboard/hub-action-pending-overlay'
 import { AgencyEmptyState, AgencyInlineStatus } from '@/components/dashboard/agency'
-import { 
-  Send, Type, Image as ImageIcon, Video, AlertCircle, 
+import {
+  Send, Type, Image as ImageIcon, Video, AlertCircle,
   UploadCloud, FileImage, FileVideo, Trash2, Link as LinkIcon, ChevronDown, ChevronUp,
   Search, Loader2, ArrowRight, Layers, Facebook, ChevronLeft, RefreshCw, CheckCircle2
 } from 'lucide-react'
@@ -58,14 +58,14 @@ export function DirectPostClient() {
 
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
   const [selectedPage, setSelectedPage] = useState<FbPage | null>(null)
-  
+
   const [accountSearch, setAccountSearch] = useState('')
   const [pageSearch, setPageSearch] = useState('')
 
   const [history, setHistory] = useState<PostHistoryItem[]>([])
   const [historyPage, setHistoryPage] = useState(1)
   const [historyTotal, setHistoryTotal] = useState(0)
-  
+
   // Composer state
   const [mediaType, setMediaType] = useState<'text' | 'image' | 'video'>('text')
   const [caption, setCaption] = useState('')
@@ -194,8 +194,8 @@ export function DirectPostClient() {
     setUploadStatus('uploading')
     setUploadedObjectKey(null)
 
-    uploadViaPresign({ 
-      file: selectedFile, 
+    uploadViaPresign({
+      file: selectedFile,
       feature: 'direct-post',
       onProgress: (pct) => setUploadProgress(pct)
     }).then(key => {
@@ -304,7 +304,7 @@ export function DirectPostClient() {
       {/* SELECTION WIZARD */}
       <AnimatePresence mode="wait">
         {!selectedPage ? (
-          <motion.div 
+          <motion.div
             key="selection-wizard"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -335,11 +335,11 @@ export function DirectPostClient() {
                       </div>
                       <div className="relative mb-6">
                         <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl" 
-                          placeholder="Search accounts..." 
-                          value={accountSearch} 
-                          onChange={(e) => setAccountSearch(e.target.value)} 
+                        <Input
+                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl"
+                          placeholder="Search accounts..."
+                          value={accountSearch}
+                          onChange={(e) => setAccountSearch(e.target.value)}
                         />
                       </div>
                       <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -382,7 +382,7 @@ export function DirectPostClient() {
                 </motion.div>
               ) : (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                   <div className="relative group">
+                  <div className="relative group">
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <div className="relative bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl">
                       <HubActionPendingOverlay show={loadingPages} message="Loading pages…" />
@@ -397,11 +397,11 @@ export function DirectPostClient() {
                       </div>
                       <div className="relative mb-6">
                         <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl" 
-                          placeholder="Search pages..." 
-                          value={pageSearch} 
-                          onChange={(e) => setPageSearch(e.target.value)} 
+                        <Input
+                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl"
+                          placeholder="Search pages..."
+                          value={pageSearch}
+                          onChange={(e) => setPageSearch(e.target.value)}
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -452,7 +452,7 @@ export function DirectPostClient() {
             </div>
           </motion.div>
         ) : (
-          <motion.div 
+          <motion.div
             key="active-composer"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -465,7 +465,7 @@ export function DirectPostClient() {
                   {selectedAccount?.fb_user_image ? (
                     <Image src={selectedAccount.fb_user_image} alt="" width={32} height={32} className="rounded-full ring-2 ring-background z-10 shadow-sm" unoptimized />
                   ) : <div className="w-8 h-8 rounded-full bg-muted z-10 ring-2 ring-background" />}
-                  
+
                   {selectedPage?.picture ? (
                     <Image src={selectedPage.picture} alt="" width={40} height={40} className="rounded-lg -ml-3 ring-2 ring-background z-20 shadow-md" unoptimized />
                   ) : <div className="w-10 h-10 rounded-lg bg-muted -ml-3 ring-2 ring-background z-20" />}
@@ -478,9 +478,9 @@ export function DirectPostClient() {
                   <p className="text-sm text-muted-foreground leading-tight mt-0.5">via {selectedAccount?.fb_user_name}</p>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => { setSelectedPage(null); setSelectedAccount(null); }}
                 className="rounded-full bg-background/50 backdrop-blur-md border-border/50 shadow-sm"
               >
@@ -490,7 +490,7 @@ export function DirectPostClient() {
 
             <div className="grid gap-8 lg:grid-cols-[1.5fr_1fr] items-start pt-2">
               {/* COMPOSER PANEL */}
-              <motion.section 
+              <motion.section
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="relative group"
@@ -543,10 +543,10 @@ export function DirectPostClient() {
                           {caption.length.toLocaleString()} / {MAX_CAPTION_LENGTH.toLocaleString()}
                         </span>
                       </div>
-                      <Textarea 
-                        value={caption} 
-                        onChange={(e) => setCaption(e.target.value)} 
-                        rows={5} 
+                      <Textarea
+                        value={caption}
+                        onChange={(e) => setCaption(e.target.value)}
+                        rows={5}
                         className="resize-none rounded-xl bg-background/50"
                         placeholder="What's on your mind?"
                       />
@@ -554,7 +554,7 @@ export function DirectPostClient() {
 
                     <AnimatePresence mode="popLayout">
                       {mediaType !== 'text' && (
-                        <motion.div 
+                        <motion.div
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
                           exit={{ opacity: 0, height: 0 }}
@@ -570,11 +570,11 @@ export function DirectPostClient() {
                               <p className="mt-1 text-xs text-muted-foreground">
                                 {mediaType === 'image' ? 'JPEG, PNG up to 10MB' : 'MP4, MOV up to 10GB'}
                               </p>
-                              <input 
-                                type="file" 
-                                className="hidden" 
-                                accept={mediaType === 'image' ? 'image/*' : 'video/*'} 
-                                onChange={handleFileChange} 
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept={mediaType === 'image' ? 'image/*' : 'video/*'}
+                                onChange={handleFileChange}
                               />
                             </label>
                           ) : (
@@ -588,17 +588,17 @@ export function DirectPostClient() {
                                   <FileVideo className="h-8 w-8 text-muted-foreground" />
                                 </div>
                               )}
-                              
+
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium">{file.name}</p>
                                 <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                                
+
                                 {uploadStatus === 'uploading' && uploadProgress > 0 && uploadProgress < 100 && (
                                   <div className="mt-2 flex items-center gap-2">
                                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                                      <div 
-                                        className="h-full bg-primary transition-all duration-300 ease-out" 
-                                        style={{ width: `${uploadProgress}%` }} 
+                                      <div
+                                        className="h-full bg-primary transition-all duration-300 ease-out"
+                                        style={{ width: `${uploadProgress}%` }}
                                       />
                                     </div>
                                     <span className="text-[10px] font-medium text-muted-foreground">
@@ -615,17 +615,17 @@ export function DirectPostClient() {
                                   </p>
                                 )}
                               </div>
-                              
+
                               {uploadStatus !== 'uploading' && (
-                                <Button 
-                                  type="button" 
-                                  variant="ghost" 
-                                  size="icon" 
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
                                   className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                                  onClick={() => { 
-                                    setFile(null); 
-                                    setFilePreview(null); 
-                                    setUploadStatus('idle'); 
+                                  onClick={() => {
+                                    setFile(null);
+                                    setFilePreview(null);
+                                    setUploadStatus('idle');
                                     setUploadedObjectKey(null);
                                   }}
                                 >
@@ -640,17 +640,17 @@ export function DirectPostClient() {
 
                     <div className="space-y-2">
                       <Label>First comment (optional)</Label>
-                      <Input 
-                        value={firstComment} 
-                        onChange={(e) => setFirstComment(e.target.value)} 
+                      <Input
+                        value={firstComment}
+                        onChange={(e) => setFirstComment(e.target.value)}
                         className="h-11 rounded-xl bg-background/50"
                         placeholder="Write a comment..."
                       />
                     </div>
-                    
-                    <Button 
+
+                    <Button
                       className="h-12 w-full rounded-xl text-base font-semibold shadow-xl shadow-primary/20"
-                      onClick={onSubmit} 
+                      onClick={onSubmit}
                       disabled={submitting || (mediaType !== 'text' && uploadStatus !== 'success') || caption.length > MAX_CAPTION_LENGTH}
                     >
                       {submitting ? (
@@ -670,7 +670,7 @@ export function DirectPostClient() {
               </motion.section>
 
               {/* HISTORY PANEL */}
-              <motion.section 
+              <motion.section
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
@@ -680,7 +680,7 @@ export function DirectPostClient() {
                 <div className="relative flex h-full max-h-[800px] flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/40 shadow-2xl backdrop-blur-xl">
                   <div className="border-b border-border/50 p-5">
                     <h2 className="text-lg font-semibold">Publish History</h2>
-                    
+
                     <div className="mt-4 grid grid-cols-2 gap-2">
                       <Select value={historyFilterType} onValueChange={setHistoryFilterType}>
                         <SelectTrigger className="h-9 rounded-lg bg-background/50 text-xs">
@@ -715,8 +715,8 @@ export function DirectPostClient() {
                     ) : (
                       <div className="space-y-3">
                         {filteredHistory.map((item, i) => (
-                          <motion.div 
-                            key={item.id} 
+                          <motion.div
+                            key={item.id}
                             initial={{ opacity: 0, x: -8 }}
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ delay: i * 0.04 }}
@@ -735,9 +735,9 @@ export function DirectPostClient() {
                                 </p>
                               </div>
                               <div className="shrink-0 text-right">
-                                <AgencyInlineStatus 
-                                  label={item.status} 
-                                  tone={item.status === 'published' ? 'default' : 'destructive'} 
+                                <AgencyInlineStatus
+                                  label={item.status}
+                                  tone={item.status === 'published' ? 'default' : 'destructive'}
                                   className="capitalize text-[10px]"
                                 />
                               </div>
@@ -745,7 +745,7 @@ export function DirectPostClient() {
 
                             {item.status === 'failed' && item.error_message && (
                               <div className="mt-3">
-                                <button 
+                                <button
                                   onClick={() => toggleError(item.id)}
                                   className="flex items-center gap-1 text-xs font-medium text-destructive hover:underline"
                                 >
@@ -754,7 +754,7 @@ export function DirectPostClient() {
                                 </button>
                                 <AnimatePresence>
                                   {expandedErrors[item.id] && (
-                                    <motion.div 
+                                    <motion.div
                                       initial={{ opacity: 0, height: 0 }}
                                       animate={{ opacity: 1, height: 'auto' }}
                                       exit={{ opacity: 0, height: 0 }}
@@ -774,9 +774,9 @@ export function DirectPostClient() {
                                 <Badge variant="outline" className="bg-transparent text-[10px] font-normal text-muted-foreground border-border/50">
                                   {item.tokens_charged} token{item.tokens_charged !== 1 ? 's' : ''}
                                 </Badge>
-                                <a 
-                                  href={`https://facebook.com/${item.graph_post_id}`} 
-                                  target="_blank" 
+                                <a
+                                  href={`https://facebook.com/${item.graph_post_id}`}
+                                  target="_blank"
                                   rel="noreferrer"
                                   className="flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
                                 >
@@ -793,9 +793,9 @@ export function DirectPostClient() {
                   {/* Pagination controls for history */}
                   {historyTotal > HISTORY_PAGE_SIZE && (
                     <div className="border-t border-border/50 bg-background/20 p-3 flex items-center justify-between text-xs">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="h-8 rounded-lg"
                         disabled={historyPage === 1}
                         onClick={() => setHistoryPage(p => p - 1)}
@@ -805,9 +805,9 @@ export function DirectPostClient() {
                       <span className="text-muted-foreground">
                         Page {historyPage} of {Math.ceil(historyTotal / HISTORY_PAGE_SIZE)}
                       </span>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="h-8 rounded-lg"
                         disabled={historyPage >= Math.ceil(historyTotal / HISTORY_PAGE_SIZE)}
                         onClick={() => setHistoryPage(p => p + 1)}
