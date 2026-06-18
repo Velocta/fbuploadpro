@@ -309,30 +309,6 @@ export function PageToolsClient() {
     setRunProgress(null)
   }
 
-  async function loadBrowseContent(type: ContentType, reset: boolean) {
-    if (!selectedAccountId || !selectedPage) return
-    setLoadingBrowse(true)
-    try {
-      const cursorPart = !reset && browseAfterCursor ? `&after=${encodeURIComponent(browseAfterCursor)}` : ''
-      const response = await fetch(
-        `/api/v1/agency/page-tools/accounts/${selectedAccountId}/pages/${selectedPage.id}/content?type=${type}&limit=25${cursorPart}`,
-        {
-          headers: selectedPage.access_token ? { 'x-page-access-token': selectedPage.access_token } : {},
-        }
-      )
-      const data = (await response.json()) as ContentResponse & { error?: string }
-      if (!response.ok) throw new Error(data.error || 'Failed to load page content')
-      const incoming = data.items || []
-      setBrowseItems((prev) => (reset ? incoming : [...prev, ...incoming]))
-      if (reset) setBrowseSelectedIds([])
-      setBrowseAfterCursor(getAfterCursorFromPaging(data.paging))
-    } catch {
-      toast.error('Unable to load page content')
-    } finally {
-      setLoadingBrowse(false)
-    }
-  }
-
   async function handlePreviewTargets() {
     if (!selectedAccountId || !selectedPage) return
     if (dateFrom && dateTo && dateFrom > dateTo) {
