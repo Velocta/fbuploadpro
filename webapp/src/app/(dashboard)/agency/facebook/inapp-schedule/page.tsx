@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddInappPageDialog } from './add-inapp-page-dialog'
@@ -6,12 +7,40 @@ import { AgencyGlassPageHero } from '@/components/dashboard/agency'
 import { CalendarClock, Layers, Clock, XCircle } from 'lucide-react'
 import { getAgencyInappScheduleStats } from '@/server/services/facebook/inapp-schedule-service'
 
-export default async function FacebookInappSchedulePage() {
+function InappScheduleSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Stats Skeleton */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+            <div className="h-4 w-24 bg-muted/20 rounded" />
+            <div className="h-6 w-16 bg-muted/20 rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Pages Grid Skeleton */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-[200px] rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+            <div className="flex gap-3">
+              <div className="h-12 w-12 bg-muted/20 rounded-lg" />
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-32 bg-muted/20 rounded" />
+                <div className="h-3 w-20 bg-muted/20 rounded" />
+              </div>
+            </div>
+            <div className="h-10 bg-muted/20 rounded-lg w-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function InappScheduleLoader({ userId }: { userId: string }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
   const { data: pages } = await supabase
     .from('facebook_inapp_schedule_pages')
     .select(`
@@ -22,10 +51,10 @@ export default async function FacebookInappSchedulePage() {
       created_at,
       facebook_accounts(fb_user_name, fb_user_image)
     `)
-    .eq('agency_id', user.id)
+    .eq('agency_id', userId)
     .order('created_at', { ascending: false })
 
-  const stats = await getAgencyInappScheduleStats(user.id)
+  const stats = await getAgencyInappScheduleStats(userId)
 
   const uiStats = [
     {
@@ -46,18 +75,7 @@ export default async function FacebookInappSchedulePage() {
   ]
 
   return (
-    <div className="space-y-6 pb-8 agency-motion-standard">
-      <AgencyGlassPageHero
-        segments={[
-          { label: 'Agency', href: '/agency' },
-          { label: 'InApp Schedule' },
-        ]}
-        icon={<CalendarClock className="h-7 w-7 text-primary" />}
-        title="InApp Schedule"
-        description="Schedule posts through our internal queue system."
-        actions={<AddInappPageDialog agencyId={user.id} />}
-      />
-
+    <div className="space-y-6">
       <div className="relative group">
         <div
           className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
@@ -82,7 +100,33 @@ export default async function FacebookInappSchedulePage() {
         </div>
       </div>
 
-      <InappPagesClient initialPages={(pages as unknown as InappPage[]) || []} agencyId={user.id} />
+      <InappPagesClient initialPages={(pages as unknown as InappPage[]) || []} agencyId={userId} />
+    </div>
+  )
+}
+
+export default async function FacebookInappSchedulePage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  return (
+    <div className="space-y-6 pb-8 agency-motion-standard">
+      <AgencyGlassPageHero
+        segments={[
+          { label: 'Agency', href: '/agency' },
+          { label: 'InApp Schedule' },
+        ]}
+        icon={<CalendarClock className="h-7 w-7 text-primary" />}
+        title="InApp Schedule"
+        description="Schedule posts through our internal queue system."
+        actions={<AddInappPageDialog agencyId={user.id} />}
+      />
+
+      <Suspense fallback={<InappScheduleSkeleton />}>
+        <InappScheduleLoader userId={user.id} />
+      </Suspense>
     </div>
   )
 }

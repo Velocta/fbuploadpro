@@ -9,20 +9,61 @@ import { AgencyGlassPageHero } from '@/components/dashboard/agency'
 import { Button } from '@/components/ui/button'
 import { Building2, Settings2 } from 'lucide-react'
 
+function AccountsSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Stats Skeleton */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+            <div className="h-4 w-24 bg-muted/20 rounded" />
+            <div className="h-6 w-16 bg-muted/20 rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Accounts List Skeleton */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-[200px] rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+            <div className="flex gap-3">
+              <div className="h-12 w-12 bg-muted/20 rounded-full" />
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-32 bg-muted/20 rounded" />
+                <div className="h-3 w-20 bg-muted/20 rounded" />
+              </div>
+            </div>
+            <div className="h-10 bg-muted/20 rounded-lg w-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function FacebookAccountsLoader({ userId, hasFacebookApp }: { userId: string; hasFacebookApp: boolean }) {
+  const { accounts, summary } = await listAgencyFacebookAccountsEnriched(userId)
+
+  return (
+    <FacebookAccountsList
+      accounts={accounts}
+      summary={summary}
+      hasFacebookApp={hasFacebookApp}
+    />
+  )
+}
+
 export default async function AgencyFacebookPage() {
   const user = await getSessionUser()
 
   if (!user) redirect('/login')
 
   const supabase = await createClient()
-  const [{ data: agencySettings }, { accounts, summary }] = await Promise.all([
-    supabase
-      .from('users')
-      .select('fb_app_id, fb_app_secret')
-      .eq('id', user.id)
-      .single(),
-    listAgencyFacebookAccountsEnriched(user.id),
-  ])
+  const { data: agencySettings } = await supabase
+    .from('users')
+    .select('fb_app_id, fb_app_secret')
+    .eq('id', user.id)
+    .single()
 
   const hasFacebookApp = Boolean(
     agencySettings?.fb_app_id?.trim() && agencySettings?.fb_app_secret?.trim(),
@@ -56,16 +97,8 @@ export default async function AgencyFacebookPage() {
         }
       />
 
-      <Suspense fallback={
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          Loading Facebook accounts...
-        </div>
-      }>
-        <FacebookAccountsList
-          accounts={accounts}
-          summary={summary}
-          hasFacebookApp={hasFacebookApp}
-        />
+      <Suspense fallback={<AccountsSkeleton />}>
+        <FacebookAccountsLoader userId={user.id} hasFacebookApp={hasFacebookApp} />
       </Suspense>
     </div>
   )
