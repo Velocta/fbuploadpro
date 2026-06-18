@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
@@ -112,12 +112,12 @@ export function FacebookAccountsList() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadData()
   }, [loadData])
 
   const [isPageChanging, setIsPageChanging] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 

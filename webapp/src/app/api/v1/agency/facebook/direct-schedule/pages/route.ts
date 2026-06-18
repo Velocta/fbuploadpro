@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { requireApiRole } from '@/server/auth/guards'
 import {
   deleteDirectSchedulePage,
-  listDirectSchedulePages,
   upsertDirectSchedulePage,
   getAgencyScheduleStats,
 } from '@/server/services/facebook/direct-schedule-service'
