@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -37,28 +37,47 @@ import { AduPageLinkPendingOverlay } from './adu-page-link-pending'
 const PAGES_PAGE_SIZE = 9
 
 export function PagesClient({ initialPages }: { initialPages: PageWithReels[] }) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const search = searchParams.get('q') || ''
-  const sortBy = searchParams.get('sort') || 'newest'
-  const statusFilter = searchParams.get('status') || 'all'
+  const initialSearch = searchParams.get('q') || ''
+  const initialSortBy = searchParams.get('sort') || 'newest'
+  const initialStatusFilter = searchParams.get('status') || 'all'
   const pageParam = searchParams.get('page')
-  const page = pageParam ? parseInt(pageParam, 10) || 1 : 1
+  const initialPage = pageParam ? parseInt(pageParam, 10) || 1 : 1
 
-  const [searchInput, setSearchInput] = useState(search)
+  // Local React states for instantaneous responsiveness
+  const [search, setSearch] = useState(initialSearch)
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
+  const [sortBy, setSortBy] = useState(initialSortBy)
+  const [page, setPage] = useState(initialPage)
+
+  const [searchInput, setSearchInput] = useState(initialSearch)
+
+  // Sync state if URL changes externally
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSearch(initialSearch)
+    setSearchInput(initialSearch)
+  }, [initialSearch])
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      setSearchInput(search)
-    }, 0)
-    return () => clearTimeout(t)
-  }, [search])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatusFilter(initialStatusFilter)
+  }, [initialStatusFilter])
 
-  const updateFilters = (updates: { q?: string | null; sort?: string | null; status?: string | null; page?: number | null }) => {
-    const params = new URLSearchParams(searchParams.toString())
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSortBy(initialSortBy)
+  }, [initialSortBy])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(initialPage)
+  }, [initialPage])
+
+  const updateFiltersUrl = useCallback((updates: { q?: string | null; sort?: string | null; status?: string | null; page?: number | null }) => {
+    const params = new URLSearchParams(window.location.search)
     if ('q' in updates) {
       const qVal = updates.q?.trim()
       if (qVal) params.set('q', qVal)
@@ -79,15 +98,26 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
       if (updates.page && updates.page > 1) params.set('page', String(updates.page))
       else params.delete('page')
     }
-    startTransition(() => {
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false })
-    })
-  }
+    const newUrl = `${pathname}?${params.toString()}`
+    window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl)
+  }, [pathname])
+
+  // Debounce URL updates for search queries to keep typing fluid
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const currentUrlQuery = new URLSearchParams(window.location.search).get('q') || ''
+      if (search !== currentUrlQuery) {
+        updateFiltersUrl({ q: search, page: 1 })
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [search, updateFiltersUrl])
 
   const filteredPages = useMemo(() => {
-    const searchLower = search.toLowerCase()
+    const searchLower = search.toLowerCase().trim()
     return initialPages.filter((p) => {
       const matchesSearch =
+        !searchLower ||
         (p.page_name || '').toLowerCase().includes(searchLower) ||
         (p.fb_page_id || '').toLowerCase().includes(searchLower) ||
         (p.source_username || '').toLowerCase().includes(searchLower)
@@ -157,8 +187,10 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                 placeholder="Search pages or sources..."
                 value={searchInput}
                 onChange={(e) => {
-                  setSearchInput(e.target.value)
-                  updateFilters({ q: e.target.value })
+                  const val = e.target.value
+                  setSearchInput(val)
+                  setSearch(val)
+                  setPage(1)
                 }}
                 className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
               />
@@ -166,7 +198,9 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                updateFilters({ status: v })
+                setStatusFilter(v)
+                setPage(1)
+                updateFiltersUrl({ status: v, page: 1 })
               }}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 lg:w-[180px]">
@@ -191,7 +225,9 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
             <Select
               value={sortBy}
               onValueChange={(v) => {
-                updateFilters({ sort: v })
+                setSortBy(v)
+                setPage(1)
+                updateFiltersUrl({ sort: v, page: 1 })
               }}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 lg:w-[180px]">
@@ -216,7 +252,11 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
             className="mt-4 rounded-full"
             onClick={() => {
               setSearchInput('')
-              updateFilters({ q: null, status: null, page: null })
+              setSearch('')
+              setStatusFilter('all')
+              setSortBy('newest')
+              setPage(1)
+              updateFiltersUrl({ q: null, status: null, sort: null, page: null })
             }}
           >
             Clear filters
@@ -224,7 +264,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
         </div>
       ) : (
         <>
-          <div className={cn("grid gap-6 sm:grid-cols-2 lg:grid-cols-3 transition-opacity duration-200", isPending && "opacity-50 pointer-events-none")}>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {paginatedPages.map((pageItem, index) => {
               const postedCount = pageItem.posted_reels_count || 0
               const pendingCount = pageItem.pending_reels_count || 0
@@ -474,8 +514,12 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full"
-                onClick={() => updateFilters({ page: Math.max(1, currentPage - 1) })}
+                className="rounded-full flex items-center gap-2"
+                onClick={() => {
+                  const newPage = Math.max(1, currentPage - 1)
+                  setPage(newPage)
+                  updateFiltersUrl({ page: newPage })
+                }}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -486,8 +530,12 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full"
-                onClick={() => updateFilters({ page: Math.min(totalPages, currentPage + 1) })}
+                className="rounded-full flex items-center gap-2"
+                onClick={() => {
+                  const newPage = Math.min(totalPages, currentPage + 1)
+                  setPage(newPage)
+                  updateFiltersUrl({ page: newPage })
+                }}
                 disabled={currentPage >= totalPages}
               >
                 Next

@@ -11,13 +11,45 @@ function getFortyEightHoursAgo() {
   return new Date(Date.now() - 48 * 60 * 60 * 1000)
 }
 
-export default async function AgencyPagesPage() {
+function PagesSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Stats Skeleton */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-24 rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+            <div className="h-4 w-24 bg-muted/20 rounded" />
+            <div className="h-6 w-16 bg-muted/20 rounded" />
+          </div>
+        ))}
+      </div>
+
+      {/* Pages Grid Skeleton */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <div key={i} className="h-[340px] rounded-2xl border border-border/50 bg-card/40 p-5 animate-pulse flex flex-col justify-between">
+            <div className="flex gap-3">
+              <div className="h-12 w-12 bg-muted/20 rounded-lg" />
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-32 bg-muted/20 rounded" />
+                <div className="h-3 w-20 bg-muted/20 rounded" />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="h-10 bg-muted/20 rounded-lg" />
+              <div className="h-10 bg-muted/20 rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function PagesListLoader({ userId }: { userId: string }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) redirect('/login')
-
   const fortyEightHoursAgo = getFortyEightHoursAgo()
+
   const [pagesRes, recentJobsRes] = await Promise.all([
     supabase
       .from('pages')
@@ -40,12 +72,12 @@ export default async function AgencyPagesPage() {
         timezone,
         facebook_accounts(fb_user_name, fb_user_image)
       `)
-      .eq('agency_id', user.id)
+      .eq('agency_id', userId)
       .order('created_at', { ascending: false }),
     supabase
       .from('adu_posting_jobs')
       .select('page_id, status, updated_at')
-      .eq('agency_id', user.id)
+      .eq('agency_id', userId)
       .in('status', ['published', 'failed_to_publish', 'publish_error', 'integrity_error'])
       .gte('updated_at', fortyEightHoursAgo.toISOString())
   ])
@@ -107,18 +139,7 @@ export default async function AgencyPagesPage() {
   ]
 
   return (
-    <div className="space-y-6 pb-8 agency-motion-standard">
-      <AgencyGlassPageHero
-        segments={[
-          { label: 'Agency', href: '/agency' },
-          { label: 'Auto Download/Upload' },
-        ]}
-        icon={<Download className="h-7 w-7 text-primary" />}
-        title="Auto Download/Upload"
-        description="Connected Facebook pages for automated reel download and posting."
-        actions={<AddPageDialog agencyId={user.id} />}
-      />
-
+    <div className="space-y-6">
       <div className="relative group">
         <div
           className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-blue-500/20 opacity-0 blur-xl transition-opacity duration-500 group-hover:opacity-100"
@@ -143,12 +164,32 @@ export default async function AgencyPagesPage() {
         </div>
       </div>
 
-      <Suspense fallback={
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          Loading automation pages...
-        </div>
-      }>
-        <PagesClient initialPages={pagesWithTodayStats} />
+      <PagesClient initialPages={pagesWithTodayStats} />
+    </div>
+  )
+}
+
+export default async function AgencyPagesPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) redirect('/login')
+
+  return (
+    <div className="space-y-6 pb-8 agency-motion-standard">
+      <AgencyGlassPageHero
+        segments={[
+          { label: 'Agency', href: '/agency' },
+          { label: 'Auto Download/Upload' },
+        ]}
+        icon={<Download className="h-7 w-7 text-primary" />}
+        title="Auto Download/Upload"
+        description="Connected Facebook pages for automated reel download and posting."
+        actions={<AddPageDialog agencyId={user.id} />}
+      />
+
+      <Suspense fallback={<PagesSkeleton />}>
+        <PagesListLoader userId={user.id} />
       </Suspense>
     </div>
   )
