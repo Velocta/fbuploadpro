@@ -45,12 +45,8 @@ const MODE_TABS = [
 ]
 
 export function AddFacebookAccountDialog({
-  reconnectAccountId,
-  reconnectAccountName,
   children,
 }: {
-  reconnectAccountId?: string
-  reconnectAccountName?: string
   children?: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
@@ -62,14 +58,12 @@ export function AddFacebookAccountDialog({
   const [copied, setCopied] = useState(false)
   const router = useRouter()
 
-  const isReconnect = Boolean(reconnectAccountId)
   const isBusy = isPending || isGeneratingLink
 
   const handleConnect = () => {
     setError(null)
     startTransition(async () => {
-      const query = reconnectAccountId ? `?reconnectAccountId=${encodeURIComponent(reconnectAccountId)}` : ''
-      window.location.href = `/api/v1/agency/facebook/oauth/start${query}`
+      window.location.href = `/api/v1/agency/facebook/oauth/start`
     })
   }
 
@@ -79,8 +73,6 @@ export function AddFacebookAccountDialog({
     try {
       const res = await fetch('/api/v1/agency/facebook/oauth/magic-link', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reconnectAccountId }),
       })
       const payload = await res.json()
       if (!res.ok) {
@@ -165,11 +157,7 @@ export function AddFacebookAccountDialog({
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ delay: 0.1, type: 'spring', stiffness: 260, damping: 20 }}
                   >
-                    {isReconnect ? (
-                      <RefreshCw className="h-8 w-8 text-primary" />
-                    ) : (
-                      <Facebook className="h-8 w-8 text-primary" />
-                    )}
+                    <Facebook className="h-8 w-8 text-primary" />
                   </motion.div>
                   <motion.div
                     className="min-w-0 pt-1"
@@ -178,18 +166,10 @@ export function AddFacebookAccountDialog({
                     transition={{ delay: 0.12, duration: 0.25 }}
                   >
                     <DialogTitle className="font-display text-xl tracking-tight sm:text-2xl">
-                      {isReconnect ? 'Reconnect Account' : 'Connect Facebook Account'}
+                      Connect Facebook Account
                     </DialogTitle>
                     <DialogDescription className="mt-2 break-words text-muted-foreground">
-                      {isReconnect && reconnectAccountName ? (
-                        <>
-                          Refresh tokens for{' '}
-                          <strong className="text-foreground">{reconnectAccountName}</strong> using your
-                          agency&apos;s Facebook App credentials.
-                        </>
-                      ) : (
-                        <>Authorize FBupload Pro using your agency&apos;s configured App credentials.</>
-                      )}
+                      Authorize FBupload Pro using your agency&apos;s configured App credentials.
                     </DialogDescription>
                   </motion.div>
                 </div>
@@ -289,17 +269,8 @@ export function AddFacebookAccountDialog({
                         loading={isPending}
                         className="h-12 w-full shrink-0 rounded-xl bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
                       >
-                        {isReconnect ? (
-                          <>
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Reconnect in This Browser
-                          </>
-                        ) : (
-                          <>
-                            <Facebook className="mr-2 h-4 w-4" />
-                            Continue in This Browser
-                          </>
-                        )}
+                        <Facebook className="mr-2 h-4 w-4" />
+                        Continue in This Browser
                       </Button>
                     )}
                   </motion.div>
@@ -325,9 +296,8 @@ export function AddFacebookAccountDialog({
                           Cross-Browser Connection
                         </p>
                         <p className="break-words leading-relaxed text-muted-foreground">
-                          Use this link to {isReconnect ? 'reconnect' : 'connect'} Facebook accounts logged
-                          in on{' '}
-                          <strong className="text-foreground">other browsers or devices</strong> without
+                          Use this link to connect Facebook accounts logged
+                          in on <strong className="text-foreground">other browsers or devices</strong> without
                           logging into this website there.
                         </p>
                       </div>
@@ -455,7 +425,7 @@ export function AddFacebookAccountDialog({
                             </Button>
                           </div>
                           <p className="shrink-0 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Link expires in 10 minutes
+                            Link expires in 1 hour
                           </p>
                         </motion.div>
                       ) : (
@@ -472,9 +442,7 @@ export function AddFacebookAccountDialog({
                             disabled={isGeneratingLink}
                           >
                             <Link2 className="mr-2 h-4 w-4 shrink-0" />
-                            {isReconnect
-                              ? 'Generate Secure Reconnection Link'
-                              : 'Generate Secure Connection Link'}
+                            Generate Secure Connection Link
                           </Button>
                         </motion.div>
                       )}

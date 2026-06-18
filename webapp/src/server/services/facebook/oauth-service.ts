@@ -21,7 +21,7 @@ type FacebookUserResponse = {
   }
 }
 
-export async function buildDirectOauthUrl(agencyId: string, host: string, protocol: string, reconnectAccountId?: string) {
+export async function buildDirectOauthUrl(agencyId: string, host: string, protocol: string) {
   const supabase = await createClient()
   const { data: agencySettings } = await supabase
     .from('users')
@@ -36,16 +36,12 @@ export async function buildDirectOauthUrl(agencyId: string, host: string, protoc
 
   const redirectUri = `${protocol}://${host}/agency/facebook/accounts/callback`
   const scope = REQUIRED_SCOPES.join(',')
-  let state = ''
-  if (reconnectAccountId) {
-    state = Buffer.from(JSON.stringify({ reconnectAccountId })).toString('base64')
-  }
 
-  return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${settings.fb_app_id}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}&response_type=code`
+  return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${settings.fb_app_id}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code`
 }
 
-export async function buildMagicConnectLink(agencyId: string, host: string, protocol: string, reconnectAccountId?: string) {
-  const token = signData({ agencyId, reconnectAccountId }, 10 * 60 * 1000)
+export async function buildMagicConnectLink(agencyId: string, host: string, protocol: string) {
+  const token = signData({ agencyId }, 60 * 60 * 1000)
   return `${protocol}://${host}/fb-connect?token=${token}`
 }
 
@@ -138,7 +134,7 @@ export async function refreshLinkedPageTokens(
 }
 
 export async function buildMagicOauthUrl(token: string, host: string, protocol: string) {
-  const payload = verifyData<{ agencyId: string; reconnectAccountId?: string }>(token)
+  const payload = verifyData<{ agencyId: string }>(token)
   if (!payload) {
     throw new Error('Invalid or expired magic link. Please generate a new one.')
   }
@@ -157,11 +153,7 @@ export async function buildMagicOauthUrl(token: string, host: string, protocol: 
 
   const scope = REQUIRED_SCOPES.join(',')
   const redirectUri = `${protocol}://${host}/fb-callback`
-  const stateData: { magicAgencyId: string; reconnectAccountId?: string } = { magicAgencyId: payload.agencyId }
-  if (payload.reconnectAccountId) {
-    stateData.reconnectAccountId = payload.reconnectAccountId
-  }
-  const state = signData(stateData)
+  const state = signData({ magicAgencyId: payload.agencyId })
 
   return `https://www.facebook.com/v19.0/dialog/oauth?client_id=${settings.fb_app_id}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&state=${state}&response_type=code`
 }
@@ -234,31 +226,6 @@ export async function processFacebookCallback(code: string, state: string | unde
   })
   const fbUser = userRes.data
   const profilePicture = fbUser.picture?.data?.url
-
-  let reconnectAccountId: string | undefined
-  if (state) {
-    if (isMagic) {
-      const payload = verifyData<{ reconnectAccountId?: string }>(state)
-      reconnectAccountId = payload?.reconnectAccountId
-    } else {
-      try {
-        const decoded = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'))
-        reconnectAccountId = decoded.reconnectAccountId
-      } catch {}
-    }
-  }
-
-  if (reconnectAccountId) {
-    const { data: existingAccount, error: fetchError } = await supabase
-      .from('facebook_accounts')
-      .select('fb_user_id')
-      .eq('id', reconnectAccountId)
-      .single()
-    if (fetchError || !existingAccount) throw new Error('The account you are trying to reconnect could not be found.')
-    if (existingAccount.fb_user_id !== fbUser.id) {
-      throw new Error('Identity Mismatch: reconnect using original Facebook account.')
-    }
-  }
 
   const { data: upsertedAccount, error: dbError } = await supabase
     .from('facebook_accounts')

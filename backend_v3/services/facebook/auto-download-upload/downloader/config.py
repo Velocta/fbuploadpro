@@ -34,7 +34,7 @@ IDLE_WAIT_SECONDS = _bounded_int("ADU_DOWNLOADER_IDLE_WAIT_SECONDS", "60", minim
 MAX_CONCURRENT = _bounded_int("ADU_DOWNLOADER_CONCURRENCY", "30", minimum=1, maximum=200)
 # Per-claim download attempts before mark_adu_reel_download_failed (separate from DB download_retries).
 DOWNLOAD_ATTEMPT_RETRIES = _bounded_int("ADU_DOWNLOADER_ATTEMPT_RETRIES", "4", minimum=1, maximum=20)
-DOWNLOAD_MAX_BYTES = _bounded_int("ADU_DOWNLOAD_MAX_BYTES", "209715200", minimum=1)
+DOWNLOAD_MAX_BYTES = _bounded_int("ADU_DOWNLOAD_MAX_BYTES", "1073741824", minimum=1)
 # Reset reels stuck in processing back to pending (worker calls reset_stale_adu_reel_downloads each loop).
 STALE_MINUTES = _bounded_int("ADU_DOWNLOADER_STALE_MINUTES", "40", minimum=1, maximum=24 * 60)
 

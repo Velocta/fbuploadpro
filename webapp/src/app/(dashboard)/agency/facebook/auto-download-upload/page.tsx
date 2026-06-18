@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AddPageDialog } from './add-page-dialog'
@@ -135,7 +136,13 @@ export default async function AgencyPagesPage() {
         </div>
       </div>
 
-      <PagesClient initialPages={pagesWithTodayStats} />
+      <Suspense fallback={
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          Loading automation pages...
+        </div>
+      }>
+        <PagesClient initialPages={pagesWithTodayStats} />
+      </Suspense>
     </div>
   )
 }

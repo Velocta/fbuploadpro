@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { getSessionUser, createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
@@ -55,11 +56,17 @@ export default async function AgencyFacebookPage() {
         }
       />
 
-      <FacebookAccountsList
-        accounts={accounts}
-        summary={summary}
-        hasFacebookApp={hasFacebookApp}
-      />
+      <Suspense fallback={
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          Loading Facebook accounts...
+        </div>
+      }>
+        <FacebookAccountsList
+          accounts={accounts}
+          summary={summary}
+          hasFacebookApp={hasFacebookApp}
+        />
+      </Suspense>
     </div>
   )
 }

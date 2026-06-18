@@ -1,5 +1,8 @@
+'use client'
+
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Facebook,
@@ -45,6 +48,7 @@ function sourceIdentityLabel(sourcePlatform: SourcePlatform, sourceUsername: str
 }
 
 export function PageDetailHeader({ profile }: { profile: PageDetailProfile }) {
+  const router = useRouter()
   const currentFollowers = profile.followers_gained || 0
   const startingFollowers = profile.followers_count || 0
   const followersDelta = currentFollowers - startingFollowers
@@ -86,11 +90,19 @@ export function PageDetailHeader({ profile }: { profile: PageDetailProfile }) {
       actions={
         <>
           <PageToggle pageId={profile.id} initialStatus={profile.status || 'inactive'} />
-          <Button variant="outline" className="h-11 rounded-xl" asChild>
-            <Link href="/agency/facebook/auto-download-upload">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Hub
-            </Link>
+          <Button
+            variant="outline"
+            className="h-11 rounded-xl"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back()
+              } else {
+                router.push('/agency/facebook/auto-download-upload')
+              }
+            }}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Hub
           </Button>
           <DeletePageDialog
             pageId={profile.id}

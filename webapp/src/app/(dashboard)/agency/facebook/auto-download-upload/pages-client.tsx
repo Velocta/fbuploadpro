@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -36,10 +37,46 @@ import { AduPageLinkPendingOverlay } from './adu-page-link-pending'
 const PAGES_PAGE_SIZE = 9
 
 export function PagesClient({ initialPages }: { initialPages: PageWithReels[] }) {
-  const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('newest')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [page, setPage] = useState(1)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const search = searchParams.get('q') || ''
+  const sortBy = searchParams.get('sort') || 'newest'
+  const statusFilter = searchParams.get('status') || 'all'
+  const pageParam = searchParams.get('page')
+  const page = pageParam ? parseInt(pageParam, 10) || 1 : 1
+
+  const [searchInput, setSearchInput] = useState(search)
+
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
+
+  const updateFilters = (updates: { q?: string | null; sort?: string | null; status?: string | null; page?: number | null }) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if ('q' in updates) {
+      const qVal = updates.q?.trim()
+      if (qVal) params.set('q', qVal)
+      else params.delete('q')
+      params.delete('page')
+    }
+    if ('sort' in updates) {
+      if (updates.sort && updates.sort !== 'newest') params.set('sort', updates.sort)
+      else params.delete('sort')
+      params.delete('page')
+    }
+    if ('status' in updates) {
+      if (updates.status && updates.status !== 'all') params.set('status', updates.status)
+      else params.delete('status')
+      params.delete('page')
+    }
+    if ('page' in updates) {
+      if (updates.page && updates.page > 1) params.set('page', String(updates.page))
+      else params.delete('page')
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   const filteredPages = useMemo(() => {
     const searchLower = search.toLowerCase()
@@ -73,7 +110,6 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
     currentPage * PAGES_PAGE_SIZE,
   )
 
-  const resetPage = () => setPage(1)
 
   if (initialPages.length === 0) {
     return (
@@ -113,10 +149,10 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
               <Input
                 type="text"
                 placeholder="Search pages or sources..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearch(e.target.value)
-                  resetPage()
+                  setSearchInput(e.target.value)
+                  updateFilters({ q: e.target.value })
                 }}
                 className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
               />
@@ -124,8 +160,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
             <Select
               value={statusFilter}
               onValueChange={(v) => {
-                setStatusFilter(v)
-                resetPage()
+                updateFilters({ status: v })
               }}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 lg:w-[180px]">
@@ -150,8 +185,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
             <Select
               value={sortBy}
               onValueChange={(v) => {
-                setSortBy(v)
-                resetPage()
+                updateFilters({ sort: v })
               }}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 lg:w-[180px]">
@@ -175,9 +209,8 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
             size="sm"
             className="mt-4 rounded-full"
             onClick={() => {
-              setSearch('')
-              setStatusFilter('all')
-              resetPage()
+              setSearchInput('')
+              updateFilters({ q: null, status: null, page: null })
             }}
           >
             Clear filters
@@ -435,7 +468,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => updateFilters({ page: Math.max(1, currentPage - 1) })}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -447,7 +480,7 @@ export function PagesClient({ initialPages }: { initialPages: PageWithReels[] })
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => updateFilters({ page: Math.min(totalPages, currentPage + 1) })}
                 disabled={currentPage >= totalPages}
               >
                 Next

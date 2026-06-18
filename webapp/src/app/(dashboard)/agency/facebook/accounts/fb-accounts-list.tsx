@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,9 +55,40 @@ export function FacebookAccountsList({
   hasFacebookApp: boolean
 }) {
   const [isPending, startTransition] = useTransition()
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [page, setPage] = useState(1)
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const search = searchParams.get('q') || ''
+  const statusFilter = (searchParams.get('status') as StatusFilter) || 'all'
+  const pageParam = searchParams.get('page')
+  const page = pageParam ? parseInt(pageParam, 10) || 1 : 1
+
+  const [searchInput, setSearchInput] = useState(search)
+
+  useEffect(() => {
+    setSearchInput(search)
+  }, [search])
+
+  const updateFilters = (updates: { q?: string | null; status?: string | null; page?: number | null }) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if ('q' in updates) {
+      const qVal = updates.q?.trim()
+      if (qVal) params.set('q', qVal)
+      else params.delete('q')
+      params.delete('page')
+    }
+    if ('status' in updates) {
+      if (updates.status && updates.status !== 'all') params.set('status', updates.status)
+      else params.delete('status')
+      params.delete('page')
+    }
+    if ('page' in updates) {
+      if (updates.page && updates.page > 1) params.set('page', String(updates.page))
+      else params.delete('page')
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
   const filteredAccounts = useMemo(() => {
     const needle = search.trim().toLowerCase()
@@ -170,18 +202,17 @@ export function FacebookAccountsList({
               <Input
                 className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
                 placeholder="Search accounts by name or ID..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearch(e.target.value)
-                  setPage(1)
+                  setSearchInput(e.target.value)
+                  updateFilters({ q: e.target.value })
                 }}
               />
             </div>
             <Select
               value={statusFilter}
               onValueChange={(v: StatusFilter) => {
-                setStatusFilter(v)
-                setPage(1)
+                updateFilters({ status: v })
               }}
             >
               <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 sm:w-44">
@@ -328,10 +359,7 @@ export function FacebookAccountsList({
                     </div>
 
                     <div className="mt-4">
-                      <AddFacebookAccountDialog
-                        reconnectAccountId={account.id}
-                        reconnectAccountName={account.fb_user_name || undefined}
-                      >
+                      <AddFacebookAccountDialog>
                         <Button
                           variant={needsReconnect ? 'default' : 'outline'}
                           size="sm"
@@ -357,7 +385,7 @@ export function FacebookAccountsList({
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => updateFilters({ page: Math.max(1, currentPage - 1) })}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -369,7 +397,7 @@ export function FacebookAccountsList({
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => updateFilters({ page: Math.min(totalPages, currentPage + 1) })}
                 disabled={currentPage >= totalPages}
               >
                 Next
