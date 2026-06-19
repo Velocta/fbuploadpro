@@ -38,6 +38,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `${brand.name} | Facebook Distribution Platform`,
     description: `Automate trusted content distribution to Facebook pages with clear controls and agency-ready workflows.`,
+    icons: {
+      icon: brand.logoUrl,
+      shortcut: brand.logoUrl,
+      apple: brand.logoUrl,
+    }
   };
 }
 
