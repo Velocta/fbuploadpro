@@ -9,7 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AgencyEmptyState } from '@/components/dashboard/agency'
 import { 
   AlertCircle, Film, RefreshCw, SkipForward, Trash2, 
-  Save, Clock, MessageSquare, Sparkles, Smartphone, Play
+  Save, Clock, MessageSquare, Sparkles, Smartphone, Play,
+  Volume2, VolumeX
 } from 'lucide-react'
 import type { AduReelRow } from '@/server/services/facebook/adu-reels-service'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -38,6 +39,7 @@ function ReelCardSkeleton() {
 
 function MobileSimulator({ reel }: { reel: AduReelRow }) {
   const [isPlaying, setIsPlaying] = useState(true)
+  const [isMuted, setIsMuted] = useState(true)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const togglePlay = () => {
@@ -81,7 +83,7 @@ function MobileSimulator({ reel }: { reel: AduReelRow }) {
               src={reel.media_url}
               className="absolute inset-0 w-full h-full object-cover cursor-pointer"
               loop
-              muted
+              muted={isMuted}
               playsInline
               onClick={togglePlay}
             />
@@ -90,6 +92,24 @@ function MobileSimulator({ reel }: { reel: AduReelRow }) {
               <Film size={32} className="opacity-40 animate-pulse text-primary" />
               <p className="text-xs">No preview available</p>
             </div>
+          )}
+
+          {/* Mute/Unmute Button */}
+          {reel.media_url && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setIsMuted((prev) => !prev)
+              }}
+              className="absolute top-8 right-3 p-1.5 bg-black/60 hover:bg-black/80 rounded-full border border-white/15 backdrop-blur-md text-white pointer-events-auto z-20 transition-all hover:scale-105 active:scale-95 flex items-center justify-center"
+              title={isMuted ? 'Unmute' : 'Mute'}
+            >
+              {isMuted ? (
+                <VolumeX className="w-3.5 h-3.5 text-white/90" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-white" />
+              )}
+            </button>
           )}
 
           {/* Screen overlays */}
