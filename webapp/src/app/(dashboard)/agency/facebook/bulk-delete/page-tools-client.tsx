@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -209,6 +209,12 @@ export function PageToolsClient() {
   const [browseItems, setBrowseItems] = useState<PageToolsContentItem[]>([])
   const [browseSelectedIds, setBrowseSelectedIds] = useState<string[]>([])
   const [browseAfterCursor, setBrowseAfterCursor] = useState<string | null>(null)
+  const browseAfterCursorRef = useRef<string | null>(null)
+  
+  useEffect(() => {
+    browseAfterCursorRef.current = browseAfterCursor
+  }, [browseAfterCursor])
+
   const [loadingBrowse, setLoadingBrowse] = useState(false)
   const [browsePage, setBrowsePage] = useState(1)
 
@@ -222,7 +228,8 @@ export function PageToolsClient() {
     if (!selectedAccountId || !selectedPage) return
     setLoadingBrowse(true)
     try {
-      const cursorPart = !reset && browseAfterCursor ? `&after=${encodeURIComponent(browseAfterCursor)}` : ''
+      const cursor = reset ? null : browseAfterCursorRef.current
+      const cursorPart = cursor ? `&after=${encodeURIComponent(cursor)}` : ''
       const response = await fetch(
         `/api/v1/agency/page-tools/accounts/${selectedAccountId}/pages/${selectedPage.id}/content?type=${type}&limit=25${cursorPart}`,
         {
@@ -234,13 +241,14 @@ export function PageToolsClient() {
       const incoming = data.items || []
       setBrowseItems((prev) => (reset ? incoming : [...prev, ...incoming]))
       if (reset) setBrowseSelectedIds([])
-      setBrowseAfterCursor(getAfterCursorFromPaging(data.paging))
+      const nextCursor = getAfterCursorFromPaging(data.paging)
+      setBrowseAfterCursor(nextCursor)
     } catch {
       toast.error('Unable to load page content')
     } finally {
       setLoadingBrowse(false)
     }
-  }, [selectedAccountId, selectedPage, browseAfterCursor])
+  }, [selectedAccountId, selectedPage])
 
   useEffect(() => {
     if (selectedPage && selectedAccountId && viewMode === 'manual') {
