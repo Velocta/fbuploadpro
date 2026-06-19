@@ -1,5 +1,3 @@
-import { getBrandConfig } from './brand'
-
 const DEFAULT_MAIN_DOMAIN = 'fbuploadpro.com'
 
 export function normalizeHost(value: string): string {
