@@ -5,6 +5,7 @@ import { AddTokensDialog } from './add-tokens-dialog'
 import { Button } from '@/components/ui/button'
 import type { TokenBalanceTier } from './dashboard-overview-utils'
 import { cn } from '@/lib/utils'
+import { useBrand } from '@/components/brand-provider'
 
 export function DashboardTokenBanner({
   tier,
@@ -13,6 +14,8 @@ export function DashboardTokenBanner({
   tier: Extract<TokenBalanceTier, 'zero' | 'low'>
   tokensBalance: number
 }) {
+  const brand = useBrand()
+
   if (tier === 'zero') {
     return (
       <section
@@ -32,14 +35,16 @@ export function DashboardTokenBanner({
               Facebook features in the sidebar stay locked until tokens are added.
             </p>
           </div>
-          <AddTokensDialog
-            trigger={
-              <Button className="shrink-0 gap-2 rounded-xl">
-                <Coins className="h-4 w-4" />
-                Add tokens
-              </Button>
-            }
-          />
+          {!brand.hideAddTokens && (
+            <AddTokensDialog
+              trigger={
+                <Button className="shrink-0 gap-2 rounded-xl">
+                  <Coins className="h-4 w-4" />
+                  Add tokens
+                </Button>
+              }
+            />
+          )}
         </div>
       </section>
     )
@@ -64,14 +69,16 @@ export function DashboardTokenBanner({
             stops.
           </p>
         </div>
-        <AddTokensDialog
-          trigger={
-            <Button variant="outline" className="shrink-0 gap-2 rounded-xl border-amber-500/40">
-              <Coins className="h-4 w-4" />
-              Add or upgrade tokens
-            </Button>
-          }
-        />
+        {!brand.hideAddTokens && (
+          <AddTokensDialog
+            trigger={
+              <Button variant="outline" className="shrink-0 gap-2 rounded-xl border-amber-500/40">
+                <Coins className="h-4 w-4" />
+                Add or upgrade tokens
+              </Button>
+            }
+          />
+        )}
       </div>
     </section>
   )

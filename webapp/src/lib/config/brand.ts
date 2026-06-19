@@ -6,6 +6,7 @@ export interface BrandConfig {
   hideLanding: boolean
   hideSignup: boolean
   hideForgotPassword: boolean
+  hideAddTokens: boolean
 }
 
 export function getBrandConfig(hostname: string): BrandConfig {
@@ -25,6 +26,7 @@ export function getBrandConfig(hostname: string): BrandConfig {
       hideLanding: true,
       hideSignup: true,
       hideForgotPassword: true,
+      hideAddTokens: true,
     }
   }
 
@@ -37,5 +39,6 @@ export function getBrandConfig(hostname: string): BrandConfig {
     hideLanding: false,
     hideSignup: false,
     hideForgotPassword: false,
+    hideAddTokens: false,
   }
 }

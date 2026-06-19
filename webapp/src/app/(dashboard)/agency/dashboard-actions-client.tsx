@@ -4,10 +4,12 @@ import { useRef, useState } from 'react'
 import { FileDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AddTokensDialog } from './add-tokens-dialog'
+import { useBrand } from '@/components/brand-provider'
 
 export function DashboardActionsClient() {
   const [isDownloading, setIsDownloading] = useState(false)
   const downloadLockRef = useRef(false)
+  const brand = useBrand()
 
   const handleDownload = async () => {
     if (downloadLockRef.current) return
@@ -53,7 +55,7 @@ export function DashboardActionsClient() {
         )}
         {isDownloading ? 'Downloading...' : 'Download usage CSV'}
       </Button>
-      <AddTokensDialog />
+      {!brand.hideAddTokens && <AddTokensDialog />}
     </div>
   )
 }

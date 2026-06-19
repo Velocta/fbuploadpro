@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext } from 'react'
-import type { BrandConfig } from '@/lib/config/brand'
+import { type BrandConfig, getBrandConfig } from '@/lib/config/brand'
 
 const BrandContext = createContext<BrandConfig | null>(null)
 
@@ -23,15 +23,7 @@ export function useBrand() {
   const context = useContext(BrandContext)
   if (!context) {
     // Default fallback brand for testing or context-less rendering
-    return {
-      name: 'FBupload Pro',
-      domain: 'fbuploadpro.com',
-      supportEmail: 'support@fbuploadpro.com',
-      logoUrl: '/logo.svg',
-      hideLanding: false,
-      hideSignup: false,
-      hideForgotPassword: false,
-    }
+    return getBrandConfig('fbuploadpro.com')
   }
   return context
 }
