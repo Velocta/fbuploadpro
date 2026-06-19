@@ -20,9 +20,12 @@ import {
   authInlineLinkClass,
 } from '@/components/auth'
 
+import { useBrand } from '@/components/brand-provider'
+
 export default function LoginPage() {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const brand = useBrand()
 
   const handleSubmit = (formData: FormData) => {
     setError(null)
@@ -40,7 +43,9 @@ export default function LoginPage() {
 
   return (
     <div className="w-full space-y-6">
-      <AuthBackLink href="/">Back to Homepage</AuthBackLink>
+      {!brand.hideLanding && (
+        <AuthBackLink href="/">Back to Homepage</AuthBackLink>
+      )}
 
       <AuthFormCard>
         <CardHeader className="space-y-2">
@@ -67,9 +72,11 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="password">Password</Label>
-                <Link href="/login/forgot-password" className={authInlineLinkClass}>
-                  Forgot password?
-                </Link>
+                {!brand.hideForgotPassword && (
+                  <Link href="/login/forgot-password" className={authInlineLinkClass}>
+                    Forgot password?
+                  </Link>
+                )}
               </div>
               <Input
                 id="password"
@@ -85,15 +92,18 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex w-full flex-col items-stretch border-t border-border/60 pt-6">
-          <p className="w-full text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className={authInlineLinkClass}>
-              Sign up as agency
-            </Link>
-          </p>
-        </CardFooter>
+        {!brand.hideSignup && (
+          <CardFooter className="flex w-full flex-col items-stretch border-t border-border/60 pt-6">
+            <p className="w-full text-center text-sm text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link href="/signup" className={authInlineLinkClass}>
+                Sign up as agency
+              </Link>
+            </p>
+          </CardFooter>
+        )}
       </AuthFormCard>
     </div>
   )
 }
+

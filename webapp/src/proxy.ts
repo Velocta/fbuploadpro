@@ -5,6 +5,7 @@ import {
   isMainDomainHost,
   isVercelPreviewHost,
 } from '@/lib/config/runtime'
+import { getBrandConfig } from '@/lib/config/brand'
 
 export async function proxy(request: NextRequest) {
   const url = request.nextUrl
@@ -12,9 +13,28 @@ export async function proxy(request: NextRequest) {
   const hostname = request.headers.get('host') || ''
   const cleanHost = (hostname.split(':')[0] ?? hostname).toLowerCase()
 
-  const mainDomain = getMainDomain()
+  const mainDomain = getMainDomain(hostname)
   const isMainDomain = isMainDomainHost(hostname)
   const isPreviewHost = isVercelPreviewHost(hostname)
+
+  const brand = getBrandConfig(hostname)
+
+  // 1. Dynamic white-label route blocks & redirects
+  if (brand.hideLanding && url.pathname === '/') {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  if (brand.hideSignup && url.pathname.startsWith('/signup')) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  if (brand.hideForgotPassword && (
+    url.pathname.startsWith('/login/forgot-password') ||
+    url.pathname.startsWith('/login/verify-otp') ||
+    url.pathname.startsWith('/login/update-password')
+  )) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
 
   const isPublicMainRoute =
     isMainDomain &&
@@ -47,7 +67,7 @@ export async function proxy(request: NextRequest) {
 
     if (url.pathname === '/') {
       const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
-      return NextResponse.redirect(`${protocol}://${mainDomain}/`)
+      return NextResponse.redirect(new URL(`${protocol}://${mainDomain}/`))
     }
 
     if (url.pathname.startsWith('/api')) {

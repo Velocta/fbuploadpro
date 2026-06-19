@@ -35,7 +35,7 @@ import {
   resolveSecurity368PageStatus,
   parseFacebookError,
 } from './error-classification.js';
-import { publishToFacebook, fetchWithTimeout } from './integrations/facebook.js';
+import { publishToFacebook, fetchWithTimeout, checkVideoPublishStatus } from './integrations/facebook.js';
 import { getR2PresignedUrl } from './integrations/r2-presign.js';
 
 const INTERNAL_JOB_PATH = '/internal/v2/process-job';
@@ -221,23 +221,36 @@ async function processPublishJob(env, job) {
 
   const existingGraphId = String(job.graph_post_id || '').trim();
 
-  if (
-    job.status === 'pending_publish' &&
-    (job.last_error_code === 'finalize_rpc_failed' || existingGraphId)
-  ) {
-    v2Log('publish_job_finalize_retry', {
+  if (existingGraphId) {
+    v2Log('publish_job_check_existing_status', { job_id: jobId, graph_post_id: existingGraphId });
+    const fbStatus = await checkVideoPublishStatus(existingGraphId, job.fb_page_access_token);
+    const videoStatus = String(fbStatus?.video_status || '').toLowerCase();
+    const pubPhaseStatus = String(fbStatus?.publishing_phase?.status || '').toLowerCase();
+
+    if (fbStatus && (videoStatus === 'ready' || pubPhaseStatus === 'complete')) {
+      v2Log('publish_job_finalize_retry', {
+        job_id: jobId,
+        graph_post_id: existingGraphId,
+        video_status: videoStatus,
+        publishing_phase_status: pubPhaseStatus,
+      });
+      await finalizeAndVerify(
+        env,
+        supabase,
+        job,
+        existingGraphId,
+        anomalyPauseThreshold,
+        anomalyWindowSeconds
+      );
+      return;
+    }
+
+    v2Log('publish_job_resume_unfinished', {
       job_id: jobId,
-      graph_post_id: existingGraphId || null,
+      graph_post_id: existingGraphId,
+      video_status: videoStatus || null,
+      pub_phase_status: pubPhaseStatus || null,
     });
-    await finalizeAndVerify(
-      env,
-      supabase,
-      job,
-      existingGraphId || null,
-      anomalyPauseThreshold,
-      anomalyWindowSeconds
-    );
-    return;
   }
 
   const mediaObjectKey = String(job.media_object_key || '');
@@ -262,18 +275,6 @@ async function processPublishJob(env, job) {
     throw new Error('page_not_active');
   }
 
-  if (existingGraphId) {
-    v2Log('publish_job_finalize_only', { job_id: jobId, graph_post_id: existingGraphId });
-    await finalizeAndVerify(
-      env,
-      supabase,
-      job,
-      existingGraphId,
-      anomalyPauseThreshold,
-      anomalyWindowSeconds
-    );
-    return;
-  }
 
   const r2AccountId = String(env.R2_ACCOUNT_ID || '').trim();
   const r2AccessKeyId = String(env.R2_ACCESS_KEY_ID || '').trim();
@@ -324,9 +325,17 @@ async function processPublishJob(env, job) {
     throw new Error('media_object_missing');
   }
 
-  const graphVideoId = await publishToFacebook(job.fb_page_id, job.fb_page_access_token, hostedFileUrl, 6, caption, {
-    job_id: jobId,
-  });
+  const graphVideoId = await publishToFacebook(
+    job.fb_page_id,
+    job.fb_page_access_token,
+    hostedFileUrl,
+    6,
+    caption,
+    { job_id: jobId },
+    supabase,
+    jobId,
+    existingGraphId || null
+  );
   v2Log('publish_job_facebook_ok', { job_id: jobId, graph_video_id: graphVideoId ?? null });
 
   const { error: recordError } = await recordPublishGraphIdWithRetry(supabase, job.job_id, graphVideoId);

@@ -71,6 +71,8 @@ function SidebarLegacyMigrator() {
   return null
 }
 
+import { useBrand } from '@/components/brand-provider'
+
 function DashboardShellInner({
   children,
   user,
@@ -80,6 +82,7 @@ function DashboardShellInner({
   const role = resolveDashboardRole(pathname, user.role)
   const hasTokens = user.tokens_balance > 0
   const isAgency = role === 'agency'
+  const brand = useBrand()
 
   const [isSignOutPending, setIsSignOutPending] = useState(false)
   const signOutLockRef = useRef(false)
@@ -116,7 +119,7 @@ function DashboardShellInner({
         <header className="dashboard-shell-header sticky top-0 z-40 flex h-14 min-w-0 items-center gap-2 overflow-hidden px-4 md:gap-3 md:px-6">
           <SidebarTrigger className="-ml-1 shrink-0" />
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-            <span className="truncate font-display text-sm font-bold md:hidden">FBupload Pro</span>
+            <span className="truncate font-display text-sm font-bold md:hidden">{brand.name}</span>
             <span className="hidden truncate text-xs font-medium uppercase tracking-wider text-muted-foreground md:inline">
               {roleLabel(role)}
             </span>
@@ -128,6 +131,7 @@ function DashboardShellInner({
     </>
   )
 }
+
 
 export function DashboardShell({ children, user }: DashboardShellProps) {
   const [defaultOpen, setDefaultOpen] = useState(true)

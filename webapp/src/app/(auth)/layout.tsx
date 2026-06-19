@@ -1,11 +1,22 @@
 import React from 'react'
 import Image from 'next/image'
+import { headers } from 'next/headers'
+import { getBrandConfig } from '@/lib/config/brand'
 
-export default function AuthLayout({
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  const headersList = await headers()
+  const host = headersList.get('host') || 'fbuploadpro.com'
+  const brand = getBrandConfig(host)
+
+  // Split brand name to style first and second parts beautifully
+  const brandParts = brand.name.split(' ')
+  const mainPart = brandParts[0]
+  const subPart = brandParts.slice(1).join(' ')
+
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4 py-12 selection:bg-primary/20 selection:text-primary sm:px-6 lg:px-8">
       <div className="auth-atmosphere-radials" aria-hidden />
@@ -18,8 +29,8 @@ export default function AuthLayout({
         <div className="text-center">
           <div className="mx-auto mb-6 inline-flex h-20 w-20 items-center justify-center rounded-3xl border border-primary/20 bg-primary/10">
             <Image
-              src="/logo.svg"
-              alt="FBupload Pro Logo"
+              src={brand.logoUrl}
+              alt={`${brand.name} Logo`}
               width={40}
               height={40}
               className="h-10 w-10"
@@ -27,7 +38,7 @@ export default function AuthLayout({
             />
           </div>
           <p className="font-display text-3xl font-semibold tracking-tight text-foreground">
-            FBupload <span className="text-primary">Pro</span>
+            {mainPart} {subPart && <span className="text-primary">{subPart}</span>}
           </p>
           <p className="mt-2 text-sm text-muted-foreground">
             Agency automation portal
@@ -38,3 +49,4 @@ export default function AuthLayout({
     </div>
   )
 }
+

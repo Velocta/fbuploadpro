@@ -97,7 +97,7 @@ export async function updateSession(request: NextRequest) {
       }
 
       const url = request.nextUrl.clone()
-      const mainDomain = getMainDomain()
+      const mainDomain = getMainDomain(hostname)
 
       if (!isMainDomain && !isPreviewHost && !isLocalHost(hostname)) {
         // Redirect to main domain login
@@ -112,7 +112,7 @@ export async function updateSession(request: NextRequest) {
     // 3.5 FORCE MAIN DOMAIN FOR AUTH PAGES ON SUBDOMAINS
     // Even if they are on the login page specifically, we want them on the main domain.
     if (isAuthPage) {
-      const mainDomain = getMainDomain()
+      const mainDomain = getMainDomain(hostname)
 
       if (!isMainDomain && !isPreviewHost && !isLocalHost(hostname)) {
         const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
@@ -167,7 +167,7 @@ export async function updateSession(request: NextRequest) {
     }
 
     // D. Subdomain Ownership Verification & Auto-Redirect
-    const mainDomain = getMainDomain()
+    const mainDomain = getMainDomain(hostname)
 
     if (role === 'agency' && !path.startsWith('/login')) {
       // Fetch user's assigned subdomain

@@ -43,6 +43,8 @@ const MODE_TABS = [
   },
 ]
 
+import { useBrand } from '@/components/brand-provider'
+
 export function AddFacebookAccountDialog({
   children,
 }: {
@@ -56,6 +58,7 @@ export function AddFacebookAccountDialog({
   const [magicLink, setMagicLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const router = useRouter()
+  const brand = useBrand()
 
   const isBusy = isPending || isGeneratingLink
 
@@ -168,7 +171,7 @@ export function AddFacebookAccountDialog({
                       Connect Facebook Account
                     </DialogTitle>
                     <DialogDescription className="mt-2 break-words text-muted-foreground">
-                      Authorize FBupload Pro using your agency&apos;s configured App credentials.
+                      Authorize {brand.name} using your agency&apos;s configured App credentials.
                     </DialogDescription>
                   </motion.div>
                 </div>

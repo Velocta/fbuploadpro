@@ -26,12 +26,22 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export const metadata: Metadata = {
-  title: "FBupload Pro | Facebook Distribution Platform",
-  description: "Automate trusted content distribution to Facebook pages with clear controls and agency-ready workflows.",
-};
+import { headers } from "next/headers";
+import { getBrandConfig } from "@/lib/config/brand";
+import { BrandProvider } from "@/components/brand-provider";
 
-export default function RootLayout({
+export async function generateMetadata(): Promise<Metadata> {
+  const headersList = await headers();
+  const host = headersList.get("host") || "fbuploadpro.com";
+  const brand = getBrandConfig(host);
+
+  return {
+    title: `${brand.name} | Facebook Distribution Platform`,
+    description: `Automate trusted content distribution to Facebook pages with clear controls and agency-ready workflows.`,
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -40,12 +50,18 @@ export default function RootLayout({
     validateRuntimeEnv()
   }
 
+  const headersList = await headers();
+  const host = headersList.get("host") || "fbuploadpro.com";
+  const brandConfig = getBrandConfig(host);
+
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body
         className={`${inter.variable} ${plusJakartaSans.variable} ${jetBrainsMono.variable} antialiased font-sans bg-background text-foreground`}
       >
-        {children}
+        <BrandProvider brand={brandConfig}>
+          {children}
+        </BrandProvider>
         <Toaster position="top-right" richColors />
         <SpeedInsights />
         <Analytics />
@@ -53,3 +69,4 @@ export default function RootLayout({
     </html>
   );
 }
+

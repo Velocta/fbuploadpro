@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512px" height="512px" viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <title>Vinsmoke Media</title>
+    <defs>
+        <linearGradient x1="0%" y1="0%" x2="100%" y2="100%" id="vinsmokeGrad">
+            <stop stop-color="#06B6D4" offset="0%"></stop>
+            <stop stop-color="#3B82F6" offset="50%"></stop>
+            <stop stop-color="#6366F1" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g fill="none" fill-rule="evenodd">
+        <!-- Outlined Outer Hexagon / Shield -->
+        <path d="M256,40 L432,136 L432,376 L256,472 L80,376 L80,136 Z" stroke="url(#vinsmokeGrad)" stroke-width="24" stroke-linejoin="round"></path>
+        <!-- Inner Stylized Media Play / Wing Symbol -->
+        <path d="M190,170 L360,256 L190,342 Z" fill="url(#vinsmokeGrad)" stroke="url(#vinsmokeGrad)" stroke-width="12" stroke-linejoin="round"></path>
+    </g>
+</svg>

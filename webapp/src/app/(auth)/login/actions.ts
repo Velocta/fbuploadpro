@@ -107,7 +107,7 @@ export async function login(formData: FormData) {
 
       if (userData?.subdomain) {
         const hostname = headersList.get('host') || ''
-        const mainDomain = getMainDomain()
+        const mainDomain = getMainDomain(hostname)
         const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http'
 
         // Keep users on current host in local and Vercel preview environments.
