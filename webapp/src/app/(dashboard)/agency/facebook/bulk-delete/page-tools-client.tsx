@@ -10,9 +10,9 @@ import 'react-day-picker/style.css'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import * as SelectPrimitive from '@radix-ui/react-select'
 
-import { 
-  Search, Trash2, Calendar as CalendarIcon, Filter, Image as ImageIcon, Video, 
-  FileText, CheckCircle2, AlertCircle, Loader2, 
+import {
+  Search, Trash2, Calendar as CalendarIcon, Filter, Image as ImageIcon, Video,
+  FileText, CheckCircle2, AlertCircle, Loader2,
   RefreshCw, X, ArrowRight, ChevronDown, CheckSquare, Layers, Facebook, Check
 } from 'lucide-react'
 
@@ -112,18 +112,18 @@ function DatePicker({ date, setDate, label }: { date: Date | undefined, setDate:
         </button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
-        <PopoverPrimitive.Content 
-          align="start" 
+        <PopoverPrimitive.Content
+          align="start"
           className="z-50 w-auto rounded-2xl border border-border/50 bg-card/95 p-3 text-popover-foreground shadow-2xl backdrop-blur-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
           sideOffset={4}
         >
-          <DayPicker 
-            mode="single" 
-            selected={date} 
+          <DayPicker
+            mode="single"
+            selected={date}
             onSelect={(d) => {
               setDate(d)
               setOpen(false)
-            }} 
+            }}
             className="p-3"
           />
         </PopoverPrimitive.Content>
@@ -132,7 +132,7 @@ function DatePicker({ date, setDate, label }: { date: Date | undefined, setDate:
   )
 }
 
-function CustomSelect({ value, onChange, options, label }: { value: string, onChange: (val: string) => void, options: {label: string, value: string}[], label: string }) {
+function CustomSelect({ value, onChange, options, label }: { value: string, onChange: (val: string) => void, options: { label: string, value: string }[], label: string }) {
   const selectedLabel = options.find(o => o.value === value)?.label
   return (
     <SelectPrimitive.Root value={value} onValueChange={onChange}>
@@ -146,15 +146,15 @@ function CustomSelect({ value, onChange, options, label }: { value: string, onCh
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content 
+        <SelectPrimitive.Content
           className="z-50 relative overflow-hidden rounded-xl border border-border/50 bg-card/95 text-popover-foreground shadow-2xl backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
           position="popper"
           sideOffset={8}
         >
           <SelectPrimitive.Viewport className="p-2">
             {options.map(opt => (
-              <SelectPrimitive.Item 
-                key={opt.value} 
+              <SelectPrimitive.Item
+                key={opt.value}
                 value={opt.value}
                 className="relative flex w-full cursor-default select-none items-center rounded-lg py-2 pl-8 pr-2 text-sm outline-none focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 hover:bg-muted/50"
               >
@@ -177,10 +177,10 @@ export function PageToolsClient() {
   const [accounts, setAccounts] = useState<FacebookAccount[]>([])
   const [loadingAccounts, setLoadingAccounts] = useState(false)
   const [hasLoadedAccounts, setHasLoadedAccounts] = useState(false)
-  
+
   const [selectedAccountId, setSelectedAccountId] = useState('')
   const [selectedAccount, setSelectedAccount] = useState<FacebookAccount | null>(null)
-  
+
   const [pages, setPages] = useState<FacebookGraphPage[]>([])
   const [loadingPages, setLoadingPages] = useState(false)
   const [selectedPage, setSelectedPage] = useState<FacebookGraphPage | null>(null)
@@ -196,7 +196,7 @@ export function PageToolsClient() {
   const [deleteSort, setDeleteSort] = useState<SortType>('oldest_first')
   const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined)
   const [dateTo, setDateTo] = useState<Date | undefined>(undefined)
-  
+
   const [previewItems, setPreviewItems] = useState<PageToolsContentItem[]>([])
   const [previewTotal, setPreviewTotal] = useState(0)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -210,7 +210,7 @@ export function PageToolsClient() {
   const [browseSelectedIds, setBrowseSelectedIds] = useState<string[]>([])
   const [browseAfterCursor, setBrowseAfterCursor] = useState<string | null>(null)
   const browseAfterCursorRef = useRef<string | null>(null)
-  
+
   useEffect(() => {
     browseAfterCursorRef.current = browseAfterCursor
   }, [browseAfterCursor])
@@ -344,7 +344,7 @@ export function PageToolsClient() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || 'Failed to preview targets')
-      
+
       setPreviewItems(data.candidates || [])
       setPreviewTotal(data.total || (data.candidates || []).length)
       setPreviewSelectedIds((data.candidates || []).map((i: PageToolsContentItem) => i.id))
@@ -368,14 +368,14 @@ export function PageToolsClient() {
 
   async function executeBulkDelete(targetIds: string[]) {
     if (!selectedAccountId || !selectedPage) return
-    
+
     setRunInProgress(true)
     setRunFailures([])
     setShowFailureDetails(false)
     const startedAt = Date.now()
-    
+
     const totalBatches = Math.ceil(targetIds.length / CLIENT_BATCH_SIZE)
-    
+
     setRunProgress({
       total: targetIds.length,
       processed: 0,
@@ -396,7 +396,7 @@ export function PageToolsClient() {
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
         const batchIds = targetIds.slice(batchIndex * CLIENT_BATCH_SIZE, (batchIndex + 1) * CLIENT_BATCH_SIZE)
-        
+
         setRunProgress((prev) => ({
           total: targetIds.length,
           processed: prev?.processed || 0,
@@ -425,12 +425,12 @@ export function PageToolsClient() {
         processed += deleteData.total || 0
         succeeded += deleteData.succeeded || 0
         failed += deleteData.failed || 0
-        
+
         const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000)
         const remaining = targetIds.length - processed
         const rate = processed > 0 ? elapsedSeconds / processed : 0
         const etaSeconds = Math.max(0, Math.round(remaining * rate + (totalBatches - batchIndex - 1) * CLIENT_BATCH_PAUSE_SECONDS))
-        
+
         setRunProgress({
           total: targetIds.length,
           processed,
@@ -462,12 +462,12 @@ export function PageToolsClient() {
             setRunProgress((prev) =>
               prev
                 ? {
-                    ...prev,
-                    elapsedSeconds: nowElapsed,
-                    etaSeconds: dynamicEta,
-                    waitingSeconds: wait,
-                    status: `API limits reached. Waiting ${wait}s...`,
-                  }
+                  ...prev,
+                  elapsedSeconds: nowElapsed,
+                  etaSeconds: dynamicEta,
+                  waitingSeconds: wait,
+                  status: `API limits reached. Waiting ${wait}s...`,
+                }
                 : prev
             )
             await waitOneSecond()
@@ -478,7 +478,7 @@ export function PageToolsClient() {
       toast.success('Bulk delete completed', {
         description: `${succeeded} deleted, ${failed} failed.`,
       })
-      
+
       // Refresh content
       setShowPreview(false)
       setPreviewItems([])
@@ -486,7 +486,7 @@ export function PageToolsClient() {
       if (viewMode === 'manual') {
         await loadBrowseContent(browseType, true)
       }
-      
+
     } catch (error) {
       toast.error('Bulk delete failed', {
         description: error instanceof Error ? error.message : 'Unexpected error',
@@ -538,12 +538,12 @@ export function PageToolsClient() {
   // ---------------------------------------------------------------------------
 
   const renderContentCard = (item: PageToolsContentItem, isSelected: boolean, onToggle: () => void) => (
-    <motion.div 
+    <motion.div
       layout
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.9 }}
-      key={item.id} 
+      key={item.id}
       className={`group relative overflow-hidden rounded-xl border transition-all hover:shadow-lg cursor-pointer ${isSelected ? 'ring-2 ring-primary border-primary hover:border-primary' : 'border-border/50 hover:border-primary/50 bg-card/50 backdrop-blur-sm'}`}
       onClick={onToggle}
     >
@@ -552,11 +552,11 @@ export function PageToolsClient() {
           <Image src={item.preview_image_url} alt={item.title} fill className="object-cover transition-transform duration-500 group-hover:scale-110" unoptimized />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-            {item.type === 'posts' ? <FileText size={32} className="opacity-20"/> : item.type === 'photos' ? <ImageIcon size={32} className="opacity-20"/> : <Video size={32} className="opacity-20"/>}
+            {item.type === 'posts' ? <FileText size={32} className="opacity-20" /> : item.type === 'photos' ? <ImageIcon size={32} className="opacity-20" /> : <Video size={32} className="opacity-20" />}
           </div>
         )}
         <div className={`absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 ${isSelected ? 'opacity-100' : ''}`} />
-        
+
         <div className="absolute top-3 left-3 z-10">
           <div className={`rounded-full p-0.5 transition-colors ${isSelected ? 'bg-primary text-primary-foreground' : 'bg-background/80 text-muted-foreground backdrop-blur-md opacity-0 group-hover:opacity-100'}`}>
             {isSelected ? <CheckCircle2 size={20} /> : <div className="h-5 w-5 rounded-full border-2 border-current m-0.5" />}
@@ -576,11 +576,11 @@ export function PageToolsClient() {
 
   return (
     <div className="min-h-[80vh] w-full max-w-7xl mx-auto flex flex-col relative pb-32">
-      
+
       {/* HEADER / SELECTION AREA */}
       <AnimatePresence mode="wait">
         {!selectedPage ? (
-          <motion.div 
+          <motion.div
             key="selection-wizard"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -611,11 +611,11 @@ export function PageToolsClient() {
                       </div>
                       <div className="relative mb-6">
                         <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl" 
-                          placeholder="Search accounts..." 
-                          value={accountSearch} 
-                          onChange={(e) => setAccountSearch(e.target.value)} 
+                        <Input
+                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl"
+                          placeholder="Search accounts..."
+                          value={accountSearch}
+                          onChange={(e) => setAccountSearch(e.target.value)}
                         />
                       </div>
                       <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
@@ -658,7 +658,7 @@ export function PageToolsClient() {
                 </motion.div>
               ) : (
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                   <div className="relative group">
+                  <div className="relative group">
                     <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-blue-500/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                     <div className="relative bg-card/40 backdrop-blur-xl border border-border/50 rounded-2xl p-6 shadow-2xl">
                       <HubActionPendingOverlay show={loadingPages} message="Loading pages…" />
@@ -673,11 +673,11 @@ export function PageToolsClient() {
                       </div>
                       <div className="relative mb-6">
                         <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl" 
-                          placeholder="Search pages..." 
-                          value={pageSearch} 
-                          onChange={(e) => setPageSearch(e.target.value)} 
+                        <Input
+                          className="pl-11 h-12 bg-background/50 border-border/50 rounded-xl"
+                          placeholder="Search pages..."
+                          value={pageSearch}
+                          onChange={(e) => setPageSearch(e.target.value)}
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -728,7 +728,7 @@ export function PageToolsClient() {
             </div>
           </motion.div>
         ) : (
-          <motion.div 
+          <motion.div
             key="active-connection"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -739,7 +739,7 @@ export function PageToolsClient() {
                 {selectedAccount?.fb_user_image ? (
                   <Image src={selectedAccount.fb_user_image} alt="" width={32} height={32} className="rounded-full ring-2 ring-background z-10 shadow-sm" unoptimized />
                 ) : <div className="w-8 h-8 rounded-full bg-muted z-10 ring-2 ring-background" />}
-                
+
                 {selectedPage?.picture ? (
                   <Image src={selectedPage.picture} alt="" width={40} height={40} className="rounded-lg -ml-3 ring-2 ring-background z-20 shadow-md" unoptimized />
                 ) : <div className="w-10 h-10 rounded-lg bg-muted -ml-3 ring-2 ring-background z-20" />}
@@ -761,7 +761,7 @@ export function PageToolsClient() {
 
       {/* MAIN WORKSPACE */}
       {selectedPage && !runInProgress && !runProgress && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, filter: 'blur(10px)' }}
           animate={{ opacity: 1, filter: 'blur(0px)' }}
           className="relative flex-1 flex flex-col space-y-8"
@@ -774,7 +774,7 @@ export function PageToolsClient() {
           {/* SEGMENTED CONTROL */}
           <div className="flex justify-center">
             <div className="bg-muted/50 p-1 rounded-full inline-flex relative shadow-inner border border-border/30 backdrop-blur-sm">
-              <div 
+              <div
                 className="absolute inset-y-1 rounded-full bg-background shadow-sm transition-all duration-300 ease-out z-0"
                 style={{
                   width: 'calc(50% - 4px)',
@@ -800,7 +800,7 @@ export function PageToolsClient() {
 
           <AnimatePresence mode="wait">
             {viewMode === 'smart' ? (
-              <motion.div 
+              <motion.div
                 key="mode-smart"
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -825,7 +825,7 @@ export function PageToolsClient() {
                       <div className="space-y-6">
                         <div className="space-y-3">
                           <label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
-                            <CalendarIcon size={16} className="text-muted-foreground"/> Date Range
+                            <CalendarIcon size={16} className="text-muted-foreground" /> Date Range
                           </label>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <DatePicker date={dateFrom} setDate={setDateFrom} label="From" />
@@ -837,11 +837,11 @@ export function PageToolsClient() {
                       <div className="space-y-6">
                         <div className="space-y-3">
                           <label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
-                            <Layers size={16} className="text-muted-foreground"/> Content Settings
+                            <Layers size={16} className="text-muted-foreground" /> Content Settings
                           </label>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <CustomSelect 
-                              value={deleteType} 
+                            <CustomSelect
+                              value={deleteType}
                               onChange={(v) => setDeleteType(v as ContentType)}
                               label="Type"
                               options={[
@@ -850,8 +850,8 @@ export function PageToolsClient() {
                                 { label: 'Reels', value: 'reels' },
                               ]}
                             />
-                            <CustomSelect 
-                              value={deleteSort} 
+                            <CustomSelect
+                              value={deleteSort}
                               onChange={(v) => setDeleteSort(v as SortType)}
                               label="Sort"
                               options={[
@@ -865,8 +865,8 @@ export function PageToolsClient() {
                     </div>
 
                     <div className="mt-10 pt-6 border-t border-border/50 flex justify-center sm:justify-end">
-                      <Button 
-                        size="lg" 
+                      <Button
+                        size="lg"
                         className="rounded-full px-8 bg-foreground text-background hover:bg-foreground/90 shadow-xl shadow-foreground/10"
                         onClick={handlePreviewTargets}
                         disabled={previewLoading}
@@ -881,7 +881,7 @@ export function PageToolsClient() {
                 {/* PREVIEW RESULTS */}
                 <AnimatePresence>
                   {showPreview && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 40 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 40 }}
@@ -906,8 +906,8 @@ export function PageToolsClient() {
                       {previewItems.length > 0 ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                           {previewItems.slice((previewPage - 1) * 12, previewPage * 12).map((item) => renderContentCard(
-                            item, 
-                            previewSelectedIds.includes(item.id), 
+                            item,
+                            previewSelectedIds.includes(item.id),
                             () => setPreviewSelectedIds(prev => prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id])
                           ))}
                         </div>
@@ -928,7 +928,7 @@ export function PageToolsClient() {
                 </AnimatePresence>
               </motion.div>
             ) : (
-              <motion.div 
+              <motion.div
                 key="mode-manual"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -965,27 +965,27 @@ export function PageToolsClient() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {browseItems.slice((browsePage - 1) * 20, browsePage * 20).map((item) => renderContentCard(
-                    item, 
-                    browseSelectedIds.includes(item.id), 
+                    item,
+                    browseSelectedIds.includes(item.id),
                     () => {
-                      setBrowseSelectedIds(prev => 
+                      setBrowseSelectedIds(prev =>
                         prev.includes(item.id) ? prev.filter(id => id !== item.id) : [...prev, item.id]
                       )
                     }
                   ))}
-                  
+
                   {loadingBrowse && (
                     <div className="col-span-full flex justify-center py-20">
                       <Loader2 className="animate-spin text-muted-foreground" size={32} />
                     </div>
                   )}
-                  
+
                   {!loadingBrowse && browseItems.length === 0 && (
-                     <div className="col-span-full text-center py-32 border border-dashed rounded-3xl bg-muted/10">
-                       <FileText className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
-                       <p className="text-lg font-medium">No {browseType} found</p>
-                       <p className="text-muted-foreground mt-1">This page doesn&apos;t have any {browseType} to display.</p>
-                     </div>
+                    <div className="col-span-full text-center py-32 border border-dashed rounded-3xl bg-muted/10">
+                      <FileText className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
+                      <p className="text-lg font-medium">No {browseType} found</p>
+                      <p className="text-muted-foreground mt-1">This page doesn&apos;t have any {browseType} to display.</p>
+                    </div>
                   )}
                 </div>
 
@@ -1012,7 +1012,7 @@ export function PageToolsClient() {
       {/* FLOATING ACTION BAR FOR BOTH MODES */}
       <AnimatePresence>
         {((viewMode === 'manual' && browseSelectedIds.length > 0) || (viewMode === 'smart' && previewSelectedIds.length > 0)) && !runInProgress && !runProgress && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 100 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 100 }}
@@ -1021,15 +1021,15 @@ export function PageToolsClient() {
             <div className="bg-foreground/95 backdrop-blur-xl text-background p-3 pl-5 pr-3 rounded-full shadow-2xl flex flex-col sm:flex-row items-center gap-3 sm:gap-6 border border-white/10 text-sm sm:text-base whitespace-nowrap">
               <span className="font-semibold">{viewMode === 'manual' ? browseSelectedIds.length : previewSelectedIds.length} items selected</span>
               <div className="flex items-center gap-2">
-                <Button 
-                  size="icon" 
-                  variant="ghost" 
+                <Button
+                  size="icon"
+                  variant="ghost"
                   className="rounded-full text-background hover:text-white hover:bg-white/20"
                   onClick={() => viewMode === 'manual' ? setBrowseSelectedIds([]) : setPreviewSelectedIds([])}
                 >
                   <X size={18} />
                 </Button>
-                <Button 
+                <Button
                   className="rounded-full bg-destructive hover:bg-destructive/90 text-white shadow-lg shadow-destructive/20 pl-4 pr-5"
                   onClick={() => executeBulkDelete(viewMode === 'manual' ? browseSelectedIds : previewSelectedIds)}
                 >
@@ -1044,7 +1044,7 @@ export function PageToolsClient() {
       {/* EXECUTION DASHBOARD */}
       <AnimatePresence>
         {(runInProgress || runProgress) && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="fixed inset-0 z-50 bg-background/95 backdrop-blur-2xl flex flex-col items-center justify-center p-6 overflow-y-auto"
@@ -1060,9 +1060,9 @@ export function PageToolsClient() {
                 <div className="relative w-64 h-64 flex items-center justify-center">
                   <svg className="absolute inset-0 w-full h-full transform -rotate-90">
                     <circle cx="128" cy="128" r="120" className="stroke-muted fill-none" strokeWidth="8" />
-                    <motion.circle 
-                      cx="128" cy="128" r="120" 
-                      className={`fill-none stroke-linecap-round ${runProgress?.waitingSeconds ? 'stroke-amber-500' : 'stroke-primary'}`} 
+                    <motion.circle
+                      cx="128" cy="128" r="120"
+                      className={`fill-none stroke-linecap-round ${runProgress?.waitingSeconds ? 'stroke-amber-500' : 'stroke-primary'}`}
                       strokeWidth="8"
                       strokeDasharray="753.98"
                       initial={{ strokeDashoffset: 753.98 }}
@@ -1088,10 +1088,10 @@ export function PageToolsClient() {
                       </>
                     )}
                   </div>
-                  
+
                   {runProgress?.waitingSeconds && runProgress.waitingSeconds > 0 && (
-                    <motion.div 
-                      animate={{ rotate: 360 }} 
+                    <motion.div
+                      animate={{ rotate: 360 }}
                       transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                       className="absolute inset-0 rounded-full border-2 border-dashed border-amber-500/30"
                     />
