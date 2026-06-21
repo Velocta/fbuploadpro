@@ -811,6 +811,12 @@ export type Database = {
           fb_page_image: string | null
           fb_page_access_token: string
           created_at: string | null
+          status: Database["public"]["Enums"]["profile_status_enum"] | null
+          rate_limited_until: string | null
+          followers_count: number | null
+          followers_gained: number | null
+          changed_followers: number | null
+          is_followers_updated: boolean
         }
         Insert: {
           id?: string
@@ -821,6 +827,11 @@ export type Database = {
           fb_page_image?: string | null
           fb_page_access_token: string
           created_at?: string | null
+          status?: Database["public"]["Enums"]["profile_status_enum"] | null
+          rate_limited_until?: string | null
+          followers_count?: number | null
+          followers_gained?: number | null
+          is_followers_updated?: boolean
         }
         Update: {
           id?: string
@@ -831,6 +842,11 @@ export type Database = {
           fb_page_image?: string | null
           fb_page_access_token?: string
           created_at?: string | null
+          status?: Database["public"]["Enums"]["profile_status_enum"] | null
+          rate_limited_until?: string | null
+          followers_count?: number | null
+          followers_gained?: number | null
+          is_followers_updated?: boolean
         }
         Relationships: [
           {

@@ -2840,3 +2840,11 @@ create policy "Service role full access failed_r2_deletions"
   using (true)
   with check (true);
 
+-- FK covering indexes for public.reels and public.pages (Added 2026-06-20)
+create index if not exists idx_errors_reel_id on public.errors(reel_id);
+create index if not exists idx_token_transactions_reel_id on public.token_transactions(reel_id);
+create index if not exists idx_posting_jobs_v2_reel_internal_id on public.posting_jobs_v2(reel_internal_id);
+create index if not exists idx_adu_posting_jobs_reel_internal_id on public.adu_posting_jobs(reel_internal_id);
+create index if not exists idx_errors_page_id on public.errors(page_id);
+create index if not exists idx_posting_jobs_v2_page_id on public.posting_jobs_v2(page_id);
+

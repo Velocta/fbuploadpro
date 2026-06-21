@@ -22,6 +22,12 @@ export default async function InappSchedulePageDetails({ params }: { params: Pro
       fb_page_image,
       fb_page_access_token,
       created_at,
+      status,
+      rate_limited_until,
+      followers_count,
+      followers_gained,
+      changed_followers,
+      is_followers_updated,
       facebook_accounts(fb_user_name, fb_user_image)
     `)
     .eq('id', id)

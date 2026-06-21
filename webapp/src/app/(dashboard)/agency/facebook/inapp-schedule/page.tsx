@@ -49,6 +49,12 @@ async function InappScheduleLoader({ userId }: { userId: string }) {
       fb_page_name,
       fb_page_image,
       created_at,
+      status,
+      rate_limited_until,
+      followers_count,
+      followers_gained,
+      changed_followers,
+      is_followers_updated,
       facebook_accounts(fb_user_name, fb_user_image)
     `)
     .eq('agency_id', userId)

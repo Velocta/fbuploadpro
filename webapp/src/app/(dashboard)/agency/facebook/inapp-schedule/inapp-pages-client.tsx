@@ -15,6 +15,7 @@ import Image from 'next/image'
 import { DeleteInappPageDialog } from './delete-inapp-page-dialog'
 import { AgencyEmptyState } from '@/components/dashboard/agency'
 import { AddInappPageDialog } from './add-inapp-page-dialog'
+import { cn } from '@/lib/utils'
 
 export type InappPage = {
   id: string
@@ -22,6 +23,11 @@ export type InappPage = {
   fb_page_name: string | null
   fb_page_image: string | null
   created_at: string | null
+  status: string | null
+  followers_count: number | null
+  followers_gained: number | null
+  changed_followers: number | null
+  is_followers_updated: boolean
   facebook_accounts: { fb_user_name: string | null; fb_user_image: string | null } | null
 }
 
@@ -165,11 +171,23 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                                 <Facebook className="h-5 w-5 text-muted-foreground" />
                               </div>
                             )}
-                            <div className="min-w-0">
-                              <p className="truncate text-lg font-semibold group-hover:text-primary">
-                                {pageItem.fb_page_name}
-                              </p>
-                              <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="truncate text-lg font-semibold group-hover:text-primary">
+                                  {pageItem.fb_page_name}
+                                </p>
+                                {pageItem.status && (
+                                  <span className={cn(
+                                    "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold border uppercase tracking-wider shrink-0",
+                                    pageItem.status === 'active'
+                                      ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                      : "bg-destructive/10 text-destructive border-destructive/20"
+                                  )}>
+                                    {pageItem.status.replace('_', ' ')}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
                                 {pageItem.fb_page_id}
                               </p>
                             </div>
@@ -184,6 +202,30 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                       </div>
 
                       <div className="flex flex-1 flex-col px-5 pb-5 pl-6">
+                        {/* Followers metrics */}
+                        <div className="mb-4 grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-background/20 p-3 text-xs">
+                          <div>
+                            <span className="block text-muted-foreground text-[10px] uppercase font-medium">Followers</span>
+                            <span className="font-semibold text-foreground">
+                              {pageItem.followers_count !== null ? pageItem.followers_count.toLocaleString() : '—'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground text-[10px] uppercase font-medium">Net Growth</span>
+                            <span className={cn(
+                              "font-semibold",
+                              (pageItem.changed_followers || 0) > 0 
+                                ? "text-emerald-500" 
+                                : (pageItem.changed_followers || 0) < 0 
+                                  ? "text-red-500" 
+                                  : "text-muted-foreground"
+                            )}>
+                              {(pageItem.changed_followers || 0) > 0 ? '+' : ''}
+                              {pageItem.changed_followers !== null ? pageItem.changed_followers.toLocaleString() : '0'}
+                            </span>
+                          </div>
+                        </div>
+
                         {fbAccount?.fb_user_name ? (
                           <div className="mt-auto pt-4 flex items-center gap-2 rounded-lg border border-border/50 bg-background/30 p-2 text-xs">
                             {fbAccount.fb_user_image ? (
