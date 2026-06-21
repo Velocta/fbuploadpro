@@ -147,6 +147,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
             fbPageName: selectedPage.name,
             fbPageImage: selectedPage.picture,
             fbPageAccessToken: selectedPage.access_token,
+            followersCount: selectedPage.followers_count,
           }),
         })
 

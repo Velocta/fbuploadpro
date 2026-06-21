@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       fbPageName: String(body.fbPageName || ''),
       fbPageImage: body.fbPageImage,
       fbPageAccessToken: String(body.fbPageAccessToken || ''),
+      followersCount: body.followersCount !== undefined ? Number(body.followersCount) : undefined,
     })
     return NextResponse.json({ page })
   } catch (error) {

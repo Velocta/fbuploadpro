@@ -55,6 +55,7 @@ export async function upsertInappSchedulePage(
     fbPageName: string
     fbPageImage?: string
     fbPageAccessToken: string
+    followersCount?: number
   }
 ) {
   const supabase = await createClient()
@@ -68,6 +69,8 @@ export async function upsertInappSchedulePage(
         fb_page_name: input.fbPageName,
         fb_page_image: input.fbPageImage ?? null,
         fb_page_access_token: input.fbPageAccessToken,
+        followers_count: input.followersCount ?? 0,
+        followers_gained: input.followersCount ?? 0,
       },
       { onConflict: 'agency_id,fb_page_id' }
     )
@@ -357,13 +360,15 @@ export async function getAgencyInappScheduleStats(agencyId: string) {
 
   let pending = 0
   let failed = 0
+  let published = 0
 
   data?.forEach((post) => {
     if (post.status === 'pending') pending++
     if (post.status === 'failed') failed++
+    if (post.status === 'published') published++
   })
 
-  return { pending, failed }
+  return { pending, failed, published }
 }
 
 export async function getInappSchedulePageStats(agencyId: string, pageId: string) {
@@ -378,11 +383,13 @@ export async function getInappSchedulePageStats(agencyId: string, pageId: string
 
   let pending = 0
   let failed = 0
+  let published = 0
 
   data?.forEach((post) => {
     if (post.status === 'pending') pending++
     if (post.status === 'failed') failed++
+    if (post.status === 'published') published++
   })
 
-  return { pending, failed }
+  return { pending, failed, published }
 }

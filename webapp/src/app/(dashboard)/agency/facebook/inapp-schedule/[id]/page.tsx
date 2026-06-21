@@ -4,6 +4,8 @@ import { InappPageDetailHeader } from './inapp-page-detail-header'
 import { InappPageDetailTabs } from './inapp-page-detail-tabs'
 import { QueueTabClient } from './tabs/queue-tab-client'
 import { HistoryTabClient } from './tabs/history-tab-client'
+import { OverviewTab } from './tabs/overview-tab'
+import { FacebookPageInsightsTab } from '@/components/dashboard/agency/facebook-page-insights-tab'
 import { getInappSchedulePageStats } from '@/server/services/facebook/inapp-schedule-service'
 
 export default async function InappSchedulePageDetails({ params }: { params: Promise<{ id: string }> }) {
@@ -42,6 +44,13 @@ export default async function InappSchedulePageDetails({ params }: { params: Pro
     <div className="space-y-6 pb-8 agency-motion-standard">
       <InappPageDetailHeader page={page} stats={stats} />
       <InappPageDetailTabs
+        overview={<OverviewTab stats={stats} page={page} />}
+        insights={
+          <FacebookPageInsightsTab
+            fbPageId={page.fb_page_id}
+            pageAccessToken={page.fb_page_access_token}
+          />
+        }
         queue={<QueueTabClient pageId={page.id} />}
         history={<HistoryTabClient pageId={page.id} />}
       />
