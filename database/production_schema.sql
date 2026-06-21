@@ -1317,6 +1317,12 @@ create table if not exists public.facebook_inapp_schedule_pages (
   fb_page_image text,
   fb_page_access_token text not null,
   created_at timestamptz default now(),
+  status profile_status_enum default 'active',
+  rate_limited_until timestamptz,
+  followers_count bigint default 0,
+  followers_gained bigint not null default 0,
+  is_followers_updated boolean not null default false,
+  changed_followers bigint generated always as (coalesce(followers_gained, 0) - coalesce(followers_count, 0)) stored,
   constraint unique_fb_is_page_per_agency unique (agency_id, fb_page_id)
 );
 
@@ -1332,6 +1338,8 @@ drop policy if exists "Super Admin read facebook_inapp_schedule_pages" on public
 create policy "Super Admin read facebook_inapp_schedule_pages"
   on public.facebook_inapp_schedule_pages for select
   using (public.get_my_role() = 'super_admin');
+
+create index if not exists idx_fb_inapp_schedule_pages_status on public.facebook_inapp_schedule_pages(status);
 
 -- facebook_direct_schedule_posts
 create table if not exists public.facebook_direct_schedule_posts (
