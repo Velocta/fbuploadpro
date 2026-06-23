@@ -24,7 +24,7 @@ type InappPostHistory = {
   media_type: 'text' | 'image' | 'video'
   caption: string | null
   scheduled_at: string
-  status: 'failed' | 'published' | 'pending'
+  status: 'failed' | 'published' | 'pending' | 'publishing'
   error_message: string | null
   media_url?: string | null
 }
@@ -44,13 +44,8 @@ export function HistoryTabClient({ pageId }: { pageId: string }) {
       const res = await fetch(`/api/v1/agency/facebook/inapp-schedule?pageId=${pageId}&limit=${limit}&offset=${(page - 1) * limit}${statusFilter !== 'all' ? `&status=${statusFilter}` : ''}`)
       const data = await res.json()
       if (res.ok) {
-        // Exclude pending if 'all' is selected, to act like a true history tab
-        const filteredPosts = statusFilter === 'all' 
-          ? data.posts.filter((p: InappPostHistory) => p.status !== 'pending')
-          : data.posts
-
-        setPosts(filteredPosts)
-        setTotalCount(statusFilter === 'all' ? filteredPosts.length : data.totalCount) // Approximation
+        setPosts(data.posts)
+        setTotalCount(data.totalCount)
       }
     } catch {
       toast.error('Failed to load history')
@@ -81,7 +76,9 @@ export function HistoryTabClient({ pageId }: { pageId: string }) {
             }}
             className="h-9 rounded-lg border border-border/50 bg-background/50 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
-            <option value="all">All History</option>
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="publishing">Publishing</option>
             <option value="published">Published</option>
             <option value="failed">Failed</option>
           </select>

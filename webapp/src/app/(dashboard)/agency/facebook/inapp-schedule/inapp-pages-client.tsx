@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -13,9 +14,17 @@ import {
 import Link from 'next/link'
 import Image from 'next/image'
 import { DeleteInappPageDialog } from './delete-inapp-page-dialog'
-import { AgencyEmptyState } from '@/components/dashboard/agency'
+import { AgencyEmptyState, AgencyInlineStatus } from '@/components/dashboard/agency'
 import { AddInappPageDialog } from './add-inapp-page-dialog'
 import { cn } from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { pageStatusLabel } from '@/lib/adu-status-labels'
 
 export type InappPage = {
   id: string
@@ -37,22 +46,106 @@ export type InappPage = {
 const PAGES_PAGE_SIZE = 9
 
 export function InappPagesClient({ initialPages, agencyId }: { initialPages: InappPage[], agencyId: string }) {
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const initialSearch = searchParams.get('q') || ''
+  const initialSortBy = searchParams.get('sort') || 'newest'
+  const initialStatusFilter = searchParams.get('status') || 'all'
+  const pageParam = searchParams.get('page')
+  const initialPage = pageParam ? parseInt(pageParam, 10) || 1 : 1
+
+  // Local React states for instantaneous responsiveness
+  const [search, setSearch] = useState(initialSearch)
+  const [statusFilter, setStatusFilter] = useState(initialStatusFilter)
+  const [sortBy, setSortBy] = useState(initialSortBy)
+  const [page, setPage] = useState(initialPage)
+
+  const [searchInput, setSearchInput] = useState(initialSearch)
+
+  // Sync state if URL changes externally
+  useEffect(() => {
+    setSearch(initialSearch)
+    setSearchInput(initialSearch)
+  }, [initialSearch])
+
+  useEffect(() => {
+    setStatusFilter(initialStatusFilter)
+  }, [initialStatusFilter])
+
+  useEffect(() => {
+    setSortBy(initialSortBy)
+  }, [initialSortBy])
+
+  useEffect(() => {
+    setPage(initialPage)
+  }, [initialPage])
+
+  const updateFiltersUrl = useCallback((updates: { q?: string | null; sort?: string | null; status?: string | null; page?: number | null }) => {
+    const params = new URLSearchParams(window.location.search)
+    if ('q' in updates) {
+      const qVal = updates.q?.trim()
+      if (qVal) params.set('q', qVal)
+      else params.delete('q')
+      params.delete('page')
+    }
+    if ('sort' in updates) {
+      if (updates.sort && updates.sort !== 'newest') params.set('sort', updates.sort)
+      else params.delete('sort')
+      params.delete('page')
+    }
+    if ('status' in updates) {
+      if (updates.status && updates.status !== 'all') params.set('status', updates.status)
+      else params.delete('status')
+      params.delete('page')
+    }
+    if ('page' in updates) {
+      if (updates.page && updates.page > 1) params.set('page', String(updates.page))
+      else params.delete('page')
+    }
+    const newUrl = `${pathname}?${params.toString()}`
+    window.history.replaceState({ ...window.history.state, as: newUrl, url: newUrl }, '', newUrl)
+  }, [pathname])
+
+  // Debounce URL updates for search queries to keep typing fluid
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const currentUrlQuery = new URLSearchParams(window.location.search).get('q') || ''
+      if (search !== currentUrlQuery) {
+        updateFiltersUrl({ q: search, page: 1 })
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [search, updateFiltersUrl])
 
   const filteredPages = useMemo(() => {
-    const searchLower = search.toLowerCase()
+    const searchLower = search.toLowerCase().trim()
     return initialPages.filter((p) => {
       const matchesSearch =
+        !searchLower ||
         (p.fb_page_name || '').toLowerCase().includes(searchLower) ||
         (p.fb_page_id || '').toLowerCase().includes(searchLower)
-      return matchesSearch
+      const matchesStatus = statusFilter === 'all' || p.status === statusFilter
+      return matchesSearch && matchesStatus
     })
-  }, [initialPages, search])
+  }, [initialPages, search, statusFilter])
 
-  const totalPages = Math.max(1, Math.ceil(filteredPages.length / PAGES_PAGE_SIZE))
+  const sortedPages = useMemo(() => {
+    return [...filteredPages].sort((a, b) => {
+      switch (sortBy) {
+        case 'followers_desc':
+          return (b.followers_count || 0) - (a.followers_count || 0)
+        case 'followers_asc':
+          return (a.followers_count || 0) - (b.followers_count || 0)
+        default:
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+      }
+    })
+  }, [filteredPages, sortBy])
+
+  const totalPages = Math.max(1, Math.ceil(sortedPages.length / PAGES_PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
-  const paginatedPages = filteredPages.slice(
+  const paginatedPages = sortedPages.slice(
     (currentPage - 1) * PAGES_PAGE_SIZE,
     currentPage * PAGES_PAGE_SIZE,
   )
@@ -88,7 +181,7 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
               <div>
                 <h2 className="text-lg font-semibold">Scheduling Pages</h2>
                 <p className="text-sm text-muted-foreground">
-                  {filteredPages.length} {filteredPages.length === 1 ? 'page' : 'pages'}
+                  {sortedPages.length} {sortedPages.length === 1 ? 'page' : 'pages'}
                 </p>
               </div>
             </div>
@@ -100,28 +193,78 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
               <Input
                 type="text"
                 placeholder="Search pages by name or ID..."
-                value={search}
+                value={searchInput}
                 onChange={(e) => {
-                  setSearch(e.target.value)
-                  resetPage()
+                  const val = e.target.value
+                  setSearchInput(val)
+                  setSearch(val)
+                  setPage(1)
                 }}
                 className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
               />
             </div>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => {
+                setStatusFilter(v)
+                setPage(1)
+                updateFiltersUrl({ status: v, page: 1 })
+              }}
+            >
+              <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 lg:w-[180px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+                <SelectItem value="fb_verification_required">Verification Req.</SelectItem>
+                <SelectItem value="fb_rate_limited">Rate Limited</SelectItem>
+                <SelectItem value="page_not_accessible">Page Not Accessible</SelectItem>
+                <SelectItem value="invalid_token">Invalid Token</SelectItem>
+                <SelectItem value="invalid_username">Invalid Username</SelectItem>
+                <SelectItem value="creator_suspended">Creator Suspended</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="2fa_required_on_BM">2FA Req. on BM</SelectItem>
+                <SelectItem value="check_developer_app">Check Dev App</SelectItem>
+                <SelectItem value="account_suspended">Account Suspended</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={sortBy}
+              onValueChange={(v) => {
+                setSortBy(v)
+                setPage(1)
+                updateFiltersUrl({ sort: v, page: 1 })
+              }}
+            >
+              <SelectTrigger className="h-12 w-full rounded-xl border-border/50 bg-background/50 lg:w-[180px]">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="followers_desc">Most Followers</SelectItem>
+                <SelectItem value="followers_asc">Least Followers</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
 
-      {filteredPages.length === 0 ? (
+      {sortedPages.length === 0 ? (
         <div className="rounded-3xl border border-dashed bg-muted/10 py-20 text-center">
-          <p className="text-muted-foreground">No pages match your search.</p>
+          <p className="text-muted-foreground">No pages match your search or filters.</p>
           <Button
             variant="outline"
             size="sm"
             className="mt-4 rounded-full"
             onClick={() => {
+              setSearchInput('')
               setSearch('')
-              resetPage()
+              setStatusFilter('all')
+              setSortBy('newest')
+              setPage(1)
+              updateFiltersUrl({ q: null, status: null, sort: null, page: null })
             }}
           >
             Clear filters
@@ -180,14 +323,11 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                                   {pageItem.fb_page_name}
                                 </p>
                                 {pageItem.status && (
-                                  <span className={cn(
-                                    "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-bold border uppercase tracking-wider shrink-0",
-                                    pageItem.status === 'active'
-                                      ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
-                                      : "bg-destructive/10 text-destructive border-destructive/20"
-                                  )}>
-                                    {pageItem.status.replace('_', ' ')}
-                                  </span>
+                                  <AgencyInlineStatus
+                                    label={pageStatusLabel(pageItem.status).label}
+                                    tone={pageStatusLabel(pageItem.status).tone}
+                                    className="text-[10px] capitalize shrink-0 font-bold border uppercase tracking-wider"
+                                  />
                                 )}
                               </div>
                               <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
@@ -280,13 +420,17 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
             })}
           </div>
 
-          {filteredPages.length > PAGES_PAGE_SIZE && (
+          {sortedPages.length > PAGES_PAGE_SIZE && (
             <div className="flex items-center justify-center gap-4 py-4">
               <Button
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => {
+                  const newPage = Math.max(1, currentPage - 1)
+                  setPage(newPage)
+                  updateFiltersUrl({ page: newPage })
+                }}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -298,7 +442,11 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                 variant="outline"
                 size="sm"
                 className="rounded-full"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => {
+                  const newPage = Math.min(totalPages, currentPage + 1)
+                  setPage(newPage)
+                  updateFiltersUrl({ page: newPage })
+                }}
                 disabled={currentPage >= totalPages}
               >
                 Next
