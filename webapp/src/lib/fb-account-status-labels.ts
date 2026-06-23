@@ -5,9 +5,6 @@ export function fbAccountStatusLabel(status: string | null | undefined): {
   const normalized = status ?? 'invalid_token'
   if (normalized === 'active') return { label: 'Active', tone: 'default' }
   if (normalized === 'invalid_token') return { label: 'Invalid token', tone: 'destructive' }
-  if (normalized === 'fb_verification_required') {
-    return { label: 'Verification required', tone: 'destructive' }
-  }
   if (normalized === 'inactive') return { label: 'Inactive', tone: 'muted' }
   return { label: normalized.replace(/_/g, ' '), tone: 'muted' }
 }

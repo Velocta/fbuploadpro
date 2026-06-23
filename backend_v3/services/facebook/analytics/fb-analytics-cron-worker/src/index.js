@@ -15,7 +15,18 @@ import { getPageMetrics, getAccountMetrics } from './integrations/facebook.js';
 
 const REQUEST_CONCURRENCY = 10;
 
-function mapFailureToStatus(reason) {
+function mapAccountFailureToStatus(reason) {
+  const text = String(reason || '').toLowerCase();
+  if (text.includes('administrator, editor, or moderator') || text.includes('two factor')) return '2fa_required_on_BM';
+  if (text.includes('api access blocked')) return 'check_developer_app';
+  if (text.includes('permission') || text.includes('pages_read_engagement') || text.includes('pages_show_list')) return 'invalid_token';
+  if (text.includes('log in to www.facebook.com') || text.includes('follow the instructions')) return 'invalid_token';
+  if (text.includes('sessions for the user are not allowed because the user is not a confirmed user')) return 'account_suspended';
+  if (text.includes('page that is not accessible')) return 'invalid_token';
+  return null;
+}
+
+function mapPageFailureToStatus(reason) {
   const text = String(reason || '').toLowerCase();
   if (text.includes('administrator, editor, or moderator') || text.includes('two factor')) return '2fa_required_on_BM';
   if (text.includes('api access blocked')) return 'check_developer_app';
@@ -190,7 +201,7 @@ export default {
           );
           const accountStatusUpdates = accountFailures
             .map((failure) => {
-              const status = mapFailureToStatus(failure.reason);
+              const status = mapAccountFailureToStatus(failure.reason);
               if (!status || !failure.id) return null;
               return { id: failure.id, status };
             })
@@ -225,7 +236,7 @@ export default {
           const { updates, failures } = await runInChunks(pages, REQUEST_CONCURRENCY, processPage);
           const statusUpdates = failures
             .map((failure) => {
-              const status = mapFailureToStatus(failure.reason);
+              const status = mapPageFailureToStatus(failure.reason);
               if (!status || !failure.id) return null;
               return { id: failure.id, status };
             })
@@ -248,7 +259,7 @@ export default {
           }
 
           if (failures.length > 0) {
-            const unhandledFailures = failures.filter((failure) => !mapFailureToStatus(failure.reason));
+            const unhandledFailures = failures.filter((failure) => !mapPageFailureToStatus(failure.reason));
             const handledFailuresCount = failures.length - unhandledFailures.length;
 
             if (handledFailuresCount > 0) {
@@ -282,7 +293,7 @@ export default {
           const { updates: inappUpdates, failures: inappFailures } = await runInChunks(inappPages, REQUEST_CONCURRENCY, processInappPage);
           const inappStatusUpdates = inappFailures
             .map((failure) => {
-              const status = mapFailureToStatus(failure.reason);
+              const status = mapPageFailureToStatus(failure.reason);
               if (!status || !failure.id) return null;
               return { id: failure.id, status };
             })
@@ -305,7 +316,7 @@ export default {
           }
 
           if (inappFailures.length > 0) {
-            const unhandledInappFailures = inappFailures.filter((failure) => !mapFailureToStatus(failure.reason));
+            const unhandledInappFailures = inappFailures.filter((failure) => !mapPageFailureToStatus(failure.reason));
             const handledInappFailuresCount = inappFailures.length - unhandledInappFailures.length;
 
             if (handledInappFailuresCount > 0) {
