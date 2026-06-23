@@ -234,3 +234,78 @@ export function getAduPageStatusAlert(profile: AduPageStatusInput): AduPageStatu
 
   return null
 }
+
+export function getInappPageStatusAlert(status: string | null | undefined): AduPageStatusAlert | null {
+  if (!status) return null
+
+  switch (status) {
+    case 'active':
+      return null
+    case 'inactive':
+      return {
+        title: 'Posting Inactive',
+        description: 'Posting is inactive. Update your slots settings to resume scheduling.',
+        variant: 'default',
+        iconKind: 'none',
+      }
+    case 'fb_verification_required':
+      return {
+        title: 'Facebook Verification Required',
+        description:
+          'Complete identity or phone verification in the Meta app on your mobile device. This is not a token error — do not reconnect. Once verified, scheduling will resume automatically.',
+        variant: 'destructive',
+        iconKind: 'shield',
+      }
+    case 'fb_rate_limited':
+      return {
+        title: 'Facebook Rate Limited',
+        description:
+          'Meta is limiting how often this page can post. Scheduling pauses for about 3 days and will resume automatically when the cooldown ends.',
+        variant: 'destructive',
+        iconKind: 'clock',
+      }
+    case 'page_not_accessible':
+      return {
+        title: 'Facebook Page Not Accessible',
+        description:
+          'This page may have been removed or your account may no longer have admin access. Confirm the page exists and you have admin rights, then reconnect your Facebook account and enable scheduling.',
+        variant: 'destructive',
+        iconKind: 'alert-circle',
+      }
+    case 'invalid_token':
+      return {
+        title: 'Access Token Expired',
+        description:
+          'Reconnect your Facebook account in Facebook Accounts. Your page access token has expired or been revoked.',
+        variant: 'destructive',
+        iconKind: 'key',
+      }
+    case '2fa_required_on_BM':
+      return {
+        title: 'Business 2FA Required',
+        description:
+          'The connected Facebook user must be an admin/editor/moderator on this page and complete required Business Manager two-factor authentication. Update role/2FA, then reconnect the account.',
+        variant: 'destructive',
+        iconKind: 'shield',
+      }
+    case 'check_developer_app':
+      return {
+        title: 'Developer App Access Blocked',
+        description:
+          'Facebook API access is blocked for this page/app combination. Review your Meta Developer app status, app mode, permissions, and policy compliance, then reconnect.',
+        variant: 'destructive',
+        iconKind: 'alert-circle',
+      }
+    case 'account_suspended':
+      return {
+        title: 'Facebook Account Suspended',
+        description:
+          'The connected Facebook user is not allowed to create valid sessions right now. Confirm the account is active/verified in Facebook and reconnect from the Facebook Accounts section.',
+        variant: 'destructive',
+        iconKind: 'user-x',
+      }
+    default:
+      return null
+  }
+}
+

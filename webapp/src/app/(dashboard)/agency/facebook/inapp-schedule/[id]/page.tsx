@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { InappPageDetailHeader } from './inapp-page-detail-header'
+import { InappPageDetailAlerts } from './inapp-page-detail-alerts'
 import { InappPageDetailTabs } from './inapp-page-detail-tabs'
 import { QueueTabClient } from './tabs/queue-tab-client'
 import { HistoryTabClient } from './tabs/history-tab-client'
@@ -54,6 +55,7 @@ export default async function InappSchedulePageDetails({ params }: { params: Pro
           failed: stats.failed,
         }}
       />
+      <InappPageDetailAlerts status={page.status} />
       <InappPageDetailTabs
         overview={<OverviewTab stats={stats} page={page} />}
         insights={
