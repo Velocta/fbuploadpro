@@ -2,16 +2,14 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import { createPresignedDownloadUrl } from '@/lib/r2/user-media'
-import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz'
-import { format, parse, addDays, setHours, setMinutes, setSeconds, setMilliseconds, compareAsc } from 'date-fns'
+import { fromZonedTime, toZonedTime } from 'date-fns-tz'
+import { addDays, setHours, setMinutes, setSeconds, setMilliseconds, compareAsc } from 'date-fns'
 import {
   getTokenCostForFeature,
   deductAgencyTokens,
   refundAgencyTokens,
   requireAgencyHasTokens,
 } from '@/server/services/tokens/token-cost-service'
-
-const EDIT_LOCK_MS = 5 * 60 * 1000
 
 type InappQueueItem = {
   mediaType: 'text' | 'image' | 'video'
@@ -20,8 +18,14 @@ type InappQueueItem = {
   mediaObjectKey?: string
 }
 
-export function projectScheduledTimes(
-  posts: any[],
+export function projectScheduledTimes<
+  T extends {
+    status?: string | null
+    published_at?: string | Date | null
+    updated_at?: string | Date | null
+  }
+>(
+  posts: T[],
   postingTimes: string[],
   timezone: string,
   startOffset: number = 0

@@ -275,6 +275,7 @@ export function FacebookAccountsList() {
             </Button>
           )
         }
+        tutorialHref="https://youtube.com/watch?v=placeholder"
       />
 
       {loading || hasFacebookApp === null ? (
