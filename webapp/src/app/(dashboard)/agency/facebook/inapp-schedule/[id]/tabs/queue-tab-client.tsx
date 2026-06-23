@@ -95,39 +95,74 @@ function EditPostDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Edit Queue Post</DialogTitle>
-          <DialogDescription>
-            Update the caption or the first comment for this enqueued post.
+      <DialogContent className="sm:max-w-[550px] overflow-hidden rounded-3xl border border-border/50 bg-card/95 p-0 shadow-2xl backdrop-blur-xl">
+        <DialogHeader className="border-b border-border/50 bg-muted/10 px-6 py-5">
+          <DialogTitle className="font-display text-xl">Queue Post Details</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+            Preview media and edit posting details
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSave} className="space-y-4 pt-2">
+
+        <form onSubmit={handleSave} className="p-6 space-y-5">
+          {/* Media Preview Section */}
           <div className="space-y-2">
-            <Label htmlFor="caption" className="text-xs font-semibold">Caption</Label>
+            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Media Preview</Label>
+            {post.media_type === 'video' && post.media_url ? (
+              <div className="relative w-full rounded-xl overflow-hidden bg-black ring-1 ring-border/50 flex items-center justify-center" style={{ aspectRatio: '16/10', maxHeight: '240px' }}>
+                <video
+                  src={post.media_url}
+                  controls
+                  className="w-full h-full object-contain"
+                  style={{ maxHeight: '240px' }}
+                  preload="metadata"
+                />
+              </div>
+            ) : post.media_type === 'image' && post.media_url ? (
+              <div className="relative w-full rounded-xl overflow-hidden bg-muted ring-1 ring-border/50 flex items-center justify-center" style={{ aspectRatio: '16/10', maxHeight: '240px' }}>
+                <img
+                  src={post.media_url}
+                  alt="Post preview"
+                  className="w-full h-full object-contain"
+                  style={{ maxHeight: '240px' }}
+                />
+              </div>
+            ) : (
+              <div className="w-full rounded-xl border border-border/50 bg-muted/30 p-5 min-h-[100px] flex flex-col items-center justify-center text-center">
+                <Type className="h-6 w-6 text-primary/40 mb-2" />
+                <span className="text-xs text-muted-foreground font-medium">Text-only Post</span>
+              </div>
+            )}
+          </div>
+
+          {/* Caption Input */}
+          <div className="space-y-2">
+            <Label htmlFor="caption" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Caption</Label>
             <Textarea
               id="caption"
               placeholder="Write a caption..."
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              className="h-28"
+              className="h-28 rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
             />
           </div>
+
+          {/* First Comment Input */}
           <div className="space-y-2">
-            <Label htmlFor="firstComment" className="text-xs font-semibold">First Comment</Label>
+            <Label htmlFor="firstComment" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">First Comment (Optional)</Label>
             <Textarea
               id="firstComment"
-              placeholder="Write first comment (optional)..."
+              placeholder="Write first comment..."
               value={firstComment}
               onChange={(e) => setFirstComment(e.target.value)}
-              className="h-20"
+              className="h-20 rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>
-            <Button type="submit" loading={isPending}>
+            <Button type="submit" loading={isPending} className="px-6 rounded-xl">
               Save Changes
             </Button>
           </div>
@@ -518,11 +553,16 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragEnd={handleDragEnd}
                       onDrop={(e) => handleDrop(e, index)}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement
+                        if (isLocked || target.closest('button') || target.closest('.cursor-grab')) return
+                        setEditingPost(post)
+                      }}
                       className={cn(
                         'group flex flex-col md:flex-row items-start md:items-center gap-4 rounded-xl border border-border/50 bg-card/40 p-4 transition-all duration-200',
                         draggedIndex === index && 'opacity-30 border-primary bg-primary/5',
                         dragOverIndex === index && 'border-primary bg-primary/5 scale-[1.005]',
-                        isLocked ? 'border-border/30' : 'hover:border-primary/40 hover:bg-card/60'
+                        isLocked ? 'border-border/30 cursor-not-allowed' : 'hover:border-primary/40 hover:bg-card/60 cursor-pointer'
                       )}
                     >
                       {/* Drag Handle & Position Indicator */}

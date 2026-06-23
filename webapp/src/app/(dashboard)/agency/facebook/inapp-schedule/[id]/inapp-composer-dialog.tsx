@@ -41,6 +41,7 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
   
   const [postType, setPostType] = useState<PostType>('text')
   const [caption, setCaption] = useState('')
+  const [firstComment, setFirstComment] = useState('')
   const [mediaFile, setMediaFile] = useState<File | null>(null)
   
   // Upload state
@@ -55,6 +56,7 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
   function resetState() {
     setPostType('text')
     setCaption('')
+    setFirstComment('')
     setMediaFile(null)
     setUploadedKey(null)
     setMediaPreviewUrl(null)
@@ -143,6 +145,7 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
             savedPageId: pageId,
             mediaType: postType,
             caption,
+            firstComment,
             mediaObjectKey: uploadedKey,
           }),
         })
@@ -239,6 +242,22 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
                   />
                   <div className="absolute bottom-3 right-3 text-xs text-muted-foreground">
                     {caption.length} / 63,206
+                  </div>
+                </div>
+              </div>
+
+              {/* First Comment */}
+              <div className="space-y-2">
+                <Label>First Comment (Optional)</Label>
+                <div className="relative">
+                  <Textarea
+                    placeholder="Add a first comment to be posted immediately..."
+                    value={firstComment}
+                    onChange={(e) => setFirstComment(e.target.value)}
+                    className="min-h-[80px] resize-none rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
+                  />
+                  <div className="absolute bottom-3 right-3 text-xs text-muted-foreground">
+                    {firstComment.length}
                   </div>
                 </div>
               </div>

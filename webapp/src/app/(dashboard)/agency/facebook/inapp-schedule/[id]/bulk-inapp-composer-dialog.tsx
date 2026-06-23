@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import {
   CalendarClock,
@@ -30,6 +30,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
 import { BULK_SCHEDULE_MAX_ITEMS } from '@/lib/direct-schedule-bulk'
+import { cn } from '@/lib/utils'
 
 type QueueItem = {
   id: string
@@ -64,7 +65,9 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
   const [submitProgress, setSubmitProgress] = useState(0)
 
   const [items, setItems] = useState<QueueItem[]>([])
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [globalFirstComment, setGlobalFirstComment] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
 
   const resetState = useCallback(() => {
     setItems((prev) => {
@@ -75,6 +78,8 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
     })
     setSubmitProgress(0)
     setGlobalFirstComment('')
+    setSelectedItemId(null)
+    setIsDragging(false)
   }, [])
 
   const uploadItem = async (itemId: string, file: File) => {
@@ -131,7 +136,14 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       }
     })
 
-    setItems((prev) => [...prev, ...newRows])
+    setItems((prev) => {
+      const updated = [...prev, ...newRows]
+      if (updated.length > 0 && !selectedItemId) {
+        setSelectedItemId(newRows[0]!.id)
+      }
+      return updated
+    })
+
     toAdd.forEach((file, index) => {
       void uploadItem(newRows[index]!.id, file)
     })
@@ -142,23 +154,29 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       toast.error(`Maximum ${BULK_SCHEDULE_MAX_ITEMS} items per batch`)
       return
     }
+    const newIdVal = newId()
     setItems((prev) => [
       ...prev,
       {
-        id: newId(),
+        id: newIdVal,
         mediaType: 'text',
         caption: '',
         uploadProgress: 100,
         uploading: false,
       },
     ])
+    setSelectedItemId(newIdVal)
   }
 
   const removeItem = (id: string) => {
     setItems((prev) => {
+      const remaining = prev.filter((r) => r.id !== id)
+      if (selectedItemId === id) {
+        setSelectedItemId(remaining.length > 0 ? remaining[0]!.id : null)
+      }
       const row = prev.find((r) => r.id === id)
       if (row?.previewUrl) URL.revokeObjectURL(row.previewUrl)
-      return prev.filter((r) => r.id !== id)
+      return remaining
     })
   }
 
@@ -168,6 +186,25 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
 
   const updateFirstComment = (id: string, firstComment: string) => {
     setItems((prev) => prev.map((r) => (r.id === id ? { ...r, firstComment } : r)))
+  }
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setIsDragging(true)
+    } else if (e.type === 'dragleave') {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files)
+    }
   }
 
   const isFormValid = items.length > 0 && items.every((row) => {
@@ -225,6 +262,8 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
     })
   }
 
+  const activeItem = items.find((r) => r.id === selectedItemId) || items[0]
+
   return (
     <Dialog
       open={open}
@@ -239,13 +278,14 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       }}
     >
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-hidden border-0 bg-transparent p-0 shadow-none">
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden border-0 bg-transparent p-0 shadow-none">
         <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex max-h-[90vh] flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/95 shadow-2xl backdrop-blur-xl"
+          className="flex h-[80vh] min-h-[600px] max-h-[800px] flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/95 shadow-2xl backdrop-blur-xl"
         >
-          <DialogHeader className="shrink-0 border-b border-border/50 bg-muted/10 px-6 py-5">
+          {/* Header */}
+          <DialogHeader className="shrink-0 border-b border-border/50 bg-muted/10 px-6 py-4">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 ring-1 ring-primary/20">
@@ -254,142 +294,254 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                 <div>
                   <DialogTitle className="font-display text-xl">Bulk Queue Posts</DialogTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Add posts to the bottom of the sequential queue
+                    Add multiple posts sequentially using the split-pane composer
                   </p>
                 </div>
               </div>
-              <Badge variant="outline">{items.length} / {BULK_SCHEDULE_MAX_ITEMS}</Badge>
+              <Badge variant="outline" className="text-xs font-mono font-semibold px-2.5 py-1">
+                {items.length} / {BULK_SCHEDULE_MAX_ITEMS} Posts
+              </Badge>
             </div>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()}>
-                <UploadCloud className="h-4 w-4" />
-                Add media files
-              </Button>
-              <Button type="button" variant="outline" className="gap-2" onClick={addTextRow}>
-                <Plus className="h-4 w-4" />
-                Add text post
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                className="hidden"
-                onChange={(e) => {
-                  handleFiles(e.target.files)
-                  e.target.value = ''
-                }}
-              />
-            </div>
-
+          {/* Main Workspace */}
+          <div className="flex flex-1 min-h-0 overflow-hidden">
             {items.length === 0 ? (
+              /* Premium Drop Zone Empty State */
               <div
-                className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/50 bg-background/30 py-20"
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
+                className={cn(
+                  'flex-1 flex flex-col items-center justify-center m-6 rounded-2xl border-2 border-dashed transition-all duration-300 cursor-pointer',
+                  isDragging
+                    ? 'border-primary bg-primary/5 scale-[0.995]'
+                    : 'border-border/50 bg-background/30 hover:border-primary/50 hover:bg-muted/30'
+                )}
               >
-                <UploadCloud className="h-10 w-10 text-muted-foreground/40" />
-                <p className="mt-4 text-sm font-semibold">Drop or select images and videos</p>
-                <p className="mt-1 text-xs text-muted-foreground">Up to {BULK_SCHEDULE_MAX_ITEMS} posts per batch</p>
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted border border-border/40 shadow-sm mb-4">
+                  <UploadCloud className={cn("h-8 w-8 transition-transform duration-300", isDragging ? "scale-110 text-primary" : "text-muted-foreground/60")} />
+                </div>
+                <p className="text-sm font-semibold">Drag & drop files here, or click to browse</p>
+                <p className="mt-1 text-xs text-muted-foreground">Images & videos (Up to {BULK_SCHEDULE_MAX_ITEMS} per batch)</p>
+                <div className="flex items-center gap-3 mt-6">
+                  <Button type="button" variant="outline" size="sm" className="rounded-lg">
+                    Select Files
+                  </Button>
+                  <span className="text-xs text-muted-foreground font-mono">OR</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-lg gap-1.5"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      addTextRow()
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Start with Text Post
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  {items.map((row) => {
-                    const Icon = row.mediaType === 'text' ? Type : row.mediaType === 'video' ? Video : ImageIcon
-                    return (
-                      <div
-                        key={row.id}
-                        className="flex flex-col gap-3 rounded-xl border border-border/50 bg-background/40 p-4 transition-all duration-200"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted border border-border/40">
+              /* Redesigned Split Pane Layout */
+              <div className="flex flex-1 min-h-0 overflow-hidden">
+                {/* Left Sidebar Pane */}
+                <div className="w-[360px] border-r border-border/50 flex flex-col min-h-0 bg-muted/5">
+                  {/* Action buttons */}
+                  <div className="p-4 border-b border-border/40 flex items-center justify-between gap-2 bg-muted/20 shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 rounded-xl text-xs gap-1.5 h-9"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <UploadCloud className="h-3.5 w-3.5" />
+                      Add Media
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 rounded-xl text-xs gap-1.5 h-9"
+                      onClick={addTextRow}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Text Post
+                    </Button>
+                  </div>
+
+                  {/* Scrollable Post Cards List */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2.5 custom-scrollbar">
+                    {items.map((row) => {
+                      const Icon = row.mediaType === 'text' ? Type : row.mediaType === 'video' ? Video : ImageIcon
+                      const isActive = selectedItemId === row.id
+                      return (
+                        <button
+                          key={row.id}
+                          type="button"
+                          onClick={() => setSelectedItemId(row.id)}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all relative overflow-hidden group',
+                            isActive
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                              : 'border-border/50 bg-background/20 hover:border-primary/30 hover:bg-muted/30'
+                          )}
+                        >
+                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted border border-border/40">
                             {row.previewUrl && row.mediaType === 'image' ? (
-                              <Image src={row.previewUrl} alt="" width={56} height={56} className="h-full w-full object-cover" unoptimized />
+                              <Image src={row.previewUrl} alt="" width={44} height={44} className="h-full w-full object-cover" unoptimized />
                             ) : (
-                              <Icon className="h-6 w-6 text-muted-foreground" />
+                              <Icon className="h-5 w-5 text-muted-foreground" />
                             )}
                           </div>
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[10px] uppercase font-mono">{row.mediaType}</Badge>
-                              {row.fileName && (
-                                <span className="truncate text-xs text-muted-foreground max-w-[200px]">{row.fileName}</span>
-                              )}
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase font-mono tracking-wide scale-90 origin-left">{row.mediaType}</Badge>
                               {row.uploading && (
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                                <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
+                                  <Loader2 className="h-2.5 w-2.5 animate-spin text-primary" />
                                   {Math.round(row.uploadProgress)}%
                                 </span>
                               )}
                             </div>
+                            <p className="truncate text-xs font-semibold text-foreground">
+                              {row.caption ? row.caption : row.fileName || 'Text Post'}
+                            </p>
                           </div>
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            onClick={() => removeItem(row.id)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeItem(row.id)
+                            }}
                             disabled={row.uploading || isPending}
-                            className="text-muted-foreground hover:text-destructive"
+                            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity rounded-lg"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        </div>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          <div className="space-y-1">
-                            <Label className="text-[10px] font-semibold text-muted-foreground">Caption</Label>
-                            <Textarea
-                              placeholder={row.mediaType === 'text' ? 'Post text (required)' : 'Caption (optional)'}
-                              value={row.caption}
-                              onChange={(e) => updateCaption(row.id, e.target.value)}
-                              className="min-h-[70px] resize-none text-sm"
+                        </button>
+                      )
+                    })}
+                  </div>
+
+                  {/* Global First Comment (Sticky at bottom of sidebar) */}
+                  <div className="p-4 border-t border-border/50 bg-muted/20 shrink-0">
+                    <Label htmlFor="globalFirstComment" className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">
+                      Global First Comment
+                    </Label>
+                    <Textarea
+                      id="globalFirstComment"
+                      placeholder="Comment text applied to posts with empty comments..."
+                      value={globalFirstComment}
+                      onChange={(e) => setGlobalFirstComment(e.target.value)}
+                      className="min-h-[60px] max-h-[80px] resize-none text-xs rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
+                    />
+                  </div>
+                </div>
+
+                {/* Right Workspace Composer Pane */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-background/30">
+                  {activeItem ? (
+                    <div className="space-y-5">
+                      {/* Media Preview Section */}
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Media Preview</Label>
+                        {activeItem.mediaType === 'video' && activeItem.previewUrl ? (
+                          <div className="relative w-full rounded-2xl overflow-hidden bg-black ring-1 ring-border/50 flex items-center justify-center aspect-[16/10] max-h-[260px]">
+                            <video
+                              src={activeItem.previewUrl}
+                              controls
+                              className="w-full h-full object-contain"
+                              style={{ maxHeight: '260px' }}
+                              preload="metadata"
                             />
                           </div>
-                          <div className="space-y-1">
-                            <Label className="text-[10px] font-semibold text-muted-foreground">First Comment (optional)</Label>
-                            <Textarea
-                              placeholder="Add first comment for this post..."
-                              value={row.firstComment || ''}
-                              onChange={(e) => updateFirstComment(row.id, e.target.value)}
-                              className="min-h-[70px] resize-none text-sm"
+                        ) : activeItem.mediaType === 'image' && activeItem.previewUrl ? (
+                          <div className="relative w-full rounded-2xl overflow-hidden bg-muted ring-1 ring-border/50 flex items-center justify-center aspect-[16/10] max-h-[260px]">
+                            <img
+                              src={activeItem.previewUrl}
+                              alt="Post preview"
+                              className="w-full h-full object-contain"
+                              style={{ maxHeight: '260px' }}
                             />
                           </div>
-                        </div>
+                        ) : (
+                          <div className="w-full rounded-2xl border border-border/50 bg-muted/20 p-8 min-h-[140px] flex flex-col items-center justify-center text-center">
+                            <Type className="h-7 w-7 text-primary/30 mb-2" />
+                            <span className="text-xs text-muted-foreground font-semibold">Text-only Post Preview</span>
+                          </div>
+                        )}
                       </div>
-                    )
-                  })}
-                </div>
 
-                <div className="rounded-2xl border border-border/50 bg-muted/20 p-4 space-y-3">
-                  <Label htmlFor="globalFirstComment" className="text-xs font-semibold">
-                    Global First Comment (applied if post-specific comment is blank)
-                  </Label>
-                  <Textarea
-                    id="globalFirstComment"
-                    placeholder="Enter comment text..."
-                    value={globalFirstComment}
-                    onChange={(e) => setGlobalFirstComment(e.target.value)}
-                    className="min-h-[72px] resize-none text-sm bg-background/50"
-                  />
-                </div>
-              </div>
-            )}
+                      {/* Caption Input */}
+                      <div className="space-y-2">
+                        <Label htmlFor="active-caption" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Caption</Label>
+                        <Textarea
+                          id="active-caption"
+                          placeholder={activeItem.mediaType === 'text' ? 'Post text (required)' : 'Caption (optional)'}
+                          value={activeItem.caption}
+                          onChange={(e) => updateCaption(activeItem.id, e.target.value)}
+                          className="min-h-[120px] rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
+                        />
+                      </div>
 
-            {isPending && (
-              <div className="space-y-2">
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all duration-300 animate-pulse"
-                    style={{ width: `${submitProgress}%` }}
-                  />
+                      {/* First Comment Input */}
+                      <div className="space-y-2">
+                        <Label htmlFor="active-comment" className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">First Comment (Optional)</Label>
+                        <Textarea
+                          id="active-comment"
+                          placeholder="Write first comment for this post..."
+                          value={activeItem.firstComment || ''}
+                          onChange={(e) => updateFirstComment(activeItem.id, e.target.value)}
+                          className="min-h-[80px] rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-center p-8 bg-muted/10 rounded-2xl border border-dashed border-border/50">
+                      <Loader2 className="h-8 w-8 text-muted-foreground/30 animate-spin mb-4" />
+                      <h3 className="font-semibold text-base mb-1">No Active Selection</h3>
+                      <p className="text-sm text-muted-foreground max-w-xs">Select or add a post from the sidebar to edit its properties.</p>
+                    </div>
+                  )}
                 </div>
-                <p className="text-center text-xs text-muted-foreground">Queueing posts…</p>
               </div>
             )}
           </div>
 
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={(e) => {
+              handleFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+
+          {/* Submission Indicator */}
+          {isPending && (
+            <div className="px-6 py-2 bg-muted/10 shrink-0 border-t border-border/40 space-y-2">
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-all duration-300 animate-pulse"
+                  style={{ width: `${submitProgress}%` }}
+                />
+              </div>
+              <p className="text-center text-xs text-muted-foreground">Queueing posts…</p>
+            </div>
+          )}
+
+          {/* Footer Actions */}
           <div className="flex shrink-0 justify-end gap-3 border-t border-border/50 px-6 py-4 bg-muted/10">
             <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
               Cancel
@@ -399,7 +551,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
               disabled={!isFormValid || isPending || items.some((r) => r.uploading)}
               loading={isPending}
               onClick={handleSubmit}
-              className="gap-2"
+              className="gap-2 px-6 rounded-xl"
             >
               <CalendarPlus className="h-4 w-4" />
               Queue {items.length} Posts

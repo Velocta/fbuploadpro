@@ -54,6 +54,7 @@ function LoadingPanel({ message, submessage }: { message: string; submessage?: s
 
 export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
   const [open, setOpen] = useState(false)
+  const [step, setStep] = useState<1 | 2>(1)
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
@@ -130,6 +131,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
 
   function resetDialogState() {
     setOpen(false)
+    setStep(1)
     setError(null)
     setSelectedAccountId('')
     setSelectedPage(null)
@@ -218,9 +220,14 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
                 <Plus className="h-7 w-7 text-primary" />
               </div>
               <div className="min-w-0">
-                <DialogTitle className="font-display text-xl">Add Scheduling Page</DialogTitle>
+                <DialogTitle className="font-display text-xl">
+                  {step === 1 ? 'Add Scheduling Page' : 'Configure Posting Schedule'}
+                </DialogTitle>
                 <DialogDescription className="mt-1 text-muted-foreground">
-                  Select a Facebook page to enable InApp scheduling.
+                  {step === 1 
+                    ? 'Step 1 of 2: Select a Facebook page to enable InApp scheduling.'
+                    : 'Step 2 of 2: Configure posting slots and timezone.'
+                  }
                 </DialogDescription>
               </div>
             </div>
@@ -228,198 +235,220 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
 
           <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 space-y-5">
-              <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-sm font-semibold">Select Facebook Account</Label>
-                  </div>
+              {step === 1 ? (
+                <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm space-y-5">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-semibold">Select Facebook Account</Label>
+                    </div>
 
-                  {isLoadingAccounts ? (
-                    <LoadingPanel message="Loading accounts…" />
-                  ) : (
-                    <>
-                      <div className="relative">
-                        <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search connected accounts..."
-                          value={accountSearch}
-                          onChange={(e) => setAccountSearch(e.target.value)}
-                          className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
-                        />
-                      </div>
-                      <div className="custom-scrollbar max-h-[200px] space-y-2 overflow-y-auto pr-2">
-                        {filteredAccounts.map((acc) => (
-                          <button
-                            key={acc.id}
-                            type="button"
-                            onClick={() => handleAccountChange(acc.id)}
-                            className={cn(
-                              'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
-                              selectedAccountId === acc.id
-                                ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
-                                : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
-                            )}
-                          >
-                            {acc.fb_user_image ? (
-                              <Image
-                                src={acc.fb_user_image}
-                                alt={acc.fb_user_name || 'Account'}
-                                width={40}
-                                height={40}
-                                className="rounded-full ring-2 ring-transparent group-hover:ring-primary/20"
-                                unoptimized
-                              />
-                            ) : (
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                                <Facebook className="h-4 w-4 text-muted-foreground" />
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="font-semibold">{acc.fb_user_name}</p>
-                              <p className="font-mono text-xs text-muted-foreground">{acc.fb_user_id}</p>
-                            </div>
-                            <ArrowRight className="h-4 w-4 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {selectedAccountId && (
-                  <div className="space-y-3 mt-6">
-                    <Label className="text-sm font-semibold">Select Page</Label>
-                    {isLoadingPages ? (
-                      <LoadingPanel message="Loading pages…" />
+                    {isLoadingAccounts ? (
+                      <LoadingPanel message="Loading accounts…" />
                     ) : (
                       <>
                         <div className="relative">
                           <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
                           <Input
-                            placeholder="Search pages..."
-                            value={pageSearch}
-                            onChange={(e) => setPageSearch(e.target.value)}
+                            placeholder="Search connected accounts..."
+                            value={accountSearch}
+                            onChange={(e) => setAccountSearch(e.target.value)}
                             className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
                           />
                         </div>
-                        <div className="custom-scrollbar max-h-[240px] space-y-2 overflow-y-auto pr-2">
-                          {filteredPages.map((page) => (
+                        <div className="custom-scrollbar max-h-[200px] space-y-2 overflow-y-auto pr-2">
+                          {filteredAccounts.map((acc) => (
                             <button
-                              key={page.id}
+                              key={acc.id}
                               type="button"
-                              onClick={() => setSelectedPage(page)}
+                              onClick={() => handleAccountChange(acc.id)}
                               className={cn(
                                 'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
-                                selectedPage?.id === page.id
+                                selectedAccountId === acc.id
                                   ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
                                   : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
                               )}
                             >
-                              {page.picture ? (
+                              {acc.fb_user_image ? (
                                 <Image
-                                  src={page.picture || ''}
-                                  alt={page.name}
+                                  src={acc.fb_user_image}
+                                  alt={acc.fb_user_name || 'Account'}
                                   width={40}
                                   height={40}
-                                  className="rounded-lg object-cover ring-2 ring-transparent group-hover:ring-primary/20"
+                                  className="rounded-full ring-2 ring-transparent group-hover:ring-primary/20"
                                   unoptimized
                                 />
                               ) : (
-                                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
                                   <Facebook className="h-4 w-4 text-muted-foreground" />
                                 </div>
                               )}
                               <div className="min-w-0 flex-1">
-                                <p className="font-semibold">{page.name}</p>
-                                <p className="font-mono text-xs text-muted-foreground">
-                                  {page.id}
-                                </p>
+                                <p className="font-semibold">{acc.fb_user_name}</p>
+                                <p className="font-mono text-xs text-muted-foreground">{acc.fb_user_id}</p>
                               </div>
-                              <div
-                                className={cn(
-                                  'flex h-5 w-5 items-center justify-center rounded-full border transition-all',
-                                  selectedPage?.id === page.id
-                                    ? 'border-primary bg-primary text-primary-foreground'
-                                    : 'border-input group-hover:border-primary/50',
-                                )}
-                              >
-                                {selectedPage?.id === page.id && (
-                                  <motion.div
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1 }}
-                                    className="h-2 w-2 rounded-full bg-current"
-                                  />
-                                )}
-                              </div>
+                              <ArrowRight className="h-4 w-4 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
                             </button>
                           ))}
                         </div>
                       </>
                     )}
                   </div>
-                )}
 
-                {selectedPage && (
-                  <div className="space-y-4 mt-6 border-t border-border/40 pt-6 animate-in fade-in duration-300">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                      <h4 className="text-sm font-bold">Default Queue Configuration</h4>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label className="text-xs">Posting Timezone</Label>
-                        <TimezoneSelect value={timezone} onValueChange={setTimezone} />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Posts Per Day</Label>
-                        <PostsPerDayPicker
-                          value={Number(postsPerDay)}
-                          onValueChange={(v) => {
-                            setPostsPerDay(v)
-                            const count = Number(v)
-                            const newTimes = [...postingTimes]
-                            if (count > newTimes.length) {
-                              for (let i = newTimes.length; i < count; i++) {
-                                newTimes.push(i === 0 ? "09:00 AM" : i === 1 ? "03:00 PM" : "")
-                              }
-                            } else if (count < newTimes.length) {
-                              newTimes.splice(count)
-                            }
-                            setPostingTimes(newTimes)
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <Label className="text-xs font-bold uppercase tracking-wider">Configure Slots ({postingTimes.length})</Label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {postingTimes.map((time, index) => (
-                          <div key={index} className="flex items-center gap-2 group">
-                            <div className="flex-1">
-                              <TimeSlotInput
-                                idPrefix={`add-page-inapp-slot-${index}`}
-                                value={time || ''}
-                                onChange={(v) => {
-                                  const newTimes = [...postingTimes]
-                                  newTimes[index] = v
-                                  setPostingTimes(newTimes)
-                                }}
-                                nextFieldId={
-                                  index < postingTimes.length - 1
-                                    ? `add-page-inapp-slot-${index + 1}-field`
-                                    : undefined
-                                }
-                              />
-                            </div>
+                  {selectedAccountId && (
+                    <div className="space-y-3 mt-6">
+                      <Label className="text-sm font-semibold">Select Page</Label>
+                      {isLoadingPages ? (
+                        <LoadingPanel message="Loading pages…" />
+                      ) : (
+                        <>
+                          <div className="relative">
+                            <Search className="absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="Search pages..."
+                              value={pageSearch}
+                              onChange={(e) => setPageSearch(e.target.value)}
+                              className="h-12 rounded-xl border-border/50 bg-background/50 pl-11"
+                            />
                           </div>
-                        ))}
+                          <div className="custom-scrollbar max-h-[240px] space-y-2 overflow-y-auto pr-2">
+                            {filteredPages.map((page) => (
+                              <button
+                                key={page.id}
+                                type="button"
+                                onClick={() => setSelectedPage(page)}
+                                className={cn(
+                                  'group flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-all',
+                                  selectedPage?.id === page.id
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
+                                    : 'border-border/50 hover:border-primary/30 hover:bg-muted/30',
+                                )}
+                              >
+                                {page.picture ? (
+                                  <Image
+                                    src={page.picture || ''}
+                                    alt={page.name}
+                                    width={40}
+                                    height={40}
+                                    className="rounded-lg object-cover ring-2 ring-transparent group-hover:ring-primary/20"
+                                    unoptimized
+                                  />
+                                ) : (
+                                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                                    <Facebook className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold">{page.name}</p>
+                                  <p className="font-mono text-xs text-muted-foreground">
+                                    {page.id}
+                                  </p>
+                                </div>
+                                <div
+                                  className={cn(
+                                    'flex h-5 w-5 items-center justify-center rounded-full border transition-all',
+                                    selectedPage?.id === page.id
+                                      ? 'border-primary bg-primary text-primary-foreground'
+                                      : 'border-input group-hover:border-primary/50',
+                                  )}
+                                >
+                                  {selectedPage?.id === page.id && (
+                                    <motion.div
+                                      initial={{ scale: 0 }}
+                                      animate={{ scale: 1 }}
+                                      className="h-2 w-2 rounded-full bg-current"
+                                    />
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm space-y-6 animate-in fade-in duration-300">
+                  {/* Selected Page Header Card */}
+                  <div className="flex items-center gap-4 border-b border-border/40 pb-4">
+                    {selectedPage?.picture ? (
+                      <Image
+                        src={selectedPage.picture}
+                        alt={selectedPage.name}
+                        width={48}
+                        height={48}
+                        className="rounded-lg object-cover ring-2 ring-primary/20"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
+                        <Facebook className="h-5 w-5 text-muted-foreground" />
                       </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-bold text-foreground">{selectedPage?.name}</h4>
+                      <p className="font-mono text-xs text-muted-foreground">Page ID: {selectedPage?.id}</p>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                    <h4 className="text-sm font-bold">Default Queue Configuration</h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs">Posting Timezone</Label>
+                      <TimezoneSelect value={timezone} onValueChange={setTimezone} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs">Posts Per Day</Label>
+                      <PostsPerDayPicker
+                        value={Number(postsPerDay)}
+                        onValueChange={(v) => {
+                          setPostsPerDay(v)
+                          const count = Number(v)
+                          const newTimes = [...postingTimes]
+                          if (count > newTimes.length) {
+                            for (let i = newTimes.length; i < count; i++) {
+                              newTimes.push(i === 0 ? "09:00 AM" : i === 1 ? "03:00 PM" : "")
+                            }
+                          } else if (count < newTimes.length) {
+                            newTimes.splice(count)
+                          }
+                          setPostingTimes(newTimes)
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold uppercase tracking-wider">Configure Slots ({postingTimes.length})</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {postingTimes.map((time, index) => (
+                        <div key={index} className="flex items-center gap-2 group">
+                          <div className="flex-1">
+                            <TimeSlotInput
+                              idPrefix={`add-page-inapp-slot-${index}`}
+                              value={time || ''}
+                              onChange={(v) => {
+                                const newTimes = [...postingTimes]
+                                newTimes[index] = v
+                                setPostingTimes(newTimes)
+                              }}
+                              nextFieldId={
+                                index < postingTimes.length - 1
+                                  ? `add-page-inapp-slot-${index + 1}-field`
+                                  : undefined
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && (
@@ -431,18 +460,45 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
             )}
 
             <div className="border-t border-border/50 bg-muted/20 px-6 py-4">
-              <div className="flex items-center justify-end gap-3">
-                <Button type="button" variant="ghost" onClick={resetDialogState} disabled={isPending}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={!selectedPage || isPending}
-                  className="rounded-xl bg-primary px-8"
-                  loading={isPending}
-                >
-                  Add Page
-                </Button>
+              <div className="flex items-center justify-between gap-3">
+                {step === 2 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setStep(1)}
+                    disabled={isPending}
+                  >
+                    Back
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={resetDialogState}
+                  >
+                    Cancel
+                  </Button>
+                )}
+
+                {step === 1 ? (
+                  <Button
+                    type="button"
+                    disabled={!selectedPage}
+                    onClick={() => setStep(2)}
+                    className="rounded-xl bg-primary px-8"
+                  >
+                    Next: Configure Slots
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    disabled={!selectedPage || isPending}
+                    className="rounded-xl bg-primary px-8"
+                    loading={isPending}
+                  >
+                    Add Page
+                  </Button>
+                )}
               </div>
             </div>
           </form>

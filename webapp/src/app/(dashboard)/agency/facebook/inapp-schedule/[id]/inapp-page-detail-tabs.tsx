@@ -36,7 +36,7 @@ export function InappPageDetailTabs({
   history: ReactNode
   settings: ReactNode
 }) {
-  const [activeTab, setActiveTab] = useState<TabId>('queue')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   const panels: Record<TabId, ReactNode> = {
     overview,
