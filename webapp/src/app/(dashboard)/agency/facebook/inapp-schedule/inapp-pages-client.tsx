@@ -63,23 +63,28 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
 
   const [searchInput, setSearchInput] = useState(initialSearch)
 
-  // Sync state if URL changes externally
-  useEffect(() => {
+  const [prevSearch, setPrevSearch] = useState(initialSearch)
+  const [prevStatus, setPrevStatus] = useState(initialStatusFilter)
+  const [prevSort, setPrevSort] = useState(initialSortBy)
+  const [prevPage, setPrevPage] = useState(initialPage)
+
+  if (initialSearch !== prevSearch) {
     setSearch(initialSearch)
     setSearchInput(initialSearch)
-  }, [initialSearch])
-
-  useEffect(() => {
+    setPrevSearch(initialSearch)
+  }
+  if (initialStatusFilter !== prevStatus) {
     setStatusFilter(initialStatusFilter)
-  }, [initialStatusFilter])
-
-  useEffect(() => {
+    setPrevStatus(initialStatusFilter)
+  }
+  if (initialSortBy !== prevSort) {
     setSortBy(initialSortBy)
-  }, [initialSortBy])
-
-  useEffect(() => {
+    setPrevSort(initialSortBy)
+  }
+  if (initialPage !== prevPage) {
     setPage(initialPage)
-  }, [initialPage])
+    setPrevPage(initialPage)
+  }
 
   const updateFiltersUrl = useCallback((updates: { q?: string | null; sort?: string | null; status?: string | null; page?: number | null }) => {
     const params = new URLSearchParams(window.location.search)
@@ -149,8 +154,6 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
     (currentPage - 1) * PAGES_PAGE_SIZE,
     currentPage * PAGES_PAGE_SIZE,
   )
-
-  const resetPage = () => setPage(1)
 
   if (initialPages.length === 0) {
     return (
@@ -222,8 +225,6 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                 <SelectItem value="fb_rate_limited">Rate Limited</SelectItem>
                 <SelectItem value="page_not_accessible">Page Not Accessible</SelectItem>
                 <SelectItem value="invalid_token">Invalid Token</SelectItem>
-                <SelectItem value="invalid_username">Invalid Username</SelectItem>
-                <SelectItem value="creator_suspended">Creator Suspended</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="2fa_required_on_BM">2FA Req. on BM</SelectItem>
                 <SelectItem value="check_developer_app">Check Dev App</SelectItem>

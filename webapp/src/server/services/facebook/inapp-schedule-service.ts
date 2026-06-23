@@ -47,7 +47,7 @@ export function projectScheduledTimes<
           if (ampm.toUpperCase() === 'AM' && hour === 12) hour = 0
         }
         return { hour, minute }
-      } catch (err) {
+      } catch {
         return null
       }
     })

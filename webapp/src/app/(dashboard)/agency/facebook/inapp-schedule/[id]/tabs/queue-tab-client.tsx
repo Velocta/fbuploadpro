@@ -119,11 +119,12 @@ function EditPostDialog({
               </div>
             ) : post.media_type === 'image' && post.media_url ? (
               <div className="relative w-full rounded-xl overflow-hidden bg-muted ring-1 ring-border/50 flex items-center justify-center" style={{ aspectRatio: '16/10', maxHeight: '240px' }}>
-                <img
+                <Image
                   src={post.media_url}
                   alt="Post preview"
+                  fill
                   className="w-full h-full object-contain"
-                  style={{ maxHeight: '240px' }}
+                  unoptimized
                 />
               </div>
             ) : (
@@ -197,7 +198,6 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
 
   useEffect(() => {
     if (bulkBatchFromUrl) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBulkBatchFilter(bulkBatchFromUrl)
     }
   }, [bulkBatchFromUrl])
@@ -226,7 +226,6 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
   }, [pageId, page, bulkBatchFilter, viewMode])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchPosts()
   }, [fetchPosts])
 

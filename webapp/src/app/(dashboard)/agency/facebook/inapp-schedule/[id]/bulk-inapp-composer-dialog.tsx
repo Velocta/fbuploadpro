@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import {
   CalendarClock,
@@ -483,11 +483,12 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                           </div>
                         ) : activeItem.mediaType === 'image' && activeItem.previewUrl ? (
                           <div className="relative w-full rounded-2xl overflow-hidden bg-muted ring-1 ring-border/50 flex items-center justify-center aspect-[16/10] max-h-[260px]">
-                            <img
+                            <Image
                               src={activeItem.previewUrl}
                               alt="Post preview"
+                              fill
                               className="w-full h-full object-contain"
-                              style={{ maxHeight: '260px' }}
+                              unoptimized
                             />
                           </div>
                         ) : (
