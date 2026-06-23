@@ -131,7 +131,7 @@ export default async function FacebookInappSchedulePage() {
         title="InApp Schedule"
         description="Schedule posts through our internal queue system."
         actions={<AddInappPageDialog agencyId={user.id} />}
-        tutorialHref="https://youtube.com/watch?v=placeholder"
+        tutorialHref="https://youtu.be/qympb3MNWOI"
       />
 
       <Suspense fallback={<InappScheduleSkeleton />}>

@@ -81,3 +81,51 @@ export async function updateInappPageSettingsAction(formData: FormData) {
     return { success: false, error: message }
   }
 }
+
+export async function toggleInappPageStatusAction(pageId: string, currentStatus: string) {
+  try {
+    const auth = await requireApiRole(['agency', 'super_admin'])
+    if (auth.error) throw new Error('Unauthorized')
+
+    const supabase = await createClient()
+
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
+
+    if (newStatus === 'active') {
+      const { data: page } = await supabase
+        .from('facebook_inapp_schedule_pages')
+        .select('*')
+        .eq('id', pageId)
+        .eq('agency_id', auth.user.id)
+        .single()
+
+      if (!page?.fb_page_access_token) {
+        return { success: false, error: 'Cannot activate: Missing Facebook Page access token.' }
+      }
+
+      if (page.status === 'fb_rate_limited') {
+        return {
+          success: false,
+          error:
+            'Cannot activate while rate limited. Meta is throttling this page — scheduling resumes automatically after the cooldown.',
+        }
+      }
+    }
+
+    const { error } = await supabase
+      .from('facebook_inapp_schedule_pages')
+      .update({ status: newStatus })
+      .eq('id', pageId)
+      .eq('agency_id', auth.user.id)
+
+    if (error) throw error
+
+    revalidatePath(`/agency/facebook/inapp-schedule/${pageId}`)
+    revalidatePath('/agency/facebook/inapp-schedule')
+
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to update status'
+    return { success: false, error: message }
+  }
+}

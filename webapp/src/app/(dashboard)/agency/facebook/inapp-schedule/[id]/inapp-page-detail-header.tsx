@@ -7,6 +7,7 @@ import { ArrowLeft, ExternalLink, CalendarPlus } from 'lucide-react'
 import { DeleteInappPageDialog } from '../delete-inapp-page-dialog'
 import { InappComposerDialog } from './inapp-composer-dialog'
 import { BulkInappComposerDialog } from './bulk-inapp-composer-dialog'
+import { InappPageToggle } from './inapp-page-toggle'
 
 interface FacebookAccount {
   fb_user_name: string | null
@@ -18,6 +19,7 @@ interface InappPage {
   fb_page_id: string
   fb_page_name: string | null
   fb_page_image: string | null
+  status: string | null
   facebook_accounts: FacebookAccount | FacebookAccount[] | null
 }
 
@@ -84,6 +86,7 @@ export function InappPageDetailHeader({
       }
       actions={
         <div className="flex flex-wrap items-center gap-3">
+          <InappPageToggle pageId={page.id} initialStatus={page.status || 'inactive'} />
           <Button variant="outline" className="gap-2 rounded-full" asChild>
             <Link href="/agency/facebook/inapp-schedule">
               <ArrowLeft className="h-4 w-4" />
