@@ -219,7 +219,7 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
                                                     You can follow this tutorial for step-by-step guidance:
                                                 </p>
                                                 <a
-                                                    href="https://youtu.be/ObS7MM-zAeQ?si=KzD522lZ7i1sSME-"
+                                                    href="https://youtu.be/xdNZ_cjJUbI"
                                                     target="_blank"
                                                     className="flex items-center gap-2 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 w-fit px-3 py-1.5 rounded-full border border-destructive/20"
                                                 >

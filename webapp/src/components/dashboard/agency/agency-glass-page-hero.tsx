@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Youtube } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ export function AgencyGlassPageHero({
   leading,
   children,
   className,
+  tutorialHref,
 }: {
   segments?: AgencyBreadcrumbSegment[]
   title: ReactNode
@@ -27,6 +28,7 @@ export function AgencyGlassPageHero({
   leading?: ReactNode
   children?: ReactNode
   className?: string
+  tutorialHref?: string
 }) {
   return (
     <div className={cn('relative group', className)}>
@@ -83,6 +85,19 @@ export function AgencyGlassPageHero({
                   <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                     {description}
                   </p>
+                ) : null}
+                {tutorialHref ? (
+                  <div className="pt-1">
+                    <a
+                      href={tutorialHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 px-3 py-1.5 rounded-full border border-destructive/20 transition-all hover:bg-destructive/15"
+                    >
+                      <Youtube className="h-4 w-4" />
+                      Watch Tutorial Video
+                    </a>
+                  </div>
                 ) : null}
                 {children}
               </div>

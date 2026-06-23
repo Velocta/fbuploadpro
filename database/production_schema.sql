@@ -712,7 +712,7 @@ begin
       nullif(item->>'fb_user_name', '') as fb_user_name,
       nullif(item->>'fb_user_image', '') as fb_user_image,
       case
-        when coalesce(item->>'status', '') in ('active', 'invalid_token', 'fb_verification_required', '2fa_required_on_BM', 'check_developer_app', 'account_suspended')
+        when coalesce(item->>'status', '') in ('active', 'invalid_token', '2fa_required_on_BM', 'check_developer_app', 'account_suspended', 'inactive')
         then (item->>'status')::public.profile_status_enum
         else null
       end as status

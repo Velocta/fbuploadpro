@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Settings2 } from 'lucide-react'
+import { Settings2, Youtube } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AgencySectionCard } from '@/components/dashboard/agency'
 import { CardContent } from '@/components/ui/card'
@@ -18,8 +18,19 @@ export function DashboardByocSetupCard({
             Connect your Facebook app in Settings before linking accounts or running Facebook
             automation.
           </p>
+          <div className="pt-1">
+            <a
+              href="https://youtu.be/xdNZ_cjJUbI"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 px-3 py-1.5 rounded-full border border-destructive/20 transition-all hover:bg-destructive/15"
+            >
+              <Youtube className="h-4 w-4" />
+              Watch Video Setup Guide
+            </a>
+          </div>
           {fbAccountsCount === 0 ? (
-            <p className="text-xs text-muted-foreground">No Facebook accounts linked yet.</p>
+            <p className="text-xs text-muted-foreground pt-1">No Facebook accounts linked yet.</p>
           ) : null}
         </div>
         <Button asChild className="shrink-0 rounded-xl">

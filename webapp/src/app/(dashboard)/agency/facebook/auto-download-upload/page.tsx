@@ -186,6 +186,7 @@ export default async function AgencyPagesPage() {
         title="Auto Download/Upload"
         description="Connected Facebook pages for automated reel download and posting."
         actions={<AddPageDialog agencyId={user.id} />}
+        tutorialHref="https://youtube.com/watch?v=placeholder"
       />
 
       <Suspense fallback={<PagesSkeleton />}>

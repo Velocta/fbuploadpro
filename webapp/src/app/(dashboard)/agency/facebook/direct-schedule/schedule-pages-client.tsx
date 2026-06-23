@@ -164,6 +164,7 @@ export function SchedulePagesClient({ userId }: { userId: string }) {
         title="Direct Schedule"
         description="Schedule posts natively on Facebook."
         actions={<AddSchedulePageDialog agencyId={userId} onSuccess={loadData} />}
+        tutorialHref="https://youtube.com/watch?v=placeholder"
       />
 
       {loading ? (
