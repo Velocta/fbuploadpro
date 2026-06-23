@@ -194,13 +194,14 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
 
   const [page, setPage] = useState(1)
   const [bulkBatchFilter, setBulkBatchFilter] = useState<string | null>(bulkBatchFromUrl)
-  const limit = 50 // Increased to 50 for easier drag and drop reordering of queues
+  const [prevBulkBatchFromUrl, setPrevBulkBatchFromUrl] = useState<string | null>(bulkBatchFromUrl)
 
-  useEffect(() => {
-    if (bulkBatchFromUrl) {
-      setBulkBatchFilter(bulkBatchFromUrl)
-    }
-  }, [bulkBatchFromUrl])
+  if (bulkBatchFromUrl !== prevBulkBatchFromUrl) {
+    setBulkBatchFilter(bulkBatchFromUrl)
+    setPrevBulkBatchFromUrl(bulkBatchFromUrl)
+  }
+
+  const limit = 50 // Increased to 50 for easier drag and drop reordering of queues
 
   const fetchPosts = useCallback(async () => {
     setLoading(true)
@@ -226,7 +227,17 @@ export function QueueTabClient({ pageId }: { pageId: string }) {
   }, [pageId, page, bulkBatchFilter, viewMode])
 
   useEffect(() => {
-    void fetchPosts()
+    let active = true
+    const load = async () => {
+      await Promise.resolve()
+      if (active) {
+        void fetchPosts()
+      }
+    }
+    void load()
+    return () => {
+      active = false
+    }
   }, [fetchPosts])
 
   const handleCancel = async (postId: string) => {
