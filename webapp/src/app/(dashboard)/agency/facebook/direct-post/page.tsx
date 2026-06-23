@@ -14,7 +14,7 @@ export default function FacebookDirectPostPage() {
           { label: 'Facebook', href: '/agency/facebook/accounts' },
           { label: 'Direct Post' },
         ]}
-        tutorialHref="https://youtube.com/watch?v=placeholder"
+        tutorialHref="https://youtu.be/74xWlKlHtWw"
       />
       <DirectPostClient />
     </div>

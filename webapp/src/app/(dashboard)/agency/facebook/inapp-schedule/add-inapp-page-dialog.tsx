@@ -143,6 +143,16 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (step === 1) {
+      if (selectedPage && selectedAccountId) {
+        setStep(2)
+        setError(null)
+      } else {
+        setError('Please select a Facebook account and page.')
+      }
+      return
+    }
+
     if (!selectedPage || !selectedAccountId) {
       setError('Please select a Facebook page.')
       return

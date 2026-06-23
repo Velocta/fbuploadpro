@@ -20,7 +20,7 @@ export default async function AgencyPageToolsPage() {
         icon={<Trash2 className="h-7 w-7 text-primary" />}
         title="Bulk Delete Posts"
         description="View live Facebook page content and bulk delete selected items."
-        tutorialHref="https://youtube.com/watch?v=placeholder"
+        tutorialHref="https://youtu.be/tp7oiEWd5oQ"
       />
       <PageToolsClient />
     </div>
