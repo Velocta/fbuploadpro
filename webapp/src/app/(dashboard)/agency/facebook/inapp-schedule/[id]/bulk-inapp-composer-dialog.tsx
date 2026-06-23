@@ -278,11 +278,11 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       }}
     >
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-5xl overflow-hidden border-0 bg-transparent p-0 shadow-none">
+      <DialogContent className="max-h-[95vh] h-[90vh] w-[95vw] sm:max-w-[95vw] md:max-w-[90vw] lg:max-w-[1024px] xl:max-w-[1200px] overflow-hidden border-0 bg-transparent p-0 shadow-none">
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="flex h-[80vh] min-h-[600px] max-h-[800px] flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/95 shadow-2xl backdrop-blur-xl"
+          className="flex h-full w-full flex-col overflow-hidden rounded-3xl border border-border/50 bg-card/95 shadow-2xl backdrop-blur-xl"
         >
           {/* Header */}
           <DialogHeader className="shrink-0 border-b border-border/50 bg-muted/10 px-6 py-4">
@@ -348,9 +348,12 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
               </div>
             ) : (
               /* Redesigned Split Pane Layout */
-              <div className="flex flex-1 min-h-0 overflow-hidden">
+              <div className="flex flex-1 min-h-0 overflow-hidden relative">
                 {/* Left Sidebar Pane */}
-                <div className="w-[360px] border-r border-border/50 flex flex-col min-h-0 bg-muted/5">
+                <div className={cn(
+                  "w-full md:w-[320px] lg:w-[360px] border-border/50 flex flex-col min-h-0 bg-muted/5 shrink-0 transition-all",
+                  selectedItemId ? "hidden md:flex md:border-r" : "flex"
+                )}>
                   {/* Action buttons */}
                   <div className="p-4 border-b border-border/40 flex items-center justify-between gap-2 bg-muted/20 shrink-0">
                     <Button
@@ -447,9 +450,24 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                 </div>
 
                 {/* Right Workspace Composer Pane */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-background/30">
+                <div className={cn(
+                  "flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar bg-background/30 transition-all",
+                  !selectedItemId ? "hidden md:block" : "block"
+                )}>
                   {activeItem ? (
                     <div className="space-y-5">
+                      {/* Mobile Back Button */}
+                      <div className="md:hidden flex items-center mb-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedItemId(null)}
+                          className="pl-0 gap-1 text-primary hover:text-primary/80"
+                        >
+                          <span className="text-base">←</span> Back to List
+                        </Button>
+                      </div>
                       {/* Media Preview Section */}
                       <div className="space-y-2">
                         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Media Preview</Label>
