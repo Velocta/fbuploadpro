@@ -1923,6 +1923,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
             <div className="flex-1" />
             {(mode === 'single' && step === 1) || (mode !== 'single' && step < 3) ? (
               <Button
+                key="btn-bulk-next"
                 type="button"
                 className="rounded-xl"
                 onClick={handleNext}
@@ -1946,7 +1947,7 @@ export function AddPageDialog({ agencyId }: { agencyId: string }) {
                 Next
               </Button>
             ) : (
-              <Button type="submit" loading={isPending} className="rounded-xl">
+              <Button key="btn-bulk-submit" type="submit" loading={isPending} className="rounded-xl">
                 {mode === 'single'
                   ? 'Start Automation'
                   : retryFailedKeys.size > 0 && mode === 'multiAccountBulk'

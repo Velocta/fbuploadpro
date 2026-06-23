@@ -141,8 +141,8 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
     setPostingTimes(['09:00 AM', '03:00 PM'])
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (step === 1) {
       if (selectedPage && selectedAccountId) {
         setStep(2)
@@ -243,7 +243,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
             </div>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 space-y-5">
               {step === 1 ? (
                 <div className="rounded-2xl border border-border/50 bg-card/40 p-5 backdrop-blur-sm space-y-5">
@@ -473,6 +473,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
               <div className="flex items-center justify-between gap-3">
                 {step === 2 ? (
                   <Button
+                    key="btn-back"
                     type="button"
                     variant="ghost"
                     onClick={() => setStep(1)}
@@ -482,6 +483,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
                   </Button>
                 ) : (
                   <Button
+                    key="btn-cancel"
                     type="button"
                     variant="ghost"
                     onClick={resetDialogState}
@@ -492,6 +494,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
 
                 {step === 1 ? (
                   <Button
+                    key="btn-next"
                     type="button"
                     disabled={!selectedPage}
                     onClick={() => setStep(2)}
@@ -501,8 +504,10 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
                   </Button>
                 ) : (
                   <Button
-                    type="submit"
+                    key="btn-submit"
+                    type="button"
                     disabled={!selectedPage || isPending}
+                    onClick={() => handleSubmit()}
                     className="rounded-xl bg-primary px-8"
                     loading={isPending}
                   >
@@ -511,7 +516,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
                 )}
               </div>
             </div>
-          </form>
+          </div>
         </motion.div>
       </DialogContent>
     </Dialog>
