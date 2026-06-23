@@ -2,7 +2,7 @@ import { addDays, format, parse, parseISO } from 'date-fns'
 import { fromZonedTime } from 'date-fns-tz'
 import { generateBalancedPostTimes } from '@/lib/scheduling'
 
-export const BULK_SCHEDULE_MAX_ITEMS = 50
+export const BULK_SCHEDULE_MAX_ITEMS = 150
 
 export const MIN_SCHEDULE_MS = 10 * 60 * 1000
 export const MAX_SCHEDULE_MS = 180 * 24 * 60 * 60 * 1000
