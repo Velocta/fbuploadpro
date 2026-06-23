@@ -29,6 +29,9 @@ export type InappPage = {
   changed_followers: number | null
   is_followers_updated: boolean
   facebook_accounts: { fb_user_name: string | null; fb_user_image: string | null } | null
+  pending_posts_count: number | null
+  posted_posts_count: number | null
+  failed_posts_count: number | null
 }
 
 const PAGES_PAGE_SIZE = 9
@@ -165,7 +168,7 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                                 height={48}
                                 className="rounded-lg shadow-sm ring-2 ring-transparent transition-all group-hover:ring-primary/20"
                                 unoptimized
-                              />
+                                />
                             ) : (
                               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted ring-2 ring-transparent transition-all group-hover:ring-primary/20">
                                 <Facebook className="h-5 w-5 text-muted-foreground" />
@@ -203,7 +206,7 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
 
                       <div className="flex flex-1 flex-col px-5 pb-5 pl-6">
                         {/* Followers metrics */}
-                        <div className="mb-4 grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-background/20 p-3 text-xs">
+                        <div className="grid grid-cols-2 gap-4 rounded-xl border border-border/50 bg-background/20 p-3 text-xs">
                           <div>
                             <span className="block text-muted-foreground text-[10px] uppercase font-medium">Followers</span>
                             <span className="font-semibold text-foreground">
@@ -225,6 +228,29 @@ export function InappPagesClient({ initialPages, agencyId }: { initialPages: Ina
                             </span>
                           </div>
                         </div>
+
+                        {/* Post statistics counters */}
+                        <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl border border-border/50 bg-background/10 p-2 text-center text-xs">
+                          <div>
+                            <span className="block text-muted-foreground text-[9px] uppercase font-medium">Pending</span>
+                            <span className="font-semibold text-blue-400">
+                              {pageItem.pending_posts_count ?? 0}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground text-[9px] uppercase font-medium">Posted</span>
+                            <span className="font-semibold text-emerald-500">
+                              {pageItem.posted_posts_count ?? 0}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground text-[9px] uppercase font-medium">Failed</span>
+                            <span className="font-semibold text-red-500">
+                              {pageItem.failed_posts_count ?? 0}
+                            </span>
+                          </div>
+                        </div>
+
 
                         {fbAccount?.fb_user_name ? (
                           <div className="mt-auto pt-4 flex items-center gap-2 rounded-lg border border-border/50 bg-background/30 p-2 text-xs">

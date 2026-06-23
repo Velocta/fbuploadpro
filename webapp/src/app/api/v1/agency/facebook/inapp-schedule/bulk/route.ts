@@ -17,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: zodErrorMessage(parsed.error) }, { status: 400 })
     }
 
-    const { savedPageId, items, schedule } = parsed.data
+    const { savedPageId, items } = parsed.data
     const result = await bulkCreateInappSchedulePosts(auth.user.id, {
       savedPageId,
       items: items.map((item) => ({
@@ -26,14 +26,6 @@ export async function POST(request: Request) {
         firstComment: item.firstComment,
         mediaObjectKey: item.mediaObjectKey,
       })),
-      schedule: {
-        startDate: schedule.startDate,
-        postsPerDay: schedule.postsPerDay,
-        scheduleType: schedule.scheduleType,
-        postingTimes: schedule.postingTimes ?? [],
-        timezone: schedule.timezone,
-        firstComment: schedule.firstComment,
-      },
     })
 
     return NextResponse.json(result)

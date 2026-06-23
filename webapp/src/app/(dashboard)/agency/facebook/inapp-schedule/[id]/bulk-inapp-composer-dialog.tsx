@@ -1,16 +1,12 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useCallback, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { format, addDays } from 'date-fns'
-import { formatInTimeZone } from 'date-fns-tz'
 import { useRouter } from 'next/navigation'
 import {
   CalendarClock,
   CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
   Image as ImageIcon,
   Loader2,
   Plus,
@@ -18,7 +14,6 @@ import {
   Type,
   UploadCloud,
   Video,
-  AlertCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -33,28 +28,14 @@ import {
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { PostsPerDayPicker } from '@/components/dashboard/posts-per-day-picker'
-import { TimezoneSelect } from '@/components/dashboard/timezone-select'
-import { TimeSlotInput } from '@/components/dashboard/time-slot-input'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
-import {
-  BULK_SCHEDULE_MAX_ITEMS,
-  ensurePostingTimesLength,
-  generateBulkScheduleTimestamps,
-  type BulkScheduleType,
-} from '@/lib/direct-schedule-bulk'
+import { BULK_SCHEDULE_MAX_ITEMS } from '@/lib/direct-schedule-bulk'
 
 type QueueItem = {
   id: string
   mediaType: 'text' | 'image' | 'video'
   caption: string
+  firstComment?: string
   fileName?: string
   previewUrl?: string
   mediaObjectKey?: string
@@ -79,21 +60,11 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [open, setOpen] = useState(false)
-  const [step, setStep] = useState(1)
   const [isPending, startTransition] = useTransition()
   const [submitProgress, setSubmitProgress] = useState(0)
 
   const [items, setItems] = useState<QueueItem[]>([])
-  const [postsPerDay, setPostsPerDay] = useState(2)
-  const [scheduleType, setScheduleType] = useState<BulkScheduleType>('dailyrandom')
-  const [postingTimes, setPostingTimes] = useState<string[]>(['09:00 AM', '03:00 PM'])
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
-  const [startDate, setStartDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-  const [previewError, setPreviewError] = useState<string | null>(null)
-  const [firstComment, setFirstComment] = useState('')
-
-  const totalSteps = 3
-  const cappedPostsPerDay = Math.min(5, Math.max(1, postsPerDay))
+  const [globalFirstComment, setGlobalFirstComment] = useState('')
 
   const resetState = useCallback(() => {
     setItems((prev) => {
@@ -102,15 +73,8 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       })
       return []
     })
-    setStep(1)
-    setPostsPerDay(2)
-    setScheduleType('dailyrandom')
-    setPostingTimes(['09:00 AM', '03:00 PM'])
-    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone)
-    setStartDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-    setPreviewError(null)
     setSubmitProgress(0)
-    setFirstComment('')
+    setGlobalFirstComment('')
   }, [])
 
   const uploadItem = async (itemId: string, file: File) => {
@@ -202,70 +166,19 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
     setItems((prev) => prev.map((r) => (r.id === id ? { ...r, caption } : r)))
   }
 
-  const previewTimestamps = useMemo(() => {
-    if (items.length === 0) return []
-    try {
-      return generateBulkScheduleTimestamps(items.length, {
-        startDate,
-        postsPerDay: cappedPostsPerDay,
-        scheduleType,
-        postingTimes: ensurePostingTimesLength(postingTimes, cappedPostsPerDay),
-        timezone,
-      })
-    } catch {
-      return []
-    }
-  }, [items.length, startDate, cappedPostsPerDay, scheduleType, postingTimes, timezone])
+  const updateFirstComment = (id: string, firstComment: string) => {
+    setItems((prev) => prev.map((r) => (r.id === id ? { ...r, firstComment } : r)))
+  }
 
-  useEffect(() => {
-    if (items.length === 0) {
-      const t = setTimeout(() => {
-        setPreviewError(null)
-      }, 0)
-      return () => clearTimeout(t)
-    }
-    try {
-      generateBulkScheduleTimestamps(items.length, {
-        startDate,
-        postsPerDay: cappedPostsPerDay,
-        scheduleType,
-        postingTimes: ensurePostingTimesLength(postingTimes, cappedPostsPerDay),
-        timezone,
-      })
-      const t = setTimeout(() => {
-        setPreviewError(null)
-      }, 0)
-      return () => clearTimeout(t)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Invalid schedule'
-      const t = setTimeout(() => {
-        setPreviewError(msg)
-      }, 0)
-      return () => clearTimeout(t)
-    }
-  }, [items.length, startDate, cappedPostsPerDay, scheduleType, postingTimes, timezone])
-
-  const daysSpan = useMemo(() => {
-    if (!items.length) return 0
-    return Math.ceil(items.length / cappedPostsPerDay)
-  }, [items.length, cappedPostsPerDay])
-
-  const contentValid = items.length > 0 && items.every((row) => {
+  const isFormValid = items.length > 0 && items.every((row) => {
     if (row.uploading) return false
     if (row.mediaType !== 'text' && !row.mediaObjectKey) return false
     if (row.mediaType === 'text' && !row.caption.trim()) return false
     return true
   })
 
-  const scheduleValid =
-    !!startDate &&
-    (scheduleType === 'dailyrandom' ||
-      ensurePostingTimesLength(postingTimes, cappedPostsPerDay).every((t) => String(t || '').trim()))
-
-  const previewValid = contentValid && scheduleValid && previewTimestamps.length === items.length
-
   const handleSubmit = () => {
-    if (!previewValid) return
+    if (!isFormValid) return
 
     startTransition(async () => {
       setSubmitProgress(0)
@@ -279,18 +192,8 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
               mediaType: row.mediaType,
               caption: row.caption || undefined,
               mediaObjectKey: row.mediaObjectKey,
+              firstComment: row.firstComment?.trim() || globalFirstComment.trim() || undefined,
             })),
-            schedule: {
-              startDate,
-              postsPerDay: cappedPostsPerDay,
-              scheduleType,
-              postingTimes:
-                scheduleType === 'fixed'
-                  ? ensurePostingTimesLength(postingTimes, cappedPostsPerDay)
-                  : [],
-              timezone,
-              firstComment: firstComment.trim() || undefined,
-            },
           }),
         })
 
@@ -349,9 +252,9 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                   <CalendarClock className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <DialogTitle className="font-display text-xl">Bulk Queue</DialogTitle>
-                  <p className="text-sm text-muted-foreground">
-                    Step {step} of {totalSteps}
+                  <DialogTitle className="font-display text-xl">Bulk Queue Posts</DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Add posts to the bottom of the sequential queue
                   </p>
                 </div>
               </div>
@@ -359,75 +262,69 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
             </div>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-6">
-            {step === 1 && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud className="h-4 w-4" />
-                    Add media files
-                  </Button>
-                  <Button type="button" variant="outline" className="gap-2" onClick={addTextRow}>
-                    <Plus className="h-4 w-4" />
-                    Add text post
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/*,video/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      handleFiles(e.target.files)
-                      e.target.value = ''
-                    }}
-                  />
-                </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()}>
+                <UploadCloud className="h-4 w-4" />
+                Add media files
+              </Button>
+              <Button type="button" variant="outline" className="gap-2" onClick={addTextRow}>
+                <Plus className="h-4 w-4" />
+                Add text post
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={(e) => {
+                  handleFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+            </div>
 
-                {items.length === 0 ? (
-                  <div
-                    className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/50 bg-background/30 py-16"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <UploadCloud className="h-10 w-10 text-muted-foreground" />
-                    <p className="mt-4 text-sm font-medium">Drop or select images and videos</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Up to {BULK_SCHEDULE_MAX_ITEMS} posts per batch</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {items.map((row) => {
-                      const Icon = row.mediaType === 'text' ? Type : row.mediaType === 'video' ? Video : ImageIcon
-                      return (
-                        <div
-                          key={row.id}
-                          className="flex gap-3 rounded-xl border border-border/50 bg-background/40 p-3"
-                        >
-                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+            {items.length === 0 ? (
+              <div
+                className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border/50 bg-background/30 py-20"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <UploadCloud className="h-10 w-10 text-muted-foreground/40" />
+                <p className="mt-4 text-sm font-semibold">Drop or select images and videos</p>
+                <p className="mt-1 text-xs text-muted-foreground">Up to {BULK_SCHEDULE_MAX_ITEMS} posts per batch</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-3">
+                  {items.map((row) => {
+                    const Icon = row.mediaType === 'text' ? Type : row.mediaType === 'video' ? Video : ImageIcon
+                    return (
+                      <div
+                        key={row.id}
+                        className="flex flex-col gap-3 rounded-xl border border-border/50 bg-background/40 p-4 transition-all duration-200"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted border border-border/40">
                             {row.previewUrl && row.mediaType === 'image' ? (
                               <Image src={row.previewUrl} alt="" width={56} height={56} className="h-full w-full object-cover" unoptimized />
                             ) : (
                               <Icon className="h-6 w-6 text-muted-foreground" />
                             )}
                           </div>
-                          <div className="min-w-0 flex-1 space-y-2">
+                          <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className="text-xs capitalize">{row.mediaType}</Badge>
+                              <Badge variant="outline" className="text-[10px] uppercase font-mono">{row.mediaType}</Badge>
                               {row.fileName && (
-                                <span className="truncate text-xs text-muted-foreground">{row.fileName}</span>
+                                <span className="truncate text-xs text-muted-foreground max-w-[200px]">{row.fileName}</span>
                               )}
                               {row.uploading && (
-                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                                  <Loader2 className="h-3 w-3 animate-spin text-primary" />
                                   {Math.round(row.uploadProgress)}%
                                 </span>
                               )}
                             </div>
-                            <Textarea
-                              placeholder={row.mediaType === 'text' ? 'Post text (required)' : 'Caption (optional)'}
-                              value={row.caption}
-                              onChange={(e) => updateCaption(row.id, e.target.value)}
-                              className="min-h-[60px] resize-none text-sm"
-                            />
                           </div>
                           <Button
                             type="button"
@@ -435,199 +332,78 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                             size="icon"
                             onClick={() => removeItem(row.id)}
                             disabled={row.uploading || isPending}
+                            className="text-muted-foreground hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {step === 2 && (
-              <div className="space-y-6">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label>Start date</Label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="flex h-11 w-full rounded-xl border border-border/50 bg-background/50 px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Posting type</Label>
-                    <Select
-                      value={scheduleType}
-                      onValueChange={(v: BulkScheduleType) => {
-                        setScheduleType(v)
-                        if (v === 'fixed') {
-                          setPostingTimes(ensurePostingTimesLength(postingTimes, cappedPostsPerDay))
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dailyrandom">Random posting times</SelectItem>
-                        <SelectItem value="fixed">Fixed posting times</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Timezone</Label>
-                    <TimezoneSelect value={timezone} onValueChange={setTimezone} />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Posts per day (max 5)</Label>
-                  <PostsPerDayPicker
-                    value={cappedPostsPerDay}
-                    onValueChange={(v) => {
-                      const n = Math.min(5, Math.max(1, Number.parseInt(v, 10) || 1))
-                      setPostsPerDay(n)
-                      setPostingTimes((prev) => ensurePostingTimesLength(prev, n))
-                    }}
-                  />
-                </div>
-
-                {scheduleType === 'dailyrandom' && (
-                  <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-primary">
-                    <AlertCircle className="mr-1 inline h-3 w-3" />
-                    Balanced random times are generated per day with at least a 5-hour gap between slots.
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label>First comment (optional, all posts)</Label>
-                  <Textarea
-                    placeholder="Posted as the first comment on each publish"
-                    value={firstComment}
-                    onChange={(e) => setFirstComment(e.target.value)}
-                    className="min-h-[72px] resize-none text-sm"
-                  />
-                </div>
-
-                {scheduleType === 'fixed' && (
-                  <div className="space-y-2">
-                    <Label>Fixed posting times</Label>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {ensurePostingTimesLength(postingTimes, cappedPostsPerDay).map((time, index) => (
-                        <TimeSlotInput
-                          key={`bulk-time-${index}`}
-                          idPrefix={`bulk-inapp-time-${index}`}
-                          value={time || ''}
-                          onChange={(value) => {
-                            setPostingTimes((prev) => {
-                              const next = [...ensurePostingTimesLength(prev, cappedPostsPerDay)]
-                              next[index] = value
-                              return next
-                            })
-                          }}
-                          nextFieldId={
-                            index < cappedPostsPerDay - 1
-                              ? `bulk-inapp-time-${index + 1}-field`
-                              : undefined
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {step === 3 && (
-              <div className="space-y-4">
-                {previewError && (
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                    {previewError}
-                  </div>
-                )}
-                <p className="text-sm text-muted-foreground">
-                  {items.length} posts over approximately {daysSpan} day{daysSpan === 1 ? '' : 's'} at{' '}
-                  {cappedPostsPerDay} post{cappedPostsPerDay === 1 ? '' : 's'} per day.
-                </p>
-                <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
-                  {items.map((row, index) => {
-                    const iso = previewTimestamps[index]
-                    const localLabel = iso
-                      ? formatInTimeZone(iso, timezone, 'MMM d, yyyy h:mm a zzz')
-                      : '—'
-                    return (
-                      <div
-                        key={row.id}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-border/50 px-3 py-2 text-sm"
-                      >
-                        <span className="truncate text-muted-foreground">
-                          #{index + 1}{' '}
-                          {row.caption.trim().slice(0, 40) || row.fileName || row.mediaType}
-                        </span>
-                        <span className="shrink-0 font-medium">{localLabel}</span>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-semibold text-muted-foreground">Caption</Label>
+                            <Textarea
+                              placeholder={row.mediaType === 'text' ? 'Post text (required)' : 'Caption (optional)'}
+                              value={row.caption}
+                              onChange={(e) => updateCaption(row.id, e.target.value)}
+                              className="min-h-[70px] resize-none text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-semibold text-muted-foreground">First Comment (optional)</Label>
+                            <Textarea
+                              placeholder="Add first comment for this post..."
+                              value={row.firstComment || ''}
+                              onChange={(e) => updateFirstComment(row.id, e.target.value)}
+                              className="min-h-[70px] resize-none text-sm"
+                            />
+                          </div>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-                {isPending && (
-                  <div className="space-y-2">
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full bg-primary transition-all duration-300"
-                        style={{ width: `${submitProgress}%` }}
-                      />
-                    </div>
-                    <p className="text-center text-xs text-muted-foreground">Queueing posts…</p>
-                  </div>
-                )}
+
+                <div className="rounded-2xl border border-border/50 bg-muted/20 p-4 space-y-3">
+                  <Label htmlFor="globalFirstComment" className="text-xs font-semibold">
+                    Global First Comment (applied if post-specific comment is blank)
+                  </Label>
+                  <Textarea
+                    id="globalFirstComment"
+                    placeholder="Enter comment text..."
+                    value={globalFirstComment}
+                    onChange={(e) => setGlobalFirstComment(e.target.value)}
+                    className="min-h-[72px] resize-none text-sm bg-background/50"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isPending && (
+              <div className="space-y-2">
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full bg-primary transition-all duration-300 animate-pulse"
+                    style={{ width: `${submitProgress}%` }}
+                  />
+                </div>
+                <p className="text-center text-xs text-muted-foreground">Queueing posts…</p>
               </div>
             )}
           </div>
 
-          <div className="flex shrink-0 justify-between gap-3 border-t border-border/50 px-6 py-4">
+          <div className="flex shrink-0 justify-end gap-3 border-t border-border/50 px-6 py-4 bg-muted/10">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
+              Cancel
+            </Button>
             <Button
               type="button"
-              variant="ghost"
-              disabled={step === 1 || isPending}
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={!isFormValid || isPending || items.some((r) => r.uploading)}
+              loading={isPending}
+              onClick={handleSubmit}
+              className="gap-2"
             >
-              <ChevronLeft className="mr-1 h-4 w-4" />
-              Back
+              <CalendarPlus className="h-4 w-4" />
+              Queue {items.length} Posts
             </Button>
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
-                Cancel
-              </Button>
-              {step < totalSteps ? (
-                <Button
-                  type="button"
-                  disabled={
-                    (step === 1 && !contentValid) ||
-                    (step === 2 && !scheduleValid) ||
-                    items.some((r) => r.uploading)
-                  }
-                  onClick={() => setStep((s) => Math.min(totalSteps, s + 1))}
-                >
-                  Next
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  disabled={!previewValid || isPending}
-                  loading={isPending}
-                  onClick={handleSubmit}
-                  className="gap-2"
-                >
-                  <CalendarPlus className="h-4 w-4" />
-                  Queue {items.length} posts
-                </Button>
-              )}
-            </div>
           </div>
         </motion.div>
       </DialogContent>

@@ -9,7 +9,7 @@ export const bulkInappScheduleSchema = z
   .object({
     savedPageId: z.string().uuid(),
     items: z.array(bulkScheduleItemSchema).min(1).max(BULK_SCHEDULE_MAX_ITEMS),
-    schedule: bulkScheduleConfigSchema,
+    schedule: bulkScheduleConfigSchema.optional(),
   })
   .superRefine((data, ctx) => {
     data.items.forEach((item, index) => {

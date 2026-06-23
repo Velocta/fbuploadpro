@@ -817,6 +817,9 @@ export type Database = {
           followers_gained: number | null
           changed_followers: number | null
           is_followers_updated: boolean
+          posts_per_day: number
+          posting_times: string[]
+          schedule_timezone: string
         }
         Insert: {
           id?: string
@@ -832,6 +835,9 @@ export type Database = {
           followers_count?: number | null
           followers_gained?: number | null
           is_followers_updated?: boolean
+          posts_per_day?: number
+          posting_times?: string[]
+          schedule_timezone?: string
         }
         Update: {
           id?: string
@@ -847,6 +853,9 @@ export type Database = {
           followers_count?: number | null
           followers_gained?: number | null
           is_followers_updated?: boolean
+          posts_per_day?: number
+          posting_times?: string[]
+          schedule_timezone?: string
         }
         Relationships: [
           {
@@ -1107,14 +1116,10 @@ export type Database = {
           id: string
           agency_id: string
           page_id: string
-          fb_page_id: string
-          fb_page_access_token: string
           media_type: string
           media_object_key: string | null
           caption: string | null
           first_comment: string | null
-          scheduled_at: string
-          timezone: string
           status: string
           retry_count: number
           graph_post_id: string | null
@@ -1122,6 +1127,7 @@ export type Database = {
           published_at: string | null
           error_message: string | null
           bulk_batch_id: string | null
+          queue_position: number | null
           created_at: string | null
           updated_at: string | null
         }
@@ -1129,14 +1135,10 @@ export type Database = {
           id?: string
           agency_id: string
           page_id: string
-          fb_page_id: string
-          fb_page_access_token: string
           media_type: string
           media_object_key?: string | null
           caption?: string | null
           first_comment?: string | null
-          scheduled_at: string
-          timezone?: string
           status?: string
           retry_count?: number
           graph_post_id?: string | null
@@ -1144,6 +1146,7 @@ export type Database = {
           published_at?: string | null
           error_message?: string | null
           bulk_batch_id?: string | null
+          queue_position?: number | null
           created_at?: string | null
           updated_at?: string | null
         }
@@ -1151,14 +1154,10 @@ export type Database = {
           id?: string
           agency_id?: string
           page_id?: string
-          fb_page_id?: string
-          fb_page_access_token?: string
           media_type?: string
           media_object_key?: string | null
           caption?: string | null
           first_comment?: string | null
-          scheduled_at?: string
-          timezone?: string
           status?: string
           retry_count?: number
           graph_post_id?: string | null
@@ -1166,10 +1165,87 @@ export type Database = {
           published_at?: string | null
           error_message?: string | null
           bulk_batch_id?: string | null
+          queue_position?: number | null
           created_at?: string | null
           updated_at?: string | null
         }
         Relationships: []
+      }
+      facebook_inapp_schedule_posting_jobs: {
+        Row: {
+          job_id: string
+          post_id: string
+          page_id: string
+          fb_page_id: string | null
+          fb_page_access_token: string | null
+          media_type: string | null
+          media_object_key: string | null
+          caption: string | null
+          first_comment: string | null
+          status: string
+          retry_count: number
+          transient_retry_count: number
+          last_error_code: string | null
+          last_error_message: string | null
+          schedule_slot_at: string | null
+          publish_started_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          job_id?: string
+          post_id: string
+          page_id: string
+          fb_page_id?: string | null
+          fb_page_access_token?: string | null
+          media_type?: string | null
+          media_object_key?: string | null
+          caption?: string | null
+          first_comment?: string | null
+          status?: string
+          retry_count?: number
+          transient_retry_count?: number
+          last_error_code?: string | null
+          last_error_message?: string | null
+          schedule_slot_at?: string | null
+          publish_started_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          job_id?: string
+          post_id?: string
+          page_id?: string
+          fb_page_id?: string | null
+          fb_page_access_token?: string | null
+          media_type?: string | null
+          media_object_key?: string | null
+          caption?: string | null
+          first_comment?: string | null
+          status?: string
+          retry_count?: number
+          transient_retry_count?: number
+          last_error_code?: string | null
+          last_error_message?: string | null
+          schedule_slot_at?: string | null
+          publish_started_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "facebook_inapp_schedule_posting_jobs_post_id_fkey"
+            columns: ["post_id"]
+            referencedRelation: "facebook_inapp_schedule_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "facebook_inapp_schedule_posting_jobs_page_id_fkey"
+            columns: ["page_id"]
+            referencedRelation: "facebook_inapp_schedule_pages"
+            referencedColumns: ["id"]
+          }
+        ]
       }
     }
     Views: {
@@ -1184,9 +1260,35 @@ export type Database = {
         Args: { p_since: string }
         Returns: number
       }
-      claim_due_facebook_inapp_schedule_posts: {
-        Args: { p_limit?: number }
-        Returns: Database['public']['Tables']['facebook_inapp_schedule_posts']['Row'][]
+      create_due_inapp_posting_jobs: {
+        Args: { p_mode?: string }
+        Returns: {
+          job_id: string
+          post_id: string
+          page_id: string
+          fb_page_id: string
+          fb_page_access_token: string
+          media_type: string
+          media_object_key: string
+          caption: string
+          first_comment: string
+          schedule_slot_at: string
+        }[]
+      }
+      claim_due_inapp_posting_jobs: {
+        Args: { p_limit: number }
+        Returns: {
+          job_id: string
+          post_id: string
+          page_id: string
+          fb_page_id: string
+          fb_page_access_token: string
+          media_type: string
+          media_object_key: string
+          caption: string
+          first_comment: string
+          schedule_slot_at: string
+        }[]
       }
       get_facebook_rss_autoposter_pages_due_posting: {
         Args: Record<string, never>

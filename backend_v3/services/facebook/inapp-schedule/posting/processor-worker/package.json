@@ -1,8 +1,0 @@
-{
-  "name": "fbuploadpro-fb-inapp-schedule-processor",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.89.0"
-  }
-}

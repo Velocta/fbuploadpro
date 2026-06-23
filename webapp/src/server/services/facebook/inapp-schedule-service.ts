@@ -2,37 +2,97 @@ import 'server-only'
 
 import { createClient } from '@/lib/supabase/server'
 import { createPresignedDownloadUrl } from '@/lib/r2/user-media'
+import { formatInTimeZone, fromZonedTime, toZonedTime } from 'date-fns-tz'
+import { format, parse, addDays, setHours, setMinutes, setSeconds, setMilliseconds, compareAsc } from 'date-fns'
 import {
-  generateBulkScheduleTimestamps,
-  type BulkScheduleConfig,
-} from '@/lib/direct-schedule-bulk'
-import { requireAgencyHasTokens } from '@/server/services/tokens/token-cost-service'
+  getTokenCostForFeature,
+  deductAgencyTokens,
+  refundAgencyTokens,
+  requireAgencyHasTokens,
+} from '@/server/services/tokens/token-cost-service'
 
-const MIN_SCHEDULE_MS = 10 * 60 * 1000
-const MAX_SCHEDULE_MS = 180 * 24 * 60 * 60 * 1000
 const EDIT_LOCK_MS = 5 * 60 * 1000
-
-function assertScheduleWindow(scheduledAt: Date) {
-  const delta = scheduledAt.getTime() - Date.now()
-  if (delta < MIN_SCHEDULE_MS) {
-    throw new Error('Scheduled time must be at least 10 minutes in the future')
-  }
-  if (delta > MAX_SCHEDULE_MS) {
-    throw new Error('Scheduled time cannot be more than 6 months in the future')
-  }
-}
-
-type SavedInappPage = {
-  id: string
-  fb_page_id: string
-  fb_page_access_token: string
-}
 
 type InappQueueItem = {
   mediaType: 'text' | 'image' | 'video'
   caption?: string
   firstComment?: string
   mediaObjectKey?: string
+}
+
+export function projectScheduledTimes(
+  posts: any[],
+  postingTimes: string[],
+  timezone: string,
+  startOffset: number = 0
+) {
+  if (!posts || posts.length === 0) return posts
+  const times = Array.isArray(postingTimes) ? postingTimes : ['09:00 AM', '03:00 PM']
+  const tz = timezone || 'UTC'
+
+  const parsedSlots = times
+    .map((timeStr) => {
+      try {
+        const match = timeStr.trim().match(/^(\d+):(\d+)\s*(AM|PM)?$/i)
+        if (!match || !match[1] || !match[2]) return null
+        let hour = parseInt(match[1], 10)
+        const minute = parseInt(match[2], 10)
+        const ampm = match[3]
+        if (ampm) {
+          if (ampm.toUpperCase() === 'PM' && hour < 12) hour += 12
+          if (ampm.toUpperCase() === 'AM' && hour === 12) hour = 0
+        }
+        return { hour, minute }
+      } catch (err) {
+        return null
+      }
+    })
+    .filter(Boolean) as { hour: number; minute: number }[]
+
+  if (parsedSlots.length === 0) {
+    parsedSlots.push({ hour: 9, minute: 0 })
+  }
+
+  parsedSlots.sort((a, b) => (a.hour * 60 + a.minute) - (b.hour * 60 + b.minute))
+
+  const nowUtc = new Date()
+  const zonedStart = toZonedTime(nowUtc, tz)
+
+  const slots: Date[] = []
+  let dayOffset = 0
+  const maxSlotsNeeded = startOffset + posts.length + 10
+
+  while (slots.length < maxSlotsNeeded) {
+    const currentDay = addDays(zonedStart, dayOffset)
+    for (const parsed of parsedSlots) {
+      let candidate = setHours(currentDay, parsed.hour)
+      candidate = setMinutes(candidate, parsed.minute)
+      candidate = setSeconds(candidate, 0)
+      candidate = setMilliseconds(candidate, 0)
+      const utcDate = fromZonedTime(candidate, tz)
+      
+      // Slot must be at least 10 minutes in the future to avoid scheduling in the past
+      if (utcDate.getTime() - nowUtc.getTime() >= 10 * 60 * 1000) {
+        slots.push(utcDate)
+      }
+    }
+    dayOffset++
+    if (dayOffset > maxSlotsNeeded * 2 + 10) break
+  }
+
+  slots.sort(compareAsc)
+
+  return posts.map((post, index) => {
+    if (post.status === 'published') {
+      return { ...post, scheduled_at: post.published_at || post.updated_at }
+    }
+    if (post.status === 'failed') {
+      return { ...post, scheduled_at: post.updated_at }
+    }
+    const slotIdx = startOffset + index
+    const projectedDate = slots[slotIdx] || nowUtc
+    return { ...post, scheduled_at: projectedDate.toISOString() }
+  })
 }
 
 export async function listInappSchedulePages(agencyId: string) {
@@ -56,6 +116,9 @@ export async function upsertInappSchedulePage(
     fbPageImage?: string
     fbPageAccessToken: string
     followersCount?: number
+    postsPerDay?: number
+    postingTimes?: string[]
+    scheduleTimezone?: string
   }
 ) {
   const supabase = await createClient()
@@ -71,6 +134,9 @@ export async function upsertInappSchedulePage(
         fb_page_access_token: input.fbPageAccessToken,
         followers_count: input.followersCount ?? 0,
         followers_gained: input.followersCount ?? 0,
+        posts_per_day: input.postsPerDay ?? 2,
+        posting_times: input.postingTimes ?? ['09:00 AM', '03:00 PM'],
+        schedule_timezone: input.scheduleTimezone ?? 'UTC',
       },
       { onConflict: 'agency_id,fb_page_id' }
     )
@@ -83,6 +149,25 @@ export async function upsertInappSchedulePage(
 
 export async function deleteInappSchedulePage(agencyId: string, pageRowId: string) {
   const supabase = await createClient()
+
+  // Find all pending posts to refund tokens before deleting page
+  const { data: posts } = await supabase
+    .from('facebook_inapp_schedule_posts')
+    .select('id, tokens_charged')
+    .eq('page_id', pageRowId)
+    .eq('agency_id', agencyId)
+    .eq('status', 'pending')
+
+  for (const post of posts || []) {
+    if (post.tokens_charged > 0) {
+      try {
+        await refundAgencyTokens(agencyId, post.tokens_charged)
+      } catch (err) {
+        console.error('Failed to refund token during page deletion:', post.id, err)
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('facebook_inapp_schedule_pages')
     .delete()
@@ -90,51 +175,6 @@ export async function deleteInappSchedulePage(agencyId: string, pageRowId: strin
     .eq('agency_id', agencyId)
 
   if (error) throw new Error(error.message)
-}
-
-function resolveFirstComment(
-  item: InappQueueItem,
-  scheduleFirstComment?: string
-): string | null {
-  const value = item.firstComment?.trim() || scheduleFirstComment?.trim()
-  return value || null
-}
-
-async function queueOneInappPost(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  agencyId: string,
-  savedPage: SavedInappPage,
-  input: InappQueueItem & { scheduledAt: string; timezone: string },
-  options?: { bulkBatchId?: string; scheduleFirstComment?: string }
-) {
-  const scheduledAt = new Date(input.scheduledAt)
-  assertScheduleWindow(scheduledAt)
-
-  if (input.mediaType !== 'text' && !input.mediaObjectKey) {
-    throw new Error('Media file is required for image and video posts')
-  }
-
-  const { data, error } = await supabase
-    .from('facebook_inapp_schedule_posts')
-    .insert({
-      agency_id: agencyId,
-      page_id: savedPage.id,
-      fb_page_id: savedPage.fb_page_id,
-      fb_page_access_token: savedPage.fb_page_access_token,
-      media_type: input.mediaType,
-      caption: input.caption ?? null,
-      first_comment: resolveFirstComment(input, options?.scheduleFirstComment),
-      media_object_key: input.mediaObjectKey ?? null,
-      scheduled_at: scheduledAt.toISOString(),
-      timezone: input.timezone,
-      status: 'pending',
-      bulk_batch_id: options?.bulkBatchId ?? null,
-    })
-    .select('*')
-    .single()
-
-  if (error) throw new Error(error.message)
-  return data
 }
 
 export async function createInappSchedulePost(
@@ -145,8 +185,6 @@ export async function createInappSchedulePost(
     caption?: string
     firstComment?: string
     mediaObjectKey?: string
-    scheduledAt: string
-    timezone: string
   }
 ) {
   await requireAgencyHasTokens(agencyId)
@@ -154,7 +192,7 @@ export async function createInappSchedulePost(
   const supabase = await createClient()
   const { data: savedPage, error: pageError } = await supabase
     .from('facebook_inapp_schedule_pages')
-    .select('id, fb_page_id, fb_page_access_token')
+    .select('id, fb_page_id, fb_page_access_token, schedule_timezone')
     .eq('id', input.savedPageId)
     .eq('agency_id', agencyId)
     .single()
@@ -163,7 +201,50 @@ export async function createInappSchedulePost(
     throw new Error('Saved page not found')
   }
 
-  return queueOneInappPost(supabase, agencyId, savedPage, input)
+  if (input.mediaType !== 'text' && !input.mediaObjectKey) {
+    throw new Error('Media file is required for image and video posts')
+  }
+
+  const tokenCost = await getTokenCostForFeature({
+    feature: 'inapp_schedule',
+    platform: 'facebook',
+    mediaType: input.mediaType,
+  })
+  await deductAgencyTokens(agencyId, tokenCost)
+
+  const { data: currentMax } = await supabase
+    .from('facebook_inapp_schedule_posts')
+    .select('queue_position')
+    .eq('page_id', savedPage.id)
+    .eq('status', 'pending')
+    .order('queue_position', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const nextPosition = currentMax && currentMax.queue_position !== null ? currentMax.queue_position + 1 : 0
+
+  const { data, error } = await supabase
+    .from('facebook_inapp_schedule_posts')
+    .insert({
+      agency_id: agencyId,
+      page_id: savedPage.id,
+      media_type: input.mediaType,
+      caption: input.caption ?? null,
+      first_comment: input.firstComment ?? null,
+      media_object_key: input.mediaObjectKey ?? null,
+      status: 'pending',
+      tokens_charged: tokenCost,
+      queue_position: nextPosition,
+    })
+    .select('*')
+    .single()
+
+  if (error) {
+    await refundAgencyTokens(agencyId, tokenCost)
+    throw new Error(error.message)
+  }
+
+  return data
 }
 
 export async function bulkCreateInappSchedulePosts(
@@ -171,7 +252,6 @@ export async function bulkCreateInappSchedulePosts(
   input: {
     savedPageId: string
     items: InappQueueItem[]
-    schedule: BulkScheduleConfig & { firstComment?: string }
   }
 ) {
   await requireAgencyHasTokens(agencyId)
@@ -179,7 +259,7 @@ export async function bulkCreateInappSchedulePosts(
   const supabase = await createClient()
   const { data: savedPage, error: pageError } = await supabase
     .from('facebook_inapp_schedule_pages')
-    .select('id, fb_page_id, fb_page_access_token')
+    .select('id, fb_page_id, fb_page_access_token, schedule_timezone')
     .eq('id', input.savedPageId)
     .eq('agency_id', agencyId)
     .single()
@@ -188,23 +268,43 @@ export async function bulkCreateInappSchedulePosts(
     throw new Error('Saved page not found')
   }
 
-  const timestamps = generateBulkScheduleTimestamps(input.items.length, input.schedule)
+  let totalCost = 0
+  const costs: number[] = []
+  for (const item of input.items) {
+    const cost = await getTokenCostForFeature({
+      feature: 'inapp_schedule',
+      platform: 'facebook',
+      mediaType: item.mediaType,
+    })
+    costs.push(cost)
+    totalCost += cost
+  }
+
+  await deductAgencyTokens(agencyId, totalCost)
+
+  const { data: currentMax } = await supabase
+    .from('facebook_inapp_schedule_posts')
+    .select('queue_position')
+    .eq('page_id', savedPage.id)
+    .eq('status', 'pending')
+    .order('queue_position', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  let nextPosition = currentMax && currentMax.queue_position !== null ? currentMax.queue_position + 1 : 0
   const bulkBatchId = crypto.randomUUID()
-  const scheduleFirstComment = input.schedule.firstComment
 
   const rows = input.items.map((item, index) => ({
     agency_id: agencyId,
     page_id: savedPage.id,
-    fb_page_id: savedPage.fb_page_id,
-    fb_page_access_token: savedPage.fb_page_access_token,
     media_type: item.mediaType,
     caption: item.caption ?? null,
-    first_comment: resolveFirstComment(item, scheduleFirstComment),
+    first_comment: item.firstComment ?? null,
     media_object_key: item.mediaObjectKey ?? null,
-    scheduled_at: timestamps[index]!,
-    timezone: input.schedule.timezone,
     status: 'pending' as const,
     bulk_batch_id: bulkBatchId,
+    tokens_charged: costs[index]!,
+    queue_position: nextPosition++,
   }))
 
   const { data, error } = await supabase
@@ -212,7 +312,10 @@ export async function bulkCreateInappSchedulePosts(
     .insert(rows)
     .select('*')
 
-  if (error) throw new Error(error.message)
+  if (error) {
+    await refundAgencyTokens(agencyId, totalCost)
+    throw new Error(error.message)
+  }
 
   return {
     batchId: bulkBatchId,
@@ -233,21 +336,48 @@ export async function listInappSchedulePosts(
 ) {
   const limit = options?.limit ?? 50
   const offset = options?.offset ?? 0
+  const status = options?.status ?? 'all'
 
   const supabase = await createClient()
+
+  let pagePostingTimes = ['09:00 AM', '03:00 PM']
+  let pageTimezone = 'UTC'
+
+  if (options?.pageId) {
+    const { data: pageData } = await supabase
+      .from('facebook_inapp_schedule_pages')
+      .select('posting_times, schedule_timezone')
+      .eq('id', options.pageId)
+      .maybeSingle()
+    if (pageData) {
+      if (Array.isArray(pageData.posting_times)) {
+        pagePostingTimes = pageData.posting_times
+      }
+      if (pageData.schedule_timezone) {
+        pageTimezone = pageData.schedule_timezone
+      }
+    }
+  }
+
   let query = supabase
     .from('facebook_inapp_schedule_posts')
-    .select('*, facebook_inapp_schedule_pages(fb_page_name)', { count: 'exact' })
+    .select('*, facebook_inapp_schedule_pages(fb_page_name, posting_times, schedule_timezone)', { count: 'exact' })
     .eq('agency_id', agencyId)
-    .order('scheduled_at', { ascending: false })
-    .range(offset, offset + limit - 1)
+
+  if (status === 'pending') {
+    query = query.order('queue_position', { ascending: true, nullsFirst: false })
+  } else {
+    query = query.order('updated_at', { ascending: false })
+  }
+
+  query = query.range(offset, offset + limit - 1)
 
   if (options?.pageId) {
     query = query.eq('page_id', options.pageId)
   }
 
-  if (options?.status && options.status !== 'all') {
-    query = query.eq('status', options.status)
+  if (status !== 'all') {
+    query = query.eq('status', status)
   }
 
   if (options?.bulkBatchId) {
@@ -258,7 +388,7 @@ export async function listInappSchedulePosts(
 
   if (error) throw new Error(error.message)
 
-  const posts = await Promise.all(
+  const rawPosts = await Promise.all(
     (data ?? []).map(async (post) => {
       let media_url: string | null = null
       if (post.media_object_key) {
@@ -272,6 +402,13 @@ export async function listInappSchedulePosts(
     })
   )
 
+  const posts = projectScheduledTimes(
+    rawPosts,
+    pagePostingTimes,
+    pageTimezone,
+    offset
+  )
+
   return { posts, totalCount: count ?? 0 }
 }
 
@@ -279,7 +416,7 @@ export async function cancelInappSchedulePost(agencyId: string, postId: string) 
   const supabase = await createClient()
   const { data: post, error: readError } = await supabase
     .from('facebook_inapp_schedule_posts')
-    .select('id, status')
+    .select('id, page_id, status, tokens_charged')
     .eq('id', postId)
     .eq('agency_id', agencyId)
     .single()
@@ -299,12 +436,20 @@ export async function cancelInappSchedulePost(agencyId: string, postId: string) 
     .eq('agency_id', agencyId)
 
   if (error) throw new Error(error.message)
+
+  if (post.tokens_charged > 0) {
+    try {
+      await refundAgencyTokens(agencyId, post.tokens_charged)
+    } catch (err) {
+      console.error('Failed to refund tokens on cancellation:', err)
+    }
+  }
 }
 
-export async function updateInappSchedulePost(
+export async function updateInappPostMetadata(
   agencyId: string,
   postId: string,
-  input: { caption?: string; scheduledAt?: string; timezone?: string }
+  input: { caption?: string; firstComment?: string }
 ) {
   const supabase = await createClient()
   const { data: post, error: readError } = await supabase
@@ -322,22 +467,11 @@ export async function updateInappSchedulePost(
     throw new Error('Only pending posts can be edited')
   }
 
-  const scheduledAt = input.scheduledAt ? new Date(input.scheduledAt) : new Date(post.scheduled_at)
-  const msUntil = new Date(post.scheduled_at).getTime() - Date.now()
-  if (msUntil < EDIT_LOCK_MS) {
-    throw new Error('Cannot edit within 5 minutes of scheduled time')
-  }
-
-  if (input.scheduledAt) {
-    assertScheduleWindow(scheduledAt)
-  }
-
   const { data, error } = await supabase
     .from('facebook_inapp_schedule_posts')
     .update({
-      caption: input.caption ?? post.caption,
-      scheduled_at: input.scheduledAt ? scheduledAt.toISOString() : post.scheduled_at,
-      timezone: input.timezone ?? post.timezone,
+      caption: input.caption !== undefined ? input.caption : post.caption,
+      first_comment: input.firstComment !== undefined ? input.firstComment : post.first_comment,
       updated_at: new Date().toISOString(),
     })
     .eq('id', postId)
@@ -347,6 +481,31 @@ export async function updateInappSchedulePost(
 
   if (error) throw new Error(error.message)
   return data
+}
+
+export async function reorderInappScheduleQueue(
+  agencyId: string,
+  pageId: string,
+  orderedPostIds: string[]
+) {
+  const supabase = await createClient()
+
+  for (let idx = 0; idx < orderedPostIds.length; idx++) {
+    const postId = orderedPostIds[idx]!
+    const { error } = await supabase
+      .from('facebook_inapp_schedule_posts')
+      .update({
+        queue_position: idx,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', postId)
+      .eq('page_id', pageId)
+      .eq('agency_id', agencyId)
+
+    if (error) {
+      console.error('Failed to update queue position for post:', postId, error.message)
+    }
+  }
 }
 
 export async function getAgencyInappScheduleStats(agencyId: string) {

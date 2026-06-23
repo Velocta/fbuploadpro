@@ -45,8 +45,6 @@ export async function POST(request: Request) {
       caption: body.caption,
       firstComment: body.firstComment,
       mediaObjectKey: body.mediaObjectKey,
-      scheduledAt: String(body.scheduledAt || ''),
-      timezone: String(body.timezone || 'UTC'),
     })
     return NextResponse.json({ post })
   } catch (error) {

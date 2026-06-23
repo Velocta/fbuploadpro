@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireApiRole } from '@/server/auth/guards'
-import { updateInappSchedulePost } from '@/server/services/facebook/inapp-schedule-service'
+import { updateInappPostMetadata } from '@/server/services/facebook/inapp-schedule-service'
 
 export const runtime = 'nodejs'
 
@@ -11,10 +11,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const { id } = await context.params
   try {
     const body = await request.json()
-    const post = await updateInappSchedulePost(auth.user.id, id, {
+    const post = await updateInappPostMetadata(auth.user.id, id, {
       caption: body.caption,
-      scheduledAt: body.scheduledAt,
-      timezone: body.timezone,
+      firstComment: body.firstComment,
     })
     return NextResponse.json({ post })
   } catch (error) {

@@ -7,18 +7,20 @@ import {
   BarChart3,
   Clock,
   History,
+  Settings,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
 
-type TabId = 'overview' | 'insights' | 'queue' | 'history'
+type TabId = 'overview' | 'insights' | 'queue' | 'history' | 'settings'
 
 const TABS: { id: TabId; label: string; icon: typeof Activity }[] = [
   { id: 'overview', label: 'Overview', icon: Activity },
   { id: 'insights', label: 'Insights', icon: BarChart3 },
   { id: 'queue', label: 'Queue', icon: Clock },
   { id: 'history', label: 'History', icon: History },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
 export function InappPageDetailTabs({
@@ -26,11 +28,13 @@ export function InappPageDetailTabs({
   insights,
   queue,
   history,
+  settings,
 }: {
   overview: ReactNode
   insights: ReactNode
   queue: ReactNode
   history: ReactNode
+  settings: ReactNode
 }) {
   const [activeTab, setActiveTab] = useState<TabId>('queue')
 
@@ -39,6 +43,7 @@ export function InappPageDetailTabs({
     insights,
     queue,
     history,
+    settings,
   }
 
   return (

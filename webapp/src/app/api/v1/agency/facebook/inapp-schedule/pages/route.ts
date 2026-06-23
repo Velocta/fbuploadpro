@@ -34,6 +34,9 @@ export async function POST(request: Request) {
       fbPageImage: body.fbPageImage,
       fbPageAccessToken: String(body.fbPageAccessToken || ''),
       followersCount: body.followersCount !== undefined ? Number(body.followersCount) : undefined,
+      postsPerDay: body.postsPerDay !== undefined ? Number(body.postsPerDay) : undefined,
+      postingTimes: Array.isArray(body.postingTimes) ? body.postingTimes : undefined,
+      scheduleTimezone: body.scheduleTimezone ? String(body.scheduleTimezone) : undefined,
     })
     return NextResponse.json({ page })
   } catch (error) {

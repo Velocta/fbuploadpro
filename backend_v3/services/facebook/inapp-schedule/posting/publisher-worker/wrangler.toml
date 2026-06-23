@@ -1,0 +1,14 @@
+# In-app schedule posting publisher
+name = "fbuploadpro-fb-inapp-schedule-publisher"
+main = "src/index.js"
+compatibility_date = "2024-02-05"
+
+[observability]
+enabled = true
+
+[vars]
+R2_ACCOUNT_ID = "50f3ec3bd038829035ed1f6b9694e943"
+
+[[r2_buckets]]
+binding = "USER_MEDIA"
+bucket_name = "fbuploadpro-user-media"

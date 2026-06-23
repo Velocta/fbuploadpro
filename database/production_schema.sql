@@ -1389,6 +1389,9 @@ create table if not exists public.facebook_inapp_schedule_pages (
   followers_gained bigint not null default 0,
   is_followers_updated boolean not null default false,
   changed_followers bigint generated always as (coalesce(followers_gained, 0) - coalesce(followers_count, 0)) stored,
+  posts_per_day integer not null default 2,
+  posting_times text[] not null default array['09:00 AM', '03:00 PM'],
+  schedule_timezone text not null default 'UTC',
   constraint unique_fb_is_page_per_agency unique (agency_id, fb_page_id)
 );
 
@@ -1464,6 +1467,7 @@ create table if not exists public.facebook_inapp_schedule_posts (
   published_at timestamptz,
   error_message text,
   bulk_batch_id uuid,
+  queue_position integer,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

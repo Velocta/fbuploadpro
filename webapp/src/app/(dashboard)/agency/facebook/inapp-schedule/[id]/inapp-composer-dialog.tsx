@@ -27,8 +27,6 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
-import { TimezoneSelect } from '@/components/dashboard/timezone-select'
-import { format, addMinutes } from 'date-fns'
 
 type PostType = 'text' | 'image' | 'video'
 
@@ -45,11 +43,6 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
   const [caption, setCaption] = useState('')
   const [mediaFile, setMediaFile] = useState<File | null>(null)
   
-  // Date/Time
-  const [scheduleDate, setScheduleDate] = useState('')
-  const [scheduleTime, setScheduleTime] = useState('')
-  const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
-
   // Upload state
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -58,18 +51,6 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
   
   const fileInputRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
-
-  useEffect(() => {
-    if (open) {
-      // Default to 1 hour from now
-      const defaultTime = addMinutes(new Date(), 60)
-      const t = setTimeout(() => {
-        setScheduleDate(format(defaultTime, 'yyyy-MM-dd'))
-        setScheduleTime(format(defaultTime, 'HH:mm'))
-      }, 0)
-      return () => clearTimeout(t)
-    }
-  }, [open])
 
   function resetState() {
     setPostType('text')
@@ -153,11 +134,6 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
       return
     }
 
-    if (!scheduleDate || !scheduleTime) {
-      toast.error('Missing schedule time', { description: 'Please select a date and time.' })
-      return
-    }
-
     startTransition(async () => {
       try {
         const res = await fetch('/api/v1/agency/facebook/inapp-schedule', {
@@ -168,8 +144,6 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
             mediaType: postType,
             caption,
             mediaObjectKey: uploadedKey,
-            scheduledAt: `${scheduleDate}T${scheduleTime}:00`,
-            timezone,
           }),
         })
 
@@ -191,7 +165,6 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
 
   const isFormValid = () => {
     if (postType !== 'text' && !uploadedKey) return false
-    if (!scheduleDate || !scheduleTime) return false
     if (postType === 'text' && !caption.trim()) return false
     return true
   }
@@ -355,31 +328,7 @@ export function InappComposerDialog({ pageId, children }: InappComposerDialogPro
                 )}
               </AnimatePresence>
 
-              {/* Schedule Details */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Date</Label>
-                  <input
-                    type="date"
-                    value={scheduleDate}
-                    onChange={(e) => setScheduleDate(e.target.value)}
-                    className="flex h-11 w-full rounded-xl border border-border/50 bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Time</Label>
-                  <input
-                    type="time"
-                    value={scheduleTime}
-                    onChange={(e) => setScheduleTime(e.target.value)}
-                    className="flex h-11 w-full rounded-xl border border-border/50 bg-background/50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                </div>
-                <div className="col-span-full space-y-2">
-                  <Label>Timezone</Label>
-                  <TimezoneSelect value={timezone} onValueChange={setTimezone} />
-                </div>
-              </div>
+
 
             </div>
 

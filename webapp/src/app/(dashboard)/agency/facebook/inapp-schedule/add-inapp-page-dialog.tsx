@@ -18,6 +18,9 @@ import { Plus, Facebook, Search, Loader2, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { TimezoneSelect } from '@/components/dashboard/timezone-select'
+import { PostsPerDayPicker } from '@/components/dashboard/posts-per-day-picker'
+import { TimeSlotInput } from '@/components/dashboard/time-slot-input'
 
 type FacebookAccount = { id: string; fb_user_id: string; fb_user_name: string; fb_user_image: string | null }
 type FacebookGraphPage = { id: string; name: string; access_token: string; picture?: string; followers_count?: number }
@@ -55,7 +58,7 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
   const [error, setError] = useState<string | null>(null)
 
   if (!agencyId) {
-    // No-op to satisfy unused variable check without breaking hooks order
+    // No-op
   }
   const [fbAccounts, setFbAccounts] = useState<FacebookAccount[]>([])
   const [accountSearch, setAccountSearch] = useState('')
@@ -68,6 +71,11 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
   const [isLoadingPages, setIsLoadingPages] = useState(false)
   
   const [selectedPage, setSelectedPage] = useState<FacebookGraphPage | null>(null)
+
+  // Scheduling defaults inside Add Page flow
+  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+  const [postsPerDay, setPostsPerDay] = useState('2')
+  const [postingTimes, setPostingTimes] = useState<string[]>(['09:00 AM', '03:00 PM'])
 
   const router = useRouter()
 
@@ -126,12 +134,20 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
     setSelectedAccountId('')
     setSelectedPage(null)
     setFbPages([])
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+    setPostsPerDay('2')
+    setPostingTimes(['09:00 AM', '03:00 PM'])
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedPage || !selectedAccountId) {
       setError('Please select a Facebook page.')
+      return
+    }
+
+    if (postingTimes.some(t => !t)) {
+      setError('Please configure all posting slot times.')
       return
     }
 
@@ -148,6 +164,9 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
             fbPageImage: selectedPage.picture,
             fbPageAccessToken: selectedPage.access_token,
             followersCount: selectedPage.followers_count,
+            postsPerDay: Number(postsPerDay),
+            postingTimes: postingTimes,
+            scheduleTimezone: timezone,
           }),
         })
 
@@ -337,6 +356,67 @@ export function AddInappPageDialog({ agencyId }: { agencyId: string }) {
                         </div>
                       </>
                     )}
+                  </div>
+                )}
+
+                {selectedPage && (
+                  <div className="space-y-4 mt-6 border-t border-border/40 pt-6 animate-in fade-in duration-300">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                      <h4 className="text-sm font-bold">Default Queue Configuration</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs">Posting Timezone</Label>
+                        <TimezoneSelect value={timezone} onValueChange={setTimezone} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs">Posts Per Day</Label>
+                        <PostsPerDayPicker
+                          value={Number(postsPerDay)}
+                          onValueChange={(v) => {
+                            setPostsPerDay(v)
+                            const count = Number(v)
+                            const newTimes = [...postingTimes]
+                            if (count > newTimes.length) {
+                              for (let i = newTimes.length; i < count; i++) {
+                                newTimes.push(i === 0 ? "09:00 AM" : i === 1 ? "03:00 PM" : "")
+                              }
+                            } else if (count < newTimes.length) {
+                              newTimes.splice(count)
+                            }
+                            setPostingTimes(newTimes)
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-xs font-bold uppercase tracking-wider">Configure Slots ({postingTimes.length})</Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {postingTimes.map((time, index) => (
+                          <div key={index} className="flex items-center gap-2 group">
+                            <div className="flex-1">
+                              <TimeSlotInput
+                                idPrefix={`add-page-inapp-slot-${index}`}
+                                value={time || ''}
+                                onChange={(v) => {
+                                  const newTimes = [...postingTimes]
+                                  newTimes[index] = v
+                                  setPostingTimes(newTimes)
+                                }}
+                                nextFieldId={
+                                  index < postingTimes.length - 1
+                                    ? `add-page-inapp-slot-${index + 1}-field`
+                                    : undefined
+                                }
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

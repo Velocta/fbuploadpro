@@ -26,7 +26,7 @@ export function InappPageDetailHeader({
   stats,
 }: {
   page: InappPage
-  stats: { pending: number; failed: number }
+  stats: { pending: number; posted: number; failed: number }
 }) {
   const fbAccount = Array.isArray(page.facebook_accounts)
     ? page.facebook_accounts[0]
@@ -58,6 +58,10 @@ export function InappPageDetailHeader({
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-blue-500" />
               {stats.pending} pending
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              {stats.posted} posted
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-destructive" />

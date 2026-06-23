@@ -5,6 +5,7 @@ import { InappPageDetailTabs } from './inapp-page-detail-tabs'
 import { QueueTabClient } from './tabs/queue-tab-client'
 import { HistoryTabClient } from './tabs/history-tab-client'
 import { OverviewTab } from './tabs/overview-tab'
+import { SettingsTabClient } from './tabs/settings-tab-client'
 import { FacebookPageInsightsTab } from '@/components/dashboard/agency/facebook-page-insights-tab'
 import { getInappSchedulePageStats } from '@/server/services/facebook/inapp-schedule-service'
 
@@ -30,7 +31,10 @@ export default async function InappSchedulePageDetails({ params }: { params: Pro
       followers_gained,
       changed_followers,
       is_followers_updated,
-      facebook_accounts(fb_user_name, fb_user_image)
+      posts_per_day,
+      posting_times,
+      schedule_timezone,
+      facebook_accounts(fb_user_name, fb_user_image, fb_user_id)
     `)
     .eq('id', id)
     .eq('agency_id', user.id)
@@ -42,7 +46,14 @@ export default async function InappSchedulePageDetails({ params }: { params: Pro
 
   return (
     <div className="space-y-6 pb-8 agency-motion-standard">
-      <InappPageDetailHeader page={page} stats={stats} />
+      <InappPageDetailHeader
+        page={page}
+        stats={{
+          pending: stats.pending,
+          posted: stats.published,
+          failed: stats.failed,
+        }}
+      />
       <InappPageDetailTabs
         overview={<OverviewTab stats={stats} page={page} />}
         insights={
@@ -53,6 +64,7 @@ export default async function InappSchedulePageDetails({ params }: { params: Pro
         }
         queue={<QueueTabClient pageId={page.id} />}
         history={<HistoryTabClient pageId={page.id} />}
+        settings={<SettingsTabClient page={page as unknown as Parameters<typeof SettingsTabClient>[0]['page']} />}
       />
     </div>
   )

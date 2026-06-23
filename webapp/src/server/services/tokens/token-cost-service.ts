@@ -96,3 +96,29 @@ export async function requireAgencyHasTokens(agencyId: string) {
     throw new Error('Insufficient token balance')
   }
 }
+
+export async function refundAgencyTokens(agencyId: string, amount: number) {
+  if (amount <= 0) return
+
+  const supabase = await createAdminClient()
+  const { data: user, error: readError } = await supabase
+    .from('users')
+    .select('tokens_balance')
+    .eq('id', agencyId)
+    .single()
+
+  if (readError || !user) {
+    throw new Error(readError?.message || 'Agency not found')
+  }
+
+  const nextBalance = (user.tokens_balance ?? 0) + amount
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ tokens_balance: nextBalance })
+    .eq('id', agencyId)
+
+  if (updateError) {
+    throw new Error(updateError.message)
+  }
+}
+
