@@ -16,10 +16,16 @@ export type AgencyListItem = {
     is_active_override: boolean | null
     adu_total_pages?: number
     adu_active_pages?: number
+    adu_followers_gained?: number
+    adu_changed_followers?: number
     inapp_total_pages?: number
     inapp_active_pages?: number
+    inapp_followers_gained?: number
+    inapp_changed_followers?: number
     combined_total_pages?: number
     combined_active_pages?: number
+    combined_followers_gained?: number
+    combined_changed_followers?: number
 }
 
 interface AgenciesViewProps {
@@ -72,14 +78,47 @@ export function AgenciesView({ agencies }: AgenciesViewProps) {
                         <TableCell className="text-center font-mono font-semibold">
                             {agency.tokens_balance?.toLocaleString() || 0}
                         </TableCell>
-                        <TableCell className="text-center font-mono font-semibold">
-                            {(agency.adu_active_pages ?? 0).toLocaleString()} / {(agency.adu_total_pages ?? 0).toLocaleString()}
+                        <TableCell className="text-center font-semibold">
+                            <div className="font-mono">
+                                {(agency.adu_active_pages ?? 0).toLocaleString()} / {(agency.adu_total_pages ?? 0).toLocaleString()}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-mono flex items-center justify-center gap-1 mt-0.5">
+                                <span>👥 {(agency.adu_followers_gained ?? 0).toLocaleString()}</span>
+                                <span className={
+                                    (agency.adu_changed_followers ?? 0) > 0 ? "text-emerald-500 font-medium" : 
+                                    (agency.adu_changed_followers ?? 0) < 0 ? "text-rose-500 font-medium" : "text-muted-foreground"
+                                }>
+                                    ({(agency.adu_changed_followers ?? 0) >= 0 ? "+" : ""}{(agency.adu_changed_followers ?? 0).toLocaleString()})
+                                </span>
+                            </div>
                         </TableCell>
-                        <TableCell className="text-center font-mono font-semibold">
-                            {(agency.inapp_active_pages ?? 0).toLocaleString()} / {(agency.inapp_total_pages ?? 0).toLocaleString()}
+                        <TableCell className="text-center font-semibold">
+                            <div className="font-mono">
+                                {(agency.inapp_active_pages ?? 0).toLocaleString()} / {(agency.inapp_total_pages ?? 0).toLocaleString()}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-mono flex items-center justify-center gap-1 mt-0.5">
+                                <span>👥 {(agency.inapp_followers_gained ?? 0).toLocaleString()}</span>
+                                <span className={
+                                    (agency.inapp_changed_followers ?? 0) > 0 ? "text-emerald-500 font-medium" : 
+                                    (agency.inapp_changed_followers ?? 0) < 0 ? "text-rose-500 font-medium" : "text-muted-foreground"
+                                }>
+                                    ({(agency.inapp_changed_followers ?? 0) >= 0 ? "+" : ""}{(agency.inapp_changed_followers ?? 0).toLocaleString()})
+                                </span>
+                            </div>
                         </TableCell>
-                        <TableCell className="text-center font-mono font-semibold">
-                            {(agency.combined_active_pages ?? 0).toLocaleString()} / {(agency.combined_total_pages ?? 0).toLocaleString()}
+                        <TableCell className="text-center font-semibold">
+                            <div className="font-mono">
+                                {(agency.combined_active_pages ?? 0).toLocaleString()} / {(agency.combined_total_pages ?? 0).toLocaleString()}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-mono flex items-center justify-center gap-1 mt-0.5">
+                                <span>👥 {(agency.combined_followers_gained ?? 0).toLocaleString()}</span>
+                                <span className={
+                                    (agency.combined_changed_followers ?? 0) > 0 ? "text-emerald-500 font-medium" : 
+                                    (agency.combined_changed_followers ?? 0) < 0 ? "text-rose-500 font-medium" : "text-muted-foreground"
+                                }>
+                                    ({(agency.combined_changed_followers ?? 0) >= 0 ? "+" : ""}{(agency.combined_changed_followers ?? 0).toLocaleString()})
+                                </span>
+                            </div>
                         </TableCell>
                         <TableCell className="text-center">
                             <Badge variant={agency.is_active_override ? "outline" : "destructive"}>

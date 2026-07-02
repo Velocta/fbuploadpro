@@ -2,6 +2,24 @@ import { createClient } from '@/lib/supabase/server'
 import { SuperAdminDashboardClient } from './super-admin-dashboard-client'
 import { redirect } from 'next/navigation'
 import { getSessionUser } from '@/lib/supabase/server'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { Database } from '@/types/database.types'
+
+interface ExtendedDatabase extends Omit<Database, 'public'> {
+  public: Database['public'] & {
+    Views: Database['public']['Views'] & {
+      agency_page_stats: {
+        Row: {
+          agency_id: string
+          adu_total_pages: number
+          adu_active_pages: number
+          inapp_total_pages: number
+          inapp_active_pages: number
+        }
+      }
+    }
+  }
+}
 
 function getStartOfPktDayUtc() {
     // Start of current calendar day in Pakistan (UTC+5, no DST)
@@ -19,7 +37,8 @@ export async function SuperAdminOverviewContent() {
         redirect('/login')
     }
 
-    const supabase = await createClient()
+    const client = await createClient()
+    const supabase = client as unknown as SupabaseClient<ExtendedDatabase>
 
     const startOfPktDayUtc = getStartOfPktDayUtc()
 
@@ -29,7 +48,7 @@ export async function SuperAdminOverviewContent() {
         { data: tokensUsedTodayRaw, error: tokensUsedError },
     ] = await Promise.all([
         supabase.from('users').select('id,name,email,tokens_balance,is_active_override,created_at').eq('role', 'agency'),
-        supabase.from('agency_page_stats' as any).select('adu_active_pages,inapp_active_pages') as any,
+        supabase.from('agency_page_stats').select('adu_active_pages,inapp_active_pages'),
         supabase.rpc('get_tokens_used_since', {
             p_since: startOfPktDayUtc.toISOString(),
         }),
@@ -44,8 +63,8 @@ export async function SuperAdminOverviewContent() {
             ? Number(tokensUsedTodayRaw)
             : Number(tokensUsedTodayRaw ?? 0)
 
-    const activePagesCount = ((stats as any) || []).reduce(
-        (sum: number, s: any) => sum + (s.adu_active_pages ?? 0) + (s.inapp_active_pages ?? 0),
+    const activePagesCount = (stats || []).reduce(
+        (sum, s) => sum + (s.adu_active_pages ?? 0) + (s.inapp_active_pages ?? 0),
         0
     )
 

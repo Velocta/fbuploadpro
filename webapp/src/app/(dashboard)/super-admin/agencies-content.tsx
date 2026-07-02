@@ -6,6 +6,18 @@ import { AgencyPageHeader } from '@/components/dashboard/agency'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
+interface AgencyStats {
+  agency_id: string
+  adu_total_pages: number
+  adu_active_pages: number
+  adu_followers_gained: number
+  adu_changed_followers: number
+  inapp_total_pages: number
+  inapp_active_pages: number
+  inapp_followers_gained: number
+  inapp_changed_followers: number
+}
+
 export async function SuperAdminAgenciesContent() {
   const user = await getSessionUser()
   if (!user) {
@@ -18,19 +30,11 @@ export async function SuperAdminAgenciesContent() {
       .from('users')
       .select('id,name,email,phone_number,tokens_balance,is_active_override')
       .eq('role', 'agency'),
-    supabase.from('agency_page_stats' as any).select('*') as any,
+    supabase.from('agency_page_stats' as never).select('*') as unknown as Promise<{ data: AgencyStats[] | null }>,
   ])
 
-  interface AgencyStats {
-    agency_id: string
-    adu_total_pages: number
-    adu_active_pages: number
-    inapp_total_pages: number
-    inapp_active_pages: number
-  }
-
   const statsMap = new Map<string, AgencyStats>()
-  for (const s of (stats as unknown as AgencyStats[]) || []) {
+  for (const s of stats || []) {
     statsMap.set(s.agency_id, s)
   }
 
@@ -40,10 +44,16 @@ export async function SuperAdminAgenciesContent() {
       ...agency,
       adu_total_pages: s?.adu_total_pages ?? 0,
       adu_active_pages: s?.adu_active_pages ?? 0,
+      adu_followers_gained: s?.adu_followers_gained ?? 0,
+      adu_changed_followers: s?.adu_changed_followers ?? 0,
       inapp_total_pages: s?.inapp_total_pages ?? 0,
       inapp_active_pages: s?.inapp_active_pages ?? 0,
+      inapp_followers_gained: s?.inapp_followers_gained ?? 0,
+      inapp_changed_followers: s?.inapp_changed_followers ?? 0,
       combined_total_pages: (s?.adu_total_pages ?? 0) + (s?.inapp_total_pages ?? 0),
       combined_active_pages: (s?.adu_active_pages ?? 0) + (s?.inapp_active_pages ?? 0),
+      combined_followers_gained: (s?.adu_followers_gained ?? 0) + (s?.inapp_followers_gained ?? 0),
+      combined_changed_followers: (s?.adu_changed_followers ?? 0) + (s?.inapp_changed_followers ?? 0),
     }
   })
 
