@@ -1,7 +1,19 @@
 import { HeroSectionMotion } from '@/components/landing/hero-section-motion'
 import { HeroPointerAmbient } from '@/components/landing/hero-pointer-ambient'
+import { createClient } from '@/lib/supabase/server'
 
-export function HeroSection() {
+interface SiteStatsRow {
+    total_followers_gained: number
+    total_users: number
+}
+
+export async function HeroSection() {
+    const supabase = await createClient()
+    const { data } = await supabase.from('site_stats' as never).select('*').single() as unknown as { data: SiteStatsRow | null }
+
+    const totalFollowersGained = data?.total_followers_gained ?? 0
+    const totalUsers = data?.total_users ?? 0
+
     return (
         <section
             data-hero-ambient-root
@@ -24,7 +36,10 @@ export function HeroSection() {
             <HeroPointerAmbient />
 
             <div className="relative flex flex-1 flex-col justify-center px-4 pt-24 pb-12 sm:px-6 sm:pt-28 lg:px-8 lg:pt-32 lg:pb-16">
-                <HeroSectionMotion />
+                <HeroSectionMotion 
+                    totalFollowersGained={Number(totalFollowersGained)}
+                    totalUsers={Number(totalUsers)}
+                />
             </div>
         </section>
     )

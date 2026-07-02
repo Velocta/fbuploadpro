@@ -14,7 +14,12 @@ import {
 
 const easeStandard = [0.2, 0, 0, 1] as const
 
-export function HeroSectionMotion() {
+interface HeroSectionMotionProps {
+    totalFollowersGained: number
+    totalUsers: number
+}
+
+export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSectionMotionProps) {
     const reduce = useReducedMotion()
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
@@ -160,18 +165,18 @@ export function HeroSectionMotion() {
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                             <div className="rounded-xl border border-border bg-muted/25 p-4 shadow-sm ring-0 ring-inset ring-transparent transition-shadow duration-200 ease-out hover:shadow-md hover:ring-1 hover:ring-primary/10 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15">
                                 <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-foreground">
-                                    7000+
+                                    {totalFollowersGained.toLocaleString()}+
                                 </p>
                                 <p className="mt-1 text-sm leading-snug text-muted-foreground">
-                                    Facebook pages running automated workflows
+                                    Followers gained across automated pages
                                 </p>
                             </div>
                             <div className="rounded-xl border border-border bg-muted/25 p-4 shadow-sm ring-0 ring-inset ring-transparent transition-shadow duration-200 ease-out hover:shadow-md hover:ring-1 hover:ring-primary/10 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15">
                                 <p className="font-mono text-3xl font-bold tabular-nums tracking-tight text-foreground">
-                                    200+
+                                    {totalUsers.toLocaleString()}+
                                 </p>
                                 <p className="mt-1 text-sm leading-snug text-muted-foreground">
-                                    Users scaling posting operations daily
+                                    Users using fbuploadpro
                                 </p>
                             </div>
                         </div>
