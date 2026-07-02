@@ -2,23 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { SuperAdminDashboardClient } from './super-admin-dashboard-client'
 import { redirect } from 'next/navigation'
 import { getSessionUser } from '@/lib/supabase/server'
-import { SupabaseClient } from '@supabase/supabase-js'
-import { Database } from '@/types/database.types'
 
-interface ExtendedDatabase extends Omit<Database, 'public'> {
-  public: Database['public'] & {
-    Views: Database['public']['Views'] & {
-      agency_page_stats: {
-        Row: {
-          agency_id: string
-          adu_total_pages: number
-          adu_active_pages: number
-          inapp_total_pages: number
-          inapp_active_pages: number
-        }
-      }
-    }
-  }
+interface AgencyPageStats {
+    adu_active_pages: number
+    inapp_active_pages: number
 }
 
 function getStartOfPktDayUtc() {
@@ -37,8 +24,7 @@ export async function SuperAdminOverviewContent() {
         redirect('/login')
     }
 
-    const client = await createClient()
-    const supabase = client as unknown as SupabaseClient<ExtendedDatabase>
+    const supabase = await createClient()
 
     const startOfPktDayUtc = getStartOfPktDayUtc()
 
@@ -48,7 +34,7 @@ export async function SuperAdminOverviewContent() {
         { data: tokensUsedTodayRaw, error: tokensUsedError },
     ] = await Promise.all([
         supabase.from('users').select('id,name,email,tokens_balance,is_active_override,created_at').eq('role', 'agency'),
-        supabase.from('agency_page_stats').select('adu_active_pages,inapp_active_pages'),
+        supabase.from('agency_page_stats' as never).select('adu_active_pages,inapp_active_pages') as unknown as Promise<{ data: AgencyPageStats[] | null }>,
         supabase.rpc('get_tokens_used_since', {
             p_since: startOfPktDayUtc.toISOString(),
         }),
