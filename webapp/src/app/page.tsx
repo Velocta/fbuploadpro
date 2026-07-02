@@ -1,19 +1,22 @@
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
+import nextDynamic from 'next/dynamic'
 import { Navbar } from '@/components/landing/navbar'
 import { HeroSection } from '@/components/landing/hero-section'
 
-const HowItWorksSection = dynamic(() => import('@/components/landing/how-it-works').then((mod) => mod.HowItWorksSection), {
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+const HowItWorksSection = nextDynamic(() => import('@/components/landing/how-it-works').then((mod) => mod.HowItWorksSection), {
   ssr: true,
   loading: () => <div className="min-h-[400px] animate-pulse bg-muted/10" />
 })
 
-const PricingSection = dynamic(() => import('@/components/landing/pricing-section').then((mod) => mod.PricingSection), {
+const PricingSection = nextDynamic(() => import('@/components/landing/pricing-section').then((mod) => mod.PricingSection), {
   ssr: true,
   loading: () => <div className="min-h-[500px] animate-pulse bg-muted/10" />
 })
 
-const FooterSection = dynamic(() => import('@/components/landing/footer-section').then((mod) => mod.FooterSection), {
+const FooterSection = nextDynamic(() => import('@/components/landing/footer-section').then((mod) => mod.FooterSection), {
   ssr: true,
   loading: () => <div className="min-h-[200px] animate-pulse bg-muted/10" />
 })
