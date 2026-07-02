@@ -1,11 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { Building2, Users } from 'lucide-react'
 import { AllocateTokensDialog } from './allocate-tokens-dialog'
 import { AgencyEmptyState, AgencySectionCard } from '@/components/dashboard/agency'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export type AgencyListItem = {
     id: string
@@ -33,8 +35,24 @@ interface AgenciesViewProps {
 }
 
 export function AgenciesView({ agencies }: AgenciesViewProps) {
-    const payingClients = agencies.filter((agency) => (agency.tokens_balance || 0) > 0)
-    const unpaidClients = agencies.filter((agency) => (agency.tokens_balance || 0) <= 0)
+    const [sortBy, setSortBy] = useState<string>('default')
+
+    const sortAgencies = (list: AgencyListItem[]) => {
+        const sorted = [...list]
+        if (sortBy === 'pages-desc') {
+            return sorted.sort((a, b) => (b.combined_total_pages ?? 0) - (a.combined_total_pages ?? 0))
+        }
+        if (sortBy === 'followers-gained-desc') {
+            return sorted.sort((a, b) => (b.combined_changed_followers ?? 0) - (a.combined_changed_followers ?? 0))
+        }
+        if (sortBy === 'followers-total-desc') {
+            return sorted.sort((a, b) => (b.combined_followers_gained ?? 0) - (a.combined_followers_gained ?? 0))
+        }
+        return sorted
+    }
+
+    const payingClients = sortAgencies(agencies.filter((agency) => (agency.tokens_balance || 0) > 0))
+    const unpaidClients = sortAgencies(agencies.filter((agency) => (agency.tokens_balance || 0) <= 0))
 
     if (agencies.length === 0) {
         return (
@@ -139,10 +157,24 @@ export function AgenciesView({ agencies }: AgenciesViewProps) {
 
     return (
         <div className="space-y-6 agency-motion-standard">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div>
                     <h2 className="font-display text-2xl font-semibold tracking-tight">Agencies management</h2>
                     <p className="text-muted-foreground">View and manage all registered agency accounts and their token balances.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sort By:</span>
+                    <Select value={sortBy} onValueChange={setSortBy}>
+                        <SelectTrigger className="w-[240px] bg-card border-border shadow-sm">
+                            <SelectValue placeholder="Select sorting..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="default">Default order</SelectItem>
+                            <SelectItem value="pages-desc">Most pages (ADU + InApp)</SelectItem>
+                            <SelectItem value="followers-gained-desc">Most followers gained (Net)</SelectItem>
+                            <SelectItem value="followers-total-desc">Most total followers (Latest)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
