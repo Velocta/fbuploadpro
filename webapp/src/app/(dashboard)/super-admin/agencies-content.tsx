@@ -13,28 +13,35 @@ export async function SuperAdminAgenciesContent() {
   }
 
   const supabase = await createClient()
-  const [{ data: agencies }, { data: pages }] = await Promise.all([
+  const [{ data: agencies }, { data: aduPages }, { data: inappPages }] = await Promise.all([
     supabase
       .from('users')
       .select('id,name,email,phone_number,tokens_balance,is_active_override')
       .eq('role', 'agency'),
     supabase.from('pages').select('agency_id,status'),
+    supabase.from('facebook_inapp_schedule_pages').select('agency_id,status'),
   ])
 
   const pageCountsByAgency = new Map<string, { total_pages: number; active_pages: number }>()
-  for (const page of pages || []) {
-    const current = pageCountsByAgency.get(page.agency_id) || {
-      total_pages: 0,
-      active_pages: 0,
-    }
 
-    current.total_pages += 1
-    if (page.status === 'active') {
-      current.active_pages += 1
-    }
+  const processPagesList = (pagesList: { agency_id: string; status: string | null }[]) => {
+    for (const page of pagesList) {
+      const current = pageCountsByAgency.get(page.agency_id) || {
+        total_pages: 0,
+        active_pages: 0,
+      }
 
-    pageCountsByAgency.set(page.agency_id, current)
+      current.total_pages += 1
+      if (page.status === 'active') {
+        current.active_pages += 1
+      }
+
+      pageCountsByAgency.set(page.agency_id, current)
+    }
   }
+
+  processPagesList(aduPages || [])
+  processPagesList(inappPages || [])
 
   const agenciesWithPageCounts = (agencies || []).map((agency) => {
     const counts = pageCountsByAgency.get(agency.id)
