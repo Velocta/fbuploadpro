@@ -14,8 +14,12 @@ export type AgencyListItem = {
     phone_number?: string | null
     tokens_balance: number | null
     is_active_override: boolean | null
-    total_pages?: number
-    active_pages?: number
+    adu_total_pages?: number
+    adu_active_pages?: number
+    inapp_total_pages?: number
+    inapp_active_pages?: number
+    combined_total_pages?: number
+    combined_active_pages?: number
 }
 
 interface AgenciesViewProps {
@@ -45,8 +49,9 @@ export function AgenciesView({ agencies }: AgenciesViewProps) {
                     <TableHead>Email</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead className="text-center">Token Balance</TableHead>
-                    <TableHead className="text-center">Total Pages</TableHead>
-                    <TableHead className="text-center">Active Pages</TableHead>
+                    <TableHead className="text-center">ADU (Active/Total)</TableHead>
+                    <TableHead className="text-center">InApp (Active/Total)</TableHead>
+                    <TableHead className="text-center">Combined (Active/Total)</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -68,10 +73,13 @@ export function AgenciesView({ agencies }: AgenciesViewProps) {
                             {agency.tokens_balance?.toLocaleString() || 0}
                         </TableCell>
                         <TableCell className="text-center font-mono font-semibold">
-                            {(agency.total_pages ?? 0).toLocaleString()}
+                            {(agency.adu_active_pages ?? 0).toLocaleString()} / {(agency.adu_total_pages ?? 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-center font-mono font-semibold">
-                            {(agency.active_pages ?? 0).toLocaleString()}
+                            {(agency.inapp_active_pages ?? 0).toLocaleString()} / {(agency.inapp_total_pages ?? 0).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-center font-mono font-semibold">
+                            {(agency.combined_active_pages ?? 0).toLocaleString()} / {(agency.combined_total_pages ?? 0).toLocaleString()}
                         </TableCell>
                         <TableCell className="text-center">
                             <Badge variant={agency.is_active_override ? "outline" : "destructive"}>

@@ -13,42 +13,37 @@ export async function SuperAdminAgenciesContent() {
   }
 
   const supabase = await createClient()
-  const [{ data: agencies }, { data: aduPages }, { data: inappPages }] = await Promise.all([
+  const [{ data: agencies }, { data: stats }] = await Promise.all([
     supabase
       .from('users')
       .select('id,name,email,phone_number,tokens_balance,is_active_override')
       .eq('role', 'agency'),
-    supabase.from('pages').select('agency_id,status'),
-    supabase.from('facebook_inapp_schedule_pages').select('agency_id,status'),
+    supabase.from('agency_page_stats' as any).select('*') as any,
   ])
 
-  const pageCountsByAgency = new Map<string, { total_pages: number; active_pages: number }>()
-
-  const processPagesList = (pagesList: { agency_id: string; status: string | null }[]) => {
-    for (const page of pagesList) {
-      const current = pageCountsByAgency.get(page.agency_id) || {
-        total_pages: 0,
-        active_pages: 0,
-      }
-
-      current.total_pages += 1
-      if (page.status === 'active') {
-        current.active_pages += 1
-      }
-
-      pageCountsByAgency.set(page.agency_id, current)
-    }
+  interface AgencyStats {
+    agency_id: string
+    adu_total_pages: number
+    adu_active_pages: number
+    inapp_total_pages: number
+    inapp_active_pages: number
   }
 
-  processPagesList(aduPages || [])
-  processPagesList(inappPages || [])
+  const statsMap = new Map<string, AgencyStats>()
+  for (const s of (stats as unknown as AgencyStats[]) || []) {
+    statsMap.set(s.agency_id, s)
+  }
 
   const agenciesWithPageCounts = (agencies || []).map((agency) => {
-    const counts = pageCountsByAgency.get(agency.id)
+    const s = statsMap.get(agency.id)
     return {
       ...agency,
-      total_pages: counts?.total_pages ?? 0,
-      active_pages: counts?.active_pages ?? 0,
+      adu_total_pages: s?.adu_total_pages ?? 0,
+      adu_active_pages: s?.adu_active_pages ?? 0,
+      inapp_total_pages: s?.inapp_total_pages ?? 0,
+      inapp_active_pages: s?.inapp_active_pages ?? 0,
+      combined_total_pages: (s?.adu_total_pages ?? 0) + (s?.inapp_total_pages ?? 0),
+      combined_active_pages: (s?.adu_active_pages ?? 0) + (s?.inapp_active_pages ?? 0),
     }
   })
 

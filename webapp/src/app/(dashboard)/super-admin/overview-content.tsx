@@ -25,23 +25,11 @@ export async function SuperAdminOverviewContent() {
 
     const [
         { data: agencies },
-        { data: aduPages },
-        { data: inappPages },
-        { count: activeAduPagesCount },
-        { count: activeInappPagesCount },
+        { data: stats },
         { data: tokensUsedTodayRaw, error: tokensUsedError },
     ] = await Promise.all([
         supabase.from('users').select('id,name,email,tokens_balance,is_active_override,created_at').eq('role', 'agency'),
-        supabase.from('pages').select('id,agency_id,page_name,status,sync_status,source_platform,followers_count'),
-        supabase.from('facebook_inapp_schedule_pages').select('id,agency_id,fb_page_name,status,followers_count'),
-        supabase
-            .from('pages')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'active'),
-        supabase
-            .from('facebook_inapp_schedule_pages')
-            .select('id', { count: 'exact', head: true })
-            .eq('status', 'active'),
+        supabase.from('agency_page_stats' as any).select('adu_active_pages,inapp_active_pages') as any,
         supabase.rpc('get_tokens_used_since', {
             p_since: startOfPktDayUtc.toISOString(),
         }),
@@ -56,26 +44,14 @@ export async function SuperAdminOverviewContent() {
             ? Number(tokensUsedTodayRaw)
             : Number(tokensUsedTodayRaw ?? 0)
 
-    const mappedInappPages = (inappPages || []).map((p) => ({
-        id: p.id,
-        agency_id: p.agency_id,
-        page_name: p.fb_page_name || 'InApp Scheduled Page',
-        status: p.status,
-        sync_status: null,
-        source_platform: null,
-        followers_count: p.followers_count ? Number(p.followers_count) : null,
-    }))
-
-    const combinedPages = [
-        ...(aduPages || []),
-        ...mappedInappPages,
-    ]
-
-    const activePagesCount = (activeAduPagesCount || 0) + (activeInappPagesCount || 0)
+    const activePagesCount = ((stats as any) || []).reduce(
+        (sum: number, s: any) => sum + (s.adu_active_pages ?? 0) + (s.inapp_active_pages ?? 0),
+        0
+    )
 
     const initialData = {
         agencies: agencies || [],
-        pages: combinedPages,
+        pages: [], // Unused in SuperAdminDashboardClient
         activePagesCount,
         tokensUsedToday,
     }
