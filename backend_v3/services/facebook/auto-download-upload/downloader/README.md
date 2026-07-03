@@ -103,6 +103,45 @@ If a proxy env var is unset, that step runs without a proxy. Only Instagram uses
 
 **Capacity notes:** Parallel jobs need disk under `/tmp` (Linux) or `%TEMP%` (Windows) for temp files (often 30–100 MB each while downloading). If RAM is tight, lower concurrency or chunk size.
 
+## Docker (Recommended for Production & Debian VPS)
+
+Using Docker is the recommended way to run the downloader in production. It packages python, ffmpeg, aria2, and Node.js automatically, and manages background execution with automatic restarts (even after server reboot) similar to PM2.
+
+### 1. Setup & Run
+
+Simply run the startup script:
+
+```bash
+chmod +x start.sh
+./start.sh
+```
+
+This script will:
+- Check for and install Docker & Docker Compose if missing (Debian/Ubuntu systems).
+- Create a `.env` file from `.env.example` if it doesn't exist.
+- Start the container in detached mode (background).
+- Enable Docker to start automatically on system boot.
+
+> [!NOTE]
+> The container uses an `entrypoint.sh` wrapper that automatically runs `pip install -U "yt-dlp[default,curl-cffi]"` on startup. This guarantees that your container always runs the absolute latest release of `yt-dlp` (including all TLS-impersonation features) every time the container is started or restarted, without requiring you to manually rebuild the Docker image when platforms update their video extraction code.
+
+
+### 2. Management Commands
+
+```bash
+# View live logs (stdout/stderr of the worker)
+sudo docker compose logs -f
+
+# Check container status
+sudo docker compose ps
+
+# Restart the downloader (after config changes)
+sudo docker compose restart
+
+# Stop the downloader
+sudo docker compose down
+```
+
 ## PM2 (keep the worker running)
 
 [PM2](https://pm2.keymetrics.io/) is a process manager: it runs `worker.py` in the background, restarts it on crash, and (with extra setup) brings it back after a server reboot.

@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  downloader:
+    build: .
+    container_name: fbuploadpro-downloader
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./cache:/app/cache
+      - ./logs:/app/logs
