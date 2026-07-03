@@ -27,7 +27,8 @@ COPY . .
 # Create cache and log directories
 RUN mkdir -p cache logs
 
-# Set environment variables for cache and log paths to resolve under /app
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
 ENV ADU_DOWNLOADER_CACHE_DIR=/app/cache
 ENV ADU_DOWNLOADER_LOG_DIR=/app/logs
 

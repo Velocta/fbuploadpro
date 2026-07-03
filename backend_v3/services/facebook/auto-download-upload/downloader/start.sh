@@ -52,9 +52,7 @@ echo "=========================================================="
 echo "SUCCESS: Downloader service is running in the background!"
 echo "It will automatically restart on server boot or failure."
 echo "=========================================================="
-echo "To view live logs, run:"
-echo "  sudo docker compose logs -f"
-echo ""
-echo "To stop the service, run:"
-echo "  sudo docker compose down"
+echo "Tailing logs... (Press Ctrl+C to exit log view; container will keep running)"
 echo "=========================================================="
+
+sudo docker compose logs -f

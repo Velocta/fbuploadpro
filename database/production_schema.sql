@@ -2438,20 +2438,6 @@ begin
     return;
   end if;
 
-  -- Source creator likely suspended/unavailable: stop downloads and posting for this page.
-  -- Changed from > 30 failures in 24 hours to > 50 failures in all time (no 24h limit) to avoid deadlock with the skip threshold.
-  update public.pages p
-  set
-    status = 'creator_suspended',
-    updated_at = now()
-  where p.status = 'active'
-    and (
-      select count(*)::int
-      from public.reels r
-      where r.page_id = p.id
-        and r.status = 'download_failed'
-    ) > 50;
-
   return query
   with active_pages as (
     select
@@ -2483,35 +2469,36 @@ begin
     from active_pages ap
   ),
   hungry_pages as (
-    select pb.page_id, pb.buffer_filled
-    from page_buffer pb
-    where pb.buffer_filled < pb.buffer_target
-      and exists (
-        select 1
+    select
+      pb.page_id,
+      pb.buffer_filled,
+      (
+        select r.id
         from public.reels r
         where r.page_id = pb.page_id
           and r.status = 'pending'
           and r.download_retries < 3
-      )
+        order by r.id asc
+        limit 1
+      ) as first_pending_id
+    from page_buffer pb
+    where pb.buffer_filled < pb.buffer_target
   ),
   min_level as (
     select min(hp.buffer_filled) as level
     from hungry_pages hp
+    where hp.first_pending_id is not null
   ),
   eligible_pages as (
-    select hp.page_id
+    select hp.page_id, hp.first_pending_id
     from hungry_pages hp
     cross join min_level ml
     where hp.buffer_filled = ml.level
+      and hp.first_pending_id is not null
   ),
   one_per_page as (
-    select distinct on (r.page_id)
-      r.id
+    select ep.first_pending_id as id
     from eligible_pages ep
-    join public.reels r on r.page_id = ep.page_id
-    where r.status = 'pending'
-      and r.download_retries < 3
-    order by r.page_id, r.id asc
   ),
   locked as (
     select r.id
@@ -2568,7 +2555,12 @@ language plpgsql
 security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_page_id uuid;
+  v_failed_count int;
+  v_new_status public.reel_status_enum;
 begin
+  -- Update the reel status
   update public.reels
   set
     status = case
@@ -2580,7 +2572,26 @@ begin
       else null
     end,
     download_claimed_at = null
-  where id = p_reel_id;
+  where id = p_reel_id
+  returning page_id, status into v_page_id, v_new_status;
+
+  -- If this reel just transitioned to 'download_failed'
+  if v_page_id is not null and v_new_status = 'download_failed'::public.reel_status_enum then
+    -- Count total download_failed reels for this page to see if we should suspend it
+    select count(*)::int into v_failed_count
+    from public.reels r
+    where r.page_id = v_page_id
+      and r.status = 'download_failed';
+
+    if v_failed_count > 50 then
+      update public.pages p
+      set
+        status = 'creator_suspended',
+        updated_at = now()
+      where p.id = v_page_id
+        and p.status = 'active';
+    end if;
+  end if;
 end;
 $$;
 
