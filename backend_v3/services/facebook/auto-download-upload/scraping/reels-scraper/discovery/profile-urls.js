@@ -6,7 +6,10 @@ export function supportsYtdlpDiscovery(platform) {
 }
 
 export function buildTiktokProfileUrl(sourceUsername) {
-  const handle = String(sourceUsername || '').trim().replace(/^@+/, '');
+  const handle = String(sourceUsername || '')
+    .replace(/[\u200b-\u200d\u200e\u200f\u202a-\u202e\ufeff]/g, '')
+    .replace(/\s/g, '')
+    .replace(/^@+/, '');
   if (!handle) {
     return null;
   }

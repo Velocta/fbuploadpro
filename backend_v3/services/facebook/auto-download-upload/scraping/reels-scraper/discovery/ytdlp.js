@@ -58,14 +58,33 @@ async function runYtDlp(args) {
 
     if (isImpersonateError) {
       console.warn('⚠️ Impersonate target not available. Attempting to install curl-cffi and update yt-dlp...');
-      try {
-        await execAsync('python3 -m pip install -U curl-cffi yt-dlp');
-        console.log('✅ Dependencies updated successfully. Retrying with impersonation...');
-        return await runCmd(args);
-      } catch (installErr) {
-        console.warn(
-          `⚠️ Failed to install curl-cffi/update yt-dlp or retry failed: ${installErr.message}`
-        );
+      let installed = false;
+      const commands = [
+        'python3 -m pip install -U curl-cffi yt-dlp',
+        'pip3 install -U --break-system-packages curl-cffi yt-dlp',
+        'pip3 install -U curl-cffi yt-dlp',
+        'pip install -U --break-system-packages curl-cffi yt-dlp',
+        'pip install -U curl-cffi yt-dlp'
+      ];
+
+      for (const cmd of commands) {
+        try {
+          await execAsync(cmd);
+          console.log(`✅ Successfully executed: ${cmd}`);
+          installed = true;
+          break;
+        } catch (cmdErr) {
+          console.warn(`⚠️ Failed command: ${cmd} (${cmdErr.message.split('\n')[0]})`);
+        }
+      }
+
+      if (installed) {
+        try {
+          console.log('✅ Retrying with impersonation...');
+          return await runCmd(args);
+        } catch (retryErr) {
+          console.warn(`⚠️ Retry with impersonation failed: ${retryErr.message}`);
+        }
       }
 
       console.warn('⚠️ Retrying without impersonation...');
