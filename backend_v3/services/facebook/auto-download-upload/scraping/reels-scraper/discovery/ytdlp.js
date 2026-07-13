@@ -1,9 +1,10 @@
-import { execFile } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { YTDLP_CONFIG } from '../config.js';
 import { buildTiktokProfileUrl, supportsYtdlpDiscovery } from './profile-urls.js';
 import { buildTiktokYtdlpArgs } from './ytdlp-args.js';
 
+const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 const EXEC_OPTS_BASE = {
@@ -33,16 +34,53 @@ async function runYtDlp(args) {
     timeout: YTDLP_CONFIG.TIMEOUT_MS,
   };
 
-  try {
-    const { stdout } = await execFileAsync(YTDLP_CONFIG.BIN, args, execOpts);
-    return stdout;
-  } catch (err) {
-    if (err.code !== 'ENOENT') {
-      throw err;
+  const runCmd = async (cmdArgs) => {
+    try {
+      const { stdout } = await execFileAsync(YTDLP_CONFIG.BIN, cmdArgs, execOpts);
+      return stdout;
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        throw err;
+      }
+      const { stdout } = await execFileAsync('python3', ['-m', 'yt_dlp', ...cmdArgs], execOpts);
+      return stdout;
     }
+  };
 
-    const { stdout } = await execFileAsync('python3', ['-m', 'yt_dlp', ...args], execOpts);
-    return stdout;
+  try {
+    return await runCmd(args);
+  } catch (err) {
+    const stderr = err.stderr?.toString() || '';
+    const errMessage = err.message || '';
+    const isImpersonateError =
+      stderr.includes('Impersonate target') ||
+      errMessage.includes('Impersonate target');
+
+    if (isImpersonateError) {
+      console.warn('⚠️ Impersonate target not available. Attempting to install curl-cffi and update yt-dlp...');
+      try {
+        await execAsync('python3 -m pip install -U curl-cffi yt-dlp');
+        console.log('✅ Dependencies updated successfully. Retrying with impersonation...');
+        return await runCmd(args);
+      } catch (installErr) {
+        console.warn(
+          `⚠️ Failed to install curl-cffi/update yt-dlp or retry failed: ${installErr.message}`
+        );
+      }
+
+      console.warn('⚠️ Retrying without impersonation...');
+      // Filter out '--impersonate' and the target (which is 'chrome')
+      const fallbackArgs = [];
+      for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--impersonate') {
+          i++; // skip next arg (chrome)
+          continue;
+        }
+        fallbackArgs.push(args[i]);
+      }
+      return await runCmd(fallbackArgs);
+    }
+    throw err;
   }
 }
 

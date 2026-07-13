@@ -20,6 +20,8 @@ export function buildTiktokYtdlpArgs(profileUrl, maxItems, userAgent = TIKTOK_YT
     `1:${limit}`,
     '--impersonate',
     'chrome',
+    '--user-agent',
+    userAgent,
     '--add-header',
     'Referer: https://www.tiktok.com/',
     '--retries',
