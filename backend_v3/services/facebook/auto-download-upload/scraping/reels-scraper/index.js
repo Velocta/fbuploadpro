@@ -237,10 +237,17 @@ async function processJob(page, job, platform, claimSource) {
       return;
     }
 
-    console.warn(
-      `⚠️ yt-dlp discovery failed for ${job.source_username} (${ytdlpResult.reason}); queueing browser fallback.`,
-    );
-    await markSyncStatus(job.id, 'browser_pending');
+    if (platform === 'tiktok') {
+      console.warn(
+        `⚠️ yt-dlp discovery failed for TikTok user ${job.source_username} (${ytdlpResult.reason}); marking as error.`,
+      );
+      await markSyncStatus(job.id, 'error');
+    } else {
+      console.warn(
+        `⚠️ yt-dlp discovery failed for ${job.source_username} (${ytdlpResult.reason}); queueing browser fallback.`,
+      );
+      await markSyncStatus(job.id, 'browser_pending');
+    }
     return;
   }
 
@@ -369,7 +376,7 @@ async function main() {
     } catch (err) {
       console.error(`❌ Error processing ${job.source_username}:`, err);
 
-      if (claimSource === 'pending' && supportsYtdlpDiscovery(platform)) {
+      if (claimSource === 'pending' && supportsYtdlpDiscovery(platform) && platform !== 'tiktok') {
         try {
           await markSyncStatus(job.id, 'browser_pending');
         } catch (markErr) {
