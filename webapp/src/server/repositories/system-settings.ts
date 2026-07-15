@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 
-const DEFAULT_TOKEN_PRICE = 0.6
+const DEFAULT_TOKEN_PRICE = 0.15
 
 export async function readTokenPrice(): Promise<number> {
   const supabase = await createAdminClient()

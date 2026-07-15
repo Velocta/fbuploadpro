@@ -12,7 +12,7 @@ type SourcePlatform = 'instagram' | 'tiktok' | 'youtube' | 'facebook'
 
 export type MonthlyPriceCalculatorLayout = 'default' | 'split'
 
-const TOKEN_PRICE_PKR = 0.5
+const TOKEN_PRICE_PKR = 0.15
 const DAYS_PER_MONTH = 30
 
 const TOKENS_PER_REEL: Record<SourcePlatform, number> = {
@@ -141,7 +141,7 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
               </div>
 
               <p id="calculator-assumptions" className="text-xs text-muted-foreground">
-                Assumptions: 30 days/month, Instagram uses 1 token per reel, TikTok/YouTube/Facebook use 2 tokens per reel, and each token costs PKR 0.5.
+                Assumptions: 30 days/month, Instagram uses 1 token per reel, TikTok/YouTube/Facebook use 2 tokens per reel, and each token costs PKR 0.15.
               </p>
             </div>
 

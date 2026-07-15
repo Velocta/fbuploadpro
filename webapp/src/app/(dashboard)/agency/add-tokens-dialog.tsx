@@ -123,7 +123,7 @@ export function AddTokensDialog({
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-semibold uppercase tracking-tight">Price</Badge>
-                                <p className="text-xl font-semibold tracking-tight text-foreground">0.5 PKR <span className="text-xs text-muted-foreground font-medium">/ Token</span></p>
+                                <p className="text-xl font-semibold tracking-tight text-foreground">0.15 PKR <span className="text-xs text-muted-foreground font-medium">/ Token</span></p>
                             </div>
                             <div className="text-right">
                                 <p className="text-xs font-semibold uppercase tracking-wide text-primary">Non-expiring</p>
