@@ -17,9 +17,9 @@ const DAYS_PER_MONTH = 30
 
 const TOKENS_PER_REEL: Record<SourcePlatform, number> = {
   instagram: 1,
-  tiktok: 2,
-  youtube: 2,
-  facebook: 2,
+  tiktok: 1,
+  youtube: 1,
+  facebook: 1,
 }
 
 function parsePositiveInt(value: string): number {
@@ -107,9 +107,9 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="instagram">Instagram (1 token per reel)</SelectItem>
-                    <SelectItem value="tiktok">TikTok (2 tokens per reel)</SelectItem>
-                    <SelectItem value="youtube">YouTube (2 tokens per reel)</SelectItem>
-                    <SelectItem value="facebook">Facebook (2 tokens per reel)</SelectItem>
+                    <SelectItem value="tiktok">TikTok (1 token per reel)</SelectItem>
+                    <SelectItem value="youtube">YouTube (1 token per reel)</SelectItem>
+                    <SelectItem value="facebook">Facebook (1 token per reel)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -141,7 +141,7 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
               </div>
 
               <p id="calculator-assumptions" className="text-xs text-muted-foreground">
-                Assumptions: 30 days/month, Instagram uses 1 token per reel, TikTok/YouTube/Facebook use 2 tokens per reel, and each token costs PKR 0.15.
+                Assumptions: 30 days/month, all platforms use 1 token per reel, and each token costs PKR 0.15.
               </p>
             </div>
 

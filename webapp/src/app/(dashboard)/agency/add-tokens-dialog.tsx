@@ -144,17 +144,17 @@ export function AddTokensDialog({
                                     <svg className="h-4 w-4 fill-current text-foreground" viewBox="0 0 24 24">
                                         <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001.002.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-3.932 1.353 6.33 6.33 0 0 0-2.454 4.966 6.333 6.333 0 0 0 10.748 4.478 6.333 6.333 0 0 0 2.155-4.478V6.686Z" />
                                     </svg>
-                                    <p className="text-sm font-bold">2 Tokens</p>
+                                    <p className="text-sm font-bold">1 Token</p>
                                     <p className="text-xs text-muted-foreground font-medium">TikTok</p>
                                 </div>
                                 <div className="p-3 rounded-lg bg-background/50 border border-border flex flex-col items-center gap-1">
                                     <Facebook className="h-4 w-4 text-blue-600" />
-                                    <p className="text-sm font-bold">2 Tokens</p>
+                                    <p className="text-sm font-bold">1 Token</p>
                                     <p className="text-xs text-muted-foreground font-medium">Facebook</p>
                                 </div>
                                 <div className="p-3 rounded-lg bg-background/50 border border-border flex flex-col items-center gap-1">
                                     <Youtube className="h-4 w-4 text-red-600" />
-                                    <p className="text-sm font-bold">2 Tokens</p>
+                                    <p className="text-sm font-bold">1 Token</p>
                                     <p className="text-xs text-muted-foreground font-medium">YouTube</p>
                                 </div>
                             </div>

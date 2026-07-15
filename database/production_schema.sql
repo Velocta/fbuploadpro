@@ -1297,9 +1297,9 @@ insert into public.token_cost_rules (feature, platform, media_type, source_platf
 select v.feature, v.platform, v.media_type, v.source_platform, v.token_cost
 from (values
   ('auto_download_upload'::text, 'facebook'::text, '*'::text, 'instagram'::text, 1),
-  ('auto_download_upload', 'facebook', '*', 'youtube', 2),
-  ('auto_download_upload', 'facebook', '*', 'tiktok', 2),
-  ('auto_download_upload', 'facebook', '*', 'facebook', 2),
+  ('auto_download_upload', 'facebook', '*', 'youtube', 1),
+  ('auto_download_upload', 'facebook', '*', 'tiktok', 1),
+  ('auto_download_upload', 'facebook', '*', 'facebook', 1),
   ('direct_post', 'facebook', '*', null::text, 0),
   ('direct_schedule', 'facebook', '*', null, 0),
   ('inapp_schedule', 'facebook', '*', null, 1)
