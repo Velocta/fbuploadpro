@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { motion, useReducedMotion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useTransition, useState } from 'react'
@@ -12,15 +11,12 @@ import {
     ServerCog,
 } from 'lucide-react'
 
-const easeStandard = [0.2, 0, 0, 1] as const
-
 interface HeroSectionMotionProps {
     totalFollowersGained: number
     totalUsers: number
 }
 
 export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSectionMotionProps) {
-    const reduce = useReducedMotion()
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
@@ -32,73 +28,33 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
         })
     }
 
-    const container = {
-        hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: reduce
-                ? { duration: 0.18, ease: easeStandard }
-                : {
-                      staggerChildren: 0.06,
-                      delayChildren: 0.08,
-                  },
-        },
-    }
-
-    const item = {
-        hidden: reduce
-            ? { opacity: 0 }
-            : { opacity: 0, y: 18 },
-        visible: {
-            opacity: 1,
-            ...(reduce ? {} : { y: 0 }),
-            transition: reduce
-                ? { duration: 0.18, ease: easeStandard }
-                : { duration: 0.42, ease: easeStandard },
-        },
-    }
-
     return (
-        <motion.div
-            className="container mx-auto"
-            variants={container}
-            initial="hidden"
-            animate="visible"
-        >
+        <div className="container mx-auto">
             <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 md:grid-cols-[1.1fr_0.9fr] lg:gap-12">
                 <div className="max-w-2xl md:pr-2">
-                    <motion.div variants={item} className="mb-7">
+                    <div className="mb-7">
                         <Badge
                             variant="outline"
                             className="border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold tracking-[0.12em] text-primary"
                         >
                             Facebook Automation Platform
                         </Badge>
-                    </motion.div>
+                    </div>
 
-                    <motion.h1
-                        variants={item}
-                        className="font-display text-display-md sm:text-display-lg lg:text-display-xl mb-6 text-left font-bold tracking-tight text-balance text-foreground"
-                    >
+                    <h1 className="font-display text-display-md sm:text-display-lg lg:text-display-xl mb-6 text-left font-bold tracking-tight text-balance text-foreground">
                         Automate Facebook pages
                         <span className="text-primary">
                             {' '}
                             without heavy PC or internet.
                         </span>
-                    </motion.h1>
+                    </h1>
 
-                    <motion.p
-                        variants={item}
-                        className="text-body-lg mb-8 max-w-xl text-left text-muted-foreground"
-                    >
+                    <p className="text-body-lg mb-8 max-w-xl text-left text-muted-foreground">
                         Use secure API to connect your Facebook accounts and pages
                         without having to use passwords.
-                    </motion.p>
+                    </p>
 
-                    <motion.div
-                        variants={item}
-                        className="flex flex-col items-start gap-3 sm:flex-row sm:gap-4"
-                    >
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:gap-4">
                         <Button
                             size="lg"
                             className="h-12 rounded-full px-8 text-base font-semibold shadow-sm transition-all duration-200 ease-out hover:bg-primary/90 hover:shadow-md active:scale-[0.98] active:shadow-sm"
@@ -106,7 +62,7 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                         >
                             <Link href="#pricing" className="group">
                                 View Pricing
-                                <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:group-hover:translate-x-0" />
+                                <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 ease-out group-hover:translate-x-0.5" />
                             </Link>
                         </Button>
                         <Button
@@ -117,22 +73,19 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                             onClick={() => handleNavigation('/signup')}
                         >
                             Sign up
-                            <ArrowRight className="ml-2 h-4 w-4 text-primary transition-transform duration-200 ease-out group-hover:translate-x-0.5 motion-reduce:group-hover:translate-x-0" />
+                            <ArrowRight className="ml-2 h-4 w-4 text-primary transition-transform duration-200 ease-out group-hover:translate-x-0.5" />
                         </Button>
-                    </motion.div>
+                    </div>
 
-                    <motion.div
-                        variants={item}
-                        className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground"
-                    >
+                    <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1.5">
                             <ShieldCheck className="h-4 w-4 text-primary" />
                             Official API auth
                         </span>
-                    </motion.div>
+                    </div>
                 </div>
 
-                <motion.div variants={item} className="automation-snapshot-surface">
+                <div className="automation-snapshot-surface">
                     <div className="automation-snapshot-grid-layer" aria-hidden />
                     <span className="landing-hero-panel-edge-shimmer" aria-hidden />
                     <div className="relative z-10 space-y-5">
@@ -141,23 +94,11 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                                 Automation snapshot
                             </p>
                             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background/90 px-2.5 py-1 text-xs text-muted-foreground">
-                                <span
-                                    className="relative flex h-2 w-2 shrink-0"
-                                    aria-hidden
-                                >
-                                    {!reduce ? (
-                                        <>
-                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/35 opacity-75 motion-reduce:animate-none" />
-                                            <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                                        </>
-                                    ) : (
-                                        <span className="h-2 w-2 rounded-full bg-primary" />
-                                    )}
+                                <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/35 opacity-75" />
+                                    <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
                                 </span>
-                                <ServerCog
-                                    className="h-3.5 w-3.5 shrink-0 text-primary"
-                                    aria-hidden
-                                />
+                                <ServerCog className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
                                 Live
                             </span>
                         </div>
@@ -181,8 +122,8 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                             </div>
                         </div>
                     </div>
-                </motion.div>
+                </div>
             </div>
-        </motion.div>
+        </div>
     )
 }

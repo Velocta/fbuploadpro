@@ -1,6 +1,5 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Menu, ArrowRight } from 'lucide-react'
@@ -21,11 +20,8 @@ const navLinks = [
   { name: 'Pricing', href: '#pricing' },
 ]
 
-const easeStandard = [0.2, 0, 0, 1] as const
-
 export function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false)
-  const reduceMotion = useReducedMotion()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
@@ -46,15 +42,9 @@ export function Navbar() {
   }, [])
 
   return (
-    <motion.nav
+    <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${isScrolled ? 'bg-background/90 backdrop-blur-md border-b border-border py-3' : 'bg-transparent py-5'
         }`}
-      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: reduceMotion ? 0.12 : 0.22,
-        ease: easeStandard,
-      }}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
         <Link href="/" className="flex items-center space-x-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md">
@@ -151,6 +141,6 @@ export function Navbar() {
           </Sheet>
         </div>
       </div>
-    </motion.nav>
+    </nav>
   )
 }

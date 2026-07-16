@@ -1,55 +1,14 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
 import Image from 'next/image'
 import Link from 'next/link'
 
-const easeStandard = [0.2, 0, 0, 1] as const
-
 export function FooterSection() {
-  const reduce = useReducedMotion()
-
-  const gridContainer = {
-    hidden: {},
-    visible: {
-      transition: reduce
-        ? { duration: 0.2 }
-        : { staggerChildren: 0.08, delayChildren: 0.05 },
-    },
-  }
-
-  const column = {
-    hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 16 },
-    visible: {
-      opacity: 1,
-      ...(reduce ? {} : { y: 0 }),
-      transition: reduce
-        ? { duration: 0.2, ease: easeStandard }
-        : { duration: 0.36, ease: easeStandard },
-    },
-  }
-
-  const bottomBar = {
-    hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 10 },
-    visible: {
-      opacity: 1,
-      ...(reduce ? {} : { y: 0 }),
-      transition: reduce
-        ? { duration: 0.2, ease: easeStandard }
-        : { duration: 0.32, ease: easeStandard, delay: 0.12 },
-    },
-  }
-
   return (
     <footer className="border-t border-border bg-muted/30 py-20 dark:bg-muted/15">
       <div className="container mx-auto px-4">
-        <motion.div
-          className="grid gap-10 md:grid-cols-2 lg:grid-cols-4"
-          variants={gridContainer}
-          initial="hidden"
-          animate="visible"
-        >
-          <motion.div variants={column} className="space-y-5">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-5">
             <Link
               href="/"
               className="inline-flex items-center space-x-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -62,9 +21,9 @@ export function FooterSection() {
             <p className="text-sm leading-relaxed text-muted-foreground">
               A reliable distribution platform for agencies running Facebook growth workflows.
             </p>
-          </motion.div>
+          </div>
 
-          <motion.div variants={column}>
+          <div>
             <h4 className="mb-5 text-xs font-semibold uppercase tracking-[0.12em] text-foreground">Product</h4>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
@@ -83,9 +42,9 @@ export function FooterSection() {
                 </Link>
               </li>
             </ul>
-          </motion.div>
+          </div>
 
-          <motion.div variants={column}>
+          <div>
             <h4 className="mb-5 text-xs font-semibold uppercase tracking-[0.12em] text-foreground">Company</h4>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>
@@ -107,9 +66,9 @@ export function FooterSection() {
                 </a>
               </li>
             </ul>
-          </motion.div>
+          </div>
 
-          <motion.div variants={column}>
+          <div>
             <h4 className="mb-5 text-xs font-semibold uppercase tracking-[0.12em] text-foreground">Contact</h4>
             <div className="space-y-3 rounded-2xl border border-border bg-muted/30 p-5">
               <p className="font-semibold text-foreground">Shahzeb Malik</p>
@@ -131,18 +90,13 @@ export function FooterSection() {
                 Facebook
               </a>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
 
-        <motion.div
-          className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground md:flex-row"
-          variants={bottomBar}
-          initial="hidden"
-          animate="visible"
-        >
+        <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-border pt-6 text-xs text-muted-foreground md:flex-row">
           <span>© {new Date().getFullYear()} FBupload Pro</span>
           <span>Secure operations • Encrypted workflows • Automated publishing</span>
-        </motion.div>
+        </div>
       </div>
     </footer>
   )

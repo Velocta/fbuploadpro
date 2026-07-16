@@ -1,6 +1,5 @@
 'use client'
 
-import { motion, useReducedMotion } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Coins, CheckCircle2 } from 'lucide-react'
@@ -17,10 +16,7 @@ const MonthlyPriceCalculatorSection = dynamic(
   }
 )
 
-const easeStandard = [0.2, 0, 0, 1] as const
-
 export function PricingSectionMotion() {
-  const reduce = useReducedMotion()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
@@ -32,45 +28,9 @@ export function PricingSectionMotion() {
     })
   }
 
-  const headerBlock = {
-    hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 14 },
-    visible: {
-      opacity: 1,
-      ...(reduce ? {} : { y: 0 }),
-      transition: reduce
-        ? { duration: 0.2, ease: easeStandard }
-        : { duration: 0.45, ease: easeStandard },
-    },
-  }
-
-  const gridContainer = {
-    hidden: {},
-    visible: {
-      transition: reduce
-        ? { duration: 0.2 }
-        : { staggerChildren: 0.075, delayChildren: 0.06 },
-    },
-  }
-
-  const column = {
-    hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 18 },
-    visible: {
-      opacity: 1,
-      ...(reduce ? {} : { y: 0 }),
-      transition: reduce
-        ? { duration: 0.2, ease: easeStandard }
-        : { duration: 0.44, ease: easeStandard },
-    },
-  }
-
   return (
     <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-      <motion.div
-        className="mx-auto mb-12 max-w-3xl text-center"
-        variants={headerBlock}
-        initial="hidden"
-        animate="visible"
-      >
+      <div className="mx-auto mb-12 max-w-3xl text-center">
         <Badge
           variant="outline"
           className="mb-4 px-4 py-1 text-xs font-semibold uppercase tracking-[0.12em] border-primary/20 bg-primary/5 text-primary"
@@ -85,15 +45,10 @@ export function PricingSectionMotion() {
           Our dynamic pricing model means you only pay for what you use. Top up your account with tokens and
           distribute content across your entire agency portfolio.
         </p>
-      </motion.div>
+      </div>
 
-      <motion.div
-        className="grid items-start gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12"
-        variants={gridContainer}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div variants={column}>
+      <div className="grid items-start gap-8 lg:grid-cols-2 lg:gap-10 xl:gap-12">
+        <div>
           <div className="relative overflow-hidden rounded-xl">
             <span className="marketing-card-conic-glow motion-reduce:animate-none" aria-hidden />
             <Card className="relative z-10 m-px overflow-hidden rounded-[calc(0.75rem-1px)] border border-border bg-muted/20 shadow-none transition-shadow duration-200 ease-out motion-reduce:transition-none hover:shadow-md hover:ring-1 hover:ring-primary/10 motion-reduce:hover:shadow-none motion-reduce:hover:ring-0">
@@ -101,7 +56,7 @@ export function PricingSectionMotion() {
                 <div className="space-y-4">
                   <h3 className="group flex items-center gap-3 text-2xl font-bold">
                     <span className="inline-flex rounded-lg bg-primary/5 p-2 transition-transform duration-200 ease-out motion-reduce:transition-none group-hover:scale-[1.02] motion-reduce:group-hover:scale-100">
-                      <Coins className="h-5 w-5 text-primary" />
+                       <Coins className="h-5 w-5 text-primary" />
                     </span>
                     Unified Token System
                   </h3>
@@ -140,12 +95,12 @@ export function PricingSectionMotion() {
               </CardContent>
             </Card>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.div variants={column}>
+        <div>
           <MonthlyPriceCalculatorSection layout="split" />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
   )
 }
