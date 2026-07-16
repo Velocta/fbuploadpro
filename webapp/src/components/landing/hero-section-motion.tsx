@@ -37,7 +37,7 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                             variant="outline"
                             className="border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold tracking-normal text-primary"
                         >
-                            Unbeatable Value: Automating 1 page at 2 posts a day for a whole month costs only PKR 9.00! (10 pages = 90 PKR)
+                            Unbeatable Value: Automating 1 page for a whole month costs only 9 PKR! (10 pages = 90 PKR)
                         </Badge>
                     </div>
 
