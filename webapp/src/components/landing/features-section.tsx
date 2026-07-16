@@ -39,21 +39,27 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-24">
-      <div className="mx-auto mb-14 max-w-3xl text-center">
-        <Badge
-          variant="outline"
-          className="mb-4 px-4 py-1 text-xs font-semibold uppercase tracking-[0.12em] border-primary/20 bg-primary/5 text-primary"
-        >
-          All-in-One Capabilities
-        </Badge>
-        <h2 className="font-display text-display-md sm:text-display-lg mb-5 text-balance font-bold tracking-tight text-foreground">
-          Built for modern agencies
-        </h2>
-        <p className="text-body-lg text-muted-foreground leading-relaxed">
-          Everything you need to run high-volume pages. Core features are completely free—only pay for automated scraping when you use it.
-        </p>
-      </div>
+    <section
+      id="features"
+      className="relative overflow-hidden border-t border-border bg-secondary/35 py-20 sm:py-24 dark:bg-secondary/25"
+      aria-labelledby="features-heading"
+    >
+      <div className="landing-atmosphere-grid-section" aria-hidden />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-14 max-w-3xl text-center">
+          <Badge
+            variant="outline"
+            className="mb-4 px-4 py-1 text-xs font-semibold uppercase tracking-[0.12em] border-primary/20 bg-primary/5 text-primary"
+          >
+            All-in-One Capabilities
+          </Badge>
+          <h2 id="features-heading" className="font-display text-display-md sm:text-display-lg mb-5 text-balance font-bold tracking-tight text-foreground">
+            Built for modern agencies
+          </h2>
+          <p className="text-body-lg text-muted-foreground leading-relaxed">
+            Everything you need to run high-volume pages. Core features are completely free—only pay for automated scraping when you use it.
+          </p>
+        </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 lg:gap-8">
         {features.map((feat, index) => {
@@ -93,5 +99,6 @@ export function FeaturesSection() {
         })}
       </div>
     </div>
+  </section>
   )
 }

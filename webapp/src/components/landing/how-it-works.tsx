@@ -1,6 +1,4 @@
 import { HowItWorksSectionMotion } from '@/components/landing/how-it-works-motion'
-import { MythbustersSection } from '@/components/landing/mythbusters'
-import { FeaturesSection } from '@/components/landing/features-section'
 
 const howItWorksSteps = [
     {
@@ -41,8 +39,6 @@ export function HowItWorksSection() {
             <div className="landing-atmosphere-grid-section" aria-hidden />
 
             <HowItWorksSectionMotion steps={[...howItWorksSteps]} />
-            <MythbustersSection />
-            <FeaturesSection />
         </section>
     )
 }

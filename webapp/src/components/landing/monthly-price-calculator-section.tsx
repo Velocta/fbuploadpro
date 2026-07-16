@@ -5,22 +5,13 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-
-type SourcePlatform = 'instagram' | 'tiktok' | 'youtube' | 'facebook'
 
 export type MonthlyPriceCalculatorLayout = 'default' | 'split'
 
 const TOKEN_PRICE_PKR = 0.15
 const DAYS_PER_MONTH = 30
-
-const TOKENS_PER_REEL: Record<SourcePlatform, number> = {
-  instagram: 1,
-  tiktok: 1,
-  youtube: 1,
-  facebook: 1,
-}
+const TOKENS_PER_REEL = 1
 
 function parsePositiveInt(value: string): number {
   const parsed = Number.parseInt(value, 10)
@@ -40,18 +31,16 @@ type MonthlyPriceCalculatorSectionProps = {
 }
 
 export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPriceCalculatorSectionProps) {
-  const [source, setSource] = useState<SourcePlatform>('instagram')
   const [reelsPerDayInput, setReelsPerDayInput] = useState('2')
   const [pagesInput, setPagesInput] = useState('10')
 
   const reelsPerDay = parsePositiveInt(reelsPerDayInput)
   const pages = parsePositiveInt(pagesInput)
-  const tokensPerReel = TOKENS_PER_REEL[source]
 
   const calculated = useMemo(() => {
     const monthlyReelsPerPage = reelsPerDay * DAYS_PER_MONTH
     const totalMonthlyReels = monthlyReelsPerPage * pages
-    const totalMonthlyTokens = totalMonthlyReels * tokensPerReel
+    const totalMonthlyTokens = totalMonthlyReels * TOKENS_PER_REEL
     const monthlyPrice = totalMonthlyTokens * TOKEN_PRICE_PKR
 
     return {
@@ -60,7 +49,7 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
       totalMonthlyTokens,
       monthlyPrice,
     }
-  }, [pages, reelsPerDay, tokensPerReel])
+  }, [pages, reelsPerDay])
 
   const isSplit = layout === 'split'
 
@@ -81,10 +70,10 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
           Monthly Cost Calculator
         </Badge>
         <h3 className="text-2xl md:text-4xl font-bold tracking-tight mb-4 text-foreground">
-          Estimate your monthly automation cost
+          Estimate your monthly Auto Download & Upload cost
         </h3>
-        <p className="text-muted-foreground text-base md:text-lg leading-relaxed">
-          Select a source platform, set daily reels and page count, and get an instant monthly estimate.
+        <p className="text-muted-foreground text-sm leading-relaxed max-w-2xl">
+          This estimate is for the Auto Download & Upload (ADU) feature only. All other features (connecting unlimited profiles/pages, In-App queue scheduling, direct posting, and bulk deletes) are <span className="font-semibold text-emerald-600 dark:text-emerald-400">100% free</span>.
         </p>
       </div>
 
@@ -98,22 +87,7 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
         >
           <CardContent className={cn(isSplit ? 'p-6 md:p-8' : 'p-8 md:p-12')}>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="source-platform">Source platform</Label>
-                <Select value={source} onValueChange={(value) => setSource(value as SourcePlatform)}>
-                  <SelectTrigger id="source-platform" className="w-full bg-background">
-                    <SelectValue placeholder="Choose source platform" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="instagram">Instagram (1 token per reel)</SelectItem>
-                    <SelectItem value="tiktok">TikTok (1 token per reel)</SelectItem>
-                    <SelectItem value="youtube">YouTube (1 token per reel)</SelectItem>
-                    <SelectItem value="facebook">Facebook (1 token per reel)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
+            <div className="space-y-6 flex flex-col justify-center">
               <div className="space-y-2">
                 <Label htmlFor="reels-per-day">Reels per day (per page)</Label>
                 <Input
@@ -141,7 +115,7 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
               </div>
 
               <p id="calculator-assumptions" className="text-xs text-muted-foreground">
-                Assumptions: 30 days/month, all platforms use 1 token per reel, and each token costs PKR 0.15.
+                Assumptions: 30 days/month, 1 token per reel, and each token costs PKR 0.15.
               </p>
             </div>
 
@@ -154,14 +128,19 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
               <div className="space-y-2 text-sm text-muted-foreground">
                 <p>Monthly reels per page: <span className="font-semibold text-foreground">{calculated.monthlyReelsPerPage.toLocaleString()}</span></p>
                 <p>Total monthly reels: <span className="font-semibold text-foreground">{calculated.totalMonthlyReels.toLocaleString()}</span></p>
-                <p>Token rate for selected source: <span className="font-semibold text-foreground">{tokensPerReel}</span> token(s)/reel</p>
+                <p>Token rate: <span className="font-semibold text-foreground">{TOKENS_PER_REEL}</span> token(s)/reel</p>
                 <p>Total monthly tokens: <span className="font-semibold text-foreground">{calculated.totalMonthlyTokens.toLocaleString()}</span></p>
               </div>
 
               <div className="mt-4 pt-4 border-t border-border/60">
-                <div className="rounded-xl bg-primary/5 border border-primary/10 p-3.5 text-xs text-primary flex flex-col gap-1">
-                  <span className="font-bold">Unbeatable Value:</span>
-                  <span>Automating 1 page at 2 posts a day for a whole month costs only <span className="font-bold">PKR 9.00</span>!</span>
+                <div className="rounded-xl bg-primary/5 border border-primary/10 p-3.5 text-xs text-primary flex flex-col gap-2">
+                  <div>
+                    <span className="font-bold block">Unbeatable Value:</span>
+                    <span>Automating 1 page at 2 posts a day for a whole month costs only <span className="font-bold">PKR 9.00</span>!</span>
+                  </div>
+                  <div className="pt-2 border-t border-primary/10">
+                    <span>Automating 10 pages for a whole month costs only <span className="font-bold">90 PKR</span>!</span>
+                  </div>
                 </div>
               </div>
             </div>

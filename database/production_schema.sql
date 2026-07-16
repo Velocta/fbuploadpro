@@ -2977,7 +2977,7 @@ grant select on public.agency_page_stats to authenticated;
 
 -- Create site_stats view
 create or replace view public.site_stats 
-with (security_invoker = true) as
+with (security_invoker = false) as
 select 
   (
     select coalesce(sum(followers_gained), 0)::bigint 

@@ -16,6 +16,16 @@ const PricingSection = nextDynamic(() => import('@/components/landing/pricing-se
   loading: () => <div className="min-h-[500px] animate-pulse bg-muted/10" />
 })
 
+const MythbustersSection = nextDynamic(() => import('@/components/landing/mythbusters').then((mod) => mod.MythbustersSection), {
+  ssr: true,
+  loading: () => <div className="min-h-[400px] animate-pulse bg-muted/10" />
+})
+
+const FeaturesSection = nextDynamic(() => import('@/components/landing/features-section').then((mod) => mod.FeaturesSection), {
+  ssr: true,
+  loading: () => <div className="min-h-[400px] animate-pulse bg-muted/10" />
+})
+
 const FooterSection = nextDynamic(() => import('@/components/landing/footer-section').then((mod) => mod.FooterSection), {
   ssr: true,
   loading: () => <div className="min-h-[200px] animate-pulse bg-muted/10" />
@@ -39,8 +49,10 @@ export default function LandingPage() {
           <div className="landing-page-mist-blob-c" />
         </div>
         <HeroSection />
-        <HowItWorksSection />
         <PricingSection />
+        <HowItWorksSection />
+        <MythbustersSection />
+        <FeaturesSection />
       </main>
 
       <FooterSection />

@@ -25,21 +25,27 @@ const myths = [
 
 export function MythbustersSection() {
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-24">
-      <div className="mx-auto mb-14 max-w-3xl text-center">
-        <Badge
-          variant="outline"
-          className="mb-4 px-4 py-1 text-xs font-semibold uppercase tracking-[0.12em] border-primary/20 bg-primary/5 text-primary"
-        >
-          Common Concerns
-        </Badge>
-        <h2 className="font-display text-display-md sm:text-display-lg mb-5 text-balance font-bold tracking-tight text-foreground">
-          Objections & Reality
-        </h2>
-        <p className="text-body-lg text-muted-foreground leading-relaxed">
-          There are many misconceptions about how API automation works. Let&apos;s set the record straight.
-        </p>
-      </div>
+    <section
+      id="common-concerns"
+      className="relative overflow-hidden border-t border-border bg-background py-20 sm:py-24"
+      aria-labelledby="mythbusters-heading"
+    >
+      <div className="landing-atmosphere-grid-section" aria-hidden />
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto mb-14 max-w-3xl text-center">
+          <Badge
+            variant="outline"
+            className="mb-4 px-4 py-1 text-xs font-semibold uppercase tracking-[0.12em] border-primary/20 bg-primary/5 text-primary"
+          >
+            Common Concerns
+          </Badge>
+          <h2 id="mythbusters-heading" className="font-display text-display-md sm:text-display-lg mb-5 text-balance font-bold tracking-tight text-foreground">
+            Objections & Reality
+          </h2>
+          <p className="text-body-lg text-muted-foreground leading-relaxed">
+            There are many misconceptions about how API automation works. Let&apos;s set the record straight.
+          </p>
+        </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:gap-8">
         {myths.map((item, index) => (
@@ -71,5 +77,6 @@ export function MythbustersSection() {
         ))}
       </div>
     </div>
+  </section>
   )
 }
