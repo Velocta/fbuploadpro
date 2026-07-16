@@ -46,15 +46,14 @@ export async function updateInappPageSettingsAction(formData: FormData) {
 
     const supabase = await createClient()
 
-    // Convert times from user timezone to UTC to save in database
-    const utcPostingTimes = postingTimes.map(timeStr => {
+    // Convert 12-hour AM/PM posting times to 24-hour HH:MM local format to save in database
+    const convertedPostingTimes = postingTimes.map(timeStr => {
       try {
+        if (/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
+          return timeStr
+        }
         const date = parse(timeStr, 'hh:mm a', new Date())
-        const zonedDate = fromZonedTime(
-          `${format(new Date(), 'yyyy-MM-dd')} ${format(date, 'HH:mm:00')}`,
-          timezone
-        )
-        return sanitizeToUtcHHMM(formatInTimeZone(zonedDate, 'UTC', 'HH:mm'))
+        return format(date, 'HH:mm')
       } catch {
         return sanitizeToUtcHHMM(timeStr)
       }
@@ -64,7 +63,7 @@ export async function updateInappPageSettingsAction(formData: FormData) {
       .from('facebook_inapp_schedule_pages')
       .update({
         posts_per_day: postsPerDay,
-        posting_times: utcPostingTimes,
+        posting_times: convertedPostingTimes,
         schedule_timezone: timezone,
       })
       .eq('id', pageId)

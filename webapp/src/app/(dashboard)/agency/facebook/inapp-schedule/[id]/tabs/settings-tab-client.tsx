@@ -41,15 +41,19 @@ export type InappPageSettingsData = {
   } | null
 }
 
-function formatUtcTimeForTimezone(utcTime: string, timezone: string): string {
-  const [hours, minutes] = utcTime.split(':')
-  if (!hours || !minutes) return utcTime
+function formatLocalTime(timeStr: string): string {
+  const [hoursStr, minutesStr] = timeStr.split(':')
+  if (!hoursStr || !minutesStr) return timeStr
   try {
-    const date = new Date()
-    date.setUTCHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0)
-    return formatInTimeZone(date, timezone, 'hh:mm a')
+    const hour = parseInt(hoursStr, 10)
+    const minute = parseInt(minutesStr, 10)
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    const h12 = hour % 12 || 12
+    const mStr = String(minute).padStart(2, '0')
+    const hStr = String(h12).padStart(2, '0')
+    return `${hStr}:${mStr} ${ampm}`
   } catch {
-    return utcTime
+    return timeStr
   }
 }
 
@@ -64,7 +68,7 @@ export function SettingsTabClient({ page }: { page: InappPageSettingsData }) {
   const [localPostingTimes, setLocalPostingTimes] = useState<string[]>(() => {
     const times = Array.isArray(page.posting_times) ? page.posting_times : []
     return times.map((utcTime) =>
-      formatUtcTimeForTimezone(utcTime, page.schedule_timezone || 'UTC')
+      formatLocalTime(utcTime)
     )
   })
 
@@ -74,9 +78,9 @@ export function SettingsTabClient({ page }: { page: InappPageSettingsData }) {
     if (times.length === 0) return null
 
     return times.map((utcTime) =>
-      formatUtcTimeForTimezone(utcTime, page.schedule_timezone || 'UTC')
+      formatLocalTime(utcTime)
     )
-  }, [page.posting_times, page.schedule_timezone])
+  }, [page.posting_times])
 
   const handleSettingsSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -121,7 +125,7 @@ export function SettingsTabClient({ page }: { page: InappPageSettingsData }) {
 
     const times = Array.isArray(page.posting_times) ? page.posting_times : []
     setLocalPostingTimes(
-      times.map((utcTime) => formatUtcTimeForTimezone(utcTime, page.schedule_timezone || 'UTC'))
+      times.map((utcTime) => formatLocalTime(utcTime))
     )
   }
 

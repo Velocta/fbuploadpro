@@ -91,8 +91,12 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
   const [startDate, setStartDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
   const [previewError, setPreviewError] = useState<string | null>(null)
 
+  const [showBulkEditor, setShowBulkEditor] = useState(false)
+  const [bulkCaption, setBulkCaption] = useState('')
+  const [bulkLinks, setBulkLinks] = useState('')
+
   const totalSteps = 3
-  const cappedPostsPerDay = Math.min(5, Math.max(1, postsPerDay))
+  const cappedPostsPerDay = Math.min(12, Math.max(1, postsPerDay))
 
   const resetState = useCallback(() => {
     setItems((prev) => {
@@ -109,7 +113,37 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
     setStartDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
     setPreviewError(null)
     setSubmitProgress(0)
+    setShowBulkEditor(false)
+    setBulkCaption('')
+    setBulkLinks('')
   }, [])
+
+  const handleBulkApply = useCallback(() => {
+    const links = bulkLinks
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+
+    const linksToUse = links.slice(0, items.length)
+
+    if (links.length > 0 && !bulkCaption.includes('{{link}}')) {
+      toast.error("Please add '{{link}}' placeholder in the caption where you want to insert the links.")
+      return
+    }
+
+    setItems((prev) =>
+      prev.map((item, index) => {
+        let finalCaption = bulkCaption
+        if (bulkCaption.includes('{{link}}')) {
+          const linkForThisItem = linksToUse[index] || ''
+          finalCaption = bulkCaption.replaceAll('{{link}}', linkForThisItem)
+        }
+        return { ...item, caption: finalCaption }
+      })
+    )
+
+    toast.success(`Applied bulk caption to ${items.length} posts.`)
+  }, [bulkCaption, bulkLinks, items.length])
 
   const uploadItem = async (itemId: string, file: File) => {
     const mediaType = detectMediaType(file)
@@ -370,6 +404,17 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
                     <Plus className="h-4 w-4" />
                     Add text post
                   </Button>
+                  {items.length > 0 && (
+                    <Button
+                      type="button"
+                      variant={showBulkEditor ? 'default' : 'outline'}
+                      className="gap-2 ml-auto"
+                      onClick={() => setShowBulkEditor(!showBulkEditor)}
+                    >
+                      <Type className="h-4 w-4" />
+                      Bulk Apply Caption & Links
+                    </Button>
+                  )}
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -382,6 +427,95 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
                     }}
                   />
                 </div>
+
+                {showBulkEditor && items.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden rounded-2xl border border-border/60 bg-muted/30 p-4 space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-bold uppercase tracking-wider text-primary">Bulk Apply Caption & Links</h4>
+                      <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+                        {items.length} Posts Active
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="bulk-caption" className="text-xs font-semibold text-muted-foreground uppercase">
+                          Template Caption
+                        </Label>
+                        <Textarea
+                          id="bulk-caption"
+                          placeholder="Write a caption template. Use {{link}} to indicate where the links should be inserted."
+                          value={bulkCaption}
+                          onChange={(e) => setBulkCaption(e.target.value)}
+                          className="min-h-[100px] text-sm bg-background/50 resize-none"
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Use <code className="font-mono bg-muted px-1 py-0.5 rounded text-foreground font-semibold">{"{{link}}"}</code> as a placeholder for links.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="bulk-links" className="text-xs font-semibold text-muted-foreground uppercase">
+                          Links List (One per line)
+                        </Label>
+                        <Textarea
+                          id="bulk-links"
+                          placeholder="Paste links here, one link per line.&#10;https://example.com/1&#10;https://example.com/2"
+                          value={bulkLinks}
+                          onChange={(e) => setBulkLinks(e.target.value)}
+                          className="min-h-[100px] text-sm bg-background/50 font-mono resize-none"
+                        />
+                        {(() => {
+                          const linksCount = bulkLinks.split('\n').map(l => l.trim()).filter(Boolean).length;
+                          const hasPlaceholder = bulkCaption.includes('{{link}}');
+                          
+                          if (linksCount > 0) {
+                            if (!hasPlaceholder) {
+                              return (
+                                <p className="text-[11px] text-amber-500 font-medium flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3" />
+                                  Warning: Please add {"{{link}}"} in the caption where you want to insert these links.
+                                </p>
+                              );
+                            }
+                            const discardedCount = Math.max(0, linksCount - items.length);
+                            const usedCount = Math.min(linksCount, items.length);
+                            return (
+                              <p className="text-[11px] text-emerald-500 font-medium">
+                                ✓ Using {usedCount} link{usedCount === 1 ? '' : 's'} for {items.length} post{items.length === 1 ? '' : 's'}. 
+                                {discardedCount > 0 ? ` (Discarding ${discardedCount} extra link${discardedCount === 1 ? '' : 's'})` : ''}
+                              </p>
+                            );
+                          }
+                          return (
+                            <p className="text-[11px] text-muted-foreground">
+                              Optional. Paste a list of links to distribute across your posts.
+                            </p>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={
+                          bulkLinks.trim().length > 0 && !bulkCaption.includes('{{link}}')
+                        }
+                        onClick={handleBulkApply}
+                        className="font-semibold"
+                      >
+                        Apply to All Posts
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
 
                 {items.length === 0 ? (
                   <div
@@ -484,11 +618,11 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Posts per day (max 5)</Label>
+                  <Label>Posts per day (max 12)</Label>
                   <PostsPerDayPicker
                     value={cappedPostsPerDay}
                     onValueChange={(v) => {
-                      const n = Math.min(5, Math.max(1, Number.parseInt(v, 10) || 1))
+                      const n = Math.min(12, Math.max(1, Number.parseInt(v, 10) || 1))
                       setPostsPerDay(n)
                       setPostingTimes((prev) => ensurePostingTimesLength(prev, n))
                     }}

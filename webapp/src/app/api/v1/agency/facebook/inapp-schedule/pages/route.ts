@@ -5,6 +5,8 @@ import {
   listInappSchedulePages,
   upsertInappSchedulePage,
 } from '@/server/services/facebook/inapp-schedule-service'
+import { parse, format } from 'date-fns'
+import { sanitizeToUtcHHMM } from '@/lib/posting-times'
 
 export const runtime = 'nodejs'
 
@@ -27,6 +29,20 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
+    
+    const rawPostingTimes = Array.isArray(body.postingTimes) ? body.postingTimes : undefined
+    const postingTimes = rawPostingTimes?.map((timeStr: string) => {
+      try {
+        if (/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
+          return timeStr
+        }
+        const date = parse(timeStr, 'hh:mm a', new Date())
+        return format(date, 'HH:mm')
+      } catch {
+        return sanitizeToUtcHHMM(timeStr)
+      }
+    })
+
     const page = await upsertInappSchedulePage(auth.user.id, {
       facebookAccountId: String(body.facebookAccountId || ''),
       fbPageId: String(body.fbPageId || ''),
@@ -35,7 +51,7 @@ export async function POST(request: Request) {
       fbPageAccessToken: String(body.fbPageAccessToken || ''),
       followersCount: body.followersCount !== undefined ? Number(body.followersCount) : undefined,
       postsPerDay: body.postsPerDay !== undefined ? Number(body.postsPerDay) : undefined,
-      postingTimes: Array.isArray(body.postingTimes) ? body.postingTimes : undefined,
+      postingTimes: postingTimes,
       scheduleTimezone: body.scheduleTimezone ? String(body.scheduleTimezone) : undefined,
     })
     return NextResponse.json({ page })
