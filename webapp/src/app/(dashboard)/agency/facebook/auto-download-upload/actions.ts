@@ -107,17 +107,6 @@ async function validateAndInsertPage(
   const fbPageId = (input.fbPageId || '').trim().replace(/\s/g, '')
   const fbPageAccessToken = (input.fbPageAccessToken || '').trim().replace(/\s/g, '')
 
-  const { data: existingPages, error: checkError } = await supabase
-    .from('pages')
-    .select('source_username')
-    .eq('agency_id', input.agencyId)
-    .eq('source_username', sourceUsername)
-
-  if (checkError) return { error: checkError.message }
-  if (existingPages && existingPages.length > 0) {
-    return { error: `The source account "${sourceUsername}" is already being used by another page.` }
-  }
-
   let finalPageAccessToken = fbPageAccessToken
 
   if (!finalPageAccessToken && input.facebookAccountId) {

@@ -202,30 +202,7 @@ export async function updateSourceUsername(pageId: string, newUsername: string, 
   const effectivePlatform: SourcePlatform = (newPlatform || profile.source_platform || 'instagram') as SourcePlatform
   const normalizedUsername = normalizeSourceUsername(effectivePlatform, newUsername)
 
-  // 2. Check for duplicate source_username in the same agency & platform
-  const { data: existing, error: duplicateCheckError } = await supabase
-    .from('pages')
-    .select('id')
-    .eq('agency_id', profile.agency_id)
-    .eq('source_username', normalizedUsername)
-    .eq('source_platform', effectivePlatform)
-    .neq('id', pageId) // Exclude current profile
-    .single()
 
-  if (duplicateCheckError && duplicateCheckError.code !== 'PGRST116') {
-    const formatted = formatDebugError('duplicate_check', duplicateCheckError, {
-      requestId: debugRequestId,
-      pageId,
-      normalizedUsername,
-      effectivePlatform,
-    })
-    console.error(formatted.logMessage)
-    return { error: `${formatted.clientMessage} [request_id=${debugRequestId}]` }
-  }
-
-  if (existing) {
-    return { error: `The source account "${normalizedUsername}" is already being used by another one of your pages on this platform.` }
-  }
 
   // 3. Delete pending reels for the old source via security-definer RPC (skips row trigger, batches internally).
   const oldSourceUsername = String(profile.source_username || '').trim()

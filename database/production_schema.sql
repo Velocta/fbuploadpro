@@ -117,7 +117,6 @@ create table public.pages (
   
   -- Constraints
   constraint unique_page_per_account unique (facebook_account_id, fb_page_id),
-  constraint unique_source_username_per_agency unique (agency_id, source_username),
   constraint pages_posting_times_hhmm_check check (public.is_valid_posting_times(posting_times))
 );
 
