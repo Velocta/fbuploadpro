@@ -62,10 +62,11 @@ export function PricingSectionMotion() {
                   </h3>
                   <ul className="space-y-4 text-sm text-muted-foreground">
                     {[
-                      'Non-expiring tokens - Use them whenever you need',
-                      "Tokens are only used for published reels; failed reels or other issues don't cost you tokens",
-                      'No minimum limit on the number of pages you can manage or the tokens you can have',
-                      'Direct founder support via WhatsApp',
+                      'Top up whatever amount you need - buy tokens starting from as low as 100 PKR.',
+                      'Non-expiring tokens - use them whenever you need.',
+                      'Only pay for successfully published reels - failed scrapes or posting errors do not consume tokens.',
+                      '100% Free core features - account linking, direct scheduling, In-App queue scheduling, and bulk deleting posts cost zero tokens.',
+                      'Direct founder support via WhatsApp.',
                     ].map((feature, i) => (
                       <li key={i} className="group/feat flex items-start gap-3">
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary transition-transform duration-200 ease-out group-hover/feat:scale-[1.02] motion-reduce:group-hover/feat:scale-100" />
@@ -78,11 +79,10 @@ export function PricingSectionMotion() {
                 <div className="space-y-6 rounded-xl border border-border bg-background p-6 shadow-sm">
                   <div className="space-y-1">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">Free account creation</p>
-                    <h4 className="text-2xl font-bold sm:text-3xl">Start Building</h4>
+                    <h4 className="text-2xl font-bold sm:text-3xl">Start Free Now</h4>
                   </div>
                   <p className="text-sm leading-relaxed text-muted-foreground">
-                    Just go to the sign up page and create an account to start adding pages. You aren&apos;t charged
-                    for Facebook accounts or pages.
+                    Create an account to start adding Facebook pages. You aren&apos;t charged for linking accounts, editing page schedules, or queueing your own posts.
                   </p>
                   <Button
                     className="h-12 w-full rounded-lg text-sm font-semibold shadow-sm transition-[background-color,box-shadow,transform] duration-200 ease-out hover:bg-primary/90 motion-reduce:active:scale-100 active:scale-[0.98]"

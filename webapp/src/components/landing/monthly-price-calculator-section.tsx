@@ -157,6 +157,13 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
                 <p>Token rate for selected source: <span className="font-semibold text-foreground">{tokensPerReel}</span> token(s)/reel</p>
                 <p>Total monthly tokens: <span className="font-semibold text-foreground">{calculated.totalMonthlyTokens.toLocaleString()}</span></p>
               </div>
+
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <div className="rounded-xl bg-primary/5 border border-primary/10 p-3.5 text-xs text-primary flex flex-col gap-1">
+                  <span className="font-bold">Unbeatable Value:</span>
+                  <span>Automating 1 page at 2 posts a day for a whole month costs only <span className="font-bold">PKR 9.00</span>!</span>
+                </div>
+              </div>
             </div>
           </div>
         </CardContent>

@@ -37,21 +37,20 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                             variant="outline"
                             className="border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-semibold tracking-[0.12em] text-primary"
                         >
-                            Facebook Automation Platform
+                            Official API Page Automation
                         </Badge>
                     </div>
 
                     <h1 className="font-display text-display-md sm:text-display-lg lg:text-display-xl mb-6 text-left font-bold tracking-tight text-balance text-foreground">
-                        Automate Facebook pages
+                        Automate your Facebook pages
                         <span className="text-primary">
                             {' '}
-                            without heavy PC or internet.
+                            100% in the cloud.
                         </span>
                     </h1>
 
                     <p className="text-body-lg mb-8 max-w-xl text-left text-muted-foreground">
-                        Use secure API to connect your Facebook accounts and pages
-                        without having to use passwords.
+                        Link unlimited pages securely using official Facebook APIs—no passwords or cookies required. Video downloading, caption scraping, and publishing run 24/7 on our premium residential proxies.
                     </p>
 
                     <div className="flex flex-col items-start gap-3 sm:flex-row sm:gap-4">
@@ -80,7 +79,7 @@ export function HeroSectionMotion({ totalFollowersGained, totalUsers }: HeroSect
                     <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                         <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card/90 px-3 py-1.5">
                             <ShieldCheck className="h-4 w-4 text-primary" />
-                            Official API auth
+                            No credit card required • Link unlimited pages for free
                         </span>
                     </div>
                 </div>
