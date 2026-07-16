@@ -49,10 +49,10 @@ export default function LandingPage() {
           <div className="landing-page-mist-blob-c" />
         </div>
         <HeroSection />
+        <FeaturesSection />
+        <MythbustersSection />
         <PricingSection />
         <HowItWorksSection />
-        <MythbustersSection />
-        <FeaturesSection />
       </main>
 
       <FooterSection />

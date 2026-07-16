@@ -3,20 +3,20 @@ import { HowItWorksSectionMotion } from '@/components/landing/how-it-works-motio
 const howItWorksSteps = [
     {
         number: '01',
-        title: 'Connect your Facebook pages',
+        title: 'Securely link your Facebook pages',
         description:
-            'Link your account securely and choose the pages you want to publish to.',
+            'Log in via official Facebook authentication and select the pages you want to automate. We never ask for passwords or session cookies.',
     },
     {
         number: '02',
-        title: 'Add source usernames',
+        title: 'Provide source accounts',
         description:
-            'Provide Instagram/TikTok/YouTube usernames or Facebook page/user IDs and we will download their reels on our server.',
+            'Add public Instagram, TikTok, YouTube, or Facebook usernames. Our system automatically scrapes, downloads, and processes their reels on our servers.',
     },
     {
         number: '03',
-        title: 'Run automated publishing',
-        description: 'Set the posting times and reels will be posted on those times.',
+        title: 'Configure posting schedule',
+        description: 'Define your target posting times. The system publishes reels at those exact moments automatically. No need to keep your PC on or browser open.',
     },
 ] as const
 
