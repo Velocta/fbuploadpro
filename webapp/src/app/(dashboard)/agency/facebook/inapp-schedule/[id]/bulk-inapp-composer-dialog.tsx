@@ -264,7 +264,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
           return
         }
 
-        const { summary, batchId } = result
+        const { summary } = result
         if (summary?.queued > 0) {
           toast.success(`Queued ${summary.queued} post${summary.queued === 1 ? '' : 's'} for publishing`)
         } else {
@@ -275,9 +275,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
         setOpen(false)
         resetState()
         router.refresh()
-        if (batchId) {
-          router.push(`/agency/facebook/inapp-schedule/${pageId}?bulkBatch=${batchId}`)
-        }
+        router.push(`/agency/facebook/inapp-schedule/${pageId}`)
       } catch {
         toast.error('Bulk queue failed due to a network error')
       }
