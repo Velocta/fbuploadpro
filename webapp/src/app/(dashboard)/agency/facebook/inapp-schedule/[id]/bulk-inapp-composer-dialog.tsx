@@ -7,9 +7,11 @@ import { useRouter } from 'next/navigation'
 import {
   CalendarClock,
   CalendarPlus,
+  Copy,
   Image as ImageIcon,
   Loader2,
   Plus,
+  Sparkles,
   Trash2,
   Type,
   UploadCloud,
@@ -52,6 +54,14 @@ function detectMediaType(file: File): 'image' | 'video' {
   return file.type.startsWith('video/') ? 'video' : 'image'
 }
 
+function captionFromFileName(fileName: string) {
+  const withoutExtension = fileName.replace(/\.[^/.]+$/, '')
+  return withoutExtension
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 interface BulkInappComposerDialogProps {
   pageId: string
   children: React.ReactNode
@@ -66,6 +76,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
 
   const [items, setItems] = useState<QueueItem[]>([])
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [globalCaption, setGlobalCaption] = useState('')
   const [globalFirstComment, setGlobalFirstComment] = useState('')
   const [isDragging, setIsDragging] = useState(false)
 
@@ -77,6 +88,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       return []
     })
     setSubmitProgress(0)
+    setGlobalCaption('')
     setGlobalFirstComment('')
     setSelectedItemId(null)
     setIsDragging(false)
@@ -128,7 +140,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       return {
         id,
         mediaType,
-        caption: '',
+        caption: captionFromFileName(file.name),
         fileName: file.name,
         previewUrl,
         uploadProgress: 0,
@@ -186,6 +198,16 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
 
   const updateFirstComment = (id: string, firstComment: string) => {
     setItems((prev) => prev.map((r) => (r.id === id ? { ...r, firstComment } : r)))
+  }
+
+  const applyGlobalCaptionToAll = () => {
+    const caption = globalCaption.trim()
+    if (!caption) {
+      toast.error('Add a caption to apply first')
+      return
+    }
+    setItems((prev) => prev.map((row) => ({ ...row, caption })))
+    toast.success(`Applied caption to ${items.length} post${items.length === 1 ? '' : 's'}`)
   }
 
   const handleDrag = (e: React.DragEvent) => {
@@ -294,7 +316,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                 <div>
                   <DialogTitle className="font-display text-xl">Bulk Queue Posts</DialogTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Add multiple posts sequentially using the split-pane composer
+                    Upload media, auto-fill captions from filenames, then edit or apply captions in bulk
                   </p>
                 </div>
               </div>
@@ -380,16 +402,24 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
 
                   {/* Scrollable Post Cards List */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-2.5 custom-scrollbar">
+                    <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-primary">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Filename captions enabled
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                        New media captions are prefilled from filenames. Edit captions directly below or apply one caption to all posts.
+                      </p>
+                    </div>
                     {items.map((row) => {
                       const Icon = row.mediaType === 'text' ? Type : row.mediaType === 'video' ? Video : ImageIcon
                       const isActive = selectedItemId === row.id
                       return (
-                        <button
+                        <div
                           key={row.id}
-                          type="button"
                           onClick={() => setSelectedItemId(row.id)}
                           className={cn(
-                            'flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all relative overflow-hidden group',
+                            'flex w-full gap-3 rounded-xl border p-3 text-left transition-all relative overflow-hidden group',
                             isActive
                               ? 'border-primary bg-primary/5 ring-1 ring-primary/20'
                               : 'border-border/50 bg-background/20 hover:border-primary/30 hover:bg-muted/30'
@@ -402,7 +432,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                               <Icon className="h-5 w-5 text-muted-foreground" />
                             )}
                           </div>
-                          <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="min-w-0 flex-1 space-y-2">
                             <div className="flex items-center gap-1.5">
                               <Badge variant="outline" className="text-[9px] px-1 py-0 uppercase font-mono tracking-wide scale-90 origin-left">{row.mediaType}</Badge>
                               {row.uploading && (
@@ -411,10 +441,21 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                                   {Math.round(row.uploadProgress)}%
                                 </span>
                               )}
+                              {row.fileName && (
+                                <span className="truncate text-[10px] text-muted-foreground">
+                                  {row.fileName}
+                                </span>
+                              )}
                             </div>
-                            <p className="truncate text-xs font-semibold text-foreground">
-                              {row.caption ? row.caption : row.fileName || 'Text Post'}
-                            </p>
+                            <Textarea
+                              aria-label={`Caption for ${row.fileName || row.mediaType}`}
+                              placeholder={row.mediaType === 'text' ? 'Post text (required)' : 'Caption (optional)'}
+                              value={row.caption}
+                              onClick={(e) => e.stopPropagation()}
+                              onFocus={() => setSelectedItemId(row.id)}
+                              onChange={(e) => updateCaption(row.id, e.target.value)}
+                              className="min-h-[58px] resize-none rounded-lg border-border/50 bg-background/70 text-xs focus-visible:ring-primary/20"
+                            />
                           </div>
                           <Button
                             type="button"
@@ -425,27 +466,55 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                               removeItem(row.id)
                             }}
                             disabled={row.uploading || isPending}
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity rounded-lg"
+                            className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-opacity rounded-lg"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
-                        </button>
+                        </div>
                       )
                     })}
                   </div>
 
-                  {/* Global First Comment (Sticky at bottom of sidebar) */}
-                  <div className="p-4 border-t border-border/50 bg-muted/20 shrink-0">
-                    <Label htmlFor="globalFirstComment" className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-                      Global First Comment
-                    </Label>
-                    <Textarea
-                      id="globalFirstComment"
-                      placeholder="Comment text applied to posts with empty comments..."
-                      value={globalFirstComment}
-                      onChange={(e) => setGlobalFirstComment(e.target.value)}
-                      className="min-h-[60px] max-h-[80px] resize-none text-xs rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
-                    />
+                  {/* Bulk caption + global first comment (Sticky at bottom of sidebar) */}
+                  <div className="p-4 border-t border-border/50 bg-muted/20 shrink-0 space-y-4">
+                    <div>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <Label htmlFor="globalCaption" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                          One Caption For All
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={applyGlobalCaptionToAll}
+                          disabled={items.length === 0 || !globalCaption.trim() || isPending}
+                          className="h-7 gap-1.5 rounded-lg px-2 text-[11px]"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Apply all
+                        </Button>
+                      </div>
+                      <Textarea
+                        id="globalCaption"
+                        placeholder="Paste one caption here, then apply it to every post..."
+                        value={globalCaption}
+                        onChange={(e) => setGlobalCaption(e.target.value)}
+                        className="min-h-[68px] max-h-[96px] resize-none text-xs rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="globalFirstComment" className="text-xs font-bold text-muted-foreground uppercase tracking-wider block mb-2">
+                        Global First Comment
+                      </Label>
+                      <Textarea
+                        id="globalFirstComment"
+                        placeholder="Comment text applied to posts with empty comments..."
+                        value={globalFirstComment}
+                        onChange={(e) => setGlobalFirstComment(e.target.value)}
+                        className="min-h-[60px] max-h-[80px] resize-none text-xs rounded-xl border-border/50 bg-background/50 focus-visible:ring-primary/20"
+                      />
+                    </div>
                   </div>
                 </div>
 
