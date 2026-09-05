@@ -3,6 +3,7 @@ import { ChevronRight, Youtube } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
+import { getBrandConfig } from '@/lib/config/brand'
 
 export type AgencyBreadcrumbSegment = {
   label: string
@@ -30,6 +31,10 @@ export function AgencyGlassPageHero({
   className?: string
   tutorialHref?: string
 }) {
+  const host = typeof window !== 'undefined' ? window.location.hostname : ''
+  const brand = getBrandConfig(host)
+  const showTutorial = Boolean(tutorialHref && !brand.hideTutorials)
+
   return (
     <div className={cn('relative group', className)}>
       <div
@@ -86,7 +91,7 @@ export function AgencyGlassPageHero({
                     {description}
                   </p>
                 ) : null}
-                {tutorialHref ? (
+                {showTutorial ? (
                   <div className="pt-1">
                     <a
                       href={tutorialHref}

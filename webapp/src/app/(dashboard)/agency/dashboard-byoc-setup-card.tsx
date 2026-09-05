@@ -3,12 +3,16 @@ import { Settings2, Youtube } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AgencySectionCard } from '@/components/dashboard/agency'
 import { CardContent } from '@/components/ui/card'
+import { getBrandConfig } from '@/lib/config/brand'
 
 export function DashboardByocSetupCard({
   fbAccountsCount,
 }: {
   fbAccountsCount: number
 }) {
+  const host = typeof window !== 'undefined' ? window.location.hostname : ''
+  const brand = getBrandConfig(host)
+
   return (
     <AgencySectionCard className="border-primary/20">
       <CardContent className="flex flex-col gap-4 py-6 sm:flex-row sm:items-center sm:justify-between">
@@ -18,17 +22,19 @@ export function DashboardByocSetupCard({
             Connect your Facebook app in Settings before linking accounts or running Facebook
             automation.
           </p>
-          <div className="pt-1">
-            <a
-              href="https://youtu.be/xdNZ_cjJUbI"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 px-3 py-1.5 rounded-full border border-destructive/20 transition-all hover:bg-destructive/15"
-            >
-              <Youtube className="h-4 w-4" />
-              Watch Video Setup Guide
-            </a>
-          </div>
+          {!brand.hideTutorials ? (
+            <div className="pt-1">
+              <a
+                href="https://youtu.be/xdNZ_cjJUbI"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 px-3 py-1.5 rounded-full border border-destructive/20 transition-all hover:bg-destructive/15"
+              >
+                <Youtube className="h-4 w-4" />
+                Watch Video Setup Guide
+              </a>
+            </div>
+          ) : null}
           {fbAccountsCount === 0 ? (
             <p className="text-xs text-muted-foreground pt-1">No Facebook accounts linked yet.</p>
           ) : null}

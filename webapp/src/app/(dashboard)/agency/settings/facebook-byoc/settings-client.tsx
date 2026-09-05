@@ -20,6 +20,7 @@ import {
     AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { getMainDomain } from '@/lib/config/runtime'
+import { getBrandConfig } from '@/lib/config/brand'
 import { AgencyEmptyState, AgencySectionCard } from '@/components/dashboard/agency'
 
 function FacebookOAuthRedirectUrls({
@@ -80,6 +81,7 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
     const mainDomain = getMainDomain()
     const protocol = mounted && typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http'
     const currentHost = mounted && typeof window !== 'undefined' ? window.location.host : mainDomain
+    const brand = getBrandConfig(currentHost)
     const isMainDomain = currentHost === mainDomain || currentHost === `www.${mainDomain}` || currentHost === 'localhost:3000'
     const isSubdomain = !isMainDomain && currentHost.includes(`.${mainDomain}`)
     const actualHost = isSubdomain ? currentHost : (initialSettings?.subdomain ? `${initialSettings.subdomain}.${mainDomain}` : mainDomain)
@@ -211,21 +213,23 @@ export function AgencySettingsClient({ initialSettings }: { initialSettings: Age
                                 {step === 1 && !hasCredentials && (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
                                         <div className="flex items-start gap-3 p-4 bg-muted/30 border rounded-lg">
-                                            <Youtube className="h-5 w-5 text-destructive mt-1 flex-shrink-0" />
+                                            <Facebook className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
                                             <div className="space-y-2">
                                                 <p className="text-sm font-semibold">Create your Developer App</p>
                                                 <p className="text-xs text-muted-foreground leading-relaxed">
                                                     Go to the <a href="https://developers.facebook.com/apps" target="_blank" className="text-primary font-bold hover:underline">Facebook Developers Portal</a> and create a new App.
-                                                    You can follow this tutorial for step-by-step guidance:
+                                                    {!brand.hideTutorials ? ' You can follow this tutorial for step-by-step guidance:' : ''}
                                                 </p>
-                                                <a
-                                                    href="https://youtu.be/xdNZ_cjJUbI"
-                                                    target="_blank"
-                                                    className="flex items-center gap-2 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 w-fit px-3 py-1.5 rounded-full border border-destructive/20"
-                                                >
-                                                    <Youtube className="h-4 w-4" />
-                                                    Watch Setup Tutorial
-                                                </a>
+                                                {!brand.hideTutorials && (
+                                                    <a
+                                                        href="https://youtu.be/xdNZ_cjJUbI"
+                                                        target="_blank"
+                                                        className="flex items-center gap-2 text-xs font-bold text-destructive hover:text-destructive/90 bg-destructive/10 w-fit px-3 py-1.5 rounded-full border border-destructive/20"
+                                                    >
+                                                        <Youtube className="h-4 w-4" />
+                                                        Watch Setup Tutorial
+                                                    </a>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
