@@ -1,9 +1,11 @@
+'use client'
+
 import Link from 'next/link'
 import { ChevronRight, Youtube } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { cn } from '@/lib/utils'
-import { getBrandConfig } from '@/lib/config/brand'
+import { useBrand } from '@/components/brand-provider'
 
 export type AgencyBreadcrumbSegment = {
   label: string
@@ -31,8 +33,7 @@ export function AgencyGlassPageHero({
   className?: string
   tutorialHref?: string
 }) {
-  const host = typeof window !== 'undefined' ? window.location.hostname : ''
-  const brand = getBrandConfig(host)
+  const brand = useBrand()
   const showTutorial = Boolean(tutorialHref && !brand.hideTutorials)
 
   return (

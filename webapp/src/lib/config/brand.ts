@@ -10,8 +10,9 @@ export interface BrandConfig {
   hideTutorials: boolean
 }
 
-export function getBrandConfig(hostname: string): BrandConfig {
+export function getBrandConfig(hostname?: string): BrandConfig {
   const host = (hostname || '').toLowerCase().split(':')[0] || ''
+  const envDomain = (process.env.NEXT_PUBLIC_MAIN_DOMAIN || '').toLowerCase()
 
   // Check if hostname matches Sajid Ali AI / Vinsmoke Media white-label domains
   if (
@@ -21,7 +22,9 @@ export function getBrandConfig(hostname: string): BrandConfig {
     host.includes('sajid') ||
     host === 'vinsmokemedia.online' ||
     host.endsWith('.vinsmokemedia.online') ||
-    host.includes('vinsmoke')
+    host.includes('vinsmoke') ||
+    envDomain.includes('sajid') ||
+    envDomain.includes('vinsmoke')
   ) {
     return {
       name: 'Sajid Ali AI',
