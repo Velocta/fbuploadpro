@@ -9,13 +9,16 @@ export function normalizeHost(value: string): string {
 export function getBaseDomain(hostname: string): string {
   const host = normalizeHost(hostname)
   if (isLocalHost(host) || isVercelPreviewHost(host)) {
+    if (host.includes('sajid')) {
+      return 'sajidaliai.online'
+    }
     if (host.includes('vinsmoke')) {
       return 'vinsmokemedia.online'
     }
     return normalizeHost(process.env.NEXT_PUBLIC_MAIN_DOMAIN || DEFAULT_MAIN_DOMAIN)
   }
 
-  const knownDomains = ['fbuploadpro.com', 'vinsmokemedia.online']
+  const knownDomains = ['fbuploadpro.com', 'sajidaliai.online', 'vinsmokemedia.online']
   for (const domain of knownDomains) {
     if (host === domain || host.endsWith('.' + domain)) {
       return domain
@@ -67,6 +70,9 @@ export function getCookieDomain(hostname?: string): string | undefined {
 
   const baseDomain = host ? getBaseDomain(host) : getMainDomain()
   
+  if (baseDomain.includes('sajid')) {
+    return '.sajidaliai.online'
+  }
   if (baseDomain.includes('vinsmoke')) {
     return '.vinsmokemedia.online'
   }
