@@ -27,12 +27,15 @@ PLATFORM_PROFILES = {
         "socket_timeout": 30,
     },
     "tiktok": {
-        "format_candidates": ["bv*+ba/b", "b[ext=mp4]/b"],
+        "format_candidates": [
+            "bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo+bestaudio/best[vcodec^=avc1]/best",
+            "best",
+        ],
         "headers": {
             "Referer": "https://www.tiktok.com/",
         },
         "retries": 1,
-        "extractor_retries": 1,
+        "extractor_retries": 2,
         "fragment_retries": 3,
         "socket_timeout": 30,
     },
@@ -289,6 +292,95 @@ def download_with_ytdlp_formats(
     raise RuntimeError(last_error or "yt-dlp download failed")
 
 
+def verify_video_has_audio(filepath: str) -> bool:
+    """Verify that video file contains an active audio stream using ffprobe, with MP4 atom fallback."""
+    if not filepath or not os.path.exists(filepath):
+        return False
+
+    # Check 1: ffprobe stream inspection
+    try:
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=codec_type",
+            "-of", "csv=p=0",
+            filepath,
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=8)
+        if res.returncode == 0:
+            return "audio" in res.stdout.lower()
+    except Exception:
+        pass
+
+    # Check 2: Binary inspection for audio atom tags (soun / mp4a / esds) in MP4 header
+    try:
+        with open(filepath, "rb") as f:
+            header = f.read(4 * 1024 * 1024)  # first 4 MB contains moov/trak/mdia/hdlr atoms
+            if b"soun" in header or b"mp4a" in header or b"esds" in header:
+                return True
+    except Exception:
+        pass
+
+    return True  # Avoid hard-blocking if both probes are inconclusive
+
+
+def download_tiktok_hd_stream(
+    url: str,
+    tmp_dir: str,
+    unique_id: str,
+    *,
+    reel_external_id: str | None = None,
+) -> tuple[str, str] | None:
+    """Download TikTok reel via TikWM HD API: original 1080p/720p HD with pre-muxed stereo AAC audio."""
+    try:
+        import httpx
+
+        client_kwargs = {
+            "timeout": 25.0,
+            "follow_redirects": True,
+            "headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+        }
+        with httpx.Client(**client_kwargs) as client:
+            resp = client.post("https://www.tikwm.com/api/", data={"url": url, "hd": 1})
+            if resp.status_code != 200:
+                return None
+
+            data = resp.json()
+            if data.get("code") != 0 or not data.get("data"):
+                return None
+
+            v_data = data["data"]
+            # Prefer uncompressed 1080p hdplay, then play
+            stream_url = v_data.get("hdplay") or v_data.get("play")
+            caption = v_data.get("title") or DEFAULT_REEL_CAPTION
+            if not stream_url:
+                return None
+
+            if stream_url.startswith("/"):
+                stream_url = f"https://www.tikwm.com{stream_url}"
+
+            dest_path = os.path.join(tmp_dir, f"{unique_id}.mp4")
+            stream_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://www.tikwm.com/",
+            }
+            with client.stream("GET", stream_url, headers=stream_headers) as stream:
+                stream.raise_for_status()
+                with open(dest_path, "wb") as f:
+                    for chunk in stream.iter_bytes(chunk_size=512 * 1024):
+                        f.write(chunk)
+
+            if os.path.exists(dest_path) and os.path.getsize(dest_path) > 10000:
+                if verify_video_has_audio(dest_path):
+                    return dest_path, normalize_reel_caption(caption, reel_external_id=reel_external_id)
+
+            return None
+    except Exception:
+        return None
+
+
 def download_reel_media(platform: str, url: str, *, reel_external_id: str | None = None) -> tuple[str, str]:
     """Download reel to a temp file; returns (absolute_path, caption). Caller must delete the file."""
     platform = (platform or "instagram").lower()
@@ -319,15 +411,38 @@ def download_reel_media(platform: str, url: str, *, reel_external_id: str | None
                 unique_id,
                 reel_external_id=reel_external_id,
             )
+        elif platform == "tiktok":
+            # 1. Primary Engine: Direct TikWM 1080p HD stream (pre-muxed audio, watermark-free)
+            tikwm_result = download_tiktok_hd_stream(
+                url,
+                tmp_dir,
+                unique_id,
+                reel_external_id=reel_external_id,
+            )
+            if tikwm_result:
+                filename, description = tikwm_result
+            else:
+                # 2. Fallback Engine: yt-dlp with strict format selector (requiring audio)
+                profile_copy = dict(profile)
+                filename, description = download_with_ytdlp_formats(
+                    url,
+                    profile_copy,
+                    DATACENTER_PROXY,
+                    tmp_dir,
+                    unique_id,
+                    reel_external_id=reel_external_id,
+                )
+                if not verify_video_has_audio(filename):
+                    raise RuntimeError("Downloaded TikTok video has no audio stream")
         else:
-            # TikTok and Facebook: full yt-dlp download (optional datacenter proxy on yt-dlp).
+            # Facebook: full yt-dlp download (optional datacenter proxy on yt-dlp).
             filename, description = download_with_ytdlp_formats(
                 url,
                 profile,
                 DATACENTER_PROXY,
                 tmp_dir,
                 unique_id,
-                include_generic_fallback=platform == "facebook",
+                include_generic_fallback=True,
                 reel_external_id=reel_external_id,
             )
 
