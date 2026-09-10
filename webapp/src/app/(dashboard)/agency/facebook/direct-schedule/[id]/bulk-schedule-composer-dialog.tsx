@@ -50,6 +50,7 @@ import {
   generateBulkScheduleTimestamps,
   type BulkScheduleType,
 } from '@/lib/direct-schedule-bulk'
+import { AsyncUploadQueue, DEFAULT_UPLOAD_CONCURRENCY } from '@/lib/upload-queue'
 
 type QueueItem = {
   id: string
@@ -60,6 +61,7 @@ type QueueItem = {
   mediaObjectKey?: string
   uploadProgress: number
   uploading: boolean
+  status?: 'queued' | 'uploading' | 'completed' | 'failed'
 }
 
 function newId() {
@@ -78,6 +80,11 @@ interface BulkScheduleComposerDialogProps {
 export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleComposerDialogProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadQueueRef = useRef<AsyncUploadQueue | null>(null)
+  if (!uploadQueueRef.current) {
+    uploadQueueRef.current = new AsyncUploadQueue(DEFAULT_UPLOAD_CONCURRENCY)
+  }
+
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(1)
   const [isPending, startTransition] = useTransition()
@@ -99,6 +106,7 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
   const cappedPostsPerDay = Math.min(12, Math.max(1, postsPerDay))
 
   const resetState = useCallback(() => {
+    uploadQueueRef.current?.clear()
     setItems((prev) => {
       prev.forEach((item) => {
         if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
@@ -145,17 +153,20 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
     toast.success(`Applied bulk caption to ${items.length} posts.`)
   }, [bulkCaption, bulkLinks, items.length])
 
-  const uploadItem = async (itemId: string, file: File) => {
+  const uploadItem = async (itemId: string, file: File, signal: AbortSignal) => {
     const mediaType = detectMediaType(file)
     setItems((prev) =>
       prev.map((row) =>
-        row.id === itemId ? { ...row, uploading: true, uploadProgress: 0, mediaType } : row
+        row.id === itemId
+          ? { ...row, uploading: true, status: 'uploading', uploadProgress: 0, mediaType }
+          : row
       )
     )
     try {
       const objectKey = await uploadViaPresign({
         file,
         feature: 'direct-schedule',
+        signal,
         onProgress: (pct) => {
           setItems((prev) =>
             prev.map((row) => (row.id === itemId ? { ...row, uploadProgress: pct } : row))
@@ -165,11 +176,20 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
       setItems((prev) =>
         prev.map((row) =>
           row.id === itemId
-            ? { ...row, mediaObjectKey: objectKey, uploading: false, uploadProgress: 100 }
+            ? {
+                ...row,
+                mediaObjectKey: objectKey,
+                uploading: false,
+                status: 'completed',
+                uploadProgress: 100,
+              }
             : row
         )
       )
-    } catch {
+    } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError') {
+        return
+      }
       toast.error('Upload failed', { description: file.name })
       setItems((prev) => prev.filter((row) => row.id !== itemId))
     }
@@ -196,12 +216,14 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
         previewUrl,
         uploadProgress: 0,
         uploading: true,
+        status: 'queued',
       }
     })
 
     setItems((prev) => [...prev, ...newRows])
     toAdd.forEach((file, index) => {
-      void uploadItem(newRows[index]!.id, file)
+      const rowId = newRows[index]!.id
+      uploadQueueRef.current?.add(rowId, (signal) => uploadItem(rowId, file, signal))
     })
   }
 
@@ -210,10 +232,11 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
       toast.error(`Maximum ${BULK_SCHEDULE_MAX_ITEMS} items per batch`)
       return
     }
+    const newIdVal = newId()
     setItems((prev) => [
       ...prev,
       {
-        id: newId(),
+        id: newIdVal,
         mediaType: 'text',
         caption: '',
         uploadProgress: 100,
@@ -223,6 +246,7 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
   }
 
   const removeItem = (id: string) => {
+    uploadQueueRef.current?.cancel(id)
     setItems((prev) => {
       const row = prev.find((r) => r.id === id)
       if (row?.previewUrl) URL.revokeObjectURL(row.previewUrl)
@@ -551,7 +575,7 @@ export function BulkScheduleComposerDialog({ pageId, children }: BulkScheduleCom
                               {row.uploading && (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                   <Loader2 className="h-3 w-3 animate-spin" />
-                                  {Math.round(row.uploadProgress)}%
+                                  {row.status === 'queued' ? 'Queued' : `${Math.round(row.uploadProgress)}%`}
                                 </span>
                               )}
                             </div>
