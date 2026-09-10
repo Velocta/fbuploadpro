@@ -2,7 +2,12 @@ export async function uploadViaPresign(params: {
   file: File
   feature: 'direct-post' | 'direct-schedule' | 'inapp-schedule'
   onProgress?: (pct: number) => void
+  signal?: AbortSignal
 }) {
+  if (params.signal?.aborted) {
+    throw new DOMException('Upload aborted', 'AbortError')
+  }
+
   const presignRes = await fetch('/api/v1/agency/uploads/presign', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -11,6 +16,7 @@ export async function uploadViaPresign(params: {
       contentType: params.file.type || 'application/octet-stream',
       feature: params.feature,
     }),
+    signal: params.signal,
   })
 
   if (!presignRes.ok) {
@@ -21,7 +27,21 @@ export async function uploadViaPresign(params: {
   const { uploadUrl, objectKey } = await presignRes.json()
 
   return new Promise<string>((resolve, reject) => {
+    if (params.signal?.aborted) {
+      reject(new DOMException('Upload aborted', 'AbortError'))
+      return
+    }
+
     const xhr = new XMLHttpRequest()
+
+    const onAbort = () => {
+      xhr.abort()
+      reject(new DOMException('Upload aborted', 'AbortError'))
+    }
+
+    if (params.signal) {
+      params.signal.addEventListener('abort', onAbort, { once: true })
+    }
     
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable && params.onProgress) {
@@ -31,6 +51,9 @@ export async function uploadViaPresign(params: {
     }
 
     xhr.onload = () => {
+      if (params.signal) {
+        params.signal.removeEventListener('abort', onAbort)
+      }
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(objectKey as string)
       } else {
@@ -39,7 +62,17 @@ export async function uploadViaPresign(params: {
     }
 
     xhr.onerror = () => {
+      if (params.signal) {
+        params.signal.removeEventListener('abort', onAbort)
+      }
       reject(new Error('Failed to upload file to storage due to a network error'))
+    }
+
+    xhr.onabort = () => {
+      if (params.signal) {
+        params.signal.removeEventListener('abort', onAbort)
+      }
+      reject(new DOMException('Upload aborted', 'AbortError'))
     }
 
     xhr.open('PUT', uploadUrl)

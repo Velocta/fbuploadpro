@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { uploadViaPresign } from '@/features/facebook/shared/media-upload'
 import { BULK_SCHEDULE_MAX_ITEMS } from '@/lib/direct-schedule-bulk'
+import { AsyncUploadQueue, DEFAULT_UPLOAD_CONCURRENCY } from '@/lib/upload-queue'
 import { cn } from '@/lib/utils'
 
 type QueueItem = {
@@ -44,6 +45,7 @@ type QueueItem = {
   mediaObjectKey?: string
   uploadProgress: number
   uploading: boolean
+  status?: 'queued' | 'uploading' | 'completed' | 'failed'
 }
 
 function newId() {
@@ -70,6 +72,11 @@ interface BulkInappComposerDialogProps {
 export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerDialogProps) {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const uploadQueueRef = useRef<AsyncUploadQueue | null>(null)
+  if (!uploadQueueRef.current) {
+    uploadQueueRef.current = new AsyncUploadQueue(DEFAULT_UPLOAD_CONCURRENCY)
+  }
+
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
   const [submitProgress, setSubmitProgress] = useState(0)
@@ -81,6 +88,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
   const [isDragging, setIsDragging] = useState(false)
 
   const resetState = useCallback(() => {
+    uploadQueueRef.current?.clear()
     setItems((prev) => {
       prev.forEach((item) => {
         if (item.previewUrl) URL.revokeObjectURL(item.previewUrl)
@@ -94,17 +102,20 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
     setIsDragging(false)
   }, [])
 
-  const uploadItem = async (itemId: string, file: File) => {
+  const uploadItem = async (itemId: string, file: File, signal: AbortSignal) => {
     const mediaType = detectMediaType(file)
     setItems((prev) =>
       prev.map((row) =>
-        row.id === itemId ? { ...row, uploading: true, uploadProgress: 0, mediaType } : row
+        row.id === itemId
+          ? { ...row, uploading: true, status: 'uploading', uploadProgress: 0, mediaType }
+          : row
       )
     )
     try {
       const objectKey = await uploadViaPresign({
         file,
         feature: 'inapp-schedule',
+        signal,
         onProgress: (pct) => {
           setItems((prev) =>
             prev.map((row) => (row.id === itemId ? { ...row, uploadProgress: pct } : row))
@@ -114,11 +125,20 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
       setItems((prev) =>
         prev.map((row) =>
           row.id === itemId
-            ? { ...row, mediaObjectKey: objectKey, uploading: false, uploadProgress: 100 }
+            ? {
+                ...row,
+                mediaObjectKey: objectKey,
+                uploading: false,
+                status: 'completed',
+                uploadProgress: 100,
+              }
             : row
         )
       )
-    } catch {
+    } catch (err: unknown) {
+      if ((err as Error)?.name === 'AbortError') {
+        return
+      }
       toast.error('Upload failed', { description: file.name })
       setItems((prev) => prev.filter((row) => row.id !== itemId))
     }
@@ -145,6 +165,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
         previewUrl,
         uploadProgress: 0,
         uploading: true,
+        status: 'queued',
       }
     })
 
@@ -157,7 +178,8 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
     })
 
     toAdd.forEach((file, index) => {
-      void uploadItem(newRows[index]!.id, file)
+      const rowId = newRows[index]!.id
+      uploadQueueRef.current?.add(rowId, (signal) => uploadItem(rowId, file, signal))
     })
   }
 
@@ -181,6 +203,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
   }
 
   const removeItem = (id: string) => {
+    uploadQueueRef.current?.cancel(id)
     setItems((prev) => {
       const remaining = prev.filter((r) => r.id !== id)
       if (selectedItemId === id) {
@@ -436,7 +459,7 @@ export function BulkInappComposerDialog({ pageId, children }: BulkInappComposerD
                               {row.uploading && (
                                 <span className="flex items-center gap-1 text-[10px] text-muted-foreground font-semibold">
                                   <Loader2 className="h-2.5 w-2.5 animate-spin text-primary" />
-                                  {Math.round(row.uploadProgress)}%
+                                  {row.status === 'queued' ? 'Queued' : `${Math.round(row.uploadProgress)}%`}
                                 </span>
                               )}
                               {row.fileName && (
