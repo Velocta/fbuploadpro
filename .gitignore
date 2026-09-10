@@ -29,3 +29,4 @@ coverage/
 # OS and editor noise
 .DS_Store
 Thumbs.db
+.browser-profile/

@@ -7,6 +7,9 @@ set -e
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
+# Ensure scripts have execute permissions
+chmod +x entrypoint.sh start.sh 2>/dev/null || true
+
 echo "=========================================================="
 echo "Starting fbuploadpro-downloader service..."
 echo "=========================================================="

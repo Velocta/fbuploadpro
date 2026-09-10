@@ -19,10 +19,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
-COPY entrypoint.sh .
-RUN chmod +x entrypoint.sh
-
 COPY . .
+
+# Ensure entrypoint script is executable
+RUN chmod +x /app/entrypoint.sh
 
 # Create cache and log directories
 RUN mkdir -p cache logs
@@ -33,7 +33,7 @@ ENV ADU_DOWNLOADER_CACHE_DIR=/app/cache
 ENV ADU_DOWNLOADER_LOG_DIR=/app/logs
 
 # Set entrypoint to run updates on startup
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
 # Run the worker script
 CMD ["python", "worker.py"]
