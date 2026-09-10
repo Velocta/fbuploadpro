@@ -33,8 +33,21 @@ export const SCRAPER_CONFIG = {
   MAX_REELS_PER_PLATFORM: boundedInt(process.env.MAX_REELS_PER_PLATFORM, 1000, { min: 1, max: 10000 }),
 };
 
+let userDataDir = process.env.BROWSER_USER_DATA_DIR || '.browser-profile';
+let profileDirectory = process.env.BROWSER_PROFILE_DIRECTORY || null;
+
+// Normalize if user points directly to "User Data\Default" subfolder
+if (userDataDir.match(/[/\\]Default$/i)) {
+  userDataDir = userDataDir.replace(/[/\\]Default$/i, '');
+  if (!profileDirectory) {
+    profileDirectory = 'Default';
+  }
+}
+
 export const BROWSER_CONFIG = {
-  USER_DATA_DIR: process.env.BROWSER_USER_DATA_DIR || '.browser-profile',
+  EXECUTABLE_PATH: process.env.BROWSER_EXECUTABLE_PATH || null,
+  USER_DATA_DIR: userDataDir,
+  PROFILE_DIRECTORY: profileDirectory,
   USER_AGENT: process.env.BROWSER_USER_AGENT || 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
 };
 

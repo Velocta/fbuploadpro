@@ -287,7 +287,7 @@ async function main() {
       await browser.close();
     }
     console.log('🌏 Launching new browser instance...');
-    browser = await puppeteer.launch({
+    const launchOptions = {
       headless: false,
       defaultViewport: null,
       userDataDir: BROWSER_CONFIG.USER_DATA_DIR,
@@ -300,7 +300,19 @@ async function main() {
         '--disable-features=IsolateOrigins,site-per-process',
         '--lang=en-US,en',
       ],
-    });
+    };
+
+    if (BROWSER_CONFIG.EXECUTABLE_PATH) {
+      console.log(`🧭 Using custom browser binary: ${BROWSER_CONFIG.EXECUTABLE_PATH}`);
+      launchOptions.executablePath = BROWSER_CONFIG.EXECUTABLE_PATH;
+    }
+
+    if (BROWSER_CONFIG.PROFILE_DIRECTORY) {
+      console.log(`👤 Using browser profile directory: ${BROWSER_CONFIG.PROFILE_DIRECTORY}`);
+      launchOptions.args.push(`--profile-directory=${BROWSER_CONFIG.PROFILE_DIRECTORY}`);
+    }
+
+    browser = await puppeteer.launch(launchOptions);
 
     page = await browser.newPage();
     await applyDetectionHardening(page);
