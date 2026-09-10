@@ -1,36 +1,67 @@
-/** Matches main-scraper/scrapers/tiktok-ytdlp.js */
-export const TIKTOK_YTDLP_USER_AGENT =
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+/**
+ * TikTok yt-dlp arguments matching video_downloader/scraper.py.
+ * Uses mobile iPhone UA and mobile browser headers to bypass 429 rate limits
+ * and bot detection without requiring curl-cffi impersonation.
+ */
+export const DEFAULT_MOBILE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1';
+
+/** Backward-compatibility alias */
+export const TIKTOK_YTDLP_USER_AGENT = DEFAULT_MOBILE_UA;
 
 /**
- * Build argv for TikTok profile discovery via yt-dlp flat extract.
- * @param {string} profileUrl
+ * Build argv for TikTok profile/user discovery via yt-dlp flat extract.
+ * @param {string} targetUrl - Profile URL or `tiktokuser:{sec_uid}`
  * @param {number} maxItems
- * @param {string} [userAgent]
+ * @param {string|object} [optsOrUa] - Options object or userAgent string
  */
-export function buildTiktokYtdlpArgs(profileUrl, maxItems, userAgent = TIKTOK_YTDLP_USER_AGENT) {
+export function buildTiktokYtdlpArgs(targetUrl, maxItems, optsOrUa = {}) {
   const limit = Math.max(1, maxItems || 1000);
+  const options = typeof optsOrUa === 'string' ? { userAgent: optsOrUa } : (optsOrUa || {});
+  const userAgent = options.userAgent || DEFAULT_MOBILE_UA;
+  const proxy =
+    options.proxy ||
+    process.env.DATACENTER_PROXY ||
+    process.env.PROXY_URL ||
+    process.env.HTTP_PROXY ||
+    process.env.HTTPS_PROXY;
 
-  return [
+  const args = [
     '--flat-playlist',
     '-J',
     '--no-warnings',
     '--quiet',
     '--playlist-items',
     `1:${limit}`,
-    '--impersonate',
-    'chrome',
     '--user-agent',
     userAgent,
     '--add-header',
-    'Referer: https://www.tiktok.com/',
+    'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    '--add-header',
+    'Accept-Language: en-US,en;q=0.9',
+    '--add-header',
+    'Sec-Fetch-Dest: document',
+    '--add-header',
+    'Sec-Fetch-Mode: navigate',
+    '--add-header',
+    'Sec-Fetch-Site: none',
+    '--add-header',
+    'Sec-Fetch-User: ?1',
+    '--add-header',
+    'Upgrade-Insecure-Requests: 1',
     '--retries',
-    '3',
+    '5',
     '--extractor-retries',
-    '3',
+    '10',
     '--socket-timeout',
     '30',
     '--no-check-certificates',
-    profileUrl,
   ];
+
+  if (proxy && String(proxy).trim()) {
+    args.push('--proxy', String(proxy).trim());
+  }
+
+  args.push(targetUrl);
+  return args;
 }

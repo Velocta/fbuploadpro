@@ -34,3 +34,14 @@ test('extractIdsFromYtdlpJson respects maxCount', () => {
   };
   assert.deepEqual(extractIdsFromYtdlpJson(payload, 'youtube', 2), ['1', '2']);
 });
+
+test('extractIdsFromYtdlpJson filters out internal ByteDance asset IDs for tiktok', () => {
+  const payload = {
+    entries: [
+      { id: 'vid:v12044gd0000abc123' },
+      { id: '7675239682837466390' },
+      { id: 'v09044g40000abcdefghij' },
+    ],
+  };
+  assert.deepEqual(extractIdsFromYtdlpJson(payload, 'tiktok', 1000), ['7675239682837466390']);
+});

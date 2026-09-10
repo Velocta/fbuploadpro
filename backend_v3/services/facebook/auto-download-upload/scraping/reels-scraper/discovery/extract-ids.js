@@ -38,6 +38,18 @@ function idFromUrl(url, platform) {
   return null;
 }
 
+/**
+ * Checks if string is an internal ByteDance video asset ID (matches video_downloader/scraper.py).
+ * E.g. vid:v12044... or v[0-9a-zA-Z]{15,}
+ */
+export function isInternalVidId(text) {
+  if (!text || typeof text !== 'string') {
+    return true;
+  }
+  const clean = text.trim();
+  return clean.startsWith('vid:') || /^v[0-9a-zA-Z]{15,}$/.test(clean);
+}
+
 function extractEntryId(entry, platform) {
   if (!entry || typeof entry !== 'object') {
     return null;
@@ -45,11 +57,20 @@ function extractEntryId(entry, platform) {
 
   const rawId = entry.id;
   if (typeof rawId === 'string' && rawId.trim()) {
-    return rawId.trim();
+    const cleanId = rawId.trim();
+    if (platform === 'tiktok' && isInternalVidId(cleanId)) {
+      // Ignore internal asset ID and check url instead
+    } else {
+      return cleanId;
+    }
   }
 
   const url = entry.url || entry.webpage_url || entry.original_url;
-  return idFromUrl(url, platform);
+  const id = idFromUrl(url, platform);
+  if (platform === 'tiktok' && isInternalVidId(id)) {
+    return null;
+  }
+  return id;
 }
 
 export function extractIdsFromYtdlpJson(payload, platform, maxCount) {

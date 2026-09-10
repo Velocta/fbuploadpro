@@ -1,31 +1,26 @@
-import { exec, execFile } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { YTDLP_CONFIG } from '../config.js';
 import { buildTiktokProfileUrl, supportsYtdlpDiscovery } from './profile-urls.js';
 import { buildTiktokYtdlpArgs } from './ytdlp-args.js';
+import { resolveTiktokSecUid } from './sec-uid.js';
+import { extractIdsFromYtdlpJson } from './extract-ids.js';
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 const EXEC_OPTS_BASE = {
   maxBuffer: 50 * 1024 * 1024,
 };
 
-function parseTiktokYtdlpJson(stdout) {
-  const info = JSON.parse(stdout);
-  const ids = [];
-
-  if (info.entries && Array.isArray(info.entries)) {
-    for (const entry of info.entries) {
-      if (entry?.id) {
-        ids.push(entry.id);
-      }
-    }
-  } else if (info.id) {
-    ids.push(info.id);
+function getCandidateBinaries() {
+  const bins = [];
+  if (YTDLP_CONFIG.BIN) bins.push(YTDLP_CONFIG.BIN);
+  bins.push('yt-dlp');
+  bins.push('yt-dlp.exe');
+  if (process.env.LOCALAPPDATA) {
+    bins.push(`${process.env.LOCALAPPDATA}\\Microsoft\\WindowsApps\\yt-dlp.exe`);
   }
-
-  return ids;
+  return [...new Set(bins)];
 }
 
 async function runYtDlp(args) {
@@ -34,77 +29,67 @@ async function runYtDlp(args) {
     timeout: YTDLP_CONFIG.TIMEOUT_MS,
   };
 
-  const runCmd = async (cmdArgs) => {
+  const candidates = getCandidateBinaries();
+  let lastError = null;
+
+  for (const bin of candidates) {
     try {
-      const { stdout } = await execFileAsync(YTDLP_CONFIG.BIN, cmdArgs, execOpts);
+      const { stdout } = await execFileAsync(bin, args, execOpts);
       return stdout;
     } catch (err) {
-      if (err.code !== 'ENOENT') {
-        throw err;
+      if (err.code === 'ENOENT') {
+        lastError = err;
+        continue;
       }
-      const { stdout } = await execFileAsync('python3', ['-m', 'yt_dlp', ...cmdArgs], execOpts);
-      return stdout;
+
+      // Check if impersonation error occurred (e.g. curl-cffi missing)
+      const stderr = err.stderr?.toString() || '';
+      const errMessage = err.message || '';
+      const isImpersonateError =
+        stderr.includes('Impersonate target') || errMessage.includes('Impersonate target');
+
+      if (isImpersonateError) {
+        console.warn('⚠️ Impersonation not available. Retrying without --impersonate...');
+        const fallbackArgs = [];
+        for (let i = 0; i < args.length; i++) {
+          if (args[i] === '--impersonate') {
+            i++; // skip next arg
+            continue;
+          }
+          fallbackArgs.push(args[i]);
+        }
+        const { stdout } = await execFileAsync(bin, fallbackArgs, execOpts);
+        return stdout;
+      }
+
+      throw err;
     }
-  };
-
-  try {
-    return await runCmd(args);
-  } catch (err) {
-    const stderr = err.stderr?.toString() || '';
-    const errMessage = err.message || '';
-    const isImpersonateError =
-      stderr.includes('Impersonate target') ||
-      errMessage.includes('Impersonate target');
-
-    if (isImpersonateError) {
-      console.warn('⚠️ Impersonate target not available. Attempting to install curl-cffi and update yt-dlp...');
-      let installed = false;
-      const commands = [
-        'python3 -m pip install -U curl-cffi yt-dlp',
-        'pip3 install -U --break-system-packages curl-cffi yt-dlp',
-        'pip3 install -U curl-cffi yt-dlp',
-        'pip install -U --break-system-packages curl-cffi yt-dlp',
-        'pip install -U curl-cffi yt-dlp'
-      ];
-
-      for (const cmd of commands) {
-        try {
-          await execAsync(cmd);
-          console.log(`✅ Successfully executed: ${cmd}`);
-          installed = true;
-          break;
-        } catch (cmdErr) {
-          console.warn(`⚠️ Failed command: ${cmd} (${cmdErr.message.split('\n')[0]})`);
-        }
-      }
-
-      if (installed) {
-        try {
-          console.log('✅ Retrying with impersonation...');
-          return await runCmd(args);
-        } catch (retryErr) {
-          console.warn(`⚠️ Retry with impersonation failed: ${retryErr.message}`);
-        }
-      }
-
-      console.warn('⚠️ Retrying without impersonation...');
-      // Filter out '--impersonate' and the target (which is 'chrome')
-      const fallbackArgs = [];
-      for (let i = 0; i < args.length; i++) {
-        if (args[i] === '--impersonate') {
-          i++; // skip next arg (chrome)
-          continue;
-        }
-        fallbackArgs.push(args[i]);
-      }
-      return await runCmd(fallbackArgs);
-    }
-    throw err;
   }
+
+  // Fallback to python module if standalone binary wasn't found
+  const pythonCmds = ['python3', 'python'];
+  for (const py of pythonCmds) {
+    try {
+      const { stdout } = await execFileAsync(py, ['-m', 'yt_dlp', ...args], execOpts);
+      return stdout;
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || new Error('yt-dlp binary not found');
 }
 
 /**
- * Discover TikTok video IDs via yt-dlp (flat extract), matching main-scraper.
+ * Discover TikTok video IDs via yt-dlp matching video_downloader/scraper.py pattern:
+ * 1. Resolves sec_uid via Countik API.
+ * 2. Targets `tiktokuser:{sec_uid}` first (queries mobile feed directly, bypassing captcha).
+ * 3. Falls back to `https://www.tiktok.com/@{username}` if sec_uid unavailable or empty.
+ *
  * @param {string} platform
  * @param {string} sourceUsername
  * @param {number} maxCount
@@ -117,39 +102,70 @@ export async function discoverReelIdsWithYtdlp(platform, sourceUsername, maxCoun
     return { ok: false, reason: 'platform_not_supported' };
   }
 
-  const profileUrl = buildTiktokProfileUrl(sourceUsername);
-  if (!profileUrl) {
-    return { ok: false, reason: 'invalid_profile_url' };
+  const cleanUser = String(sourceUsername || '')
+    .replace(/[\u200b-\u200d\u200e\u200f\u202a-\u202e\ufeff]/g, '')
+    .replace(/\s/g, '')
+    .replace(/^@+/, '')
+    .trim();
+
+  if (!cleanUser) {
+    return { ok: false, reason: 'invalid_source_username' };
   }
 
-  const args = buildTiktokYtdlpArgs(profileUrl, maxCount);
+  const profileUrl = buildTiktokProfileUrl(cleanUser);
+  const targetUrls = [];
 
-  let stdout;
-  try {
-    console.log(`📡 TikTok yt-dlp discovery: ${profileUrl}`);
-    stdout = await runYtDlp(args);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const stderr = err.stderr?.toString?.() || '';
-    const detail = stderr.trim().slice(-500) || message;
-    console.warn(`⚠️ TikTok yt-dlp failed for ${profileUrl}: ${detail}`);
-    return { ok: false, reason: detail };
+  // Try sec_uid resolution first (matches video_downloader/scraper.py)
+  console.log(`🔍 Resolving TikTok sec_uid for @${cleanUser}...`);
+  const secUid = await resolveTiktokSecUid(cleanUser);
+  if (secUid) {
+    console.log(`✅ Resolved sec_uid for @${cleanUser}: ${secUid}`);
+    targetUrls.push(`tiktokuser:${secUid}`);
+  } else {
+    console.log(`ℹ️ No sec_uid resolved for @${cleanUser}; using standard profile URL.`);
   }
 
-  let ids;
-  try {
-    ids = parseTiktokYtdlpJson(stdout);
-  } catch (parseErr) {
-    const message = parseErr instanceof Error ? parseErr.message : String(parseErr);
-    console.warn(`⚠️ TikTok yt-dlp returned invalid JSON for ${profileUrl}: ${message}`);
-    return { ok: false, reason: 'unparseable_json' };
+  if (profileUrl && !targetUrls.includes(profileUrl)) {
+    targetUrls.push(profileUrl);
   }
 
-  if (ids.length === 0) {
-    console.warn(`⚠️ TikTok yt-dlp returned zero IDs for ${profileUrl}`);
-    return { ok: false, reason: 'empty_result' };
+  let lastDetail = 'unknown_error';
+
+  for (const targetUrl of targetUrls) {
+    const args = buildTiktokYtdlpArgs(targetUrl, maxCount);
+    console.log(`📡 TikTok yt-dlp discovery: ${targetUrl}`);
+
+    let stdout;
+    try {
+      stdout = await runYtDlp(args);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const stderr = err.stderr?.toString?.() || '';
+      lastDetail = stderr.trim().slice(-500) || message;
+      console.warn(`⚠️ TikTok yt-dlp target ${targetUrl} failed: ${lastDetail}`);
+      continue;
+    }
+
+    let payload;
+    try {
+      payload = JSON.parse(stdout);
+    } catch (parseErr) {
+      const message = parseErr instanceof Error ? parseErr.message : String(parseErr);
+      console.warn(`⚠️ TikTok yt-dlp returned invalid JSON for ${targetUrl}: ${message}`);
+      lastDetail = 'unparseable_json';
+      continue;
+    }
+
+    const ids = extractIdsFromYtdlpJson(payload, 'tiktok', maxCount);
+    if (ids.length > 0) {
+      console.log(`✅ TikTok yt-dlp discovered ${ids.length} ID(s) for @${cleanUser} via ${targetUrl}`);
+      return { ok: true, ids };
+    }
+
+    console.warn(`⚠️ TikTok yt-dlp returned zero valid IDs for ${targetUrl}; trying next target...`);
+    lastDetail = 'empty_result';
   }
 
-  console.log(`✅ TikTok yt-dlp discovered ${ids.length} ID(s) for ${sourceUsername}`);
-  return { ok: true, ids };
+  console.warn(`⚠️ All TikTok discovery targets failed for @${cleanUser} (${lastDetail})`);
+  return { ok: false, reason: lastDetail };
 }

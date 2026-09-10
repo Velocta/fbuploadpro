@@ -312,6 +312,24 @@ async function main() {
       launchOptions.args.push(`--profile-directory=${BROWSER_CONFIG.PROFILE_DIRECTORY}`);
     }
 
+async function getActivePage(b, existingPage) {
+  try {
+    if (existingPage && !existingPage.isClosed()) {
+      await existingPage.evaluate(() => true);
+      return existingPage;
+    }
+  } catch (_) {
+    try {
+      if (existingPage && !existingPage.isClosed()) {
+        await existingPage.close().catch(() => {});
+      }
+    } catch (_) {}
+  }
+  const newPage = await b.newPage();
+  await applyDetectionHardening(newPage);
+  return newPage;
+}
+
     browser = await puppeteer.launch(launchOptions);
 
     page = await browser.newPage();
@@ -322,6 +340,7 @@ async function main() {
         console.log('⏭️  SKIP_STARTUP_LOGINS=true, skipping manual login prompts for all platforms.');
       } else {
         for (const [platform, handlers] of Object.entries(PLATFORM_HANDLERS)) {
+          page = await getActivePage(browser, page);
           await handlers.login(page);
 
           const readline = (await import('readline')).createInterface({
@@ -344,6 +363,8 @@ async function main() {
       console.log('✅ Proceeding after manual login checks for all platforms.');
     } catch (e) {
       console.error('❌ Initial platform login setup failed:', e);
+    } finally {
+      page = await getActivePage(browser, page);
     }
 
     jobsProcessed = 0;
@@ -383,6 +404,7 @@ async function main() {
     const { job, platform, claimSource } = selection;
 
     try {
+      page = await getActivePage(browser, page);
       await processJob(page, job, platform, claimSource);
       jobsProcessed += 1;
     } catch (err) {
