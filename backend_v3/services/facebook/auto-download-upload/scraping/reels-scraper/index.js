@@ -263,6 +263,24 @@ async function processJob(page, job, platform, claimSource) {
   await markSyncStatus(job.id, 'error');
 }
 
+async function getActivePage(b, existingPage) {
+  try {
+    if (existingPage && !existingPage.isClosed()) {
+      await existingPage.evaluate(() => true);
+      return existingPage;
+    }
+  } catch (_) {
+    try {
+      if (existingPage && !existingPage.isClosed()) {
+        await existingPage.close().catch(() => {});
+      }
+    } catch (_) {}
+  }
+  const newPage = await b.newPage();
+  await applyDetectionHardening(newPage);
+  return newPage;
+}
+
 async function main() {
   console.log('🚀 Starting Multi-Platform Scraper Orchestrator (yt-dlp + browser)...');
 
@@ -311,24 +329,6 @@ async function main() {
       console.log(`👤 Using browser profile directory: ${BROWSER_CONFIG.PROFILE_DIRECTORY}`);
       launchOptions.args.push(`--profile-directory=${BROWSER_CONFIG.PROFILE_DIRECTORY}`);
     }
-
-async function getActivePage(b, existingPage) {
-  try {
-    if (existingPage && !existingPage.isClosed()) {
-      await existingPage.evaluate(() => true);
-      return existingPage;
-    }
-  } catch (_) {
-    try {
-      if (existingPage && !existingPage.isClosed()) {
-        await existingPage.close().catch(() => {});
-      }
-    } catch (_) {}
-  }
-  const newPage = await b.newPage();
-  await applyDetectionHardening(newPage);
-  return newPage;
-}
 
     browser = await puppeteer.launch(launchOptions);
 
