@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { createClient } from '@/lib/supabase/server'
 import { graphGet } from '@/server/integrations/facebook/graph-client'
 
@@ -16,12 +17,30 @@ export async function updateAgencyFacebookAppSettings(agencyId: string, fbAppId:
     throw new Error('Invalid App ID format. Must be numeric.')
   }
 
-  const response = await graphGet<{ name: string }>(trimmedId, {
-    access_token: `${trimmedId}|${trimmedSecret}`,
-  })
-  const appName = response.data.name
-  if (!appName) {
-    throw new Error('Could not retrieve app name.')
+  let appName: string
+  try {
+    const response = await graphGet<{ name: string }>(trimmedId, {
+      access_token: `${trimmedId}|${trimmedSecret}`,
+    })
+    appName = response.data.name
+    if (!appName) {
+      throw new Error('Could not retrieve app name.')
+    }
+  } catch (err) {
+    if (axios.isAxiosError(err)) {
+      const fbError = err.response?.data?.error
+      const fbMessage = fbError?.message
+      if (fbMessage) {
+        if (fbMessage.toLowerCase().includes('invalid client secret') || fbError?.code === 1) {
+          throw new Error('Invalid Facebook App Secret. Please verify your App Secret from Meta Developer Dashboard (App Settings > Basic), not the Client Token.')
+        }
+        if (fbMessage.toLowerCase().includes('does not exist') || fbError?.code === 100) {
+          throw new Error(`Facebook App ID "${trimmedId}" does not exist. Please check your App ID.`)
+        }
+        throw new Error(`Facebook verification failed: ${fbMessage}`)
+      }
+    }
+    throw err
   }
 
   const { error } = await supabase
