@@ -2993,4 +2993,156 @@ select
 
 grant select on public.site_stats to anon, authenticated;
 
+-- In-App Schedule Three-Step Posting: index and slot intake procedure (20260911150000)
+create index if not exists idx_facebook_inapp_schedule_posts_queue_claim
+  on public.facebook_inapp_schedule_posts (page_id, queue_position asc)
+  where status = 'pending';
+
+create or replace function public.create_due_inapp_posting_jobs(p_mode text default 'prod')
+returns table (
+  job_id uuid,
+  post_id uuid,
+  page_id uuid,
+  fb_page_id text,
+  fb_page_access_token text,
+  media_type text,
+  media_object_key text,
+  caption text,
+  first_comment text,
+  schedule_slot_at timestamp with time zone
+)
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+#variable_conflict use_column
+begin
+  return query
+  with due_pages_with_slot as (
+    select
+      p.id as page_id,
+      p.agency_id,
+      p.fb_page_id,
+      p.fb_page_access_token,
+      (
+        select min(matched.slot_at)
+        from (
+          select (local_day.day + t.schedule_time::time) at time zone p.schedule_timezone as slot_at
+          from unnest(p.posting_times) as t(schedule_time)
+          cross join (
+            values 
+              (date_trunc('day', now() at time zone p.schedule_timezone) - interval '1 day'),
+              (date_trunc('day', now() at time zone p.schedule_timezone)),
+              (date_trunc('day', now() at time zone p.schedule_timezone) + interval '1 day')
+          ) as local_day(day)
+        ) matched
+        where matched.slot_at >= now() - interval '24 hours'
+          and matched.slot_at <= now() + interval '1 minute'
+          and not exists (
+            select 1
+            from public.facebook_inapp_schedule_posting_jobs aj
+            where aj.page_id = p.id
+              and aj.schedule_slot_at = matched.slot_at
+          )
+      ) as schedule_slot_at
+    from public.facebook_inapp_schedule_pages p
+    join public.users u on p.agency_id = u.id
+    where p.status = 'active'
+      and u.is_active_override = true
+  ),
+  eligible_due_pages as (
+    select dps.*
+    from due_pages_with_slot dps
+    where dps.schedule_slot_at is not null
+      and not exists (
+        select 1
+        from public.facebook_inapp_schedule_posting_jobs active_j
+        where active_j.page_id = dps.page_id
+          and active_j.status in ('pending_publish', 'publishing')
+      )
+  ),
+  candidate_posts as (
+    select
+      edp.agency_id,
+      edp.page_id,
+      edp.fb_page_id,
+      edp.fb_page_access_token,
+      edp.schedule_slot_at,
+      p.id as post_id,
+      p.media_type,
+      p.media_object_key,
+      p.caption,
+      p.first_comment
+    from eligible_due_pages edp
+    join lateral (
+      select pp.*
+      from public.facebook_inapp_schedule_posts pp
+      where pp.page_id = edp.page_id
+        and pp.status = 'pending'
+      order by pp.queue_position asc nulls last
+      limit 1
+      for update skip locked
+    ) p on true
+  ),
+  inserted_jobs as (
+    insert into public.facebook_inapp_schedule_posting_jobs (
+      job_id,
+      post_id,
+      page_id,
+      fb_page_id,
+      fb_page_access_token,
+      status,
+      media_type,
+      media_object_key,
+      caption,
+      first_comment,
+      schedule_slot_at,
+      created_at,
+      updated_at
+    )
+    select
+      gen_random_uuid(),
+      cp.post_id,
+      cp.page_id,
+      cp.fb_page_id,
+      cp.fb_page_access_token,
+      'pending_publish',
+      cp.media_type,
+      cp.media_object_key,
+      cp.caption,
+      cp.first_comment,
+      cp.schedule_slot_at,
+      now(),
+      now()
+    from candidate_posts cp
+    on conflict (page_id, schedule_slot_at) where schedule_slot_at is not null do nothing
+    returning *
+  ),
+  mark_posts as (
+    update public.facebook_inapp_schedule_posts p
+    set 
+      status = 'publishing',
+      updated_at = now()
+    where p.id in (select ij.post_id from inserted_jobs ij)
+      and p.status = 'pending'
+    returning p.id
+  )
+  select
+    ij.job_id,
+    ij.post_id,
+    ij.page_id,
+    ij.fb_page_id,
+    ij.fb_page_access_token,
+    ij.media_type,
+    ij.media_object_key,
+    ij.caption,
+    ij.first_comment,
+    ij.schedule_slot_at
+  from inserted_jobs ij;
+end;
+$$;
+
+grant execute on function public.create_due_inapp_posting_jobs(text) to service_role;
+
+
 
