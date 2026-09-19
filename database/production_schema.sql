@@ -3036,7 +3036,7 @@ begin
               (date_trunc('day', now() at time zone p.schedule_timezone) + interval '1 day')
           ) as local_day(day)
         ) matched
-        where matched.slot_at >= now() - interval '24 hours'
+        where matched.slot_at >= now() - interval '5 minutes'
           and matched.slot_at <= now() + interval '1 minute'
           and not exists (
             select 1
@@ -3049,6 +3049,12 @@ begin
     join public.users u on p.agency_id = u.id
     where p.status = 'active'
       and u.is_active_override = true
+      and exists (
+        select 1
+        from public.facebook_inapp_schedule_posts ppost
+        where ppost.page_id = p.id
+          and ppost.status = 'pending'
+      )
   ),
   eligible_due_pages as (
     select dps.*
@@ -3079,6 +3085,7 @@ begin
       from public.facebook_inapp_schedule_posts pp
       where pp.page_id = edp.page_id
         and pp.status = 'pending'
+        and pp.created_at <= edp.schedule_slot_at + interval '1 minute'
       order by pp.queue_position asc nulls last
       limit 1
       for update skip locked

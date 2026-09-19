@@ -29,8 +29,8 @@ export function projectScheduledTimes<
   postingTimes: string[],
   timezone: string,
   startOffset: number = 0
-) {
-  if (!posts || posts.length === 0) return posts
+): (T & { scheduled_at: string | Date | null })[] {
+  if (!posts || posts.length === 0) return [] as (T & { scheduled_at: string | Date | null })[]
   const times = Array.isArray(postingTimes) ? postingTimes : ['09:00 AM', '03:00 PM']
   const tz = timezone || 'UTC'
 
@@ -75,8 +75,8 @@ export function projectScheduledTimes<
       candidate = setMilliseconds(candidate, 0)
       const utcDate = fromZonedTime(candidate, tz)
       
-      // Slot must be at least 10 minutes in the future to avoid scheduling in the past
-      if (utcDate.getTime() - nowUtc.getTime() >= 10 * 60 * 1000) {
+      // Slot must not have already elapsed (allow current active minute)
+      if (utcDate.getTime() >= nowUtc.getTime() - 60 * 1000) {
         slots.push(utcDate)
       }
     }
@@ -86,14 +86,16 @@ export function projectScheduledTimes<
 
   slots.sort(compareAsc)
 
-  return posts.map((post, index) => {
+  let pendingIdx = 0
+  return posts.map((post) => {
     if (post.status === 'published') {
-      return { ...post, scheduled_at: post.published_at || post.updated_at }
+      return { ...post, scheduled_at: post.published_at || post.updated_at || null }
     }
     if (post.status === 'failed') {
-      return { ...post, scheduled_at: post.updated_at }
+      return { ...post, scheduled_at: post.updated_at || null }
     }
-    const slotIdx = startOffset + index
+    const slotIdx = startOffset + pendingIdx
+    pendingIdx++
     const projectedDate = slots[slotIdx] || nowUtc
     return { ...post, scheduled_at: projectedDate.toISOString() }
   })

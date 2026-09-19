@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
-import { AsyncUploadQueue } from './upload-queue.ts'
+import { test } from 'vitest'
+import { AsyncUploadQueue } from './upload-queue'
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
