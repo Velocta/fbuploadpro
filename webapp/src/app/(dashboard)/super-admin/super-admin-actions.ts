@@ -21,7 +21,7 @@ export async function allocateTokens(agencyId: string, amountPaidPKR: number, no
 
     // Calculate Tokens (Floor to integer)
     // Avoid division by zero
-    const safePrice = price > 0 ? price : 0.6
+    const safePrice = price > 0 ? price : 0.5
     const tokensToAdd = Math.floor(amountPaidPKR / safePrice)
 
     const { data: agency, error: fetchError } = await supabase

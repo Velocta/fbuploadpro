@@ -30,7 +30,7 @@ export function AllocateTokensDialog({ agencyId, agencyName }: AllocateTokensDia
     const [amountPaid, setAmountPaid] = useState<string>('')
     const [notes, setNotes] = useState('')
     const [loading, setLoading] = useState(false)
-    const [tokenPrice, setTokenPrice] = useState<number>(0.6)
+    const [tokenPrice, setTokenPrice] = useState<number>(0.5)
     const router = useRouter()
 
     useEffect(() => {

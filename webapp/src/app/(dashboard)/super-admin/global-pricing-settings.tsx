@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { AgencySectionCard } from '@/components/dashboard/agency'
 
 export function GlobalPricingSettings() {
-    const [price, setPrice] = useState<number>(0.15)
+    const [price, setPrice] = useState<number>(0.5)
     const [isPending, startTransition] = useTransition()
     const [isFetching, setIsFetching] = useState(true)
 

@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 
 export type MonthlyPriceCalculatorLayout = 'default' | 'split'
 
-const TOKEN_PRICE_PKR = 0.15
+const TOKEN_PRICE_PKR = 0.5
 const DAYS_PER_MONTH = 30
 const TOKENS_PER_REEL = 1
 
@@ -115,7 +115,7 @@ export function MonthlyPriceCalculatorSection({ layout = 'default' }: MonthlyPri
               </div>
 
               <p id="calculator-assumptions" className="text-xs text-muted-foreground">
-                Assumptions: 30 days/month, 1 token per reel, and each token costs PKR 0.15.
+                Assumptions: 30 days/month, 1 token per reel, and each token costs PKR 0.50.
               </p>
             </div>
 

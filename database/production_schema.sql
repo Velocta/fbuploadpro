@@ -202,7 +202,7 @@ create table public.errors (
 -- System Settings
 create table public.system_settings (
     id int primary key default 1,
-    token_price_pkr decimal(10,2) not null default 0.15,
+    token_price_pkr decimal(10,2) not null default 0.50,
     updated_at timestamptz default now(),
     constraint singleton_check check (id = 1)
 );
@@ -870,7 +870,7 @@ select cron.schedule('cleanup-auth-attempts', '0 1 * * *', 'select public.cleanu
 select cron.schedule('reset-stuck-pages', '*/15 * * * *', 'select public.reset_stuck_pages()');
 
 -- 6. System Settings Seed
-insert into public.system_settings (id, token_price_pkr) values (1, 0.15)
+insert into public.system_settings (id, token_price_pkr) values (1, 0.50)
 on conflict (id) do nothing;
 
 -- 6. One-time Sync for existing users (Fixes login issues)
