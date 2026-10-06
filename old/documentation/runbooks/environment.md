@@ -17,7 +17,7 @@
 | `R2_ADU_BUFFER_BUCKET` | ADU pre-download buffer (default: `fbuploadpro-adu-buffer`) |
 | `USER_MEDIA_PUBLIC_BASE_URL` | HTTPS origin for Facebook `file_url` fetches |
 
-Production validates required vars in `webapp/src/lib/config/env.ts`. Integration-heavy API routes use Node.js runtime on Vercel.
+Required vars are validated in `webapp/src/lib/config/env.ts`. Integration-heavy API routes use Node.js runtime.
 
 ## ADU buffer downloader (VPS)
 

@@ -62,4 +62,4 @@ Cron worker claims due rows from `facebook_inapp_schedule_posts` via `claim_due_
 - **Supabase:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - **Schema:** [`database/production_schema.sql`](../database/production_schema.sql)
 
-Webapp deploys separately from `webapp/` (Vercel).
+Webapp is located separately under `webapp/`.

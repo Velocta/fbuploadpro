@@ -62,7 +62,7 @@
 ## Runtime and Deployment
 
 - Public pages and marketing routes prioritize static rendering where possible.
-- Supabase/session-heavy routes and external integrations use Node.js runtime on Vercel.
+- Supabase/session-heavy routes and external integrations use Node.js runtime.
 - Proxy entrypoint (`webapp/src/proxy.ts`) handles auth/session and subdomain routing.
 - Facebook OAuth is handled via `/api/v1` callback/start endpoints with server-side redirects and service-layer processing.
 - Token gating is handled in the sidebar UI (lock icons when balance=0), not via hard middleware redirects.

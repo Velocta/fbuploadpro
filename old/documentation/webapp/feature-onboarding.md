@@ -29,4 +29,4 @@ Use this checklist whenever you add a new feature.
 - Validate no duplicate auth/data fetch in route tree.
 - Keep response payloads bounded.
 - Ensure required env vars are documented in `webapp/.env.example`.
-- Confirm behavior in Vercel preview before merge.
+- Confirm behavior in local/preview environments before merge.

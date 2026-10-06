@@ -13,7 +13,7 @@
 3. **InApp Schedule worker** — `cd backend_v3/services/facebook/inapp-schedule/posting/processor-worker && npm install && npx wrangler deploy`.
 4. **Analytics** — `backend_v3/services/facebook/auto-download-upload/analytics/deploy.sh`.
 5. **Scraper** — Restart VPS process if scraper code changed (`backend_v3/services/facebook/auto-download-upload/scraping/reels-scraper`).
-6. **Webapp** — Vercel preview, then production promote.
+6. **Webapp** — Staging preview, then promote.
 
 Adjust order when only a subset of services changes.
 

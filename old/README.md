@@ -1,16 +1,15 @@
 # FBUploadPro (fbuploadprov3)
 
-Multi-service SaaS for scraping short-form content, scheduling Facebook Reels publishing, and managing agency operations.
+Multi-service codebase for scraping short-form content, scheduling Facebook Reels publishing, and managing agency operations.
 
 ## Repository layout
 
 ```
 fbuploadprov3/
-├── webapp/              # Next.js 16 — dashboards, auth, API v1 (Vercel)
+├── webapp/              # Next.js 16 — dashboards, auth, API v1
 ├── backend_v3/          # Posting workers, followers cron, VPS scraper
 ├── database/            # production_schema.sql + migrations/
-├── documentation/       # Architecture, runbooks, ADRs
-└── .cursor/             # Agent rules and skills
+└── documentation/       # Architecture, runbooks, ADRs
 ```
 
 ## Quick start for contributors
@@ -35,15 +34,6 @@ cp .env.example .env.local   # fill Supabase and domain secrets
 npm install
 npm run dev
 ```
-
-## Deploy (high level)
-
-See [`documentation/runbooks/deployment.md`](documentation/runbooks/deployment.md).
-
-1. DB migration (if any)
-2. `backend_v3/services/posting/deploy-posting.sh`
-3. Analytics / scraper as needed
-4. Vercel webapp
 
 ## Git workflow
 

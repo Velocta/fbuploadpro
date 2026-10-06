@@ -1,6 +1,6 @@
 # Webapp
 
-Next.js App Router frontend for agency and super-admin workflows, structured for API-heavy growth and Vercel-first deployment. Posting, analytics, and scraper workers live in [`../backend_v3/`](../backend_v3/README.md).
+Next.js App Router frontend for agency and super-admin workflows, structured for API-heavy growth. Posting, analytics, and scraper workers live in [`../backend_v3/`](../backend_v3/README.md).
 
 ## Getting Started
 
@@ -54,12 +54,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 - `src/server/integrations`: external API clients (e.g., Facebook Graph).
 - `src/contracts`: API request/response schemas.
 
-## Vercel Deployment Notes
+## Runtime & Environment Notes
 
 - Use Node.js runtime for Supabase-heavy and external-integration endpoints.
 - Keep environment variables aligned with `.env.example`.
-- Validate required env vars in production (`src/lib/config/env.ts`).
-- Use preview deployments as merge gates for auth/dashboard smoke tests.
+- Validate required env vars (`src/lib/config/env.ts`).
 
 ## Documentation
 

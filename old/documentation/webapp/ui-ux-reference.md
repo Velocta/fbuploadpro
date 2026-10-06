@@ -526,7 +526,7 @@ Before shipping UI changes:
 - [ ] Accessibility checks completed in touched views.
 - [ ] Responsive checks at 375 / 768 / 1024 / 1440.
 - [ ] Local checks pass (`lint`, `typecheck`, `build` when relevant).
-- [ ] Preview verification completed in Vercel.
+- [ ] Preview verification completed.
 
 ## 16) Decision Priority
 

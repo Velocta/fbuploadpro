@@ -6,7 +6,7 @@ This document provides an exhaustive, low-level explanation of the In-App Schedu
 
 ## 1. Architectural Overview & Design Rationale
 
-To support high-throughput, conflict-free scheduling and bulletproof execution, the In-App Scheduler uses a **3-Step Pipeline** deployed across **2 Cloudflare Workers**:
+To support high-throughput, conflict-free scheduling and bulletproof execution, the In-App Scheduler uses a **3-Step Pipeline** implemented across **2 Cloudflare Workers**:
 
 ```
                        [Cloudflare Cron Trigger]

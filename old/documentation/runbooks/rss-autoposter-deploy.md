@@ -9,7 +9,7 @@ supabase db push
 # or apply database/migrations/20260527120000_facebook_rss_autoposter.sql
 ```
 
-## Webapp (Vercel)
+## Webapp
 
 Set environment variables:
 

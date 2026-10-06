@@ -6,7 +6,7 @@ Canonical database path: `database/`.
 
 | Artifact | Purpose |
 |----------|---------|
-| `database/production_schema.sql` | Full canonical schema for fresh installs and agent reference |
+| `database/production_schema.sql` | Full canonical schema for fresh installs and reference |
 | `database/migrations/` | One new `.sql` file per forward change |
 
 Historical migrations were merged into `production_schema.sql` on 2026-05-22. Do not recreate deleted migration files.
