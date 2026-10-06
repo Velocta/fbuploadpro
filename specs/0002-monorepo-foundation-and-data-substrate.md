@@ -519,13 +519,13 @@ apps/worker/
 
 ## 8. Atomic Task Breakdown
 
-- [ ] **TASK-0001: Monorepo Setup & Workspace Tooling** (Issue: #TBD)
+- [ ] **TASK-0001: Monorepo Setup & Workspace Tooling** (Issue: #4)
   - Configure root `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `tsconfig.base.json`, and root ESLint.
-- [ ] **TASK-0002: Domain Contracts & Error Taxonomy** (Issue: #TBD)
+- [ ] **TASK-0002: Domain Contracts & Error Taxonomy** (Issue: #5)
   - Implement `packages/contracts` with pure domain schemas (with timestamp coercion, subdomain blocklist, and positive amounts), models, and domain errors with Vitest unit tests.
-- [ ] **TASK-0003: Clean PostgreSQL Schema v1 & Dual Clients** (Issue: #TBD)
+- [ ] **TASK-0003: Clean PostgreSQL Schema v1 & Dual Clients** (Issue: #6)
   - Implement `packages/database` with initial DDL migration (composite FKs, balance check constraints), Node connection client, edge client interface, and integration tests.
-- [ ] **TASK-0004: Webapp Shell & Health Route** (Issue: #TBD)
+- [ ] **TASK-0004: Webapp Shell & Health Route** (Issue: #7)
   - Scaffold `apps/web` with Next.js 16 App Router, sanitized `/api/health` endpoint (200 OK and 503 degraded states), and route tests.
-- [ ] **TASK-0005: Worker Shell & CI Pipeline** (Issue: #TBD)
+- [ ] **TASK-0005: Worker Shell & CI Pipeline** (Issue: #8)
   - Scaffold `apps/worker` with Wrangler configured for edge database access and create `.github/workflows/ci.yml`.
