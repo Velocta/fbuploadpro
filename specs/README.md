@@ -48,6 +48,7 @@ specs/
 | ID | Title | Status | Type | Target Version | AI Readiness |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | [SPEC-0001](0001-spec-driven-development-standard.md) | Spec-Driven Development Standard & Protocol | `approved` | `standard` | `v1.0.0` | `ready` |
+| [SPEC-0002](0002-monorepo-foundation-and-data-substrate.md) | Monorepo Foundation & Clean Data Substrate | `approved` | `architecture` | `v0.1.0` | `ready` |
 
 ---
 
