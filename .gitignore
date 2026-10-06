@@ -25,6 +25,7 @@ out/
 dist/
 coverage/
 *.tsbuildinfo
+.turbo/
 
 # OS and editor noise
 .DS_Store
