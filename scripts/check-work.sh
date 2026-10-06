@@ -75,6 +75,7 @@ fi
 if [ "$ROLE" = "all" ] || [ "$ROLE" = "orchestrator" ]; then
   echo ""
   echo "📐 [ORCHESTRATOR QUEUE]"
+  query_issues "spec:challenged" "Challenged Specs Requiring Orchestrator Revisions"
   query_issues "ai:blocked" "Blocked Tasks Needing Scope Extension (SBEP) or Task Split"
   query_prs "phase:review" "Worker PRs Awaiting Orchestrator Anti-Slop Audit"
   query_issues "spec:approved" "Approved Specs Needing Micro-Task Breakdown (<150-200 LoC)"
