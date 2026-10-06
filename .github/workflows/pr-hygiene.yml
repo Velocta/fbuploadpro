@@ -1,0 +1,51 @@
+name: "🛡️ PR Hygiene & Spec Linkage"
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check-pr:
+    name: "PR Title, Spec Linkage & Branch Guard"
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Validate PR Title (Conventional Commits)"
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+            spec
+          requireScope: false
+
+      - name: "Verify Spec Link in PR Description"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+            const specRegex = /(SPEC-\d{4}|specs\/)/i;
+            const title = (context.payload.pull_request.title || "").toLowerCase();
+            const isChore = title.startsWith("chore") || 
+                            title.startsWith("ci") ||
+                            title.startsWith("docs") ||
+                            title.startsWith("build");
+            
+            if (!isChore && !specRegex.test(body)) {
+              core.setFailed(
+                "❌ Missing Spec Linkage: Pull Request description must reference a specification (e.g., 'SPEC-0001' or link to 'specs/'). " +
+                "Spec-Driven Development requires all non-chore changes to trace back to an approved Spec."
+              );
+            } else {
+              core.info("✅ Spec reference verified in PR description.");
+            }

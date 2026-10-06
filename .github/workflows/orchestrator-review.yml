@@ -1,0 +1,196 @@
+name: "🤖 Orchestrator Anti-Slop Audit"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: orchestrator-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  anti-slop-gate:
+    name: "Automated Orchestrator PR Audit"
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+      contents: read
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v4
+
+      - name: "Audit PR Quality, Heuristics & Slop Checks"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            if (pr.draft) {
+              core.info(`PR #${pr.number} is in draft mode. Skipping Orchestrator review.`);
+              return;
+            }
+
+            const body = pr.body || "";
+            const title = (pr.title || "").toLowerCase();
+            const isChore = title.startsWith("chore") || title.startsWith("ci") || title.startsWith("docs") || title.startsWith("build");
+            
+            const issues = [];
+            const checks = [];
+
+            // 1. Spec & Issue Traceability
+            const hasSpecLink = /(SPEC-\d{4}|specs\/)/i.test(body);
+            const hasIssueLink = /(resolves|fixes|closes):?\s+#\d+/i.test(body);
+            
+            if (hasSpecLink) {
+              checks.push("✅ **Spec Traceability:** References an approved specification.");
+            } else if (!isChore) {
+              issues.push("❌ **Missing Spec Link:** PR description must link to an approved spec (e.g. `SPEC-0001`).");
+            }
+
+            if (hasIssueLink) {
+              checks.push("✅ **Issue Traceability:** References a task issue.");
+            } else if (!isChore) {
+              issues.push("⚠️ **Missing Issue Link:** PR description should link to a task issue (`Resolves #XX`).");
+            }
+
+            // 2. Terminal Test Evidence Verification
+            const hasEvidenceSection = /### 1\. Test Suite Execution/i.test(body);
+            const hasTerminalLogs = /```[\s\S]*?(pass(ed|ing)?|tests?|ok|success|check(s)?)[\s\S]*?```/i.test(body);
+
+            if (hasEvidenceSection && hasTerminalLogs) {
+              checks.push("✅ **Terminal Evidence:** Test execution output detected.");
+            } else if (!isChore) {
+              issues.push("❌ **Missing Test Evidence:** AI Worker must paste real terminal test logs into the PR template.");
+            }
+
+            // 3. Diff Size Guard (<150-200 LoC threshold)
+            const additions = pr.additions || 0;
+            const deletions = pr.deletions || 0;
+            const totalChanges = additions + deletions;
+            const isRefactorOrTombstone = title.startsWith("refactor") || title.startsWith("fix") || /tombstone|purge|deprecat/i.test(title);
+
+            if (isRefactorOrTombstone) {
+              // Refactors, bugfixes, and tombstone purges encourage deleting dead code. Guard against excessive additions.
+              if (additions <= 200) {
+                checks.push(`✅ **Atomic PR Size:** ${additions} lines added, ${deletions} lines deleted (clean refactor/tombstone).`);
+              } else if (!isChore) {
+                issues.push(`❌ **PR Exceeds Atomic Limit:** ${additions} lines added. Limit net additions to <200 LoC.`);
+              }
+            } else {
+              if (totalChanges <= 200) {
+                checks.push(`✅ **Atomic PR Size:** ${totalChanges} lines changed (within the optimal <200 LoC window).`);
+              } else if (totalChanges <= 400) {
+                checks.push(`⚠️ **Moderate PR Size:** ${totalChanges} lines changed. Target <200 lines to minimize LLM drift.`);
+              } else if (!isChore) {
+                issues.push(`❌ **PR Exceeds Atomic Limit:** ${totalChanges} lines changed. Tasks must be split into <200 LoC micro-tasks.`);
+              }
+            }
+
+            // 4. Slop Heuristics Scan across PR Files
+            try {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number
+              });
+
+              let foundTodo = false;
+              let foundDebugLog = false;
+              let foundTrivialTest = false;
+
+              for (const file of files) {
+                if (!file.patch) continue;
+                const isDocOrData = /\.(md|markdown|txt|json|ya?ml|toml)$/i.test(file.filename);
+                const isTest = /(test|spec)/i.test(file.filename);
+                const isScript = file.filename.startsWith("scripts/") || /\.(sh|bash)$/i.test(file.filename);
+
+                const patch = file.patch;
+                const addedLines = patch.split("\n").filter(l => l.startsWith("+") && !l.startsWith("+++"));
+                
+                for (const line of addedLines) {
+                  // Only scan for debug logs in application source files (not tests, scripts, or documentation)
+                  if (!isTest && !isDocOrData && !isScript) {
+                    if (/console\.log\(/i.test(line)) {
+                      foundDebugLog = true;
+                    }
+                    if (/print\(/i.test(line) && !file.filename.endsWith(".py")) {
+                      foundDebugLog = true;
+                    }
+                  }
+                  // Check for unhandled TODOs only in code files, not docs/templates
+                  if (!isDocOrData && /(\/\/\s*TODO:|\bTODO\b|\bFIXME\b)/i.test(line)) {
+                    foundTodo = true;
+                  }
+                  if (/expect\(true\)\.toBe\(true\)/i.test(line)) {
+                    foundTrivialTest = true;
+                  }
+                }
+              }
+
+              if (foundDebugLog) {
+                issues.push("❌ **Leftover Debug Logging:** PR contains added `console.log()` calls in application files.");
+              }
+              if (foundTodo) {
+                issues.push("⚠️ **TODO / Stub Detected:** PR adds unresolved `TODO` or `FIXME` comments in code files.");
+              }
+              if (foundTrivialTest) {
+                issues.push("❌ **Trivial Test Slop:** Detected placeholder `expect(true).toBe(true)` test.");
+              }
+              if (!foundDebugLog && !foundTrivialTest) {
+                checks.push("✅ **Anti-Slop Cleanliness:** No debug prints or trivial mock assertions found in diff.");
+              }
+            } catch (err) {
+              core.warning(`Could not scan diff patches: ${err.message}`);
+            }
+
+            // 5. Construct Comment Body (5-Point Scorecard)
+            const statusEmoji = issues.length === 0 ? "🟢 **PASSED**" : "🔴 **ACTION REQUIRED**";
+            let commentBody = `### 🤖 Orchestrator Anti-Slop Audit\n\n`;
+            commentBody += `**Audit Status:** ${statusEmoji}\n\n`;
+            
+            if (checks.length > 0) {
+              commentBody += `#### Conformance Checks:\n` + checks.map(c => `- ${c}`).join('\n') + `\n\n`;
+            }
+
+            if (issues.length > 0) {
+              commentBody += `#### Required Revisions:\n` + issues.map(i => `- ${i}`).join('\n') + `\n\n`;
+              commentBody += `> *Worker Agent: Please address these items before Orchestrator approval.*`;
+            } else {
+              commentBody += `> *All automated anti-slop guardrails passed! Ready for final Orchestrator & Human sign-off.*`;
+            }
+
+            // Post or update comment with fork permission safety
+            try {
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number
+              });
+
+              const botComment = comments.find(c => c.body.includes("### 🤖 Orchestrator Anti-Slop Audit"));
+
+              if (botComment) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: commentBody
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  body: commentBody
+                });
+              }
+            } catch (commentErr) {
+              core.warning(`Could not post PR comment (fork permission limitation): ${commentErr.message}`);
+            }
+
+            // If critical issues exist, fail the check
+            const criticalIssues = issues.filter(i => i.startsWith("❌"));
+            if (criticalIssues.length > 0) {
+              core.setFailed(`Orchestrator Audit Failed: ${criticalIssues.join("; ")}`);
+            }

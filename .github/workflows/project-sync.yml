@@ -1,0 +1,109 @@
+name: "🤖 GitHub Projects & Lifecycle Sync"
+
+on:
+  issues:
+    types: [opened, labeled]
+  pull_request:
+    types: [opened, ready_for_review, closed]
+
+jobs:
+  auto-triage:
+    name: "Sync Lifecycle Labels & Project State"
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: "Triage New Issues"
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const issue = context.payload.issue;
+              const labels = (issue.labels || []).map(l => l.name);
+
+              // If issue has no phase label, add phase:triage
+              const hasPhase = labels.some(l => l.startsWith('phase:'));
+              if (!hasPhase) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: ['phase:triage', 'ai:needs-triage']
+                });
+                core.info(`Tagged issue #${issue.number} with default triage labels.`);
+              }
+            } catch (err) {
+              core.warning(`Could not triage issue #${context.payload.issue?.number}: ${err.message}`);
+            }
+
+      - name: "Triage PR Lifecycle"
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            try {
+              const pr = context.payload.pull_request;
+              const action = context.payload.action;
+
+              if (action === 'opened' || action === 'ready_for_review') {
+                if (pr.draft) {
+                  core.info(`PR #${pr.number} is in draft mode. Skipping review label until ready_for_review.`);
+                  return;
+                }
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: ['phase:review']
+                });
+                core.info(`PR #${pr.number} marked as in-review.`);
+              } else if (action === 'closed' && pr.merged) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: ['phase:done']
+                });
+                core.info(`PR #${pr.number} marked as completed.`);
+
+                // Synchronize linked task issue to phase:done
+                const body = pr.body || "";
+                const issueMatch = body.match(/(?:resolves|fixes|closes):?\s+#(\d+)/i);
+                if (issueMatch) {
+                  const linkedIssueNum = parseInt(issueMatch[1], 10);
+                  try {
+                    await github.rest.issues.addLabels({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: linkedIssueNum,
+                      labels: ['phase:done']
+                    });
+                    await github.rest.issues.removeLabel({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: linkedIssueNum,
+                      name: 'ai:in-progress'
+                    });
+                    core.info(`Linked task issue #${linkedIssueNum} synchronized to phase:done.`);
+                  } catch (issueErr) {
+                    core.warning(`Could not update linked issue #${linkedIssueNum}: ${issueErr.message}`);
+                  }
+                }
+              } else if (action === 'closed' && !pr.merged) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: pr.number,
+                    name: 'phase:review'
+                  });
+                } catch (_) {}
+                core.info(`PR #${pr.number} closed without merge.`);
+              }
+            } catch (err) {
+              core.warning(`Could not update PR labels (fork permission limitation): ${err.message}`);
+            }
