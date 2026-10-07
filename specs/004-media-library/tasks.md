@@ -9,7 +9,7 @@
 
 **Purpose**: Configure object storage dependencies and environment configuration for Cloudflare R2.
 
-- [ ] T078 Configure Cloudflare R2 storage credentials, environment variable schema, and AWS SDK dependencies in `apps/web/src/lib/storage.ts` (Issue: #126)
+- [X] T078 Configure Cloudflare R2 storage credentials, environment variable schema, and AWS SDK dependencies in `apps/web/src/lib/storage.ts` (Issue: #126)
 
 ---
 
