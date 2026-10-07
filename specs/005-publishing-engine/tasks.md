@@ -86,10 +86,10 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 ### Implementation for User Story 3
 
-- [ ] T132 [US3] Implement PostgreSQL `FOR UPDATE SKIP LOCKED` claim logic and status transitions in `apps/worker/src/dispatcher.ts` (Issue: #207)
-- [ ] T133 [US3] Implement token decryption (`decryptToken`) and media dispatching loop in `apps/worker/src/dispatcher.ts` (Issue: #208)
-- [ ] T134 [US3] Implement automated first comment execution and external post ID recording in `apps/worker/src/dispatcher.ts` (Issue: #209)
-- [ ] T135 [US3] Wire Cloudflare Worker `scheduled` event listener in `apps/worker/src/index.ts` to execute `runDispatchCycle` (Issue: #210)
+- [X] T132 [US3] Implement PostgreSQL `FOR UPDATE SKIP LOCKED` claim logic and status transitions in `apps/worker/src/dispatcher.ts` (Issue: #207)
+- [X] T133 [US3] Implement token decryption (`decryptToken`) and media dispatching loop in `apps/worker/src/dispatcher.ts` (Issue: #208)
+- [X] T134 [US3] Implement automated first comment execution and external post ID recording in `apps/worker/src/dispatcher.ts` (Issue: #209)
+- [X] T135 [US3] Wire Cloudflare Worker `scheduled` event listener in `apps/worker/src/index.ts` to execute `runDispatchCycle` (Issue: #210)
 
 **Checkpoint**: User Story 3 complete — Edge dispatcher streams media to Facebook and posts first comments.
 
