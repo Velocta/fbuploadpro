@@ -10,7 +10,7 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 **Purpose**: Configure worker scheduled cron trigger and environment configurations.
 
-- [ ] T114 [P] Configure Cloudflare Worker scheduled cron trigger (`crons = ["* * * * *"]`) and environment bindings in `apps/worker/wrangler.toml` and `apps/worker/src/index.ts` (Issue: #189)
+- [X] T114 [P] Configure Cloudflare Worker scheduled cron trigger (`crons = ["* * * * *"]`) and environment bindings in `apps/worker/wrangler.toml` and `apps/worker/src/index.ts` (Issue: #189)
 
 ---
 
