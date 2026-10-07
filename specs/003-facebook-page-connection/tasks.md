@@ -42,12 +42,12 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated using Vitest by sending mock OAuth initiation requests, executing simulated Graph API v26.0 callbacks for Account A and Account B, and asserting both accounts are persisted with `active` status, unique `fb_account_id` values, and encrypted tokens in the database.
 
 ### Tests for User Story 1 (TDD) ⚠️
-- [ ] T058 [P] [US1] Write unit and integration tests for Facebook OAuth initiation and callback route handlers verifying CSRF state signing, code exchange, and encrypted token persistence in `apps/web/tests/api/auth-facebook.test.ts` (Issue: #93)
-- [ ] T059 [P] [US1] Write integration tests verifying multiple distinct Facebook accounts can be connected to the same tenant workspace without collision or overwriting in `apps/web/tests/api/multi-account-oauth.test.ts` (Issue: #94)
+- [X] T058 [P] [US1] Write unit and integration tests for Facebook OAuth initiation and callback route handlers verifying CSRF state signing, code exchange, and encrypted token persistence in `apps/web/tests/api/auth-facebook.test.ts` (Issue: #93)
+- [X] T059 [P] [US1] Write integration tests verifying multiple distinct Facebook accounts can be connected to the same tenant workspace without collision or overwriting in `apps/web/tests/api/multi-account-oauth.test.ts` (Issue: #94)
 
 ### Implementation for User Story 1
-- [ ] T060 [US1] Implement `GET /api/auth/facebook` route handler generating signed HMAC-SHA256 OAuth state envelope and redirecting to `https://www.facebook.com/v26.0/dialog/oauth` with required scopes `pages_show_list,pages_read_engagement,pages_manage_posts,business_management` in `apps/web/src/app/api/auth/facebook/route.ts` (Issue: #95)
-- [ ] T061 [US1] Implement `GET /api/auth/facebook/callback` route handler verifying state signature and expiration, exchanging code for 60-day long-lived token via `https://graph.facebook.com/v26.0/oauth/access_token`, retrieving profile from `https://graph.facebook.com/v26.0/me?fields=id,name`, encrypting token with AES-256-GCM, and upserting into `facebook_accounts` on conflict `(user_id, fb_account_id)` in `apps/web/src/app/api/auth/facebook/callback/route.ts` (Issue: #96)
+- [X] T060 [US1] Implement `GET /api/auth/facebook` route handler generating signed HMAC-SHA256 OAuth state envelope and redirecting to `https://www.facebook.com/v26.0/dialog/oauth` with required scopes `pages_show_list,pages_read_engagement,pages_manage_posts,business_management` in `apps/web/src/app/api/auth/facebook/route.ts` (Issue: #95)
+- [X] T061 [US1] Implement `GET /api/auth/facebook/callback` route handler verifying state signature and expiration, exchanging code for 60-day long-lived token via `https://graph.facebook.com/v26.0/oauth/access_token`, retrieving profile from `https://graph.facebook.com/v26.0/me?fields=id,name`, encrypting token with AES-256-GCM, and upserting into `facebook_accounts` on conflict `(user_id, fb_account_id)` in `apps/web/src/app/api/auth/facebook/callback/route.ts` (Issue: #96)
 
 **Checkpoint**: User Story 1 complete — multi-account Facebook OAuth connection and encrypted token storage functional and independently testable (MVP).
 
