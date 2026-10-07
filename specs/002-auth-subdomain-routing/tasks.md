@@ -59,11 +59,11 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by executing middleware tests with valid, missing, mismatched, and suspended user session tokens.
 
 ### Tests for User Story 2 (TDD) ⚠️
-- [ ] T040 [P] [US2] Write unit and integration tests for session extraction and tenant ownership verification guard in apps/web/tests/middleware-auth.test.ts (Issue: #67)
+- [X] T040 [P] [US2] Write unit and integration tests for session extraction and tenant ownership verification guard in apps/web/tests/middleware-auth.test.ts (Issue: #67)
 
 ### Implementation for User Story 2
-- [ ] T041 [US2] Integrate session authentication guard and tenant ownership checks into Next.js Edge Middleware in apps/web/src/middleware.ts (Issue: #68)
-- [ ] T042 [US2] Implement server-side session extraction helper in apps/web/src/lib/auth.ts and account suspended notice page in apps/web/src/app/account-suspended/page.tsx (Issue: #69)
+- [X] T041 [US2] Integrate session authentication guard and tenant ownership checks into Next.js Edge Middleware in apps/web/src/middleware.ts (Issue: #68)
+- [X] T042 [US2] Implement server-side session extraction helper in apps/web/src/lib/auth.ts and account suspended notice page in apps/web/src/app/account-suspended/page.tsx (Issue: #69)
 
 **Checkpoint**: At this point, User Stories 1 and 2 work independently.
 
