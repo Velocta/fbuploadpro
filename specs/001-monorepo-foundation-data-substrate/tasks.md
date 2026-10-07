@@ -10,9 +10,9 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: Project initialization, monorepo workspace tooling, and shared linting/typechecking configuration.
 
-- [ ] T001 Configure root monorepo workspace tooling in package.json, pnpm-workspace.yaml, and turbo.json with pipeline tasks (build, lint, typecheck, test) (Issue: #16)
-- [ ] T002 [P] Configure strict root TypeScript compiler base in tsconfig.base.json (strict: true, noImplicitAny: true, exactOptionalPropertyTypes: true) (Issue: #17)
-- [ ] T003 [P] Configure root ESLint 9 flat configuration in eslint.config.mjs enforcing zero warnings across all workspaces (Issue: #18)
+- [X] T001 Configure root monorepo workspace tooling in package.json, pnpm-workspace.yaml, and turbo.json with pipeline tasks (build, lint, typecheck, test) (Issue: #16)
+- [X] T002 [P] Configure strict root TypeScript compiler base in tsconfig.base.json (strict: true, noImplicitAny: true, exactOptionalPropertyTypes: true) (Issue: #17)
+- [X] T003 [P] Configure root ESLint 9 flat configuration in eslint.config.mjs enforcing zero warnings across all workspaces (Issue: #18)
 
 ---
 
