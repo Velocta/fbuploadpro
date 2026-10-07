@@ -18,4 +18,20 @@ describe('Database Migrations Substrate', () => {
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_subdomain ON users(subdomain)');
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
   });
+
+  it('0001_initial_schema.sql contains facebook_accounts and facebook_pages with composite constraints', () => {
+    const migrationPath = path.resolve(__dirname, '../migrations/0001_initial_schema.sql');
+    const ddl = fs.readFileSync(migrationPath, 'utf8');
+
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS facebook_accounts');
+    expect(ddl).toContain('CONSTRAINT uq_fb_accounts_user_account UNIQUE (user_id, fb_account_id)');
+    expect(ddl).toContain('CONSTRAINT uq_fb_accounts_user_id UNIQUE (user_id, id)');
+
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS facebook_pages');
+    expect(ddl).toContain('CONSTRAINT fk_fb_pages_user_account FOREIGN KEY (user_id, facebook_account_id)');
+    expect(ddl).toContain('REFERENCES facebook_accounts(user_id, id) ON DELETE CASCADE');
+    expect(ddl).toContain('CONSTRAINT uq_fb_pages_user_page UNIQUE (user_id, fb_page_id)');
+    expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_fb_accounts_user_id ON facebook_accounts(user_id)');
+    expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_fb_pages_user_id ON facebook_pages(user_id)');
+  });
 });

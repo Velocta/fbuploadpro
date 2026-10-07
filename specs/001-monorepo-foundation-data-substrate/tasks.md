@@ -55,11 +55,11 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by executing Vitest tests against Facebook schemas, and asserting that SQL DDL defines composite foreign keys fk_fb_pages_user_account and compound unique constraints uq_fb_pages_user_page.
 
 ### Tests for User Story 2 (TDD) ⚠️
-- [ ] T011 [P] [US2] Write unit tests for FacebookAccountSchema, FacebookPageSchema, and composite user constraints in packages/contracts/tests/facebook.test.ts (Issue: #26)
+- [X] T011 [P] [US2] Write unit tests for FacebookAccountSchema, FacebookPageSchema, and composite user constraints in packages/contracts/tests/facebook.test.ts (Issue: #26)
 
 ### Implementation for User Story 2
-- [ ] T012 [P] [US2] Implement FacebookAccountStatusSchema (active, disconnected, expired), FacebookAccountSchema, FacebookPageStatusSchema (active, fb_rate_limited, invalid_token, disconnected), and FacebookPageSchema (with followersCount >= 0) referencing userId in packages/contracts/src/domain/facebook.ts (Issue: #27)
-- [ ] T013 [US2] Append DDL definitions for facebook_accounts (with unique constraints uq_fb_accounts_user_account and uq_fb_accounts_user_id) and facebook_pages (with composite FK fk_fb_pages_user_account referencing facebook_accounts(user_id, id) ON DELETE CASCADE and unique uq_fb_pages_user_page) to packages/database/migrations/0001_initial_schema.sql (Issue: #28)
+- [X] T012 [P] [US2] Implement FacebookAccountStatusSchema (active, disconnected, expired), FacebookAccountSchema, FacebookPageStatusSchema (active, fb_rate_limited, invalid_token, disconnected), and FacebookPageSchema (with followersCount >= 0) referencing userId in packages/contracts/src/domain/facebook.ts (Issue: #27)
+- [X] T013 [US2] Append DDL definitions for facebook_accounts (with unique constraints uq_fb_accounts_user_account and uq_fb_accounts_user_id) and facebook_pages (with composite FK fk_fb_pages_user_account referencing facebook_accounts(user_id, id) ON DELETE CASCADE and unique uq_fb_pages_user_page) to packages/database/migrations/0001_initial_schema.sql (Issue: #28)
 
 **Checkpoint**: At this point, User Stories 1 and 2 work independently.
 
