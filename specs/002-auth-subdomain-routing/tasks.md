@@ -42,11 +42,11 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated using Vitest by sending mock requests with various Host headers (`localhost:3000`, `www.fbuploadpro.com`, `admin.fbuploadpro.com`, `client.fbuploadpro.com`) and verifying correct internal path rewriting.
 
 ### Tests for User Story 1 (TDD) ⚠️
-- [ ] T037 [P] [US1] Write unit and integration tests for Next.js Edge Middleware subdomain rewriting and header injection in apps/web/tests/middleware-routing.test.ts (Issue: #64)
+- [X] T037 [P] [US1] Write unit and integration tests for Next.js Edge Middleware subdomain rewriting and header injection in apps/web/tests/middleware-routing.test.ts (Issue: #64)
 
 ### Implementation for User Story 1
-- [ ] T038 [US1] Implement Next.js Edge Middleware for hostname inspection, subdomain extraction, and internal path rewriting in apps/web/src/middleware.ts (Issue: #65)
-- [ ] T039 [US1] Implement public marketing root page and reserved slug routes in apps/web/src/app/page.tsx and apps/web/src/app/login/page.tsx (Issue: #66)
+- [X] T038 [US1] Implement Next.js Edge Middleware for hostname inspection, subdomain extraction, and internal path rewriting in apps/web/src/middleware.ts (Issue: #65)
+- [X] T039 [US1] Implement public marketing root page and reserved slug routes in apps/web/src/app/page.tsx and apps/web/src/app/login/page.tsx (Issue: #66)
 
 **Checkpoint**: At this point, User Story 1 is functional and testable independently.
 
