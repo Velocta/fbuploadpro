@@ -8,3 +8,7 @@ export * from './domain/session.js';
 export * from './domain/routing.js';
 export * from './domain/rbac.js';
 export * from './crypto/token.js';
+export * from './domain/media.js';
+export * from './domain/folder.js';
+export * from './domain/caption.js';
+export * from './domain/storage.js';
