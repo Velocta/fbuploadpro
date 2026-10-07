@@ -109,9 +109,9 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: Deliver user interface components for multi-account management, account switching, page discovery, and selective import at `/tenant/[subdomain]/accounts`.
 
-- [ ] T072 [P] Implement multi-account switcher and account card component displaying display name, status badge, token expiration horizon, and connect/disconnect buttons in `apps/web/src/components/facebook/account-list.tsx` (Issue: #107)
-- [ ] T073 [P] Implement Facebook Page discovery modal component with selective checkboxes, follower counts, and import confirmation in `apps/web/src/components/facebook/page-discovery-modal.tsx` (Issue: #108)
-- [ ] T074 Implement tenant accounts page integrating account list, imported pages table, discovery modal, and status indicators in `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx` (Issue: #109)
+- [X] T072 [P] Implement multi-account switcher and account card component displaying display name, status badge, token expiration horizon, and connect/disconnect buttons in `apps/web/src/components/facebook/account-list.tsx` (Issue: #107)
+- [X] T073 [P] Implement Facebook Page discovery modal component with selective checkboxes, follower counts, and import confirmation in `apps/web/src/components/facebook/page-discovery-modal.tsx` (Issue: #108)
+- [X] T074 Implement tenant accounts page integrating account list, imported pages table, discovery modal, and status indicators in `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx` (Issue: #109)
 
 ---
 

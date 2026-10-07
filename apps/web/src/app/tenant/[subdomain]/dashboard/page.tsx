@@ -45,20 +45,21 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           Connect Facebook accounts and select target Facebook Pages for scheduled short-form video publishing.
         </p>
         <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-          <button
-            type="button"
+          <a
+            href={`/tenant/${subdomain}/accounts`}
             style={{
+              display: 'inline-block',
+              textDecoration: 'none',
               padding: '0.6rem 1.2rem',
               backgroundColor: '#1877f2',
               color: '#fff',
-              border: 'none',
               borderRadius: '4px',
               fontWeight: '600',
               cursor: 'pointer',
             }}
           >
-            + Connect Facebook Account
-          </button>
+            Manage Facebook Channels &rarr;
+          </a>
         </div>
       </div>
     </div>
