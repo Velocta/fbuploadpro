@@ -38,11 +38,11 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated with Vitest by asserting that SubdomainSchema rejects invalid patterns and reserved slugs, UserSchema validates UUIDs, email, subdomain, and tokensBalance >= 0, and DDL creates users table with primary keys, unique constraints, and check constraints.
 
 ### Tests for User Story 1 (TDD) ⚠️
-- [ ] T008 [P] [US1] Write unit tests for SubdomainSchema, reserved slugs, and UserSchema in packages/contracts/tests/user.test.ts (Issue: #23)
+- [X] T008 [P] [US1] Write unit tests for SubdomainSchema, reserved slugs, and UserSchema in packages/contracts/tests/user.test.ts (Issue: #23)
 
 ### Implementation for User Story 1
-- [ ] T009 [P] [US1] Implement SubdomainSchema (regex /^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/, rejecting RESERVED_SUBDOMAINS: admin, api, app, auth, billing, dashboard, internal, mail, status, system, test, webhook, www), UserRoleSchema (user, seller, admin), UserStatusSchema (active, suspended), and UserSchema (with tokensBalance >= 0) in packages/contracts/src/domain/user.ts (Issue: #24)
-- [ ] T010 [US1] Write DDL migration for users table (id UUID PK, email VARCHAR(255) UNIQUE, name VARCHAR(100), subdomain VARCHAR(50) UNIQUE, role VARCHAR(20) CHECK IN ('user', 'seller', 'admin'), tokens_balance BIGINT CHECK >= 0, status VARCHAR(20) CHECK IN ('active', 'suspended')) in packages/database/migrations/0001_initial_schema.sql (Issue: #25)
+- [X] T009 [P] [US1] Implement SubdomainSchema (regex /^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/, rejecting RESERVED_SUBDOMAINS: admin, api, app, auth, billing, dashboard, internal, mail, status, system, test, webhook, www), UserRoleSchema (user, seller, admin), UserStatusSchema (active, suspended), and UserSchema (with tokensBalance >= 0) in packages/contracts/src/domain/user.ts (Issue: #24)
+- [X] T010 [US1] Write DDL migration for users table (id UUID PK, email VARCHAR(255) UNIQUE, name VARCHAR(100), subdomain VARCHAR(50) UNIQUE, role VARCHAR(20) CHECK IN ('user', 'seller', 'admin'), tokens_balance BIGINT CHECK >= 0, status VARCHAR(20) CHECK IN ('active', 'suspended')) in packages/database/migrations/0001_initial_schema.sql (Issue: #25)
 
 **Checkpoint**: At this point, User Story 1 is functional and testable independently.
 
