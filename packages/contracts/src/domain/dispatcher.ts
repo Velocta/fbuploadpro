@@ -54,6 +54,24 @@ export const PublishLogSchema = z.object({
 
 export type PublishLog = z.infer<typeof PublishLogSchema>;
 
+// List Publish Logs Query
+export const ListPublishLogsQuerySchema = z.object({
+  pageId: z.string().uuid().optional(),
+  status: z.enum(['success', 'failure', 'retry']).optional(),
+  limit: z.coerce.number().int().positive().max(100).default(50),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
+
+export type ListPublishLogsQuery = z.infer<typeof ListPublishLogsQuerySchema>;
+
+// List Publish Logs Response
+export const ListPublishLogsResponseSchema = z.object({
+  logs: z.array(PublishLogSchema),
+  total: z.number().int().nonnegative(),
+});
+
+export type ListPublishLogsResponse = z.infer<typeof ListPublishLogsResponseSchema>;
+
 // Dispatcher Service Interface
 export interface IPublishDispatcher {
   /**
