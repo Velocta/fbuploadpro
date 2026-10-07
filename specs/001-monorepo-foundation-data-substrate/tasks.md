@@ -110,8 +110,8 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: Automated continuous integration quality gates and end-to-end verification.
 
-- [ ] T027 Implement GitHub Actions CI workflow for push and pull_request to main in .github/workflows/ci.yml running pnpm turbo run build lint typecheck test (Issue: #42)
-- [ ] T028 [P] Execute end-to-end quickstart validation, typecheck, lint, and test suites across all monorepo packages per specs/001-monorepo-foundation-data-substrate/quickstart.md (Issue: #43)
+- [X] T027 Implement GitHub Actions CI workflow for push and pull_request to main in .github/workflows/ci.yml running pnpm turbo run build lint typecheck test (Issue: #42)
+- [X] T028 [P] Execute end-to-end quickstart validation, typecheck, lint, and test suites across all monorepo packages per specs/001-monorepo-foundation-data-substrate/quickstart.md (Issue: #43)
 
 ---
 
