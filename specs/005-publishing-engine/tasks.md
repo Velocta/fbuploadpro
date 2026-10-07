@@ -44,7 +44,7 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 - [X] T122 [US1] Implement `GET` and `POST` handlers for Page Queue Slots in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route.ts` (Issue: #197)
 - [X] T123 [US1] Implement `PATCH` and `DELETE` handlers for Page Queue Slots in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/[slotId]/route.ts` (Issue: #198)
-- [ ] T124 [US1] Implement next vacant slot calculator utility with timezone support in `apps/web/src/lib/slot-scheduler.ts` with unit tests in `apps/web/tests/unit/slot-scheduler.test.ts` (Issue: #199)
+- [X] T124 [US1] Implement next vacant slot calculator utility with timezone support in `apps/web/src/lib/slot-scheduler.ts` with unit tests in `apps/web/tests/unit/slot-scheduler.test.ts` (Issue: #199)
 
 **Checkpoint**: User Story 1 complete — Page slots can be managed and next available slot times calculated.
 
