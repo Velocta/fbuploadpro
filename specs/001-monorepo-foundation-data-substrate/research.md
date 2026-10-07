@@ -39,37 +39,33 @@ Implement a dual client strategy in `@fbuploadpro/database`:
 
 ---
 
-## 3. Multi-Tenant Relational Isolation & Composite Foreign Keys
+## 3. Unified User Multi-Tenant Isolation & Subdomain Ownership
 
 ### Decision
-Enforce tenant boundaries in PostgreSQL DDL using **composite foreign keys** and **compound unique constraints**:
-- `facebook_accounts` uses `(agency_id, id)`.
-- `facebook_pages` references `(agency_id, facebook_account_id)` via composite foreign key `fk_fb_pages_agency_account`.
-- Unique constraint `uq_fb_pages_agency_page` on `(agency_id, fb_page_id)`.
+Unify tenant ownership directly into the `users` table:
+- Every user has their own unique `subdomain` slug (e.g. `client.fbuploadpro.com`).
+- Child resources (`facebook_accounts`, `facebook_pages`, `token_transactions`) reference `user_id` directly.
+- Multi-tenant defense-in-depth is enforced via composite foreign keys `(user_id, facebook_account_id)` and compound unique constraints `(user_id, fb_page_id)`.
 
 ### Rationale
-- **Kernel-Level Multi-Tenancy**: Moving tenant enforcement into relational constraints guarantees that a page owned by Agency A can never be linked to a Facebook account owned by Agency B, even if application logic suffers an IDOR bug.
-- **Cascade Safety**: Deleting an agency cascades strictly across all tenant-owned entities without leaving orphan records.
+- **Simplicity & Direct Alignment**: Aligns with the core operational model where 1 user account = 1 customer workspace, eliminating redundant join tables, intermediary foreign keys, and extra onboarding indirection.
+- **Kernel-Level Multi-Tenancy**: Composite keys at the PostgreSQL level physically prevent a page owned by User A from being bound to an account owned by User B.
+- **Cascade Safety**: Deleting a user cascades strictly across all user-owned social accounts, pages, and transaction history.
 
 ### Alternatives Considered
-- **Application-Layer Filtering Only (`WHERE agency_id = ?`)**: Highly susceptible to developer omission or regression bugs leading to cross-tenant data leakage.
-- **Row-Level Security (RLS) Only**: Viable in Supabase but adds latency and complexity when services connect via administrative pool credentials. Relational composite keys provide defense-in-depth regardless of connection role.
+- **Separated Agencies + Users Table**: Adds unnecessary joins and schema ceremony when users operate their own subdomains directly.
 
 ---
 
 ## 4. Token Ledger Concurrency & Non-Negative Invariants
 
 ### Decision
-Combine PostgreSQL check constraints with atomic conditional SQL decrements:
+Maintain `tokens_balance` directly on the `users` table (protected by `CHECK (tokens_balance >= 0)`) combined with atomic conditional SQL decrements and an append-only `token_transactions` audit log:
 ```sql
-CONSTRAINT chk_token_balance_non_negative CHECK (balance >= 0)
-CONSTRAINT chk_token_reserved_non_negative CHECK (reserved >= 0)
-```
-```sql
-UPDATE token_balances
-SET balance = balance - :amount, updated_at = now()
-WHERE agency_id = :agencyId AND balance >= :amount
-RETURNING balance;
+UPDATE users
+SET tokens_balance = tokens_balance - :amount, updated_at = now()
+WHERE id = :userId AND tokens_balance >= :amount
+RETURNING tokens_balance;
 ```
 If 0 rows are returned, the client helper throws a typed `InsufficientFundsError` (HTTP 402, `INSUFFICIENT_FUNDS`).
 
@@ -79,8 +75,7 @@ If 0 rows are returned, the client helper throws a typed `InsufficientFundsError
 - **Immutable Transaction Audit**: Every balance mutation writes an entry to `token_transactions` with `transaction_type IN ('credit', 'debit', 'refund', 'adjustment')` and `amount > 0`.
 
 ### Alternatives Considered
-- **Read-Calculate-Write Application Flow**: Prone to classic race conditions where two simultaneous tasks read balance=10, both approve a 10-token spend, and deduct, leading to overdraft or lost updates.
-- **Distributed Locks (Redis/Redlock)**: Adds operational complexity, latency, and single-point-of-failure risk when native PostgreSQL row locking is already available and ACID-compliant.
+- **Separate token_balances table**: Unnecessary 1:1 table when `tokens_balance` is an intrinsic attribute of the user workspace.
 
 ---
 

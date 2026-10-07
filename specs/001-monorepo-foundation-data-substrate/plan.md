@@ -6,7 +6,7 @@
 
 ## Summary
 
-Establish the foundational multi-workspace monorepo infrastructure and secure data substrate for FBUploadPro. This includes setting up Turborepo and pnpm workspaces, authoring `@fbuploadpro/contracts` for pure domain schemas and error taxonomies, implementing `@fbuploadpro/database` with PostgreSQL DDL migrations (composite multi-tenant isolation keys, non-negative balance checks) and dual Node/Edge clients, scaffolding Next.js 16 (`apps/web`) with a sanitized 2000ms health check route, and setting up Cloudflare Worker (`apps/worker`) edge runtime with CI quality gates.
+Establish the foundational multi-workspace monorepo infrastructure and secure data substrate for FBUploadPro based on a unified User model. This includes setting up Turborepo and pnpm workspaces, authoring `@fbuploadpro/contracts` for pure domain schemas (User with unique subdomain, Facebook accounts/pages, token transactions) and error taxonomies, implementing `@fbuploadpro/database` with PostgreSQL DDL migrations (composite user isolation keys, `tokens_balance >= 0` check constraints) and dual Node/Edge clients, scaffolding Next.js 16 (`apps/web`) with a sanitized 2000ms health check route, and setting up Cloudflare Worker (`apps/worker`) edge runtime with CI quality gates.
 
 ## Technical Context
 
@@ -25,7 +25,7 @@ Establish the foundational multi-workspace monorepo infrastructure and secure da
 **Performance Goals**: Diagnostic health probes resolve in <2000ms; atomic token balance decrements execute in a single roundtrip
 
 **Constraints**:
-- Strict multi-tenant isolation enforced via composite foreign keys `(agency_id, facebook_account_id)`
+- Strict multi-tenant isolation enforced via composite foreign keys `(user_id, facebook_account_id)`
 - Zero Node.js TCP socket dependencies in edge isolate execution
 - Sanitized health probes preventing credential and stack trace leakage
 - Atomic debit semantics preventing balance overdrafts under concurrent load
@@ -38,7 +38,7 @@ Establish the foundational multi-workspace monorepo infrastructure and secure da
 
 1. **Principle I: Spec-Driven Development (SDD) as SSOT**: PASS. Approved spec exists at `specs/001-monorepo-foundation-data-substrate/spec.md`. TDD required for all modules.
 2. **Principle II: Modular Architecture & Service Isolation**: PASS. Shared contracts isolated in `@fbuploadpro/contracts`; database clients separated into Node and Edge modules; zero cross-app code imports.
-3. **Principle III: Multi-Tenant Defense-in-Depth**: PASS. Composite foreign keys `(agency_id, facebook_account_id)`, unique tenant constraints, non-negative check constraints (`balance >= 0`), and atomic conditional decrements.
+3. **Principle III: Multi-Tenant Defense-in-Depth**: PASS. Composite foreign keys `(user_id, facebook_account_id)`, unique user constraints, non-negative check constraints (`tokens_balance >= 0`), and atomic conditional decrements.
 4. **Principle IV: Zero-Trust Boundary Validation & Sanitization**: PASS. Runtime Zod schema validation across all inputs; 2000ms timeout budget on `/api/health` with sanitized response envelopes.
 5. **Principle V: Atomic PRs & Linear Git Hygiene**: PASS. Tasks decomposed to <150–200 LoC each, with PRs linked to dedicated task issues.
 
@@ -72,7 +72,6 @@ packages/contracts/
 │   └── contracts.test.ts
 └── src/
     ├── domain/
-    │   ├── agency.ts
     │   ├── user.ts
     │   ├── facebook.ts
     │   └── billing.ts

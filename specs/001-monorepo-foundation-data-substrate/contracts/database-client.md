@@ -12,25 +12,25 @@ export interface DatabaseClient {
   query<T = unknown>(text: string, params?: unknown[]): Promise<T[]>;
   queryOne<T = unknown>(text: string, params?: unknown[]): Promise<T | null>;
   withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T>;
-  atomicDecrementTokens(agencyId: string, amount: number): Promise<number>;
+  atomicDecrementTokens(userId: string, amount: number): Promise<number>;
   close(): Promise<void>;
 }
 ```
 
 ### Atomic Token Decrement Contract
 - **Inputs**:
-  - `agencyId`: Valid UUID string
+  - `userId`: Valid UUID string
   - `amount`: Strictly positive integer (`amount > 0`)
 - **SQL Execution**:
   ```sql
-  UPDATE token_balances
-  SET balance = balance - $2, updated_at = now()
-  WHERE agency_id = $1 AND balance >= $2
-  RETURNING balance;
+  UPDATE users
+  SET tokens_balance = tokens_balance - $2, updated_at = now()
+  WHERE id = $1 AND tokens_balance >= $2
+  RETURNING tokens_balance;
   ```
 - **Outcomes**:
-  - If updated: returns `number` (new updated balance).
-  - If 0 rows updated (insufficient balance or missing record): throws `InsufficientFundsError` (`DomainErrorCode = 'INSUFFICIENT_FUNDS'`, HTTP 402).
+  - If updated: returns `number` (new updated `tokens_balance`).
+  - If 0 rows updated (insufficient balance or user missing): throws `InsufficientFundsError` (`DomainErrorCode = 'INSUFFICIENT_FUNDS'`, HTTP 402).
 
 ---
 
@@ -45,7 +45,7 @@ export interface EdgeTransport {
 export interface EdgeDatabaseClient {
   query<T = unknown>(text: string, params?: unknown[]): Promise<T[]>;
   queryOne<T = unknown>(text: string, params?: unknown[]): Promise<T | null>;
-  atomicDecrementTokens(agencyId: string, amount: number): Promise<number>;
+  atomicDecrementTokens(userId: string, amount: number): Promise<number>;
 }
 ```
 
