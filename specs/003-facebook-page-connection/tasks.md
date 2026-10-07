@@ -60,12 +60,12 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by executing discovery for a specific connected account, asserting that discovered pages match Graph API v26.0 responses (zero groups), selecting specific pages for import, and verifying persisted records in `facebook_pages` linked to `(user_id, facebook_account_id)` with encrypted tokens.
 
 ### Tests for User Story 2 (TDD) ⚠️
-- [ ] T062 [P] [US2] Write unit and integration tests for Graph API v26.0 `/me/accounts` page discovery and selective import route handlers asserting strict groups exclusion and encrypted page token persistence in `apps/web/tests/api/facebook-pages.test.ts` (Issue: #97)
+- [X] T062 [P] [US2] Write unit and integration tests for Graph API v26.0 `/me/accounts` page discovery and selective import route handlers asserting strict groups exclusion and encrypted page token persistence in `apps/web/tests/api/facebook-pages.test.ts` (Issue: #97)
 
 ### Implementation for User Story 2
-- [ ] T063 [US2] Implement `GET /api/tenant/[subdomain]/accounts/[accountId]/pages/discover` route handler decrypting account token, querying `https://graph.facebook.com/v26.0/me/accounts?fields=id,name,category,tasks,access_token,followers_count`, filtering for pages only, and returning `DiscoveredPage` list with `isImported` status in `apps/web/src/app/api/tenant/[subdomain]/accounts/[accountId]/pages/discover/route.ts` (Issue: #98)
-- [ ] T064 [US2] Implement `POST /api/tenant/[subdomain]/pages/import` route handler encrypting Page access tokens with AES-256-GCM and upserting selected pages into `facebook_pages` enforcing `CONSTRAINT fk_fb_pages_user_account FOREIGN KEY (user_id, facebook_account_id)` and `CONSTRAINT uq_fb_pages_user_page UNIQUE (user_id, fb_page_id)` in `apps/web/src/app/api/tenant/[subdomain]/pages/import/route.ts` (Issue: #99)
-- [ ] T065 [US2] Implement `GET /api/tenant/[subdomain]/pages` route handler returning sanitized imported Facebook Pages for the tenant workspace in `apps/web/src/app/api/tenant/[subdomain]/pages/route.ts` (Issue: #100)
+- [X] T063 [US2] Implement `GET /api/tenant/[subdomain]/accounts/[accountId]/pages/discover` route handler decrypting account token, querying `https://graph.facebook.com/v26.0/me/accounts?fields=id,name,category,tasks,access_token,followers_count`, filtering for pages only, and returning `DiscoveredPage` list with `isImported` status in `apps/web/src/app/api/tenant/[subdomain]/accounts/[accountId]/pages/discover/route.ts` (Issue: #98)
+- [X] T064 [US2] Implement `POST /api/tenant/[subdomain]/pages/import` route handler encrypting Page access tokens with AES-256-GCM and upserting selected pages into `facebook_pages` enforcing `CONSTRAINT fk_fb_pages_user_account FOREIGN KEY (user_id, facebook_account_id)` and `CONSTRAINT uq_fb_pages_user_page UNIQUE (user_id, fb_page_id)` in `apps/web/src/app/api/tenant/[subdomain]/pages/import/route.ts` (Issue: #99)
+- [X] T065 [US2] Implement `GET /api/tenant/[subdomain]/pages` route handler returning sanitized imported Facebook Pages for the tenant workspace in `apps/web/src/app/api/tenant/[subdomain]/pages/route.ts` (Issue: #100)
 
 **Checkpoint**: User Story 2 complete — Facebook Page discovery and selective import fully functional with zero groups.
 
