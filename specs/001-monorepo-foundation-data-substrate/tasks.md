@@ -92,13 +92,13 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by testing /api/health in apps/web (expecting 200 OK on healthy DB, 503 on drop/timeout with zero leaked credentials) and /health in apps/worker (expecting 200 OK with worker identification).
 
 ### Tests for User Story 4 (TDD) ⚠️
-- [ ] T020 [P] [US4] Write health route tests in apps/web/tests/health.test.ts asserting 200 OK, 503 degraded states, credential sanitization, and 2000ms timeout budget (Issue: #35)
+- [X] T020 [P] [US4] Write health route tests in apps/web/tests/health.test.ts asserting 200 OK, 503 degraded states, credential sanitization, and 2000ms timeout budget (Issue: #35)
 - [ ] T021 [P] [US4] Write edge worker unit tests in apps/worker/tests/worker.test.ts verifying GET /health and 404 fallback (Issue: #36)
 
 ### Implementation for User Story 4
-- [ ] T022 [P] [US4] Scaffold Next.js 16 App Router application shell in apps/web/package.json, apps/web/tsconfig.json, and apps/web/next.config.ts (Issue: #37)
-- [ ] T023 [P] [US4] Implement minimal application layout and root page in apps/web/src/app/layout.tsx and apps/web/src/app/page.tsx (Issue: #38)
-- [ ] T024 [US4] Implement sanitized health check route with 2000ms AbortController timeout budget suppressing credentials in apps/web/src/app/api/health/route.ts (Issue: #39)
+- [X] T022 [P] [US4] Scaffold Next.js 16 App Router application shell in apps/web/package.json, apps/web/tsconfig.json, and apps/web/next.config.ts (Issue: #37)
+- [X] T023 [P] [US4] Implement minimal application layout and root page in apps/web/src/app/layout.tsx and apps/web/src/app/page.tsx (Issue: #38)
+- [X] T024 [US4] Implement sanitized health check route with 2000ms AbortController timeout budget suppressing credentials in apps/web/src/app/api/health/route.ts (Issue: #39)
 - [ ] T025 [P] [US4] Scaffold Cloudflare Worker shell in apps/worker/package.json, apps/worker/tsconfig.json, and apps/worker/wrangler.toml (Issue: #40)
 - [ ] T026 [US4] Implement edge fetch handler responding to GET /health with { status: "ok", worker: "fbuploadpro-worker" } in apps/worker/src/index.ts (Issue: #41)
 
