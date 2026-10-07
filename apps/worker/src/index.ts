@@ -11,6 +11,7 @@ export interface Env {
 
 export * from './fb-client.js';
 export * from './dispatcher.js';
+export * from './settlement.js';
 
 export interface ScheduledOptions {
   db?: DispatcherDbClient;

@@ -7,6 +7,7 @@ import {
   decryptToken,
 } from '@fbuploadpro/contracts';
 import { FacebookGraphError, FacebookPublishClient } from './fb-client.js';
+import { settleOutcome } from './settlement.js';
 
 export interface Queryable {
   query<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
@@ -233,7 +234,7 @@ export interface RunDispatchCycleParams {
   fbClient?: IFacebookPublishClient;
   masterKey: string;
   limit?: number;
-  onSettleOutcome?: (outcome: DispatchOutcome) => Promise<void>;
+  onSettleOutcome?: (outcome: DispatchOutcome, item?: ClaimedQueueItem) => Promise<void>;
 }
 
 /**
@@ -254,9 +255,9 @@ export async function runDispatchCycle(
     const outcome = await dispatchItem(item, fbClient, masterKey);
 
     if (onSettleOutcome) {
-      await onSettleOutcome(outcome);
+      await onSettleOutcome(outcome, item);
     } else {
-      await recordDispatchOutcome(db, outcome);
+      await settleOutcome(db, item, outcome);
     }
 
     if (outcome.status === 'published') {
@@ -294,7 +295,10 @@ export class PublishDispatcher implements IPublishDispatcher {
     return dispatchItem(item, this.fbClient, this.masterKey);
   }
 
-  async settleOutcome(outcome: DispatchOutcome): Promise<void> {
+  async settleOutcome(outcome: DispatchOutcome, item?: ClaimedQueueItem): Promise<void> {
+    if (item) {
+      return settleOutcome(this.db, item, outcome);
+    }
     return recordDispatchOutcome(this.db, outcome);
   }
 

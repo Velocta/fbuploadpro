@@ -14,6 +14,8 @@ import {
   ListQueueItemsResponseSchema,
   ClaimedQueueItemSchema,
   PublishLogSchema,
+  ListPublishLogsQuerySchema,
+  ListPublishLogsResponseSchema,
 } from '../src/index.js';
 
 describe('Publishing Engine Domain Contracts', () => {
@@ -351,5 +353,31 @@ describe('Publishing Engine Domain Contracts', () => {
         expect(res.success).toBe(true);
       });
     });
+
+    describe('ListPublishLogsQuerySchema & ListPublishLogsResponseSchema', () => {
+      it('validates and coerces list publish logs query parameters', () => {
+        const res = ListPublishLogsQuerySchema.safeParse({
+          pageId: '11111111-1111-4111-a111-111111111111',
+          status: 'success',
+          limit: '20',
+          offset: '5',
+        });
+        expect(res.success).toBe(true);
+        if (res.success) {
+          expect(res.data.limit).toBe(20);
+          expect(res.data.offset).toBe(5);
+          expect(res.data.status).toBe('success');
+        }
+      });
+
+      it('validates ListPublishLogsResponseSchema', () => {
+        const res = ListPublishLogsResponseSchema.safeParse({
+          logs: [],
+          total: 0,
+        });
+        expect(res.success).toBe(true);
+      });
+    });
   });
 });
+
