@@ -92,14 +92,14 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by testing /api/health in apps/web (expecting 200 OK on healthy DB, 503 on drop/timeout with zero leaked credentials) and /health in apps/worker (expecting 200 OK with worker identification).
 
 ### Tests for User Story 4 (TDD) ⚠️
-- [ ] T022 [P] [US4] Write health route tests in apps/web/tests/health.test.ts asserting 200 OK, 503 degraded states, credential sanitization, and 2000ms timeout budget
-- [ ] T025 [P] [US4] Write edge worker unit tests in apps/worker/tests/worker.test.ts verifying GET /health and 404 fallback
+- [ ] T020 [P] [US4] Write health route tests in apps/web/tests/health.test.ts asserting 200 OK, 503 degraded states, credential sanitization, and 2000ms timeout budget
+- [ ] T021 [P] [US4] Write edge worker unit tests in apps/worker/tests/worker.test.ts verifying GET /health and 404 fallback
 
 ### Implementation for User Story 4
-- [ ] T020 [P] [US4] Scaffold Next.js 16 App Router application shell in apps/web/package.json, apps/web/tsconfig.json, and apps/web/next.config.ts
-- [ ] T021 [P] [US4] Implement minimal application layout and root page in apps/web/src/app/layout.tsx and apps/web/src/app/page.tsx
-- [ ] T023 [US4] Implement sanitized health check route with 2000ms AbortController timeout budget suppressing credentials in apps/web/src/app/api/health/route.ts
-- [ ] T024 [P] [US4] Scaffold Cloudflare Worker shell in apps/worker/package.json, apps/worker/tsconfig.json, and apps/worker/wrangler.toml
+- [ ] T022 [P] [US4] Scaffold Next.js 16 App Router application shell in apps/web/package.json, apps/web/tsconfig.json, and apps/web/next.config.ts
+- [ ] T023 [P] [US4] Implement minimal application layout and root page in apps/web/src/app/layout.tsx and apps/web/src/app/page.tsx
+- [ ] T024 [US4] Implement sanitized health check route with 2000ms AbortController timeout budget suppressing credentials in apps/web/src/app/api/health/route.ts
+- [ ] T025 [P] [US4] Scaffold Cloudflare Worker shell in apps/worker/package.json, apps/worker/tsconfig.json, and apps/worker/wrangler.toml
 - [ ] T026 [US4] Implement edge fetch handler responding to GET /health with { status: "ok", worker: "fbuploadpro-worker" } in apps/worker/src/index.ts
 
 **Checkpoint**: All user stories are functional and testable independently.
@@ -133,7 +133,7 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 - In User Story 1: T008 (tests) and T009 (user contract) can run in parallel.
 - In User Story 2: T011 (tests) and T012 (facebook contracts) can run in parallel.
 - In User Story 3: T014 (tests), T015 (database tests), and T016 (billing contracts) can run in parallel.
-- In User Story 4: T020, T021, T022, T024, and T025 can run in parallel across web and worker shells.
+- In User Story 4: T020, T021, T022, T023, and T025 can run in parallel across web and worker shells.
 
 ---
 
