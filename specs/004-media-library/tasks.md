@@ -41,14 +41,14 @@
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
 - [X] T086 [P] [US1] Write integration tests for presigned upload URL generation and quota rejection in `apps/web/tests/api/media-upload-url.test.ts` (Issue: #134)
-- [ ] T087 [P] [US1] Write integration tests for media upload confirmation and atomic quota increment in `apps/web/tests/api/media-confirm.test.ts` (Issue: #135)
+- [X] T087 [P] [US1] Write integration tests for media upload confirmation and atomic quota increment in `apps/web/tests/api/media-confirm.test.ts` (Issue: #135)
 
 ### Implementation for User Story 1
 
 - [X] T088 [US1] Implement storage quota inspection route in `apps/web/src/app/api/tenant/[subdomain]/media/quota/route.ts` (Issue: #136)
 - [X] T089 [US1] Implement presigned upload URL generation endpoint with quota pre-check in `apps/web/src/app/api/tenant/[subdomain]/media/upload-url/route.ts` (Issue: #137)
 - [X] T090 [US1] Implement Cloudflare R2 presigned PUT URL generator in `R2StorageProvider` within `apps/web/src/lib/storage.ts` (Issue: #138)
-- [ ] T091 [US1] Implement media confirmation endpoint with atomic database transaction and quota increment in `apps/web/src/app/api/tenant/[subdomain]/media/confirm/route.ts` (Issue: #139)
+- [X] T091 [US1] Implement media confirmation endpoint with atomic database transaction and quota increment in `apps/web/src/app/api/tenant/[subdomain]/media/confirm/route.ts` (Issue: #139)
 
 **Checkpoint**: User Story 1 fully functional and testable independently — direct uploads and quota enforcement active.
 
