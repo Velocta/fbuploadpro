@@ -45,7 +45,7 @@
 
 ### Implementation for User Story 1
 
-- [ ] T088 [US1] Implement storage quota inspection route in `apps/web/src/app/api/tenant/[subdomain]/media/quota/route.ts` (Issue: #136)
+- [X] T088 [US1] Implement storage quota inspection route in `apps/web/src/app/api/tenant/[subdomain]/media/quota/route.ts` (Issue: #136)
 - [ ] T089 [US1] Implement presigned upload URL generation endpoint with quota pre-check in `apps/web/src/app/api/tenant/[subdomain]/media/upload-url/route.ts` (Issue: #137)
 - [ ] T090 [US1] Implement Cloudflare R2 presigned PUT URL generator in `R2StorageProvider` within `apps/web/src/lib/storage.ts` (Issue: #138)
 - [ ] T091 [US1] Implement media confirmation endpoint with atomic database transaction and quota increment in `apps/web/src/app/api/tenant/[subdomain]/media/confirm/route.ts` (Issue: #139)
