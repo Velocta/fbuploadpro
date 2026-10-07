@@ -135,9 +135,9 @@
 
 **Purpose**: Security audit asserting zero cross-user media leakage and 100% clean Turborepo pipeline validation.
 
-- [ ] T111 [P] Run multi-tenant security isolation audit asserting zero cross-user media leakage in `apps/web/tests/security/media-isolation.test.ts` (Issue: #159)
-- [ ] T112 Execute quickstart validation scenarios defined in `specs/004-media-library/quickstart.md` (Issue: #160)
-- [ ] T113 Verify all Turborepo quality gates pass cleanly (`pnpm turbo run build lint typecheck test`) across all monorepo packages (Issue: #161)
+- [X] T111 [P] Run multi-tenant security isolation audit asserting zero cross-user media leakage in `apps/web/tests/security/media-isolation.test.ts` (Issue: #159)
+- [X] T112 Execute quickstart validation scenarios defined in `specs/004-media-library/quickstart.md` (Issue: #160)
+- [X] T113 Verify all Turborepo quality gates pass cleanly (`pnpm turbo run build lint typecheck test`) across all monorepo packages (Issue: #161)
 
 ---
 
