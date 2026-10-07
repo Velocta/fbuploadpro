@@ -1,5 +1,8 @@
 export interface Env {
   ENVIRONMENT?: string;
+  FB_ENCRYPTION_MASTER_KEY?: string;
+  FB_GRAPH_API_URL?: string;
+  DATABASE_URL?: string;
 }
 
 export default {
@@ -33,4 +36,13 @@ export default {
       }
     );
   },
+
+  async scheduled(
+    _controller: ScheduledController,
+    _env: Env,
+    _ctx: ExecutionContext
+  ): Promise<void> {
+    // Scheduled cron trigger handler skeleton
+  },
 };
+
