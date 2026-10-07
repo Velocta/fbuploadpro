@@ -10,7 +10,7 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: Environment configuration and test setup for Facebook OAuth credentials and cryptographic token encryption.
 
-- [ ] T050 Configure environment variables template with `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, and 256-bit `TOKEN_ENCRYPTION_KEY` in `apps/web/.env.example` (Issue: #85)
+- [X] T050 Configure environment variables template with `FACEBOOK_APP_ID`, `FACEBOOK_APP_SECRET`, and 256-bit `TOKEN_ENCRYPTION_KEY` in `apps/web/.env.example` (Issue: #85)
 
 ---
 
@@ -21,15 +21,15 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **⚠️ CRITICAL**: No user story work can begin until this foundational phase is complete.
 
 ### Tests for Foundational Infrastructure (TDD) ⚠️
-- [ ] T051 [P] Write unit tests for native Web Crypto AES-256-GCM token encryption and decryption utilities asserting random 12-byte IV, valid round-trip decryption, authentication tag validation on tamper, and zero plaintext leakage in `packages/contracts/tests/crypto.test.ts` (Issue: #86)
-- [ ] T052 [P] Write database integration tests asserting multi-account `CONSTRAINT uq_fb_accounts_user_account UNIQUE (user_id, fb_account_id)` and page uniqueness `CONSTRAINT uq_fb_pages_user_page UNIQUE (user_id, fb_page_id)` in `packages/database/tests/facebook-tokens.test.ts` (Issue: #87)
+- [X] T051 [P] Write unit tests for native Web Crypto AES-256-GCM token encryption and decryption utilities asserting random 12-byte IV, valid round-trip decryption, authentication tag validation on tamper, and zero plaintext leakage in `packages/contracts/tests/crypto.test.ts` (Issue: #86)
+- [X] T052 [P] Write database integration tests asserting multi-account `CONSTRAINT uq_fb_accounts_user_account UNIQUE (user_id, fb_account_id)` and page uniqueness `CONSTRAINT uq_fb_pages_user_page UNIQUE (user_id, fb_page_id)` in `packages/database/tests/facebook-tokens.test.ts` (Issue: #87)
 
 ### Implementation of Foundational Infrastructure
-- [ ] T053 [P] Implement `encryptToken` and `decryptToken` using native `crypto.subtle` (AES-256-GCM, 12-byte IV, `{iv_hex}:{ciphertext_hex}` format) in `packages/contracts/src/crypto/token.ts` (Issue: #88)
-- [ ] T054 [P] Implement `OAuthStatePayloadSchema`, `FacebookOAuthCallbackQuerySchema`, and `FacebookTokenExchangeResponseSchema` targeting Graph API v26.0 in `packages/contracts/src/domain/oauth.ts` (Issue: #89)
-- [ ] T055 [P] Update `FacebookAccountSchema` and `FacebookPageSchema` adding `encryptedAccessToken TEXT NOT NULL`, `tokenExpiresAt TIMESTAMPTZ`, `category VARCHAR(100)`, and `tasks JSONB NOT NULL DEFAULT '[]'::jsonb` in `packages/contracts/src/domain/facebook.ts` (Issue: #90)
-- [ ] T056 Export crypto utilities, OAuth schemas, and updated Facebook schemas in `packages/contracts/src/index.ts` (Issue: #91)
-- [ ] T057 Create forward database migration `0002_facebook_tokens.sql` adding `encrypted_access_token TEXT NOT NULL`, `token_expires_at TIMESTAMPTZ` to `facebook_accounts` and `encrypted_access_token TEXT NOT NULL`, `category VARCHAR(100)`, `tasks JSONB NOT NULL DEFAULT '[]'::jsonb` to `facebook_pages` in `packages/database/migrations/0002_facebook_tokens.sql` (Issue: #92)
+- [X] T053 [P] Implement `encryptToken` and `decryptToken` using native `crypto.subtle` (AES-256-GCM, 12-byte IV, `{iv_hex}:{ciphertext_hex}` format) in `packages/contracts/src/crypto/token.ts` (Issue: #88)
+- [X] T054 [P] Implement `OAuthStatePayloadSchema`, `FacebookOAuthCallbackQuerySchema`, and `FacebookTokenExchangeResponseSchema` targeting Graph API v26.0 in `packages/contracts/src/domain/oauth.ts` (Issue: #89)
+- [X] T055 [P] Update `FacebookAccountSchema` and `FacebookPageSchema` adding `encryptedAccessToken TEXT NOT NULL`, `tokenExpiresAt TIMESTAMPTZ`, `category VARCHAR(100)`, and `tasks JSONB NOT NULL DEFAULT '[]'::jsonb` in `packages/contracts/src/domain/facebook.ts` (Issue: #90)
+- [X] T056 Export crypto utilities, OAuth schemas, and updated Facebook schemas in `packages/contracts/src/index.ts` (Issue: #91)
+- [X] T057 Create forward database migration `0002_facebook_tokens.sql` adding `encrypted_access_token TEXT NOT NULL`, `token_expires_at TIMESTAMPTZ` to `facebook_accounts` and `encrypted_access_token TEXT NOT NULL`, `category VARCHAR(100)`, `tasks JSONB NOT NULL DEFAULT '[]'::jsonb` to `facebook_pages` in `packages/database/migrations/0002_facebook_tokens.sql` (Issue: #92)
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
