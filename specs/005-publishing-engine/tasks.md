@@ -59,12 +59,12 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 2 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T125 [P] [US2] Write route tests for Enqueue Media, Pre-flight Token Check, and Queue Item operations in `apps/web/tests/api/publishing-queue.test.ts` (Issue: #200)
+- [X] T125 [P] [US2] Write route tests for Enqueue Media, Pre-flight Token Check, and Queue Item operations in `apps/web/tests/api/publishing-queue.test.ts` (Issue: #200)
 
 ### Implementation for User Story 2
 
-- [ ] T126 [US2] Implement Enqueue Media (`POST`) handler with pre-flight token balance check (`tokens_balance >= 1`) in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #201)
-- [ ] T127 [US2] Implement List Queue Items (`GET`) handler with filters by page and status in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #202)
+- [X] T126 [US2] Implement Enqueue Media (`POST`) handler with pre-flight token balance check (`tokens_balance >= 1`) in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #201)
+- [X] T127 [US2] Implement List Queue Items (`GET`) handler with filters by page and status in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #202)
 - [ ] T128 [US2] Implement Update Queue Item (`PATCH`), Delete (`DELETE`), and Skip handlers in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route.ts` (Issue: #203)
 - [ ] T129 [US2] Implement Manual "Publish Now" endpoint in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route.ts` (Issue: #204)
 
