@@ -37,8 +37,7 @@ describe('Facebook OAuth Contracts & State Signing', () => {
   it('should reject tampered OAuth state tokens', async () => {
     const signedToken = await signOAuthState(validStatePayload, secret);
     const [payload, sig] = signedToken.split('.');
-    if (!sig) throw new Error('Invalid test setup');
-    const tampered = `${payload}.${sig.slice(0, -1)}a`;
+    const tampered = `${payload}.${sig.slice(0, -1)}${sig.endsWith('a') ? 'b' : 'a'}`;
 
     await expect(verifyOAuthState(tampered, secret)).rejects.toThrow(
       /signature/i
