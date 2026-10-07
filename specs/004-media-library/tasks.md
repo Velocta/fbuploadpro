@@ -85,12 +85,12 @@
 ### Tests for User Story 3 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T097 [P] [US3] Write unit and integration tests for caption templates CRUD and attachment in `apps/web/tests/api/caption-templates.test.ts` (Issue: #145)
+- [X] T097 [P] [US3] Write unit and integration tests for caption templates CRUD and attachment in `apps/web/tests/api/caption-templates.test.ts` (Issue: #145)
 
 ### Implementation for User Story 3
 
-- [ ] T098 [US3] Implement caption templates listing and creation endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/captions/route.ts` (Issue: #146)
-- [ ] T099 [US3] Implement caption template update and deletion endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/captions/[captionId]/route.ts` (Issue: #147)
+- [X] T098 [US3] Implement caption templates listing and creation endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/captions/route.ts` (Issue: #146)
+- [X] T099 [US3] Implement caption template update and deletion endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/captions/[captionId]/route.ts` (Issue: #147)
 - [ ] T100 [US3] Implement media item patch endpoint for updating folder, tags, and attaching captions in `apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts` (Issue: #148)
 
 **Checkpoint**: User Stories 1, 2, and 3 functional — copywriting templates can be created and attached to assets.
