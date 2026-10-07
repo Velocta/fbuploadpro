@@ -90,6 +90,9 @@ export default async function TenantLayout({ params, children }: TenantLayoutPro
           <Link href={`/tenant/${subdomain}/dashboard`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
             Dashboard
           </Link>
+          <Link href={`/tenant/${subdomain}/accounts`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
+            Facebook Channels
+          </Link>
           {(role === 'seller' || role === 'admin') && (
             <Link href={`/tenant/${subdomain}/seller`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
               Seller Portal
