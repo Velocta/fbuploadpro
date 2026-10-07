@@ -63,13 +63,13 @@
 ### Tests for User Story 2 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T092 [P] [US2] Write unit and integration tests for custom folder CRUD and non-destructive deletion in `apps/web/tests/api/media-folders.test.ts` (Issue: #140)
+- [X] T092 [P] [US2] Write unit and integration tests for custom folder CRUD and non-destructive deletion in `apps/web/tests/api/media-folders.test.ts` (Issue: #140)
 - [ ] T093 [P] [US2] Write unit and integration tests for media listing, folder filtering, and tag search in `apps/web/tests/api/media-list-filter.test.ts` (Issue: #141)
 
 ### Implementation for User Story 2
 
-- [ ] T094 [US2] Implement custom folder listing and creation endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/folders/route.ts` (Issue: #142)
-- [ ] T095 [US2] Implement folder update and non-destructive deletion endpoint (`ON DELETE SET NULL`) in `apps/web/src/app/api/tenant/[subdomain]/media/folders/[folderId]/route.ts` (Issue: #143)
+- [X] T094 [US2] Implement custom folder listing and creation endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/folders/route.ts` (Issue: #142)
+- [X] T095 [US2] Implement folder update and non-destructive deletion endpoint (`ON DELETE SET NULL`) in `apps/web/src/app/api/tenant/[subdomain]/media/folders/[folderId]/route.ts` (Issue: #143)
 - [ ] T096 [US2] Implement media item listing endpoint with folder, media type, and tag filtering in `apps/web/src/app/api/tenant/[subdomain]/media/route.ts` (Issue: #144)
 
 **Checkpoint**: User Stories 1 AND 2 functional — assets can be organized into folders and filtered by tags.
