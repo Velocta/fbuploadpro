@@ -1,0 +1,32 @@
+{
+  "name": "@fbuploadpro/database",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./edge": {
+      "import": "./dist/edge.js",
+      "types": "./dist/edge.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --no-error-on-unmatched-pattern",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@fbuploadpro/contracts": "workspace:*",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.5"
+  }
+}

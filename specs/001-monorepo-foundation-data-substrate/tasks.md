@@ -22,10 +22,10 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **⚠️ CRITICAL**: No user story work can begin until this foundational phase is complete.
 
-- [ ] T004 Scaffold packages/contracts workspace configuration in packages/contracts/package.json and packages/contracts/tsconfig.json (Issue: #19)
-- [ ] T005 [P] Implement domain error taxonomy and HTTP status code mappings (VALIDATION_FAILED: 400, UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT_STATE: 409, INSUFFICIENT_FUNDS: 402, INTERNAL_ERROR: 500) in packages/contracts/src/errors/domain-error.ts (Issue: #20)
-- [ ] T006 Scaffold packages/database workspace configuration in packages/database/package.json and packages/database/tsconfig.json (Issue: #21)
-- [ ] T007 Implement base package exports in packages/contracts/src/index.ts and packages/database/src/index.ts (Issue: #22)
+- [X] T004 Scaffold packages/contracts workspace configuration in packages/contracts/package.json and packages/contracts/tsconfig.json (Issue: #19)
+- [X] T005 [P] Implement domain error taxonomy and HTTP status code mappings (VALIDATION_FAILED: 400, UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404, CONFLICT_STATE: 409, INSUFFICIENT_FUNDS: 402, INTERNAL_ERROR: 500) in packages/contracts/src/errors/domain-error.ts (Issue: #20)
+- [X] T006 Scaffold packages/database workspace configuration in packages/database/package.json and packages/database/tsconfig.json (Issue: #21)
+- [X] T007 Implement base package exports in packages/contracts/src/index.ts and packages/database/src/index.ts (Issue: #22)
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
