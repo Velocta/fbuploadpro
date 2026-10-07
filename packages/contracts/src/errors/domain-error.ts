@@ -1,11 +1,14 @@
-export type DomainErrorCode =
-  | 'VALIDATION_FAILED'
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'NOT_FOUND'
-  | 'CONFLICT_STATE'
-  | 'INSUFFICIENT_FUNDS'
-  | 'INTERNAL_ERROR';
+export const DomainErrorCode = {
+  VALIDATION_FAILED: 'VALIDATION_FAILED',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT_STATE: 'CONFLICT_STATE',
+  INSUFFICIENT_FUNDS: 'INSUFFICIENT_FUNDS',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+} as const;
+
+export type DomainErrorCode = (typeof DomainErrorCode)[keyof typeof DomainErrorCode];
 
 export const ERROR_HTTP_MAPPINGS: Record<DomainErrorCode, number> = {
   VALIDATION_FAILED: 400,
