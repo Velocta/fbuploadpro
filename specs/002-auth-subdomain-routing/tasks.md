@@ -106,8 +106,8 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: End-to-end verification and full CI quality gate validation.
 
-- [ ] T048 [P] Execute end-to-end quickstart validation for Spec 002 in specs/002-auth-subdomain-routing/quickstart.md (Issue: #75)
-- [ ] T049 Verify all quality gates pass across Turborepo pipeline with pnpm turbo run build lint typecheck test (Issue: #76)
+- [X] T048 [P] Execute end-to-end quickstart validation for Spec 002 in specs/002-auth-subdomain-routing/quickstart.md (Issue: #75)
+- [X] T049 Verify all quality gates pass across Turborepo pipeline with pnpm turbo run build lint typecheck test (Issue: #76)
 
 ---
 
