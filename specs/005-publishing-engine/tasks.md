@@ -10,7 +10,7 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 **Purpose**: Configure worker scheduled cron trigger and environment configurations.
 
-- [ ] T114 [P] Configure Cloudflare Worker scheduled cron trigger (`crons = ["* * * * *"]`) and environment bindings in `apps/worker/wrangler.toml` and `apps/worker/src/index.ts`
+- [ ] T114 [P] Configure Cloudflare Worker scheduled cron trigger (`crons = ["* * * * *"]`) and environment bindings in `apps/worker/wrangler.toml` and `apps/worker/src/index.ts` (Issue: #189)
 
 ---
 
@@ -18,12 +18,12 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 **Purpose**: Core data models, Zod validation schemas, and database migration that block all user stories.
 
-- [ ] T115 [P] Define `PageQueueSlot` contracts and Zod boundary validation schemas in `packages/contracts/src/domain/queue.ts`
-- [ ] T116 [P] Define `QueueItem`, `EnqueueMediaRequest`, and status transition schemas in `packages/contracts/src/domain/queue.ts`
-- [ ] T117 [P] Define `ClaimedQueueItem`, `DispatchOutcome`, and `IPublishDispatcher` contracts in `packages/contracts/src/domain/dispatcher.ts`
-- [ ] T118 [P] Add contract unit tests for queue schemas and validation in `packages/contracts/tests/publishing-contracts.test.ts`
-- [ ] T119 Create forward DDL migration `0004_publishing_engine.sql` in `packages/database/migrations/0004_publishing_engine.sql`
-- [ ] T120 Write database schema and constraint tests for migration 0004 asserting compound uniqueness, foreign key cascades, and `FOR UPDATE SKIP LOCKED` query in `packages/database/tests/publishing-engine.test.ts`
+- [ ] T115 [P] Define `PageQueueSlot` contracts and Zod boundary validation schemas in `packages/contracts/src/domain/queue.ts` (Issue: #190)
+- [ ] T116 [P] Define `QueueItem`, `EnqueueMediaRequest`, and status transition schemas in `packages/contracts/src/domain/queue.ts` (Issue: #191)
+- [ ] T117 [P] Define `ClaimedQueueItem`, `DispatchOutcome`, and `IPublishDispatcher` contracts in `packages/contracts/src/domain/dispatcher.ts` (Issue: #192)
+- [ ] T118 [P] Add contract unit tests for queue schemas and validation in `packages/contracts/tests/publishing-contracts.test.ts` (Issue: #193)
+- [ ] T119 Create forward DDL migration `0004_publishing_engine.sql` in `packages/database/migrations/0004_publishing_engine.sql` (Issue: #194)
+- [ ] T120 Write database schema and constraint tests for migration 0004 asserting compound uniqueness, foreign key cascades, and `FOR UPDATE SKIP LOCKED` query in `packages/database/tests/publishing-engine.test.ts` (Issue: #195)
 
 **Checkpoint**: Foundation ready — Page slots and queue item implementation can begin.
 
@@ -38,13 +38,13 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 1 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T121 [P] [US1] Write route tests for Page Queue Slots CRUD (`GET`, `POST`, `PATCH`, `DELETE`) with tenant isolation in `apps/web/tests/api/queue-slots.test.ts`
+- [ ] T121 [P] [US1] Write route tests for Page Queue Slots CRUD (`GET`, `POST`, `PATCH`, `DELETE`) with tenant isolation in `apps/web/tests/api/queue-slots.test.ts` (Issue: #196)
 
 ### Implementation for User Story 1
 
-- [ ] T122 [US1] Implement `GET` and `POST` handlers for Page Queue Slots in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route.ts`
-- [ ] T123 [US1] Implement `PATCH` and `DELETE` handlers for Page Queue Slots in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/[slotId]/route.ts`
-- [ ] T124 [US1] Implement next vacant slot calculator utility with timezone support in `apps/web/src/lib/slot-scheduler.ts` with unit tests in `apps/web/tests/unit/slot-scheduler.test.ts`
+- [ ] T122 [US1] Implement `GET` and `POST` handlers for Page Queue Slots in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route.ts` (Issue: #197)
+- [ ] T123 [US1] Implement `PATCH` and `DELETE` handlers for Page Queue Slots in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/[slotId]/route.ts` (Issue: #198)
+- [ ] T124 [US1] Implement next vacant slot calculator utility with timezone support in `apps/web/src/lib/slot-scheduler.ts` with unit tests in `apps/web/tests/unit/slot-scheduler.test.ts` (Issue: #199)
 
 **Checkpoint**: User Story 1 complete — Page slots can be managed and next available slot times calculated.
 
@@ -59,14 +59,14 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 2 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T125 [P] [US2] Write route tests for Enqueue Media, Pre-flight Token Check, and Queue Item operations in `apps/web/tests/api/publishing-queue.test.ts`
+- [ ] T125 [P] [US2] Write route tests for Enqueue Media, Pre-flight Token Check, and Queue Item operations in `apps/web/tests/api/publishing-queue.test.ts` (Issue: #200)
 
 ### Implementation for User Story 2
 
-- [ ] T126 [US2] Implement Enqueue Media (`POST`) handler with pre-flight token balance check (`tokens_balance >= 1`) in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts`
-- [ ] T127 [US2] Implement List Queue Items (`GET`) handler with filters by page and status in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts`
-- [ ] T128 [US2] Implement Update Queue Item (`PATCH`), Delete (`DELETE`), and Skip handlers in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route.ts`
-- [ ] T129 [US2] Implement Manual "Publish Now" endpoint in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route.ts`
+- [ ] T126 [US2] Implement Enqueue Media (`POST`) handler with pre-flight token balance check (`tokens_balance >= 1`) in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #201)
+- [ ] T127 [US2] Implement List Queue Items (`GET`) handler with filters by page and status in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #202)
+- [ ] T128 [US2] Implement Update Queue Item (`PATCH`), Delete (`DELETE`), and Skip handlers in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route.ts` (Issue: #203)
+- [ ] T129 [US2] Implement Manual "Publish Now" endpoint in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route.ts` (Issue: #204)
 
 **Checkpoint**: User Story 2 complete — Assets can be enqueued, organized into slots, and managed.
 
@@ -81,15 +81,15 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 3 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T130 [P] [US3] Implement `IFacebookPublishClient` abstraction and mock implementation in `apps/worker/src/fb-client.ts`
-- [ ] T131 [P] [US3] Write unit tests for Facebook Graph API v26.0 Reels 3-phase upload, Photos upload, and First Comment in `apps/worker/tests/fb-client.test.ts`
+- [ ] T130 [P] [US3] Implement `IFacebookPublishClient` abstraction and mock implementation in `apps/worker/src/fb-client.ts` (Issue: #205)
+- [ ] T131 [P] [US3] Write unit tests for Facebook Graph API v26.0 Reels 3-phase upload, Photos upload, and First Comment in `apps/worker/tests/fb-client.test.ts` (Issue: #206)
 
 ### Implementation for User Story 3
 
-- [ ] T132 [US3] Implement PostgreSQL `FOR UPDATE SKIP LOCKED` claim logic and status transitions in `apps/worker/src/dispatcher.ts`
-- [ ] T133 [US3] Implement token decryption (`decryptToken`) and media dispatching loop in `apps/worker/src/dispatcher.ts`
-- [ ] T134 [US3] Implement automated first comment execution and external post ID recording in `apps/worker/src/dispatcher.ts`
-- [ ] T135 [US3] Wire Cloudflare Worker `scheduled` event listener in `apps/worker/src/index.ts` to execute `runDispatchCycle`
+- [ ] T132 [US3] Implement PostgreSQL `FOR UPDATE SKIP LOCKED` claim logic and status transitions in `apps/worker/src/dispatcher.ts` (Issue: #207)
+- [ ] T133 [US3] Implement token decryption (`decryptToken`) and media dispatching loop in `apps/worker/src/dispatcher.ts` (Issue: #208)
+- [ ] T134 [US3] Implement automated first comment execution and external post ID recording in `apps/worker/src/dispatcher.ts` (Issue: #209)
+- [ ] T135 [US3] Wire Cloudflare Worker `scheduled` event listener in `apps/worker/src/index.ts` to execute `runDispatchCycle` (Issue: #210)
 
 **Checkpoint**: User Story 3 complete — Edge dispatcher streams media to Facebook and posts first comments.
 
@@ -104,17 +104,17 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 4 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T136 [P] [US4] Write unit and integration tests for atomic 1-token deduction on success, 0 tokens on failure, and audit logging in `apps/worker/tests/token-settlement.test.ts`
+- [ ] T136 [P] [US4] Write unit and integration tests for atomic 1-token deduction on success, 0 tokens on failure, and audit logging in `apps/worker/tests/token-settlement.test.ts` (Issue: #211)
 
 ### Implementation for User Story 4
 
-- [ ] T137 [US4] Implement atomic token settlement transaction and `publish_logs` insertion in `apps/worker/src/settlement.ts`
-- [ ] T138 [US4] Implement Publish Logs API route handler in `apps/web/src/app/api/tenant/[subdomain]/publishing/logs/route.ts`
-- [ ] T139 [P] Implement Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx`
-- [ ] T140 [P] Implement Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx`
-- [ ] T141 [P] Implement Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx`
-- [ ] T142 [P] Implement Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx`
-- [ ] T143 Assemble full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx`
+- [ ] T137 [US4] Implement atomic token settlement transaction and `publish_logs` insertion in `apps/worker/src/settlement.ts` (Issue: #212)
+- [ ] T138 [US4] Implement Publish Logs API route handler in `apps/web/src/app/api/tenant/[subdomain]/publishing/logs/route.ts` (Issue: #213)
+- [ ] T139 [P] Implement Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx` (Issue: #214)
+- [ ] T140 [P] Implement Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx` (Issue: #215)
+- [ ] T141 [P] Implement Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx` (Issue: #216)
+- [ ] T142 [P] Implement Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx` (Issue: #217)
+- [ ] T143 Assemble full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx` (Issue: #218)
 
 **Checkpoint**: User Story 4 complete — Financial settlement verified and interactive UI operational.
 
@@ -124,9 +124,9 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 **Purpose**: Security audit asserting zero cross-user queue leakage and 100% clean Turborepo pipeline validation.
 
-- [ ] T144 [P] Multi-tenant isolation audit asserting zero cross-user queue or slot access in `apps/web/tests/security/publishing-isolation.test.ts`
-- [ ] T145 Execute quickstart validation scenarios defined in `specs/005-publishing-engine/quickstart.md`
-- [ ] T146 Monorepo quality gate verification across all packages (`pnpm turbo run build lint typecheck test`)
+- [ ] T144 [P] Multi-tenant isolation audit asserting zero cross-user queue or slot access in `apps/web/tests/security/publishing-isolation.test.ts` (Issue: #219)
+- [ ] T145 Execute quickstart validation scenarios defined in `specs/005-publishing-engine/quickstart.md` (Issue: #220)
+- [ ] T146 Monorepo quality gate verification across all packages (`pnpm turbo run build lint typecheck test`) (Issue: #221)
 
 ---
 
