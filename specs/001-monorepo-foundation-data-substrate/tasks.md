@@ -72,12 +72,12 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by executing unit tests against TokenTransactionSchema, and database client tests verifying atomic decrement succeeds on sufficient balance and throws InsufficientFundsError on insufficient funds.
 
 ### Tests for User Story 3 (TDD) ⚠️
-- [ ] T014 [P] [US3] Write unit tests for TokenTransactionSchema and positive amount validation in packages/contracts/tests/billing.test.ts (Issue: #29)
+- [X] T014 [P] [US3] Write unit tests for TokenTransactionSchema and positive amount validation in packages/contracts/tests/billing.test.ts (Issue: #29)
 - [ ] T015 [P] [US3] Write database client integration tests verifying DDL constraints, parameterized queries, and atomic token decrement in packages/database/tests/database.test.ts (Issue: #30)
 
 ### Implementation for User Story 3
-- [ ] T016 [P] [US3] Implement TokenTransactionTypeSchema (credit, debit, refund, adjustment) and TokenTransactionSchema (amount > 0) referencing userId in packages/contracts/src/domain/billing.ts (Issue: #31)
-- [ ] T017 [US3] Append DDL definitions for token_transactions (user_id UUID FK, amount BIGINT CHECK > 0, transaction_type IN ('credit', 'debit', 'refund', 'adjustment')) to packages/database/migrations/0001_initial_schema.sql (Issue: #32)
+- [X] T016 [P] [US3] Implement TokenTransactionTypeSchema (credit, debit, refund, adjustment) and TokenTransactionSchema (amount > 0) referencing userId in packages/contracts/src/domain/billing.ts (Issue: #31)
+- [X] T017 [US3] Append DDL definitions for token_transactions (user_id UUID FK, amount BIGINT CHECK > 0, transaction_type IN ('credit', 'debit', 'refund', 'adjustment')) to packages/database/migrations/0001_initial_schema.sql (Issue: #32)
 - [ ] T018 [US3] Implement Node.js connection pool client (pg.Pool) with parameterized query helpers (query, queryOne, withTransaction) and atomicDecrementTokens(userId, amount) in packages/database/src/client.ts (Issue: #33)
 - [ ] T019 [US3] Implement Edge isolate client interface and atomicDecrementTokens(userId, amount) helper decoupled from Node socket drivers in packages/database/src/edge.ts (Issue: #34)
 
