@@ -121,7 +121,7 @@
 
 **Purpose**: Build the user-facing Media Library at `/tenant/[subdomain]/media`.
 
-- [ ] T104 [P] Implement storage quota meter component in `apps/web/src/components/media/storage-meter.tsx` (Issue: #152)
+- [X] T104 [P] Implement storage quota meter component in `apps/web/src/components/media/storage-meter.tsx` (Issue: #152)
 - [ ] T105 [P] Implement folder sidebar and tag navigation component in `apps/web/src/components/media/folder-sidebar.tsx` (Issue: #153)
 - [ ] T106 [P] Implement drag-and-drop file upload modal with client-side canvas thumbnail generation and progress in `apps/web/src/components/media/upload-modal.tsx` (Issue: #154)
 - [ ] T107 [P] Implement media asset grid component with aspect ratio badges and video indicators in `apps/web/src/components/media/media-grid.tsx` (Issue: #155)
