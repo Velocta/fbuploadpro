@@ -10,7 +10,7 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: Environment configuration and test setup for subdomain routing and edge authentication.
 
-- [ ] T029 Configure environment variables template and test fixtures for multi-tenant routing and session signing in apps/web/.env.example and packages/contracts/tests/fixtures/session.ts (Issue: #56)
+- [X] T029 Configure environment variables template and test fixtures for multi-tenant routing and session signing in apps/web/.env.example and packages/contracts/tests/fixtures/session.ts (Issue: #56)
 
 ---
 
@@ -21,15 +21,15 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **⚠️ CRITICAL**: No user story work can begin until this foundational phase is complete.
 
 ### Tests for Foundational Contracts (TDD) ⚠️
-- [ ] T030 [P] Write unit tests for SessionPayloadSchema and Web Crypto session signing/verification in packages/contracts/tests/session.test.ts (Issue: #57)
-- [ ] T031 [P] Write unit tests for subdomain extraction and path rewriting in packages/contracts/tests/routing.test.ts (Issue: #58)
-- [ ] T032 [P] Write unit tests for Role-Based Access Control hierarchy and tenant access guard in packages/contracts/tests/rbac.test.ts (Issue: #59)
+- [X] T030 [P] Write unit tests for SessionPayloadSchema and Web Crypto session signing/verification in packages/contracts/tests/session.test.ts (Issue: #57)
+- [X] T031 [P] Write unit tests for subdomain extraction and path rewriting in packages/contracts/tests/routing.test.ts (Issue: #58)
+- [X] T032 [P] Write unit tests for Role-Based Access Control hierarchy and tenant access guard in packages/contracts/tests/rbac.test.ts (Issue: #59)
 
 ### Implementation of Foundational Contracts
-- [ ] T033 [P] Implement SessionPayloadSchema, signSessionToken, and verifySessionToken using Web Crypto API in packages/contracts/src/domain/session.ts (Issue: #60)
-- [ ] T034 [P] Implement extractSubdomain and getTenantRewriteUrl handling apex, ports, and reserved slugs in packages/contracts/src/domain/routing.ts (Issue: #61)
-- [ ] T035 [P] Implement ROLE_HIERARCHY, hasRole, and canAccessTenant in packages/contracts/src/domain/rbac.ts (Issue: #62)
-- [ ] T036 Export new session, routing, and RBAC contracts in packages/contracts/src/index.ts (Issue: #63)
+- [X] T033 [P] Implement SessionPayloadSchema, signSessionToken, and verifySessionToken using Web Crypto API in packages/contracts/src/domain/session.ts (Issue: #60)
+- [X] T034 [P] Implement extractSubdomain and getTenantRewriteUrl handling apex, ports, and reserved slugs in packages/contracts/src/domain/routing.ts (Issue: #61)
+- [X] T035 [P] Implement ROLE_HIERARCHY, hasRole, and canAccessTenant in packages/contracts/src/domain/rbac.ts (Issue: #62)
+- [X] T036 Export new session, routing, and RBAC contracts in packages/contracts/src/index.ts (Issue: #63)
 
 **Checkpoint**: Foundation ready — user story implementation can now begin.
 
