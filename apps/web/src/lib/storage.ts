@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type {
+  IStorageService,
+  PresignedUploadParams,
+  PresignedUploadResult,
+} from '@fbuploadpro/contracts';
 
 export const R2ConfigSchema = z.object({
   accountId: z.string().min(1, 'R2_ACCOUNT_ID is required'),
@@ -45,4 +51,93 @@ export function createR2S3Client(config: R2Config): S3Client {
       secretAccessKey: config.secretAccessKey,
     },
   });
+}
+
+export class MockStorageProvider implements IStorageService {
+  public deletedKeys: Set<string> = new Set();
+  public requestedUploadKeys: Set<string> = new Set();
+  public publicUrlBase: string = 'https://media.fbuploadpro.com';
+
+  async getPresignedUploadUrl(params: PresignedUploadParams): Promise<PresignedUploadResult> {
+    const expiresIn = params.expiresInSeconds ?? 900;
+    this.requestedUploadKeys.add(params.key);
+    return {
+      uploadUrl: `https://mock-r2.fbuploadpro.com/upload/${encodeURIComponent(params.key)}?expires=${expiresIn}`,
+      publicUrl: this.getPublicUrl(params.key),
+      expiresInSeconds: expiresIn,
+    };
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    this.deletedKeys.add(key);
+    this.requestedUploadKeys.delete(key);
+  }
+
+  getPublicUrl(key: string): string {
+    const trimmedBase = this.publicUrlBase.replace(/\/+$/, '');
+    const trimmedKey = key.replace(/^\/+/, '');
+    return `${trimmedBase}/${trimmedKey}`;
+  }
+
+  reset(): void {
+    this.deletedKeys.clear();
+    this.requestedUploadKeys.clear();
+  }
+}
+
+export class R2StorageProvider implements IStorageService {
+  private client: S3Client;
+  private config: R2Config;
+
+  constructor(config: R2Config, client?: S3Client) {
+    this.config = config;
+    this.client = client ?? createR2S3Client(config);
+  }
+
+  async getPresignedUploadUrl(params: PresignedUploadParams): Promise<PresignedUploadResult> {
+    const expiresIn = params.expiresInSeconds ?? 900;
+    const command = new PutObjectCommand({
+      Bucket: this.config.bucketName,
+      Key: params.key,
+      ContentType: params.contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(this.client, command, { expiresIn });
+    return {
+      uploadUrl,
+      publicUrl: this.getPublicUrl(params.key),
+      expiresInSeconds: expiresIn,
+    };
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    const command = new DeleteObjectCommand({
+      Bucket: this.config.bucketName,
+      Key: key,
+    });
+    await this.client.send(command);
+  }
+
+  getPublicUrl(key: string): string {
+    const trimmedBase = this.config.publicUrl.replace(/\/+$/, '');
+    const trimmedKey = key.replace(/^\/+/, '');
+    return `${trimmedBase}/${trimmedKey}`;
+  }
+}
+
+let activeMockStorage: MockStorageProvider | null = null;
+
+export function getMockStorageProvider(): MockStorageProvider {
+  if (!activeMockStorage) {
+    activeMockStorage = new MockStorageProvider();
+  }
+  return activeMockStorage;
+}
+
+export function getStorageService(): IStorageService {
+  const config = getR2Config();
+  if (config) {
+    return new R2StorageProvider(config);
+  }
+  return getMockStorageProvider();
 }
