@@ -127,7 +127,7 @@
 - [X] T107 [P] Implement media asset grid component with aspect ratio badges and video indicators in `apps/web/src/components/media/media-grid.tsx` (Issue: #155)
 - [X] T108 [P] Implement media preview modal with video player, audio controls, and technical metadata inspector in `apps/web/src/components/media/media-preview-modal.tsx` (Issue: #156)
 - [X] T109 [P] Implement caption templates manager modal in `apps/web/src/components/media/caption-modal.tsx` (Issue: #157)
-- [ ] T110 Assemble full Media Library dashboard page at `apps/web/src/app/tenant/[subdomain]/media/page.tsx` (Issue: #158)
+- [X] T110 Assemble full Media Library dashboard page at `apps/web/src/app/tenant/[subdomain]/media/page.tsx` (Issue: #158)
 
 ---
 
