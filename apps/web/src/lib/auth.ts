@@ -9,24 +9,37 @@ export interface AuthenticatedUserContext {
 }
 
 export async function getServerSessionContext(): Promise<AuthenticatedUserContext | null> {
-  const reqHeaders = await headers();
-  const userId = reqHeaders.get('x-user-id');
-  const role = reqHeaders.get('x-user-role') as UserRole | null;
-  const email = reqHeaders.get('x-user-email');
-  const subdomain = reqHeaders.get('x-user-subdomain');
-
-  if (userId && role && email && subdomain) {
-    return {
-      userId,
-      role,
-      email,
-      subdomain,
-    };
+  let reqHeaders: Headers | null = null;
+  try {
+    reqHeaders = await headers();
+  } catch {
+    reqHeaders = null;
   }
 
-  // Fallback to cookie verification
-  const cookieStore = await cookies();
-  const token = cookieStore.get('fbup_session')?.value;
+  if (reqHeaders) {
+    const userId = reqHeaders.get('x-user-id');
+    const role = reqHeaders.get('x-user-role') as UserRole | null;
+    const email = reqHeaders.get('x-user-email');
+    const subdomain = reqHeaders.get('x-user-subdomain');
+
+    if (userId && role && email && subdomain) {
+      return {
+        userId,
+        role,
+        email,
+        subdomain,
+      };
+    }
+  }
+
+  let cookieStore = null;
+  try {
+    cookieStore = await cookies();
+  } catch {
+    cookieStore = null;
+  }
+
+  const token = cookieStore?.get('fbup_session')?.value;
   if (!token) return null;
 
   const secret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
