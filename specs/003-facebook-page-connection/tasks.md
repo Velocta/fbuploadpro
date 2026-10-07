@@ -78,11 +78,11 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by simulating an expired token on Account A and valid token on Account B, asserting that Account A transitions to `expired` status while Account B remains `active`, and verifying reconnection triggers update credentials without duplicating records.
 
 ### Tests for User Story 3 (TDD) ⚠️
-- [ ] T066 [P] [US3] Write unit and integration tests for account and page health status evaluation, Graph API OAuth error 190 handling, and token expiry calculation in `apps/web/tests/domain/facebook-health.test.ts` (Issue: #101)
+- [X] T066 [P] [US3] Write unit and integration tests for account and page health status evaluation, Graph API OAuth error 190 handling, and token expiry calculation in `apps/web/tests/domain/facebook-health.test.ts` (Issue: #101)
 
 ### Implementation for User Story 3
-- [ ] T067 [US3] Implement health status evaluator mapping Graph API errors (error 190 subcodes 458/460/463 to `expired` / `invalid_token`, rate limit codes 4/17/32 to `fb_rate_limited`) and token expiry horizons in `packages/contracts/src/domain/facebook-health.ts` (Issue: #102)
-- [ ] T068 [US3] Implement `GET /api/tenant/[subdomain]/accounts` route handler returning sanitized multi-account status summary with connected page counts in `apps/web/src/app/api/tenant/[subdomain]/accounts/route.ts` (Issue: #103)
+- [X] T067 [US3] Implement health status evaluator mapping Graph API errors (error 190 subcodes 458/460/463 to `expired` / `invalid_token`, rate limit codes 4/17/32 to `fb_rate_limited`) and token expiry horizons in `packages/contracts/src/domain/facebook-health.ts` (Issue: #102)
+- [X] T068 [US3] Implement `GET /api/tenant/[subdomain]/accounts` route handler returning sanitized multi-account status summary with connected page counts in `apps/web/src/app/api/tenant/[subdomain]/accounts/route.ts` (Issue: #103)
 
 **Checkpoint**: User Story 3 complete — multi-account health monitoring and expiration handling operational.
 

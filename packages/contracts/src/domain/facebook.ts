@@ -35,6 +35,16 @@ export const FacebookAccountViewSchema = z.object({
 
 export type FacebookAccountView = z.infer<typeof FacebookAccountViewSchema>;
 
+export const ListFacebookAccountsResponseSchema = z.object({
+  accounts: z.array(FacebookAccountViewSchema),
+  total: z.number().int().nonnegative(),
+});
+
+export type ListFacebookAccountsResponse = z.infer<
+  typeof ListFacebookAccountsResponseSchema
+>;
+
+
 export const FacebookPageStatusSchema = z.enum([
   'active',
   'fb_rate_limited',
