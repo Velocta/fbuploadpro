@@ -90,6 +90,9 @@ export default async function TenantLayout({ params, children }: TenantLayoutPro
           <Link href={`/tenant/${subdomain}/dashboard`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
             Dashboard
           </Link>
+          <Link href={`/tenant/${subdomain}/media`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
+            Media Library
+          </Link>
           <Link href={`/tenant/${subdomain}/accounts`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
             Facebook Channels
           </Link>
