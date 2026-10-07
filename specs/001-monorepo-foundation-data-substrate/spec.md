@@ -99,7 +99,7 @@ Platform operators and automated orchestrators need to monitor the operational s
 
 ### Key Entities *(include if feature involves data)*
 
-- **User**: The root tenant and operator. Key attributes: unique identifier (UUID), display name, email, validated subdomain slug, role (`agency`, `super_admin`), token balance (non-negative integer), status (`active`, `suspended`), creation and update timestamps.
+- **User**: The root tenant and operator. Key attributes: unique identifier (UUID), display name, email, validated subdomain slug, role (`user`, `seller`, `admin`), token balance (non-negative integer), status (`active`, `suspended`), creation and update timestamps.
 - **Facebook Account**: A connected social media identity. Key attributes: unique identifier (UUID), owning user identifier (`user_id`), platform account ID, display name, connection status.
 - **Facebook Page**: A managed publishing page. Key attributes: unique identifier (UUID), owning user identifier (`user_id`), parent Facebook account identifier, platform page ID, page title, follower count, publishing status.
 - **Token Transaction**: Immutable ledger item. Key attributes: unique identifier (UUID), owning user identifier (`user_id`), transaction type (`credit`, `debit`, `refund`, `adjustment`), amount (strictly positive integer), reference identifier, description, creation timestamp.

@@ -43,14 +43,14 @@ export const SubdomainSchema = z
 
 ```typescript
 // User
-export const UserRoleSchema = z.enum(['agency', 'super_admin']);
+export const UserRoleSchema = z.enum(['user', 'seller', 'admin']);
 export const UserStatusSchema = z.enum(['active', 'suspended']);
 export const UserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email().max(255),
   name: z.string().max(100).nullable().optional(),
   subdomain: SubdomainSchema,
-  role: UserRoleSchema.default('agency'),
+  role: UserRoleSchema.default('user'),
   tokensBalance: z.number().int().nonnegative().default(0),
   status: UserStatusSchema.default('active'),
   createdAt: z.coerce.date(),

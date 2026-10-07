@@ -41,8 +41,8 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 - [ ] T008 [P] [US1] Write unit tests for SubdomainSchema, reserved slugs, and UserSchema in packages/contracts/tests/user.test.ts
 
 ### Implementation for User Story 1
-- [ ] T009 [P] [US1] Implement SubdomainSchema (regex /^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/, rejecting RESERVED_SUBDOMAINS: admin, api, app, auth, billing, dashboard, internal, mail, status, system, test, webhook, www), UserRoleSchema (agency, super_admin), UserStatusSchema (active, suspended), and UserSchema (with tokensBalance >= 0) in packages/contracts/src/domain/user.ts
-- [ ] T010 [US1] Write DDL migration for users table (id UUID PK, email VARCHAR(255) UNIQUE, name VARCHAR(100), subdomain VARCHAR(50) UNIQUE, role VARCHAR(20) CHECK IN ('agency', 'super_admin'), tokens_balance BIGINT CHECK >= 0, status VARCHAR(20) CHECK IN ('active', 'suspended')) in packages/database/migrations/0001_initial_schema.sql
+- [ ] T009 [P] [US1] Implement SubdomainSchema (regex /^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/, rejecting RESERVED_SUBDOMAINS: admin, api, app, auth, billing, dashboard, internal, mail, status, system, test, webhook, www), UserRoleSchema (user, seller, admin), UserStatusSchema (active, suspended), and UserSchema (with tokensBalance >= 0) in packages/contracts/src/domain/user.ts
+- [ ] T010 [US1] Write DDL migration for users table (id UUID PK, email VARCHAR(255) UNIQUE, name VARCHAR(100), subdomain VARCHAR(50) UNIQUE, role VARCHAR(20) CHECK IN ('user', 'seller', 'admin'), tokens_balance BIGINT CHECK >= 0, status VARCHAR(20) CHECK IN ('active', 'suspended')) in packages/database/migrations/0001_initial_schema.sql
 
 **Checkpoint**: At this point, User Story 1 is functional and testable independently.
 

@@ -71,7 +71,7 @@ Represents the primary tenant workspace and user operator.
 | `email` | `VARCHAR(255)` | `NOT NULL UNIQUE` | User email address |
 | `name` | `VARCHAR(100)` | `NULL` | User display name |
 | `subdomain` | `VARCHAR(50)` | `NOT NULL UNIQUE` | Normalized tenant subdomain slug |
-| `role` | `VARCHAR(20)` | `NOT NULL DEFAULT 'agency' CHECK (role IN ('agency', 'super_admin'))` | User role |
+| `role` | `VARCHAR(20)` | `NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'seller', 'admin'))` | User role tier |
 | `tokens_balance` | `BIGINT` | `NOT NULL DEFAULT 0 CHECK (tokens_balance >= 0)` | Current prepaid token balance |
 | `status` | `VARCHAR(20)` | `NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended'))` | Account status |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | Creation timestamp |
