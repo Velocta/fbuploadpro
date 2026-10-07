@@ -19,12 +19,12 @@
 
 **⚠️ CRITICAL**: No user story implementation can begin until this phase is complete.
 
-- [ ] T079 [P] Create domain contracts and validation schemas for media items, upload URLs, and confirmations in `packages/contracts/src/domain/media.ts` (Issue: #127)
-- [ ] T080 [P] Create domain contracts and validation schemas for folders, captions, and quotas in `packages/contracts/src/domain/folder.ts`, `packages/contracts/src/domain/caption.ts`, and `packages/contracts/src/domain/storage.ts` (Issue: #128)
+- [X] T079 [P] Create domain contracts and validation schemas for media items, upload URLs, and confirmations in `packages/contracts/src/domain/media.ts` (Issue: #127)
+- [X] T080 [P] Create domain contracts and validation schemas for folders, captions, and quotas in `packages/contracts/src/domain/folder.ts`, `packages/contracts/src/domain/caption.ts`, and `packages/contracts/src/domain/storage.ts` (Issue: #128)
 - [ ] T081 [P] Implement `IStorageService` interface and `MockStorageProvider` for test execution in `apps/web/src/lib/storage.ts` (Issue: #129)
 - [ ] T082 Implement forward DDL migration for media items, folders, caption templates, and storage quotas in `packages/database/migrations/0003_media_library.sql` (Issue: #130)
-- [ ] T083 Export media contracts and storage interfaces from `packages/contracts/src/index.ts` (Issue: #131)
-- [ ] T084 [P] Add unit tests for media validation contracts and schemas in `packages/contracts/tests/media-contracts.test.ts` (Issue: #132)
+- [X] T083 Export media contracts and storage interfaces from `packages/contracts/src/index.ts` (Issue: #131)
+- [X] T084 [P] Add unit tests for media validation contracts and schemas in `packages/contracts/tests/media-contracts.test.ts` (Issue: #132)
 - [ ] T085 [P] Add database migration tests asserting multi-tenant isolation, unique constraints, and check constraints in `packages/database/tests/media-library.test.ts` (Issue: #133)
 
 **Checkpoint**: Core contracts, migration, and mock storage ready — user story implementation can now begin.
