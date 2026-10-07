@@ -119,9 +119,9 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 **Purpose**: Security verification asserting zero plaintext token leakage and full Turborepo pipeline validation.
 
-- [ ] T075 [P] Run security audit test asserting zero raw or encrypted token leakage across all client-facing view models and error responses in `apps/web/tests/security/token-leakage.test.ts` (Issue: #110)
-- [ ] T076 Execute quickstart validation scenarios defined in `specs/003-facebook-page-connection/quickstart.md` (Issue: #111)
-- [ ] T077 Verify all Turborepo quality gates pass cleanly (`pnpm turbo run build lint typecheck test`) across all monorepo packages (Issue: #112)
+- [X] T075 [P] Run security audit test asserting zero raw or encrypted token leakage across all client-facing view models and error responses in `apps/web/tests/security/token-leakage.test.ts` (Issue: #110)
+- [X] T076 Execute quickstart validation scenarios defined in `specs/003-facebook-page-connection/quickstart.md` (Issue: #111)
+- [X] T077 Verify all Turborepo quality gates pass cleanly (`pnpm turbo run build lint typecheck test`) across all monorepo packages (Issue: #112)
 
 ---
 
