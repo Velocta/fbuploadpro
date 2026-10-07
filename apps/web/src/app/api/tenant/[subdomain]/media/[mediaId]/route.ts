@@ -1,14 +1,109 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  DeleteMediaItemResponseSchema,
+  type IStorageService,
   MediaItemResponseSchema,
   UpdateMediaItemRequestSchema,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { getDbClient } from '../../../../../../lib/db';
+import { getStorageService } from '../../../../../../lib/storage';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function authenticateUser(request: NextRequest, subdomain: string) {
+  const sessionSecret =
+    process.env.SESSION_SECRET ||
+    'super-secret-session-signing-key-minimum-32-chars-long';
+
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return {
+      error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    };
+  }
+
+  let session;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch (_e) {
+    return {
+      error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
+    };
+  }
+
+  if (session.subdomain !== subdomain && session.role !== 'admin') {
+    return {
+      error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+    };
+  }
+
+  return { session };
+}
+
+function formatMediaRow(row: any) {
+  return MediaItemResponseSchema.parse({
+    id: row.id,
+    userId: row.user_id,
+    folderId: row.folder_id,
+    name: row.name,
+    fileSize: Number(row.file_size),
+    mimeType: row.mime_type,
+    mediaType: row.media_type,
+    storageKey: row.storage_key,
+    url: row.url,
+    thumbnailKey: row.thumbnail_key,
+    thumbnailUrl: row.thumbnail_url,
+    durationSeconds:
+      row.duration_seconds !== null ? Number(row.duration_seconds) : null,
+    aspectRatio: row.aspect_ratio,
+    tags: Array.isArray(row.tags)
+      ? row.tags
+      : typeof row.tags === 'string'
+      ? JSON.parse(row.tags)
+      : [],
+    captionTemplateId: row.caption_template_id,
+    captionText: row.caption_text,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+  });
+}
+
+export async function handleGetMedia(
+  request: NextRequest,
+  subdomain: string,
+  mediaId: string,
+  dbClient?: DatabaseClient
+): Promise<NextResponse> {
+  const auth = await authenticateUser(request, subdomain);
+  if (auth.error || !auth.session) return auth.error!;
+
+  if (!UUID_REGEX.test(mediaId)) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'Invalid media ID format' },
+      { status: 400 }
+    );
+  }
+
+  const db = dbClient ?? getDbClient();
+  const rows = (await db.query(
+    `SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
+            storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
+            aspect_ratio, tags, caption_template_id, caption_text,
+            created_at, updated_at
+     FROM media_items
+     WHERE id = $1 AND user_id = $2`,
+    [mediaId, auth.session.userId]
+  )) as any[];
+
+  if (!rows || rows.length === 0) {
+    return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(formatMediaRow(rows[0]));
+}
 
 export async function handleUpdateMedia(
   request: NextRequest,
@@ -16,25 +111,8 @@ export async function handleUpdateMedia(
   mediaId: string,
   dbClient?: DatabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
-
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await authenticateUser(request, subdomain);
+  if (auth.error || !auth.session) return auth.error!;
 
   if (!UUID_REGEX.test(mediaId)) {
     return NextResponse.json(
@@ -63,23 +141,21 @@ export async function handleUpdateMedia(
 
   const db = dbClient ?? getDbClient();
 
-  // Verify media item exists and belongs to the user
   const existingMedia = (await db.query(
     `SELECT id, folder_id, caption_template_id, caption_text
      FROM media_items
      WHERE id = $1 AND user_id = $2`,
-    [mediaId, session.userId]
+    [mediaId, auth.session.userId]
   )) as any[];
 
   if (!existingMedia || existingMedia.length === 0) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
-  // Validate folder if specified
   if (parsed.data.folderId !== undefined && parsed.data.folderId !== null) {
     const folderRows = (await db.query(
       `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
-      [parsed.data.folderId, session.userId]
+      [parsed.data.folderId, auth.session.userId]
     )) as any[];
 
     if (!folderRows || folderRows.length === 0) {
@@ -92,14 +168,13 @@ export async function handleUpdateMedia(
 
   let captionTextToSave: string | null | undefined = parsed.data.captionText;
 
-  // Validate caption template if specified
   if (
     parsed.data.captionTemplateId !== undefined &&
     parsed.data.captionTemplateId !== null
   ) {
     const captionRows = (await db.query(
       `SELECT id, content FROM caption_templates WHERE id = $1 AND user_id = $2`,
-      [parsed.data.captionTemplateId, session.userId]
+      [parsed.data.captionTemplateId, auth.session.userId]
     )) as any[];
 
     if (!captionRows || captionRows.length === 0) {
@@ -112,7 +187,6 @@ export async function handleUpdateMedia(
       );
     }
 
-    // If captionText is not explicitly provided, snapshot template content
     if (captionTextToSave === undefined) {
       captionTextToSave = captionRows[0].content;
     }
@@ -143,7 +217,7 @@ export async function handleUpdateMedia(
     values.push(captionTextToSave);
   }
 
-  values.push(mediaId, session.userId);
+  values.push(mediaId, auth.session.userId);
   const updateQuery = `
     UPDATE media_items
     SET ${updates.join(', ')}
@@ -159,34 +233,98 @@ export async function handleUpdateMedia(
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
-  const row = updatedRows[0];
-  const payload = MediaItemResponseSchema.parse({
-    id: row.id,
-    userId: row.user_id,
-    folderId: row.folder_id,
-    name: row.name,
-    fileSize: Number(row.file_size),
-    mimeType: row.mime_type,
-    mediaType: row.media_type,
-    storageKey: row.storage_key,
-    url: row.url,
-    thumbnailKey: row.thumbnail_key,
-    thumbnailUrl: row.thumbnail_url,
-    durationSeconds:
-      row.duration_seconds !== null ? Number(row.duration_seconds) : null,
-    aspectRatio: row.aspect_ratio,
-    tags: Array.isArray(row.tags)
-      ? row.tags
-      : typeof row.tags === 'string'
-      ? JSON.parse(row.tags)
-      : [],
-    captionTemplateId: row.caption_template_id,
-    captionText: row.caption_text,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+  return NextResponse.json(formatMediaRow(updatedRows[0]));
+}
+
+export async function handleDeleteMedia(
+  request: NextRequest,
+  subdomain: string,
+  mediaId: string,
+  dbClient?: DatabaseClient,
+  storageService?: IStorageService
+): Promise<NextResponse> {
+  const auth = await authenticateUser(request, subdomain);
+  if (auth.error || !auth.session) return auth.error!;
+
+  if (!UUID_REGEX.test(mediaId)) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'Invalid media ID format' },
+      { status: 400 }
+    );
+  }
+
+  const db = dbClient ?? getDbClient();
+  const rows = (await db.query(
+    `SELECT id, user_id, storage_key, thumbnail_key, file_size
+     FROM media_items
+     WHERE id = $1 AND user_id = $2`,
+    [mediaId, auth.session.userId]
+  )) as any[];
+
+  if (!rows || rows.length === 0) {
+    return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+  }
+
+  const item = rows[0];
+  const fileSize = Number(item.file_size);
+
+  const storage = storageService ?? getStorageService();
+  if (item.storage_key) {
+    try {
+      await storage.deleteObject(item.storage_key);
+    } catch (_e) {
+      // Continue with DB deletion even if storage deletion fails
+    }
+  }
+  if (item.thumbnail_key) {
+    try {
+      await storage.deleteObject(item.thumbnail_key);
+    } catch (_e) {
+      // Continue
+    }
+  }
+
+  await db.query(
+    `DELETE FROM media_items WHERE id = $1 AND user_id = $2`,
+    [mediaId, auth.session.userId]
+  );
+
+  const quotaRows = (await db.query(
+    `UPDATE user_storage_quotas
+     SET used_bytes = GREATEST(0, used_bytes - $1),
+         updated_at = now()
+     WHERE user_id = $2
+     RETURNING total_bytes, used_bytes`,
+    [fileSize, auth.session.userId]
+  )) as any[];
+
+  let remainingQuotaBytes = 5368709120;
+  if (quotaRows && quotaRows.length > 0) {
+    const total = Number(quotaRows[0].total_bytes);
+    const used = Number(quotaRows[0].used_bytes);
+    remainingQuotaBytes = Math.max(0, total - used);
+  }
+
+  const payload = DeleteMediaItemResponseSchema.parse({
+    success: true,
+    mediaId,
+    reclaimedBytes: fileSize,
+    remainingQuotaBytes,
   });
 
   return NextResponse.json(payload);
+}
+
+export async function GET(
+  request: NextRequest,
+  props: {
+    params:
+      | { subdomain: string; mediaId: string }
+      | Promise<{ subdomain: string; mediaId: string }>;
+  }
+) {
+  const resolvedParams = await Promise.resolve(props.params);
+  return handleGetMedia(request, resolvedParams.subdomain, resolvedParams.mediaId);
 }
 
 export async function PATCH(
@@ -199,6 +337,22 @@ export async function PATCH(
 ) {
   const resolvedParams = await Promise.resolve(props.params);
   return handleUpdateMedia(
+    request,
+    resolvedParams.subdomain,
+    resolvedParams.mediaId
+  );
+}
+
+export async function DELETE(
+  request: NextRequest,
+  props: {
+    params:
+      | { subdomain: string; mediaId: string }
+      | Promise<{ subdomain: string; mediaId: string }>;
+  }
+) {
+  const resolvedParams = await Promise.resolve(props.params);
+  return handleDeleteMedia(
     request,
     resolvedParams.subdomain,
     resolvedParams.mediaId

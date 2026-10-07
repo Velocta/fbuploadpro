@@ -106,12 +106,12 @@
 ### Tests for User Story 4 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T101 [P] [US4] Write unit and integration tests for media asset retrieval and safe purging with quota reclamation in `apps/web/tests/api/media-purge.test.ts` (Issue: #149)
+- [X] T101 [P] [US4] Write unit and integration tests for media asset retrieval and safe purging with quota reclamation in `apps/web/tests/api/media-purge.test.ts` (Issue: #149)
 
 ### Implementation for User Story 4
 
-- [ ] T102 [US4] Implement single media item inspection endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts` (Issue: #150)
-- [ ] T103 [US4] Implement media asset deletion handler with R2 object purge and atomic quota decrement in `apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts` (Issue: #151)
+- [X] T102 [US4] Implement single media item inspection endpoint in `apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts` (Issue: #150)
+- [X] T103 [US4] Implement media asset deletion handler with R2 object purge and atomic quota decrement in `apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts` (Issue: #151)
 
 **Checkpoint**: All backend APIs complete — assets can be inspected and purged with quota refunded.
 
