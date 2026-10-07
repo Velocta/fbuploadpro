@@ -81,8 +81,8 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 3 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T130 [P] [US3] Implement `IFacebookPublishClient` abstraction and mock implementation in `apps/worker/src/fb-client.ts` (Issue: #205)
-- [ ] T131 [P] [US3] Write unit tests for Facebook Graph API v26.0 Reels 3-phase upload, Photos upload, and First Comment in `apps/worker/tests/fb-client.test.ts` (Issue: #206)
+- [X] T130 [P] [US3] Implement `IFacebookPublishClient` abstraction and mock implementation in `apps/worker/src/fb-client.ts` (Issue: #205)
+- [X] T131 [P] [US3] Write unit tests for Facebook Graph API v26.0 Reels 3-phase upload, Photos upload, and First Comment in `apps/worker/tests/fb-client.test.ts` (Issue: #206)
 
 ### Implementation for User Story 3
 
