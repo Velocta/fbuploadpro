@@ -76,10 +76,10 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by testing role-guarded endpoints, asserting standard user cannot access seller or admin features, seller can access seller features, and admin has superuser access.
 
 ### Tests for User Story 3 (TDD) ⚠️
-- [ ] T043 [P] [US3] Write integration tests for RBAC route protection in apps/web/tests/rbac-routes.test.ts (Issue: #70)
+- [X] T043 [P] [US3] Write integration tests for RBAC route protection in apps/web/tests/rbac-routes.test.ts (Issue: #70)
 
 ### Implementation for User Story 3
-- [ ] T044 [US3] Implement RBAC route helper and seller route guard in apps/web/src/lib/rbac.ts and apps/web/src/app/tenant/[subdomain]/seller/page.tsx (Issue: #71)
+- [X] T044 [US3] Implement RBAC route helper and seller route guard in apps/web/src/lib/rbac.ts and apps/web/src/app/tenant/[subdomain]/seller/page.tsx (Issue: #71)
 
 **Checkpoint**: At this point, User Stories 1, 2, and 3 work independently.
 
