@@ -77,6 +77,16 @@ export const FacebookPageViewSchema = z.object({
 
 export type FacebookPageView = z.infer<typeof FacebookPageViewSchema>;
 
+export const ListFacebookPagesResponseSchema = z.object({
+  pages: z.array(FacebookPageViewSchema),
+  total: z.number().int().nonnegative(),
+});
+
+export type ListFacebookPagesResponse = z.infer<
+  typeof ListFacebookPagesResponseSchema
+>;
+
+
 // In-memory representation of pages discovered from Graph API /me/accounts
 export const DiscoveredPageSchema = z.object({
   fbPageId: z.string().min(1).max(100),
