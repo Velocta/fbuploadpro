@@ -73,13 +73,13 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 ### Tests for User Story 3 (TDD) ⚠️
 - [X] T014 [P] [US3] Write unit tests for TokenTransactionSchema and positive amount validation in packages/contracts/tests/billing.test.ts (Issue: #29)
-- [ ] T015 [P] [US3] Write database client integration tests verifying DDL constraints, parameterized queries, and atomic token decrement in packages/database/tests/database.test.ts (Issue: #30)
+- [X] T015 [P] [US3] Write database client integration tests verifying DDL constraints, parameterized queries, and atomic token decrement in packages/database/tests/database.test.ts (Issue: #30)
 
 ### Implementation for User Story 3
 - [X] T016 [P] [US3] Implement TokenTransactionTypeSchema (credit, debit, refund, adjustment) and TokenTransactionSchema (amount > 0) referencing userId in packages/contracts/src/domain/billing.ts (Issue: #31)
 - [X] T017 [US3] Append DDL definitions for token_transactions (user_id UUID FK, amount BIGINT CHECK > 0, transaction_type IN ('credit', 'debit', 'refund', 'adjustment')) to packages/database/migrations/0001_initial_schema.sql (Issue: #32)
-- [ ] T018 [US3] Implement Node.js connection pool client (pg.Pool) with parameterized query helpers (query, queryOne, withTransaction) and atomicDecrementTokens(userId, amount) in packages/database/src/client.ts (Issue: #33)
-- [ ] T019 [US3] Implement Edge isolate client interface and atomicDecrementTokens(userId, amount) helper decoupled from Node socket drivers in packages/database/src/edge.ts (Issue: #34)
+- [X] T018 [US3] Implement Node.js connection pool client (pg.Pool) with parameterized query helpers (query, queryOne, withTransaction) and atomicDecrementTokens(userId, amount) in packages/database/src/client.ts (Issue: #33)
+- [X] T019 [US3] Implement Edge isolate client interface and atomicDecrementTokens(userId, amount) helper decoupled from Node socket drivers in packages/database/src/edge.ts (Issue: #34)
 
 **Checkpoint**: At this point, User Stories 1, 2, and 3 work independently.
 
