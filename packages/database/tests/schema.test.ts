@@ -34,4 +34,15 @@ describe('Database Migrations Substrate', () => {
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_fb_accounts_user_id ON facebook_accounts(user_id)');
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_fb_pages_user_id ON facebook_pages(user_id)');
   });
+
+  it('0001_initial_schema.sql contains token_transactions table with constraints and indexes', () => {
+    const migrationPath = path.resolve(__dirname, '../migrations/0001_initial_schema.sql');
+    const ddl = fs.readFileSync(migrationPath, 'utf8');
+
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS token_transactions');
+    expect(ddl).toContain('user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE');
+    expect(ddl).toContain('amount BIGINT NOT NULL CHECK (amount > 0)');
+    expect(ddl).toContain("transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('credit', 'debit', 'refund', 'adjustment'))");
+    expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_token_transactions_user_id ON token_transactions(user_id)');
+  });
 });
