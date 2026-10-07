@@ -22,8 +22,8 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 - [X] T116 [P] Define `QueueItem`, `EnqueueMediaRequest`, and status transition schemas in `packages/contracts/src/domain/queue.ts` (Issue: #191)
 - [X] T117 [P] Define `ClaimedQueueItem`, `DispatchOutcome`, and `IPublishDispatcher` contracts in `packages/contracts/src/domain/dispatcher.ts` (Issue: #192)
 - [X] T118 [P] Add contract unit tests for queue schemas and validation in `packages/contracts/tests/publishing-contracts.test.ts` (Issue: #193)
-- [ ] T119 Create forward DDL migration `0004_publishing_engine.sql` in `packages/database/migrations/0004_publishing_engine.sql` (Issue: #194)
-- [ ] T120 Write database schema and constraint tests for migration 0004 asserting compound uniqueness, foreign key cascades, and `FOR UPDATE SKIP LOCKED` query in `packages/database/tests/publishing-engine.test.ts` (Issue: #195)
+- [X] T119 Create forward DDL migration `0004_publishing_engine.sql` in `packages/database/migrations/0004_publishing_engine.sql` (Issue: #194)
+- [X] T120 Write database schema and constraint tests for migration 0004 asserting compound uniqueness, foreign key cascades, and `FOR UPDATE SKIP LOCKED` query in `packages/database/tests/publishing-engine.test.ts` (Issue: #195)
 
 **Checkpoint**: Foundation ready — Page slots and queue item implementation can begin.
 
