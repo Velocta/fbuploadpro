@@ -1,3 +1,7 @@
+import { createDatabaseClient } from '@fbuploadpro/database';
+import { FacebookPublishClient, type IFacebookPublishClient } from './fb-client.js';
+import { runDispatchCycle, type DispatcherDbClient } from './dispatcher.js';
+
 export interface Env {
   ENVIRONMENT?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
@@ -6,6 +10,61 @@ export interface Env {
 }
 
 export * from './fb-client.js';
+export * from './dispatcher.js';
+
+export interface ScheduledOptions {
+  db?: DispatcherDbClient;
+  fbClient?: IFacebookPublishClient;
+  limit?: number;
+}
+
+export async function handleScheduled(
+  _controller: ScheduledController,
+  env: Env,
+  _ctx?: ExecutionContext,
+  options?: ScheduledOptions
+): Promise<void> {
+  const masterKey = env.FB_ENCRYPTION_MASTER_KEY;
+  if (!masterKey) {
+    console.warn('[Scheduled] FB_ENCRYPTION_MASTER_KEY is not configured; skipping cycle');
+    return;
+  }
+
+  let db = options?.db;
+  let shouldCloseDb = false;
+
+  if (!db) {
+    if (!env.DATABASE_URL || env.ENVIRONMENT === 'test') {
+      return;
+    }
+    db = createDatabaseClient({ connectionString: env.DATABASE_URL });
+    shouldCloseDb = true;
+  }
+
+  const fbClient =
+    options?.fbClient ??
+    new FacebookPublishClient(
+      env.FB_GRAPH_API_URL ? { baseUrl: env.FB_GRAPH_API_URL } : undefined
+    );
+
+  try {
+    await runDispatchCycle({
+      db,
+      fbClient,
+      masterKey,
+      limit: options?.limit ?? 10,
+    });
+  } finally {
+    if (
+      shouldCloseDb &&
+      db &&
+      'close' in db &&
+      typeof (db as { close?: () => Promise<void> }).close === 'function'
+    ) {
+      await (db as { close: () => Promise<void> }).close().catch(() => {});
+    }
+  }
+}
 
 export default {
   async fetch(request: Request, _env: Env, _ctx: ExecutionContext): Promise<Response> {
@@ -40,11 +99,10 @@ export default {
   },
 
   async scheduled(
-    _controller: ScheduledController,
-    _env: Env,
-    _ctx: ExecutionContext
+    controller: ScheduledController,
+    env: Env,
+    ctx: ExecutionContext
   ): Promise<void> {
-    // Scheduled cron trigger handler skeleton
+    await handleScheduled(controller, env, ctx);
   },
 };
-
