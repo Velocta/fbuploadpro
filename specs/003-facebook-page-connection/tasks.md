@@ -95,11 +95,11 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 **Independent Test**: Can be validated by disconnecting a single page and asserting only that page is removed, disconnecting an account and asserting only that account's pages are removed while sibling accounts remain active, and asserting cross-tenant requests fail with authorization errors.
 
 ### Tests for User Story 4 (TDD) ⚠️
-- [ ] T069 [P] [US4] Write integration tests for granular page and account disconnection and cross-tenant authorization denial in `apps/web/tests/api/facebook-disconnect.test.ts` (Issue: #104)
+- [X] T069 [P] [US4] Write integration tests for granular page and account disconnection and cross-tenant authorization denial in `apps/web/tests/api/facebook-disconnect.test.ts` (Issue: #104)
 
 ### Implementation for User Story 4
-- [ ] T070 [US4] Implement `DELETE /api/tenant/[subdomain]/pages/[pageId]` route handler deleting page record and purging encrypted token under `(user_id, pageId)` in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/route.ts` (Issue: #105)
-- [ ] T071 [US4] Implement `DELETE /api/tenant/[subdomain]/accounts/[accountId]` route handler deleting account record and cascading deletion of linked pages under `(user_id, accountId)` without affecting other connected accounts in `apps/web/src/app/api/tenant/[subdomain]/accounts/[accountId]/route.ts` (Issue: #106)
+- [X] T070 [US4] Implement `DELETE /api/tenant/[subdomain]/pages/[pageId]` route handler deleting page record and purging encrypted token under `(user_id, pageId)` in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/route.ts` (Issue: #105)
+- [X] T071 [US4] Implement `DELETE /api/tenant/[subdomain]/accounts/[accountId]` route handler deleting account record and cascading deletion of linked pages under `(user_id, accountId)` without affecting other connected accounts in `apps/web/src/app/api/tenant/[subdomain]/accounts/[accountId]/route.ts` (Issue: #106)
 
 **Checkpoint**: User Story 4 complete — granular disconnection and multi-tenant isolation fully verified.
 
