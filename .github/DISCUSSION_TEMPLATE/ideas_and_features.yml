@@ -1,0 +1,24 @@
+title: "[Idea]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "🎯 Problem Statement"
+      description: "What problem does this solve, or what opportunity does it address?"
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: "💡 Proposed Solution"
+      description: "Describe how the feature should behave from the user's perspective."
+    validations:
+      required: true
+  - type: textarea
+    id: requirements
+    attributes:
+      label: "✅ Key Requirements / User Stories"
+      description: "List the essential requirements or checklist of behaviors."
+      placeholder: "- [ ] As a user, I want ...\n- [ ] The system should ..."
+    validations:
+      required: true

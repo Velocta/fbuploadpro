@@ -1,0 +1,22 @@
+title: "[Announcement]: "
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: "📢 Summary"
+      description: "A brief 1-2 sentence overview of what changed or what milestone was reached."
+    validations:
+      required: true
+  - type: textarea
+    id: what-changed
+    attributes:
+      label: "🎯 What Changed / What's New"
+      description: "List the key updates, additions, or modifications."
+      placeholder: "- Update 1\n- Update 2"
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "⚠️ Breaking Changes / Impact"
+      description: "Any breaking changes, database updates, or new configurations needed."
