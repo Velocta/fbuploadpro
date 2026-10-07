@@ -65,8 +65,8 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 - [X] T126 [US2] Implement Enqueue Media (`POST`) handler with pre-flight token balance check (`tokens_balance >= 1`) in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #201)
 - [X] T127 [US2] Implement List Queue Items (`GET`) handler with filters by page and status in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #202)
-- [ ] T128 [US2] Implement Update Queue Item (`PATCH`), Delete (`DELETE`), and Skip handlers in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route.ts` (Issue: #203)
-- [ ] T129 [US2] Implement Manual "Publish Now" endpoint in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route.ts` (Issue: #204)
+- [X] T128 [US2] Implement Update Queue Item (`PATCH`), Delete (`DELETE`), and Skip handlers in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route.ts` (Issue: #203)
+- [X] T129 [US2] Implement Manual "Publish Now" endpoint in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route.ts` (Issue: #204)
 
 **Checkpoint**: User Story 2 complete — Assets can be enqueued, organized into slots, and managed.
 
