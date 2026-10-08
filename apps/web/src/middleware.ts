@@ -47,11 +47,37 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // If apex domain or reserved system subdomain, serve root routes
   if (isApex || isReserved || !subdomain) {
+    // Central App Gateway (app.fbuploadpro.com) handling
+    if (subdomain === 'app') {
+      let session: SessionPayload | null = null;
+      const token = extractToken(request);
+      if (token) {
+        try {
+          session = await verifySessionToken(token, sessionSecret);
+        } catch {
+          session = null;
+        }
+      }
+
+      // If already authenticated and visiting app root, login, or signup, redirect to their tenant workspace
+      if (session && (pathname === '/' || pathname === '/login' || pathname === '/signup')) {
+        const workspaceUrl = new URL(request.url);
+        workspaceUrl.host = `${session.subdomain}.${rootDomain}`;
+        workspaceUrl.pathname = '/dashboard';
+        return NextResponse.redirect(workspaceUrl);
+      }
+
+      // If unauthenticated on app root (/), redirect to /login
+      if (!session && pathname === '/') {
+        return NextResponse.redirect(new URL('/login', request.url));
+      }
+    }
+
     return NextResponse.next();
   }
 
   // Public paths under tenant do not require auth
-  const isPublicTenantPath = pathname === '/login';
+  const isPublicTenantPath = pathname === '/login' || pathname === '/signup';
 
   let session: SessionPayload | null = null;
   const token = extractToken(request);
@@ -66,8 +92,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   if (!isPublicTenantPath) {
     if (!session) {
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('returnUrl', pathname);
+      // Redirect unauthenticated tenant access to central app login
+      const loginUrl = new URL(request.url);
+      loginUrl.host = `app.${rootDomain}`;
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('returnUrl', request.url);
       return NextResponse.redirect(loginUrl);
     }
 

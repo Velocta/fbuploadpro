@@ -80,7 +80,7 @@ flowchart TD
 | Monorepo Scope | Dispatched Agent | Enforced Standard |
 | :--- | :--- | :--- |
 | **`apps/web`** (UI, Components, CSS) | `frontend-engineer` | Anti-slop craft (`taste-skill` + `pbakaus/impeccable`), Next.js 16 App Router, React 19 standards. |
-| **`apps/worker`**, **`packages/*`** | `backend-engineer` | Clean architecture, Zod runtime validation, multi-tenant isolation (`agency_id`/`user_id`), edge V8 isolate purity. |
+| **`apps/worker`**, **`packages/*`** | `backend-engineer` | Clean architecture, Zod runtime validation, multi-tenant isolation (`user_id`), edge V8 isolate purity. |
 | **E2E & Integration Tests** | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant boundary verification. |
 | **Turborepo & CI/CD** | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments. |
 

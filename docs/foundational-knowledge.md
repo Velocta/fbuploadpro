@@ -10,17 +10,79 @@ This document serves as the canonical source of truth for the product vision, ar
 
 ---
 
-## 2. Multi-Tenant User Architecture
+## 2. Production Infrastructure Topology & Cloud Providers
 
-- **Individual User Workspaces**: Rather than multi-client agency containers, the platform is centered around **individual users**.
-- **Dedicated Subdomain Isolation**: Each registered user gets an isolated personal workspace accessible via their own subdomain (e.g. `https://{username}.fbuploadpro.com` or `https://{user-slug}.fbuploadpro.com`).
-- **Strict Data Boundaries**:
+The platform architecture is cleanly separated across four specialized, best-in-class cloud providers:
+
+```mermaid
+flowchart TD
+    subgraph VercelHost ["Vercel (Web Application Control Plane)"]
+        Web["apps/web\nNext.js 16 App Router + React 19\n(Tenant Subdomain Routing)"]
+    end
+
+    subgraph SupabaseCloud ["Supabase (Data Substrate & Identity)"]
+        Auth["Supabase Auth\n(Identity & Session Management)"]
+        PG[("PostgreSQL Substrate\n(Multi-tenant Compound Schemas)")]
+        Pooler["Connection Pooler (PgBouncer)\n(Port 6543 / 5432 Direct DDL)"]
+    end
+
+    subgraph CloudflareEdge ["Cloudflare (Edge Compute & Object Storage)"]
+        Worker["apps/worker\nCloudflare Workers Edge Cron (1-min)\n(SKIP LOCKED Dispatcher)"]
+        R2[("Cloudflare R2 Storage\n(Videos / Images Direct Uploads)")]
+    end
+
+    subgraph ExternalServices ["External API Gateways"]
+        FB["Facebook Graph API v26.0\n(Reels, Feed, Comments)"]
+        Stripe["Stripe API & Webhooks\n(Token Ledger Settlement)"]
+    end
+
+    Web -->|Auth & User Identity| Auth
+    Web -->|App Queries via PgBouncer| Pooler
+    Pooler --> PG
+    Web -->|Generate Presigned URLs| R2
+    Worker -->|Claim due posts via SKIP LOCKED| PG
+    Worker -->|Stream media assets| R2
+    Worker -->|Publish posts & first comments| FB
+    Web -->|Stripe Checkout| Stripe
+    Stripe -->|Webhooks| Web
+```
+
+| **Marketing Site** | **Independent Host** | Landing Page, Terms, Privacy | High-converting marketing landing pages, Terms of Service (`/terms`), Privacy Policy (`/privacy`), SEO content, deployed independently. |
+| **Web App Gateway** | **Vercel** | `app.fbuploadpro.com` (`apps/web`) | Central authentication gateway, serving `/login`, `/signup`, and cross-subdomain auth handoffs. |
+| **Tenant Workspaces** | **Vercel** | `{username}.fbuploadpro.com` (`apps/web`) | User workspace dashboard, dedicated Media Library, queue slot configuration, Page analytics. |
+| **Database & Identity** | **Supabase** | Managed PostgreSQL & Supabase Auth | User identity/sessions, multi-tenant tables (`user_id`), transaction pooling, and forward SQL migrations. |
+| **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks (`SKIP LOCKED`), direct media streaming to Meta APIs. |
+| **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage, presigned direct PC-to-bucket uploads, thumbnail cache. |
+| **Social Publishing** | **Meta** | Facebook Graph API v26.0 | Reels and photo publishing, automatic first comment submission, page insights sync. |
+| **Billing & Payments** | **Stripe** | Stripe Billing & Webhooks | Pay-as-you-go token packs, seller referral commission attribution. |
+
+---
+
+## 3. Multi-Tenant User Architecture & Domain Routing
+
+The platform adopts a decoupled multi-domain topology:
+
+### A. Domain Routing Strategy
+1. **Apex Marketing Domain (`fbuploadpro.com` & `www.fbuploadpro.com`)**:
+   - Hosted and deployed independently from the webapp (e.g., custom marketing repo, Framer, Webflow).
+   - Serves high-craft landing pages, feature announcements, `/terms`, and `/privacy`.
+   - Links "Log In" to `https://app.fbuploadpro.com/login` and "Sign Up" / "Get Started" to `https://app.fbuploadpro.com/signup`.
+2. **Central Application Gateway (`app.fbuploadpro.com`)**:
+   - The primary entry door to the SaaS application.
+   - Hosts public authentication: `/login` and `/signup`.
+   - Upon successful authentication, automatically redirects the user to their personal workspace (`https://{username}.fbuploadpro.com/dashboard`).
+3. **Dedicated User Workspaces (`https://{username}.fbuploadpro.com`)**:
+   - Strictly reserved for the active authenticated user.
+   - Unauthenticated visitors hitting `{username}.fbuploadpro.com` are bounced to `https://app.fbuploadpro.com/login?returnUrl=...`.
+   - Mismatched users (e.g. user `alex` trying to view `https://sarah.fbuploadpro.com`) are redirected to their own valid workspace.
+4. **Shared Session Cookie Scope**:
+   - Authentication cookies are set on the apex wildcard cookie domain (`.fbuploadpro.com`), ensuring uninterrupted session continuity between `app.fbuploadpro.com` and `{username}.fbuploadpro.com`.
   - Facebook accounts, imported Facebook Pages, media assets, publishing queues, and token ledgers are strictly scoped to the active tenant user.
   - Zero cross-user data leakage enforced via database compound constraints (`user_id`) and edge routing guards.
 
 ---
 
-## 3. Platform Roles & Governance
+## 4. Platform Roles & Governance
 
 The platform operates on a clear three-tier role taxonomy:
 
@@ -32,7 +94,7 @@ The platform operates on a clear three-tier role taxonomy:
 
 ---
 
-## 4. Dedicated User Media Library
+## 5. Dedicated User Media Library
 
 Each user has an isolated, feature-rich Media Library:
 
@@ -50,7 +112,7 @@ Each user has an isolated, feature-rich Media Library:
 
 ---
 
-## 5. Automated Queue Slots Publishing Engine
+## 6. Automated Queue Slots Publishing Engine
 
 Instead of manual calendar scheduling or legacy scraper bots, publishing is driven by an **Automated Queue Slots** architecture:
 
@@ -72,7 +134,7 @@ Instead of manual calendar scheduling or legacy scraper bots, publishing is driv
 
 ---
 
-## 6. Dedicated Facebook Page Insights & Analytics
+## 7. Dedicated Facebook Page Insights & Analytics
 
 Insights are accessible in a dedicated, per-page view (rather than cluttering the workspace dashboard):
 
@@ -91,7 +153,7 @@ Insights are accessible in a dedicated, per-page view (rather than cluttering th
 
 ---
 
-## 7. Financial & Token Economy
+## 8. Financial & Token Economy
 
 - **Prepaid Token Model**: Users buy token packs (e.g., 500, 2,000, 10,000 tokens) via Stripe Checkout.
 - **Automated Webhook Balance Credit**: Stripe webhook events automatically credit the user's PostgreSQL token balance.
@@ -102,7 +164,7 @@ Insights are accessible in a dedicated, per-page view (rather than cluttering th
 
 ---
 
-## 8. Development Roadmap & Milestones
+## 9. Development Roadmap & Milestones
 
 ```mermaid
 flowchart LR
@@ -132,7 +194,7 @@ flowchart LR
 
 ---
 
-## 9. Autonomous Spec-Driven Development (SDD) & Multi-Agent Protocol
+## 10. Autonomous Spec-Driven Development (SDD) & Multi-Agent Protocol
 
 All development follows autonomous multi-agent orchestration codified in [`AGENTS.md`](../AGENTS.md):
 

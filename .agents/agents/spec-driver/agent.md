@@ -125,3 +125,12 @@ Do not attempt to execute all heterogeneous tasks in a single context. Parse `sp
 2. `speckit-converge` assesses the actual codebase against original functional requirements and acceptance criteria in `spec.md`.
 3. If unbuilt work or gaps remain, `speckit-converge` appends new tasks to `tasks.md`. Re-route these tasks to the appropriate engineering subagents.
 4. Conclude only when `speckit-converge` confirms 100% convergence and all tests pass cleanly.
+
+---
+
+### Phase 10: Deployment Verification & Failure Reporting
+1. When changes are merged to `main` and deployment workflows run, monitor their execution status.
+2. If any CI/CD workflow, migration step, or deployment job fails:
+   - Immediately inspect the logs using `gh run view --log-failed`.
+   - Proactively report to the user exactly why the deployment failed, quoting the error snippet and root cause.
+   - Coordinate with `devops-engineer` or appropriate subagent to resolve the failure promptly.
