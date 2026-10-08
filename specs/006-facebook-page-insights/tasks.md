@@ -55,12 +55,12 @@
 **Independent Test**: Can be validated by querying endpoint with `range=7d|14d|28d|90d` and asserting continuous chronological daily data points with mapped video metrics.
 
 ### Tests for User Story 2
-- [ ] T159 [P] [US2] Write failing tests for time-series extraction and date range normalization (`7d`, `14d`, `28d`, `90d`) in `apps/web/tests/api/page-insights-timeseries.test.ts` (Issue: #260)
+- [X] T159 [P] [US2] Write failing tests for time-series extraction and date range normalization (`7d`, `14d`, `28d`, `90d`) in `apps/web/tests/api/page-insights-timeseries.test.ts` (Issue: #260)
 
 ### Implementation for User Story 2
-- [ ] T160 [US2] Implement `getPageTimeSeriesInsights` in `apps/web/src/lib/insights/facebook-insights-client.ts` querying Graph API v26.0 metrics and normalizing missing date gaps (Issue: #261)
-- [ ] T161 [US2] Integrate time-series data into the route handler response in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` (Issue: #262)
-- [ ] T162 [US2] Verify all US2 tests pass in `apps/web/tests/api/page-insights-timeseries.test.ts` (Issue: #263)
+- [X] T160 [US2] Implement `getPageTimeSeriesInsights` in `apps/web/src/lib/insights/facebook-insights-client.ts` querying Graph API v26.0 metrics and normalizing missing date gaps (Issue: #261)
+- [X] T161 [US2] Integrate time-series data into the route handler response in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` (Issue: #262)
+- [X] T162 [US2] Verify all US2 tests pass in `apps/web/tests/api/page-insights-timeseries.test.ts` (Issue: #263)
 
 **Checkpoint**: User Story 2 complete and independently verifiable.
 

@@ -8,7 +8,10 @@ import {
 import { getDbClient } from '../../../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 import { globalInsightsCache } from '../../../../../../../lib/insights/insights-cache';
-import { getPageOverview } from '../../../../../../../lib/insights/facebook-insights-client';
+import {
+  getPageOverview,
+  getPageTimeSeriesInsights,
+} from '../../../../../../../lib/insights/facebook-insights-client';
 
 export interface HandleGetInsightsOptions {
   dbClient?: DatabaseClient;
@@ -98,14 +101,22 @@ export async function handleGetInsights(
     );
   }
 
-  // 4. Fetch Overview metrics from Facebook Graph API v26.0
+  // 4. Fetch Overview and Time-Series metrics from Facebook Graph API v26.0
   const fetchImpl = options?.fetchImpl ?? fetch;
   const overviewResult = await getPageOverview(page.fb_page_id, decryptedToken, fetchImpl);
+  const timeSeriesResult = await getPageTimeSeriesInsights(
+    page.fb_page_id,
+    decryptedToken,
+    query.range,
+    fetchImpl
+  );
 
   // Preserve stored page_name if Graph API didn't return one
   const finalOverview = {
     ...overviewResult.overview,
     pageName: overviewResult.overview.pageName || page.page_name || null,
+    totalMediaViews: timeSeriesResult.totalMediaViews,
+    totalVideoViews: timeSeriesResult.totalVideoViews,
   };
 
   const responsePayload: PageInsightsResponse = {
@@ -115,7 +126,7 @@ export async function handleGetInsights(
     cachedAt: new Date().toISOString(),
     cacheHit: false,
     overview: finalOverview,
-    timeSeries: [],
+    timeSeries: timeSeriesResult.timeSeries,
     reactions: {
       like: 0,
       love: 0,

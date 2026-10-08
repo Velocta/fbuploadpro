@@ -2,6 +2,8 @@ import {
   evaluateGraphApiError,
   type PageInsightsHealthStatus,
   type PageInsightsOverview,
+  type PageInsightsRange,
+  type PageInsightsTimeSeriesPoint,
 } from '@fbuploadpro/contracts';
 
 export interface PageOverviewResult {
@@ -96,4 +98,139 @@ export async function getPageOverview(
       rawError: message,
     };
   }
+}
+
+export interface PageTimeSeriesResult {
+  timeSeries: PageInsightsTimeSeriesPoint[];
+  totalMediaViews: number;
+  totalVideoViews: number;
+  totalVideoViewTimeMinutes: number;
+}
+
+export function getDaysForRange(range: PageInsightsRange): number {
+  switch (range) {
+    case '7d':
+      return 7;
+    case '14d':
+      return 14;
+    case '90d':
+      return 90;
+    case '28d':
+    default:
+      return 28;
+  }
+}
+
+export async function getPageTimeSeriesInsights(
+  fbPageId: string,
+  accessToken: string,
+  range: PageInsightsRange = '28d',
+  fetchImpl: typeof fetch = fetch
+): Promise<PageTimeSeriesResult> {
+  const days = getDaysForRange(range);
+  const now = new Date();
+  const untilEpoch = Math.floor(now.getTime() / 1000);
+  const sinceDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  const sinceEpoch = Math.floor(sinceDate.getTime() / 1000);
+
+  // Initialize continuous chronological day map with zero values
+  const daysMap = new Map<string, PageInsightsTimeSeriesPoint>();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+    const dateStr = d.toISOString().slice(0, 10);
+    daysMap.set(dateStr, {
+      date: dateStr,
+      pageFollows: 0,
+      dailyFollowsUnique: 0,
+      dailyUnfollowsUnique: 0,
+      mediaViews: 0,
+      videoViews: 0,
+      videoCompleteViews30s: 0,
+      videoViewTimeMinutes: 0,
+    });
+  }
+
+  const metrics = [
+    'page_follows',
+    'page_daily_follows_unique',
+    'page_daily_unfollows_unique',
+    'page_media_view',
+    'page_video_views',
+    'page_video_complete_views_30s',
+    'page_video_view_time',
+  ].join(',');
+
+  const url = `https://graph.facebook.com/v26.0/${encodeURIComponent(
+    fbPageId
+  )}/insights?metric=${metrics}&period=day&since=${sinceEpoch}&until=${untilEpoch}&access_token=${encodeURIComponent(
+    accessToken
+  )}`;
+
+  let totalMediaViews = 0;
+  let totalVideoViews = 0;
+  let totalVideoViewTimeMinutes = 0;
+
+  try {
+    const res = await fetchImpl(url);
+    const payload = await res.json();
+
+    if (res.ok && Array.isArray(payload.data)) {
+      for (const metric of payload.data) {
+        const metricName = metric.name;
+        if (!Array.isArray(metric.values)) continue;
+
+        for (const item of metric.values) {
+          if (!item.end_time) continue;
+          const dateStr = String(item.end_time).slice(0, 10);
+          const rawVal = typeof item.value === 'number' ? Math.max(0, item.value) : 0;
+
+          const point = daysMap.get(dateStr);
+          if (!point) continue;
+
+          switch (metricName) {
+            case 'page_follows':
+              point.pageFollows = rawVal;
+              break;
+            case 'page_daily_follows_unique':
+              point.dailyFollowsUnique = rawVal;
+              break;
+            case 'page_daily_unfollows_unique':
+              point.dailyUnfollowsUnique = rawVal;
+              break;
+            case 'page_media_view':
+              point.mediaViews = rawVal;
+              totalMediaViews += rawVal;
+              break;
+            case 'page_video_views':
+              point.videoViews = rawVal;
+              totalVideoViews += rawVal;
+              break;
+            case 'page_video_complete_views_30s':
+              point.videoCompleteViews30s = rawVal;
+              break;
+            case 'page_video_view_time': {
+              const minutes =
+                rawVal > 1000
+                  ? Math.round((rawVal / 60000) * 10) / 10
+                  : Math.round((rawVal / 60) * 10) / 10;
+              point.videoViewTimeMinutes = minutes;
+              totalVideoViewTimeMinutes += minutes;
+              break;
+            }
+          }
+        }
+      }
+    }
+  } catch (_e) {
+    // If Graph API fails, return the initialized zero-filled array gracefully
+  }
+
+  const timeSeries = Array.from(daysMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+  return {
+    timeSeries,
+    totalMediaViews,
+    totalVideoViews,
+    totalVideoViewTimeMinutes,
+  };
 }
