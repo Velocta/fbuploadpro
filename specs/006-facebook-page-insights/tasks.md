@@ -128,9 +128,9 @@
 
 **Purpose**: Security audit asserting zero cross-user insights leakage and 100% clean Turborepo pipeline validation.
 
-- [ ] T179 [P] Security audit asserting zero token leakage in responses or logs in `apps/web/tests/security/insights-token-leakage.test.ts` (Issue: #280)
-- [ ] T180 Execute quickstart validation scenarios defined in `specs/006-facebook-page-insights/quickstart.md` (Issue: #281)
-- [ ] T181 Monorepo quality gate verification across all packages (`pnpm turbo run build lint typecheck test`) (Issue: #282)
+- [X] T179 [P] Security audit asserting zero token leakage in responses or logs in `apps/web/tests/security/insights-token-leakage.test.ts` (Issue: #280)
+- [X] T180 Execute quickstart validation scenarios defined in `specs/006-facebook-page-insights/quickstart.md` (Issue: #281)
+- [X] T181 Monorepo quality gate verification across all packages (`pnpm turbo run build lint typecheck test`) (Issue: #282)
 
 ---
 
