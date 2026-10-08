@@ -90,7 +90,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - `speckit-analyze`: Audits consistency across artifacts.
 - `speckit-implement`: Implements features based on spec artifacts.
 - `speckit-converge`: Evaluates completion and logs remaining work.
-- `speckit-taskstoissues`: Exports tasks to GitHub issues and syncs with Project #8.
+- `speckit-taskstoissues`: Exports tasks to GitHub issues.
 - `impeccable`: Design director and anti-slop craft skill.
 - `taste-skill`: Anti-slop frontend design framework.
 
@@ -121,5 +121,5 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 
 ### Quality & Governance
 - Follow coding standards in `.agents/rules/coding-standards.md`.
-- Follow Git guidelines in `.agents/rules/git-workflow.md` (Atomic PRs <150–200 LoC, Project #8 tracking).
+- Follow Git guidelines in `.agents/rules/git-workflow.md` (Atomic PRs <150–200 LoC).
 - Quality Gate: `pnpm turbo run build lint typecheck test` must pass with 100% success and 0 errors before PR creation.
