@@ -11,6 +11,7 @@ import { globalInsightsCache } from '../../../../../../../lib/insights/insights-
 import {
   getPageOverview,
   getPageTimeSeriesInsights,
+  getPageReactionsAndDemographics,
 } from '../../../../../../../lib/insights/facebook-insights-client';
 
 export interface HandleGetInsightsOptions {
@@ -101,13 +102,18 @@ export async function handleGetInsights(
     );
   }
 
-  // 4. Fetch Overview and Time-Series metrics from Facebook Graph API v26.0
+  // 4. Fetch Overview, Time-Series, and Reactions/Demographics metrics from Facebook Graph API v26.0
   const fetchImpl = options?.fetchImpl ?? fetch;
   const overviewResult = await getPageOverview(page.fb_page_id, decryptedToken, fetchImpl);
   const timeSeriesResult = await getPageTimeSeriesInsights(
     page.fb_page_id,
     decryptedToken,
     query.range,
+    fetchImpl
+  );
+  const reactionsDemoResult = await getPageReactionsAndDemographics(
+    page.fb_page_id,
+    decryptedToken,
     fetchImpl
   );
 
@@ -117,6 +123,7 @@ export async function handleGetInsights(
     pageName: overviewResult.overview.pageName || page.page_name || null,
     totalMediaViews: timeSeriesResult.totalMediaViews,
     totalVideoViews: timeSeriesResult.totalVideoViews,
+    totalPostEngagements: reactionsDemoResult.reactions.total,
   };
 
   const responsePayload: PageInsightsResponse = {
@@ -127,19 +134,8 @@ export async function handleGetInsights(
     cacheHit: false,
     overview: finalOverview,
     timeSeries: timeSeriesResult.timeSeries,
-    reactions: {
-      like: 0,
-      love: 0,
-      wow: 0,
-      haha: 0,
-      sorry: 0,
-      anger: 0,
-      total: 0,
-    },
-    demographics: {
-      topCountries: [],
-      topCities: [],
-    },
+    reactions: reactionsDemoResult.reactions,
+    demographics: reactionsDemoResult.demographics,
     healthStatus: overviewResult.healthStatus,
   };
 

@@ -73,12 +73,12 @@
 **Independent Test**: Can be validated by querying demographic and reaction endpoints and asserting valid sentiment counts and sorted geographic distribution lists with correct percentages.
 
 ### Tests for User Story 3
-- [ ] T163 [P] [US3] Write failing tests for reaction sentiments and demographics parsing in `apps/web/tests/api/page-insights-demographics.test.ts` (Issue: #264)
+- [X] T163 [P] [US3] Write failing tests for reaction sentiments and demographics parsing in `apps/web/tests/api/page-insights-demographics.test.ts` (Issue: #264)
 
 ### Implementation for User Story 3
-- [ ] T164 [US3] Implement `getPageReactionsAndDemographics` in `apps/web/src/lib/insights/facebook-insights-client.ts` parsing sentiment counts and country/city dictionaries (Issue: #265)
-- [ ] T165 [US3] Integrate reactions and demographics payloads into route handler in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` (Issue: #266)
-- [ ] T166 [US3] Verify all US3 tests pass in `apps/web/tests/api/page-insights-demographics.test.ts` (Issue: #267)
+- [X] T164 [US3] Implement `getPageReactionsAndDemographics` in `apps/web/src/lib/insights/facebook-insights-client.ts` parsing sentiment counts and country/city dictionaries (Issue: #265)
+- [X] T165 [US3] Integrate reactions and demographics payloads into route handler in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` (Issue: #266)
+- [X] T166 [US3] Verify all US3 tests pass in `apps/web/tests/api/page-insights-demographics.test.ts` (Issue: #267)
 
 **Checkpoint**: User Story 3 complete.
 
