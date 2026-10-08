@@ -113,12 +113,12 @@
 **Independent Test**: Can be validated by triggering worker snapshot sync and verifying upserted rows in PostgreSQL with conflict resolution.
 
 ### Tests for User Story 5
-- [ ] T175 [P] [US5] Write failing tests for worker daily snapshot sync routine in `apps/worker/tests/insights-sync.test.ts` (Issue: #276)
+- [X] T175 [P] [US5] Write failing tests for worker daily snapshot sync routine in `apps/worker/tests/insights-sync.test.ts` (Issue: #276)
 
 ### Implementation for User Story 5
-- [ ] T176 [US5] Implement `syncDailyPageInsights` in `apps/worker/src/insights-sync.ts` querying eligible pages and upserting into `page_insights_daily_snapshots` (Issue: #277)
-- [ ] T177 [US5] Register daily snapshot scheduled cron job in `apps/worker/src/index.ts` (Issue: #278)
-- [ ] T178 [US5] Verify all US5 tests pass in `apps/worker/tests/insights-sync.test.ts` (Issue: #279)
+- [X] T176 [US5] Implement `syncDailyPageInsights` in `apps/worker/src/insights-sync.ts` querying eligible pages and upserting into `page_insights_daily_snapshots` (Issue: #277)
+- [X] T177 [US5] Register daily snapshot scheduled cron job in `apps/worker/src/index.ts` (Issue: #278)
+- [X] T178 [US5] Verify all US5 tests pass in `apps/worker/tests/insights-sync.test.ts` (Issue: #279)
 
 **Checkpoint**: User Story 5 complete — Background snapshot engine active.
 
