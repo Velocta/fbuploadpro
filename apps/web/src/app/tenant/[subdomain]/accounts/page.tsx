@@ -8,13 +8,18 @@ import type {
 } from '@fbuploadpro/contracts';
 import { AccountList } from '../../../../components/facebook/account-list';
 import { PageDiscoveryModal } from '../../../../components/facebook/page-discovery-modal';
+import Link from 'next/link';
 
 interface AccountsPageProps {
-  params: Promise<{ subdomain: string }>;
+  params: { subdomain: string } | Promise<{ subdomain: string }>;
 }
 
 export default function TenantAccountsPage({ params }: AccountsPageProps) {
-  const { subdomain } = use(params);
+  const resolvedParams =
+    params && typeof (params as any).then === 'function'
+      ? use(params as Promise<{ subdomain: string }>)
+      : (params as { subdomain: string });
+  const subdomain = resolvedParams.subdomain;
 
   const [accounts, setAccounts] = useState<FacebookAccountView[]>([]);
   const [pages, setPages] = useState<FacebookPageView[]>([]);
@@ -335,8 +340,29 @@ export default function TenantAccountsPage({ params }: AccountsPageProps) {
                         style={{
                           padding: '1rem 1.5rem',
                           textAlign: 'right',
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          gap: '0.5rem',
                         }}
                       >
+                        <Link
+                          href={`/tenant/${encodeURIComponent(subdomain)}/pages/${encodeURIComponent(p.id)}/insights`}
+                          style={{
+                            padding: '0.35rem 0.7rem',
+                            backgroundColor: '#eff6ff',
+                            color: '#1d4ed8',
+                            border: '1px solid #bfdbfe',
+                            borderRadius: '4px',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          📊 Insights
+                        </Link>
                         <button
                           type="button"
                           onClick={() => handleDisconnectPage(p.id)}

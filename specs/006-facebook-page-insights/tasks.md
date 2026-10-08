@@ -91,16 +91,16 @@
 **Independent Test**: Can be validated by rendering the dashboard, verifying chart interactions and responsiveness, and checking error and empty state handling.
 
 ### Tests for User Story 4
-- [ ] T167 [P] [US4] Write failing UI component tests for insights dashboard rendering, KPI cards, date range picker, and health banner in `apps/web/tests/components/insights-dashboard.test.tsx` (Issue: #268)
+- [X] T167 [P] [US4] Write failing UI component tests for insights dashboard rendering, KPI cards, date range picker, and health banner in `apps/web/tests/components/insights-dashboard.test.tsx` (Issue: #268)
 
 ### Implementation for User Story 4
-- [ ] T168 [P] [US4] Implement `OverviewKpiCards` in `apps/web/src/components/insights/kpi-scorecards.tsx` (Issue: #269)
-- [ ] T169 [P] [US4] Implement `GrowthChart` in `apps/web/src/components/insights/growth-chart.tsx` using Recharts AreaChart (Issue: #270)
-- [ ] T170 [P] [US4] Implement `VideoMetricsChart` in `apps/web/src/components/insights/video-metrics-chart.tsx` using Recharts ComposedChart (Issue: #271)
-- [ ] T171 [P] [US4] Implement `ReactionsDistributionCard` in `apps/web/src/components/insights/reactions-chart.tsx` and `DemographicsCard` in `apps/web/src/components/insights/demographics-bars.tsx` (Issue: #272)
-- [ ] T172 [P] [US4] Implement `InsightsHeader` and `InsightsAlerts` in `apps/web/src/components/insights/insights-header.tsx` and `apps/web/src/components/insights/insights-alerts.tsx` (Issue: #273)
-- [ ] T173 [US4] Implement page route `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/insights/page.tsx` with zero-CLS skeleton in `loading.tsx` and connect "View Insights" link from Accounts/Pages list (Issue: #274)
-- [ ] T174 [US4] Verify all US4 UI tests pass in `apps/web/tests/components/insights-dashboard.test.tsx` (Issue: #275)
+- [X] T168 [P] [US4] Implement `OverviewKpiCards` in `apps/web/src/components/insights/kpi-scorecards.tsx` (Issue: #269)
+- [X] T169 [P] [US4] Implement `GrowthChart` in `apps/web/src/components/insights/growth-chart.tsx` using Recharts AreaChart (Issue: #270)
+- [X] T170 [P] [US4] Implement `VideoMetricsChart` in `apps/web/src/components/insights/video-metrics-chart.tsx` using Recharts ComposedChart (Issue: #271)
+- [X] T171 [P] [US4] Implement `ReactionsDistributionCard` in `apps/web/src/components/insights/reactions-chart.tsx` and `DemographicsCard` in `apps/web/src/components/insights/demographics-bars.tsx` (Issue: #272)
+- [X] T172 [P] [US4] Implement `InsightsHeader` and `InsightsAlerts` in `apps/web/src/components/insights/insights-header.tsx` and `apps/web/src/components/insights/insights-alerts.tsx` (Issue: #273)
+- [X] T173 [US4] Implement page route `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/insights/page.tsx` with zero-CLS skeleton in `loading.tsx` and connect "View Insights" link from Accounts/Pages list (Issue: #274)
+- [X] T174 [US4] Verify all US4 UI tests pass in `apps/web/tests/components/insights-dashboard.test.tsx` (Issue: #275)
 
 **Checkpoint**: User Story 4 complete — High-craft analytical UI operational.
 
