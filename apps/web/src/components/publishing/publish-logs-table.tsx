@@ -62,7 +62,7 @@ export function PublishLogsTable({ logs, isLoading }: PublishLogsTableProps) {
             Publish Audit Logs
           </h2>
           <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: '#5f6368' }}>
-            Execution ledger tracking Facebook Graph API responses and token settlements
+            Execution ledger tracking Facebook Graph API responses and delivery outcomes
           </p>
         </div>
         <span
@@ -124,7 +124,6 @@ export function PublishLogsTable({ logs, isLoading }: PublishLogsTableProps) {
                 <th style={{ padding: '0.6rem 0.75rem' }}>Status</th>
                 <th style={{ padding: '0.6rem 0.75rem' }}>Timestamp</th>
                 <th style={{ padding: '0.6rem 0.75rem' }}>Attempt</th>
-                <th style={{ padding: '0.6rem 0.75rem' }}>Tokens Deducted</th>
                 <th style={{ padding: '0.6rem 0.75rem' }}>Response / Diagnostics</th>
               </tr>
             </thead>
@@ -164,18 +163,6 @@ export function PublishLogsTable({ logs, isLoading }: PublishLogsTableProps) {
                     {/* Attempt */}
                     <td style={{ padding: '0.75rem', fontWeight: 600, color: '#3c4043' }}>
                       #{log.attemptNumber}
-                    </td>
-
-                    {/* Tokens */}
-                    <td style={{ padding: '0.75rem', whiteSpace: 'nowrap' }}>
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          color: log.tokensDeducted > 0 ? '#1a73e8' : '#5f6368',
-                        }}
-                      >
-                        {`${log.tokensDeducted} ${log.tokensDeducted === 1 ? 'Token' : 'Tokens'}`}
-                      </span>
                     </td>
 
                     {/* Diagnostics */}

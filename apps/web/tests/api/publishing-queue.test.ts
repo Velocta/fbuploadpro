@@ -84,37 +84,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
       expect(json.error).toBe('INVALID_REQUEST');
     });
 
-    it('returns 402 Payment Required if user tokens_balance < 1 (pre-flight token check)', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM users')) {
-            return Promise.resolve([{ tokens_balance: '0' }]);
-          }
-          return Promise.resolve([]);
-        }),
-      };
-
-      const req = new NextRequest('http://localhost:3000/api/tenant/acme/publishing/queue', {
-        method: 'POST',
-        body: JSON.stringify(validEnqueuePayload),
-        headers: {
-          cookie: validSessionCookie,
-          'content-type': 'application/json',
-        },
-      });
-
-      const res = await handleEnqueueMedia(req, 'acme', mockDb as DatabaseClient);
-      expect(res.status).toBe(402);
-      const json = await res.json();
-      expect(json.error).toBe('INSUFFICIENT_TOKENS');
-    });
-
     it('returns 404 Not Found if target Facebook page does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM users')) {
-            return Promise.resolve([{ tokens_balance: '10' }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([]);
           }
@@ -140,9 +112,6 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 404 Not Found if target media item does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM users')) {
-            return Promise.resolve([{ tokens_balance: '10' }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -171,9 +140,6 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 404 Not Found if slotId is provided but slot does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM users')) {
-            return Promise.resolve([{ tokens_balance: '10' }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -213,9 +179,6 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 201 Created and auto-computes next vacant slot when slotId and scheduledTime are omitted', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM users')) {
-            return Promise.resolve([{ tokens_balance: '10' }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -303,9 +266,6 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
       const explicitTime = '2026-10-08T15:30:00.000Z';
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM users')) {
-            return Promise.resolve([{ tokens_balance: '5' }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }

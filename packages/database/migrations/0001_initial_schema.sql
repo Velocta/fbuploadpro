@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(100),
     subdomain VARCHAR(50) NOT NULL UNIQUE,
     role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'seller', 'admin')),
-    tokens_balance BIGINT NOT NULL DEFAULT 0 CHECK (tokens_balance >= 0),
     status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -49,14 +48,3 @@ CREATE INDEX IF NOT EXISTS idx_fb_accounts_user_id ON facebook_accounts(user_id)
 CREATE INDEX IF NOT EXISTS idx_fb_pages_user_id ON facebook_pages(user_id);
 CREATE INDEX IF NOT EXISTS idx_fb_pages_account_id ON facebook_pages(facebook_account_id);
 
-CREATE TABLE IF NOT EXISTS token_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    amount BIGINT NOT NULL CHECK (amount > 0),
-    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('credit', 'debit', 'refund', 'adjustment')),
-    reference_id VARCHAR(100),
-    description VARCHAR(255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_token_transactions_user_id ON token_transactions(user_id);

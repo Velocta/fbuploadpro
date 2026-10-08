@@ -78,20 +78,24 @@ describe('User Domain Schemas & Invariants', () => {
       name: 'Alex Operator',
       subdomain: 'alex-workspace',
       role: 'seller' as const,
-      tokensBalance: 1500,
       status: 'active' as const,
       createdAt: new Date('2026-01-01T00:00:00Z'),
       updatedAt: new Date('2026-01-01T00:00:00Z'),
     };
 
-    it('validates a complete user object', () => {
+    it('validates a complete user object without tokensBalance', () => {
       const parsed = UserSchema.parse(validUser);
       expect(parsed.id).toBe(validUser.id);
       expect(parsed.subdomain).toBe('alex-workspace');
-      expect(parsed.tokensBalance).toBe(1500);
+      expect('tokensBalance' in parsed).toBe(false);
     });
 
-    it('applies defaults for role, tokensBalance, and status', () => {
+    it('ignores or strips any legacy tokensBalance property', () => {
+      const parsed = UserSchema.parse({ ...validUser, tokensBalance: 500 });
+      expect('tokensBalance' in parsed).toBe(false);
+    });
+
+    it('applies defaults for role and status', () => {
       const minimalUser = {
         id: '550e8400-e29b-41d4-a716-446655440000',
         email: 'minimal@example.com',
@@ -101,18 +105,8 @@ describe('User Domain Schemas & Invariants', () => {
       };
       const parsed = UserSchema.parse(minimalUser);
       expect(parsed.role).toBe('user');
-      expect(parsed.tokensBalance).toBe(0);
       expect(parsed.status).toBe('active');
       expect(parsed.createdAt).toBeInstanceOf(Date);
-    });
-
-    it('rejects negative tokensBalance', () => {
-      const invalid = {
-        ...validUser,
-        tokensBalance: -10,
-      };
-      const result = UserSchema.safeParse(invalid);
-      expect(result.success).toBe(false);
     });
 
     it('rejects invalid email and non-UUID id', () => {

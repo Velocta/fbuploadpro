@@ -328,7 +328,6 @@ describe('Publishing Engine Domain Contracts', () => {
           fbResponseCode: 200,
           errorMessage: null,
           errorDetails: null,
-          tokensDeducted: 1,
           createdAt: new Date().toISOString(),
         };
         const res = PublishLogSchema.safeParse(log);
@@ -346,7 +345,6 @@ describe('Publishing Engine Domain Contracts', () => {
           fbResponseCode: 400,
           errorMessage: 'OAuthException: Session expired',
           errorDetails: { code: 190, subcode: 463 },
-          tokensDeducted: 0,
           createdAt: new Date().toISOString(),
         };
         const res = PublishLogSchema.safeParse(log);

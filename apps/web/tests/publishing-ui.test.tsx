@@ -100,7 +100,6 @@ describe('Publishing Queue UI Components & Dashboard (T139 - T143)', () => {
       fbResponseCode: 200,
       errorMessage: null,
       errorDetails: null,
-      tokensDeducted: 1,
       createdAt: '2026-10-08T17:00:05Z',
     },
     {
@@ -113,7 +112,6 @@ describe('Publishing Queue UI Components & Dashboard (T139 - T143)', () => {
       fbResponseCode: 190,
       errorMessage: 'Facebook Page token expired (OAuth code 190)',
       errorDetails: { error: 'OAuthException' },
-      tokensDeducted: 0,
       createdAt: '2026-10-08T18:00:00Z',
     },
   ];
@@ -260,7 +258,7 @@ describe('Publishing Queue UI Components & Dashboard (T139 - T143)', () => {
       expect(html).toBe('');
     });
 
-    it('renders modal dialog with page selector, media picker, caption, and token notice when open', () => {
+    it('renders modal dialog with page selector, media picker, and caption when open', () => {
       const html = renderToString(
         <EnqueueModal
           isOpen={true}
@@ -281,7 +279,7 @@ describe('Publishing Queue UI Components & Dashboard (T139 - T143)', () => {
       expect(html).toContain('Insert Saved Template');
       expect(html).toContain('Spring Discount');
       expect(html).toContain('Automated First Comment');
-      expect(html).toContain('1 token will be deducted');
+      expect(html).not.toContain('token will be deducted');
       expect(html).toContain('Enqueue Asset');
     });
   });
@@ -296,15 +294,13 @@ describe('Publishing Queue UI Components & Dashboard (T139 - T143)', () => {
       expect(html).toContain('No publish execution logs recorded yet');
     });
 
-    it('renders logs table with status, tokens deducted, timestamp, and error details', () => {
+    it('renders logs table with status, timestamp, and error details', () => {
       const html = renderToString(
         <PublishLogsTable logs={mockLogs} />
       );
 
       expect(html).toContain('Success');
       expect(html).toContain('Failure');
-      expect(html).toContain('1 Token');
-      expect(html).toContain('0 Tokens');
       expect(html).toContain('Facebook Page token expired');
       expect(html).toContain('OAuth code 190');
     });

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DomainError, InsufficientFundsError } from '@fbuploadpro/contracts';
 import { createDatabaseClient } from '../src/client.js';
 import { createEdgeDatabaseClient, type EdgeTransport } from '../src/edge.js';
 import type { Pool, PoolClient } from 'pg';
@@ -66,70 +65,31 @@ describe('Database Client Suite', () => {
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
       expect(mockClient.release).toHaveBeenCalled();
     });
-
-    it('atomicDecrementTokens returns updated balance on success', async () => {
-      const mockPool = {
-        query: vi.fn().mockResolvedValue({
-          rowCount: 1,
-          rows: [{ tokens_balance: '850' }],
-        }),
-      } as unknown as Pool;
-
-      const client = createDatabaseClient(mockPool);
-      const remaining = await client.atomicDecrementTokens(userId, 150);
-      expect(remaining).toBe(850);
-      expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE users'),
-        [userId, 150]
-      );
-    });
-
-    it('atomicDecrementTokens throws InsufficientFundsError when balance is insufficient', async () => {
-      const mockPool = {
-        query: vi.fn().mockResolvedValue({
-          rowCount: 0,
-          rows: [],
-        }),
-      } as unknown as Pool;
-
-      const client = createDatabaseClient(mockPool);
-      await expect(client.atomicDecrementTokens(userId, 500)).rejects.toThrow(InsufficientFundsError);
-    });
-
-    it('atomicDecrementTokens rejects non-positive or float amounts', async () => {
-      const mockPool = { query: vi.fn() } as unknown as Pool;
-      const client = createDatabaseClient(mockPool);
-
-      await expect(client.atomicDecrementTokens(userId, 0)).rejects.toThrow(DomainError);
-      await expect(client.atomicDecrementTokens(userId, -10)).rejects.toThrow(DomainError);
-      await expect(client.atomicDecrementTokens(userId, 5.5)).rejects.toThrow(DomainError);
-    });
   });
 
   describe('Edge Isolate DatabaseClient', () => {
-    it('executes edge query and atomic token decrement without node sockets', async () => {
+    it('executes edge query without node sockets', async () => {
       const mockTransport: EdgeTransport = {
-        fetch: vi.fn().mockResolvedValue([{ tokens_balance: 400 }]),
+        fetch: vi.fn().mockResolvedValue([{ id: 'test-1' }]),
       };
 
       const edgeClient = createEdgeDatabaseClient(mockTransport);
-      const remaining = await edgeClient.atomicDecrementTokens(userId, 100);
-      expect(remaining).toBe(400);
+      const rows = await edgeClient.query('SELECT id FROM users WHERE id = $1', ['test-1']);
+      expect(rows).toEqual([{ id: 'test-1' }]);
       expect(mockTransport.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('UPDATE users'),
-        [userId, 100]
+        'SELECT id FROM users WHERE id = $1',
+        ['test-1']
       );
     });
 
-    it('throws InsufficientFundsError when edge update returns 0 rows', async () => {
+    it('executes edge queryOne correctly', async () => {
       const mockTransport: EdgeTransport = {
-        fetch: vi.fn().mockResolvedValue([]),
+        fetch: vi.fn().mockResolvedValue([{ id: 'test-1' }]),
       };
 
       const edgeClient = createEdgeDatabaseClient(mockTransport);
-      await expect(edgeClient.atomicDecrementTokens(userId, 1000)).rejects.toThrow(
-        InsufficientFundsError
-      );
+      const row = await edgeClient.queryOne('SELECT id FROM users WHERE id = $1', ['test-1']);
+      expect(row).toEqual({ id: 'test-1' });
     });
   });
 });

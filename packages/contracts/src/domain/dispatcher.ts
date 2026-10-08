@@ -34,7 +34,6 @@ export interface DispatchOutcome {
   fbCommentId?: string;
   errorMessage?: string;
   errorCode?: number;
-  tokensDeducted: number;
 }
 
 // Publish Log Domain Model
@@ -48,7 +47,6 @@ export const PublishLogSchema = z.object({
   fbResponseCode: z.number().int().nullable(),
   errorMessage: z.string().nullable(),
   errorDetails: z.record(z.unknown()).nullable(),
-  tokensDeducted: z.number().int().nonnegative(),
   createdAt: z.string().datetime(),
 });
 
@@ -85,7 +83,7 @@ export interface IPublishDispatcher {
   dispatchItem(item: ClaimedQueueItem): Promise<DispatchOutcome>;
 
   /**
-   * Settles atomic 1-token decrement on success or logs failure
+   * Settles publish outcome and audit log
    */
   settleOutcome(outcome: DispatchOutcome): Promise<void>;
 
