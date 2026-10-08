@@ -1,0 +1,6 @@
+{
+  "name": "example-plugin",
+  "version": "1.0.0",
+  "description": "Template bundle for distributing skills, rules, hooks, and MCP configs.",
+  "disabled": true
+}

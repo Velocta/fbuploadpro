@@ -1,0 +1,10 @@
+{
+  "id": "speckit-converge",
+  "name": "Speckit Converge Agent",
+  "model": "inherit",
+  "temperature": 0.1,
+  "skills": [
+    "speckit-converge"
+  ],
+  "autoApproveReadOnly": true
+}

@@ -1,0 +1,10 @@
+{
+  "id": "speckit-plan",
+  "name": "Speckit Plan Agent",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-plan"
+  ],
+  "autoApproveReadOnly": true
+}

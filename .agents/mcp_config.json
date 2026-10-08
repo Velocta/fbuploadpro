@@ -1,0 +1,6 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schema/mcp.json",
+  "mcpServers": {
+    "_comment": "Add your project-specific MCP servers here to expose external tools, APIs, and databases to your agents."
+  }
+}

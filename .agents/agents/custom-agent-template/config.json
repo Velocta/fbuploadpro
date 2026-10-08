@@ -1,0 +1,10 @@
+{
+  "id": "custom-agent-template",
+  "name": "Custom Agent Template",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "custom-skill-template"
+  ],
+  "autoApproveReadOnly": true
+}

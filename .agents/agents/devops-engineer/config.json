@@ -1,0 +1,8 @@
+{
+  "id": "devops-engineer",
+  "name": "DevOps Engineer",
+  "model": "inherit",
+  "temperature": 0.1,
+  "skills": [],
+  "autoApproveReadOnly": true
+}

@@ -1,0 +1,19 @@
+{
+  "id": "spec-driver",
+  "name": "Spec Driver",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-constitution",
+    "speckit-specify",
+    "speckit-clarify",
+    "speckit-plan",
+    "speckit-checklist",
+    "speckit-tasks",
+    "speckit-analyze",
+    "speckit-implement",
+    "speckit-converge",
+    "speckit-taskstoissues"
+  ],
+  "autoApproveReadOnly": true
+}

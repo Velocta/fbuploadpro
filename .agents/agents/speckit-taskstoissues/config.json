@@ -1,0 +1,10 @@
+{
+  "id": "speckit-taskstoissues",
+  "name": "Speckit Tasks-to-Issues Agent",
+  "model": "inherit",
+  "temperature": 0.1,
+  "skills": [
+    "speckit-taskstoissues"
+  ],
+  "autoApproveReadOnly": true
+}

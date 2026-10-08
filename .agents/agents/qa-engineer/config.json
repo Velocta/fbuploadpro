@@ -1,0 +1,8 @@
+{
+  "id": "qa-engineer",
+  "name": "QA Engineer",
+  "model": "inherit",
+  "temperature": 0.1,
+  "skills": [],
+  "autoApproveReadOnly": true
+}

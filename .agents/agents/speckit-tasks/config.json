@@ -1,0 +1,10 @@
+{
+  "id": "speckit-tasks",
+  "name": "Speckit Tasks Agent",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-tasks"
+  ],
+  "autoApproveReadOnly": true
+}

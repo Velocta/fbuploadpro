@@ -1,0 +1,10 @@
+{
+  "id": "speckit-implement",
+  "name": "Speckit Implement Agent",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-implement"
+  ],
+  "autoApproveReadOnly": true
+}

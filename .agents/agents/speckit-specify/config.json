@@ -1,0 +1,10 @@
+{
+  "id": "speckit-specify",
+  "name": "Speckit Specify Agent",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-specify"
+  ],
+  "autoApproveReadOnly": true
+}

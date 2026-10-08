@@ -1,0 +1,10 @@
+{
+  "id": "speckit-clarify",
+  "name": "Speckit Clarify Agent",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-clarify"
+  ],
+  "autoApproveReadOnly": true
+}

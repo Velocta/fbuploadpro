@@ -1,0 +1,8 @@
+{
+  "id": "backend-engineer",
+  "name": "Backend Engineer",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [],
+  "autoApproveReadOnly": true
+}

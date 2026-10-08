@@ -1,0 +1,10 @@
+{
+  "id": "speckit-constitution",
+  "name": "Speckit Constitution Agent",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "speckit-constitution"
+  ],
+  "autoApproveReadOnly": true
+}

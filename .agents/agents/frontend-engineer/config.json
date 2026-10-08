@@ -1,0 +1,11 @@
+{
+  "id": "frontend-engineer",
+  "name": "Frontend Engineer",
+  "model": "inherit",
+  "temperature": 0.2,
+  "skills": [
+    "impeccable",
+    "taste-skill"
+  ],
+  "autoApproveReadOnly": true
+}
