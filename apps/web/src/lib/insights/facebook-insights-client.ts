@@ -4,6 +4,9 @@ import {
   type PageInsightsOverview,
   type PageInsightsRange,
   type PageInsightsTimeSeriesPoint,
+  type PageInsightsDemographics,
+  type PageInsightsReactions,
+  type DemographicItem,
 } from '@fbuploadpro/contracts';
 
 export interface PageOverviewResult {
@@ -232,5 +235,136 @@ export async function getPageTimeSeriesInsights(
     totalMediaViews,
     totalVideoViews,
     totalVideoViewTimeMinutes,
+  };
+}
+
+export interface PageReactionsAndDemographicsResult {
+  reactions: PageInsightsReactions;
+  demographics: PageInsightsDemographics;
+}
+
+export function parseDemographicsDict(
+  rawDict: Record<string, unknown> | undefined
+): DemographicItem[] {
+  if (!rawDict || typeof rawDict !== 'object') return [];
+
+  const items: Array<{ name: string; count: number }> = [];
+  for (const [key, val] of Object.entries(rawDict)) {
+    const count = typeof val === 'number' ? Math.max(0, val) : 0;
+    if (count > 0) {
+      items.push({ name: key, count });
+    }
+  }
+
+  items.sort((a, b) => b.count - a.count);
+  const top7 = items.slice(0, 7);
+  const total = top7.reduce((sum, item) => sum + item.count, 0);
+
+  return top7.map((item) => ({
+    name: item.name,
+    count: item.count,
+    percentage: total > 0 ? Math.round((item.count / total) * 1000) / 10 : 0,
+  }));
+}
+
+export async function getPageReactionsAndDemographics(
+  fbPageId: string,
+  accessToken: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<PageReactionsAndDemographicsResult> {
+  const reactions: PageInsightsReactions = {
+    like: 0,
+    love: 0,
+    wow: 0,
+    haha: 0,
+    sorry: 0,
+    anger: 0,
+    total: 0,
+  };
+
+  const demographics: PageInsightsDemographics = {
+    topCountries: [],
+    topCities: [],
+  };
+
+  const metrics = [
+    'page_actions_post_reactions_like_total',
+    'page_actions_post_reactions_love_total',
+    'page_actions_post_reactions_wow_total',
+    'page_actions_post_reactions_haha_total',
+    'page_actions_post_reactions_sorry_total',
+    'page_actions_post_reactions_anger_total',
+    'page_follows_country',
+    'page_follows_city',
+  ].join(',');
+
+  const url = `https://graph.facebook.com/v26.0/${encodeURIComponent(
+    fbPageId
+  )}/insights?metric=${metrics}&period=days_28&access_token=${encodeURIComponent(
+    accessToken
+  )}`;
+
+  try {
+    const res = await fetchImpl(url);
+    const payload = await res.json();
+
+    if (res.ok && Array.isArray(payload.data)) {
+      for (const item of payload.data) {
+        const metricName = item.name;
+        const latestVal = Array.isArray(item.values) && item.values.length > 0
+          ? item.values[item.values.length - 1].value
+          : undefined;
+
+        switch (metricName) {
+          case 'page_actions_post_reactions_like_total':
+            if (typeof latestVal === 'number') reactions.like = Math.max(0, latestVal);
+            break;
+          case 'page_actions_post_reactions_love_total':
+            if (typeof latestVal === 'number') reactions.love = Math.max(0, latestVal);
+            break;
+          case 'page_actions_post_reactions_wow_total':
+            if (typeof latestVal === 'number') reactions.wow = Math.max(0, latestVal);
+            break;
+          case 'page_actions_post_reactions_haha_total':
+            if (typeof latestVal === 'number') reactions.haha = Math.max(0, latestVal);
+            break;
+          case 'page_actions_post_reactions_sorry_total':
+            if (typeof latestVal === 'number') reactions.sorry = Math.max(0, latestVal);
+            break;
+          case 'page_actions_post_reactions_anger_total':
+            if (typeof latestVal === 'number') reactions.anger = Math.max(0, latestVal);
+            break;
+          case 'page_follows_country':
+            if (latestVal && typeof latestVal === 'object') {
+              demographics.topCountries = parseDemographicsDict(
+                latestVal as Record<string, unknown>
+              );
+            }
+            break;
+          case 'page_follows_city':
+            if (latestVal && typeof latestVal === 'object') {
+              demographics.topCities = parseDemographicsDict(
+                latestVal as Record<string, unknown>
+              );
+            }
+            break;
+        }
+      }
+
+      reactions.total =
+        reactions.like +
+        reactions.love +
+        reactions.wow +
+        reactions.haha +
+        reactions.sorry +
+        reactions.anger;
+    }
+  } catch (_e) {
+    // Graceful fallback with empty default structures
+  }
+
+  return {
+    reactions,
+    demographics,
   };
 }

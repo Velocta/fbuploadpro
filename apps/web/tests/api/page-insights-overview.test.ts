@@ -154,7 +154,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     expect(res1.status).toBe(200);
     const body1 = await res1.json();
     expect(body1.cacheHit).toBe(false);
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
 
     // Call again - should hit cache
     const req2 = new NextRequest(
@@ -168,7 +168,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     expect(res2.status).toBe(200);
     const body2 = await res2.json();
     expect(body2.cacheHit).toBe(true);
-    expect(mockFetch).toHaveBeenCalledTimes(2); // not called again
+    expect(mockFetch).toHaveBeenCalledTimes(3); // not called again
   });
 
   it('bypasses cache when refresh=true query parameter is present', async () => {
@@ -203,7 +203,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
       dbClient: mockDb,
       fetchImpl: mockFetch as unknown as typeof fetch,
     });
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
 
     // Call with refresh=true
     const req2 = new NextRequest(
@@ -217,7 +217,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     expect(res2.status).toBe(200);
     const body2 = await res2.json();
     expect(body2.cacheHit).toBe(false);
-    expect(mockFetch).toHaveBeenCalledTimes(4);
+    expect(mockFetch).toHaveBeenCalledTimes(6);
   });
 
   it('rejects unauthorized requests missing valid session cookie with 401', async () => {
