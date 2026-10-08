@@ -16,6 +16,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1147.0",
     "@fbuploadpro/contracts": "workspace:*",
     "@fbuploadpro/database": "workspace:*",
+    "@supabase/supabase-js": "^2.117.3",
     "next": "^16.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
