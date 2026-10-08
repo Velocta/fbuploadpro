@@ -110,10 +110,10 @@ flowchart LR
     M1[Spec 001: Monorepo Foundation & DB]
     M2[Spec 002: Auth & Subdomain Routing]
     M3[Spec 003: FB Graph API v26.0 & Accounts]
+    M4[Spec 004: Dedicated Media Library & R2]
   end
 
   subgraph Next [Roadmap]
-    M4[Spec 004: Dedicated Media Library & R2]
     M5[Spec 005: Automated Queue Slots Engine]
     M6[Spec 006: Dedicated Page Insights]
     M7[Spec 007: Stripe Billing & Seller Referrals]
@@ -122,10 +122,31 @@ flowchart LR
   M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7
 ```
 
-- **Spec 001 (Completed)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
-- **Spec 002 (Completed)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
-- **Spec 003 (Completed)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
-- **Spec 004 (Next Target)**: **Dedicated Media Library & Cloudflare R2 Uploads** (PC file upload, video/image support, custom folders, tags, reusable captions, baseline quotas).
-- **Spec 005 (Target)**: **Automated Queue Slots Publishing Engine** (Page slot definitions, queue manager, first comment automation, edge worker publisher, token deduction on success).
-- **Spec 006 (Target)**: **Dedicated Facebook Page Insights** (Time-series followers, video views, watch time, reactions, demographics).
-- **Spec 007 (Target)**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller**.
+- **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
+- **Spec 002 (Completed & Merged)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
+- **Spec 003 (Completed & Merged)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
+- **Spec 004 (Completed & Merged)**: **Dedicated Media Library & Cloudflare R2 Uploads** (36 tasks, T078–T113, 146 passing tests; direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset quota meters, media preview modal, and security isolation audit).
+- **Spec 005 (Active Milestone)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (Page slot definitions, queue manager, first comment automation, Cloudflare Worker edge publisher, token deduction upon successful publication).
+- **Spec 006 (Planned)**: **Dedicated Facebook Page Insights** (Time-series followers, video views, watch time, reactions, demographics).
+- **Spec 007 (Planned)**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller**.
+
+---
+
+## 9. Autonomous Spec-Driven Development (SDD) & Multi-Agent Protocol
+
+All development follows autonomous multi-agent orchestration codified in [`AGENTS.md`](../AGENTS.md):
+
+1. **Single User Touchpoint ("Ask Once, Complete Till Merge")**:
+   - The agent only asks the user **which spec or feature to work on** (if not already specified in prompt).
+   - Once confirmed, the agent runs all phases end-to-end autonomously through completion and squash-merge to `main` without intermediate approval prompts.
+2. **Deterministic 7-Stage Sequence**:
+   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-taskstoissues` ➔ `/speckit-implement` ➔ `/speckit-converge`.
+3. **Clean Chat & Sub-Agent Delegation**:
+   - Orchestrator keeps main chat executive-ready, isolating verbose commands into dedicated sub-agents.
+   - During `/speckit-implement`, spawns multiple sub-agents (`frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`) to work concurrently across domain boundaries.
+4. **Constitutional Guardrails**:
+   - Strict TDD (failing tests committed before implementation).
+   - Atomic PR diffs strictly under 150–200 LoC per PR.
+   - 100% Turborepo quality gates green (`build`, `lint`, `typecheck`, `test`).
+   - Zero direct pushes to `main`.
+
