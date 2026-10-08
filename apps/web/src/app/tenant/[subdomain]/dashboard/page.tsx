@@ -1,5 +1,6 @@
 import React from 'react';
-import { getServerSessionContext } from '../../../../lib/auth';
+import Link from 'next/link';
+import { THEME, COMPONENT_STYLES, STATUS_SIGNALS } from '@/lib/theme';
 
 interface DashboardPageProps {
   params: Promise<{ subdomain: string }>;
@@ -7,60 +8,88 @@ interface DashboardPageProps {
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { subdomain } = await params;
-  const session = await getServerSessionContext();
+
+  const modules = [
+    { title: 'Facebook Pages', desc: 'Connect and manage Facebook Page assets.', href: `/tenant/${subdomain}/accounts`, signal: 'operational' as const },
+    { title: 'Media Library', desc: 'Direct Cloudflare R2 uploads, folders, and captions.', href: `/tenant/${subdomain}/media`, signal: 'operational' as const },
+    { title: 'Publishing Queue', desc: 'Recurring slots and automated publishing engine.', href: `/tenant/${subdomain}/publishing`, signal: 'operational' as const },
+  ];
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1100px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ margin: 0, fontSize: '1.75rem', color: '#202124' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ marginBottom: THEME.default.spacing.xl }}>
+        <h1
+          style={{
+            margin: `0 0 ${THEME.default.spacing.xs} 0`,
+            fontSize: '1.5rem',
+            fontWeight: THEME.default.typography.weights.bold,
+            letterSpacing: THEME.default.typography.tracking.h1,
+          }}
+        >
           Workspace Overview
         </h1>
-        <p style={{ margin: '0.5rem 0 0', color: '#5f6368', fontSize: '0.95rem' }}>
-          Active Tenant: <strong>{subdomain}</strong> {session?.email && `(${session.email})`}
+        <p style={{ margin: 0, color: THEME.default.text.secondary, fontSize: '0.875rem' }}>
+          Real-time operations for tenant <span style={{ color: THEME.default.text.primary, fontWeight: 600 }}>{subdomain}</span>.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2.5rem' }}>
-        <div style={{ backgroundColor: '#fff', padding: '1.5rem', borderRadius: '8px', border: '1px solid #dadce0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#5f6368', textTransform: 'uppercase' }}>Subdomain Slug</h3>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '1.5rem', fontWeight: 'bold', color: '#1a73e8' }}>{subdomain}</p>
-        </div>
-
-        <div style={{ backgroundColor: '#fff', padding: '1.5rem', borderRadius: '8px', border: '1px solid #dadce0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#5f6368', textTransform: 'uppercase' }}>Account Role</h3>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '1.5rem', fontWeight: 'bold', color: '#202124', textTransform: 'capitalize' }}>
-            {session?.role || 'User'}
-          </p>
-        </div>
-
-        <div style={{ backgroundColor: '#fff', padding: '1.5rem', borderRadius: '8px', border: '1px solid #dadce0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ margin: 0, fontSize: '0.9rem', color: '#5f6368', textTransform: 'uppercase' }}>Publishing Status</h3>
-          <p style={{ margin: '0.5rem 0 0', fontSize: '1.5rem', fontWeight: 'bold', color: '#34a853' }}>Active</p>
-        </div>
-      </div>
-
-      <div style={{ backgroundColor: '#fff', padding: '1.5rem', borderRadius: '8px', border: '1px solid #dadce0' }}>
-        <h2 style={{ fontSize: '1.2rem', margin: '0 0 1rem' }}>Connected Facebook Channels</h2>
-        <p style={{ color: '#5f6368', fontSize: '0.9rem' }}>
-          Connect Facebook accounts and select target Facebook Pages for scheduled short-form video publishing.
-        </p>
-        <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
-          <a
-            href={`/tenant/${subdomain}/accounts`}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+          gap: THEME.default.spacing.lg,
+        }}
+      >
+        {modules.map((m) => (
+          <div
+            key={m.href}
             style={{
-              display: 'inline-block',
-              textDecoration: 'none',
-              padding: '0.6rem 1.2rem',
-              backgroundColor: '#1877f2',
-              color: '#fff',
-              borderRadius: '4px',
-              fontWeight: '600',
-              cursor: 'pointer',
+              ...COMPONENT_STYLES.card(THEME.default),
+              padding: THEME.default.spacing.lg,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
             }}
           >
-            Manage Facebook Channels &rarr;
-          </a>
-        </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: THEME.default.spacing.sm }}>
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: '1rem',
+                    fontWeight: THEME.default.typography.weights.semibold,
+                  }}
+                >
+                  {m.title}
+                </h2>
+                <span style={COMPONENT_STYLES.statusDot(m.signal)} />
+              </div>
+              <p
+                style={{
+                  margin: `0 0 ${THEME.default.spacing.lg} 0`,
+                  color: THEME.default.text.secondary,
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.5,
+                }}
+              >
+                {m.desc}
+              </p>
+            </div>
+
+            <Link
+              href={m.href}
+              style={{
+                ...COMPONENT_STYLES.secondaryButton(THEME.default),
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textDecoration: 'none',
+              }}
+            >
+              Open Module
+            </Link>
+          </div>
+        ))}
       </div>
     </div>
   );

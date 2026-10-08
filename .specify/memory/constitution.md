@@ -1,13 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 1.3.0 -> 2.0.0 (MAJOR: Backward-incompatible removal of prepaid token billing model and token balance non-negative constraints)
+- Version change: 2.0.0 -> 2.1.0 (MINOR: Added Theme Token & Design System Governance constraint)
 - List of modified principles:
-  - Principle III: Multi-Tenant Defense-in-Depth & Data Isolation (Purged financial token balance check constraints `balance >= 0` and atomic token debits; established unrestricted publishing entitlement for active users). Retained strict `user_id` multi-tenant defense-in-depth, composite foreign keys, and compound unique constraints.
+  - Technology & Architectural Constraints: Added Section 8 establishing `apps/web/src/lib/theme.ts` as the mandatory centralized theme authority. Declared permanent ban on ad-hoc color declarations and capsule pill badges.
 - Added/Modified sections:
-  - Technology & Architectural Constraints: Formally removed Stripe token ledger reference; codified unrestricted publishing via Facebook Graph API v26.0 for active users and deferred all monetization.
-- Removed sections:
-  - Token Ledger & Balance Deduction gates.
-- Follow-up TODOs: Execute spec 007-remove-token-system (clean DDL rewrite purging tokens_balance, token_transactions, tokens_deducted).
+  - Section 8: Theme Token & Design System Governance (apps/web/src/lib/theme.ts).
+- Follow-up TODOs: Enforce theme-standards.md across all UI components.
 -->
 
 # FBUploadPro Constitution
@@ -43,6 +41,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
    - **Application Central Gateway (`app.fbuploadpro.com`)**: Hosts the primary authentication portal, providing `/login` and `/signup`.
    - **Tenant Workspaces (`{username}.fbuploadpro.com`)**: Serves authenticated user workspaces, with session cookies scoped to `.fbuploadpro.com` to enable seamless transitions from the gateway into private subdomains.
 7. **Publishing & External APIs**: Facebook Graph API v26.0 for reels, photos, and automated first-comment publishing; Cloudflare R2 for media storage. Publishing is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages, with zero token ledger or credit balance checks. All billing and monetization systems are deferred.
+8. **Theme Token & Design System Governance (`apps/web/src/lib/theme.ts`)**: All visual interface design, colors, hairlines, spacing, radii, typography, and shadows across `apps/web` are governed strictly by the canonical theme configuration in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`, which reflect the immutable specification in `DESIGN.md`. Agents must NEVER modify or edit `DESIGN.md` (permanently frozen). Hardcoding ad-hoc hex color literals, arbitrary border definitions, custom shadows, or capsule pill badges in components is permanently prohibited; all frontend code must consume tokens directly from `@web/lib/theme` or CSS variables. Status signaling must strictly use unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS`).
 
 ## Development Workflow & Quality Gates
 
@@ -65,4 +64,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [AGENTS.md](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/AGENTS.md).
 
-**Version**: 2.0.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-08
+**Version**: 2.1.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-08

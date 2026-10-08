@@ -71,7 +71,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 
 | Task Type & Package Scope | Target Subagent | Enforced Standard |
 | :--- | :--- | :--- |
-| **`apps/web`** (UI, Pages, Layouts, Components, CSS) | `frontend-engineer` | Anti-slop craft (*Taste Skill* dials + *Impeccable* craft floor), Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`). |
+| **`apps/web`** (UI, Pages, Layouts, Components, CSS) | `frontend-engineer` | Anti-slop craft (*Taste Skill* dials + *Impeccable* craft floor), Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference from `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; zero capsule pill badges; NEVER modify `DESIGN.md`). |
 | **`apps/worker`**, **`packages/contracts`**, **`packages/database`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
 | **E2E & Integration Tests**, Contracts, Scenarios | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation. |
 | **Turborepo**, **CI/CD**, **Cloudflare Wrangler**, Docker | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, atomic PR hygiene. |
@@ -130,6 +130,17 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - **Mandatory Human Approval Gate Before Merging**:
   - The agent MUST NEVER merge any Pull Request into `main` without explicitly asking the user and receiving their direct, unambiguous approval first.
   - This rule is non-negotiable and applies to ALL PRs without exception—whether frontend, backend, database migrations, devops, or documentation.
+- **Strict Theme & Design System Authority (`apps/web/src/lib/theme.ts`)**:
+  - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is [`apps/web/src/lib/theme.ts`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/apps/web/src/lib/theme.ts) and [`DESIGN.md`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/DESIGN.md).
+  - All components MUST import and reference styling properties from `@web/lib/theme` or CSS variables (`globals.css`).
+  - NEVER declare, invent, or hardcode ad-hoc hex codes, custom borders, arbitrary shadows, or capsule pill badges anywhere in frontend components.
+  - Status indicators must strictly use unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS` or `COMPONENT_STYLES.statusDot`).
+  - Enforced by `.agents/rules/theme-standards.md`.
+- **Absolute Immutability of `DESIGN.md` (Never Modify `DESIGN.md`)**:
+  - AI agents and automated tools MUST NEVER make any changes, edits, reformatting, overwrites, or truncations to [`DESIGN.md`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/DESIGN.md).
+  - `DESIGN.md` is permanently frozen and locked as the repository's immutable design system specification.
+  - All frontend code and theme configurations in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` must strictly conform to `DESIGN.md` without modifying the root design specification document itself.
+  - Only the human project lead may directly alter or update `DESIGN.md`.
 - **Pre-Merge UI Showroom & Review Protocol**:
   - To prevent context fragmentation and workflow derailment, component previews are batched at the very end when all tasks are complete and the Pull Request is ready for merge.
   - All mock data and component preview harnesses are strictly isolated in `apps/showroom` (with zero mock code in `apps/web`).

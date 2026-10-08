@@ -1,91 +1,121 @@
+import React from 'react';
 import Link from 'next/link';
+import { THEME, COMPONENT_STYLES } from '@/lib/theme';
 
 export default function SignupPage() {
   return (
-    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '420px', margin: '4rem auto' }}>
-      <h2>Create Your FBUploadPro Account</h2>
-      <p style={{ color: '#555', fontSize: '0.95rem' }}>
-        Reserve your dedicated subdomain and start automating Facebook publishing.
-      </p>
-
-      <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.5rem' }}>
-        <div>
-          <label htmlFor="workspace" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>
-            Workspace Subdomain
-          </label>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <input
-              id="workspace"
-              type="text"
-              placeholder="yourname"
-              required
-              pattern="[a-z0-9-]+"
-              style={{ flex: 1, padding: '0.5rem', borderRadius: '4px 0 0 4px', border: '1px solid #ccc' }}
-            />
-            <span
-              style={{
-                padding: '0.5rem 0.75rem',
-                backgroundColor: '#f1f1f1',
-                border: '1px solid #ccc',
-                borderLeft: 'none',
-                borderRadius: '0 4px 4px 0',
-                color: '#666',
-                fontSize: '0.9rem',
-              }}
-            >
-              .fbuploadpro.com
-            </span>
-          </div>
-          <small style={{ color: '#888' }}>Lowercase letters, numbers, and hyphens only.</small>
-        </div>
-
-        <div>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>
-            Email Address
-          </label>
-          <input
-            id="email"
-            type="email"
-            placeholder="you@domain.com"
-            required
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-          />
-        </div>
-
-        <div>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-          />
-        </div>
-
-        <button
-          type="submit"
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: THEME.default.spacing.lg,
+        backgroundColor: THEME.default.surfaces.canvas,
+        color: THEME.default.text.primary,
+        fontFamily: THEME.default.typography.fontFamily,
+      }}
+    >
+      <div
+        style={{
+          ...COMPONENT_STYLES.card(THEME.default),
+          padding: THEME.default.spacing.xl,
+          maxWidth: '400px',
+          width: '100%',
+        }}
+      >
+        <h2
           style={{
-            padding: '0.65rem 1rem',
-            backgroundColor: '#0066cc',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            marginTop: '0.5rem',
+            margin: `0 0 ${THEME.default.spacing.xs} 0`,
+            fontSize: '1.25rem',
+            fontWeight: THEME.default.typography.weights.bold,
+            letterSpacing: THEME.default.typography.tracking.h2,
           }}
         >
-          Create Workspace & Sign Up
-        </button>
-      </form>
+          Create Account
+        </h2>
+        <p
+          style={{
+            margin: `0 0 ${THEME.default.spacing.lg} 0`,
+            color: THEME.default.text.secondary,
+            fontSize: '0.875rem',
+          }}
+        >
+          Get started with your FBUploadPro workspace.
+        </p>
 
-      <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.9rem', color: '#666' }}>
-        Already have an account?{' '}
-        <Link href="/login" style={{ color: '#0066cc', fontWeight: 'bold', textDecoration: 'none' }}>
-          Sign In
-        </Link>
+        <form style={{ display: 'flex', flexDirection: 'column', gap: THEME.default.spacing.md }}>
+          <div>
+            <label
+              htmlFor="email"
+              style={{
+                display: 'block',
+                marginBottom: THEME.default.spacing.xs,
+                fontSize: '0.75rem',
+                fontWeight: THEME.default.typography.weights.semibold,
+                color: THEME.default.text.secondary,
+                letterSpacing: THEME.default.typography.tracking.caption,
+                textTransform: 'uppercase',
+              }}
+            >
+              Email Address
+            </label>
+            <input
+              id="email"
+              type="email"
+              placeholder="you@domain.com"
+              required
+              style={{
+                ...COMPONENT_STYLES.input(THEME.default),
+                width: '100%',
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              style={{
+                display: 'block',
+                marginBottom: THEME.default.spacing.xs,
+                fontSize: '0.75rem',
+                fontWeight: THEME.default.typography.weights.semibold,
+                color: THEME.default.text.secondary,
+                letterSpacing: THEME.default.typography.tracking.caption,
+                textTransform: 'uppercase',
+              }}
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              style={{
+                ...COMPONENT_STYLES.input(THEME.default),
+                width: '100%',
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              width: '100%',
+              marginTop: THEME.default.spacing.sm,
+            }}
+          >
+            Create Account
+          </button>
+        </form>
+
+        <div style={{ marginTop: THEME.default.spacing.lg, textAlign: 'center', fontSize: '0.8125rem' }}>
+          <span style={{ color: THEME.default.text.muted }}>Already have an account? </span>
+          <Link href="/login" style={{ color: THEME.default.text.link, textDecoration: 'none' }}>
+            Sign in
+          </Link>
+        </div>
       </div>
     </main>
   );

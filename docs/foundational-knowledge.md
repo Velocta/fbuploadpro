@@ -215,4 +215,9 @@ All development follows autonomous multi-agent orchestration codified in [`AGENT
    - In accordance with Constitution v2.0.0, the platform enforces unrestricted queue publishing for all active users (`status = 'active'`).
    - Zero token balance checks, deductions, or credit ledgers are permitted in the scheduling or publishing pipeline.
    - All billing, payment gateway, and monetization logic remains deferred until explicitly requested.
+6. **Design System & Theme Token Governance (`DESIGN.md` & `apps/web/src/lib/theme.ts`)**:
+   - The official 8-color palette is codified in `DESIGN.md`: Gold (`#fad734`), Peru (`#b29527`), Bronze (`#766018`), Rose (`#f6465d`), Emerald (`#2ebd85`), Pitch Black (`#000000`), Pure White (`#ffffff`), and Pitch Slate (`#1f242d`).
+   - `DESIGN.md` is permanently frozen and locked as an immutable specification; agents must NEVER modify it.
+   - `apps/web/src/lib/theme.ts` is the single centralized authority for all frontend styling. All components must import and reference tokens from `@web/lib/theme` or CSS variables (`globals.css`); declaring ad-hoc hex values, arbitrary borders, or capsule pill badges is permanently prohibited. Status indicators must strictly use unboxed 6px luminous dots with micro-halos.
+
 

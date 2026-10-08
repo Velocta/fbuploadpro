@@ -1,47 +1,122 @@
+import React from 'react';
+import Link from 'next/link';
+import { THEME, COMPONENT_STYLES } from '@/lib/theme';
+
 export default function LoginPage() {
   return (
-    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '400px', margin: '4rem auto' }}>
-      <h2>Sign In to Workspace</h2>
-      <p style={{ color: '#555' }}>Enter your credentials to access your tenant workspace.</p>
-      <form style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1.5rem' }}>
-        <div>
-          <label htmlFor="email" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>
-            Email Address
-          </label>
-          <input
-            id="email"
-            type="email"
-            placeholder="you@domain.com"
-            required
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-          />
-        </div>
-        <div>
-          <label htmlFor="password" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 'bold' }}>
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #ccc' }}
-          />
-        </div>
-        <button
-          type="submit"
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: THEME.default.spacing.lg,
+        backgroundColor: THEME.default.surfaces.canvas,
+        color: THEME.default.text.primary,
+        fontFamily: THEME.default.typography.fontFamily,
+      }}
+    >
+      <div
+        style={{
+          ...COMPONENT_STYLES.card(THEME.default),
+          padding: THEME.default.spacing.xl,
+          maxWidth: '400px',
+          width: '100%',
+        }}
+      >
+        <h2
           style={{
-            padding: '0.6rem 1rem',
-            backgroundColor: '#0066cc',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontWeight: 'bold',
+            margin: `0 0 ${THEME.default.spacing.xs} 0`,
+            fontSize: '1.25rem',
+            fontWeight: THEME.default.typography.weights.bold,
+            letterSpacing: THEME.default.typography.tracking.h2,
           }}
         >
           Sign In
-        </button>
-      </form>
+        </h2>
+        <p
+          style={{
+            margin: `0 0 ${THEME.default.spacing.lg} 0`,
+            color: THEME.default.text.secondary,
+            fontSize: '0.875rem',
+          }}
+        >
+          Enter your credentials to access your tenant workspace.
+        </p>
+
+        <form style={{ display: 'flex', flexDirection: 'column', gap: THEME.default.spacing.md }}>
+          <div>
+            <label
+              htmlFor="email"
+              style={{
+                display: 'block',
+                marginBottom: THEME.default.spacing.xs,
+                fontSize: '0.75rem',
+                fontWeight: THEME.default.typography.weights.semibold,
+                color: THEME.default.text.secondary,
+                letterSpacing: THEME.default.typography.tracking.caption,
+                textTransform: 'uppercase',
+              }}
+            >
+              Email Address
+            </label>
+            <input
+              id="email"
+              type="email"
+              placeholder="you@domain.com"
+              required
+              style={{
+                ...COMPONENT_STYLES.input(THEME.default),
+                width: '100%',
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="password"
+              style={{
+                display: 'block',
+                marginBottom: THEME.default.spacing.xs,
+                fontSize: '0.75rem',
+                fontWeight: THEME.default.typography.weights.semibold,
+                color: THEME.default.text.secondary,
+                letterSpacing: THEME.default.typography.tracking.caption,
+                textTransform: 'uppercase',
+              }}
+            >
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              style={{
+                ...COMPONENT_STYLES.input(THEME.default),
+                width: '100%',
+              }}
+            />
+          </div>
+
+          <button
+            type="submit"
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              width: '100%',
+              marginTop: THEME.default.spacing.sm,
+            }}
+          >
+            Sign In
+          </button>
+        </form>
+
+        <div style={{ marginTop: THEME.default.spacing.lg, textAlign: 'center', fontSize: '0.8125rem' }}>
+          <span style={{ color: THEME.default.text.muted }}>Don&apos;t have an account? </span>
+          <Link href="/signup" style={{ color: THEME.default.text.link, textDecoration: 'none' }}>
+            Create one
+          </Link>
+        </div>
+      </div>
     </main>
   );
 }
