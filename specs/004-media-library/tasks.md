@@ -117,17 +117,20 @@
 
 ---
 
-## Phase 7: UI Integration (Dedicated Media Library Interface)
+## Phase 7: UI Integration (Dedicated Media Library Interface) [UI SLATED FOR RECREATION]
+
+> [!NOTE]
+> The frontend UI components in `apps/web` have been cleared and are slated for recreation following *Taste Skill* and *Impeccable* standards. Backend presigned R2 upload APIs, folders, tagging, and caption endpoints remain fully operational.
 
 **Purpose**: Build the user-facing Media Library at `/tenant/[subdomain]/media`.
 
-- [X] T104 [P] Implement storage quota meter component in `apps/web/src/components/media/storage-meter.tsx` (Issue: #152)
-- [X] T105 [P] Implement folder sidebar and tag navigation component in `apps/web/src/components/media/folder-sidebar.tsx` (Issue: #153)
-- [X] T106 [P] Implement drag-and-drop file upload modal with client-side canvas thumbnail generation and progress in `apps/web/src/components/media/upload-modal.tsx` (Issue: #154)
-- [X] T107 [P] Implement media asset grid component with aspect ratio badges and video indicators in `apps/web/src/components/media/media-grid.tsx` (Issue: #155)
-- [X] T108 [P] Implement media preview modal with video player, audio controls, and technical metadata inspector in `apps/web/src/components/media/media-preview-modal.tsx` (Issue: #156)
-- [X] T109 [P] Implement caption templates manager modal in `apps/web/src/components/media/caption-modal.tsx` (Issue: #157)
-- [X] T110 Assemble full Media Library dashboard page at `apps/web/src/app/tenant/[subdomain]/media/page.tsx` (Issue: #158)
+- [ ] T104 [P] Recreate storage quota meter component in `apps/web/src/components/media/storage-meter.tsx` (Issue: #152)
+- [ ] T105 [P] Recreate folder sidebar and tag navigation component in `apps/web/src/components/media/folder-sidebar.tsx` (Issue: #153)
+- [ ] T106 [P] Recreate drag-and-drop file upload modal with client-side canvas thumbnail generation and progress in `apps/web/src/components/media/upload-modal.tsx` (Issue: #154)
+- [ ] T107 [P] Recreate media asset grid component with aspect ratio badges and video indicators in `apps/web/src/components/media/media-grid.tsx` (Issue: #155)
+- [ ] T108 [P] Recreate media preview modal with video player, audio controls, and technical metadata inspector in `apps/web/src/components/media/media-preview-modal.tsx` (Issue: #156)
+- [ ] T109 [P] Recreate caption templates manager modal in `apps/web/src/components/media/caption-modal.tsx` (Issue: #157)
+- [ ] T110 Recreate full Media Library dashboard page at `apps/web/src/app/tenant/[subdomain]/media/page.tsx` (Issue: #158)
 
 ---
 

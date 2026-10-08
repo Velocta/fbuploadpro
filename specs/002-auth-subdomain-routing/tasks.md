@@ -85,20 +85,23 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 ---
 
-## Phase 6: User Story 4 - Multi-Tenant Workspace Dashboard Shell (Priority: P4)
+## Phase 6: User Story 4 - Multi-Tenant Workspace Dashboard Shell (Priority: P4) [UI SLATED FOR RECREATION]
 
-**Goal**: Deliver Next.js App Router workspace shell displaying tenant subdomain badge, user role badge, and live tokens balance from PostgreSQL.
+> [!NOTE]
+> The frontend UI components in `apps/web` have been cleared and are slated for recreation following *Taste Skill* and *Impeccable* standards without token balance meters.
 
-**Independent Test**: Can be validated by testing server component rendering of dashboard shell, verifying correct tenant subdomain badge, role badge, and token balance without leaking credentials.
+**Goal**: Deliver Next.js App Router workspace shell displaying tenant subdomain badge and user role badge (with UI slated for recreation).
+
+**Independent Test**: Can be validated by testing server component rendering of dashboard shell, verifying correct tenant subdomain badge and role badge without leaking credentials.
 
 ### Tests for User Story 4 (TDD) ⚠️
 - [X] T045 [P] [US4] Write tests for dashboard shell component and tenant layout in apps/web/tests/dashboard.test.ts (Issue: #72)
 
-### Implementation for User Story 4
-- [X] T046 [US4] Implement tenant workspace layout with navigation header, subdomain badge, role badge, and token balance in apps/web/src/app/tenant/[subdomain]/layout.tsx (Issue: #73)
-- [X] T047 [US4] Implement tenant workspace dashboard page and default redirect in apps/web/src/app/tenant/[subdomain]/page.tsx and apps/web/src/app/tenant/[subdomain]/dashboard/page.tsx (Issue: #74)
+### Implementation for User Story 4 (UI Slated for Recreation)
+- [ ] T046 [US4] Recreate tenant workspace layout with navigation header, subdomain badge, and role badge (zero token counter) in apps/web/src/app/tenant/[subdomain]/layout.tsx (Issue: #73)
+- [ ] T047 [US4] Recreate tenant workspace dashboard page and default redirect in apps/web/src/app/tenant/[subdomain]/page.tsx and apps/web/src/app/tenant/[subdomain]/dashboard/page.tsx (Issue: #74)
 
-**Checkpoint**: All user stories are independently functional.
+**Checkpoint**: Backend routing complete; UI shell pending recreation.
 
 ---
 

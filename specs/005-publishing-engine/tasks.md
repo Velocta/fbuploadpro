@@ -59,11 +59,11 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Tests for User Story 2 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [X] T125 [P] [US2] Write route tests for Enqueue Media, Pre-flight Token Check, and Queue Item operations in `apps/web/tests/api/publishing-queue.test.ts` (Issue: #200)
+- [X] T125 [P] [US2] Write route tests for Enqueue Media, Schedule Validation, and Queue Item operations in `apps/web/tests/api/publishing-queue.test.ts` (Issue: #200)
 
 ### Implementation for User Story 2
 
-- [X] T126 [US2] Implement Enqueue Media (`POST`) handler with pre-flight token balance check (`tokens_balance >= 1`) in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #201)
+- [X] T126 [US2] Implement Enqueue Media (`POST`) handler with page and slot validation in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #201)
 - [X] T127 [US2] Implement List Queue Items (`GET`) handler with filters by page and status in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts` (Issue: #202)
 - [X] T128 [US2] Implement Update Queue Item (`PATCH`), Delete (`DELETE`), and Skip handlers in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route.ts` (Issue: #203)
 - [X] T129 [US2] Implement Manual "Publish Now" endpoint in `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route.ts` (Issue: #204)
@@ -95,28 +95,30 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 ---
 
-## Phase 6: User Story 4 - Atomic Token Deduction, Failure Logging & Schedule UI (Priority: P4)
+## Phase 6: User Story 4 - Execution Outcome Logging, Retry Handling & Publishing UI (Priority: P4) [UI SLATED FOR RECREATION]
 
-**Goal**: Atomically deduct exactly 1 token on successful publication, log errors on failure with zero token leakage, and deliver interactive UI.
+> [!NOTE]
+> Per-post token deductions and settlement transactions have been retired in favor of flat workspace subscription access. Frontend publishing UI components in `apps/web` have been cleared and are slated for recreation following *Taste Skill* and *Impeccable* standards.
 
-**Independent Test**: Assert 1 token deducted and transaction created on success; 0 tokens deducted on failure with error log recorded; interactive queue UI loads and displays schedule.
+**Goal**: Log execution outcomes, handle transient retries, record full diagnostic error logs, and deliver interactive publishing UI (slated for recreation).
+
+**Independent Test**: Assert outcome status transition and execution logs recorded on publish success/failure; interactive queue UI loads and displays schedule.
 
 ### Tests for User Story 4 ⚠️
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [X] T136 [P] [US4] Write unit and integration tests for atomic 1-token deduction on success, 0 tokens on failure, and audit logging in `apps/worker/tests/token-settlement.test.ts` (Issue: #211)
+- [X] T136 [P] [US4] Write unit and integration tests for outcome status transition, retry handling, and audit logging in `apps/worker/tests/token-settlement.test.ts` (Issue: #211)
 
 ### Implementation for User Story 4
-
-- [X] T137 [US4] Implement atomic token settlement transaction and `publish_logs` insertion in `apps/worker/src/settlement.ts` (Issue: #212)
+- [X] T137 [US4] Implement execution outcome status update and `publish_logs` insertion in `apps/worker/src/settlement.ts` (Issue: #212)
 - [X] T138 [US4] Implement Publish Logs API route handler in `apps/web/src/app/api/tenant/[subdomain]/publishing/logs/route.ts` (Issue: #213)
-- [X] T139 [P] Implement Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx` (Issue: #214)
-- [X] T140 [P] Implement Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx` (Issue: #215)
-- [X] T141 [P] Implement Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx` (Issue: #216)
-- [X] T142 [P] Implement Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx` (Issue: #217)
-- [X] T143 Assemble full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx` (Issue: #218)
+- [ ] T139 [P] Recreate Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx` (Issue: #214)
+- [ ] T140 [P] Recreate Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx` (Issue: #215)
+- [ ] T141 [P] Recreate Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx` (Issue: #216)
+- [ ] T142 [P] Recreate Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx` (Issue: #217)
+- [ ] T143 Recreate full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx` (Issue: #218)
 
-**Checkpoint**: User Story 4 complete — Financial settlement verified and interactive UI operational.
+**Checkpoint**: Backend dispatcher and logging operational; Publishing UI slated for recreation.
 
 ---
 

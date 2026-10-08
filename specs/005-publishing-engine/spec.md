@@ -63,31 +63,34 @@ As a social media creator, I want the system's background edge dispatcher to aut
 
 ---
 
-## User Story 4 - Atomic Token Deduction, Failure Logging & Schedule UI (Priority: P4)
+## User Story 4 - Execution Outcome Logging, Retry Handling & Publishing UI (Priority: P4)
 
-As a platform operator and creator, I want exactly 1 token to be deducted strictly upon verified post publication to Facebook, with automatic failure logging, retry handling, and an interactive schedule dashboard, so that I have complete transparency into publishing status and zero token loss on failed attempts.
+> [!NOTE]
+> **Architecture & UI Update**: The token-based usage system has been retired in favor of flat workspace subscription access. The frontend publishing schedule UI at `/tenant/[subdomain]/publishing` is slated for recreation following *Taste Skill* and *Impeccable* guidelines.
 
-**Why this priority**: Financial integrity and operational visibility. Protects users from paying for failed posts and gives them complete audit logs and controls.
+As a platform operator and creator, I want automated execution outcome logging, retry handling for transient network errors, and an interactive schedule dashboard, so that I have complete transparency into publishing status and reliable post dispatching.
 
-**Independent Test**: Can be validated by executing a successful publish (asserting 1 token is atomically decremented and a transaction record created), executing a simulated failed publish (asserting 0 tokens deducted, error logged, retry incremented), and inspecting the queue timeline UI at `/tenant/[subdomain]/publishing`.
+**Why this priority**: Operational reliability and publishing transparency. Protects users from transient failures and provides complete audit logs and controls.
+
+**Independent Test**: Can be validated by executing a successful publish (asserting status becomes `published` and an execution log record is created), executing a simulated failed publish (asserting error logged and retry incremented), and inspecting the queue timeline UI at `/tenant/[subdomain]/publishing`.
 
 **Acceptance Scenarios**:
 
-1. **Given** a queue item that successfully publishes to Facebook, **When** publication completes, **Then** exactly 1 token is atomically decremented from the user's balance, a ledger transaction is created with type `usage`, and status becomes `published`.
-2. **Given** a queue item where Facebook Graph API returns a non-fatal temporary error (e.g., rate limit or network glitch), **When** processing fails, **Then** the item retry count is incremented, zero tokens are deducted, and next retry is scheduled.
-3. **Given** a queue item that reaches maximum retry attempts (e.g. 3 attempts) or encounters a fatal permission/account error, **When** it fails, **Then** status transitions to `failed`, zero tokens are deducted, an error log entry is recorded with full diagnostic details, and the user is alerted in the UI.
-4. **Given** an authenticated user navigating to `/tenant/[subdomain]/publishing`, **When** the page loads, **Then** the user sees an interactive schedule timeline of upcoming slots, currently queued items, published post history, slot management controls, and manual "Publish Now" / "Skip" actions.
+1. **Given** a queue item that successfully publishes to Facebook, **When** publication completes, **Then** post ID is recorded, an execution log entry is created in `publish_logs`, and status transitions to `published`.
+2. **Given** a queue item where Facebook Graph API returns a non-fatal temporary error (e.g., rate limit or network glitch), **When** processing fails, **Then** the item retry count is incremented, error diagnostics are recorded, and next retry is scheduled.
+3. **Given** a queue item that reaches maximum retry attempts (e.g. 3 attempts) or encounters a fatal permission/account error, **When** it fails, **Then** status transitions to `failed`, an error log entry is recorded with full diagnostic details, and the user is alerted.
+4. **Given** an authenticated user navigating to `/tenant/[subdomain]/publishing`, **When** the page loads, **Then** the user sees an interactive schedule timeline of upcoming slots, currently queued items, published post history, slot management controls, and manual "Publish Now" / "Skip" actions (slated for UI recreation).
 
 ---
 
 ## Edge Cases
 
 - **Concurrent Edge Worker Execution**: Multiple worker isolate instances triggered at the exact same minute boundary must never claim or publish the same queue item twice. Enforced via PostgreSQL `FOR UPDATE SKIP LOCKED`.
-- **Expired or Revoked Page Access Tokens**: If Facebook Graph API returns error code 190 (Invalid OAuth Token), the publish job must be marked as `failed` with actionable error text ("Facebook Page connection expired, please reconnect"), zero tokens deducted, and no runaway retries.
-- **Deleted Media Asset**: If a user deletes a media asset while it is currently queued in an upcoming slot, the queue engine must detect the missing asset, mark the item as `failed` with an explanatory message ("Source media asset no longer exists"), and vacate the slot without charging a token.
+- **Expired or Revoked Page Access Tokens**: If Facebook Graph API returns error code 190 (Invalid OAuth Token), the publish job must be marked as `failed` with actionable error text ("Facebook Page connection expired, please reconnect") and no runaway retries.
+- **Deleted Media Asset**: If a user deletes a media asset while it is currently queued in an upcoming slot, the queue engine must detect the missing asset, mark the item as `failed` with an explanatory message ("Source media asset no longer exists"), and vacate the slot cleanly.
 - **Timezone Drift & Daylight Saving Time**: Slots defined in localized Page timezones (e.g., `Europe/London`, `America/New_York`) must accurately compute UTC publishing timestamps across DST transitions.
 - **Large Video Processing Delay on Facebook**: Facebook Reels ingestion may process asynchronously. The publisher must handle the two-phase upload session (initialize upload session, stream video bytes, verify readiness/publish) within Cloudflare Worker execution budgets or status polling.
-- **First Comment Failure**: If the main post publishes successfully but the automated first comment fails (e.g., comment rate limit), the post itself remains `published`, 1 token is deducted for the published post, and the comment failure is logged as a non-fatal warning in the publish log.
+- **First Comment Failure**: If the main post publishes successfully but the automated first comment fails (e.g., comment rate limit), the post itself remains `published`, and the comment failure is logged as a non-fatal warning in the publish log.
 - **Cross-Tenant Isolation**: Every database query, queue item mutation, slot configuration, and publish log is bound strictly to `user_id`. Workspace A cannot view or manipulate Workspace B's queue or slots.
 
 ---
@@ -102,16 +105,16 @@ As a platform operator and creator, I want exactly 1 token to be deducted strict
 - **FR-004**: The system MUST allow users to select video or image assets from their Media Library and enqueue them into upcoming vacant slots for a target Page.
 - **FR-005**: The system MUST support attaching custom captions or selecting reusable caption templates when queueing assets.
 - **FR-006**: The system MUST support configuring an optional "First Comment" string to be posted automatically upon successful post publication.
-- **FR-007**: The system MUST perform a pre-flight token check and reject queue additions if the user's available token balance is less than 1.
+- **FR-007**: [RETIRED] Pre-flight token check has been retired in favor of flat workspace subscription access.
 - **FR-008**: The system MUST allow users to reorder queued items, edit scheduled captions, skip slots, or remove items from the queue.
 - **FR-009**: The system MUST include an edge worker scheduler executing every minute via Cloudflare Worker cron triggers to process due queue items.
 - **FR-010**: The edge worker MUST claim due items atomically using PostgreSQL row-level locks (`SELECT ... FOR UPDATE SKIP LOCKED`) to eliminate double-publishing under high concurrency.
 - **FR-011**: The worker MUST stream video media to Facebook Graph API v26.0 Reels publishing endpoints (`/video_reels`) using decrypted Page access tokens.
 - **FR-012**: The worker MUST publish image media to Facebook Graph API v26.0 Photos publishing endpoints (`/photos`) using decrypted Page access tokens.
 - **FR-013**: The worker MUST post the automated first comment to `/{post_id}/comments` immediately following successful post creation when configured.
-- **FR-014**: The system MUST atomically deduct exactly 1 token from the user's balance and record a ledger transaction strictly upon verified publication to Facebook.
-- **FR-015**: The system MUST NOT deduct tokens if a publication attempt fails, and MUST record detailed error logs with retry metadata (maximum 3 retries for transient errors).
-- **FR-016**: The system MUST provide an interactive publishing management UI at `/tenant/[subdomain]/publishing` featuring slot configuration, upcoming schedule visualizer, manual trigger, and publishing history logs.
+- **FR-014**: [RETIRED] Per-action token deduction has been retired.
+- **FR-015**: The system MUST record detailed error logs with retry metadata (maximum 3 retries for transient errors) on publication failure.
+- **FR-016**: The system MUST provide an interactive publishing management UI at `/tenant/[subdomain]/publishing` featuring slot configuration, upcoming schedule visualizer, manual trigger, and publishing history logs (UI slated for recreation following Taste Skill & Impeccable guidelines).
 
 ---
 
@@ -119,8 +122,7 @@ As a platform operator and creator, I want exactly 1 token to be deducted strict
 
 - **Page Queue Slot**: Represents a recurring daily publishing window. Attributes: `id` (UUID), `user_id` (UUID), `fb_page_id` (UUID), `slot_time` (TIME, HH:MM:SS), `timezone` (VARCHAR), `is_active` (BOOLEAN), `created_at`, `updated_at`. Compound unique on `(user_id, fb_page_id, slot_time)`.
 - **Queue Item**: Represents a scheduled publication instance. Attributes: `id` (UUID), `user_id` (UUID), `fb_page_id` (UUID), `slot_id` (UUID, nullable), `media_id` (UUID), `scheduled_time` (TIMESTAMPTZ), `caption` (TEXT), `first_comment` (TEXT, nullable), `status` (ENUM: `queued`, `publishing`, `published`, `failed`, `skipped`), `retry_count` (INTEGER), `max_retries` (INTEGER default 3), `fb_post_id` (VARCHAR, nullable), `fb_comment_id` (VARCHAR, nullable), `published_at` (TIMESTAMPTZ, nullable), `created_at`, `updated_at`.
-- **Publish Log**: Represents the execution audit trail for a publish attempt. Attributes: `id` (UUID), `user_id` (UUID), `queue_item_id` (UUID), `fb_page_id` (UUID), `status` (ENUM: `success`, `failure`, `retry`), `attempt_number` (INTEGER), `fb_response_code` (INTEGER, nullable), `error_message` (TEXT, nullable), `error_details` (JSONB, nullable), `tokens_deducted` (INTEGER), `created_at`.
-- **Token Transaction**: Links to existing billing ledger (`type: usage`, `amount: -1`, `reference_id: queue_item_id`).
+- **Publish Log**: Represents the execution audit trail for a publish attempt. Attributes: `id` (UUID), `user_id` (UUID), `queue_item_id` (UUID), `fb_page_id` (UUID), `status` (ENUM: `success`, `failure`, `retry`), `attempt_number` (INTEGER), `fb_response_code` (INTEGER, nullable), `error_message` (TEXT, nullable), `error_details` (JSONB, nullable), `created_at`.
 
 ---
 
@@ -130,7 +132,7 @@ As a platform operator and creator, I want exactly 1 token to be deducted strict
 
 - **SC-001**: Scheduled posts are claimed and dispatched by the edge worker within 60 seconds of their target slot time.
 - **SC-002**: 100% zero duplicate publishing: under concurrent worker invocations, no queue item is published more than once.
-- **SC-003**: 100% zero token leakage: tokens are deducted strictly upon verified Facebook Graph API post confirmation; exactly 0 tokens are charged for failed or aborted attempts.
+- **SC-003**: 100% execution transparency: detailed execution logs and retry audit trails are captured for all publication attempts.
 - **SC-004**: Automated first comment is dispatched within 5 seconds of the root post being created.
 - **SC-005**: 100% cross-tenant data isolation: no user can inspect, modify, or trigger queue items or slots belonging to another user.
 - **SC-006**: Users can configure slots, enqueue assets, and inspect upcoming schedules with UI transitions completing in under 250 milliseconds.
@@ -144,4 +146,3 @@ As a platform operator and creator, I want exactly 1 token to be deducted strict
 - Graph API v26.0 endpoints are used for all Facebook interactions (`pages_manage_posts`, `pages_read_engagement`).
 - The edge scheduler runs as a Cloudflare Worker scheduled event (`crons = ["* * * * *"]`).
 - Post types are inferred automatically from media asset type: videos are published as Facebook Reels / video posts, images are published as photo posts.
-- The default cost per published post is fixed at 1 token.

@@ -62,13 +62,12 @@ The permission mapping governing route and action access:
 
 | Permission | `user` | `seller` | `admin` | Description |
 | :--- | :---: | :---: | :---: | :--- |
-| `VIEW_WORKSPACE_DASHBOARD` | ✅ | ✅ | ✅ | View tenant workspace shell and token balance |
+| `VIEW_WORKSPACE_DASHBOARD` | ✅ | ✅ | ✅ | View tenant workspace shell |
 | `MANAGE_SOCIAL_ACCOUNTS` | ✅ | ✅ | ✅ | Connect and manage Facebook accounts and pages |
 | `EXECUTE_PUBLISHING` | ✅ | ✅ | ✅ | Trigger automated Reel uploads and schedules |
-| `ACCESS_SELLER_PORTAL` | ❌ | ✅ | ✅ | Access seller-tier templates and agency packages |
+| `ACCESS_SELLER_PORTAL` | ❌ | ✅ | ✅ | Access seller-tier templates and referral packages |
 | `CROSS_TENANT_INSPECT` | ❌ | ❌ | ✅ | Inspect other tenants' workspace views |
 | `ADMIN_SYSTEM_SETTINGS` | ❌ | ❌ | ✅ | Access platform `/admin` system tools and manage users |
-| `ADJUST_TOKEN_BALANCES` | ❌ | ❌ | ✅ | Credit or adjust user token balances |
 
 **Hierarchical Role Order**:
 `admin` (Level 3) > `seller` (Level 2) > `user` (Level 1).
@@ -88,7 +87,6 @@ export interface WorkspaceDashboardState {
     subdomain: string;
     role: 'user' | 'seller' | 'admin';
     status: 'active' | 'suspended';
-    tokensBalance: number;
     createdAt: string;
   };
   metrics: {

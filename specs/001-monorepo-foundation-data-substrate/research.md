@@ -44,38 +44,26 @@ Implement a dual client strategy in `@fbuploadpro/database`:
 ### Decision
 Unify tenant ownership directly into the `users` table:
 - Every user has their own unique `subdomain` slug (e.g. `client.fbuploadpro.com`).
-- Child resources (`facebook_accounts`, `facebook_pages`, `token_transactions`) reference `user_id` directly.
+- Child resources (`facebook_accounts`, `facebook_pages`) reference `user_id` directly.
 - Multi-tenant defense-in-depth is enforced via composite foreign keys `(user_id, facebook_account_id)` and compound unique constraints `(user_id, fb_page_id)`.
 
 ### Rationale
 - **Simplicity & Direct Alignment**: Aligns with the core operational model where 1 user account = 1 customer workspace, eliminating redundant join tables, intermediary foreign keys, and extra onboarding indirection.
 - **Kernel-Level Multi-Tenancy**: Composite keys at the PostgreSQL level physically prevent a page owned by User A from being bound to an account owned by User B.
-- **Cascade Safety**: Deleting a user cascades strictly across all user-owned social accounts, pages, and transaction history.
+- **Cascade Safety**: Deleting a user cascades strictly across all user-owned social accounts, pages, and linked records.
 
 ### Alternatives Considered
 - **Separated Agencies + Users Table**: Adds unnecessary joins and schema ceremony when users operate their own subdomains directly.
 
 ---
 
-## 4. Token Ledger Concurrency & Non-Negative Invariants
+## 4. [RETIRED] Token Ledger Concurrency & Non-Negative Invariants
 
-### Decision
-Maintain `tokens_balance` directly on the `users` table (protected by `CHECK (tokens_balance >= 0)`) combined with atomic conditional SQL decrements and an append-only `token_transactions` audit log:
-```sql
-UPDATE users
-SET tokens_balance = tokens_balance - :amount, updated_at = now()
-WHERE id = :userId AND tokens_balance >= :amount
-RETURNING tokens_balance;
-```
-If 0 rows are returned, the client helper throws a typed `InsufficientFundsError` (HTTP 402, `INSUFFICIENT_FUNDS`).
+> [!NOTE]
+> The per-action token ledger, `tokens_balance`, and `token_transactions` have been retired and deleted from the platform in favor of flat workspace subscription access with zero per-action token metering.
 
-### Rationale
-- **Zero Race Conditions**: Single-statement conditional updates execute atomically within PostgreSQL row locks, preventing concurrent posting tasks from overdrafting.
-- **Check Constraint Guarantee**: The database physically prevents balances from dropping below 0 under any circumstance.
-- **Immutable Transaction Audit**: Every balance mutation writes an entry to `token_transactions` with `transaction_type IN ('credit', 'debit', 'refund', 'adjustment')` and `amount > 0`.
-
-### Alternatives Considered
-- **Separate token_balances table**: Unnecessary 1:1 table when `tokens_balance` is an intrinsic attribute of the user workspace.
+### Historical Decision
+Historically maintained `tokens_balance` directly on the `users` table combined with atomic conditional SQL decrements and an append-only `token_transactions` audit log. This mechanism has been retired.
 
 ---
 

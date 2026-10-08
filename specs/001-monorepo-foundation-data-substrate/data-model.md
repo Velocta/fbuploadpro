@@ -10,7 +10,6 @@ This document defines the schema, invariants, validation rules, and relational r
 erDiagram
     USERS ||--o{ FACEBOOK_ACCOUNTS : "owns"
     USERS ||--o{ FACEBOOK_PAGES : "manages"
-    USERS ||--o{ TOKEN_TRANSACTIONS : "logs transactions"
     FACEBOOK_ACCOUNTS ||--o{ FACEBOOK_PAGES : "composite parent (user_id, account_id)"
 
     USERS {
@@ -19,7 +18,6 @@ erDiagram
         varchar name
         varchar subdomain UK
         varchar role
-        bigint tokens_balance
         varchar status
         timestamptz created_at
         timestamptz updated_at
@@ -46,16 +44,6 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
-
-    TOKEN_TRANSACTIONS {
-        uuid id PK
-        uuid user_id FK
-        bigint amount
-        varchar transaction_type
-        varchar reference_id
-        varchar description
-        timestamptz created_at
-    }
 ```
 
 ---
@@ -72,7 +60,6 @@ Represents the primary tenant workspace and user operator.
 | `name` | `VARCHAR(100)` | `NULL` | User display name |
 | `subdomain` | `VARCHAR(50)` | `NOT NULL UNIQUE` | Normalized tenant subdomain slug |
 | `role` | `VARCHAR(20)` | `NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'seller', 'admin'))` | User role tier |
-| `tokens_balance` | `BIGINT` | `NOT NULL DEFAULT 0 CHECK (tokens_balance >= 0)` | Current prepaid token balance |
 | `status` | `VARCHAR(20)` | `NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended'))` | Account status |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | Creation timestamp |
 | `updated_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | Last update timestamp |
@@ -80,7 +67,6 @@ Represents the primary tenant workspace and user operator.
 **Invariants & Subdomain Validation**:
 - Subdomain must match regex: `/^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/`
 - Reserved subdomains are rejected: `admin`, `api`, `app`, `auth`, `billing`, `dashboard`, `internal`, `mail`, `status`, `system`, `test`, `webhook`, `www`.
-- `tokens_balance` can never drop below 0.
 
 ---
 
@@ -124,18 +110,9 @@ Represents managed Facebook publishing destinations.
 
 ---
 
-### 2.4 `token_transactions`
-Immutable financial audit trail of all token credits and debits.
-
-| Column | Type | Constraints | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | `UUID` | `PRIMARY KEY DEFAULT gen_random_uuid()` | Unique transaction ID |
-| `user_id` | `UUID` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | Owning user |
-| `amount` | `BIGINT` | `NOT NULL CHECK (amount > 0)` | Transaction magnitude |
-| `transaction_type` | `VARCHAR(20)` | `NOT NULL CHECK (transaction_type IN ('credit', 'debit', 'refund', 'adjustment'))` | Transaction category |
-| `reference_id` | `VARCHAR(100)` | `NULL` | External job or invoice ID |
-| `description` | `VARCHAR(255)` | `NOT NULL` | Audit explanation |
-| `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | Timestamp of transaction |
+### 2.4 [RETIRED] `token_transactions`
+> [!NOTE]
+> The per-action token transaction ledger and operational balance tracking have been retired as the platform adopted a direct workspace subscription model without token metering.
 
 ---
 

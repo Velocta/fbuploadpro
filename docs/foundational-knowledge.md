@@ -1,6 +1,4 @@
-# FBUploadPro: Foundational Product Knowledge & Architecture
-
-This document serves as the canonical source of truth for the product vision, architecture, user personas, roles, and functional workflows of **FBUploadPro**.
+# FBUploadPro: System Architecture, Product Knowledge & Execution Blueprint
 
 ---
 
@@ -10,14 +8,23 @@ This document serves as the canonical source of truth for the product vision, ar
 
 ---
 
-## 2. Production Infrastructure Topology & Cloud Providers
-
-The platform architecture is cleanly separated across four specialized, best-in-class cloud providers:
+## 2. System Architecture Diagram & Component Topology
 
 ```mermaid
 flowchart TD
-    subgraph VercelHost ["Vercel (Web Application Control Plane)"]
+    subgraph ClientLayer ["Client Devices & Browsers"]
+        UserBrowser["User / Creator Browser\n(Web UI / Mobile Dashboard)"]
+    end
+
+    subgraph EdgeEntry ["Edge Ingress & Routing (Cloudflare & Vercel)"]
+        Apex["Marketing Apex Domain\n(fbuploadpro.com / www)"]
+        Gateway["Application Central Gateway\n(app.fbuploadpro.com)"]
+        TenantWorkspace["Tenant Subdomains\n({username}.fbuploadpro.com)"]
+    end
+
+    subgraph AppPlane ["Application Control Plane (Next.js 16 App Router)"]
         Web["apps/web\nNext.js 16 App Router + React 19\n(Tenant Subdomain Routing)"]
+        Showroom["apps/showroom\nIsolated UI Sandbox (Port 3001)\n(Pre-merge Visual Verification)"]
     end
 
     subgraph SupabaseCloud ["Supabase (Data Substrate & Identity)"]
@@ -32,7 +39,7 @@ flowchart TD
     end
 
     subgraph ExternalServices ["External API Gateways"]
-        FB["Facebook Graph API v26.0\n(Reels, Feed, Comments)"]
+        FB["Facebook Graph API v26.0\n(Reels, Feed, Comments, Insights)"]
     end
 
     Web -->|Auth & User Identity| Auth
@@ -44,6 +51,8 @@ flowchart TD
     Worker -->|Publish posts & first comments| FB
 ```
 
+| Component | Host / Runtime | Entrypoints | Core Responsibilities |
+|---|---|---|---|
 | **Marketing Site** | **Independent Host** | Landing Page, Terms, Privacy | High-converting marketing landing pages, Terms of Service (`/terms`), Privacy Policy (`/privacy`), SEO content, deployed independently. |
 | **Web App Gateway** | **Vercel** | `app.fbuploadpro.com` (`apps/web`) | Central authentication gateway, serving `/login`, `/signup`, and cross-subdomain auth handoffs. |
 | **Tenant Workspaces** | **Vercel** | `{username}.fbuploadpro.com` (`apps/web`) | User workspace dashboard, dedicated Media Library, queue slot configuration, Page analytics. |
@@ -51,7 +60,6 @@ flowchart TD
 | **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks (`SKIP LOCKED`), direct media streaming to Meta APIs. |
 | **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage, presigned direct PC-to-bucket uploads, thumbnail cache. |
 | **Social Publishing** | **Meta** | Facebook Graph API v26.0 | Reels and photo publishing, automatic first comment submission, page insights sync. |
-| **Billing & Payments (Deferred)** | **Stripe (Deferred)** | Deferred Billing & Invoicing | All monetization and token billing deferred until explicitly requested. Unrestricted publishing entitlement for active users. |
 
 ---
 
@@ -69,13 +77,10 @@ The platform adopts a decoupled multi-domain topology:
    - Hosts public authentication: `/login` and `/signup`.
    - Upon successful authentication, automatically redirects the user to their personal workspace (`https://{username}.fbuploadpro.com/dashboard`).
 3. **Dedicated User Workspaces (`https://{username}.fbuploadpro.com`)**:
-   - Strictly reserved for the active authenticated user.
-   - Unauthenticated visitors hitting `{username}.fbuploadpro.com` are bounced to `https://app.fbuploadpro.com/login?returnUrl=...`.
-   - Mismatched users (e.g. user `alex` trying to view `https://sarah.fbuploadpro.com`) are redirected to their own valid workspace.
-4. **Shared Session Cookie Scope**:
+   - Every registered user operates within their dedicated tenant subdomain.
    - Authentication cookies are set on the apex wildcard cookie domain (`.fbuploadpro.com`), ensuring uninterrupted session continuity between `app.fbuploadpro.com` and `{username}.fbuploadpro.com`.
-  - Facebook accounts, imported Facebook Pages, media assets, and publishing queues are strictly scoped to the active tenant user.
-  - Zero cross-user data leakage enforced via database compound constraints (`user_id`) and edge routing guards.
+   - Facebook accounts, imported Facebook Pages, media assets, and publishing queues are strictly scoped to the active tenant user.
+   - Zero cross-user data leakage enforced via database compound constraints (`user_id`) and edge routing guards.
 
 ---
 
@@ -86,8 +91,8 @@ The platform operates on a clear three-tier role taxonomy:
 | Role | Primary Purpose | Key Capabilities |
 |---|---|---|
 | **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders and reusable captions, configures Page queue slots, schedules and publishes unlimited posts without credit checks, and monitors Page insights. |
-| **Seller** | Affiliate / Referral Partner | Onboards users via unique referral links/codes (referral tracking and commission attribution deferred pending monetization). |
-| **Admin** | Platform & System Controller | Manages platform health, system operations, and user statuses. User onboarding and management is completely automated (monetization controls deferred). |
+| **Seller** | Affiliate / Referral Partner | Onboards users via unique referral links/codes. Tracks referred users' activity and workspace usage. |
+| **Admin** | Platform & System Controller | Manages platform health, system operations, and user statuses. User onboarding and management is completely automated. |
 
 ---
 
@@ -104,16 +109,16 @@ Each user has an isolated, feature-rich Media Library:
   - **Tags**: Multi-tag filtering and search for quick asset retrieval.
   - **Reusable Captions**: A library of saved caption templates and snippets that can be attached to posts with one click.
 - **Storage Infrastructure & Quotas**:
-  - Backed by Cloudflare R2 object storage.
-  - Generous baseline storage quota (e.g. 5GB or 50 media assets) with clear usage meters.
+  - High-availability object storage powered by **Cloudflare R2** with zero egress fees.
+  - Per-user storage limits (default 5 GB / 50 assets), with real-time quota tracking.
 
 ---
 
-## 6. Automated Queue Slots Publishing Engine
+## 6. High-Frequency Facebook Publishing Engine
 
-Instead of manual calendar scheduling or legacy scraper bots, publishing is driven by an **Automated Queue Slots** architecture:
+Publishing is driven by an automated, queue-based slot architecture:
 
-1. **Page-Specific Queue Slots**:
+1. **Recurring Queue Slots**:
    - For each connected Facebook Page, users define recurring publishing time slots (e.g., Daily at `09:00`, `13:00`, and `18:00`).
 2. **Selective Asset Queueing**:
    - Users select videos or images from their Media Library, assign captions (or reusable caption templates), and add them to target Page queues.
@@ -150,15 +155,15 @@ Insights are accessible in a dedicated, per-page view (rather than cluttering th
 
 ---
 
-## 8. Deferred Monetization & Unrestricted Publishing Policy
+## 8. Zero-Token Architecture & Unrestricted Publishing Policy
 
 - **Token Economy Purged**: The prepaid token system, token ledger, and credit balance model have been formally abolished. Database columns (`tokens_balance`, `tokens_deducted`) and tables (`token_transactions`) are removed via clean DDL rewrite.
 - **Unrestricted Publishing**: Any user with `status = 'active'` and connected Facebook pages can queue and publish unlimited posts without credit checks or balance deductions.
-- **Deferred Monetization**: All billing, subscription/token purchasing, Stripe checkout integrations, and affiliate referral commissions are deferred until explicitly requested.
+- **On-Demand Extension**: All billing, subscription monetization, or specialized workflows will be specified and implemented strictly upon explicit user direction.
 
 ---
 
-## 9. Development Roadmap & Milestones
+## 9. Current Specifications & Platform Status
 
 ```mermaid
 flowchart LR
@@ -169,27 +174,25 @@ flowchart LR
     M4[Spec 004: Dedicated Media Library & R2]
     M5[Spec 005: Automated Queue Slots Engine]
     M6[Spec 006: Dedicated Page Insights]
-  end
-
-  subgraph Active [Active Milestone]
     M7[Spec 007: Purge Token System]
   end
 
-  subgraph Deferred [Deferred Work]
-    M8[Stripe Billing & Referrals]
+  subgraph CurrentFocus [Active Priority]
+    UIRecreate[UI Recreation Suite: Binance Precision Dual-Theme]
   end
 
-  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7
+  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> UIRecreate
 ```
 
 - **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
-- **Spec 002 (Completed & Merged)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
-- **Spec 003 (Completed & Merged)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
-- **Spec 004 (Completed & Merged)**: **Dedicated Media Library & Cloudflare R2 Uploads** (36 tasks, T078–T113, 146 passing tests; direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset quota meters, media preview modal, and security isolation audit).
-- **Spec 005 (Completed & Merged)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (tasks T114–T149; recurring slot definitions, timeline view & enqueue modal, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment, and security isolation audit).
-- **Spec 006 (Completed & Merged)**: **Dedicated Facebook Page Insights** (Daily page snapshots, Graph API v26.0 sync, time-series followers, video views, watch time, reactions, demographics).
+- **Spec 002 (Completed & Merged; UI Slated for Recreation)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
+- **Spec 003 (Completed & Merged; UI Slated for Recreation)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
+- **Spec 004 (Completed & Merged; UI Slated for Recreation)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset storage quota meters).
+- **Spec 005 (Completed & Merged; UI Slated for Recreation)**: Automated Queue Slots Publishing Engine & Edge Dispatcher (recurring slot definitions, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment).
+- **Spec 006 (Completed & Merged; UI Slated for Recreation)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
 - **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
-- **Deferred Milestones**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller** (Deferred until monetization is explicitly requested).
+- **UI Recreation Suite (Active Priority)**: Rebuilding high-craft, accessible frontend views across all workspaces (`apps/web` & `apps/showroom`) using the Binance precision dual-theme design system in `DESIGN.md` and `apps/web/src/lib/theme.ts`.
+- **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
 
 ---
 
@@ -211,13 +214,10 @@ All development follows autonomous multi-agent orchestration codified in [`AGENT
    - Atomic PR diffs strictly under 150–200 LoC per PR.
    - 100% Turborepo quality gates green (`build`, `lint`, `typecheck`, `test`).
    - Zero direct pushes to `main`.
-5. **Unrestricted Publishing Governance (Constitution v2.0.0)**:
-   - In accordance with Constitution v2.0.0, the platform enforces unrestricted queue publishing for all active users (`status = 'active'`).
+5. **Unrestricted Publishing Governance (Constitution v2.1.0)**:
+   - In accordance with Constitution v2.1.0, the platform enforces unrestricted queue publishing for all active users (`status = 'active'`).
    - Zero token balance checks, deductions, or credit ledgers are permitted in the scheduling or publishing pipeline.
-   - All billing, payment gateway, and monetization logic remains deferred until explicitly requested.
 6. **Design System & Theme Token Governance (`DESIGN.md` & `apps/web/src/lib/theme.ts`)**:
-   - The official 8-color palette is codified in `DESIGN.md`: Gold (`#fad734`), Peru (`#b29527`), Bronze (`#766018`), Rose (`#f6465d`), Emerald (`#2ebd85`), Pitch Black (`#000000`), Pure White (`#ffffff`), and Pitch Slate (`#1f242d`).
+   - The official palette is codified in `DESIGN.md`: Gold (`#fad734`), Peru (`#b29527`), Bronze (`#766018`), Rose (`#f6465d`), Emerald (`#2ebd85`), Pitch Black (`#000000`), Pure White (`#ffffff`), and Pitch Slate (`#1f242d`).
    - `DESIGN.md` is permanently frozen and locked as an immutable specification; agents must NEVER modify it.
-   - `apps/web/src/lib/theme.ts` is the single centralized authority for all frontend styling. All components must import and reference tokens from `@web/lib/theme` or CSS variables (`globals.css`); declaring ad-hoc hex values, arbitrary borders, or capsule pill badges is permanently prohibited. Status indicators must strictly use unboxed 6px luminous dots with micro-halos.
-
-
+   - `apps/web/src/lib/theme.ts` is the single centralized authority for all frontend styling. All components must import and reference tokens from `@web/lib/theme` or CSS variables (`globals.css`); declaring ad-hoc hex values, arbitrary borders, or capsule pill badges is permanently prohibited. Status signaling must strictly use unboxed 6px luminous dots with micro-halos.

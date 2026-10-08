@@ -2,7 +2,7 @@
 
 **Branch**: `feat/005-publishing-engine-plan` | **Date**: 2026-10-07 | **Spec**: [specs/005-publishing-engine/spec.md](../spec.md)
 
-This document defines the contracts and interfaces for claiming due queue items, streaming media to Facebook Graph API v26.0, and settling atomic token debits.
+This document defines the contracts and interfaces for claiming due queue items, streaming media to Facebook Graph API v26.0, and recording execution outcomes in publish logs.
 
 ---
 
@@ -41,7 +41,6 @@ export interface DispatchOutcome {
   fbCommentId?: string;
   errorMessage?: string;
   errorCode?: number;
-  tokensDeducted: number;
 }
 
 // Publish Log Domain Model
@@ -55,7 +54,6 @@ export const PublishLogSchema = z.object({
   fbResponseCode: z.number().int().nullable(),
   errorMessage: z.string().nullable(),
   errorDetails: z.record(z.unknown()).nullable(),
-  tokensDeducted: z.number().int().nonnegative(),
   createdAt: z.string().datetime(),
 });
 
@@ -79,7 +77,7 @@ export interface IPublishDispatcher {
   dispatchItem(item: ClaimedQueueItem): Promise<DispatchOutcome>;
 
   /**
-   * Settles atomic 1-token decrement on success or logs failure
+   * Settles outcome (updates queue item status and records publish_logs)
    */
   settleOutcome(outcome: DispatchOutcome): Promise<void>;
 

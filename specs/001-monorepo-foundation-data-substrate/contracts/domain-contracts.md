@@ -51,7 +51,6 @@ export const UserSchema = z.object({
   name: z.string().max(100).nullable().optional(),
   subdomain: SubdomainSchema,
   role: UserRoleSchema.default('user'),
-  tokensBalance: z.number().int().nonnegative().default(0),
   status: UserStatusSchema.default('active'),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
@@ -82,17 +81,7 @@ export const FacebookPageSchema = z.object({
   updatedAt: z.coerce.date(),
 });
 
-// Billing Ledger
-export const TokenTransactionTypeSchema = z.enum(['credit', 'debit', 'refund', 'adjustment']);
-export const TokenTransactionSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
-  amount: z.number().int().positive('Transaction amount must be strictly positive'),
-  transactionType: TokenTransactionTypeSchema,
-  referenceId: z.string().max(100).nullable().optional(),
-  description: z.string().min(1).max(255),
-  createdAt: z.coerce.date(),
-});
+// Billing Ledger [RETIRED - Token usage system deleted]
 ```
 
 ---

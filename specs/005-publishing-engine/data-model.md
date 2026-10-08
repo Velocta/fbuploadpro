@@ -64,7 +64,7 @@ Represents media assets enqueued for automated publication into target slots.
 ---
 
 ### 1.3 `publish_logs` (Execution Audit & Diagnostics)
-Records every dispatch attempt, external Facebook response codes, and token deductions.
+Records every dispatch attempt, external Facebook response codes, and diagnostic errors.
 
 | Field | Type | Nullable | Constraints / Defaults | Description |
 |---|---|---|---|---|
@@ -77,7 +77,6 @@ Records every dispatch attempt, external Facebook response codes, and token dedu
 | `fb_response_code`| `INT` | Yes | `NULL` | HTTP status code from Graph API |
 | `error_message` | `TEXT` | Yes | `NULL` | Error summary or message |
 | `error_details` | `JSONB` | Yes | `NULL` | Full Graph API error response object |
-| `tokens_deducted`| `INT` | No | `DEFAULT 0 CHECK (tokens_deducted >= 0)` | Tokens deducted (1 on success, 0 otherwise) |
 | `created_at` | `TIMESTAMPTZ` | No | `DEFAULT now()` | Attempt execution timestamp |
 
 **Indexes & Constraints**:

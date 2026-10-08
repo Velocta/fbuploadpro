@@ -14,7 +14,7 @@ Implement an automated queue slots publishing engine uniting connected Facebook 
 
 **Primary Dependencies**: Next.js 16 (App Router), React 19, Cloudflare Workers runtime, Zod (runtime boundary validation schemas in `@fbuploadpro/contracts`), `@fbuploadpro/database` (dual Node.js connection pool and Edge transport client), Web Crypto AES-256-GCM token decryption (`@fbuploadpro/contracts/crypto`)
 
-**Storage**: PostgreSQL (`page_queue_slots`, `queue_items`, `publish_logs`, `token_transactions`) via forward DDL migration `0004_publishing_engine.sql`
+**Storage**: PostgreSQL (`page_queue_slots`, `queue_items`, `publish_logs`) via forward DDL migration `0004_publishing_engine.sql`
 
 **Testing**: Vitest (`@fbuploadpro/contracts`, `@fbuploadpro/database`, `@fbuploadpro/web`, `@fbuploadpro/worker`)
 
@@ -22,9 +22,9 @@ Implement an automated queue slots publishing engine uniting connected Facebook 
 
 **Project Type**: Monorepo Web Application, Scheduled Edge Worker Daemon, Database Substrate & Shared Contracts
 
-**Performance Goals**: Worker claims and dispatches due queue items within 60s of slot time; row lock query completes in <10ms; zero duplicate publishing under concurrent worker isolates; 100% zero token leakage on failed attempts
+**Performance Goals**: Worker claims and dispatches due queue items within 60s of slot time; row lock query completes in <10ms; zero duplicate publishing under concurrent worker isolates; 100% execution audit logging on failed attempts
 
-**Constraints**: Strict composite tenant isolation `(user_id, fb_page_id, ...)`; atomic 1-token deduction strictly upon verified Facebook publication; row-level lock concurrency safety (`FOR UPDATE SKIP LOCKED`); decoupled HTTP client for offline Facebook API mock testing in CI
+**Constraints**: Strict composite tenant isolation `(user_id, fb_page_id, ...)`; row-level lock concurrency safety (`FOR UPDATE SKIP LOCKED`); decoupled HTTP client for offline Facebook API mock testing in CI
 
 ## Constitution Check
 

@@ -63,6 +63,9 @@ As a content marketing operator, I want to see detailed reaction sentiment break
 
 ### User Story 4 - Dedicated High-Craft Insights Dashboard Page (Priority: P4)
 
+> [!NOTE]
+> **UI Recreation In-Progress**: The frontend Insights dashboard view is slated for recreation following *Taste Skill* and *Impeccable* standards. The underlying server-side proxy API, 15-minute cache, and worker daily snapshot sync are fully functional.
+
 As a user navigating my personal workspace, I want a dedicated, beautifully crafted Page Insights view at `/tenant/[subdomain]/pages/[pageId]/insights`, featuring quick date range selectors, KPI delta scorecards, interactive Recharts visualizations, and clear health status banners, so that I have a fast, enjoyable, and responsive analytical command center.
 
 **Why this priority**: User experience floor. Adheres to *Taste Skill* and *Impeccable* standards—avoiding clunky AI templates in favor of crisp typography, responsive layout, seamless loading skeletons, and fluid micro-interactions.
