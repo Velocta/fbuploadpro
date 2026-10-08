@@ -36,13 +36,13 @@
 **Independent Test**: Can be validated by sending authenticated `GET` requests to the endpoint, asserting overview stats are returned with HTTP 200, verifying 15m server cache behavior, asserting cross-tenant queries return 404/403, and verifying zero token leakage.
 
 ### Tests for User Story 1
-- [ ] T154 [P] [US1] Write failing integration tests for `GET /api/tenant/[subdomain]/pages/[pageId]/insights` asserting 200 response for overview metrics, 15m server cache, 404/403 cross-tenant isolation, and zero token leakage in `apps/web/tests/api/page-insights-overview.test.ts` (Issue: #255)
+- [X] T154 [P] [US1] Write failing integration tests for `GET /api/tenant/[subdomain]/pages/[pageId]/insights` asserting 200 response for overview metrics, 15m server cache, 404/403 cross-tenant isolation, and zero token leakage in `apps/web/tests/api/page-insights-overview.test.ts` (Issue: #255)
 
 ### Implementation for User Story 1
-- [ ] T155 [US1] Implement server-side Facebook Graph API v26.0 overview client (`getPageOverview`) in `apps/web/src/lib/insights/facebook-insights-client.ts` with AES-256-GCM token decryption (Issue: #256)
-- [ ] T156 [US1] Implement in-memory TTL cache with 15-minute expiration in `apps/web/src/lib/insights/insights-cache.ts` (Issue: #257)
-- [ ] T157 [US1] Implement route handler `GET /api/tenant/[subdomain]/pages/[pageId]/insights` in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` validating session, decrypting token, calling Graph API client, caching, and returning Overview KPIs (Issue: #258)
-- [ ] T158 [US1] Verify all US1 tests pass in `apps/web/tests/api/page-insights-overview.test.ts` (Issue: #259)
+- [X] T155 [US1] Implement server-side Facebook Graph API v26.0 overview client (`getPageOverview`) in `apps/web/src/lib/insights/facebook-insights-client.ts` with AES-256-GCM token decryption (Issue: #256)
+- [X] T156 [US1] Implement in-memory TTL cache with 15-minute expiration in `apps/web/src/lib/insights/insights-cache.ts` (Issue: #257)
+- [X] T157 [US1] Implement route handler `GET /api/tenant/[subdomain]/pages/[pageId]/insights` in `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` validating session, decrypting token, calling Graph API client, caching, and returning Overview KPIs (Issue: #258)
+- [X] T158 [US1] Verify all US1 tests pass in `apps/web/tests/api/page-insights-overview.test.ts` (Issue: #259)
 
 **Checkpoint**: User Story 1 MVP complete and independently functional.
 
