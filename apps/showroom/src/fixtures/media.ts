@@ -31,10 +31,15 @@ export const mockMediaItems = [
   },
 ];
 
-export const mockStorageQuota = {
-  used_bytes: 1_288_490_188, // ~1.2 GB
-  quota_bytes: 5_368_709_120, // 5 GB
-  used_percentage: 24,
-  asset_count: 14,
-  max_asset_count: 50,
+import type { StorageQuotaResponse } from '@fbuploadpro/contracts';
+
+export const mockStorageQuota: StorageQuotaResponse = {
+  userId: '00000000-0000-0000-0000-000000000001',
+  totalBytes: 5_368_709_120, // 5 GB
+  usedBytes: 1_288_490_188,  // ~1.2 GB
+  remainingBytes: 4_080_218_932,
+  utilizationPercentage: 24,
+  totalItems: 14,
+  videoItems: 10,
+  imageItems: 4,
 };

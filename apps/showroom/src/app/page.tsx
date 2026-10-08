@@ -1,24 +1,28 @@
 'use client';
 
 import React, { useState } from 'react';
+import type { StorageQuotaResponse } from '@fbuploadpro/contracts';
 import { StorageMeter } from '@web/components/media/storage-meter';
 import { mockStorageQuota } from '../fixtures/media';
 
 export default function ShowroomHome() {
   const [viewport, setViewport] = useState<'desktop' | 'mobile'>('desktop');
 
-  const warningQuota = {
+  const warningQuota: StorageQuotaResponse = {
     ...mockStorageQuota,
-    used_bytes: 4_950_000_000,
-    used_percentage: 92,
+    usedBytes: 4_950_000_000,
+    remainingBytes: 5_368_709_120 - 4_950_000_000,
+    utilizationPercentage: 92,
   };
 
-  const emptyQuota = {
-    used_bytes: 0,
-    quota_bytes: 5_368_709_120,
-    used_percentage: 0,
-    asset_count: 0,
-    max_asset_count: 50,
+  const emptyQuota: StorageQuotaResponse = {
+    ...mockStorageQuota,
+    usedBytes: 0,
+    remainingBytes: 5_368_709_120,
+    utilizationPercentage: 0,
+    totalItems: 0,
+    videoItems: 0,
+    imageItems: 0,
   };
 
   return (
