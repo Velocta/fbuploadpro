@@ -4,4 +4,5 @@ compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-crons = ["* * * * *"]
+crons = ["* * * * *", "0 2 * * *"]
+

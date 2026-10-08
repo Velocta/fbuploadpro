@@ -12,15 +12,19 @@ export interface Env {
 export * from './fb-client.js';
 export * from './dispatcher.js';
 export * from './settlement.js';
+export * from './insights-sync.js';
+import { syncDailyPageInsights } from './insights-sync.js';
 
 export interface ScheduledOptions {
   db?: DispatcherDbClient;
   fbClient?: IFacebookPublishClient;
   limit?: number;
+  syncInsights?: boolean;
+  insightsFetchImpl?: typeof fetch;
 }
 
 export async function handleScheduled(
-  _controller: ScheduledController,
+  controller: ScheduledController,
   env: Env,
   _ctx?: ExecutionContext,
   options?: ScheduledOptions
@@ -55,6 +59,17 @@ export async function handleScheduled(
       masterKey,
       limit: options?.limit ?? 10,
     });
+
+    // Run Daily Page Insights Snapshot Sync if explicitly requested or on daily schedule
+    const isDailyInsightsCron = controller.cron === '0 2 * * *' || controller.cron === '0 0 * * *';
+    if (options?.syncInsights || isDailyInsightsCron) {
+      await syncDailyPageInsights({
+        db,
+        masterKey,
+        fbApiUrl: env.FB_GRAPH_API_URL,
+        fetchImpl: options?.insightsFetchImpl,
+      });
+    }
   } finally {
     if (
       shouldCloseDb &&
