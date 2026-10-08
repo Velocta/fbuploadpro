@@ -44,7 +44,7 @@ flowchart TD
     Dispatch -->|"E2E, Contracts & Fixtures"| QA["qa-engineer\n(Zero Mock Theater)"]
     Dispatch -->|"Turborepo & CI/CD"| DO["devops-engineer\n(Platform & Workflows)"]
     
-    FE --> Sync["Sync tasks.md & Project #8"]
+    FE --> Sync["Sync tasks.md"]
     BE --> Sync
     QA --> Sync
     DO --> Sync
@@ -71,7 +71,7 @@ flowchart TD
 | **7. Analyze** | `/speckit-analyze` | `speckit-analyze` | Audit consistency across `spec.md`, `plan.md`, and `tasks.md`. |
 | **8. Implement** | `/speckit-implement` | `speckit-implement` + Specialized Team | Multi-agent execution (`frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`). |
 | **9. Converge** | `/speckit-converge` | `speckit-converge` | Validate codebase convergence against spec and resolve remaining gaps. |
-| **Tracker** | `/speckit-taskstoissues` | `speckit-taskstoissues` | Convert tasks into GitHub Issues and sync with GitHub Project #8. |
+| **Tracker** | `/speckit-taskstoissues` | `speckit-taskstoissues` | Convert tasks into GitHub Issues for tracking. |
 
 ---
 

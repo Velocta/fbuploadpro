@@ -51,8 +51,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
    - `/speckit-taskstoissues` — Automated creation of GitHub Issues.
    - `/speckit-implement` — TDD execution of tasks.
    - `/speckit-converge` — Verification against specification before completion.
-3. **Project Board Tracking**: Every implementation task issue is tracked on GitHub Project #8 (`fbuploadpro rebuild`) moving through `Backlog` ➔ `To Do` ➔ `In Progress` ➔ `Awaiting PR` ➔ `Done`.
-4. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates before merge.
+3. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates before merge.
 
 ## Governance
 
@@ -61,4 +60,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [AGENTS.md](file:///home/shahzebpy/Documents/projects/fbuploadpro/AGENTS.md).
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-07
+**Version**: 1.0.1 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-08

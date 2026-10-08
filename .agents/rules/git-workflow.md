@@ -16,5 +16,4 @@ Follow Conventional Commits:
 ## 3. Pull Request Requirements
 - **Atomic Diffs**: Net pull request diffs must remain strictly under 150–200 lines of code.
 - **Traceability**: Reference the active specification ID from `specs/` and associated GitHub Issue (`Closes #X`).
-- **Project Board Tracking**: Implementation task issues must be tracked on GitHub Project #8 (`fbuploadpro rebuild`).
 - **Quality Gates**: All automated checks (`pnpm turbo run build lint typecheck test`) must pass with 100% test pass rate and 0 errors/warnings prior to requesting review.
