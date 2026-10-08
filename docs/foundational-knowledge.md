@@ -175,23 +175,25 @@ flowchart LR
     M5[Spec 005: Automated Queue Slots Engine]
     M6[Spec 006: Dedicated Page Insights]
     M7[Spec 007: Purge Token System]
+    M8[Spec 008: Essential Reusable UI Components]
   end
 
   subgraph CurrentFocus [Active Priority]
-    UIRecreate[UI Recreation Suite: Binance Precision Dual-Theme]
+    UIRecreate[Feature Views Assembly: Spec 002-006 Pages]
   end
 
-  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> UIRecreate
+  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> UIRecreate
 ```
 
 - **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
-- **Spec 002 (Completed & Merged; UI Slated for Recreation)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
-- **Spec 003 (Completed & Merged; UI Slated for Recreation)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
-- **Spec 004 (Completed & Merged; UI Slated for Recreation)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset storage quota meters).
-- **Spec 005 (Completed & Merged; UI Slated for Recreation)**: Automated Queue Slots Publishing Engine & Edge Dispatcher (recurring slot definitions, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment).
-- **Spec 006 (Completed & Merged; UI Slated for Recreation)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
+- **Spec 002 (Completed & Merged; UI Slated for Assembly)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
+- **Spec 003 (Completed & Merged; UI Slated for Assembly)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
+- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset storage quota meters).
+- **Spec 005 (Completed & Merged; UI Slated for Assembly)**: Automated Queue Slots Publishing Engine & Edge Dispatcher (recurring slot definitions, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment).
+- **Spec 006 (Completed & Merged; UI Slated for Assembly)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
 - **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
-- **UI Recreation Suite (Active Priority)**: Rebuilding high-craft, accessible frontend views across all workspaces (`apps/web` & `apps/showroom`) using the Binance precision dual-theme design system in `DESIGN.md` and `apps/web/src/lib/theme.ts`.
+- **Spec 008 (Completed & Implemented)**: **Essential Reusable UI Components** (15 production-ready, accessible React 19 primitives in `apps/web/src/components/ui/` with interactive dual-theme testing benches in `apps/showroom` on port 3001: Button, Input, Textarea, Checkbox, Switch, Select, Card, Dialog/Modal, Tabs, Table, StatusDot, Tag, Skeleton, Alert, Tooltip).
+- **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 002–006 utilizing the completed Spec 008 component primitives.
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
 
 ---
