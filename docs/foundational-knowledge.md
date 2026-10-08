@@ -111,10 +111,10 @@ flowchart LR
     M2[Spec 002: Auth & Subdomain Routing]
     M3[Spec 003: FB Graph API v26.0 & Accounts]
     M4[Spec 004: Dedicated Media Library & R2]
+    M5[Spec 005: Automated Queue Slots Engine]
   end
 
   subgraph Next [Roadmap]
-    M5[Spec 005: Automated Queue Slots Engine]
     M6[Spec 006: Dedicated Page Insights]
     M7[Spec 007: Stripe Billing & Seller Referrals]
   end
@@ -126,8 +126,8 @@ flowchart LR
 - **Spec 002 (Completed & Merged)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
 - **Spec 003 (Completed & Merged)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
 - **Spec 004 (Completed & Merged)**: **Dedicated Media Library & Cloudflare R2 Uploads** (36 tasks, T078–T113, 146 passing tests; direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset quota meters, media preview modal, and security isolation audit).
-- **Spec 005 (Active Milestone)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (Page slot definitions, queue manager, first comment automation, Cloudflare Worker edge publisher, token deduction upon successful publication).
-- **Spec 006 (Planned)**: **Dedicated Facebook Page Insights** (Time-series followers, video views, watch time, reactions, demographics).
+- **Spec 005 (Completed & Merged)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (tasks T114–T149, 254 passing tests; recurring slot definitions, timeline view & enqueue modal, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment, atomic token settlement upon publication, and security isolation audit).
+- **Spec 006 (Next Target / Active Milestone)**: **Dedicated Facebook Page Insights** (Time-series followers, video views, watch time, reactions, demographics).
 - **Spec 007 (Planned)**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller**.
 
 ---
