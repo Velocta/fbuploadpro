@@ -110,11 +110,11 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 - [X] T137 [US4] Implement atomic token settlement transaction and `publish_logs` insertion in `apps/worker/src/settlement.ts` (Issue: #212)
 - [X] T138 [US4] Implement Publish Logs API route handler in `apps/web/src/app/api/tenant/[subdomain]/publishing/logs/route.ts` (Issue: #213)
-- [ ] T139 [P] Implement Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx` (Issue: #214)
-- [ ] T140 [P] Implement Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx` (Issue: #215)
-- [ ] T141 [P] Implement Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx` (Issue: #216)
-- [ ] T142 [P] Implement Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx` (Issue: #217)
-- [ ] T143 Assemble full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx` (Issue: #218)
+- [X] T139 [P] Implement Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx` (Issue: #214)
+- [X] T140 [P] Implement Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx` (Issue: #215)
+- [X] T141 [P] Implement Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx` (Issue: #216)
+- [X] T142 [P] Implement Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx` (Issue: #217)
+- [X] T143 Assemble full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx` (Issue: #218)
 
 **Checkpoint**: User Story 4 complete — Financial settlement verified and interactive UI operational.
 
