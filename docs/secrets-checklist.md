@@ -29,9 +29,6 @@ This document details every required secret, environment variable, and credentia
 | `DEFAULT_STORAGE_QUOTA_BYTES` | Positive integer (bytes) | Optional | ❌ | Optional | ❌ |
 | `CLOUDFLARE_API_TOKEN` | Bearer Token (Workers + R2) | ❌ | ❌ | ❌ | ✅ |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account Hex ID | ❌ | ❌ | ❌ | ✅ |
-| `STRIPE_SECRET_KEY` | `sk_live_...` | ✅ | ❌ | ✅ | ❌ |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_...` | ✅ | ❌ | ✅ | ❌ |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | `pk_live_...` | ✅ | ❌ | ✅ | ❌ |
 
 ---
 
@@ -128,20 +125,6 @@ To deploy `apps/worker` via GitHub Actions (`wrangler deploy`):
 
 ---
 
-### Category F: Stripe Billing & Token Economy (Milestone 7)
-
-#### `STRIPE_SECRET_KEY`
-* **Format**: `sk_live_...` (or `sk_test_...` for staging).
-
-#### `STRIPE_WEBHOOK_SECRET`
-* **Format**: `whsec_...` from Stripe Dashboard → Developers → Webhooks.
-* **Configured Events**: `checkout.session.completed`, `customer.subscription.updated`.
-
-#### `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
-* **Format**: `pk_live_...` (or `pk_test_...` for staging).
-
----
-
 ## 3. Step-by-Step Injection Guide
 
 ### 1. In GitHub Repository Secrets (for CI/CD Deployments)
@@ -175,6 +158,3 @@ Add all Web App variables from `.env.production.example`:
 - `R2_BUCKET_NAME`
 - `R2_PUBLIC_URL`
 - `DEFAULT_STORAGE_QUOTA_BYTES`
-- `STRIPE_SECRET_KEY`
-- `STRIPE_WEBHOOK_SECRET`
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`

@@ -87,9 +87,9 @@ Enforce strict multi-tenant boundary checks in both edge middleware and server l
 
 ### Decision
 Define a formal Role-Based Access Control matrix for the three constitutional roles:
-- **`user`**: Standard operational tenant. Can view their own workspace dashboard, manage connected Facebook accounts/pages, view ledger transactions, and trigger automation tasks.
+- **`user`**: Standard operational tenant. Can view their own workspace dashboard, manage connected Facebook accounts/pages, and trigger automation tasks.
 - **`seller`**: Includes all `user` capabilities plus access to seller-tier features (e.g. template publishing, client campaign management).
-- **`admin`**: Platform superuser. Can access all tenant workspaces, access global `/admin` routes, inspect system health, and adjust token balances.
+- **`admin`**: Platform superuser. Can access all tenant workspaces, access global `/admin` routes, and inspect system health.
 
 Implement helper utilities in `@fbuploadpro/contracts`:
 - `hasRole(userRole, requiredRole): boolean`
@@ -102,20 +102,22 @@ Implement helper utilities in `@fbuploadpro/contracts`:
 
 ---
 
-## 5. Multi-Tenant Workspace Dashboard Shell
+## 5. Multi-Tenant Workspace Dashboard Shell (UI Recreation In-Progress)
+
+> [!NOTE]
+> The UI components and layout shell are slated for recreation following *Taste Skill* and *Impeccable* guidelines. Operational token meters have been removed from the architecture.
 
 ### Decision
 Create a Next.js 16 App Router workspace shell:
 - Route hierarchy:
-  - `apps/web/src/app/tenant/[subdomain]/layout.tsx` (Shared Workspace Shell: Header, Subdomain Badge, Token Balance, Nav)
+  - `apps/web/src/app/tenant/[subdomain]/layout.tsx` (Shared Workspace Shell: Header, Subdomain Badge, Nav)
   - `apps/web/src/app/tenant/[subdomain]/page.tsx` (Workspace Root / Dashboard redirect)
   - `apps/web/src/app/tenant/[subdomain]/dashboard/page.tsx` (Main Dashboard view)
 - Dynamic server data loading:
-  - Fetches user details and current `tokens_balance` from PostgreSQL using `@fbuploadpro/database`.
-  - Displays token balance as a badge with formatted integer.
+  - Fetches user details from PostgreSQL using `@fbuploadpro/database`.
   - Displays role badge (`USER`, `SELLER`, `ADMIN`).
 - React 19 standards: Pure Server Components for initial render, zero `set-state-in-effect`, zero sensitive secret exposure.
 
 ### Rationale
 - **Optimal Web Vitals (CWV)**: Server-side rendering renders the initial dashboard shell immediately with no client-side loading flashes.
-- **Sanitized Data Boundary**: Only safe user fields (`subdomain`, `name`, `email`, `role`, `tokens_balance`) are passed to the UI layer; database credentials and internal ids remain private.
+- **Sanitized Data Boundary**: Only safe user fields (`subdomain`, `name`, `email`, `role`) are passed to the UI layer; database credentials and internal ids remain private.

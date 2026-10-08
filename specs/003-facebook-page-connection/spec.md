@@ -104,7 +104,7 @@ A user can disconnect an individual Facebook Page or an entire Facebook account 
 - **FR-012**: The system MUST allow users to disconnect an individual Facebook account, safely detaching its linked pages and destroying its encrypted tokens, without affecting other connected accounts.
 - **FR-013**: The system MUST allow users to disconnect individual Facebook Pages without affecting sibling pages or the parent Facebook account.
 - **FR-014**: The system MUST sanitize all API responses and client view models to ensure zero exposure of raw access tokens or encryption keys.
-- **FR-015**: The system MUST provide a multi-account workspace UI at `/tenant/[subdomain]/accounts` displaying all connected accounts, account switching/filtering, discovered page selection, and real-time connection health.
+- **FR-015**: The system MUST provide a multi-account workspace UI at `/tenant/[subdomain]/accounts` displaying all connected accounts, account switching/filtering, discovered page selection, and real-time connection health (UI slated for recreation following Taste Skill & Impeccable guidelines).
 
 ### Key Entities *(include if feature involves data)*
 

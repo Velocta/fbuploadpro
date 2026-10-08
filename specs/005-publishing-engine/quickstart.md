@@ -54,7 +54,7 @@ pnpm --filter @fbuploadpro/worker test
 - Media streaming for videos calls 3-phase Reels endpoints (`start`, upload, `finish`).
 - Media streaming for photos calls `/photos` endpoint.
 - Automated first comment dispatches to `/{post_id}/comments`.
-- Exactly 1 token is deducted on successful publish; 0 tokens deducted on failure.
+- Execution outcome is logged to `publish_logs`; status transitions to `published` on success.
 - Retry count increments on transient 429/5xx errors; status transitions to `failed` upon reaching `maxRetries`.
 
 ### 2.4 Web App Route Handlers & UI Component Tests
@@ -63,9 +63,9 @@ pnpm --filter @fbuploadpro/web test
 ```
 **Asserts**:
 - `GET /api/tenant/[subdomain]/pages/[pageId]/slots` and `POST` handlers enforce tenant isolation.
-- `POST /api/tenant/[subdomain]/publishing/queue` validates pre-flight token balance (`tokens_balance >= 1`).
+- `POST /api/tenant/[subdomain]/publishing/queue` validates page connection and slot schedule.
 - `GET /api/tenant/[subdomain]/publishing/queue` lists items with upcoming schedule calculation.
-- Publishing queue page at `/tenant/[subdomain]/publishing` renders schedule visualizer, slot manager, and manual action controls.
+- Publishing queue page at `/tenant/[subdomain]/publishing` (slated for UI recreation) renders schedule visualizer, slot manager, and manual action controls.
 
 ---
 

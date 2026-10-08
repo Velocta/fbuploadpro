@@ -104,7 +104,7 @@ export type ListQueueItemsResponse = z.infer<typeof ListQueueItemsResponseSchema
 
 ### 2.1 `POST /api/tenant/[subdomain]/publishing/queue`
 Enqueues a media asset into the target Page queue.
-- **Pre-flight check**: Verifies `tokens_balance >= 1`.
+- **Pre-flight check**: Verifies active page connection and valid slot schedule.
 - **Request Body**: `EnqueueMediaRequest`
 - **Response**: `201 Created` with `QueueItem`
 

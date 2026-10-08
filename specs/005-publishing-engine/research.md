@@ -137,43 +137,25 @@ Content-Type: application/json
 
 ---
 
-## 4. Token Ledger Integrity & Atomic Accounting
+## 4. [RETIRED] Token Ledger Integrity & Atomic Accounting
 
-### Invariant
-- **Rule**: Tokens are deducted strictly upon verified post publication to Facebook Graph API.
-- **Cost**: 1 token per successfully published post.
-- **Failures**: 0 tokens deducted if publication fails or is aborted.
-- **First Comment Failure**: If the post succeeds but first comment fails, the post remains `published` and 1 token is deducted. The comment error is recorded in `publish_logs` with a warning status.
+> [!NOTE]
+> The per-action token ledger, balance deductions, and `token_transactions` have been retired and deleted from the platform in favor of flat workspace subscription access with zero per-action token metering. Publication outcome settlement updates queue item state (`published`, `failed`) and logs directly to `publish_logs`.
 
-### Transaction Flow
+### Execution Outcome Settlement Flow
 ```typescript
 await db.withTransaction(async (tx) => {
-  // 1. Decrement user balance atomically (enforces balance >= 1)
+  // 1. Mark queue item published or failed
   await tx.query(
-    `UPDATE users SET tokens_balance = tokens_balance - 1, updated_at = now() WHERE id = $1 AND tokens_balance >= 1`,
-    [userId]
+    `UPDATE queue_items SET status = $1, fb_post_id = $2, published_at = now(), updated_at = now() WHERE id = $3`,
+    [status, fbPostId, queueItemId]
   );
 
-  // 2. Insert immutable audit ledger record
+  // 2. Insert execution audit log
   await tx.query(
-    `INSERT INTO token_transactions (user_id, amount, transaction_type, reference_id, description)
-     VALUES ($1, 1, 'debit', $2, $3)`,
-    [userId, queueItemId, `Published post to Facebook Page ${pageName}`]
-  );
-
-  // 3. Mark queue item published
-  await tx.query(
-    `UPDATE queue_items
-     SET status = 'published', fb_post_id = $2, published_at = now(), updated_at = now()
-     WHERE id = $1`,
-    [queueItemId, fbPostId]
-  );
-
-  // 4. Record execution log
-  await tx.query(
-    `INSERT INTO publish_logs (user_id, queue_item_id, fb_page_id, status, attempt_number, tokens_deducted)
-     VALUES ($1, $2, $3, 'success', $4, 1)`,
-    [userId, queueItemId, pageId, attemptNumber]
+    `INSERT INTO publish_logs (user_id, queue_item_id, fb_page_id, status, fb_response_code, error_message, error_details)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [userId, queueItemId, pageId, status, fbResponseCode, errorMessage, errorDetails]
   );
 });
 ```

@@ -41,8 +41,8 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 - [X] T008 [P] [US1] Write unit tests for SubdomainSchema, reserved slugs, and UserSchema in packages/contracts/tests/user.test.ts (Issue: #23)
 
 ### Implementation for User Story 1
-- [X] T009 [P] [US1] Implement SubdomainSchema (regex /^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/, rejecting RESERVED_SUBDOMAINS: admin, api, app, auth, billing, dashboard, internal, mail, status, system, test, webhook, www), UserRoleSchema (user, seller, admin), UserStatusSchema (active, suspended), and UserSchema (with tokensBalance >= 0) in packages/contracts/src/domain/user.ts (Issue: #24)
-- [X] T010 [US1] Write DDL migration for users table (id UUID PK, email VARCHAR(255) UNIQUE, name VARCHAR(100), subdomain VARCHAR(50) UNIQUE, role VARCHAR(20) CHECK IN ('user', 'seller', 'admin'), tokens_balance BIGINT CHECK >= 0, status VARCHAR(20) CHECK IN ('active', 'suspended')) in packages/database/migrations/0001_initial_schema.sql (Issue: #25)
+- [X] T009 [P] [US1] Implement SubdomainSchema (regex /^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$/, rejecting RESERVED_SUBDOMAINS: admin, api, app, auth, billing, dashboard, internal, mail, status, system, test, webhook, www), UserRoleSchema (user, seller, admin), UserStatusSchema (active, suspended), and UserSchema in packages/contracts/src/domain/user.ts (Issue: #24)
+- [X] T010 [US1] Write DDL migration for users table (id UUID PK, email VARCHAR(255) UNIQUE, name VARCHAR(100), subdomain VARCHAR(50) UNIQUE, role VARCHAR(20) CHECK IN ('user', 'seller', 'admin'), status VARCHAR(20) CHECK IN ('active', 'suspended')) in packages/database/migrations/0001_initial_schema.sql (Issue: #25)
 
 **Checkpoint**: At this point, User Story 1 is functional and testable independently.
 
@@ -65,11 +65,12 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 ---
 
-## Phase 5: User Story 3 - Token Balance Ledger & Atomic Debit Invariants (Priority: P3)
+## Phase 5: User Story 3 - [RETIRED] Token Balance Ledger & Atomic Debit Invariants (Priority: P3)
 
-**Goal**: Implement token transaction schemas, database constraints (tokens_balance >= 0 on users, amount > 0 on transactions), and atomic token decrement client helpers.
+> [!NOTE]
+> The token-based usage system and operational balance debits have been retired and deleted from the platform in favor of flat workspace subscription access. Historical tasks below remain for audit traceability.
 
-**Independent Test**: Can be validated by executing unit tests against TokenTransactionSchema, and database client tests verifying atomic decrement succeeds on sufficient balance and throws InsufficientFundsError on insufficient funds.
+**Goal**: [RETIRED] Former token transaction schemas, database constraints, and atomic token decrement client helpers.
 
 ### Tests for User Story 3 (TDD) ⚠️
 - [X] T014 [P] [US3] Write unit tests for TokenTransactionSchema and positive amount validation in packages/contracts/tests/billing.test.ts (Issue: #29)

@@ -105,13 +105,16 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 ---
 
-## Phase 7: UI & Dashboard Integration
+## Phase 7: UI & Dashboard Integration [UI SLATED FOR RECREATION]
+
+> [!NOTE]
+> Frontend components in `apps/web` have been cleared and are slated for recreation following *Taste Skill* and *Impeccable* guidelines. Backend OAuth endpoints, AES-256-GCM encryption, and health APIs remain fully operational.
 
 **Purpose**: Deliver user interface components for multi-account management, account switching, page discovery, and selective import at `/tenant/[subdomain]/accounts`.
 
-- [X] T072 [P] Implement multi-account switcher and account card component displaying display name, status badge, token expiration horizon, and connect/disconnect buttons in `apps/web/src/components/facebook/account-list.tsx` (Issue: #107)
-- [X] T073 [P] Implement Facebook Page discovery modal component with selective checkboxes, follower counts, and import confirmation in `apps/web/src/components/facebook/page-discovery-modal.tsx` (Issue: #108)
-- [X] T074 Implement tenant accounts page integrating account list, imported pages table, discovery modal, and status indicators in `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx` (Issue: #109)
+- [ ] T072 [P] Recreate multi-account switcher and account card component displaying display name, status badge, token expiration horizon, and connect/disconnect buttons in `apps/web/src/components/facebook/account-list.tsx` (Issue: #107)
+- [ ] T073 [P] Recreate Facebook Page discovery modal component with selective checkboxes, follower counts, and import confirmation in `apps/web/src/components/facebook/page-discovery-modal.tsx` (Issue: #108)
+- [ ] T074 Recreate tenant accounts page integrating account list, imported pages table, discovery modal, and status indicators in `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx` (Issue: #109)
 
 ---
 

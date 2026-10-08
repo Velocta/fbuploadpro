@@ -14,7 +14,7 @@ Implement Next.js Edge Middleware for multi-tenant subdomain host routing (`{sub
 
 **Primary Dependencies**: Next.js 16 (App Router), React 19, Zod (runtime boundary schemas in `@fbuploadpro/contracts`), Web Crypto API (`crypto.subtle` for edge-safe HMAC-SHA256 token signing/verification)
 
-**Storage**: PostgreSQL (`users`, `facebook_accounts`, `facebook_pages`, `token_transactions`) accessed via `@fbuploadpro/database`
+**Storage**: PostgreSQL (`users`, `facebook_accounts`, `facebook_pages`) accessed via `@fbuploadpro/database`
 
 **Testing**: Vitest (`@fbuploadpro/contracts`, `@fbuploadpro/database`, `@fbuploadpro/web`)
 

@@ -12,25 +12,13 @@ export interface DatabaseClient {
   query<T = unknown>(text: string, params?: unknown[]): Promise<T[]>;
   queryOne<T = unknown>(text: string, params?: unknown[]): Promise<T | null>;
   withTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T>;
-  atomicDecrementTokens(userId: string, amount: number): Promise<number>;
   close(): Promise<void>;
 }
 ```
 
-### Atomic Token Decrement Contract
-- **Inputs**:
-  - `userId`: Valid UUID string
-  - `amount`: Strictly positive integer (`amount > 0`)
-- **SQL Execution**:
-  ```sql
-  UPDATE users
-  SET tokens_balance = tokens_balance - $2, updated_at = now()
-  WHERE id = $1 AND tokens_balance >= $2
-  RETURNING tokens_balance;
-  ```
-- **Outcomes**:
-  - If updated: returns `number` (new updated `tokens_balance`).
-  - If 0 rows updated (insufficient balance or user missing): throws `InsufficientFundsError` (`DomainErrorCode = 'INSUFFICIENT_FUNDS'`, HTTP 402).
+### [RETIRED] Atomic Token Decrement Contract
+> [!NOTE]
+> The per-action token decrement helper and operational balance tracking have been retired and deleted as the platform adopted a direct workspace subscription model without token metering.
 
 ---
 
@@ -45,7 +33,6 @@ export interface EdgeTransport {
 export interface EdgeDatabaseClient {
   query<T = unknown>(text: string, params?: unknown[]): Promise<T[]>;
   queryOne<T = unknown>(text: string, params?: unknown[]): Promise<T | null>;
-  atomicDecrementTokens(userId: string, amount: number): Promise<number>;
 }
 ```
 

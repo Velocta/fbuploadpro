@@ -46,8 +46,8 @@ pnpm turbo run build lint typecheck test
 - User with role `seller` or `admin` accessing `/tenant/[subdomain]/seller/tools` ➔ HTTP 200 Allowed.
 - User with role `admin` accessing any tenant workspace ➔ Privileged access granted.
 
-### Scenario D: Workspace Dashboard Shell
+### Scenario D: Workspace Dashboard Shell (Slated for Recreation)
 - Accessing authorized dashboard displays:
   - Subdomain badge (e.g. `client`)
   - User display name and role badge
-  - Real-time token balance retrieved from PostgreSQL
+  - Navigation across workspace modules
