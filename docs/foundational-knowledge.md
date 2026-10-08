@@ -198,14 +198,15 @@ flowchart LR
 
 All development follows autonomous multi-agent orchestration codified in [`AGENTS.md`](../AGENTS.md):
 
-1. **Single User Touchpoint ("Ask Once, Complete Till Merge")**:
-   - The agent only asks the user **which spec or feature to work on** (if not already specified in prompt).
-   - Once confirmed, the agent runs all phases end-to-end autonomously through completion and squash-merge to `main` without intermediate approval prompts.
+1. **Focused Execution & Mandatory Human Merge Gate ("Ask Once, Verify & Approve Before Merge")**:
+   - The agent confirms **which spec or feature to work on**.
+   - The agent autonomously conducts specification, planning, task decomposition, and implementation across subagents without constant micro-interruptions.
+   - **Pre-Merge UI Showroom**: To keep agent focus sharp and eliminate mock data contamination from `apps/web`, component testing is batched at the very end when all milestone tasks are complete. The agent launches `apps/showroom` and provides an ephemeral public tunnel link for interactive inspection across all states (empty, loading, active, error, mobile/desktop).
+   - **Mandatory Human Approval Gate**: The agent MUST NEVER merge any PR into `main` without explicitly asking the user and receiving direct approval. This applies to all PRs (frontend, backend, database migrations, devops, or docs).
 2. **Deterministic 7-Stage Sequence**:
-   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-taskstoissues` ➔ `/speckit-implement` ➔ `/speckit-converge`.
+   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement` ➔ `/speckit-converge` ➔ `Pre-Merge Showroom & Human Approval` ➔ `Merge & Deploy`.
 3. **Clean Chat & Sub-Agent Delegation**:
-   - Orchestrator keeps main chat executive-ready, isolating verbose commands into dedicated sub-agents.
-   - During `/speckit-implement`, spawns multiple sub-agents (`frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`) to work concurrently across domain boundaries.
+   - Orchestrator keeps main chat executive-ready, isolating verbose commands into dedicated subagents (`frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`).
 4. **Constitutional Guardrails**:
    - Strict TDD (failing tests committed before implementation).
    - Atomic PR diffs strictly under 150–200 LoC per PR.

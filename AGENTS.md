@@ -127,3 +127,10 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - **Continuous Constitution & Documentation Synchronization**:
   - **On User Directives & Project Insights**: Whenever the user shares new details, business logic, constraints, architectural choices, or domain rules about the project, the agent MUST immediately update `.specify/memory/constitution.md` (for principles & governance) and corresponding documentation under `docs/` (e.g., `docs/foundational-knowledge.md`). Never leave project knowledge isolated in chat history.
   - **On Merge / Push to `main`**: Whenever modifications, new features, or milestone tasks are pushed or merged into `main`, the agent MUST proactively update documentation in `docs/` (updating the milestone roadmap, API contracts, database schemas, or deployment guides) to ensure documentation never drifts from production reality.
+- **Mandatory Human Approval Gate Before Merging**:
+  - The agent MUST NEVER merge any Pull Request into `main` without explicitly asking the user and receiving their direct, unambiguous approval first.
+  - This rule is non-negotiable and applies to ALL PRs without exception—whether frontend, backend, database migrations, devops, or documentation.
+- **Pre-Merge UI Showroom & Review Protocol**:
+  - To prevent context fragmentation and workflow derailment, component previews are batched at the very end when all tasks are complete and the Pull Request is ready for merge.
+  - All mock data and component preview harnesses are strictly isolated in `apps/showroom` (with zero mock code in `apps/web`).
+  - When a PR containing UI components is ready, the agent launches the showroom on port 3001, opens an ephemeral Cloudflare tunnel, and provides the live HTTPS link for the user to interactively inspect all component states before requesting merge approval.
