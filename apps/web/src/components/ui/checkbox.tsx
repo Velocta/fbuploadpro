@@ -1,4 +1,4 @@
-import React, { forwardRef, useId } from 'react';
+import React, { forwardRef, useState, useId } from 'react';
 import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 export interface CheckboxProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
@@ -13,8 +13,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   {
     label,
     description,
-    checked,
-    defaultChecked,
+    checked: controlledChecked,
+    defaultChecked = false,
     onCheckedChange,
     disabled = false,
     id,
@@ -27,22 +27,43 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   const generatedId = useId();
   const checkboxId = id || generatedId;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onCheckedChange?.(e.target.checked);
+  const [uncontrolledChecked, setUncontrolledChecked] = useState(defaultChecked);
+  const isChecked = controlledChecked !== undefined ? controlledChecked : uncontrolledChecked;
+
+  const handleToggle = (e: React.MouseEvent | React.KeyboardEvent) => {
+    if (disabled) return;
+    e.preventDefault();
+    const next = !isChecked;
+    if (controlledChecked === undefined) {
+      setUncontrolledChecked(next);
+    }
+    onCheckedChange?.(next);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      handleToggle(e);
+    }
   };
 
   return (
     <>
       <style>{`
-        .fbu-checkbox-input:focus-visible + .fbu-checkbox-box {
-          box-shadow: 0 0 0 3px var(--ring-focus) !important;
+        .fbu-checkbox-wrapper:focus-visible .fbu-checkbox-box {
+          box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
         }
         .fbu-checkbox-wrapper:hover:not(.is-disabled) .fbu-checkbox-box {
-          border-color: var(--border-strong);
+          border-color: var(--border-strong, #b29527);
         }
       `}</style>
-      <label
-        htmlFor={checkboxId}
+      <div
+        id={checkboxId}
+        role="checkbox"
+        tabIndex={disabled ? -1 : 0}
+        aria-checked={isChecked}
+        aria-disabled={disabled ? 'true' : undefined}
+        onKeyDown={handleKeyDown}
+        onClick={handleToggle}
         className={`fbu-checkbox-wrapper ${disabled ? 'is-disabled' : ''} ${className}`}
         style={{
           display: 'inline-flex',
@@ -52,29 +73,26 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           opacity: disabled ? 0.45 : 1,
           userSelect: 'none',
           fontFamily: TYPOGRAPHY.fontFamily,
+          outline: 'none',
           ...style,
         }}
       >
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', marginTop: '2px' }}>
           <input
             ref={ref}
-            id={checkboxId}
             type="checkbox"
-            role="checkbox"
-            aria-checked={checked !== undefined ? (checked ? 'true' : 'false') : undefined}
-            checked={checked}
-            defaultChecked={defaultChecked}
+            tabIndex={-1}
+            aria-hidden="true"
+            checked={isChecked}
             disabled={disabled}
-            onChange={handleChange}
-            className="fbu-checkbox-input"
+            readOnly
             style={{
               position: 'absolute',
               opacity: 0,
-              width: '18px',
-              height: '18px',
+              pointerEvents: 'none',
+              width: 0,
+              height: 0,
               margin: 0,
-              cursor: disabled ? 'not-allowed' : 'pointer',
-              zIndex: 1,
             }}
             {...props}
           />
@@ -84,16 +102,17 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
               width: '18px',
               height: '18px',
               borderRadius: RADII.xs, // Strict 4px rectilinear geometry
-              border: `1px solid ${checked ? PALETTE.primary : 'var(--border-subtle)'}`,
-              backgroundColor: checked ? PALETTE.primary : 'var(--bg-canvas)',
+              border: `1px solid ${isChecked ? PALETTE.primary : 'var(--border-subtle, #2b323c)'}`,
+              backgroundColor: isChecked ? PALETTE.primary : 'var(--bg-canvas, #000000)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               transition: 'background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
               boxSizing: 'border-box',
+              flexShrink: 0,
             }}
           >
-            {checked && (
+            {isChecked && (
               <svg
                 width="12"
                 height="12"
@@ -118,7 +137,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
                 style={{
                   fontSize: '0.875rem',
                   fontWeight: TYPOGRAPHY.weights.medium,
-                  color: 'var(--text-main)',
+                  color: 'var(--text-main, currentColor)',
                   lineHeight: 1.3,
                 }}
               >
@@ -129,7 +148,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
               <span
                 style={{
                   fontSize: '0.75rem',
-                  color: 'var(--text-dim)',
+                  color: 'var(--text-dim, #6b7280)',
                   lineHeight: 1.3,
                 }}
               >
@@ -138,7 +157,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
             )}
           </div>
         )}
-      </label>
+      </div>
     </>
   );
 });

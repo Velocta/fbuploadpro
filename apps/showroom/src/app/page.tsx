@@ -27,18 +27,21 @@ export default function ShowroomDashboard() {
 
   return (
     <div
+      id="showroom-root"
+      data-theme={theme}
+      className={theme}
       style={{
         minHeight: '100vh',
-        backgroundColor: 'var(--bg-canvas)',
-        color: 'var(--text-main)',
-        transition: 'background-color 0.2s ease, color 0.2s ease',
+        backgroundColor: theme === 'dark' ? '#000000' : '#ffffff',
+        color: theme === 'dark' ? '#ffffff' : '#000000',
+        transition: 'background-color 0.15s ease, color 0.15s ease',
       }}
     >
       {/* Top Header */}
       <header
         style={{
-          borderBottom: '1px solid var(--border-subtle)',
-          backgroundColor: 'var(--bg-panel)',
+          borderBottom: `1px solid ${theme === 'dark' ? 'var(--border-subtle, #1f242d)' : '#eaecef'}`,
+          backgroundColor: theme === 'dark' ? 'var(--bg-panel, #0c0d10)' : '#ffffff',
           position: 'sticky',
           top: 0,
           zIndex: 50,

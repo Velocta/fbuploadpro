@@ -35,8 +35,12 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
   const [uncontrolledChecked, setUncontrolledChecked] = useState(defaultChecked);
   const isChecked = controlledChecked !== undefined ? controlledChecked : uncontrolledChecked;
 
-  const handleToggle = () => {
+  const handleToggle = (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (disabled) return;
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const next = !isChecked;
     if (controlledChecked === undefined) {
       setUncontrolledChecked(next);
@@ -44,10 +48,9 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
     onCheckedChange?.(next);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      handleToggle();
+      handleToggle(e);
     }
   };
 
@@ -55,7 +58,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
     <>
       <style>{`
         .fbu-switch-button:focus-visible {
-          box-shadow: 0 0 0 3px var(--ring-focus) !important;
+          box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
         }
       `}</style>
       <div
@@ -70,7 +73,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
           userSelect: 'none',
           ...style,
         }}
-        onClick={handleToggle}
+        onClick={(e) => handleToggle(e)}
       >
         <button
           ref={ref}
@@ -80,10 +83,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
           aria-checked={isChecked}
           disabled={disabled}
           onKeyDown={handleKeyDown}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleToggle();
-          }}
+          onClick={(e) => handleToggle(e)}
           className="fbu-switch-button"
           style={{
             position: 'relative',
@@ -107,11 +107,12 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
               width: '16px',
               height: '16px',
               borderRadius: RADII.full,
-              backgroundColor: isChecked ? PALETTE.background : '#848e9c',
+              backgroundColor: isChecked ? '#000000' : '#ffffff',
               transform: isChecked ? 'translateX(18px)' : 'translateX(0)',
               transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.15s ease',
-              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.4)',
               display: 'block',
+              pointerEvents: 'none',
             }}
           />
           {name && (
@@ -133,7 +134,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
                 style={{
                   fontSize: '0.875rem',
                   fontWeight: TYPOGRAPHY.weights.medium,
-                  color: 'var(--text-main)',
+                  color: 'var(--text-main, currentColor)',
                   lineHeight: 1.3,
                 }}
               >
@@ -144,7 +145,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
               <span
                 style={{
                   fontSize: '0.75rem',
-                  color: 'var(--text-dim)',
+                  color: 'var(--text-dim, #6b7280)',
                   lineHeight: 1.3,
                 }}
               >
