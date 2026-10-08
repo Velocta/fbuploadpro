@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { getServerSessionContext } from '../../../lib/auth';
+import { THEME, COMPONENT_STYLES } from '@/lib/theme';
 
 interface TenantLayoutProps {
   params: Promise<{ subdomain: string }>;
@@ -10,99 +11,107 @@ interface TenantLayoutProps {
 export default async function TenantLayout({ params, children }: TenantLayoutProps) {
   const { subdomain } = await params;
   const session = await getServerSessionContext();
-
   const role = session?.role || 'user';
-  const roleColors: Record<string, string> = {
-    admin: '#8e24aa',
-    seller: '#00897b',
-    user: '#0066cc',
-  };
+
+  const navLinks = [
+    { href: `/tenant/${subdomain}/dashboard`, label: 'Dashboard' },
+    { href: `/tenant/${subdomain}/accounts`, label: 'Facebook Pages' },
+    { href: `/tenant/${subdomain}/media`, label: 'Media Library' },
+    { href: `/tenant/${subdomain}/publishing`, label: 'Publishing Queue' },
+  ];
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: THEME.default.surfaces.canvas,
+        color: THEME.default.text.primary,
+        fontFamily: THEME.default.typography.fontFamily,
+      }}
+    >
       <header
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0.75rem 2rem',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e0e0e0',
+          padding: `0 ${THEME.default.spacing.xl}`,
+          height: '56px',
+          backgroundColor: THEME.default.surfaces.panel,
+          borderBottom: `1px solid ${THEME.default.borders.hairline}`,
           position: 'sticky',
           top: 0,
           zIndex: 100,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Link href={`/tenant/${subdomain}/dashboard`} style={{ textDecoration: 'none', color: '#111', fontWeight: 'bold', fontSize: '1.2rem' }}>
-            FBUploadPro
-          </Link>
-          <span
-            style={{
-              padding: '0.2rem 0.6rem',
-              backgroundColor: '#f1f3f4',
-              borderRadius: '12px',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              color: '#333',
-            }}
-          >
-            {subdomain}
-          </span>
-          <span
-            style={{
-              padding: '0.2rem 0.6rem',
-              backgroundColor: roleColors[role] || '#0066cc',
-              borderRadius: '12px',
-              fontSize: '0.75rem',
-              fontWeight: '700',
-              color: '#ffffff',
-              textTransform: 'uppercase',
-            }}
-          >
-            {role}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: THEME.default.spacing.xl }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: THEME.default.spacing.sm }}>
+            <Link
+              href={`/tenant/${subdomain}/dashboard`}
+              style={{
+                textDecoration: 'none',
+                color: THEME.default.text.primary,
+                fontWeight: THEME.default.typography.weights.bold,
+                fontSize: '1rem',
+                letterSpacing: THEME.default.typography.tracking.h3,
+              }}
+            >
+              FBUploadPro
+            </Link>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: THEME.default.text.muted,
+                fontFamily: 'monospace',
+              }}
+            >
+              /{subdomain}
+            </span>
+          </div>
+
+          <nav style={{ display: 'flex', alignItems: 'center', gap: THEME.default.spacing.md }}>
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                style={{
+                  textDecoration: 'none',
+                  color: THEME.default.text.secondary,
+                  fontSize: '0.8125rem',
+                  fontWeight: THEME.default.typography.weights.medium,
+                  padding: `${THEME.default.spacing.xs} ${THEME.default.spacing.sm}`,
+                  borderRadius: THEME.default.radii.xs,
+                  transition: 'color 0.15s ease',
+                }}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-          <Link href={`/tenant/${subdomain}/dashboard`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
-            Dashboard
-          </Link>
-          <Link href={`/tenant/${subdomain}/media`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
-            Media Library
-          </Link>
-          <Link href={`/tenant/${subdomain}/accounts`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
-            Facebook Channels
-          </Link>
-          <Link href={`/tenant/${subdomain}/publishing`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
-            Publishing
-          </Link>
-          {(role === 'seller' || role === 'admin') && (
-            <Link href={`/tenant/${subdomain}/seller`} style={{ textDecoration: 'none', color: '#555', fontSize: '0.9rem' }}>
-              Seller Portal
-            </Link>
-          )}
-          <Link
-            href="/login"
-            style={{
-              textDecoration: 'none',
-              fontSize: '0.85rem',
-              color: '#d93025',
-              padding: '0.35rem 0.75rem',
-              border: '1px solid #fad2cf',
-              borderRadius: '4px',
-            }}
-          >
-            Sign Out
-          </Link>
-        </nav>
+        <div style={{ display: 'flex', alignItems: 'center', gap: THEME.default.spacing.md }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: THEME.default.spacing.xs }}>
+            <span style={COMPONENT_STYLES.statusDot('operational')} />
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: THEME.default.text.secondary,
+                fontWeight: THEME.default.typography.weights.semibold,
+                textTransform: 'uppercase',
+                letterSpacing: THEME.default.typography.tracking.caption,
+              }}
+            >
+              {role}
+            </span>
+          </div>
+        </div>
       </header>
 
-      <main style={{ flex: 1, backgroundColor: '#f8f9fa' }}>{children}</main>
-
-      <footer style={{ padding: '1rem 2rem', borderTop: '1px solid #e0e0e0', backgroundColor: '#fff', fontSize: '0.8rem', color: '#777', textAlign: 'center' }}>
-        FBUploadPro &copy; 2026 | Multi-Tenant Workspace [{subdomain}]
-      </footer>
+      <main style={{ flex: 1, padding: THEME.default.spacing.xl }}>
+        {children}
+      </main>
     </div>
   );
 }

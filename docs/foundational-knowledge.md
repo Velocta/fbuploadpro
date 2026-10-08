@@ -188,7 +188,7 @@ flowchart LR
 - **Spec 004 (Completed & Merged)**: **Dedicated Media Library & Cloudflare R2 Uploads** (36 tasks, T078–T113, 146 passing tests; direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset quota meters, media preview modal, and security isolation audit).
 - **Spec 005 (Completed & Merged)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (tasks T114–T149; recurring slot definitions, timeline view & enqueue modal, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment, and security isolation audit).
 - **Spec 006 (Completed & Merged)**: **Dedicated Facebook Page Insights** (Daily page snapshots, Graph API v26.0 sync, time-series followers, video views, watch time, reactions, demographics).
-- **Spec 007 (Active Milestone)**: **Purge Token System & Enforce Unrestricted Publishing** (Remove token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and grant unrestricted publishing for active users).
+- **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
 - **Deferred Milestones**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller** (Deferred until monetization is explicitly requested).
 
 ---
@@ -215,4 +215,9 @@ All development follows autonomous multi-agent orchestration codified in [`AGENT
    - In accordance with Constitution v2.0.0, the platform enforces unrestricted queue publishing for all active users (`status = 'active'`).
    - Zero token balance checks, deductions, or credit ledgers are permitted in the scheduling or publishing pipeline.
    - All billing, payment gateway, and monetization logic remains deferred until explicitly requested.
+6. **Design System & Theme Token Governance (`DESIGN.md` & `apps/web/src/lib/theme.ts`)**:
+   - The official 8-color palette is codified in `DESIGN.md`: Gold (`#fad734`), Peru (`#b29527`), Bronze (`#766018`), Rose (`#f6465d`), Emerald (`#2ebd85`), Pitch Black (`#000000`), Pure White (`#ffffff`), and Pitch Slate (`#1f242d`).
+   - `DESIGN.md` is permanently frozen and locked as an immutable specification; agents must NEVER modify it.
+   - `apps/web/src/lib/theme.ts` is the single centralized authority for all frontend styling. All components must import and reference tokens from `@web/lib/theme` or CSS variables (`globals.css`); declaring ad-hoc hex values, arbitrary borders, or capsule pill badges is permanently prohibited. Status indicators must strictly use unboxed 6px luminous dots with micro-halos.
+
 

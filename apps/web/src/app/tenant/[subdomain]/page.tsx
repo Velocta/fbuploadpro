@@ -1,33 +1,56 @@
 import React from 'react';
 import Link from 'next/link';
+import { THEME, COMPONENT_STYLES } from '@/lib/theme';
 
-interface TenantIndexProps {
+interface TenantIndexPageProps {
   params: Promise<{ subdomain: string }>;
 }
 
-export default async function TenantIndexPage({ params }: TenantIndexProps) {
+export default async function TenantIndexPage({ params }: TenantIndexPageProps) {
   const { subdomain } = await params;
+
   return (
-    <section style={{ padding: '3rem 2rem', maxWidth: '600px', margin: '2rem auto', textAlign: 'center' }}>
-      <h2>Welcome to your Workspace</h2>
-      <p style={{ color: '#666', marginTop: '0.5rem' }}>
-        You are connected to <strong>{subdomain}.fbuploadpro.com</strong>
-      </p>
-      <div style={{ marginTop: '2rem' }}>
+    <div
+      style={{
+        maxWidth: '800px',
+        margin: '0 auto',
+        padding: THEME.default.spacing.xl,
+      }}
+    >
+      <div style={{ ...COMPONENT_STYLES.card(THEME.default), padding: THEME.default.spacing.xl }}>
+        <h1
+          style={{
+            margin: `0 0 ${THEME.default.spacing.xs} 0`,
+            fontSize: '1.5rem',
+            fontWeight: THEME.default.typography.weights.bold,
+            letterSpacing: THEME.default.typography.tracking.h1,
+          }}
+        >
+          Workspace: {subdomain}
+        </h1>
+        <p
+          style={{
+            margin: `0 0 ${THEME.default.spacing.lg} 0`,
+            color: THEME.default.text.secondary,
+            fontSize: '0.875rem',
+          }}
+        >
+          Welcome to your FBUploadPro workspace.
+        </p>
+
         <Link
           href={`/tenant/${subdomain}/dashboard`}
           style={{
-            padding: '0.6rem 1.2rem',
-            backgroundColor: '#0066cc',
-            color: '#fff',
-            borderRadius: '4px',
+            ...COMPONENT_STYLES.primaryButton,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             textDecoration: 'none',
-            fontWeight: '600',
           }}
         >
-          Open Workspace Dashboard &rarr;
+          Go to Dashboard
         </Link>
       </div>
-    </section>
+    </div>
   );
 }
