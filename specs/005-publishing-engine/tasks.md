@@ -124,9 +124,9 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 
 **Purpose**: Security audit asserting zero cross-user queue leakage and 100% clean Turborepo pipeline validation.
 
-- [ ] T144 [P] Multi-tenant isolation audit asserting zero cross-user queue or slot access in `apps/web/tests/security/publishing-isolation.test.ts` (Issue: #219)
-- [ ] T145 Execute quickstart validation scenarios defined in `specs/005-publishing-engine/quickstart.md` (Issue: #220)
-- [ ] T146 Monorepo quality gate verification across all packages (`pnpm turbo run build lint typecheck test`) (Issue: #221)
+- [X] T144 [P] Multi-tenant isolation audit asserting zero cross-user queue or slot access in `apps/web/tests/security/publishing-isolation.test.ts` (Issue: #219)
+- [X] T145 Execute quickstart validation scenarios defined in `specs/005-publishing-engine/quickstart.md` (Issue: #220)
+- [X] T146 Monorepo quality gate verification across all packages (`pnpm turbo run build lint typecheck test`) (Issue: #221)
 
 ---
 
