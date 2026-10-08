@@ -14,3 +14,4 @@ export * from './domain/caption.js';
 export * from './domain/storage.js';
 export * from './domain/queue.js';
 export * from './domain/dispatcher.js';
+export * from './domain/insights.js';

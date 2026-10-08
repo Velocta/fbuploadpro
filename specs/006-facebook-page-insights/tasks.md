@@ -8,7 +8,7 @@
 
 **Purpose**: Project initialization, baseline directory structure, and shared contract foundations.
 
-- [ ] T147 Initialize Spec 006 tracking and domain contracts directory in `packages/contracts/src/domain/insights.ts` (Issue: #248)
+- [X] T147 Initialize Spec 006 tracking and domain contracts directory in `packages/contracts/src/domain/insights.ts` (Issue: #248)
 
 ---
 
@@ -18,9 +18,9 @@
 
 **⚠️ CRITICAL**: Must be completed before User Story implementation begins.
 
-- [ ] T148 [P] Define Zod schemas and TypeScript types for `PageInsightsOverview`, `PageInsightsTimeSeriesPoint`, `PageInsightsReactions`, `PageInsightsDemographics`, `PageInsightsResponse` in `packages/contracts/src/domain/insights.ts` (Issue: #249)
-- [ ] T149 [P] Write contract unit tests asserting valid schema parsing and rejection of invalid data in `packages/contracts/tests/insights-contracts.test.ts` (Issue: #250)
-- [ ] T150 [P] Export insights schemas from `@fbuploadpro/contracts` barrel index `packages/contracts/src/index.ts` (Issue: #251)
+- [X] T148 [P] Define Zod schemas and TypeScript types for `PageInsightsOverview`, `PageInsightsTimeSeriesPoint`, `PageInsightsReactions`, `PageInsightsDemographics`, `PageInsightsResponse` in `packages/contracts/src/domain/insights.ts` (Issue: #249)
+- [X] T149 [P] Write contract unit tests asserting valid schema parsing and rejection of invalid data in `packages/contracts/tests/insights-contracts.test.ts` (Issue: #250)
+- [X] T150 [P] Export insights schemas from `@fbuploadpro/contracts` barrel index `packages/contracts/src/index.ts` (Issue: #251)
 - [ ] T151 [P] Create forward PostgreSQL DDL migration `0005_page_insights.sql` defining `page_insights_daily_snapshots` table with compound uniqueness `(user_id, fb_page_id, snapshot_date)` in `packages/database/migrations/0005_page_insights.sql` (Issue: #252)
 - [ ] T152 [P] Define Drizzle ORM schema for `page_insights_daily_snapshots` in `packages/database/src/schema/page-insights.ts` and export from `@fbuploadpro/database` (Issue: #253)
 - [ ] T153 Write database integration test for `page_insights_daily_snapshots` asserting compound tenant isolation and upsert conflict resolution in `packages/database/tests/page-insights.test.ts` (Issue: #254)
