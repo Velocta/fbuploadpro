@@ -69,7 +69,6 @@ CREATE TABLE IF NOT EXISTS publish_logs (
     fb_response_code INT NULL,
     error_message TEXT NULL,
     error_details JSONB NULL,
-    tokens_deducted INT NOT NULL DEFAULT 0 CHECK (tokens_deducted >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_publish_logs_page FOREIGN KEY (user_id, fb_page_id)
         REFERENCES facebook_pages(user_id, id) ON DELETE CASCADE,

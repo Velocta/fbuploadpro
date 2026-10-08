@@ -406,25 +406,6 @@ export function EnqueueModal({
             </span>
           </div>
 
-          {/* Token Deduction Notice */}
-          <div
-            style={{
-              padding: '0.75rem',
-              backgroundColor: '#e8f0fe',
-              borderRadius: '6px',
-              fontSize: '0.8rem',
-              color: '#1967d2',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-            }}
-          >
-            <span style={{ fontSize: '1.1rem' }}>⚡</span>
-            <span>
-              <strong>Billing Assurance:</strong> Exactly 1 token will be deducted strictly upon verified post publication to Facebook. Zero charge on failures.
-            </span>
-          </div>
-
           {/* Footer Actions */}
           <div
             style={{

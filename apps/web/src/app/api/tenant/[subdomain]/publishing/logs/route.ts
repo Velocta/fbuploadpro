@@ -82,7 +82,7 @@ export async function handleListPublishLogs(
   const listSql = `
     SELECT pl.id, pl.user_id, pl.queue_item_id, pl.fb_page_id, pl.status,
            pl.attempt_number, pl.fb_response_code, pl.error_message, pl.error_details,
-           pl.tokens_deducted, pl.created_at
+           pl.created_at
     FROM publish_logs pl
     WHERE ${whereClause}
     ORDER BY pl.created_at DESC
@@ -115,7 +115,6 @@ export async function handleListPublishLogs(
       fbResponseCode: row.fb_response_code != null ? Number(row.fb_response_code) : null,
       errorMessage: row.error_message ? String(row.error_message) : null,
       errorDetails,
-      tokensDeducted: Number(row.tokens_deducted ?? 0),
       createdAt: new Date(String(row.created_at)).toISOString(),
     });
   });

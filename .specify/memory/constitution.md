@@ -1,10 +1,13 @@
 <!--
 Sync Impact Report:
-- Version change: 1.0.0 -> 1.1.0
-- List of modified principles: None
+- Version change: 1.3.0 -> 2.0.0 (MAJOR: Backward-incompatible removal of prepaid token billing model and token balance non-negative constraints)
+- List of modified principles:
+  - Principle III: Multi-Tenant Defense-in-Depth & Data Isolation (Purged financial token balance check constraints `balance >= 0` and atomic token debits; established unrestricted publishing entitlement for active users). Retained strict `user_id` multi-tenant defense-in-depth, composite foreign keys, and compound unique constraints.
 - Added/Modified sections:
-  - Technology & Architectural Constraints: Formally ratified Supabase for PostgreSQL substrate & Auth, Vercel for Next.js 16 web application hosting, and Cloudflare for Edge Workers & R2 Object Storage.
-- Follow-up TODOs: None
+  - Technology & Architectural Constraints: Formally removed Stripe token ledger reference; codified unrestricted publishing via Facebook Graph API v26.0 for active users and deferred all monetization.
+- Removed sections:
+  - Token Ledger & Balance Deduction gates.
+- Follow-up TODOs: Execute spec 007-remove-token-system (clean DDL rewrite purging tokens_balance, token_transactions, tokens_deducted).
 -->
 
 # FBUploadPro Constitution
@@ -18,7 +21,7 @@ No application code, database migrations, or infrastructure configurations may b
 The system enforces strict architectural decoupling between the edge execution layer (Cloudflare Workers), application control plane (Next.js 16 Webapp), and asynchronous ingestion pipelines (VPS Scraper/Downloaders). Edge workers must run in standard V8 isolate environments with zero Node.js TCP socket dependencies, using `@fbuploadpro/database/edge`. Web applications and background services must never cross-import code; all shared data contracts, validation schemas, and error definitions must reside strictly within `@fbuploadpro/contracts`.
 
 ### III. Multi-Tenant Defense-in-Depth & Data Isolation
-Tenant boundaries (`user_id`) are immutable and mandatory across all domain models. There are no agency containers in the platform: the platform architecture is centered strictly on individual **Users** (`user_id`), with **Sellers** and **Admins** operating under dedicated role-based boundaries. Database schemas must enforce multi-tenant isolation through composite foreign keys (e.g. `(user_id, facebook_account_id)`, `(user_id, folder_id)`) and compound unique constraints (e.g. `(user_id, fb_page_id)`) to eliminate any risk of cross-tenant data leakage. Financial and token balances must be protected with non-negative check constraints (`balance >= 0`, `reserved >= 0`) and atomic balance debits to guarantee ledger consistency under concurrency.
+Tenant boundaries (`user_id`) are immutable and mandatory across all domain models. There are no agency containers in the platform: the platform architecture is centered strictly on individual **Users** (`user_id`), with **Sellers** and **Admins** operating under dedicated role-based boundaries. Database schemas must enforce multi-tenant isolation through composite foreign keys (e.g. `(user_id, facebook_account_id)`, `(user_id, folder_id)`) and compound unique constraints (e.g. `(user_id, fb_page_id)`) to eliminate any risk of cross-tenant data leakage. Publishing entitlement is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages. All legacy prepaid token ledger, balance constraints, and token debit mechanisms are formally abolished and purged from the platform data model.
 
 ### IV. Zero-Trust Boundary Validation & Sanitization
 All data crossing public API routes, webhook endpoints, and worker fetch handlers must be validated at runtime against strict Zod schemas. Sensitive secrets, tokens, connection strings, and database credentials must never be emitted in logs or client-facing responses. Diagnostic endpoints such as `/api/health` must enforce strict execution timeout budgets (e.g., 2000ms AbortController) and return sanitized status envelopes without exposing internal infrastructure topology.
@@ -39,6 +42,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
    - **Marketing Apex Domain (`fbuploadpro.com` / `www.fbuploadpro.com`)**: Strictly decoupled from the SaaS application; dedicated to marketing landing pages, Terms of Service (`/terms`), and Privacy Policy (`/privacy`), deployed and operated independently.
    - **Application Central Gateway (`app.fbuploadpro.com`)**: Hosts the primary authentication portal, providing `/login` and `/signup`.
    - **Tenant Workspaces (`{username}.fbuploadpro.com`)**: Serves authenticated user workspaces, with session cookies scoped to `.fbuploadpro.com` to enable seamless transitions from the gateway into private subdomains.
+7. **Publishing & External APIs**: Facebook Graph API v26.0 for reels, photos, and automated first-comment publishing; Cloudflare R2 for media storage. Publishing is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages, with zero token ledger or credit balance checks. All billing and monetization systems are deferred.
 
 ## Development Workflow & Quality Gates
 
@@ -61,4 +65,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [AGENTS.md](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/AGENTS.md).
 
-**Version**: 1.3.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-08
+**Version**: 2.0.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-08

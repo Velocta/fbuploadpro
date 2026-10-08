@@ -1,7 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { getServerSessionContext } from '../../../lib/auth';
-import { createDatabaseClient } from '@fbuploadpro/database';
 
 interface TenantLayoutProps {
   params: Promise<{ subdomain: string }>;
@@ -11,27 +10,6 @@ interface TenantLayoutProps {
 export default async function TenantLayout({ params, children }: TenantLayoutProps) {
   const { subdomain } = await params;
   const session = await getServerSessionContext();
-
-  let tokensBalance = 0;
-  if (session && process.env.DATABASE_URL) {
-    try {
-      const db = createDatabaseClient({
-        connectionString: process.env.DATABASE_URL,
-        connectionTimeoutMillis: 1000,
-      });
-      const row = await db.queryOne<{ tokens_balance: string | number }>(
-        'SELECT tokens_balance FROM users WHERE id = $1',
-        [session.userId]
-      );
-      if (row) {
-        tokensBalance = Number(row.tokens_balance);
-      }
-      await db.close();
-    } catch {
-      // In testing or fallback environments, graceful degradation to 0
-      tokensBalance = 0;
-    }
-  }
 
   const role = session?.role || 'user';
   const roleColors: Record<string, string> = {
@@ -104,22 +82,6 @@ export default async function TenantLayout({ params, children }: TenantLayoutPro
               Seller Portal
             </Link>
           )}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              padding: '0.35rem 0.75rem',
-              backgroundColor: '#e8f0fe',
-              borderRadius: '16px',
-              fontSize: '0.85rem',
-              fontWeight: '600',
-              color: '#1a73e8',
-            }}
-          >
-            <span>⚡</span>
-            <span>{tokensBalance} Tokens</span>
-          </div>
           <Link
             href="/login"
             style={{

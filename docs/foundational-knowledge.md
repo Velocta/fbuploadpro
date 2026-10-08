@@ -6,7 +6,7 @@ This document serves as the canonical source of truth for the product vision, ar
 
 ## 1. Product Vision & Core Mission
 
-**FBUploadPro** is a modern, cloud-native social media automation and video/image publishing SaaS. It empowers content creators, digital marketers, and media operators to manage multiple Facebook profiles, organize rich digital media, and automate high-volume publishing to Facebook Pages through intelligent, slot-based queues with zero token leakage, real-time analytics, and transparent pay-as-you-go token billing.
+**FBUploadPro** is a modern, cloud-native social media automation and video/image publishing SaaS. It empowers content creators, digital marketers, and media operators to manage multiple Facebook profiles, organize rich digital media, and automate high-volume publishing to Facebook Pages through intelligent, slot-based queues with robust multi-tenant data isolation, real-time analytics, and unrestricted publishing entitlement for active users.
 
 ---
 
@@ -33,7 +33,6 @@ flowchart TD
 
     subgraph ExternalServices ["External API Gateways"]
         FB["Facebook Graph API v26.0\n(Reels, Feed, Comments)"]
-        Stripe["Stripe API & Webhooks\n(Token Ledger Settlement)"]
     end
 
     Web -->|Auth & User Identity| Auth
@@ -43,8 +42,6 @@ flowchart TD
     Worker -->|Claim due posts via SKIP LOCKED| PG
     Worker -->|Stream media assets| R2
     Worker -->|Publish posts & first comments| FB
-    Web -->|Stripe Checkout| Stripe
-    Stripe -->|Webhooks| Web
 ```
 
 | **Marketing Site** | **Independent Host** | Landing Page, Terms, Privacy | High-converting marketing landing pages, Terms of Service (`/terms`), Privacy Policy (`/privacy`), SEO content, deployed independently. |
@@ -54,7 +51,7 @@ flowchart TD
 | **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks (`SKIP LOCKED`), direct media streaming to Meta APIs. |
 | **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage, presigned direct PC-to-bucket uploads, thumbnail cache. |
 | **Social Publishing** | **Meta** | Facebook Graph API v26.0 | Reels and photo publishing, automatic first comment submission, page insights sync. |
-| **Billing & Payments** | **Stripe** | Stripe Billing & Webhooks | Pay-as-you-go token packs, seller referral commission attribution. |
+| **Billing & Payments (Deferred)** | **Stripe (Deferred)** | Deferred Billing & Invoicing | All monetization and token billing deferred until explicitly requested. Unrestricted publishing entitlement for active users. |
 
 ---
 
@@ -77,7 +74,7 @@ The platform adopts a decoupled multi-domain topology:
    - Mismatched users (e.g. user `alex` trying to view `https://sarah.fbuploadpro.com`) are redirected to their own valid workspace.
 4. **Shared Session Cookie Scope**:
    - Authentication cookies are set on the apex wildcard cookie domain (`.fbuploadpro.com`), ensuring uninterrupted session continuity between `app.fbuploadpro.com` and `{username}.fbuploadpro.com`.
-  - Facebook accounts, imported Facebook Pages, media assets, publishing queues, and token ledgers are strictly scoped to the active tenant user.
+  - Facebook accounts, imported Facebook Pages, media assets, and publishing queues are strictly scoped to the active tenant user.
   - Zero cross-user data leakage enforced via database compound constraints (`user_id`) and edge routing guards.
 
 ---
@@ -88,9 +85,9 @@ The platform operates on a clear three-tier role taxonomy:
 
 | Role | Primary Purpose | Key Capabilities |
 |---|---|---|
-| **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders and reusable captions, configures Page queue slots, schedules posts, monitors Page insights, and purchases operational tokens via Stripe. |
-| **Seller** | Affiliate / Referral Partner | Onboards users via unique referral links/codes. Tracks referred users' activity and earns commission credits / revenue share on referred users' Stripe token purchases. |
-| **Admin** | Financial & Commission Controller | Configures platform token pricing tiers, sets seller commission percentages, reviews referral performance, and approves/processes commission payouts. User onboarding and management is completely automated. |
+| **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders and reusable captions, configures Page queue slots, schedules and publishes unlimited posts without credit checks, and monitors Page insights. |
+| **Seller** | Affiliate / Referral Partner | Onboards users via unique referral links/codes (referral tracking and commission attribution deferred pending monetization). |
+| **Admin** | Platform & System Controller | Manages platform health, system operations, and user statuses. User onboarding and management is completely automated (monetization controls deferred). |
 
 ---
 
@@ -127,9 +124,9 @@ Instead of manual calendar scheduling or legacy scraper bots, publishing is driv
    - Atomically claims due queue items using PostgreSQL row-level locks (`FOR UPDATE SKIP LOCKED`).
    - Streams media directly to **Facebook Graph API v26.0**.
    - Submits the automated first comment if configured.
-5. **Token Consumption Lifecycle**:
-   - Pre-flight checks ensure the user has sufficient tokens before scheduling.
-   - **Tokens are deducted strictly upon successful publication** to Facebook (with automatic rollback and detailed error logs if publishing fails).
+5. **Unrestricted Publishing Entitlement**:
+   - Publishing entitlement is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages.
+   - Any active user can queue and publish unlimited posts with zero credit checks, balance deduction gates, or token ledgers.
    - Zero reliance on external scraping daemons or VPS downloaders; 100% focused on user-owned creative content.
 
 ---
@@ -153,14 +150,11 @@ Insights are accessible in a dedicated, per-page view (rather than cluttering th
 
 ---
 
-## 8. Financial & Token Economy
+## 8. Deferred Monetization & Unrestricted Publishing Policy
 
-- **Prepaid Token Model**: Users buy token packs (e.g., 500, 2,000, 10,000 tokens) via Stripe Checkout.
-- **Automated Webhook Balance Credit**: Stripe webhook events automatically credit the user's PostgreSQL token balance.
-- **Seller Referral Attribution**:
-  - When a user signs up with a Seller's referral code, purchases are tied to that Seller.
-  - Commission credits are logged in a dedicated ledger for Admin payout review.
-- **Transparent Ledger**: Every token credit, debit, refund, or adjustment is permanently recorded in `token_transactions`.
+- **Token Economy Purged**: The prepaid token system, token ledger, and credit balance model have been formally abolished. Database columns (`tokens_balance`, `tokens_deducted`) and tables (`token_transactions`) are removed via clean DDL rewrite.
+- **Unrestricted Publishing**: Any user with `status = 'active'` and connected Facebook pages can queue and publish unlimited posts without credit checks or balance deductions.
+- **Deferred Monetization**: All billing, subscription/token purchasing, Stripe checkout integrations, and affiliate referral commissions are deferred until explicitly requested.
 
 ---
 
@@ -174,11 +168,15 @@ flowchart LR
     M3[Spec 003: FB Graph API v26.0 & Accounts]
     M4[Spec 004: Dedicated Media Library & R2]
     M5[Spec 005: Automated Queue Slots Engine]
+    M6[Spec 006: Dedicated Page Insights]
   end
 
-  subgraph Next [Roadmap]
-    M6[Spec 006: Dedicated Page Insights]
-    M7[Spec 007: Stripe Billing & Seller Referrals]
+  subgraph Active [Active Milestone]
+    M7[Spec 007: Purge Token System]
+  end
+
+  subgraph Deferred [Deferred Work]
+    M8[Stripe Billing & Referrals]
   end
 
   M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7
@@ -188,9 +186,10 @@ flowchart LR
 - **Spec 002 (Completed & Merged)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
 - **Spec 003 (Completed & Merged)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
 - **Spec 004 (Completed & Merged)**: **Dedicated Media Library & Cloudflare R2 Uploads** (36 tasks, T078–T113, 146 passing tests; direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset quota meters, media preview modal, and security isolation audit).
-- **Spec 005 (Completed & Merged)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (tasks T114–T149, 254 passing tests; recurring slot definitions, timeline view & enqueue modal, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment, atomic token settlement upon publication, and security isolation audit).
-- **Spec 006 (Next Target / Active Milestone)**: **Dedicated Facebook Page Insights** (Time-series followers, video views, watch time, reactions, demographics).
-- **Spec 007 (Planned)**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller**.
+- **Spec 005 (Completed & Merged)**: **Automated Queue Slots Publishing Engine & Edge Dispatcher** (tasks T114–T149; recurring slot definitions, timeline view & enqueue modal, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment, and security isolation audit).
+- **Spec 006 (Completed & Merged)**: **Dedicated Facebook Page Insights** (Daily page snapshots, Graph API v26.0 sync, time-series followers, video views, watch time, reactions, demographics).
+- **Spec 007 (Active Milestone)**: **Purge Token System & Enforce Unrestricted Publishing** (Remove token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and grant unrestricted publishing for active users).
+- **Deferred Milestones**: **Stripe Token Billing, Seller Referrals & Admin Commission Controller** (Deferred until monetization is explicitly requested).
 
 ---
 
@@ -212,4 +211,8 @@ All development follows autonomous multi-agent orchestration codified in [`AGENT
    - Atomic PR diffs strictly under 150–200 LoC per PR.
    - 100% Turborepo quality gates green (`build`, `lint`, `typecheck`, `test`).
    - Zero direct pushes to `main`.
+5. **Unrestricted Publishing Governance (Constitution v2.0.0)**:
+   - In accordance with Constitution v2.0.0, the platform enforces unrestricted queue publishing for all active users (`status = 'active'`).
+   - Zero token balance checks, deductions, or credit ledgers are permitted in the scheduling or publishing pipeline.
+   - All billing, payment gateway, and monetization logic remains deferred until explicitly requested.
 

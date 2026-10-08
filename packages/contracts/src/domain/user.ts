@@ -45,7 +45,6 @@ export const UserSchema = z.object({
   name: z.string().max(100).nullable().optional(),
   subdomain: SubdomainSchema,
   role: UserRoleSchema.default('user'),
-  tokensBalance: z.number().int().nonnegative().default(0),
   status: UserStatusSchema.default('active'),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),

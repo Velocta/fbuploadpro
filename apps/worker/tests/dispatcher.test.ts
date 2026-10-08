@@ -155,7 +155,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       expect(outcome.status).toBe('published');
       expect(outcome.fbPostId).toBe('10987654321_video_99999');
-      expect(outcome.tokensDeducted).toBe(1);
 
       expect(mockFbClient.reelsPublished).toHaveLength(1);
       expect(mockFbClient.reelsPublished[0]).toEqual({
@@ -175,7 +174,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       expect(outcome.status).toBe('published');
       expect(outcome.fbPostId).toBe('10987654321_photo_88888');
-      expect(outcome.tokensDeducted).toBe(1);
 
       expect(mockFbClient.photosPublished).toHaveLength(1);
       expect(mockFbClient.photosPublished[0]).toEqual({
@@ -197,7 +195,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       const outcome = await dispatchItem(corruptedItem, mockFbClient, TEST_MASTER_KEY);
 
       expect(outcome.status).toBe('failed');
-      expect(outcome.tokensDeducted).toBe(0);
       expect(outcome.errorMessage).toContain('Token decryption failed');
       expect(mockFbClient.reelsPublished).toHaveLength(0);
     });
@@ -214,7 +211,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       expect(outcome.status).toBe('failed');
       expect(outcome.errorCode).toBe(190);
-      expect(outcome.tokensDeducted).toBe(0);
     });
 
     it('returns retry status on transient/rate-limit error when retryCount < maxRetries', async () => {
@@ -232,7 +228,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       expect(outcome.status).toBe('retry');
       expect(outcome.errorCode).toBe(32);
-      expect(outcome.tokensDeducted).toBe(0);
     });
 
     it('returns failed status when maxRetries exhausted even on transient error', async () => {
@@ -249,7 +244,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       );
 
       expect(outcome.status).toBe('failed');
-      expect(outcome.tokensDeducted).toBe(0);
     });
   });
 
@@ -283,7 +277,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       expect(outcome.status).toBe('published');
       expect(outcome.fbPostId).toBe('10987654321_post_888');
       expect(outcome.fbCommentId).toBeUndefined();
-      expect(outcome.tokensDeducted).toBe(1);
     });
 
     it('records external post ID and comment ID into queue_items database table', async () => {
@@ -296,7 +289,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
         status: 'published',
         fbPostId: 'fb_post_999',
         fbCommentId: 'fb_comment_888',
-        tokensDeducted: 1,
       });
 
       expect(mockDb.query).toHaveBeenCalledWith(
@@ -314,7 +306,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
         queueItemId: sampleClaimedVideoItem.id,
         status: 'retry',
         errorMessage: 'Transient error',
-        tokensDeducted: 0,
       });
 
       expect(mockDb.query).toHaveBeenCalledWith(
@@ -332,7 +323,6 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
         queueItemId: sampleClaimedVideoItem.id,
         status: 'failed',
         errorMessage: 'Invalid credentials',
-        tokensDeducted: 0,
       });
 
       expect(mockDb.query).toHaveBeenCalledWith(

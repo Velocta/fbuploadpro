@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 describe('Database Migrations Substrate', () => {
-  it('0001_initial_schema.sql contains users table with constraints and indexes', () => {
+  it('0001_initial_schema.sql contains users table with constraints and indexes without tokens_balance', () => {
     const migrationPath = path.resolve(__dirname, '../migrations/0001_initial_schema.sql');
     expect(fs.existsSync(migrationPath)).toBe(true);
 
@@ -13,7 +13,7 @@ describe('Database Migrations Substrate', () => {
     expect(ddl).toContain('email VARCHAR(255) NOT NULL UNIQUE');
     expect(ddl).toContain('subdomain VARCHAR(50) NOT NULL UNIQUE');
     expect(ddl).toContain("role VARCHAR(20) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'seller', 'admin'))");
-    expect(ddl).toContain('tokens_balance BIGINT NOT NULL DEFAULT 0 CHECK (tokens_balance >= 0)');
+    expect(ddl).not.toContain('tokens_balance');
     expect(ddl).toContain("status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended'))");
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_subdomain ON users(subdomain)');
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
@@ -35,14 +35,19 @@ describe('Database Migrations Substrate', () => {
     expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_fb_pages_user_id ON facebook_pages(user_id)');
   });
 
-  it('0001_initial_schema.sql contains token_transactions table with constraints and indexes', () => {
+  it('0001_initial_schema.sql does not contain token_transactions table', () => {
     const migrationPath = path.resolve(__dirname, '../migrations/0001_initial_schema.sql');
     const ddl = fs.readFileSync(migrationPath, 'utf8');
 
-    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS token_transactions');
-    expect(ddl).toContain('user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE');
-    expect(ddl).toContain('amount BIGINT NOT NULL CHECK (amount > 0)');
-    expect(ddl).toContain("transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('credit', 'debit', 'refund', 'adjustment'))");
-    expect(ddl).toContain('CREATE INDEX IF NOT EXISTS idx_token_transactions_user_id ON token_transactions(user_id)');
+    expect(ddl).not.toContain('CREATE TABLE IF NOT EXISTS token_transactions');
+    expect(ddl).not.toContain('idx_token_transactions_user_id');
+  });
+
+  it('0004_publishing_engine.sql does not contain tokens_deducted in publish_logs', () => {
+    const migrationPath = path.resolve(__dirname, '../migrations/0004_publishing_engine.sql');
+    const ddl = fs.readFileSync(migrationPath, 'utf8');
+
+    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS publish_logs');
+    expect(ddl).not.toContain('tokens_deducted');
   });
 });

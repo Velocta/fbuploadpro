@@ -112,7 +112,6 @@ export async function dispatchItem(
       queueItemId: item.id,
       status: 'failed',
       errorMessage: `Token decryption failed: ${errorMessage}`,
-      tokensDeducted: 0,
     };
     return outcome;
   }
@@ -153,7 +152,6 @@ export async function dispatchItem(
       queueItemId: item.id,
       status: canRetry ? 'retry' : 'failed',
       errorMessage,
-      tokensDeducted: 0,
       ...(errorCode !== undefined ? { errorCode } : {}),
     };
     return outcome;
@@ -170,8 +168,7 @@ export async function dispatchItem(
       });
       fbCommentId = commentRes.commentId;
     } catch (commentErr: unknown) {
-      // In accordance with research.md: if post succeeds but comment fails,
-      // post remains published and 1 token is deducted.
+      // If post succeeds but comment fails, post remains published.
       console.warn(
         `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
         commentErr
@@ -183,7 +180,6 @@ export async function dispatchItem(
     queueItemId: item.id,
     status: 'published',
     fbPostId: publishResult.postId,
-    tokensDeducted: 1,
     ...(fbCommentId !== undefined ? { fbCommentId } : {}),
   };
   return outcome;

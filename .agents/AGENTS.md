@@ -117,7 +117,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - **Edge Worker**: Cloudflare Workers edge runtime (`apps/worker`). V8 isolate execution; import database via `@fbuploadpro/database/edge`.
 - **Contracts**: Shared schemas and validations in `@fbuploadpro/contracts` with strict Zod types.
 - **Database**: PostgreSQL substrate in `@fbuploadpro/database` with compound tenant constraints (`user_id`).
-- **Publishing & APIs**: Facebook Graph API v26.0, Cloudflare R2 media storage, Stripe token ledger.
+- **Publishing & APIs**: Facebook Graph API v26.0, Cloudflare R2 media storage.
 
 ### Quality & Governance
 - Follow coding standards in `.agents/rules/coding-standards.md`.

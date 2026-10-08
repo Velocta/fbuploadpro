@@ -323,9 +323,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from enqueuing media targeting User A page with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('SELECT tokens_balance FROM users')) {
-            return Promise.resolve([{ tokens_balance: 10 }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             // Page check: WHERE id = $1 AND user_id = $2
             if (params && params[0] === userA.pageId && params[1] === userB.id) {
@@ -354,9 +351,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from enqueuing User A media asset with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('SELECT tokens_balance FROM users')) {
-            return Promise.resolve([{ tokens_balance: 10 }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             if (params && params[0] === userB.pageId && params[1] === userB.id) {
               return Promise.resolve([{ id: userB.pageId }]);
@@ -390,9 +384,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from enqueuing media into User A queue slot with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('SELECT tokens_balance FROM users')) {
-            return Promise.resolve([{ tokens_balance: 10 }]);
-          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: userB.pageId }]);
           }
@@ -651,7 +642,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
               fb_response_code: 200,
               error_message: null,
               error_details: null,
-              tokens_deducted: 1,
               created_at: new Date().toISOString(),
             },
           ]);

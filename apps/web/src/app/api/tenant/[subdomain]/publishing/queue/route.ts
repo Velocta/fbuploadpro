@@ -61,24 +61,7 @@ export async function handleEnqueueMedia(
 
   const db = dbClient ?? getDbClient();
 
-  // 4. Pre-flight token balance check (tokens_balance >= 1)
-  const userRows = (await db.query(
-    'SELECT tokens_balance FROM users WHERE id = $1',
-    [session.userId]
-  )) as any[];
-
-  const tokenBalance = userRows.length > 0 ? Number(userRows[0].tokens_balance) : 0;
-  if (tokenBalance < 1) {
-    return NextResponse.json(
-      {
-        error: 'INSUFFICIENT_TOKENS',
-        message: 'Insufficient token balance to enqueue media',
-      },
-      { status: 402 }
-    );
-  }
-
-  // 5. Verify page exists and belongs to user
+  // 4. Verify page exists and belongs to user
   const pageRows = (await db.query(
     'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
     [pageId, session.userId]

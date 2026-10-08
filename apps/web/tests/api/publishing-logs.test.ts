@@ -83,7 +83,6 @@ describe('Publish Logs API Route Handler (T138)', () => {
         fb_response_code: null,
         error_message: null,
         error_details: null,
-        tokens_deducted: 1,
         created_at: new Date('2026-10-07T12:00:00Z'),
       };
 
@@ -118,7 +117,6 @@ describe('Publish Logs API Route Handler (T138)', () => {
         fbResponseCode: null,
         errorMessage: null,
         errorDetails: null,
-        tokensDeducted: 1,
         createdAt: '2026-10-07T12:00:00.000Z',
       });
     });
