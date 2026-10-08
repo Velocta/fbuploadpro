@@ -55,4 +55,29 @@ describe('Next.js Edge Middleware Subdomain Routing (User Story 1)', () => {
     expect(rewriteUrl).not.toBeNull();
     expect(new URL(rewriteUrl!).pathname).toBe('/tenant/acme/login');
   });
+
+  it('serves central app gateway /login and /signup without tenant rewrite', async () => {
+    const loginReq = new NextRequest('http://app.localhost:3000/login', {
+      headers: { host: 'app.localhost:3000' },
+    });
+    const loginRes = await middleware(loginReq);
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.headers.get('x-middleware-rewrite')).toBeNull();
+
+    const signupReq = new NextRequest('http://app.localhost:3000/signup', {
+      headers: { host: 'app.localhost:3000' },
+    });
+    const signupRes = await middleware(signupReq);
+    expect(signupRes.status).toBe(200);
+    expect(signupRes.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+
+  it('redirects unauthenticated root visit on app gateway to /login', async () => {
+    const req = new NextRequest('http://app.localhost:3000/', {
+      headers: { host: 'app.localhost:3000' },
+    });
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toContain('/login');
+  });
 });

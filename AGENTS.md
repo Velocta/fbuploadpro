@@ -72,7 +72,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 | Task Type & Package Scope | Target Subagent | Enforced Standard |
 | :--- | :--- | :--- |
 | **`apps/web`** (UI, Pages, Layouts, Components, CSS) | `frontend-engineer` | Anti-slop craft (*Taste Skill* dials + *Impeccable* craft floor), Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`). |
-| **`apps/worker`**, **`packages/contracts`**, **`packages/database`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`agency_id` / `user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
+| **`apps/worker`**, **`packages/contracts`**, **`packages/database`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
 | **E2E & Integration Tests**, Contracts, Scenarios | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation. |
 | **Turborepo**, **CI/CD**, **Cloudflare Wrangler**, Docker | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, atomic PR hygiene. |
 
@@ -116,10 +116,14 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - **Web App**: Next.js 16 (App Router) + React 19 (`apps/web`). Event-driven state transitions only.
 - **Edge Worker**: Cloudflare Workers edge runtime (`apps/worker`). V8 isolate execution; import database via `@fbuploadpro/database/edge`.
 - **Contracts**: Shared schemas and validations in `@fbuploadpro/contracts` with strict Zod types.
-- **Database**: PostgreSQL substrate in `@fbuploadpro/database` with compound tenant constraints (`agency_id` / `user_id`).
+- **Database**: PostgreSQL substrate in `@fbuploadpro/database` with compound tenant constraints (`user_id`).
 - **Publishing & APIs**: Facebook Graph API v26.0, Cloudflare R2 media storage, Stripe token ledger.
 
 ### Quality & Governance
 - Follow coding standards in `.agents/rules/coding-standards.md`.
 - Follow Git guidelines in `.agents/rules/git-workflow.md` (Atomic PRs <150–200 LoC).
 - Quality Gate: `pnpm turbo run build lint typecheck test` must pass with 100% success and 0 errors before PR creation.
+- **Deployment Failure Transparency & Diagnosis**: Whenever a deployment, release pipeline, or CI/CD workflow fails, the agent MUST immediately inspect the execution logs (e.g., via `gh run view --log-failed` or deployment service logs), clearly explain to the user the exact root cause of why it failed (e.g., missing secret, schema migration error, API quota, timeout, or build failure), and outline concrete remediation steps or autonomously apply the fix.
+- **Continuous Constitution & Documentation Synchronization**:
+  - **On User Directives & Project Insights**: Whenever the user shares new details, business logic, constraints, architectural choices, or domain rules about the project, the agent MUST immediately update `.specify/memory/constitution.md` (for principles & governance) and corresponding documentation under `docs/` (e.g., `docs/foundational-knowledge.md`). Never leave project knowledge isolated in chat history.
+  - **On Merge / Push to `main`**: Whenever modifications, new features, or milestone tasks are pushed or merged into `main`, the agent MUST proactively update documentation in `docs/` (updating the milestone roadmap, API contracts, database schemas, or deployment guides) to ensure documentation never drifts from production reality.

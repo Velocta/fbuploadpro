@@ -17,3 +17,6 @@ Follow Conventional Commits:
 - **Atomic Diffs**: Net pull request diffs must remain strictly under 150–200 lines of code.
 - **Traceability**: Reference the active specification ID from `specs/` and associated GitHub Issue (`Closes #X`).
 - **Quality Gates**: All automated checks (`pnpm turbo run build lint typecheck test`) must pass with 100% test pass rate and 0 errors/warnings prior to requesting review.
+
+## 4. Documentation Synchronization
+- Every pull request or merge to `main` must include synchronized updates to `docs/` (e.g., updating roadmap milestone statuses in `docs/foundational-knowledge.md`, architecture diagrams, environment configurations, and API contracts) to prevent documentation drift.

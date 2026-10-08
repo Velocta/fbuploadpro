@@ -105,7 +105,7 @@ AI-generated code frequently suffers from "slop"—unnecessary bloat, speculativ
 - **Strict Execution Budgets**: External HTTP calls must carry explicit timeouts via `AbortController` (e.g. 2000ms max).
 
 ### C. Multi-Tenant Data Isolation (`packages/database`)
-- **Tenant Scope Enforcement**: Every tenant-owned database table must enforce isolation via `agency_id` / `user_id`.
+- **Tenant Scope Enforcement**: Every tenant-owned database table must enforce isolation strictly via `user_id`. There are no agency containers in the platform.
 - **Compound Constraints**: Enforce foreign keys and unique constraints using compound keys (e.g., `(user_id, facebook_account_id)`).
 - **Concurrency & Ledgers**: Token ledgers must use atomic balance debits and non-negative check constraints (`balance >= 0`).
 
