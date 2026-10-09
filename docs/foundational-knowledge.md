@@ -24,7 +24,6 @@ flowchart TD
 
     subgraph AppPlane ["Application Control Plane (Next.js 16 App Router)"]
         Web["apps/web\nNext.js 16 App Router + React 19\n(Tenant Subdomain Routing)"]
-        Showroom["apps/showroom\nIsolated UI Sandbox (Port 3001)\n(Pre-merge Visual Verification)"]
     end
 
     subgraph SupabaseCloud ["Supabase (Data Substrate & Identity)"]
@@ -234,10 +233,10 @@ All development follows autonomous multi-agent orchestration codified in [`.agen
 1. **Focused Execution & Mandatory Human Merge Gate ("Ask Once, Verify & Approve Before Merge")**:
    - The agent confirms **which spec or feature to work on**.
    - The agent autonomously conducts specification, planning, task decomposition, and implementation across subagents without constant micro-interruptions.
-   - **Pre-Merge UI Showroom**: To keep agent focus sharp and eliminate mock data contamination from `apps/web`, component testing is batched at the very end when all milestone tasks are complete. The agent launches `apps/showroom` and provides an ephemeral public tunnel link for interactive inspection across all states (empty, loading, active, error, mobile/desktop).
+   - **Post-PR Vercel Preview Testing**: UI components and layouts are reviewed and validated using live Vercel Preview Deployments generated automatically for each Pull Request. The standalone showroom app (`apps/showroom`) is decommissioned. The agent retrieves the preview URL and provides it for interactive user inspection across all states (empty, loading, active, error, mobile/desktop).
    - **Mandatory Human Approval Gate**: The agent MUST NEVER merge any PR into `main` without explicitly asking the user and receiving direct approval. This applies to all PRs (frontend, backend, database migrations, devops, or docs).
 2. **Deterministic 7-Stage Sequence**:
-   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement` ➔ `/speckit-converge` ➔ `Pre-Merge Showroom & Human Approval` ➔ `Merge & Deploy`.
+   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement` ➔ `/speckit-converge` ➔ `PR Vercel Preview & Human Approval` ➔ `Merge & Deploy`.
 3. **Clean Chat & Sub-Agent Delegation**:
    - Orchestrator keeps main chat executive-ready, isolating verbose commands into dedicated subagents (`frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`).
 4. **Constitutional Guardrails**:

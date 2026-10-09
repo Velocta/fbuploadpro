@@ -6,8 +6,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "showroom": "turbo run dev --filter=@fbuploadpro/showroom"
+    "test": "turbo run test"
   },
   "devDependencies": {
     "@eslint/js": "^9.20.0",

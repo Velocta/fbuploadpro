@@ -128,12 +128,11 @@ Do not attempt to execute all heterogeneous tasks in a single context. Parse `sp
 
 ---
 
-### Phase 9.5: Pre-Merge Review, Showroom Testing & Mandatory Human Approval
+### Phase 9.5: Pre-Merge Review, Vercel Preview Testing & Mandatory Human Approval
 1. Once convergence is verified and all tests pass cleanly, open the Pull Request via `gh pr create`.
 2. **If UI Components are modified**:
-   - Launch the dedicated showroom sandbox (`pnpm showroom` on port 3001).
-   - Generate an ephemeral Cloudflare Quick Tunnel (`cloudflared tunnel --url http://localhost:3001`).
-   - Provide the live HTTPS link in chat for the user to interactively inspect and test all component states.
+   - Inspect the PR deployment status and obtain the live Vercel Preview Deployment URL.
+   - Provide the live Vercel preview link in chat for the user to interactively inspect and test all component states.
 3. **Mandatory Human Approval Gate**:
    - Explicitly ask the user for approval: *"PR #X is tested and ready. May I proceed with merging into main?"*
    - **Non-negotiable**: Even if no frontend code is present (backend, database, devops, docs), NEVER merge to `main` without waiting for and receiving explicit approval from the user.
