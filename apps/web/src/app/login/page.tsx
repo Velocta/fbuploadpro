@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Button, Alert } from '@/components/ui';
+import { Input, Button, Alert } from '@/components/ui';
+import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
+import { PasswordInput } from '@/components/auth/password-input';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 export default function LoginPage() {
@@ -70,101 +72,66 @@ export default function LoginPage() {
   };
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: SPACING.lg,
-        backgroundColor: 'var(--bg-canvas, #000000)',
-        color: 'var(--text-main, #ffffff)',
-        fontFamily: TYPOGRAPHY.fontFamily,
-      }}
+    <AuthSplitLayout
+      title="Sign In"
+      description="Enter your credentials to access your Facebook publishing workspace."
+      footer={
+        <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+          Don&apos;t have an account?{' '}
+          <Link
+            href="/signup"
+            style={{
+              color: PALETTE.primary,
+              textDecoration: 'none',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+            }}
+          >
+            Create one
+          </Link>
+        </span>
+      }
     >
-      <div style={{ maxWidth: '400px', width: '100%' }}>
-        <Card>
-          <CardHeader>
-            <div style={{ marginBottom: SPACING.xs }}>
-              <span
-                style={{
-                  fontSize: '0.875rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  letterSpacing: '-0.02em',
-                  color: 'var(--text-main)',
-                }}
-              >
-                FBUploadPro
-              </span>
-            </div>
-            <CardTitle>Sign In</CardTitle>
-            <CardDescription>
-              Sign in to manage your Facebook pages and scheduled reels.
-            </CardDescription>
-          </CardHeader>
+      {errorMessage && (
+        <div style={{ marginBottom: SPACING.lg }}>
+          <Alert
+            severity="error"
+            title="Couldn't sign you in"
+            message={errorMessage}
+            onClose={() => setErrorMessage(null)}
+          />
+        </div>
+      )}
 
-          <CardContent>
-            {errorMessage && (
-              <div style={{ marginBottom: SPACING.lg }}>
-                <Alert
-                  severity="error"
-                  title="Couldn't sign you in"
-                  message={errorMessage}
-                  onClose={() => setErrorMessage(null)}
-                />
-              </div>
-            )}
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <Input
+          label="Email Address"
+          type="email"
+          placeholder="you@domain.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={isSubmitting}
+          required
+        />
 
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-              <Input
-                label="Email Address"
-                type="email"
-                placeholder="you@domain.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isSubmitting}
-                required
-              />
+        <PasswordInput
+          label="Password"
+          placeholder="••••••••••••"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          disabled={isSubmitting}
+          required
+        />
 
-              <Input
-                label="Password"
-                type="password"
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isSubmitting}
-                required
-              />
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                isLoading={isSubmitting}
-                style={{ width: '100%', marginTop: SPACING.sm }}
-              >
-                Sign In
-              </Button>
-            </form>
-          </CardContent>
-
-          <CardFooter style={{ justifyContent: 'center' }}>
-            <span style={{ fontSize: '0.8125rem', color: 'var(--text-dim, #6b7280)' }}>
-              Don&apos;t have an account?{' '}
-              <Link
-                href="/signup"
-                style={{
-                  color: PALETTE.primary,
-                  textDecoration: 'none',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                }}
-              >
-                Create one
-              </Link>
-            </span>
-          </CardFooter>
-        </Card>
-      </div>
-    </main>
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          isLoading={isSubmitting}
+          style={{ width: '100%', marginTop: SPACING.sm }}
+        >
+          Sign In
+        </Button>
+      </form>
+    </AuthSplitLayout>
   );
 }

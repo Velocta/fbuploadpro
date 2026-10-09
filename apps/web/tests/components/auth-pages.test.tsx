@@ -5,9 +5,9 @@ import SignupPage from '../../src/app/signup/page';
 import LoginPage from '../../src/app/login/page';
 import { PALETTE } from '@/lib/theme';
 
-describe('Auth Pages UI (Spec 009)', () => {
+describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
   describe('SignupPage', () => {
-    it('renders all required registration inputs with labels and helper text', () => {
+    it('renders all required registration inputs without subdomain preview', () => {
       const { hasText, hasAttribute, html } = render(<SignupPage />);
 
       expect(hasText('Create Account')).toBe(true);
@@ -15,7 +15,8 @@ describe('Auth Pages UI (Spec 009)', () => {
       expect(hasText('Phone Number')).toBe(true);
       expect(hasText('Email Address')).toBe(true);
       expect(hasText('Password')).toBe(true);
-      expect(hasText('Workspace URL:')).toBe(true);
+      // Per Spec 010 user directive, subdomain preview is removed
+      expect(hasText('Workspace URL:')).toBe(false);
       expect(hasText('Create Workspace')).toBe(true);
 
       expect(hasAttribute('type', 'email')).toBe(true);
