@@ -223,6 +223,296 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
   return candidate;
 }
 
+export async function signUpTenantUser(params: {
+  name: string;
+  phone: string;
+  email: string;
+  password?: string | undefined;
+  hashedPassword?: string | undefined;
+}): Promise<{ user: AuthUser; requiresOtp: boolean; simulatedOtp?: string | undefined }> {
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(params.email);
+  } catch {
+    canonicalEmail = params.email.trim().toLowerCase();
+  }
+
+  let formattedPhone: string;
+  try {
+    formattedPhone = validateAndFormatE164Phone(params.phone);
+  } catch {
+    formattedPhone = params.phone.trim();
+  }
+
+  const existingUser = await findUserByEmail(canonicalEmail);
+  if (existingUser) {
+    if (existingUser.status !== 'pending_verification') {
+      throw new Error('Email is already registered');
+    }
+    const resendRes = await resendSignupOtpViaSupabase(canonicalEmail);
+    return {
+      user: existingUser,
+      requiresOtp: true,
+      simulatedOtp: resendRes.otp,
+    };
+  }
+
+  const rawSubdomain = deriveSubdomainFromEmail(canonicalEmail);
+  const subdomain = await resolveUniqueSubdomain(rawSubdomain);
+  const rawPassword = params.password || '';
+  const hashedPassword = params.hashedPassword || (rawPassword ? await hashPassword(rawPassword) : '');
+
+  const supabase = getSupabaseClient();
+  let userRecord: AuthUser;
+
+  if (supabase) {
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: canonicalEmail,
+      password: rawPassword,
+      options: {
+        data: {
+          name: params.name,
+          phone: formattedPhone,
+          subdomain,
+        },
+      },
+    });
+
+    if (authError || !authData.user) {
+      if (authError?.message?.toLowerCase().includes('already registered')) {
+        throw new Error('Email is already registered');
+      }
+      throw new Error(authError?.message || 'Authentication registration failed');
+    }
+
+    const userId = authData.user.id;
+    try {
+      const { data: inserted, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: canonicalEmail,
+          normalized_email: canonicalEmail,
+          name: params.name,
+          phone: formattedPhone,
+          subdomain,
+          role: 'user',
+          status: 'pending_verification',
+        })
+        .select('id, email, name, phone, subdomain, role, status')
+        .single();
+
+      if (insertError) {
+        console.error('[Supabase PostgREST] User insert error:', insertError.message);
+      }
+      userRecord = (inserted as AuthUser) || {
+        id: userId,
+        email: canonicalEmail,
+        name: params.name,
+        phone: formattedPhone,
+        subdomain,
+        role: 'user',
+        status: 'pending_verification',
+      };
+    } catch (insertErr) {
+      console.error('[Supabase PostgREST] User insert exception:', insertErr);
+      userRecord = {
+        id: userId,
+        email: canonicalEmail,
+        name: params.name,
+        phone: formattedPhone,
+        subdomain,
+        role: 'user',
+        status: 'pending_verification',
+      };
+    }
+  } else {
+    // Local / test fallback
+    const { createPendingSignup } = await import('@/lib/otp-service');
+    const { otp } = createPendingSignup({
+      name: params.name,
+      phone: formattedPhone,
+      email: canonicalEmail,
+      password: rawPassword,
+      hashedPassword,
+    });
+
+    const userId = crypto.randomUUID();
+    userRecord = {
+      id: userId,
+      email: canonicalEmail,
+      name: params.name,
+      phone: formattedPhone,
+      subdomain,
+      role: 'user',
+      status: 'pending_verification',
+    };
+    localUserStore.set(canonicalEmail, userRecord);
+    if (hashedPassword) {
+      localPasswordStore.set(canonicalEmail, hashedPassword);
+    }
+    console.log(`[SupabaseAuth Fallback] Simulated OTP dispatch to ${canonicalEmail}: ${otp}`);
+    return {
+      user: userRecord,
+      requiresOtp: true,
+      simulatedOtp: otp,
+    };
+  }
+
+  return {
+    user: userRecord,
+    requiresOtp: true,
+  };
+}
+
+export async function verifySignupOtpViaSupabase(params: {
+  email: string;
+  otp: string;
+  returnUrl?: string | undefined;
+}): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(params.email);
+  } catch {
+    canonicalEmail = params.email.trim().toLowerCase();
+  }
+
+  const supabase = getSupabaseClient();
+  let userRecord: AuthUser | null = await findUserByEmail(canonicalEmail);
+
+  if (supabase) {
+    const { error } = await supabase.auth.verifyOtp({
+      email: canonicalEmail,
+      token: params.otp,
+      type: 'signup',
+    });
+
+    if (error) {
+      const retry = await supabase.auth.verifyOtp({
+        email: canonicalEmail,
+        token: params.otp,
+        type: 'email',
+      });
+      if (retry.error) {
+        throw new Error('Invalid or expired verification code.');
+      }
+    }
+
+    try {
+      await supabase
+        .from('users')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`);
+    } catch (updateErr) {
+      console.error('[Supabase PostgREST] Status activation error:', updateErr);
+    }
+
+    if (userRecord?.id) {
+      try {
+        await supabase.from('user_storage_quotas').upsert(
+          {
+            user_id: userRecord.id,
+            max_bytes: 5368709120,
+            used_bytes: 0,
+            max_assets: 50,
+            used_assets: 0,
+          },
+          { onConflict: 'user_id' }
+        );
+      } catch (quotaErr) {
+        console.error('[Supabase PostgREST] Storage quota upsert error:', quotaErr);
+      }
+    }
+
+    userRecord = await findUserByEmail(canonicalEmail);
+    if (userRecord) {
+      userRecord.status = 'active';
+    }
+  } else {
+    // Local / test fallback
+    const { verifySignupOtp } = await import('@/lib/otp-service');
+    const verification = verifySignupOtp(canonicalEmail, params.otp);
+    if (!verification.success) {
+      throw new Error(verification.error || 'Invalid or expired verification code.');
+    }
+
+    if (!userRecord) {
+      const rawSubdomain = deriveSubdomainFromEmail(canonicalEmail);
+      userRecord = {
+        id: crypto.randomUUID(),
+        email: canonicalEmail,
+        name: verification.signupData?.name || null,
+        phone: verification.signupData?.phone || null,
+        subdomain: rawSubdomain,
+        role: 'user',
+        status: 'active',
+      };
+      localUserStore.set(canonicalEmail, userRecord);
+    } else {
+      userRecord.status = 'active';
+    }
+  }
+
+  if (!userRecord) {
+    throw new Error('Unable to find user account after verification.');
+  }
+
+  const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
+  const token = await signSessionToken(
+    {
+      userId: userRecord.id,
+      email: userRecord.email,
+      name: userRecord.name,
+      subdomain: userRecord.subdomain,
+      role: userRecord.role,
+      status: 'active',
+    },
+    sessionSecret,
+    86400 * 30
+  );
+
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
+  const redirectUrl = sanitizeAuthRedirectUrl(params.returnUrl, userRecord.subdomain, rootDomain);
+
+  return {
+    user: userRecord,
+    token,
+    redirectUrl,
+  };
+}
+
+export async function resendSignupOtpViaSupabase(email: string): Promise<{
+  success: boolean;
+  otp?: string | undefined;
+  cooldownSecondsRemaining?: number | undefined;
+  error?: string | undefined;
+}> {
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(email);
+  } catch {
+    canonicalEmail = email.trim().toLowerCase();
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: canonicalEmail,
+    });
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+    return { success: true };
+  }
+
+  const { resendSignupOtp } = await import('@/lib/otp-service');
+  return resendSignupOtp(canonicalEmail);
+}
+
 export async function registerTenantUser(params: {
   name: string;
   phone: string;
@@ -459,6 +749,14 @@ export async function loginTenantUser(params: {
     throw error;
   }
 
+  if (user.status === 'pending_verification') {
+    const error = new Error('Please verify your email address to complete registration.');
+    (error as unknown as { code: string; requiresOtp: boolean; email: string }).code = 'REQUIRES_OTP';
+    (error as unknown as { requiresOtp: boolean }).requiresOtp = true;
+    (error as unknown as { email: string }).email = user.email;
+    throw error;
+  }
+
   const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
   const token = await signSessionToken(
     {
@@ -528,6 +826,59 @@ export async function requestPasswordReset(params: {
   };
 }
 
+export async function sendPasswordResetOtpViaSupabase(email: string): Promise<{
+  success: boolean;
+  otp?: string | undefined;
+  error?: string | undefined;
+}> {
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(email);
+  } catch {
+    canonicalEmail = email.trim().toLowerCase();
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+
+  const { createPasswordResetOtp } = await import('@/lib/otp-service');
+  const { otp } = createPasswordResetOtp(canonicalEmail);
+  console.log(`[SupabaseAuth Fallback] Simulated Password Reset OTP dispatch to ${canonicalEmail}: ${otp}`);
+  return { success: true, otp };
+}
+
+export async function resendPasswordResetOtpViaSupabase(email: string): Promise<{
+  success: boolean;
+  otp?: string | undefined;
+  cooldownSecondsRemaining?: number | undefined;
+  error?: string | undefined;
+}> {
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(email);
+  } catch {
+    canonicalEmail = email.trim().toLowerCase();
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  }
+
+  const { resendPasswordResetOtp } = await import('@/lib/otp-service');
+  return resendPasswordResetOtp(canonicalEmail);
+}
+
 export async function resetUserPasswordWithOtp(params: {
   email: string;
   otp: string;
@@ -547,40 +898,48 @@ export async function resetUserPasswordWithOtp(params: {
     canonicalEmail = params.email.trim().toLowerCase();
   }
 
-  // 1. Verify OTP with constant-time comparison and lockout checks
-  const { verifyPasswordResetOtp } = await import('@/lib/otp-service');
-  const verification = verifyPasswordResetOtp(canonicalEmail, params.otp);
-  if (!verification.success) {
-    throw new Error(verification.error || 'Invalid or expired verification code.');
-  }
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    const { error } = await supabase.auth.verifyOtp({
+      email: canonicalEmail,
+      token: params.otp,
+      type: 'recovery',
+    });
+    if (error) {
+      throw new Error('Invalid or expired verification code.');
+    }
 
-  // 2. Hash new password
-  const hashed = await hashPassword(params.password);
-  localPasswordStore.set(canonicalEmail, hashed);
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: params.password,
+    });
+    if (updateError) {
+      const existingUser = await findUserByEmail(canonicalEmail);
+      if (existingUser?.id) {
+        await supabase.auth.admin.updateUserById(existingUser.id, {
+          password: params.password,
+        });
+      } else {
+        throw new Error(updateError.message);
+      }
+    }
+  } else {
+    // 1. Verify OTP with constant-time comparison and lockout checks in fallback
+    const { verifyPasswordResetOtp } = await import('@/lib/otp-service');
+    const verification = verifyPasswordResetOtp(canonicalEmail, params.otp);
+    if (!verification.success) {
+      throw new Error(verification.error || 'Invalid or expired verification code.');
+    }
+
+    // 2. Hash new password in fallback
+    const hashed = await hashPassword(params.password);
+    localPasswordStore.set(canonicalEmail, hashed);
+  }
 
   // 3. Invalidate existing sessions by updating passwordUpdatedAt
   const nowSeconds = Math.floor(Date.now() / 1000);
   const user = localUserStore.get(canonicalEmail);
   if (user) {
     user.passwordUpdatedAt = nowSeconds;
-  }
-
-  // 4. Update in Supabase / Postgres if configured
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const existingUser = await findUserByEmail(canonicalEmail);
-      if (existingUser?.id) {
-        const { error } = await supabase.auth.admin.updateUserById(existingUser.id, {
-          password: params.password,
-        });
-        if (error) {
-          console.error('[Supabase Auth] resetUserPasswordWithOtp updateUserById error:', error.message);
-        }
-      }
-    } catch (err) {
-      console.error('[Supabase Auth] resetUserPasswordWithOtp exception:', err);
-    }
   }
 
   if (process.env.DATABASE_URL) {
@@ -599,6 +958,8 @@ export async function resetUserPasswordWithOtp(params: {
     message: 'Your password has been successfully updated.',
   };
 }
+
+export const resetPasswordWithSupabaseOtp = resetUserPasswordWithOtp;
 
 export async function resetUserPassword(params: {
   email?: string | undefined;

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
-import { resendSignupOtp, getPendingSignup } from '@/lib/otp-service';
-import { sendOtpEmail } from '@/lib/email-service';
+import { findUserByEmail, resendSignupOtpViaSupabase } from '@/lib/supabase-auth';
+import { getPendingSignup } from '@/lib/otp-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
@@ -45,18 +45,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const user = await findUserByEmail(canonicalEmail);
     const pending = getPendingSignup(canonicalEmail);
 
-    if (!pending) {
+    if (!user && !pending) {
       return NextResponse.json(
         { error: 'No pending registration found. Please submit the registration form again.' },
         { status: 400 }
       );
     }
 
-    const resendResult = resendSignupOtp(canonicalEmail);
+    if (user && user.status === 'active') {
+      return NextResponse.json(
+        { error: 'Account is already verified. Please sign in.' },
+        { status: 400 }
+      );
+    }
 
-    if (!resendResult.success || !resendResult.otp) {
+    const resendResult = await resendSignupOtpViaSupabase(canonicalEmail);
+
+    if (!resendResult.success) {
       const status = resendResult.cooldownSecondsRemaining ? 429 : 400;
       return NextResponse.json(
         {
@@ -64,19 +72,6 @@ export async function POST(request: NextRequest) {
           cooldownSecondsRemaining: resendResult.cooldownSecondsRemaining,
         },
         { status }
-      );
-    }
-
-    const dispatchResult = await sendOtpEmail({
-      email: canonicalEmail,
-      name: pending.data.name,
-      otp: resendResult.otp,
-    });
-
-    if (!dispatchResult.success) {
-      return NextResponse.json(
-        { error: 'Unable to deliver verification code. Please check your email and try again shortly.' },
-        { status: 502 }
       );
     }
 

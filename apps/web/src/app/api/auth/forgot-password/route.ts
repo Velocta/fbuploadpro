@@ -55,23 +55,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate 6-digit numeric OTP with 10-minute TTL
-    const { createPasswordResetOtp } = await import('@/lib/otp-service');
-    const { sendPasswordResetOtpEmail } = await import('@/lib/email-service');
-
-    const { otp, expiresAt } = createPasswordResetOtp(canonicalEmail);
-
-    // Dispatch OTP email via Resend (or test logger)
-    await sendPasswordResetOtpEmail({
-      email: canonicalEmail,
-      otp,
-    });
+    // Dispatch recovery OTP via Supabase Auth (or test fallback)
+    const { sendPasswordResetOtpViaSupabase } = await import('@/lib/supabase-auth');
+    await sendPasswordResetOtpViaSupabase(canonicalEmail);
 
     return NextResponse.json({
       success: true,
       requiresOtp: true,
       email: canonicalEmail,
-      expiresAt: expiresAt.toISOString(),
       message: `A 6-digit verification code has been sent to ${canonicalEmail}.`,
     });
   } catch (error: unknown) {

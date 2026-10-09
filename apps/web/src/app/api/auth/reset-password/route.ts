@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { resetUserPassword } from '@/lib/supabase-auth';
+import { resetUserPassword, resetUserPasswordWithOtp } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
@@ -65,7 +65,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { resetUserPasswordWithOtp } = await import('@/lib/supabase-auth');
       const result = await resetUserPasswordWithOtp({
         email,
         otp: cleanOtp,

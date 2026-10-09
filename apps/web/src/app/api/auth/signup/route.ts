@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SignupRequestSchema, canonicalizeGmailAddress } from '@fbuploadpro/contracts';
-import { findUserByEmail } from '@/lib/supabase-auth';
-import { createPendingSignup } from '@/lib/otp-service';
-import { sendOtpEmail } from '@/lib/email-service';
+import { findUserByEmail, signUpTenantUser } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
@@ -55,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Check canonical email uniqueness before dispatching OTP
     const existingUser = await findUserByEmail(canonicalEmail);
-    if (existingUser) {
+    if (existingUser && existingUser.status !== 'pending_verification') {
       return NextResponse.json(
         {
           error: 'Email is already registered',
@@ -65,29 +63,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Generate 6-digit cryptographic OTP and store pending registration
-    const { otp, expiresAt } = createPendingSignup(parseResult.data);
-
-    // 5. Dispatch OTP email via Resend
-    const dispatchResult = await sendOtpEmail({
-      email: canonicalEmail,
-      name: parseResult.data.name,
-      otp,
-    });
-
-    if (!dispatchResult.success) {
-      return NextResponse.json(
-        { error: 'Unable to deliver verification code. Please check your email address and try again.' },
-        { status: 502 }
-      );
-    }
+    // 4. Register user with pending_verification status and dispatch OTP via Supabase Auth
+    const signupResult = await signUpTenantUser(parseResult.data);
 
     return NextResponse.json(
       {
         success: true,
-        requiresOtp: true,
+        requiresOtp: signupResult.requiresOtp,
         email: canonicalEmail,
-        expiresAt: expiresAt.toISOString(),
         message: 'A 6-digit verification code has been sent to your Gmail address.',
       },
       { status: 200 }
