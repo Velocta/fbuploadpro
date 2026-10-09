@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { password, email, token, code } = body || {};
+    const { password, email, otp, token, code } = body || {};
 
     if (!password || typeof password !== 'string' || password.length < 8) {
       return NextResponse.json(
@@ -40,12 +40,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const cleanOtp = typeof otp === 'string' ? otp.replace(/\D/g, '').trim() : undefined;
     const recoveryToken = typeof token === 'string' && token.trim() ? token.trim() : typeof code === 'string' && code.trim() ? code.trim() : undefined;
-    if (!recoveryToken && !email) {
+
+    if (!cleanOtp && !recoveryToken) {
       return NextResponse.json(
-        { error: 'A valid password recovery link or token is required.' },
+        { error: 'A valid 6-digit verification code or recovery token is required.' },
         { status: 400 }
       );
+    }
+
+    if (cleanOtp) {
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return NextResponse.json(
+          { error: 'Email address is required for verification.' },
+          { status: 400 }
+        );
+      }
+
+      if (cleanOtp.length !== 6) {
+        return NextResponse.json(
+          { error: 'Verification code must be exactly 6 digits.' },
+          { status: 400 }
+        );
+      }
+
+      const { resetUserPasswordWithOtp } = await import('@/lib/supabase-auth');
+      const result = await resetUserPasswordWithOtp({
+        email,
+        otp: cleanOtp,
+        password,
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: result.message,
+      });
     }
 
     const result = await resetUserPassword({

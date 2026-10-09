@@ -18,6 +18,15 @@ export interface PendingSignupEntry {
   attempts: number;
 }
 
+export interface PendingPasswordResetEntry {
+  email: string;
+  otp: string;
+  createdAt: number;
+  expiresAt: number;
+  lastSentAt: number;
+  attempts: number;
+}
+
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
 const MAX_VERIFICATION_ATTEMPTS = 5;
@@ -25,6 +34,8 @@ const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
 
 // In-memory store for pending signups
 const pendingSignups = new Map<string, PendingSignupEntry>();
+// In-memory store for pending password resets
+const pendingPasswordResets = new Map<string, PendingPasswordResetEntry>();
 
 export function hashPasswordSync(password: string): string {
   const salt = crypto.randomBytes(16);
@@ -59,6 +70,11 @@ function cleanupExpiredEntries(): void {
   for (const [email, entry] of pendingSignups.entries()) {
     if (now > entry.expiresAt) {
       pendingSignups.delete(email);
+    }
+  }
+  for (const [email, entry] of pendingPasswordResets.entries()) {
+    if (now > entry.expiresAt) {
+      pendingPasswordResets.delete(email);
     }
   }
 }
@@ -250,7 +266,170 @@ export function clearPendingSignup(email: string): void {
   clearLockout(canonicalEmail);
 }
 
+export function createPasswordResetOtp(email: string): {
+  otp: string;
+  expiresAt: Date;
+} {
+  cleanupExpiredEntries();
+  const canonicalEmail = resolveCanonicalEmail(email);
+  const now = Date.now();
+  const otp = generateSecureOtp();
+
+  const entry: PendingPasswordResetEntry = {
+    email: canonicalEmail,
+    otp,
+    createdAt: now,
+    expiresAt: now + OTP_TTL_MS,
+    lastSentAt: now,
+    attempts: 0,
+  };
+
+  pendingPasswordResets.set(canonicalEmail, entry);
+
+  return {
+    otp,
+    expiresAt: new Date(entry.expiresAt),
+  };
+}
+
+export function getPendingPasswordReset(email: string): PendingPasswordResetEntry | null {
+  cleanupExpiredEntries();
+  const canonicalEmail = resolveCanonicalEmail(email);
+  return pendingPasswordResets.get(canonicalEmail) || null;
+}
+
+export function verifyPasswordResetOtp(
+  email: string,
+  providedOtp: string
+): {
+  success: boolean;
+  error?: string | undefined;
+} {
+  cleanupExpiredEntries();
+  const canonicalEmail = resolveCanonicalEmail(email);
+
+  // Check if reset lockout is active
+  const lockoutKey = `reset:${canonicalEmail}`;
+  const lockoutStatus = isLockedOut(lockoutKey);
+  if (lockoutStatus.locked) {
+    const minutes = Math.ceil(lockoutStatus.retryAfterSeconds / 60);
+    return {
+      success: false,
+      error: `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    };
+  }
+
+  const entry = pendingPasswordResets.get(canonicalEmail);
+
+  if (!entry) {
+    return {
+      success: false,
+      error: 'No active password reset request found or the code has expired. Please request a new code.',
+    };
+  }
+
+  const now = Date.now();
+  if (now > entry.expiresAt) {
+    pendingPasswordResets.delete(canonicalEmail);
+    return {
+      success: false,
+      error: 'Verification code has expired. Please request a new code.',
+    };
+  }
+
+  const cleanProvided = providedOtp.replace(/\D/g, '').trim();
+
+  // Timing-safe comparison to prevent timing side channels
+  if (!constantTimeEquals(cleanProvided, entry.otp)) {
+    entry.attempts += 1;
+    const lockout = recordFailedAttempt(lockoutKey, MAX_VERIFICATION_ATTEMPTS, LOCKOUT_DURATION_MS);
+
+    if (lockout.locked) {
+      pendingPasswordResets.delete(canonicalEmail);
+      return {
+        success: false,
+        error: 'Too many incorrect attempts. Verification is temporarily locked for 15 minutes.',
+      };
+    }
+
+    const remaining = lockout.remainingAttempts;
+    return {
+      success: false,
+      error: `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+    };
+  }
+
+  // OTP verified successfully: delete single-use entry and clear lockout
+  pendingPasswordResets.delete(canonicalEmail);
+  clearLockout(lockoutKey);
+
+  return {
+    success: true,
+  };
+}
+
+export function resendPasswordResetOtp(email: string): {
+  success: boolean;
+  otp?: string | undefined;
+  cooldownSecondsRemaining?: number | undefined;
+  error?: string | undefined;
+} {
+  cleanupExpiredEntries();
+  const canonicalEmail = resolveCanonicalEmail(email);
+
+  const lockoutKey = `reset:${canonicalEmail}`;
+  const lockoutStatus = isLockedOut(lockoutKey);
+  if (lockoutStatus.locked) {
+    return {
+      success: false,
+      cooldownSecondsRemaining: lockoutStatus.retryAfterSeconds,
+      error: `Too many incorrect attempts. Please wait ${lockoutStatus.retryAfterSeconds} seconds before trying again.`,
+    };
+  }
+
+  const entry = pendingPasswordResets.get(canonicalEmail);
+
+  if (!entry) {
+    // If no existing entry, generate a fresh one
+    const { otp } = createPasswordResetOtp(canonicalEmail);
+    return {
+      success: true,
+      otp,
+    };
+  }
+
+  const now = Date.now();
+  const timeSinceLastSent = now - entry.lastSentAt;
+
+  if (timeSinceLastSent < RESEND_COOLDOWN_MS) {
+    const remainingSeconds = Math.ceil((RESEND_COOLDOWN_MS - timeSinceLastSent) / 1000);
+    return {
+      success: false,
+      cooldownSecondsRemaining: remainingSeconds,
+      error: `Please wait ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'} before requesting a new code.`,
+    };
+  }
+
+  const newOtp = generateSecureOtp();
+  entry.otp = newOtp;
+  entry.lastSentAt = now;
+  entry.expiresAt = now + OTP_TTL_MS;
+  entry.attempts = 0; // Reset failed attempts on fresh code dispatch
+
+  return {
+    success: true,
+    otp: newOtp,
+  };
+}
+
+export function clearPendingPasswordReset(email: string): void {
+  const canonicalEmail = resolveCanonicalEmail(email);
+  pendingPasswordResets.delete(canonicalEmail);
+  clearLockout(`reset:${canonicalEmail}`);
+}
+
 // For unit tests
 export function _resetOtpStore(): void {
   pendingSignups.clear();
+  pendingPasswordResets.clear();
 }

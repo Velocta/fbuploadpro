@@ -1,157 +1,27 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
-import { PasswordInput } from '@/components/auth/password-input';
-import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
-
-interface FieldErrors {
-  password?: string | undefined;
-  confirmPassword?: string | undefined;
-}
 
 export default function ResetPasswordPage() {
   const router = useRouter();
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      let hashToken: string | null = null;
-      if (window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-        hashToken = hashParams.get('access_token');
-      }
-      return params.get('token') || hashToken || null;
-    }
-    return null;
-  });
-  const [code, setCode] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      return params.get('code') || null;
-    }
-    return null;
-  });
-  const [isTokenChecked, setIsTokenChecked] = useState(() => typeof window !== 'undefined');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [generalError, setGeneralError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const urlCode = params.get('code');
-      const urlToken = params.get('token');
-
-      // Also check hash fragments for Supabase access_token
-      let hashToken: string | null = null;
-      if (window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-        hashToken = hashParams.get('access_token');
-      }
-
-      if (urlCode) setCode(urlCode);
-      if (urlToken) setToken(urlToken);
-      if (hashToken) setToken(hashToken);
-
-      setIsTokenChecked(true);
-    }
-  }, []);
-
-  const clearFieldError = (field: keyof FieldErrors) => {
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    }
-    if (generalError) {
-      setGeneralError(null);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setGeneralError(null);
-
-    const errors: FieldErrors = {};
-
-    if (!password) {
-      errors.password = 'Password is required.';
-    } else if (password.length < 8) {
-      errors.password = 'Password must be at least 8 characters long.';
-    } else if (password.length > 128) {
-      errors.password = 'Password cannot exceed 128 characters.';
-    }
-
-    if (!confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password.';
-    } else if (password !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      return;
-    }
-
-    setFieldErrors({});
-    setIsSubmitting(true);
-
-    try {
-      const res = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          password,
-          token: token || undefined,
-          code: code || undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 400 && data.error?.includes('at least 8 characters')) {
-          setFieldErrors({ password: 'Password must be at least 8 characters long.' });
-          setIsSubmitting(false);
-          return;
-        }
-
-        setGeneralError(
-          sanitizeAuthErrorMessage(data.error, 'Failed to update password. Your reset link may be expired.')
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      setIsSuccess(true);
-      setIsSubmitting(false);
-
-      const timer = setTimeout(() => {
-        router.push('/login');
-      }, 2000);
-      return () => clearTimeout(timer);
-    } catch {
-      setGeneralError('Unable to reset your password. Please check your connection and try again.');
-      setIsSubmitting(false);
-    }
-  };
-
-  const hasRecoveryToken = Boolean(token || code);
+    // Gracefully route visitors to the unified OTP recovery interface
+    const timer = setTimeout(() => {
+      router.replace('/forgot-password');
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
     <AuthSplitLayout
-      title="Set New Password"
-      description="Create a new, strong password to secure your account."
+      title="Password Recovery"
+      description="Password recovery is now managed securely with a 6-digit verification code."
       footer={
         <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
           Back to{' '}
@@ -168,94 +38,27 @@ export default function ResetPasswordPage() {
         </span>
       }
     >
-      {isTokenChecked && !hasRecoveryToken && !isSuccess ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-          <Alert
-            severity="error"
-            title="Recovery Link Required"
-            message="Password reset requires a valid recovery link from your email. Please request a new recovery link to proceed."
-          />
-          <Link
-            href="/forgot-password"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textDecoration: 'none',
-              width: '100%',
-            }}
-          >
-            <Button variant="primary" size="lg" style={{ width: '100%' }}>
-              Request Recovery Link
-            </Button>
-          </Link>
-        </div>
-      ) : isSuccess ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-          <Alert
-            severity="success"
-            title="Password Updated"
-            message="Your password has been reset successfully. Redirecting you to the sign in page..."
-          />
-          <Link
-            href="/login"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textDecoration: 'none',
-              width: '100%',
-            }}
-          >
-            <Button variant="primary" size="lg" style={{ width: '100%' }}>
-              Proceed to Sign In
-            </Button>
-          </Link>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          <PasswordInput
-            label="New Password"
-            placeholder="••••••••••••"
-            autoComplete="new-password"
-            value={password}
-            error={fieldErrors.password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              clearFieldError('password');
-            }}
-            disabled={isSubmitting}
-            required
-            helperText="Minimum 8 characters"
-          />
-
-          <PasswordInput
-            label="Confirm New Password"
-            placeholder="••••••••••••"
-            autoComplete="new-password"
-            value={confirmPassword}
-            error={fieldErrors.confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value);
-              clearFieldError('confirmPassword');
-            }}
-            disabled={isSubmitting}
-            required
-          />
-
-          <FormErrorCallout message={generalError} style={{ marginTop: SPACING.xs }} />
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            isLoading={isSubmitting}
-            style={{ width: '100%', marginTop: SPACING.sm }}
-          >
-            Update Password
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+        <Alert
+          severity="info"
+          title="Redirecting to Password Recovery"
+          message="Password recovery is now handled directly using a 6-digit code. Redirecting you to the recovery page..."
+        />
+        <Link
+          href="/forgot-password"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textDecoration: 'none',
+            width: '100%',
+          }}
+        >
+          <Button variant="primary" size="lg" style={{ width: '100%' }}>
+            Go to Password Recovery
           </Button>
-        </form>
-      )}
+        </Link>
+      </div>
     </AuthSplitLayout>
   );
 }

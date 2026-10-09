@@ -3,17 +3,19 @@ import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { resendPasswordResetOtp } from '@/lib/otp-service';
+import { sendPasswordResetOtpEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
     const clientIp = extractClientIp(request.headers);
 
-    // 1. IP rate limiting (max 5 reset requests per 60 seconds)
-    const ipLimit = checkRateLimit(`forgot:ip:${clientIp}`, 5, 60 * 1000);
+    // 1. IP rate limiting (max 5 resend requests per 60 seconds)
+    const ipLimit = checkRateLimit(`forgot_resend:ip:${clientIp}`, 5, 60 * 1000);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
-          error: `Too many password reset requests. Please wait ${ipLimit.retryAfterSeconds} seconds before trying again.`,
+          error: `Too many requests. Please wait ${ipLimit.retryAfterSeconds} seconds before requesting a new code.`,
           retryAfterSeconds: ipLimit.retryAfterSeconds,
         },
         {
@@ -43,8 +45,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Identifier rate limiting (max 3 reset requests per 60 seconds per email)
-    const emailLimit = checkRateLimit(`forgot:email:${canonicalEmail}`, 3, 60 * 1000);
+    // 2. Identifier rate limiting (max 3 resend requests per 60 seconds per email)
+    const emailLimit = checkRateLimit(`forgot_resend:email:${canonicalEmail}`, 3, 60 * 1000);
     if (!emailLimit.allowed) {
       return NextResponse.json(
         {
@@ -55,24 +57,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate 6-digit numeric OTP with 10-minute TTL
-    const { createPasswordResetOtp } = await import('@/lib/otp-service');
-    const { sendPasswordResetOtpEmail } = await import('@/lib/email-service');
+    // 3. Resend OTP subject to cooldown and lockout
+    const resendResult = resendPasswordResetOtp(canonicalEmail);
+    if (!resendResult.success || !resendResult.otp) {
+      return NextResponse.json(
+        {
+          error: resendResult.error || 'Unable to resend verification code.',
+          cooldownSecondsRemaining: resendResult.cooldownSecondsRemaining,
+        },
+        { status: 429 }
+      );
+    }
 
-    const { otp, expiresAt } = createPasswordResetOtp(canonicalEmail);
-
-    // Dispatch OTP email via Resend (or test logger)
+    // 4. Dispatch new OTP email
     await sendPasswordResetOtpEmail({
       email: canonicalEmail,
-      otp,
+      otp: resendResult.otp,
     });
 
     return NextResponse.json({
       success: true,
-      requiresOtp: true,
-      email: canonicalEmail,
-      expiresAt: expiresAt.toISOString(),
-      message: `A 6-digit verification code has been sent to ${canonicalEmail}.`,
+      message: `A new 6-digit verification code has been sent to ${canonicalEmail}.`,
     });
   } catch (error: unknown) {
     return formatAuthErrorResponse(error, {
