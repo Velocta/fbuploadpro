@@ -89,7 +89,7 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
 
   it('blocks cross-tenant access and redirects standard user to their own workspace', async () => {
     // User belonging to 'beta' tries to access 'acme'
-    const req = new NextRequest('http://acme.localhost:3000/dashboard', {
+    const req = new NextRequest('http://acme.localhost:3000/', {
       headers: {
         host: 'acme.localhost:3000',
         cookie: `fbup_session=${otherTenantToken}`,
@@ -98,11 +98,23 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     const res = await middleware(req);
     expect(res.status).toBe(307);
     const location = res.headers.get('location');
-    expect(location).toContain('beta.localhost:3000/dashboard');
+    expect(location).toBe('http://beta.localhost:3000/');
+  });
+
+  it('redirects authenticated user on central app login/root to their tenant workspace root', async () => {
+    const req = new NextRequest('http://app.localhost:3000/login', {
+      headers: {
+        host: 'app.localhost:3000',
+        cookie: `fbup_session=${userToken}`,
+      },
+    });
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('http://acme.localhost:3000/');
   });
 
   it('allows access for matching tenant subdomain and injects session headers', async () => {
-    const req = new NextRequest('http://acme.localhost:3000/dashboard', {
+    const req = new NextRequest('http://acme.localhost:3000/', {
       headers: {
         host: 'acme.localhost:3000',
         cookie: `fbup_session=${userToken}`,
@@ -112,12 +124,12 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     expect(res.status).toBe(200);
     const rewriteUrl = res.headers.get('x-middleware-rewrite');
     expect(rewriteUrl).not.toBeNull();
-    expect(new URL(rewriteUrl!).pathname).toBe('/tenant/acme/dashboard');
+    expect(new URL(rewriteUrl!).pathname).toBe('/tenant/acme');
   });
 
   it('allows cross-tenant inspection access for admin role', async () => {
     // Admin with subdomain 'platform-admin' accessing 'acme' tenant
-    const req = new NextRequest('http://acme.localhost:3000/dashboard', {
+    const req = new NextRequest('http://acme.localhost:3000/', {
       headers: {
         host: 'acme.localhost:3000',
         cookie: `fbup_session=${adminToken}`,
@@ -127,6 +139,6 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     expect(res.status).toBe(200);
     const rewriteUrl = res.headers.get('x-middleware-rewrite');
     expect(rewriteUrl).not.toBeNull();
-    expect(new URL(rewriteUrl!).pathname).toBe('/tenant/acme/dashboard');
+    expect(new URL(rewriteUrl!).pathname).toBe('/tenant/acme');
   });
 });

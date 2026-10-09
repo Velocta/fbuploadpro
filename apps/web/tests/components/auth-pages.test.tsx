@@ -62,5 +62,13 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
       expect(html).not.toContain('Gateway');
       expect(hasText('Online')).toBe(false);
     });
+
+    it('displays success alert when reset=success is present', () => {
+      const { hasText } = render(<LoginPage initialResetSuccess={true} />);
+      expect(hasText('Password Updated')).toBe(true);
+      expect(
+        hasText('Your password has been successfully reset. Please sign in with your new credentials.')
+      ).toBe(true);
+    });
   });
 });

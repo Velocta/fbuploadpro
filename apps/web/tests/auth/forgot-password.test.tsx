@@ -40,6 +40,12 @@ describe('Password Recovery - Forgot Password (US1)', () => {
       expect(hasText('Ready')).toBe(false);
       expect(hasText('Database')).toBe(false);
     });
+
+    it('renders success notice and link to /login?reset=success when password reset succeeds', () => {
+      const { hasText, html } = render(<ForgotPasswordPage initialSuccess={true} />);
+      expect(hasText('Password Updated')).toBe(true);
+      expect(html).toContain('href="/login?reset=success"');
+    });
   });
 
   describe('API Route POST /api/auth/forgot-password', () => {

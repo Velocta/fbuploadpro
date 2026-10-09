@@ -83,7 +83,7 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
       const verifyJson = await verifyRes.json();
       expect(verifyJson.success).toBe(true);
       expect(verifyJson.user.subdomain).toBe('johndoe');
-      expect(verifyJson.redirectUrl).toBe('http://johndoe.localhost:3000/dashboard');
+      expect(verifyJson.redirectUrl).toBe('http://johndoe.localhost:3000/');
 
       const setCookie = verifyRes.headers.get('set-cookie');
       expect(setCookie).toContain('fbup_session=');
