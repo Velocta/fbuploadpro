@@ -130,3 +130,11 @@ body {
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Responsive Mobile-Only Visibility */
+@media (min-width: 768px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
