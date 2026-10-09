@@ -65,6 +65,7 @@ flowchart TD
 - **Canonical Migrations Directory**: `/supabase/migrations/`
 - **Naming Standard**: Strict `YYYYMMDDHHmmss_<name>.sql` timestamp pattern (e.g. `20261008120001_initial_schema.sql`).
 - **Automated Deployment**: Powered by the **Supabase GitHub Integration** configured in the Supabase Project Dashboard. When code merges to `main`, Supabase automatically executes unapplied migrations in chronological order.
+- **Single Primary Instance (Zero Branching)**: Supabase preview branching is disabled (paid tier feature). The system operates strictly against the single production database instance tied directly to the `main` branch.
 - **Local Package Reference**: `packages/database/migrations/` maintains symbolic links pointing to `/supabase/migrations` for package-level reference and local test execution.
 
 ---
@@ -87,6 +88,14 @@ The platform adopts a decoupled multi-domain topology:
    - Authentication cookies are set on the apex wildcard cookie domain (`.fbuploadpro.com`), ensuring uninterrupted session continuity between `app.fbuploadpro.com` and `{username}.fbuploadpro.com`.
    - Facebook accounts, imported Facebook Pages, media assets, and publishing queues are strictly scoped to the active tenant user.
    - Zero cross-user data leakage enforced via database compound constraints (`user_id`) and edge routing guards.
+
+### B. Active Construction & Staging Demo Domain (`vinsmokemedia.online`)
+During initial feature assembly, integration testing, and staging, the platform is configured with `vinsmokemedia.online`:
+- **Central Application Gateway**: `https://app.vinsmokemedia.online` (`/login`, `/signup`).
+- **Dedicated Tenant Workspaces**: `https://{username}.vinsmokemedia.online` (`/dashboard`, media library, queues, insights).
+- **Wildcard Session Cookie**: `.vinsmokemedia.online` (enables cross-subdomain authentication continuity).
+- **Supabase Auth Allowlist**: `https://app.vinsmokemedia.online/**` and `https://*.vinsmokemedia.online/**`.
+- **Vercel Domains**: `app.vinsmokemedia.online` and `*.vinsmokemedia.online` with CNAME `cname.vercel-dns.com`.
 
 ---
 
@@ -207,7 +216,7 @@ flowchart LR
 
 ## 10. Autonomous Spec-Driven Development (SDD) & Multi-Agent Protocol
 
-All development follows autonomous multi-agent orchestration codified in [`AGENTS.md`](../AGENTS.md):
+All development follows autonomous multi-agent orchestration codified in [`.agents/AGENTS.md`](../.agents/AGENTS.md):
 
 1. **Focused Execution & Mandatory Human Merge Gate ("Ask Once, Verify & Approve Before Merge")**:
    - The agent confirms **which spec or feature to work on**.

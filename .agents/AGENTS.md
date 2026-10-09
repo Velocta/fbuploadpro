@@ -145,3 +145,8 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
   - To prevent context fragmentation and workflow derailment, component previews are batched at the very end when all tasks are complete and the Pull Request is ready for merge.
   - All mock data and component preview harnesses are strictly isolated in `apps/showroom` (with zero mock code in `apps/web`).
   - When a PR containing UI components is ready, the agent launches the showroom on port 3001, opens an ephemeral Cloudflare tunnel, and provides the live HTTPS link for the user to interactively inspect all component states before requesting merge approval.
+- **Prohibition on Running Migrations via Supabase MCP (`apply_migration` / `execute_sql`)**:
+  - AI agents and automated tools MUST NEVER use the Supabase MCP server or direct ad-hoc SQL execution tools (`apply_migration`, `execute_sql`, etc.) to run, apply, or execute database schema migrations on the remote database.
+  - All database schema modifications MUST be written as versioned forward migration files strictly located in `supabase/migrations/YYYYMMDDHHmmss_<name>.sql` and delivered through GitHub Pull Requests.
+  - Migrations are automatically executed by the Supabase GitHub Integration whenever code is pushed or merged into `main`.
+  - The Supabase MCP server is strictly limited to read-only inspection and diagnostics (`list_tables`, `list_migrations`, `get_project_url`, `get_publishable_keys`, read-only queries), never for manual schema mutation.
