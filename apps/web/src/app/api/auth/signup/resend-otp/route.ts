@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
-import { findUserByEmail, resendSignupOtpViaSupabase } from '@/lib/supabase-auth';
+import { findUserByEmail, resendSignupOtpViaSupabase, getSupabaseClient } from '@/lib/supabase-auth';
 import { getPendingSignup } from '@/lib/otp-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
@@ -55,7 +55,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (user && user.status === 'active') {
+    const supabase = getSupabaseClient();
+    if (supabase && user) {
+      const { data: authUserData } = await supabase.auth.admin.getUserById(user.id);
+      if (authUserData?.user?.email_confirmed_at) {
+        return NextResponse.json(
+          { error: 'Account is already verified. Please sign in.' },
+          { status: 400 }
+        );
+      }
+    } else if (!supabase && user && !pending) {
       return NextResponse.json(
         { error: 'Account is already verified. Please sign in.' },
         { status: 400 }

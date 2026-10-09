@@ -86,7 +86,13 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
 17. **Supabase Auth Native SMTP OTP Delivery Architecture**:
     - **Unified Dispatch via Supabase Auth**: All verification codes, registration OTPs, and password reset tokens MUST be dispatched exclusively via Supabase Auth (`supabase.auth.signUp`, `supabase.auth.resetPasswordForEmail`, `supabase.auth.resend`), leveraging the operator's custom SMTP configuration in Supabase. Direct third-party email SDKs (e.g. Resend) are completely eradicated from dependencies and runtime code.
     - **6-Digit Token Verification**: Verification operates via `supabase.auth.verifyOtp` matching the 6-digit numeric token (`{{ .Token }}` in Supabase email templates), preserving the application's clean 2-step OTP interface.
-    - **Immediate Profile Ingestion with Verification Lifecycle**: During initial `signUp`, the user profile in the public `users` table is registered with status `pending_verification`, transitioning to `active` immediately upon successful `verifyOtp` confirmation.
+    - **Native Verification Lifecycle**: The user profile in the public `users` table is registered with `status: 'active'`, with email verification state governed natively and authoritatively by Supabase Auth (`auth.users.email_confirmed_at`).
+
+18. **Native Supabase Email Verification Lifecycle & Cooldown Resilience (Spec 024)**:
+    - **Single Source of Truth for Verification**: Email confirmation authority resides exclusively in Supabase GoTrue Auth (`auth.users.email_confirmed_at`). The `public.users` database status domain is strictly constrained to `['active', 'suspended']`. Redundant intermediate states (such as `pending_verification`) are permanently eliminated.
+    - **Unified Email Proof via Forgot Password**: Verifying email ownership through a 6-digit recovery OTP during a Password Reset flow is recognized as legitimate email verification. It automatically confirms the email in GoTrue, activates/upserts the profile in `public.users`, provisions storage quotas, and permits sign-in into the user's workspace.
+    - **Unconfirmed Sign-In Recovery**: Sign-in attempts with valid credentials where the email is not yet confirmed in GoTrue (`Email not confirmed`) return HTTP 403 `requiresOtp: true`, seamlessly routing the user to the verification view (`/signup?step=otp`) rather than presenting misleading "Invalid email or password" errors.
+    - **GoTrue Security Cooldown Handling & Form Resilience**: When GoTrue throttles verification dispatch (`For security purposes, you can only request this after X seconds`), the system extracts the remaining cooldown duration. If the user returns to the form with the same email, they smoothly transition back to the OTP screen with the remaining cooldown timer active. If throttled on new requests, the server returns HTTP 429 (`retryAfterSeconds: X`), and the frontend disables the primary action button with a live countdown (`Please wait (Xs)`), automatically re-enabling when the cooldown elapses.
 
 ## Development Workflow & Quality Gates
 
@@ -110,4 +116,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.12.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.13.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
