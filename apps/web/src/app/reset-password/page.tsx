@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button, Alert } from '@/components/ui';
@@ -17,12 +17,53 @@ interface FieldErrors {
 
 export default function ResetPasswordPage() {
   const router = useRouter();
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      let hashToken: string | null = null;
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        hashToken = hashParams.get('access_token');
+      }
+      return params.get('token') || hashToken || null;
+    }
+    return null;
+  });
+  const [code, setCode] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('code') || null;
+    }
+    return null;
+  });
+  const [isTokenChecked, setIsTokenChecked] = useState(() => typeof window !== 'undefined');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlCode = params.get('code');
+      const urlToken = params.get('token');
+
+      // Also check hash fragments for Supabase access_token
+      let hashToken: string | null = null;
+      if (window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        hashToken = hashParams.get('access_token');
+      }
+
+      if (urlCode) setCode(urlCode);
+      if (urlToken) setToken(urlToken);
+      if (hashToken) setToken(hashToken);
+
+      setIsTokenChecked(true);
+    }
+  }, []);
 
   const clearFieldError = (field: keyof FieldErrors) => {
     if (fieldErrors[field]) {
@@ -47,6 +88,8 @@ export default function ResetPasswordPage() {
       errors.password = 'Password is required.';
     } else if (password.length < 8) {
       errors.password = 'Password must be at least 8 characters long.';
+    } else if (password.length > 128) {
+      errors.password = 'Password cannot exceed 128 characters.';
     }
 
     if (!confirmPassword) {
@@ -67,7 +110,11 @@ export default function ResetPasswordPage() {
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({
+          password,
+          token: token || undefined,
+          code: code || undefined,
+        }),
       });
 
       const data = await res.json();
@@ -89,14 +136,17 @@ export default function ResetPasswordPage() {
       setIsSuccess(true);
       setIsSubmitting(false);
 
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         router.push('/login');
       }, 2000);
+      return () => clearTimeout(timer);
     } catch {
       setGeneralError('Unable to reset your password. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
+
+  const hasRecoveryToken = Boolean(token || code);
 
   return (
     <AuthSplitLayout
@@ -118,7 +168,29 @@ export default function ResetPasswordPage() {
         </span>
       }
     >
-      {isSuccess ? (
+      {isTokenChecked && !hasRecoveryToken && !isSuccess ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+          <Alert
+            severity="error"
+            title="Recovery Link Required"
+            message="Password reset requires a valid recovery link from your email. Please request a new recovery link to proceed."
+          />
+          <Link
+            href="/forgot-password"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textDecoration: 'none',
+              width: '100%',
+            }}
+          >
+            <Button variant="primary" size="lg" style={{ width: '100%' }}>
+              Request Recovery Link
+            </Button>
+          </Link>
+        </div>
+      ) : isSuccess ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
           <Alert
             severity="success"
@@ -145,6 +217,7 @@ export default function ResetPasswordPage() {
           <PasswordInput
             label="New Password"
             placeholder="••••••••••••"
+            autoComplete="new-password"
             value={password}
             error={fieldErrors.password}
             onChange={(e) => {
@@ -159,6 +232,7 @@ export default function ResetPasswordPage() {
           <PasswordInput
             label="Confirm New Password"
             placeholder="••••••••••••"
+            autoComplete="new-password"
             value={confirmPassword}
             error={fieldErrors.confirmPassword}
             onChange={(e) => {

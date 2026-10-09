@@ -97,7 +97,10 @@ export function formatAuthErrorResponse(
   if (
     rawMessage.includes('Password must be at least') ||
     rawMessage.includes('valid email address is required') ||
-    rawMessage.includes('Passwords do not match')
+    rawMessage.includes('Passwords do not match') ||
+    rawMessage.includes('Invalid or expired') ||
+    rawMessage.includes('reset link has expired') ||
+    rawMessage.includes('token is required')
   ) {
     return NextResponse.json({ error: rawMessage }, { status: 400 });
   }

@@ -52,7 +52,7 @@ async function getHmacKey(secret: string): Promise<CryptoKey> {
 export async function signSessionToken(
   payload: SessionPayload | (Omit<SessionPayload, 'iat' | 'exp'> & { iat?: number; exp?: number }),
   secret: string,
-  expiresInSeconds: number = 86400
+  expiresInSeconds: number = 86400 * 30 // 30 days (2,592,000s) matching fbup_session cookie maxAge
 ): Promise<string> {
   if (!secret || secret.length < 32) {
     throw new DomainError(

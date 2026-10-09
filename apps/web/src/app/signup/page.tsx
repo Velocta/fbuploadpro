@@ -8,6 +8,7 @@ import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
+import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { validateClientPhoneNumber } from '@fbuploadpro/contracts';
 
 interface FieldErrors {
@@ -43,7 +44,7 @@ export default function SignupPage() {
       const params = new URLSearchParams(window.location.search);
       const ret = params.get('returnUrl');
       if (ret) {
-        setReturnUrl(ret);
+        setReturnUrl(sanitizeAuthRedirectUrl(ret));
       }
     }
   }, []);
@@ -181,7 +182,7 @@ export default function SignupPage() {
       }
 
       if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
+        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl);
       }
     } catch {
       setGeneralError('Unable to create your account at this moment. Please check your connection and try again.');
@@ -210,7 +211,7 @@ export default function SignupPage() {
         body: JSON.stringify({
           email: email.trim(),
           otp: cleanOtp,
-          returnUrl,
+          returnUrl: returnUrl ? sanitizeAuthRedirectUrl(returnUrl) : undefined,
         }),
       });
 
@@ -225,7 +226,7 @@ export default function SignupPage() {
       }
 
       if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
+        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl);
       }
     } catch {
       setGeneralError('Unable to verify code at this moment. Please check your connection and try again.');
@@ -307,7 +308,10 @@ export default function SignupPage() {
               fontSize: '0.8125rem',
               cursor: 'pointer',
               textDecoration: 'underline',
-              padding: 0,
+              padding: '10px 12px',
+              minHeight: '44px',
+              display: 'inline-flex',
+              alignItems: 'center',
             }}
           >
             Need to change your details? Return to form
@@ -428,6 +432,9 @@ export default function SignupPage() {
             By creating an account, you agree to our{' '}
             <a
               href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Terms of Service (opens in a new tab)"
               style={{
                 color: PALETTE.primary,
                 textDecoration: 'none',
@@ -439,6 +446,9 @@ export default function SignupPage() {
             and{' '}
             <a
               href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Privacy Policy (opens in a new tab)"
               style={{
                 color: PALETTE.primary,
                 textDecoration: 'none',

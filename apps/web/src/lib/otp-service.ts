@@ -2,8 +2,15 @@ import crypto from 'node:crypto';
 import { canonicalizeGmailAddress, type SignupRequest } from '@fbuploadpro/contracts';
 import { isLockedOut, recordFailedAttempt, clearLockout } from '@/lib/rate-limiter';
 
+export interface StagedSignupData {
+  name: string;
+  phone: string;
+  email: string;
+  hashedPassword: string;
+}
+
 export interface PendingSignupEntry {
-  data: SignupRequest;
+  data: StagedSignupData;
   otp: string;
   createdAt: number;
   expiresAt: number;
@@ -18,6 +25,12 @@ const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
 
 // In-memory store for pending signups
 const pendingSignups = new Map<string, PendingSignupEntry>();
+
+export function hashPasswordSync(password: string): string {
+  const salt = crypto.randomBytes(16);
+  const derivedKey = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+  return `${salt.toString('hex')}:${derivedKey.toString('hex')}`;
+}
 
 export function generateSecureOtp(): string {
   const array = new Uint32Array(1);
@@ -58,7 +71,13 @@ function resolveCanonicalEmail(email: string): string {
   }
 }
 
-export function createPendingSignup(data: SignupRequest): {
+export function createPendingSignup(data: {
+  name: string;
+  phone: string;
+  email: string;
+  password?: string | undefined;
+  hashedPassword?: string | undefined;
+}): {
   otp: string;
   expiresAt: Date;
 } {
@@ -67,10 +86,19 @@ export function createPendingSignup(data: SignupRequest): {
   const now = Date.now();
   const otp = generateSecureOtp();
 
+  const rawPassword = data.password || '';
+  const hashedPassword = data.hashedPassword
+    ? data.hashedPassword
+    : rawPassword.includes(':')
+    ? rawPassword
+    : hashPasswordSync(rawPassword);
+
   const entry: PendingSignupEntry = {
     data: {
-      ...data,
+      name: data.name,
+      phone: data.phone,
       email: canonicalEmail,
+      hashedPassword,
     },
     otp,
     createdAt: now,
@@ -98,7 +126,7 @@ export function verifySignupOtp(
   providedOtp: string
 ): {
   success: boolean;
-  signupData?: SignupRequest | undefined;
+  signupData?: StagedSignupData | undefined;
   error?: string | undefined;
 } {
   cleanupExpiredEntries();
