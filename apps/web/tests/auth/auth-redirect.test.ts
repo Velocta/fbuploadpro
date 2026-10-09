@@ -45,4 +45,19 @@ describe('Open Redirect Defense - sanitizeAuthRedirectUrl (Spec 017 / AUTH-01)',
     expect(sanitizeAuthRedirectUrl('   ', subdomain, rootDomain)).toBe(defaultHome);
     expect(sanitizeAuthRedirectUrl('not-a-url', subdomain, rootDomain)).toBe(defaultHome);
   });
+
+  it('routes to tenant path on Vercel preview environments without wildcard subdomains', () => {
+    const originalVercelUrl = process.env.VERCEL_URL;
+    try {
+      process.env.VERCEL_URL = 'fbuploadpro-git-preview-test.vercel.app';
+      expect(sanitizeAuthRedirectUrl(null, subdomain, 'localhost:3000')).toBe(
+        'https://fbuploadpro-git-preview-test.vercel.app/tenant/acmecorp'
+      );
+      expect(sanitizeAuthRedirectUrl('/media', subdomain, 'localhost:3000')).toBe(
+        'https://fbuploadpro-git-preview-test.vercel.app/media'
+      );
+    } finally {
+      process.env.VERCEL_URL = originalVercelUrl;
+    }
+  });
 });

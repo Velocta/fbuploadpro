@@ -14,9 +14,27 @@ export function sanitizeAuthRedirectUrl(
   const cleanRoot = rootDomain.toLowerCase().split(':')[0] || 'localhost';
   const isLocal = cleanRoot.includes('localhost') || cleanRoot.includes('127.0.0.1');
   const protocol = isLocal ? 'http' : 'https';
-  const defaultUrl = userSubdomain
-    ? `${protocol}://${userSubdomain}.${rootDomain}/`
-    : '/';
+
+  // Detect Vercel preview environments (*.vercel.app) where wildcard subdomains are unavailable
+  const isBrowserPreview =
+    typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+  const isServerPreview =
+    Boolean(process.env.VERCEL_URL && (isLocal || cleanRoot === 'localhost'));
+
+  let defaultUrl: string;
+  if (isBrowserPreview) {
+    defaultUrl = userSubdomain
+      ? `${window.location.origin}/tenant/${userSubdomain}`
+      : `${window.location.origin}/`;
+  } else if (isServerPreview && process.env.VERCEL_URL) {
+    defaultUrl = userSubdomain
+      ? `https://${process.env.VERCEL_URL}/tenant/${userSubdomain}`
+      : `https://${process.env.VERCEL_URL}/`;
+  } else {
+    defaultUrl = userSubdomain
+      ? `${protocol}://${userSubdomain}.${rootDomain}/`
+      : '/';
+  }
 
   if (!rawReturnUrl || typeof rawReturnUrl !== 'string') {
     return defaultUrl;
@@ -42,6 +60,12 @@ export function sanitizeAuthRedirectUrl(
     // Reject any relative path containing colon to avoid scheme interpretation
     if (trimmed.includes(':')) {
       return defaultUrl;
+    }
+    if (isBrowserPreview) {
+      return `${window.location.origin}${trimmed}`;
+    }
+    if (isServerPreview && process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}${trimmed}`;
     }
     return userSubdomain
       ? `${protocol}://${userSubdomain}.${rootDomain}${trimmed}`
