@@ -60,7 +60,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
    - `/speckit-implement` — TDD execution of tasks.
    - `/speckit-converge` — Verification against specification before completion.
 3. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates before merge.
-4. **Post-PR Vercel Preview Deployments**: UI previews are validated directly via automated Vercel Preview Deployments generated on each Pull Request. The standalone showroom application (`apps/showroom`) and Cloudflare tunnels are decommissioned; live Vercel preview links must be presented to the user for interactive visual inspection before requesting merge approval.
+4. **Post-PR Vercel Preview Deployments**: UI previews are validated directly via automated Vercel Preview Deployments generated on each Pull Request. The standalone showroom application (`apps/showroom`) and Cloudflare tunnels are decommissioned; if and only if the PR includes UI changes, the live Vercel preview link must be presented to the user for interactive visual inspection before requesting merge approval. Non-UI PRs do not surface a preview link.
 5. **Mandatory Human Approval Gate**: Autonomous or unapproved merges to `main` are strictly forbidden. The agent must explicitly ask for and receive user approval prior to executing any merge, regardless of whether the PR contains frontend, backend, database, or infrastructure changes.
 
 ## Governance

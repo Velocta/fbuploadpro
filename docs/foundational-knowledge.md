@@ -233,7 +233,7 @@ All development follows autonomous multi-agent orchestration codified in [`.agen
 1. **Focused Execution & Mandatory Human Merge Gate ("Ask Once, Verify & Approve Before Merge")**:
    - The agent confirms **which spec or feature to work on**.
    - The agent autonomously conducts specification, planning, task decomposition, and implementation across subagents without constant micro-interruptions.
-   - **Post-PR Vercel Preview Testing**: UI components and layouts are reviewed and validated using live Vercel Preview Deployments generated automatically for each Pull Request. The standalone showroom app (`apps/showroom`) is decommissioned. The agent retrieves the preview URL and provides it for interactive user inspection across all states (empty, loading, active, error, mobile/desktop).
+   - **Post-PR Vercel Preview Testing**: UI components and layouts are reviewed and validated using live Vercel Preview Deployments generated automatically for each Pull Request. The standalone showroom app (`apps/showroom`) is decommissioned. If and only if the PR modifies UI components or pages, the agent retrieves the preview URL and provides it for interactive user inspection across all states (empty, loading, active, error, mobile/desktop). Non-UI PRs do not surface a preview link.
    - **Mandatory Human Approval Gate**: The agent MUST NEVER merge any PR into `main` without explicitly asking the user and receiving direct approval. This applies to all PRs (frontend, backend, database migrations, devops, or docs).
 2. **Deterministic 7-Stage Sequence**:
    - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement` ➔ `/speckit-converge` ➔ `PR Vercel Preview & Human Approval` ➔ `Merge & Deploy`.

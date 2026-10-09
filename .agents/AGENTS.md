@@ -145,7 +145,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - **Post-PR Vercel Preview Link Protocol**:
   - UI previews are validated directly via Vercel Preview Deployments generated automatically for every Pull Request.
   - The standalone showroom application (`apps/showroom`) and Cloudflare tunnels are decommissioned. All UI components are verified directly within `apps/web`.
-  - When a Pull Request is opened or updated, the agent MUST obtain the live Vercel preview deployment URL (via `gh pr view` or Vercel deployment tools) and present the preview link to the user in chat for interactive UI inspection and review prior to requesting merge approval.
+  - When a Pull Request is opened or updated, the agent MUST only surface and present the live Vercel preview deployment URL if the PR includes UI changes (e.g. pages, layouts, styles, components in `apps/web`) for interactive user inspection and review prior to requesting merge approval. For non-UI PRs (pure backend, database migrations, devops, or documentation), do not show a preview link.
 - **Prohibition on Running Migrations via Supabase MCP (`apply_migration` / `execute_sql`)**:
   - AI agents and automated tools MUST NEVER use the Supabase MCP server or direct ad-hoc SQL execution tools (`apply_migration`, `execute_sql`, etc.) to run, apply, or execute database schema migrations on the remote database.
   - All database schema modifications MUST be written as versioned forward migration files strictly located in `supabase/migrations/YYYYMMDDHHmmss_<name>.sql` and delivered through GitHub Pull Requests.
