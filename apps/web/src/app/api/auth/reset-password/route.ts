@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { resetUserPassword } from '@/lib/supabase-auth';
+import { formatAuthErrorResponse } from '@/lib/auth-errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +26,9 @@ export async function POST(request: NextRequest) {
       message: result.message,
     });
   } catch (error: unknown) {
-    const message = (error as Error).message || 'Failed to update password';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return formatAuthErrorResponse(error, {
+      fallbackMessage: 'Unable to reset your password. Your link may have expired or is invalid.',
+      defaultStatus: 500,
+    });
   }
 }
