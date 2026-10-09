@@ -1,67 +1,56 @@
-# Professional UX Writing Standards & Public Webapp Tone Enforcement
+# Universal UX Writing Standards & Public Web App Tone Enforcement
 
 **Canonical Authority**: [`.agents/skills/ux-writing/SKILL.md`](../skills/ux-writing/SKILL.md)  
-**Governing Rule**: All user-facing copy in public web applications MUST sound human, professional, clear, and trustworthy.
+**Governing Rule**: All user-facing text across the entire web application MUST be professional, clear, human, and outcome-oriented.
 
 ---
 
-## 1. Core Principle: Public Web App Professionalism
+## 1. Core Mandate: Commercial SaaS Tone Across All Surfaces
 
-FBUploadPro is a public commercial SaaS product used by creators, marketers, agencies, and business owners. All user-visible copy—headings, subtext, form labels, placeholders, helper text, error alerts, empty states, and button labels—must be written with high-craft editorial care.
+FBUploadPro is a public commercial product designed for creators, digital agencies, and business operators. Every user-visible text element—including page headers, navigation, dashboard metrics, modal dialogs, form labels, placeholder text, helper instructions, validation feedback, error banners, empty states, and action buttons—must adhere to professional software standards.
 
-> **CRITICAL DIRECTIVE**: Never write robotic, lazy, or engineer-slop copy. Avoid exposing technical plumbing, internal architectural constraints, regex sanitization logic, or database implementation details in user-facing UI.
-
----
-
-## 2. Forbidden Anti-Patterns vs. Required Human SaaS Standards
-
-### A. Leaking Internal Technical / Database Plumbing
-* ❌ **STRICTLY FORBIDDEN**: Exposing regex logic, string sanitization, database constraints, or hashing algorithms in UI helper text:
-  - *Violation*: `"Dots and plus tags will be automatically stripped for your subdomain"`
-  - *Violation*: `"Must not exceed varchar(255) character limit"`
-  - *Violation*: `"Tenant derived via email split regex"`
-* ✅ **MANDATED**: Show user benefit or clean preview examples without mentioning code:
-  - *Standard*: `"Workspace URL: yourname.vinsmokemedia.online"`
-  - *Standard*: Keep helper text focused on user value or omit if the field is self-explanatory.
+> **CRITICAL DIRECTIVE**: Never write robotic, lazy, or engineer-slop copy. Software must speak to users in the language of their domain and workflows, never in the vocabulary of internal implementation details.
 
 ---
 
-### B. DevOps & Infrastructure Terminology Cosplay
-* ❌ **STRICTLY FORBIDDEN**: Using DevOps, cloud infrastructure, or multi-tenant system terms on customer-facing screens:
-  - *Violation*: `"Deploy your automated workspace"` (Users create accounts; they don't deploy clusters).
-  - *Violation*: `"Enter credentials to access your isolated workspace"` (Sounds like a quarantine or Kubernetes pod).
-  - *Violation*: `"FBUploadPro Gateway"` (This is a login page, not an API gateway).
-* ✅ **MANDATED**: Use clear, welcoming, standard SaaS language:
-  - *Standard*: `"Create your account"` — `"Start scheduling and publishing Reels across your Facebook pages."`
-  - *Standard*: `"Welcome back"` — `"Sign in to manage your pages and scheduled content."`
+## 2. Universal Prohibitions & Architectural Rules
+
+### A. Total Prohibition on Technical Plumbing Leaks
+Engineers and AI agents must never expose internal software mechanics to the user interface:
+* **Zero Database / Schema Jargon**: Never mention data types, column constraints, storage engines, hashing, unique index collisions, or backend data normalization.
+* **Zero Regex or Sanitization Logic**: Never explain regex patterns, character-stripping algorithms, or string manipulation mechanics in helper copy. Instead, show clear, polished examples of the expected input or output.
+* **Zero Infrastructure / Architecture Terminology**: Never refer to multi-tenant isolation containers, deployment pipelines, routing gateways, or server environments in user workflows. Frame every screen and control around the user's workspace, content, and goals.
 
 ---
 
-### C. Fake "Operational / Server Status" Dots & Monitoring Cosplay
-* ❌ **STRICTLY FORBIDDEN**: Adding decorative or fake status dots (`Ready`, `Online`, `Operational`, `Standby`, etc.) to:
-  - Login / Sign in cards and headers
-  - Signup / Registration cards
-  - Standard page titles, form headers, and navigation bars
-  - Generic UI components to simulate "system health"
-* ✅ **MANDATED**: Status dots are **strictly and exclusively** reserved for real entity runtime state:
-  - A connected Facebook Page's live token health in account settings (`active`, `expired`, `invalid`).
-  - A queued post's execution status in the publishing timeline (`queued`, `publishing`, `failed`).
-  - Standard authentication and marketing pages must never display fake server monitor badges.
+### B. Total Prohibition on Decorative & Simulated Status Signals
+The platform strictly forbids fake or decorative "operational / system status" indicators:
+* **No Cosmetic Status Signals**: Never place static status dots, "Online", "Ready", "Operational", or "System Active" badges on authentication cards, page headers, form wrappers, or general containers.
+* **Strict Entity-Bound Scope for Indicators**: Status dots (`StatusDot`, `STATUS_SIGNALS`) are strictly reserved for authentic, dynamic runtime states of live domain entities:
+  - Third-party OAuth connection health (e.g., active Facebook Page token, expired access token).
+  - Background asynchronous task states (e.g., publishing queue item pending, actively streaming, failed).
+* Standard navigation, onboarding, authentication, and content views must never feature simulated system-monitoring signals.
 
 ---
 
-### D. Blaming or Robotic Error Messages
-* ❌ **STRICTLY FORBIDDEN**: Cold, bureaucratic, or accusatory error titles:
-  - *Violation*: `"Registration Error"`, `"Sign In Error"`, `"Invalid input provided"`, `"Error 400"`.
-* ✅ **MANDATED**: Polite, clear, empathetic messages explaining what happened and how to recover:
-  - *Standard*: `"Couldn't sign you in"` — `"Please check your email address and password, then try again."`
-  - *Standard*: `"Unable to create account"` — `"An account with this email already exists. Try signing in instead."`
+### C. Constructive, Empathetic Error Design
+Error messages must guide the user forward without blame, cryptic status codes, or robotic jargon:
+1. **Explain what happened** using straightforward, human language.
+2. **Clarify the reason** without technical jargon or fault attribution.
+3. **Provide a clear next step** or recovery action.
+* Never use cold, bureaucratic titles (e.g., "Operation Error", "Validation Failure"). Use conversational, helpful headlines (e.g., "Couldn't complete request", "Please verify your details").
+
+---
+
+### D. Action-Oriented Microcopy
+* **Buttons & Actions**: Must use explicit active verbs describing what will occur (`[Verb] [Object]`, e.g., "Schedule reel", "Connect Facebook Page", "Save changes"), avoiding generic labels ("Submit", "OK", "Click here").
+* **Empty States**: Must acknowledge the empty state warmly, explain the immediate value of adding data, and provide a direct call-to-action button to create or import content.
 
 ---
 
 ## 3. The 4 Quality Standards for Every UI String
 
-1. **Purposeful**: Every single word must earn its place on the screen. If removing a word doesn't change meaning, remove it.
-2. **Concise**: Keep titles under 6 words, descriptions under 16 words, and button labels to 2–3 active words (`[Verb] [Object]`).
-3. **Conversational**: Write like a helpful, articulate human product designer. Use active voice 85%+ of the time.
-4. **Clear**: Avoid jargon. Aim for 7th-to-8th grade reading level for consumer-facing text.
+1. **Purposeful**: Every single word must have a distinct job. Eliminate filler, preamble, and self-evident explanations.
+2. **Concise**: Keep titles under 6 words, descriptions under 16 words, and action labels under 3 words.
+3. **Conversational**: Use natural sentence rhythm, active voice (85%+), and standard everyday vocabulary.
+4. **Clear**: Eliminate ambiguity. Ensure content is readable at an 8th-grade level without domain jargon.

@@ -27,29 +27,23 @@ Write clear, concise, user-centered interface copy (UX text/microcopy) for digit
 
 ## Absolute Prohibitions (Zero Developer Slop)
 
-### 1. Never Leak Engineering Plumbing to Users
-Users are business owners, creators, and operators—NOT backend developers or database administrators.
-- **NEVER** expose regex logic, sanitation rules, or database constraints in UI labels:
-  - ❌ *"Dots and plus tags will be automatically stripped for your subdomain"*
-  - ❌ *"Value must satisfy PostgreSQL varchar(255) constraints"*
-  - ❌ *"Subdomain derived via HMAC token"*
-- **NEVER** use infrastructure or DevOps terminology where customer-facing concepts apply:
-  - ❌ *"Deploy your automated workspace"* → ✅ *"Create your workspace"* or *"Start scheduling Reels"*
-  - ❌ *"Access your isolated multi-tenant environment"* → ✅ *"Sign in to your account"*
-  - ❌ *"FBUploadPro Gateway"* → ✅ *"Welcome back"* or *"Sign in to FBUploadPro"*
+### 1. Never Expose Engineering Plumbing
+Users are business owners, creators, and operators—not backend developers or database administrators.
+- **Backend Mechanics**: Never mention schema constraints, data types, database engines, or internal data normalization anywhere in user copy.
+- **Validation & Sanitization**: Never describe regex patterns, string manipulation, or input sanitation mechanics in helper text. Use realistic, human input examples instead.
+- **Infrastructure Terminology**: Never use infrastructure, cloud deployment, or system architecture jargon on customer-facing screens. Frame all copy around user intent, content, and workflows.
 
-### 2. Never Use Fake "Operational / Status" Dots in Standard UI
-- **NEVER** add decorative status dots (`Ready`, `Online`, `Operational`, `Standby`) to login screens, signup cards, page headers, or standard forms.
-- Status dots exist **strictly** for real entity state monitoring (e.g. active Facebook Page connection status, failed publishing queue item).
-- Placing green/yellow/red dots on authentication cards or generic form titles is artificial "system monitor" cosplay that looks amateurish and confusing to real users.
+### 2. Never Use Decorative or Simulated Status Indicators
+- Status indicators (`StatusDot`, `STATUS_SIGNALS`) must strictly and exclusively represent authentic, live runtime entity state (e.g., connected social account token health, publishing task progress).
+- Never add decorative or simulated status dots (such as "Online", "Ready", "Operational", or cosmetic colored dots) to headers, cards, forms, modals, or page wrappers.
 
 ### 3. Never Blame the User or Show Cryptic Errors
-- ❌ *"Registration Error"* / *"Invalid input"* / *"Error 422: Unprocessable Entity"*
-- ✅ *"Couldn't create account"* / *"Please check your email address and try again"*
-- Formula for error messages:
+- Error messages must be constructive, empathetic, and plain-language.
+- Never use cold, bureaucratic codes or accusatory language.
+- Structure error messages cleanly:
   1. What happened (plain terms)
-  2. Why it happened (without technical blame)
-  3. How to fix it (clear recovery action)
+  2. Why it occurred (without technical jargon or blame)
+  3. How to resolve it (clear recovery action)
 
 ---
 
