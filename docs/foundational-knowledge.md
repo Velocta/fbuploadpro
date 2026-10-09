@@ -104,7 +104,7 @@ The platform operates on a clear three-tier role taxonomy:
 
 | Role | Primary Purpose | Key Capabilities |
 |---|---|---|
-| **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders and reusable captions, configures Page queue slots, schedules and publishes unlimited posts without credit checks, and monitors Page insights. |
+| **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders, configures Page queue slots, schedules and publishes unlimited posts without credit checks, and monitors Page insights. |
 | **Seller** | Affiliate / Referral Partner | Onboards users via unique referral links/codes. Tracks referred users' activity and workspace usage. |
 | **Admin** | Platform & System Controller | Manages platform health, system operations, and user statuses. User onboarding and management is completely automated. |
 
@@ -121,10 +121,9 @@ Each user has an isolated, feature-rich Media Library:
 - **Organization & Metadata**:
   - **Custom Folders**: Nested or categorized collections for organizing campaigns, themes, or series.
   - **Tags**: Multi-tag filtering and search for quick asset retrieval.
-  - **Reusable Captions**: A library of saved caption templates and snippets that can be attached to posts with one click.
 - **Storage Infrastructure & Quotas**:
   - High-availability object storage powered by **Cloudflare R2** with zero egress fees.
-  - Per-user storage limits (default 5 GB / 50 assets), with real-time quota tracking.
+  - Per-user storage limits (default 10 GB), with real-time quota tracking.
 
 ---
 
@@ -135,7 +134,7 @@ Publishing is driven by an automated, queue-based slot architecture:
 1. **Recurring Queue Slots**:
    - For each connected Facebook Page, users define recurring publishing time slots (e.g., Daily at `09:00`, `13:00`, and `18:00`).
 2. **Selective Asset Queueing**:
-   - Users select videos or images from their Media Library, assign captions (or reusable caption templates), and add them to target Page queues.
+   - Users select videos or images from their Media Library, assign captions, and add them to target Page queues.
 3. **Automated First Comment**:
    - Users can optionally attach a First Comment (calls to action, affiliate links, hashtags) that is automatically posted immediately after the post goes live.
 4. **Cloudflare Worker Edge Scheduler**:
@@ -209,7 +208,7 @@ flowchart LR
 - **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
 - **Spec 002 (Completed & Merged; UI Slated for Assembly)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
 - **Spec 003 (Completed & Merged; UI Slated for Assembly)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
-- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset storage quota meters).
+- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, 10 GB storage quota meters).
 - **Spec 005 (Completed & Merged; UI Slated for Assembly)**: Automated Queue Slots Publishing Engine & Edge Dispatcher (recurring slot definitions, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment).
 - **Spec 006 (Completed & Merged; UI Slated for Assembly)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
 - **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
