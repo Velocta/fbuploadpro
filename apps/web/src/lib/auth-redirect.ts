@@ -15,8 +15,8 @@ export function sanitizeAuthRedirectUrl(
   const isLocal = cleanRoot.includes('localhost') || cleanRoot.includes('127.0.0.1');
   const protocol = isLocal ? 'http' : 'https';
   const defaultUrl = userSubdomain
-    ? `${protocol}://${userSubdomain}.${rootDomain}/dashboard`
-    : '/dashboard';
+    ? `${protocol}://${userSubdomain}.${rootDomain}/`
+    : '/';
 
   if (!rawReturnUrl || typeof rawReturnUrl !== 'string') {
     return defaultUrl;

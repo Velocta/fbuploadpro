@@ -10,7 +10,11 @@ import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
-export default function ForgotPasswordPage() {
+export interface ForgotPasswordPageProps {
+  initialSuccess?: boolean | undefined;
+}
+
+export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPasswordPageProps = {}) {
   const router = useRouter();
 
   // Step state: 1 = email input, 2 = OTP + new password entry
@@ -23,7 +27,7 @@ export default function ForgotPasswordPage() {
   // Loading & Submission states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(initialSuccess);
   const [cooldownSeconds, setCooldownSeconds] = useState(60);
 
   // Field-level error states
@@ -204,7 +208,7 @@ export default function ForgotPasswordPage() {
       setIsSubmitting(false);
 
       const timer = setTimeout(() => {
-        router.push('/login');
+        router.push('/login?reset=success');
       }, 2000);
       return () => clearTimeout(timer);
     } catch {
@@ -245,7 +249,7 @@ export default function ForgotPasswordPage() {
             message="Your password has been successfully reset. Redirecting you to sign in..."
           />
           <Link
-            href="/login"
+            href="/login?reset=success"
             style={{
               display: 'inline-flex',
               alignItems: 'center',

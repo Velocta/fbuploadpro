@@ -390,7 +390,7 @@ export async function registerTenantUser(params: {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
   const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
   const protocol = isLocal ? 'http' : 'https';
-  const redirectUrl = `${protocol}://${userRecord.subdomain}.${rootDomain}/dashboard`;
+  const redirectUrl = `${protocol}://${userRecord.subdomain}.${rootDomain}/`;
 
   return {
     user: userRecord,

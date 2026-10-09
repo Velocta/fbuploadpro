@@ -66,6 +66,11 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Navigation Hierarchy**: The primary navigation organizes tools cleanly: top Workspace identity, "Home" navigation item, a visual `SidebarSeparator` hairline, and a "Facebook" section header with "Accounts" as its nested sub-item.
     - **Bottom Profile & Popover Action**: The bottom of the sidebar anchors a user card displaying the authenticated operator's name and email, accompanied by a chevron-up (`^`) trigger that reveals a contextual menu for theme switching and instant sign out.
     - **Mobile Floating Trigger**: Small screens (<768px) access the sidebar drawer via a discreet, floating theme-styled trigger button in the top-left corner without adding horizontal header bars.
+14. **Canonical Post-Authentication Workspace Home Landing Route**:
+    - **Tenant Root as Default Destination**: Following successful authentication (login) or account creation (signup OTP verification), the default destination MUST strictly resolve to the tenant's workspace root (`https://${subdomain}.${rootDomain}/` in production, `http://${subdomain}.${rootDomain}/` in dev), which internally rewrites to the workspace Home view (`/tenant/[subdomain]`). Legacy references redirecting to `/dashboard` are permanently eradicated.
+    - **Post-Password Reset Sign-In Redirection**: Upon successful 6-digit OTP password reset and creation of a new password, the user MUST be redirected to the central Sign In page (`/login`) accompanied by a clear success notification confirming their password has been updated. Upon signing in with their new credentials, they are landed directly on their workspace Home page.
+    - **Deep-Link Return URL Preservation**: When a valid, authorized `returnUrl` is provided during login or signup, it takes precedence over the default Home destination provided it satisfies strict open-redirect sanitization rules.
+    - **Central Gateway Forwarding**: Authenticated sessions attempting to access central auth routes (`app.${rootDomain}/`, `/login`, `/signup`) are automatically routed to their workspace root (`https://${session.subdomain}.${rootDomain}/`).
 
 ## Development Workflow & Quality Gates
 
@@ -88,4 +93,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.7.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.8.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

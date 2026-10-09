@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Input, Button } from '@/components/ui';
+import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
@@ -15,10 +15,15 @@ interface FieldErrors {
   password?: string | undefined;
 }
 
-export default function LoginPage() {
+export interface LoginPageProps {
+  initialResetSuccess?: boolean | undefined;
+}
+
+export default function LoginPage({ initialResetSuccess = false }: LoginPageProps = {}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
+  const [isResetSuccess, setIsResetSuccess] = useState(initialResetSuccess);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -29,6 +34,9 @@ export default function LoginPage() {
       const ret = params.get('returnUrl');
       if (ret) {
         setReturnUrl(sanitizeAuthRedirectUrl(ret));
+      }
+      if (params.get('reset') === 'success') {
+        setIsResetSuccess(true);
       }
     }
   }, []);
@@ -144,6 +152,13 @@ export default function LoginPage() {
       }
     >
       <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        {isResetSuccess && (
+          <Alert
+            severity="success"
+            title="Password Updated"
+            message="Your password has been successfully reset. Please sign in with your new credentials."
+          />
+        )}
         <Input
           label="Email Address"
           type="email"

@@ -63,7 +63,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       if (session && (pathname === '/' || pathname === '/login' || pathname === '/signup')) {
         const workspaceUrl = new URL(request.url);
         workspaceUrl.host = `${session.subdomain}.${rootDomain}`;
-        workspaceUrl.pathname = '/dashboard';
+        workspaceUrl.pathname = '/';
         return NextResponse.redirect(workspaceUrl);
       }
 
@@ -76,7 +76,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // Customer tenant subdomains only host private workspace routes (/dashboard, /media, etc.).
+  // Customer tenant subdomains only host private workspace routes (/, /accounts, etc.).
   // Any attempt to access centralized auth routes (/login, /signup, /forgot-password, /reset-password)
   // on a tenant subdomain is cleanly 307 redirected to the central gateway (app.${rootDomain}) preserving query params.
   const isAuthRoute =
