@@ -34,6 +34,7 @@ describe('Supabase Migrations Convention Suite', () => {
       'publishing_engine',
       'page_insights',
       'users_phone_number',
+      'auth_hardening_canonical_email_e164',
     ];
 
     for (const slug of expectedSlugs) {
@@ -45,5 +46,18 @@ describe('Supabase Migrations Convention Suite', () => {
     const timestamps = files.map(f => f.slice(0, 14));
     const sortedTimestamps = [...timestamps].sort();
     expect(timestamps).toEqual(sortedTimestamps);
+  });
+
+  it('validates auth hardening migration has trigger, unique index, and check constraints', () => {
+    const files = fs.readdirSync(supabaseMigrationsDir);
+    const hardeningMigration = files.find(f => f.includes('auth_hardening_canonical_email_e164.sql'));
+    expect(hardeningMigration).toBeDefined();
+
+    const content = fs.readFileSync(path.join(supabaseMigrationsDir, hardeningMigration!), 'utf8');
+    expect(content).toContain('normalized_email');
+    expect(content).toContain('idx_users_normalized_email');
+    expect(content).toContain('trg_canonicalize_user_email');
+    expect(content).toContain('check_users_gmail_only');
+    expect(content).toContain('check_users_phone_e164');
   });
 });

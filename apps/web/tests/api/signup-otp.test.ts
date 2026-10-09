@@ -4,22 +4,24 @@ import { POST as signupHandler } from '../../src/app/api/auth/signup/route';
 import { POST as verifyOtpHandler } from '../../src/app/api/auth/signup/verify-otp/route';
 import { POST as resendOtpHandler } from '../../src/app/api/auth/signup/resend-otp/route';
 import { _resetOtpStore, getPendingSignup } from '../../src/lib/otp-service';
+import { _resetRateLimiter } from '../../src/lib/rate-limiter';
 
-describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () => {
+describe('Signup OTP API Flow (Spec 014 - Hardened)', () => {
   beforeEach(() => {
     _resetOtpStore();
+    _resetRateLimiter();
     process.env.SESSION_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
   });
 
-  it('initiates signup and returns requiresOtp without issuing session cookie immediately', async () => {
+  it('initiates signup and returns requiresOtp with canonical email without issuing session cookie immediately', async () => {
     const req = new NextRequest('http://localhost:3000/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'Ellen Ripley',
-        phone: '+15554321098',
-        email: 'ripley@weyland.corp',
+        phone: '+1 415 555 2671',
+        email: 'Ellen.Ripley+promo@GMAIL.COM',
         password: 'Password123!',
       }),
     });
@@ -30,14 +32,14 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.requiresOtp).toBe(true);
-    expect(body.email).toBe('ripley@weyland.corp');
+    expect(body.email).toBe('ellenripley@gmail.com');
 
     // Cookie must NOT be set until OTP is verified
     const setCookie = res.headers.get('set-cookie');
     expect(setCookie).toBeNull();
 
-    // Pending registration must exist
-    const pending = getPendingSignup('ripley@weyland.corp');
+    // Pending registration must exist under canonical email
+    const pending = getPendingSignup('ellenripley@gmail.com');
     expect(pending).not.toBeNull();
     expect(pending?.otp).toHaveLength(6);
   });
@@ -48,8 +50,8 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'Ripley Jr',
-        phone: '+15554321099',
-        email: 'ripleyj@weyland.corp',
+        phone: '+14155552672',
+        email: 'ripleyj@gmail.com',
         password: 'Password123!',
       }),
     });
@@ -59,7 +61,7 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email: 'ripleyj@weyland.corp',
+        email: 'ripleyj@gmail.com',
         otp: '000000',
       }),
     });
@@ -71,20 +73,22 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
   });
 
   it('activates account, sets session cookie, and returns workspace redirect on valid OTP', async () => {
-    const email = 'hero@domain.com';
+    const email = 'hero.user@gmail.com';
+    const canonicalEmail = 'herouser@gmail.com';
+
     const signupReq = new NextRequest('http://localhost:3000/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'Hero User',
-        phone: '+15551112222',
+        phone: '+14155552673',
         email,
         password: 'Password123!',
       }),
     });
     await signupHandler(signupReq);
 
-    const pending = getPendingSignup(email);
+    const pending = getPendingSignup(canonicalEmail);
     expect(pending).not.toBeNull();
     const validOtp = pending!.otp;
 
@@ -102,7 +106,7 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
     expect(verifyRes.status).toBe(201);
     const body = await verifyRes.json();
     expect(body.success).toBe(true);
-    expect(body.user.email).toBe(email);
+    expect(body.user.email).toBe(canonicalEmail);
     expect(body.redirectUrl).toContain('/media');
 
     // Cookie must be set
@@ -110,36 +114,35 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
     expect(setCookie).toContain('fbup_session=');
   });
 
-  it('rejects duplicate signup if email already exists', async () => {
-    const email = 'duplicate@domain.com';
+  it('rejects duplicate signup if canonical email already exists (aliasing deduplication)', async () => {
     // First signup and verification
     const signupReq1 = new NextRequest('http://localhost:3000/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'First User',
-        phone: '+15550001111',
-        email,
+        phone: '+14155552674',
+        email: 'duplicate.user@gmail.com',
         password: 'Password123!',
       }),
     });
     await signupHandler(signupReq1);
-    const pending = getPendingSignup(email);
+    const pending = getPendingSignup('duplicateuser@gmail.com');
     const verifyReq = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, otp: pending!.otp }),
+      body: JSON.stringify({ email: 'duplicateuser@gmail.com', otp: pending!.otp }),
     });
     await verifyOtpHandler(verifyReq);
 
-    // Second signup with same email should return 409
+    // Second signup with same underlying Gmail inbox using dots & plus tags should return 409
     const signupReq2 = new NextRequest('http://localhost:3000/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: 'Second User',
-        phone: '+15550002222',
-        email,
+        phone: '+14155552675',
+        email: 'd.u.p.l.i.c.a.t.e.u.s.e.r+alias@gmail.com',
         password: 'Password123!',
       }),
     });
@@ -147,5 +150,118 @@ describe('Signup OTP API Flow (Spec 013 - Email Confirmation with Resend)', () =
     expect(res2.status).toBe(409);
     const body2 = await res2.json();
     expect(body2.error).toContain('Email is already registered');
+  });
+
+  it('rejects non-gmail addresses with validation error', async () => {
+    const signupReq = new NextRequest('http://localhost:3000/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Bad Domain',
+        phone: '+14155552676',
+        email: 'user@yahoo.com',
+        password: 'Password123!',
+      }),
+    });
+
+    const res = await signupHandler(signupReq);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Validation failed');
+  });
+
+  it('enforces IP rate limiting after excessive signup calls', async () => {
+    const makeReq = (emailNum: number) =>
+      new NextRequest('http://localhost:3000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '198.51.100.99' },
+        body: JSON.stringify({
+          name: 'Spam User',
+          phone: '+14155552677',
+          email: `spam.user${emailNum}@gmail.com`,
+          password: 'Password123!',
+        }),
+      });
+
+    for (let i = 0; i < 5; i++) {
+      const res = await signupHandler(makeReq(i));
+      expect([200, 409]).toContain(res.status);
+    }
+
+    // 6th request triggers IP rate limit 429
+    const limitedRes = await signupHandler(makeReq(5));
+    expect(limitedRes.status).toBe(429);
+    const body = await limitedRes.json();
+    expect(body.error).toContain('Too many registration attempts');
+  });
+
+  it('enforces email identifier rate limiting after 3 requests for same email', async () => {
+    const makeReq = () =>
+      new NextRequest('http://localhost:3000/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Target User',
+          phone: '+14155552678',
+          email: 'target.email@gmail.com',
+          password: 'Password123!',
+        }),
+      });
+
+    for (let i = 0; i < 3; i++) {
+      const res = await signupHandler(makeReq());
+      expect([200, 409]).toContain(res.status);
+    }
+
+    // 4th request triggers email rate limit 429
+    const limitedRes = await signupHandler(makeReq());
+    expect(limitedRes.status).toBe(429);
+    const body = await limitedRes.json();
+    expect(body.error).toContain('Too many verification requests for this email address');
+  });
+
+  it('rejects non-gmail address on OTP verification', async () => {
+    const req = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'user@yahoo.com',
+        otp: '123456',
+      }),
+    });
+
+    const res = await verifyOtpHandler(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('Only @gmail.com');
+  });
+
+  it('enforces IP rate limiting on OTP verification after 10 requests', async () => {
+    const ip = '10.20.30.40';
+    for (let i = 0; i < 10; i++) {
+      const req = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
+        body: JSON.stringify({
+          email: 'testuser@gmail.com',
+          otp: '123456',
+        }),
+      });
+      await verifyOtpHandler(req);
+    }
+
+    // 11th request from same IP should return 429
+    const limitedReq = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
+      body: JSON.stringify({
+        email: 'testuser@gmail.com',
+        otp: '123456',
+      }),
+    });
+    const limitedRes = await verifyOtpHandler(limitedReq);
+    expect(limitedRes.status).toBe(429);
+    const body = await limitedRes.json();
+    expect(body.error).toContain('Too many verification attempts from this IP');
   });
 });

@@ -1,23 +1,51 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { resendSignupOtp, getPendingSignup } from '@/lib/otp-service';
 import { sendOtpEmail } from '@/lib/email-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
+import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = extractClientIp(request.headers);
+
+    // 1. IP rate limiting (max 5 resend requests per 60 seconds per IP)
+    const ipLimit = checkRateLimit(`resend:ip:${clientIp}`, 5, 60 * 1000);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many resend attempts. Please wait ${ipLimit.retryAfterSeconds} seconds before requesting a new code.`,
+          retryAfterSeconds: ipLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const body = await request.json();
     const { email } = body || {};
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return NextResponse.json(
-        { error: 'Valid email address is required.' },
+        { error: 'Valid Gmail address is required.' },
         { status: 400 }
       );
     }
 
-    const emailLower = email.trim().toLowerCase();
-    const pending = getPendingSignup(emailLower);
+    let canonicalEmail: string;
+    try {
+      canonicalEmail = canonicalizeGmailAddress(email);
+    } catch {
+      return NextResponse.json(
+        { error: 'Only @gmail.com (or @googlemail.com) addresses are supported.' },
+        { status: 400 }
+      );
+    }
+
+    const pending = getPendingSignup(canonicalEmail);
 
     if (!pending) {
       return NextResponse.json(
@@ -26,7 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resendResult = resendSignupOtp(emailLower);
+    const resendResult = resendSignupOtp(canonicalEmail);
 
     if (!resendResult.success || !resendResult.otp) {
       const status = resendResult.cooldownSecondsRemaining ? 429 : 400;
@@ -39,11 +67,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await sendOtpEmail({
-      email: emailLower,
+    const dispatchResult = await sendOtpEmail({
+      email: canonicalEmail,
       name: pending.data.name,
       otp: resendResult.otp,
     });
+
+    if (!dispatchResult.success) {
+      return NextResponse.json(
+        { error: 'Unable to deliver verification code. Please check your email and try again shortly.' },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(
       {

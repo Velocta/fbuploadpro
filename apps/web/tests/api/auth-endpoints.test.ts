@@ -8,13 +8,15 @@ import { GET as handleMe } from '../../src/app/api/auth/me/route';
 import * as dbModule from '../../src/lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 import { getPendingSignup, _resetOtpStore } from '../../src/lib/otp-service';
+import { _resetRateLimiter } from '../../src/lib/rate-limiter';
 
-describe('Auth API Endpoints (Spec 009)', () => {
+describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
   const testUserId = '11111111-1111-4111-a111-111111111111';
 
   beforeEach(() => {
     vi.restoreAllMocks();
     _resetOtpStore();
+    _resetRateLimiter();
     process.env.SESSION_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
     process.env.DATABASE_URL = 'postgresql://mock:mock@localhost:5432/mock_db';
@@ -33,9 +35,9 @@ describe('Auth API Endpoints (Spec 009)', () => {
           // Step 2: RETURNING inserted user
           .mockResolvedValueOnce({
             id: testUserId,
-            email: 'john.doe+reels@example.com',
+            email: 'johndoe@gmail.com',
             name: 'John Doe',
-            phone: '+15551234567',
+            phone: '+14155552671',
             subdomain: 'johndoe',
             role: 'user',
             status: 'active',
@@ -50,8 +52,8 @@ describe('Auth API Endpoints (Spec 009)', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: 'John Doe',
-          phone: '+15551234567',
-          email: 'john.doe+reels@example.com',
+          phone: '+14155552671',
+          email: 'john.doe+reels@gmail.com',
           password: 'Password123!',
         }),
       });
@@ -63,14 +65,14 @@ describe('Auth API Endpoints (Spec 009)', () => {
       expect(json.success).toBe(true);
       expect(json.requiresOtp).toBe(true);
 
-      const pending = getPendingSignup('john.doe+reels@example.com');
+      const pending = getPendingSignup('johndoe@gmail.com');
       expect(pending).not.toBeNull();
 
       const verifyReq = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'john.doe+reels@example.com',
+          email: 'johndoe@gmail.com',
           otp: pending!.otp,
         }),
       });
@@ -117,8 +119,8 @@ describe('Auth API Endpoints (Spec 009)', () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: 'John Doe',
-          phone: '+15551234567',
-          email: 'existing@example.com',
+          phone: '+14155552671',
+          email: 'existing@gmail.com',
           password: 'Password123!',
         }),
       });
@@ -136,9 +138,9 @@ describe('Auth API Endpoints (Spec 009)', () => {
       const mockDb: Partial<DatabaseClient> = {
         queryOne: vi.fn().mockResolvedValueOnce({
           id: testUserId,
-          email: 'active@example.com',
+          email: 'active@gmail.com',
           name: 'Active User',
-          phone: '+1234567890',
+          phone: '+14155552671',
           subdomain: 'activecorp',
           role: 'user',
           status: 'active',
@@ -151,7 +153,7 @@ describe('Auth API Endpoints (Spec 009)', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'active@example.com',
+          email: 'active@gmail.com',
           password: 'Password123!',
           returnUrl: '/publishing',
         }),
@@ -173,7 +175,7 @@ describe('Auth API Endpoints (Spec 009)', () => {
       const mockDb: Partial<DatabaseClient> = {
         queryOne: vi.fn().mockResolvedValueOnce({
           id: testUserId,
-          email: 'suspended@example.com',
+          email: 'suspended@gmail.com',
           name: 'Suspended User',
           phone: null,
           subdomain: 'bannedcorp',
@@ -188,7 +190,7 @@ describe('Auth API Endpoints (Spec 009)', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'suspended@example.com',
+          email: 'suspended@gmail.com',
           password: 'Password123!',
         }),
       });
@@ -212,7 +214,7 @@ describe('Auth API Endpoints (Spec 009)', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'unknown@example.com',
+          email: 'unknown@gmail.com',
           password: 'Password123!',
         }),
       });
@@ -222,6 +224,51 @@ describe('Auth API Endpoints (Spec 009)', () => {
 
       const json = await res.json();
       expect(json.error).toBe('Invalid email or password');
+    });
+
+    it('rejects non-Gmail domains with 400 Bad Request on login', async () => {
+      const req = new NextRequest('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'user@yahoo.com',
+          password: 'Password123!',
+        }),
+      });
+
+      const res = await handleLogin(req);
+      expect(res.status).toBe(400);
+
+      const json = await res.json();
+      expect(json.error).toBe('Validation failed');
+    });
+
+    it('enforces email identifier rate limit on login after 5 attempts', async () => {
+      const email = 'ratelimiteduser@gmail.com';
+      const mockDb: Partial<DatabaseClient> = {
+        queryOne: vi.fn().mockResolvedValue(null),
+      };
+      vi.spyOn(dbModule, 'getDbClient').mockReturnValue(mockDb as DatabaseClient);
+
+      for (let i = 0; i < 5; i++) {
+        const req = new NextRequest('http://localhost:3000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': `192.168.10.${i + 1}` },
+          body: JSON.stringify({ email, password: 'WrongPassword!' }),
+        });
+        await handleLogin(req);
+      }
+
+      // 6th attempt should return 429
+      const blockedReq = new NextRequest('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '192.168.10.99' },
+        body: JSON.stringify({ email, password: 'WrongPassword!' }),
+      });
+      const blockedRes = await handleLogin(blockedReq);
+      expect(blockedRes.status).toBe(429);
+      const blockedJson = await blockedRes.json();
+      expect(blockedJson.error).toContain('Too many sign in attempts for this account');
     });
   });
 

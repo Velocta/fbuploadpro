@@ -29,8 +29,14 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMessage('Please enter a valid Gmail address.');
+      return;
+    }
+    const domain = cleanEmail.split('@')[1];
+    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+      setErrorMessage('Only @gmail.com (or @googlemail.com) accounts are supported.');
       return;
     }
     if (!password) {
@@ -107,7 +113,7 @@ export default function LoginPage() {
         <Input
           label="Email Address"
           type="email"
-          placeholder="you@domain.com"
+          placeholder="you@gmail.com"
           autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}

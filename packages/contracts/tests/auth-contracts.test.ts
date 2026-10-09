@@ -38,8 +38,8 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
     it('validates a correct signup payload', () => {
       const valid = {
         name: 'Jane Doe',
-        phone: '+15551234567',
-        email: 'jane.doe+reels@example.com',
+        phone: '+14155552671',
+        email: 'jane.doe+reels@gmail.com',
         password: 'Password123!',
       };
       const result = SignupRequestSchema.safeParse(valid);
@@ -50,7 +50,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
       const invalid = {
         name: 'Jane Doe',
         phone: '+15551234567',
-        email: 'jane@example.com',
+        email: 'jane@gmail.com',
         password: 'short',
       };
       const result = SignupRequestSchema.safeParse(invalid);
@@ -61,7 +61,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
   describe('LoginRequestSchema', () => {
     it('validates a valid login request with returnUrl', () => {
       const valid = {
-        email: 'jane@example.com',
+        email: 'jane@gmail.com',
         password: 'Password123!',
         returnUrl: 'https://jane.fbuploadpro.com/dashboard',
       };

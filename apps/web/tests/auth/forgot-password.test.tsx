@@ -50,11 +50,25 @@ describe('Password Recovery - Forgot Password (US1)', () => {
       expect(body.error).toContain('valid email address');
     });
 
-    it('returns 200 with confirmation message for valid email format', async () => {
+    it('returns 400 when email is not a Gmail domain', async () => {
       const req = new NextRequest('http://localhost:3000/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: 'operator@example.com' }),
+      });
+
+      const res = await forgotPasswordHandler(req);
+      expect(res.status).toBe(400);
+
+      const body = await res.json();
+      expect(body.error).toContain('Only @gmail.com');
+    });
+
+    it('returns 200 with confirmation message for valid email format', async () => {
+      const req = new NextRequest('http://localhost:3000/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'operator@gmail.com' }),
       });
 
       const res = await forgotPasswordHandler(req);

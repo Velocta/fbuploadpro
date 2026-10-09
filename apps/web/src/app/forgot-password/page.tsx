@@ -17,8 +17,14 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMessage('Please enter a valid email address.');
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      setErrorMessage('Please enter a valid Gmail address.');
+      return;
+    }
+    const domain = cleanEmail.split('@')[1];
+    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+      setErrorMessage('Password recovery is available for @gmail.com (or @googlemail.com) accounts.');
       return;
     }
 
@@ -124,12 +130,12 @@ export default function ForgotPasswordPage() {
           <Input
             label="Email Address"
             type="email"
-            placeholder="you@domain.com"
+            placeholder="you@gmail.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isSubmitting}
             required
-            helperText="We will send a password reset link to this email address."
+            helperText="We will send a password reset link to your registered Gmail address."
           />
 
           <Button
