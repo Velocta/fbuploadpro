@@ -28,6 +28,13 @@ describe('Auth Pages UI (Spec 009)', () => {
       const { html } = render(<SignupPage />);
       expect(html).toContain(`background-color:${PALETTE.primary}`);
     });
+
+    it('does not contain robotic developer slop or decorative operational status dots', () => {
+      const { hasText, html } = render(<SignupPage />);
+      expect(html).not.toContain('Dots and plus tags');
+      expect(html).not.toContain('Deploy your automated');
+      expect(hasText('Ready')).toBe(false);
+    });
   });
 
   describe('LoginPage', () => {
@@ -45,6 +52,13 @@ describe('Auth Pages UI (Spec 009)', () => {
     it('applies primary brand styling to submit action button', () => {
       const { html } = render(<LoginPage />);
       expect(html).toContain(`background-color:${PALETTE.primary}`);
+    });
+
+    it('does not contain robotic developer slop or decorative operational status dots', () => {
+      const { hasText, html } = render(<LoginPage />);
+      expect(html).not.toContain('isolated workspace');
+      expect(html).not.toContain('Gateway');
+      expect(hasText('Online')).toBe(false);
     });
   });
 });

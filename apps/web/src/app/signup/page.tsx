@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Button, Alert, StatusDot } from '@/components/ui';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Button, Alert } from '@/components/ui';
 import { deriveSubdomainFromEmail } from '@fbuploadpro/contracts';
 import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
@@ -88,7 +88,7 @@ export default function SignupPage() {
       <div style={{ maxWidth: '440px', width: '100%' }}>
         <Card>
           <CardHeader>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.xs }}>
+            <div style={{ marginBottom: SPACING.xs }}>
               <span
                 style={{
                   fontSize: '0.875rem',
@@ -97,13 +97,12 @@ export default function SignupPage() {
                   color: 'var(--text-main)',
                 }}
               >
-                FBUploadPro <span style={{ color: PALETTE.primary }}>Workspace</span>
+                FBUploadPro
               </span>
-              <StatusDot status="operational" label="Ready" />
             </div>
             <CardTitle>Create Account</CardTitle>
             <CardDescription>
-              Deploy your automated Facebook Reels & media publishing workspace.
+              Start scheduling and auto-publishing Facebook Reels in minutes.
             </CardDescription>
           </CardHeader>
 
@@ -112,7 +111,7 @@ export default function SignupPage() {
               <div style={{ marginBottom: SPACING.lg }}>
                 <Alert
                   severity="error"
-                  title="Registration Error"
+                  title="Couldn't create account"
                   message={errorMessage}
                   onClose={() => setErrorMessage(null)}
                 />
@@ -142,12 +141,11 @@ export default function SignupPage() {
               <Input
                 label="Email Address"
                 type="email"
-                placeholder="jane.doe+reels@agency.com"
+                placeholder="jane@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSubmitting}
                 required
-                helperText="Dots and plus tags will be automatically stripped for your subdomain"
               />
 
               {/* Real-time Subdomain Derivation Preview */}
@@ -164,7 +162,6 @@ export default function SignupPage() {
                   color: 'var(--text-sub, #9ca3af)',
                 }}
               >
-                <StatusDot status="operational" />
                 <span>
                   Workspace URL: <strong style={{ color: PALETTE.primary }}>{derivedSubdomain}</strong>.{rootDomain}
                 </span>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Button, Alert, StatusDot } from '@/components/ui';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Button, Alert } from '@/components/ui';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 export default function LoginPage() {
@@ -85,7 +85,7 @@ export default function LoginPage() {
       <div style={{ maxWidth: '400px', width: '100%' }}>
         <Card>
           <CardHeader>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.xs }}>
+            <div style={{ marginBottom: SPACING.xs }}>
               <span
                 style={{
                   fontSize: '0.875rem',
@@ -94,13 +94,12 @@ export default function LoginPage() {
                   color: 'var(--text-main)',
                 }}
               >
-                FBUploadPro <span style={{ color: PALETTE.primary }}>Gateway</span>
+                FBUploadPro
               </span>
-              <StatusDot status="operational" label="Online" />
             </div>
             <CardTitle>Sign In</CardTitle>
             <CardDescription>
-              Enter your credentials to access your isolated workspace.
+              Sign in to manage your Facebook pages and scheduled reels.
             </CardDescription>
           </CardHeader>
 
@@ -109,7 +108,7 @@ export default function LoginPage() {
               <div style={{ marginBottom: SPACING.lg }}>
                 <Alert
                   severity="error"
-                  title="Sign In Error"
+                  title="Couldn't sign you in"
                   message={errorMessage}
                   onClose={() => setErrorMessage(null)}
                 />
