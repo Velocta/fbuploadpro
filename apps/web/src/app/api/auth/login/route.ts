@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { LoginRequestSchema } from '@fbuploadpro/contracts';
-import { loginTenantUser, getCookieDomain } from '@/lib/supabase-auth';
+import { loginTenantUser, resendSignupOtpViaSupabase, getCookieDomain } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 import {
   findPendingSignup,
   verifyPendingSignupPassword,
-  refreshPendingSignupOtp,
 } from '@/lib/otp-service';
-import { sendOtpEmail } from '@/lib/email-service';
 
 export async function POST(request: NextRequest) {
   try {
@@ -62,27 +60,34 @@ export async function POST(request: NextRequest) {
     try {
       loginResult = await loginTenantUser(parseResult.data);
     } catch (loginErr: unknown) {
-      // Check if user has an unverified pending registration
+      const errObj = loginErr as { code?: string; requiresOtp?: boolean; email?: string };
+      if (errObj?.code === 'REQUIRES_OTP' || errObj?.requiresOtp) {
+        const targetEmail = errObj.email || parseResult.data.email;
+        await resendSignupOtpViaSupabase(targetEmail);
+        return NextResponse.json(
+          {
+            error: 'Please verify your email address to complete registration.',
+            requiresOtp: true,
+            email: targetEmail,
+          },
+          { status: 403 }
+        );
+      }
+
+      // Check if user has an unverified pending registration in fallback store
       const pendingSignup = findPendingSignup(parseResult.data.email);
       if (pendingSignup) {
         const passwordMatches = verifyPendingSignupPassword(parseResult.data.email, parseResult.data.password);
         if (passwordMatches) {
-          const refreshRes = refreshPendingSignupOtp(parseResult.data.email);
-          if (refreshRes.success && refreshRes.otp) {
-            await sendOtpEmail({
+          await resendSignupOtpViaSupabase(pendingSignup.data.email);
+          return NextResponse.json(
+            {
+              error: 'Please verify your email address to complete registration.',
+              requiresOtp: true,
               email: pendingSignup.data.email,
-              name: pendingSignup.data.name,
-              otp: refreshRes.otp,
-            });
-            return NextResponse.json(
-              {
-                error: 'Please verify your email address to complete registration.',
-                requiresOtp: true,
-                email: pendingSignup.data.email,
-              },
-              { status: 403 }
-            );
-          }
+            },
+            { status: 403 }
+          );
         }
       }
       throw loginErr;

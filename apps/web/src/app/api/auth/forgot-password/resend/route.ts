@@ -3,8 +3,7 @@ import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
-import { resendPasswordResetOtp } from '@/lib/otp-service';
-import { sendPasswordResetOtpEmail } from '@/lib/email-service';
+import { resendPasswordResetOtpViaSupabase } from '@/lib/supabase-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,9 +56,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Resend OTP subject to cooldown and lockout
-    const resendResult = resendPasswordResetOtp(canonicalEmail);
-    if (!resendResult.success || !resendResult.otp) {
+    // 3. Resend OTP via Supabase Auth (or test fallback) subject to cooldown and lockout
+    const resendResult = await resendPasswordResetOtpViaSupabase(canonicalEmail);
+    if (!resendResult.success) {
       return NextResponse.json(
         {
           error: resendResult.error || 'Unable to resend verification code.',
@@ -68,12 +67,6 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-
-    // 4. Dispatch new OTP email
-    await sendPasswordResetOtpEmail({
-      email: canonicalEmail,
-      otp: resendResult.otp,
-    });
 
     return NextResponse.json({
       success: true,

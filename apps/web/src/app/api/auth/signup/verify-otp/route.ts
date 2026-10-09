@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
-import { registerTenantUser, getCookieDomain } from '@/lib/supabase-auth';
-import { verifySignupOtp } from '@/lib/otp-service';
+import { verifySignupOtpViaSupabase, getCookieDomain } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
-import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,23 +53,12 @@ export async function POST(request: NextRequest) {
 
     const cleanOtp = otp.trim();
 
-    // Verify OTP against pending registrations
-    const verification = verifySignupOtp(canonicalEmail, cleanOtp);
-
-    if (!verification.success || !verification.signupData) {
-      return NextResponse.json(
-        { error: verification.error || 'Invalid or expired verification code.' },
-        { status: 400 }
-      );
-    }
-
-    // Provision user in database / Supabase
-    const { user, token, redirectUrl: defaultRedirectUrl } = await registerTenantUser(
-      verification.signupData
-    );
-
-    // Deep-link preservation with strict open redirect defense
-    const finalRedirectUrl = sanitizeAuthRedirectUrl(returnUrl, user.subdomain);
+    // Verify OTP via Supabase Auth (or test fallback) and activate user profile
+    const { user, token, redirectUrl: finalRedirectUrl } = await verifySignupOtpViaSupabase({
+      email: canonicalEmail,
+      otp: cleanOtp,
+      returnUrl,
+    });
 
     const response = NextResponse.json(
       {

@@ -60,9 +60,10 @@ describe('User Domain Schemas & Invariants', () => {
   });
 
   describe('UserStatusSchema', () => {
-    it('accepts active and suspended statuses', () => {
+    it('accepts active, suspended, and pending_verification statuses', () => {
       expect(UserStatusSchema.parse('active')).toBe('active');
       expect(UserStatusSchema.parse('suspended')).toBe('suspended');
+      expect(UserStatusSchema.parse('pending_verification')).toBe('pending_verification');
     });
 
     it('rejects invalid statuses', () => {

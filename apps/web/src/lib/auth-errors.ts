@@ -99,6 +99,10 @@ export function formatAuthErrorResponse(
     rawMessage.includes('valid email address is required') ||
     rawMessage.includes('Passwords do not match') ||
     rawMessage.includes('Invalid or expired') ||
+    rawMessage.includes('Invalid verification code') ||
+    rawMessage.includes('Too many incorrect attempts') ||
+    rawMessage.includes('Verification code has expired') ||
+    rawMessage.includes('No pending registration found') ||
     rawMessage.includes('reset link has expired') ||
     rawMessage.includes('token is required')
   ) {
