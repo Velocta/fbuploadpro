@@ -142,15 +142,17 @@ export async function findUserByEmail(emailLower: string): Promise<AuthUser | nu
     }
   }
 
-  try {
-    const db = getDbClient();
-    const user = await db.queryOne<AuthUser>(
-      'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE LOWER(email) = $1',
-      [emailLower]
-    );
-    if (user) return user;
-  } catch (err) {
-    console.error('[Postgres DB] findUserByEmail error:', err);
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = getDbClient();
+      const user = await db.queryOne<AuthUser>(
+        'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE LOWER(email) = $1',
+        [emailLower]
+      );
+      if (user) return user;
+    } catch (err) {
+      console.error('[Postgres DB] findUserByEmail error:', err);
+    }
   }
 
   return localUserStore.get(emailLower) || null;
@@ -186,22 +188,24 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
     }
   }
 
-  try {
-    const db = getDbClient();
-    while (true) {
-      const existing = await db.queryOne<{ id: string }>(
-        'SELECT id FROM users WHERE subdomain = $1',
-        [candidate]
-      );
-      if (!existing) {
-        return candidate;
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = getDbClient();
+      while (true) {
+        const existing = await db.queryOne<{ id: string }>(
+          'SELECT id FROM users WHERE subdomain = $1',
+          [candidate]
+        );
+        if (!existing) {
+          return candidate;
+        }
+        candidate = `${baseSubdomain}${counter}`;
+        counter++;
       }
-      candidate = `${baseSubdomain}${counter}`;
-      counter++;
+    } catch (err) {
+      console.error('[Postgres DB] resolveUniqueSubdomain error:', err);
+      return candidate;
     }
-  } catch (err) {
-    console.error('[Postgres DB] resolveUniqueSubdomain error:', err);
-    return candidate;
   }
 
   return candidate;
@@ -319,22 +323,24 @@ export async function registerTenantUser(params: {
     };
     localUserStore.set(emailLower, userRecord);
 
-    try {
-      const db = getDbClient();
-      await db.query(
-        `INSERT INTO users (id, email, name, phone, subdomain, role, status, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
-         ON CONFLICT (id) DO NOTHING`,
-        [userId, emailLower, params.name, params.phone, subdomain]
-      );
-      await db.query(
-        `INSERT INTO storage_quotas (user_id, max_bytes, used_bytes, max_assets, used_assets)
-         VALUES ($1, 5368709120, 0, 50, 0)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [userId]
-      );
-    } catch (dbErr) {
-      console.error('[Postgres DB] User insert error:', dbErr);
+    if (process.env.DATABASE_URL) {
+      try {
+        const db = getDbClient();
+        await db.query(
+          `INSERT INTO users (id, email, name, phone, subdomain, role, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [userId, emailLower, params.name, params.phone, subdomain]
+        );
+        await db.query(
+          `INSERT INTO storage_quotas (user_id, max_bytes, used_bytes, max_assets, used_assets)
+           VALUES ($1, 5368709120, 0, 50, 0)
+           ON CONFLICT (user_id) DO NOTHING`,
+          [userId]
+        );
+      } catch (dbErr) {
+        console.error('[Postgres DB] User insert error:', dbErr);
+      }
     }
   }
 

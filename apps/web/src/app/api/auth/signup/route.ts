@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SignupRequestSchema } from '@fbuploadpro/contracts';
-import { registerTenantUser, getCookieDomain } from '@/lib/supabase-auth';
+import { findUserByEmail } from '@/lib/supabase-auth';
+import { createPendingSignup } from '@/lib/otp-service';
+import { sendOtpEmail } from '@/lib/email-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 
 export async function POST(request: NextRequest) {
@@ -19,40 +21,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { user, token, redirectUrl } = await registerTenantUser(parseResult.data);
+    const emailLower = parseResult.data.email.trim().toLowerCase();
 
-    const response = NextResponse.json(
-      {
-        success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          subdomain: user.subdomain,
-          role: user.role,
-          status: user.status,
-        },
-        redirectUrl,
-      },
-      { status: 201 }
-    );
+    // Check email uniqueness before sending OTP
+    const existingUser = await findUserByEmail(emailLower);
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'Email is already registered' },
+        { status: 409 }
+      );
+    }
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const domain = getCookieDomain();
+    // Generate 6-digit OTP and store pending registration
+    const { otp, expiresAt } = createPendingSignup(parseResult.data);
 
-    response.cookies.set('fbup_session', token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      path: '/',
-      domain,
-      maxAge: 86400 * 30, // 30 days
+    // Dispatch OTP email via Resend (or simulated logger in test/dev)
+    await sendOtpEmail({
+      email: emailLower,
+      name: parseResult.data.name,
+      otp,
     });
 
-    return response;
+    return NextResponse.json(
+      {
+        success: true,
+        requiresOtp: true,
+        email: emailLower,
+        expiresAt: expiresAt.toISOString(),
+        message: 'A 6-digit verification code has been sent to your email.',
+      },
+      { status: 200 }
+    );
   } catch (error: unknown) {
     return formatAuthErrorResponse(error, {
-      fallbackMessage: 'Unable to create your account at this moment. Please try again shortly.',
+      fallbackMessage: 'Unable to initiate account registration. Please try again shortly.',
       defaultStatus: 500,
     });
   }

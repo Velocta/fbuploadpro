@@ -76,8 +76,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
-  // Public paths under tenant do not require auth
-  const isPublicTenantPath = pathname === '/login' || pathname === '/signup';
+  // Customer tenant subdomains only host private workspace routes (/dashboard, /media, etc.).
+  // Any attempt to access centralized auth routes (/login, /signup, /forgot-password, /reset-password)
+  // on a tenant subdomain is cleanly 307 redirected to the central gateway (app.${rootDomain}) preserving query params.
+  const isAuthRoute =
+    pathname === '/login' ||
+    pathname === '/signup' ||
+    pathname === '/forgot-password' ||
+    pathname === '/reset-password';
+
+  if (isAuthRoute) {
+    const gatewayUrl = new URL(request.url);
+    gatewayUrl.host = `app.${rootDomain}`;
+    return NextResponse.redirect(gatewayUrl, 307);
+  }
 
   let session: SessionPayload | null = null;
   const token = extractToken(request);
@@ -90,29 +102,27 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  if (!isPublicTenantPath) {
-    if (!session) {
-      // Redirect unauthenticated tenant access to central app login
-      const loginUrl = new URL(request.url);
-      loginUrl.host = `app.${rootDomain}`;
-      loginUrl.pathname = '/login';
-      loginUrl.searchParams.set('returnUrl', request.url);
-      return NextResponse.redirect(loginUrl);
-    }
+  if (!session) {
+    // Redirect unauthenticated tenant access to central app login
+    const loginUrl = new URL(request.url);
+    loginUrl.host = `app.${rootDomain}`;
+    loginUrl.pathname = '/login';
+    loginUrl.searchParams.set('returnUrl', request.url);
+    return NextResponse.redirect(loginUrl, 307);
+  }
 
-    if (session.status === 'suspended') {
-      return NextResponse.redirect(new URL('/account-suspended', request.url));
-    }
+  if (session.status === 'suspended') {
+    return NextResponse.redirect(new URL('/account-suspended', request.url), 307);
+  }
 
-    const access = canAccessTenant(session, subdomain);
-    if (!access.allowed) {
-      if (access.reason === 'mismatch') {
-        const authorizedUrl = new URL(request.url);
-        authorizedUrl.host = `${session.subdomain}.${rootDomain}`;
-        return NextResponse.redirect(authorizedUrl);
-      }
-      return NextResponse.redirect(new URL('/login', request.url));
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    if (access.reason === 'mismatch') {
+      const authorizedUrl = new URL(request.url);
+      authorizedUrl.host = `${session.subdomain}.${rootDomain}`;
+      return NextResponse.redirect(authorizedUrl, 307);
     }
+    return NextResponse.redirect(new URL('/login', request.url), 307);
   }
 
   // Rewrite to tenant workspace path (/tenant/[subdomain]/*)

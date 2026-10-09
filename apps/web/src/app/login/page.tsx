@@ -80,7 +80,7 @@ export default function LoginPage() {
         <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
           Don&apos;t have an account?{' '}
           <Link
-            href="/signup"
+            href={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : '/signup'}
             style={{
               color: PALETTE.primary,
               textDecoration: 'none',
@@ -108,6 +108,7 @@ export default function LoginPage() {
           label="Email Address"
           type="email"
           placeholder="you@domain.com"
+          autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={isSubmitting}
@@ -147,6 +148,7 @@ export default function LoginPage() {
           </div>
           <PasswordInput
             placeholder="••••••••••••"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             disabled={isSubmitting}
