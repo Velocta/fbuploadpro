@@ -3,6 +3,8 @@ import { getDbClient } from '@/lib/db';
 import {
   deriveSubdomainFromEmail,
   signSessionToken,
+  canonicalizeGmailAddress,
+  validateAndFormatE164Phone,
   type UserRole,
   type UserStatus,
   type SessionPayload,
@@ -122,14 +124,21 @@ export interface AuthUser {
  * 2. Checks PostgreSQL database client ONLY if DATABASE_URL is explicitly configured.
  * 3. Falls back to in-memory test store without throwing unhandled network exceptions.
  */
-export async function findUserByEmail(emailLower: string): Promise<AuthUser | null> {
+export async function findUserByEmail(emailInput: string): Promise<AuthUser | null> {
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(emailInput);
+  } catch {
+    canonicalEmail = emailInput.trim().toLowerCase();
+  }
+
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('id, email, name, phone, subdomain, role, status')
-        .ilike('email', emailLower)
+        .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`)
         .maybeSingle();
 
       if (error) {
@@ -146,8 +155,8 @@ export async function findUserByEmail(emailLower: string): Promise<AuthUser | nu
     try {
       const db = getDbClient();
       const user = await db.queryOne<AuthUser>(
-        'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE LOWER(email) = $1',
-        [emailLower]
+        'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE normalized_email = $1 OR LOWER(email) = $1',
+        [canonicalEmail]
       );
       if (user) return user;
     } catch (err) {
@@ -155,7 +164,7 @@ export async function findUserByEmail(emailLower: string): Promise<AuthUser | nu
     }
   }
 
-  return localUserStore.get(emailLower) || null;
+  return localUserStore.get(canonicalEmail) || localUserStore.get(emailInput.trim().toLowerCase()) || null;
 }
 
 export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<string> {
@@ -217,16 +226,28 @@ export async function registerTenantUser(params: {
   email: string;
   password: string;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
-  const emailLower = params.email.trim().toLowerCase();
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(params.email);
+  } catch {
+    canonicalEmail = params.email.trim().toLowerCase();
+  }
+
+  let formattedPhone: string;
+  try {
+    formattedPhone = validateAndFormatE164Phone(params.phone);
+  } catch {
+    formattedPhone = params.phone.trim();
+  }
 
   // Check email uniqueness
-  const existingUser = await findUserByEmail(emailLower);
+  const existingUser = await findUserByEmail(canonicalEmail);
   if (existingUser) {
     throw new Error('Email is already registered');
   }
 
   // Derive unique subdomain
-  const rawSubdomain = deriveSubdomainFromEmail(emailLower);
+  const rawSubdomain = deriveSubdomainFromEmail(canonicalEmail);
   const subdomain = await resolveUniqueSubdomain(rawSubdomain);
 
   let userId: string;
@@ -235,12 +256,12 @@ export async function registerTenantUser(params: {
 
   if (supabase) {
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: emailLower,
+      email: canonicalEmail,
       password: params.password,
       options: {
         data: {
           name: params.name,
-          phone: params.phone,
+          phone: formattedPhone,
           subdomain,
         },
       },
@@ -257,9 +278,10 @@ export async function registerTenantUser(params: {
         .from('users')
         .insert({
           id: userId,
-          email: emailLower,
+          email: canonicalEmail,
+          normalized_email: canonicalEmail,
           name: params.name,
-          phone: params.phone,
+          phone: formattedPhone,
           subdomain,
           role: 'user',
           status: 'active',
@@ -272,9 +294,9 @@ export async function registerTenantUser(params: {
       }
       userRecord = (inserted as AuthUser) || {
         id: userId,
-        email: emailLower,
+        email: canonicalEmail,
         name: params.name,
-        phone: params.phone,
+        phone: formattedPhone,
         subdomain,
         role: 'user',
         status: 'active',
@@ -283,9 +305,9 @@ export async function registerTenantUser(params: {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
       userRecord = {
         id: userId,
-        email: emailLower,
+        email: canonicalEmail,
         name: params.name,
-        phone: params.phone,
+        phone: formattedPhone,
         subdomain,
         role: 'user',
         status: 'active',
@@ -310,27 +332,27 @@ export async function registerTenantUser(params: {
   } else {
     userId = crypto.randomUUID();
     const hashed = await hashPassword(params.password);
-    localPasswordStore.set(emailLower, hashed);
+    localPasswordStore.set(canonicalEmail, hashed);
 
     userRecord = {
       id: userId,
-      email: emailLower,
+      email: canonicalEmail,
       name: params.name,
-      phone: params.phone,
+      phone: formattedPhone,
       subdomain,
       role: 'user',
       status: 'active',
     };
-    localUserStore.set(emailLower, userRecord);
+    localUserStore.set(canonicalEmail, userRecord);
 
     if (process.env.DATABASE_URL) {
       try {
         const db = getDbClient();
         await db.query(
-          `INSERT INTO users (id, email, name, phone, subdomain, role, status, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
+          `INSERT INTO users (id, email, normalized_email, name, phone, subdomain, role, status, created_at, updated_at)
+           VALUES ($1, $2, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
            ON CONFLICT (id) DO NOTHING`,
-          [userId, emailLower, params.name, params.phone, subdomain]
+          [userId, canonicalEmail, params.name, formattedPhone, subdomain]
         );
         await db.query(
           `INSERT INTO storage_quotas (user_id, max_bytes, used_bytes, max_assets, used_assets)
@@ -374,13 +396,18 @@ export async function loginTenantUser(params: {
   password: string;
   returnUrl?: string | undefined;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
-  const emailLower = params.email.trim().toLowerCase();
-  let user = await findUserByEmail(emailLower);
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(params.email);
+  } catch {
+    canonicalEmail = params.email.trim().toLowerCase();
+  }
+  let user = await findUserByEmail(canonicalEmail);
 
   const supabase = getSupabaseClient();
   if (supabase) {
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: emailLower,
+      email: user?.email || canonicalEmail,
       password: params.password,
     });
 
@@ -391,10 +418,10 @@ export async function loginTenantUser(params: {
     // If user record wasn't loaded from public.users yet, construct from authenticated user
     if (!user && authData?.user) {
       const metadata = authData.user.user_metadata || {};
-      const subdomain = metadata.subdomain || deriveSubdomainFromEmail(emailLower);
+      const subdomain = metadata.subdomain || deriveSubdomainFromEmail(canonicalEmail);
       user = {
         id: authData.user.id,
-        email: authData.user.email || emailLower,
+        email: authData.user.email || canonicalEmail,
         name: metadata.name || null,
         phone: metadata.phone || null,
         subdomain,
@@ -403,7 +430,9 @@ export async function loginTenantUser(params: {
       };
     }
   } else {
-    const storedHash = localPasswordStore.get(emailLower);
+    const storedHash =
+      localPasswordStore.get(canonicalEmail) ||
+      localPasswordStore.get(params.email.trim().toLowerCase());
     if (storedHash) {
       const valid = await verifyPassword(params.password, storedHash);
       if (!valid) {
@@ -457,9 +486,14 @@ export async function requestPasswordReset(params: {
   email: string;
   redirectTo?: string | undefined;
 }): Promise<{ message: string }> {
-  const emailLower = params.email.trim().toLowerCase();
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(params.email);
+  } catch {
+    canonicalEmail = params.email.trim().toLowerCase();
+  }
 
-  const user = await findUserByEmail(emailLower);
+  const user = await findUserByEmail(canonicalEmail);
   // For security against email enumeration, return confirmation even if email not found
   if (!user && !getSupabaseClient()) {
     return {
@@ -471,7 +505,7 @@ export async function requestPasswordReset(params: {
   if (supabase) {
     try {
       const options = params.redirectTo ? { redirectTo: params.redirectTo } : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(emailLower, options);
+      const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail, options);
       if (error) {
         console.error('[Supabase Auth] resetPasswordForEmail error:', error.message);
       }

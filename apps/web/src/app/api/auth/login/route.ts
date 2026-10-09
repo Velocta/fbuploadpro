@@ -3,9 +3,27 @@ import type { NextRequest } from 'next/server';
 import { LoginRequestSchema } from '@fbuploadpro/contracts';
 import { loginTenantUser, getCookieDomain } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
+import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = extractClientIp(request.headers);
+
+    // IP rate limiting to prevent credential brute-force (max 10 login attempts per 60 seconds)
+    const ipLimit = checkRateLimit(`login:ip:${clientIp}`, 10, 60 * 1000);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many sign in attempts. Please wait ${ipLimit.retryAfterSeconds} seconds before trying again.`,
+          retryAfterSeconds: ipLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const body = await request.json();
     const parseResult = LoginRequestSchema.safeParse(body);
 

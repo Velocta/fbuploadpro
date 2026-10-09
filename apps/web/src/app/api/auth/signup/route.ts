@@ -1,13 +1,31 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { SignupRequestSchema } from '@fbuploadpro/contracts';
+import { SignupRequestSchema, canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { findUserByEmail } from '@/lib/supabase-auth';
 import { createPendingSignup } from '@/lib/otp-service';
 import { sendOtpEmail } from '@/lib/email-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
+import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = extractClientIp(request.headers);
+
+    // 1. IP rate limiting (max 5 signup OTP requests per 60 seconds)
+    const ipLimit = checkRateLimit(`signup:ip:${clientIp}`, 5, 60 * 1000);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many registration attempts. Please wait ${ipLimit.retryAfterSeconds} seconds before trying again.`,
+          retryAfterSeconds: ipLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const body = await request.json();
     const parseResult = SignupRequestSchema.safeParse(body);
 
@@ -21,10 +39,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const emailLower = parseResult.data.email.trim().toLowerCase();
+    const canonicalEmail = parseResult.data.email;
 
-    // Check email uniqueness before sending OTP
-    const existingUser = await findUserByEmail(emailLower);
+    // 2. Email identifier rate limiting (max 3 requests per 60 seconds per email)
+    const emailLimit = checkRateLimit(`signup:email:${canonicalEmail}`, 3, 60 * 1000);
+    if (!emailLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many verification requests for this email address. Please wait ${emailLimit.retryAfterSeconds} seconds.`,
+          retryAfterSeconds: emailLimit.retryAfterSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    // 3. Check canonical email uniqueness before dispatching OTP
+    const existingUser = await findUserByEmail(canonicalEmail);
     if (existingUser) {
       return NextResponse.json(
         { error: 'Email is already registered' },
@@ -32,23 +62,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate 6-digit OTP and store pending registration
+    // 4. Generate 6-digit cryptographic OTP and store pending registration
     const { otp, expiresAt } = createPendingSignup(parseResult.data);
 
-    // Dispatch OTP email via Resend (or simulated logger in test/dev)
-    await sendOtpEmail({
-      email: emailLower,
+    // 5. Dispatch OTP email via Resend
+    const dispatchResult = await sendOtpEmail({
+      email: canonicalEmail,
       name: parseResult.data.name,
       otp,
     });
+
+    if (!dispatchResult.success) {
+      return NextResponse.json(
+        { error: 'Unable to deliver verification code. Please check your email address and try again.' },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(
       {
         success: true,
         requiresOtp: true,
-        email: emailLower,
+        email: canonicalEmail,
         expiresAt: expiresAt.toISOString(),
-        message: 'A 6-digit verification code has been sent to your email.',
+        message: 'A 6-digit verification code has been sent to your Gmail address.',
       },
       { status: 200 }
     );

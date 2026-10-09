@@ -1,4 +1,6 @@
-import type { SignupRequest } from '@fbuploadpro/contracts';
+import crypto from 'node:crypto';
+import { canonicalizeGmailAddress, type SignupRequest } from '@fbuploadpro/contracts';
+import { isLockedOut, recordFailedAttempt, clearLockout } from '@/lib/rate-limiter';
 
 export interface PendingSignupEntry {
   data: SignupRequest;
@@ -12,6 +14,7 @@ export interface PendingSignupEntry {
 const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
 const MAX_VERIFICATION_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
 
 // In-memory store for pending signups
 const pendingSignups = new Map<string, PendingSignupEntry>();
@@ -26,6 +29,16 @@ export function generateSecureOtp(): string {
 }
 
 /**
+ * Constant-time string equality to prevent timing attacks on OTP verification
+ */
+export function constantTimeEquals(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/**
  * Clean up expired entries to prevent memory growth
  */
 function cleanupExpiredEntries(): void {
@@ -37,19 +50,27 @@ function cleanupExpiredEntries(): void {
   }
 }
 
+function resolveCanonicalEmail(email: string): string {
+  try {
+    return canonicalizeGmailAddress(email);
+  } catch {
+    return email.trim().toLowerCase();
+  }
+}
+
 export function createPendingSignup(data: SignupRequest): {
   otp: string;
   expiresAt: Date;
 } {
   cleanupExpiredEntries();
-  const emailLower = data.email.trim().toLowerCase();
+  const canonicalEmail = resolveCanonicalEmail(data.email);
   const now = Date.now();
   const otp = generateSecureOtp();
 
   const entry: PendingSignupEntry = {
     data: {
       ...data,
-      email: emailLower,
+      email: canonicalEmail,
     },
     otp,
     createdAt: now,
@@ -58,7 +79,7 @@ export function createPendingSignup(data: SignupRequest): {
     attempts: 0,
   };
 
-  pendingSignups.set(emailLower, entry);
+  pendingSignups.set(canonicalEmail, entry);
 
   return {
     otp,
@@ -68,8 +89,8 @@ export function createPendingSignup(data: SignupRequest): {
 
 export function getPendingSignup(email: string): PendingSignupEntry | null {
   cleanupExpiredEntries();
-  const emailLower = email.trim().toLowerCase();
-  return pendingSignups.get(emailLower) || null;
+  const canonicalEmail = resolveCanonicalEmail(email);
+  return pendingSignups.get(canonicalEmail) || null;
 }
 
 export function verifySignupOtp(
@@ -81,8 +102,19 @@ export function verifySignupOtp(
   error?: string | undefined;
 } {
   cleanupExpiredEntries();
-  const emailLower = email.trim().toLowerCase();
-  const entry = pendingSignups.get(emailLower);
+  const canonicalEmail = resolveCanonicalEmail(email);
+
+  // Check if identifier is currently locked out
+  const lockoutStatus = isLockedOut(canonicalEmail);
+  if (lockoutStatus.locked) {
+    const minutes = Math.ceil(lockoutStatus.retryAfterSeconds / 60);
+    return {
+      success: false,
+      error: `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    };
+  }
+
+  const entry = pendingSignups.get(canonicalEmail);
 
   if (!entry) {
     return {
@@ -93,25 +125,29 @@ export function verifySignupOtp(
 
   const now = Date.now();
   if (now > entry.expiresAt) {
-    pendingSignups.delete(emailLower);
+    pendingSignups.delete(canonicalEmail);
     return {
       success: false,
       error: 'Verification code has expired. Please request a new code.',
     };
   }
 
-  if (entry.attempts >= MAX_VERIFICATION_ATTEMPTS) {
-    pendingSignups.delete(emailLower);
-    return {
-      success: false,
-      error: 'Too many incorrect attempts. Please start your registration again.',
-    };
-  }
-
   const cleanProvided = providedOtp.replace(/\D/g, '').trim();
-  if (cleanProvided !== entry.otp) {
+
+  // Use timingSafeEqual to compare OTPs
+  if (!constantTimeEquals(cleanProvided, entry.otp)) {
     entry.attempts += 1;
-    const remaining = MAX_VERIFICATION_ATTEMPTS - entry.attempts;
+    const lockout = recordFailedAttempt(canonicalEmail, MAX_VERIFICATION_ATTEMPTS, LOCKOUT_DURATION_MS);
+
+    if (lockout.locked) {
+      pendingSignups.delete(canonicalEmail);
+      return {
+        success: false,
+        error: 'Too many incorrect attempts. Verification is temporarily locked for 15 minutes.',
+      };
+    }
+
+    const remaining = lockout.remainingAttempts;
     return {
       success: false,
       error: `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
@@ -120,7 +156,8 @@ export function verifySignupOtp(
 
   // OTP verified successfully
   const signupData = entry.data;
-  pendingSignups.delete(emailLower);
+  pendingSignups.delete(canonicalEmail);
+  clearLockout(canonicalEmail);
 
   return {
     success: true,
@@ -135,8 +172,18 @@ export function resendSignupOtp(email: string): {
   error?: string | undefined;
 } {
   cleanupExpiredEntries();
-  const emailLower = email.trim().toLowerCase();
-  const entry = pendingSignups.get(emailLower);
+  const canonicalEmail = resolveCanonicalEmail(email);
+
+  const lockoutStatus = isLockedOut(canonicalEmail);
+  if (lockoutStatus.locked) {
+    return {
+      success: false,
+      cooldownSecondsRemaining: lockoutStatus.retryAfterSeconds,
+      error: `Too many incorrect attempts. Please wait ${lockoutStatus.retryAfterSeconds} seconds before trying again.`,
+    };
+  }
+
+  const entry = pendingSignups.get(canonicalEmail);
 
   if (!entry) {
     return {
@@ -170,8 +217,9 @@ export function resendSignupOtp(email: string): {
 }
 
 export function clearPendingSignup(email: string): void {
-  const emailLower = email.trim().toLowerCase();
-  pendingSignups.delete(emailLower);
+  const canonicalEmail = resolveCanonicalEmail(email);
+  pendingSignups.delete(canonicalEmail);
+  clearLockout(canonicalEmail);
 }
 
 // For unit tests

@@ -52,12 +52,23 @@ export default function SignupPage() {
       setErrorMessage('Full name is required.');
       return;
     }
-    if (!phone.trim()) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
       setErrorMessage('Phone number is required.');
       return;
     }
-    if (!email.trim() || !email.includes('@')) {
+    if (!cleanPhone.startsWith('+')) {
+      setErrorMessage('Please include your country calling code starting with + (e.g. +1 555 123 4567 or +92 300 1234567).');
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
       setErrorMessage('A valid email address is required.');
+      return;
+    }
+    const domain = cleanEmail.split('@')[1];
+    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+      setErrorMessage('Registration is currently limited to @gmail.com (or @googlemail.com) email addresses.');
       return;
     }
     if (password.length < 8) {
@@ -272,17 +283,19 @@ export default function SignupPage() {
             onChange={(e) => setPhone(e.target.value)}
             disabled={isSubmitting}
             required
+            helperText="Include country code starting with + (e.g. +1... or +92...)"
           />
 
           <Input
             label="Email Address"
             type="email"
-            placeholder="jane@example.com"
+            placeholder="you@gmail.com"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             disabled={isSubmitting}
             required
+            helperText="Only @gmail.com accounts are supported"
           />
 
           <div>

@@ -1,11 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 2.0.0 -> 2.1.0 (MINOR: Added Theme Token & Design System Governance constraint)
+- Version change: 2.2.0 -> 2.3.0 (MINOR: Added Gmail Canonicalization, Phone E.164, and OTP Hardening governance)
 - List of modified principles:
-  - Technology & Architectural Constraints: Added Section 8 establishing `apps/web/src/lib/theme.ts` as the mandatory centralized theme authority. Declared permanent ban on ad-hoc color declarations and capsule pill badges.
+  - Technology & Architectural Constraints: Added Section 10 establishing strict Gmail domain restriction, canonicalization (stripping dots and plus tags), E.164 phone validation via libphonenumber-js, and hardened Supabase/Resend OTP security.
 - Added/Modified sections:
-  - Section 8: Theme Token & Design System Governance (apps/web/src/lib/theme.ts).
-- Follow-up TODOs: Enforce theme-standards.md across all UI components.
+  - Section 10: Strict Gmail Canonicalization, International E.164 Phone Validation, and Hardened OTP Security.
+- Follow-up TODOs: Implement spec 014 for auth hardening.
 -->
 
 # FBUploadPro Constitution
@@ -44,6 +44,10 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
 7. **Publishing & External APIs**: Facebook Graph API v26.0 for reels, photos, and automated first-comment publishing; Cloudflare R2 for media storage. Publishing is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages, with zero token ledger or credit balance checks. All billing and monetization systems are deferred.
 8. **Theme Token & Design System Governance (`apps/web/src/lib/theme.ts`)**: All visual interface design, colors, hairlines, spacing, radii, typography, and shadows across `apps/web` are governed strictly by the canonical theme configuration in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`, which reflect the immutable specification in `DESIGN.md`. Agents must NEVER modify or edit `DESIGN.md` (permanently frozen). Hardcoding ad-hoc hex color literals, arbitrary border definitions, custom shadows, or capsule pill badges in components is permanently prohibited; all frontend code must consume tokens directly from `@web/lib/theme` or CSS variables. Status signaling must strictly use unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS`).
 9. **Universal Professional UX Writing & Interface Tone Governance**: FBUploadPro is a commercial SaaS application; all user-visible copy across the entire platform (pages, layouts, headers, modals, forms, helper text, error alerts, empty states, and buttons) must be professional, conversational, clear, concise, and human. Agents and engineers must NEVER expose backend plumbing, data models, validation internals, regex/sanitization logic, system architecture, or DevOps/infrastructure jargon on any public screens. Decorative, mock, or simulated "operational / system status" signals (such as "Online", "Ready", "Operational", or static status dots) on pages, cards, headers, forms, or general UI components are strictly prohibited; status signals are reserved exclusively for authentic, live entity runtime state (e.g., connected Facebook page health, queue job execution status). All copy must be framed strictly around user intent, benefits, and straightforward actions.
+10. **Strict Gmail Canonicalization, International E.164 Phone Validation, and Hardened OTP Security**:
+    - **Strict Gmail-Only & Email Canonicalization**: FBUploadPro strictly requires `@gmail.com` or `@googlemail.com` email domains for customer registration and authentication. All email addresses must be canonicalized before lookup, validation, or persistence: trim whitespace, lowercase, extract username, strip all dots (`.`), remove plus tags (`+tag` and everything up to `@`), and recombine as `<normalized_username>@gmail.com`. Canonicalization must be enforced on client input, API contract layer (`@fbuploadpro/contracts`), and at the PostgreSQL database substrate with a unique index on normalized emails (`normalized_email`).
+    - **International E.164 Phone Validation**: Phone numbers must strictly comply with international E.164 standard formatting (e.g. `+923001234567`). Formatting, country codes, and numeric lengths must be validated using `libphonenumber-js`. Raw, unvalidated strings or non-numeric characters (aside from leading `+`) are prohibited.
+    - **Supabase + Resend OTP Security**: Verification OTPs must be cryptographically secure 6-digit numeric codes with 5–10 minute expiration, single-use invalidation upon verification, and timing-safe comparison. Rate limiting per IP and per identifier (email/phone) is mandatory across OTP dispatch routes to prevent Resend credit exhaustion and SMS/email spam bombing. Verification endpoints must enforce progressive backoff and temporary lockout after 3–5 failed attempts. Cleartext passwords must never linger in unhashed memory.
 
 ## Development Workflow & Quality Gates
 
@@ -66,4 +70,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.2.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.3.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

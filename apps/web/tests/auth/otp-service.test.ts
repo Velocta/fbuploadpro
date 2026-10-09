@@ -1,15 +1,18 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   generateSecureOtp,
+  constantTimeEquals,
   createPendingSignup,
   verifySignupOtp,
   resendSignupOtp,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
+import { _resetRateLimiter } from '../../src/lib/rate-limiter';
 
-describe('OTP Service (Spec 013 - 6-Digit Email Confirmation)', () => {
+describe('OTP Service (Spec 014 Hardened)', () => {
   beforeEach(() => {
     _resetOtpStore();
+    _resetRateLimiter();
   });
 
   it('generates a 6-digit numeric OTP', () => {
@@ -23,11 +26,17 @@ describe('OTP Service (Spec 013 - 6-Digit Email Confirmation)', () => {
     }
   });
 
-  it('creates and verifies pending signup successfully with correct OTP', () => {
+  it('evaluates string equality in constant time', () => {
+    expect(constantTimeEquals('123456', '123456')).toBe(true);
+    expect(constantTimeEquals('123456', '654321')).toBe(false);
+    expect(constantTimeEquals('123456', '12345')).toBe(false);
+  });
+
+  it('creates and verifies pending signup successfully with Gmail canonicalization', () => {
     const signupData = {
       name: 'Sarah Connor',
-      phone: '+15551234567',
-      email: 'sarah@resistance.org',
+      phone: '+14155552671',
+      email: 'Sarah.Connor+resistance@gmail.com',
       password: 'SecurePassword123!',
     };
 
@@ -35,48 +44,75 @@ describe('OTP Service (Spec 013 - 6-Digit Email Confirmation)', () => {
     expect(otp).toHaveLength(6);
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
 
-    const result = verifySignupOtp('sarah@resistance.org', otp);
+    // Verify using unaliased canonical email
+    const result = verifySignupOtp('sarahconnor@gmail.com', otp);
     expect(result.success).toBe(true);
     expect(result.signupData).toBeDefined();
     expect(result.signupData?.name).toBe('Sarah Connor');
-    expect(result.signupData?.email).toBe('sarah@resistance.org');
+    expect(result.signupData?.email).toBe('sarahconnor@gmail.com');
   });
 
   it('rejects incorrect OTP and counts attempts', () => {
     const signupData = {
       name: 'John Connor',
-      phone: '+15559876543',
-      email: 'john@resistance.org',
+      phone: '+14155552671',
+      email: 'john.connor@gmail.com',
       password: 'SecurePassword123!',
     };
 
     createPendingSignup(signupData);
 
-    const badResult = verifySignupOtp('john@resistance.org', '000000');
+    const badResult = verifySignupOtp('johnconnor@gmail.com', '000000');
     expect(badResult.success).toBe(false);
     expect(badResult.error).toContain('Invalid verification code');
     expect(badResult.error).toContain('4 attempts remaining');
   });
 
+  it('locks out verification after 5 failed attempts', () => {
+    const signupData = {
+      name: 'John Connor',
+      phone: '+14155552671',
+      email: 'john.lockout@gmail.com',
+      password: 'SecurePassword123!',
+    };
+
+    createPendingSignup(signupData);
+
+    for (let i = 0; i < 4; i++) {
+      const res = verifySignupOtp('johnlockout@gmail.com', '000000');
+      expect(res.success).toBe(false);
+    }
+
+    // 5th attempt triggers lockout
+    const finalRes = verifySignupOtp('johnlockout@gmail.com', '000000');
+    expect(finalRes.success).toBe(false);
+    expect(finalRes.error).toContain('temporarily locked');
+
+    // Subsequent attempt should still be locked out
+    const lockedRes = verifySignupOtp('johnlockout@gmail.com', '123456');
+    expect(lockedRes.success).toBe(false);
+    expect(lockedRes.error).toContain('temporarily locked');
+  });
+
   it('enforces 60-second cooldown on resend', () => {
     const signupData = {
       name: 'Kyle Reese',
-      phone: '+15553334444',
-      email: 'kyle@resistance.org',
+      phone: '+14155552671',
+      email: 'kyle.reese@gmail.com',
       password: 'SecurePassword123!',
     };
 
     createPendingSignup(signupData);
 
     // Immediate resend should fail due to cooldown
-    const earlyResend = resendSignupOtp('kyle@resistance.org');
+    const earlyResend = resendSignupOtp('kylereese@gmail.com');
     expect(earlyResend.success).toBe(false);
     expect(earlyResend.cooldownSecondsRemaining).toBeGreaterThan(0);
     expect(earlyResend.error).toContain('Please wait');
   });
 
   it('returns friendly error when verifying nonexistent or expired registration', () => {
-    const result = verifySignupOtp('nonexistent@example.com', '123456');
+    const result = verifySignupOtp('nonexistent@gmail.com', '123456');
     expect(result.success).toBe(false);
     expect(result.error).toContain('No pending registration found');
   });

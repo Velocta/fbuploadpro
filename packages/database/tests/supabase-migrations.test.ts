@@ -34,6 +34,7 @@ describe('Supabase Migrations Convention Suite', () => {
       'publishing_engine',
       'page_insights',
       'users_phone_number',
+      'auth_hardening_canonical_email_e164',
     ];
 
     for (const slug of expectedSlugs) {
