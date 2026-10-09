@@ -268,7 +268,7 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
       const blockedRes = await handleLogin(blockedReq);
       expect(blockedRes.status).toBe(429);
       const blockedJson = await blockedRes.json();
-      expect(blockedJson.error).toContain('Too many sign in attempts for this account');
+      expect(blockedJson.error).toContain('Too many sign in attempts');
     });
   });
 

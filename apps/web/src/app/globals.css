@@ -138,3 +138,10 @@ body {
   }
 }
 
+/* Mobile workspace canvas gutter so floating hamburger trigger never overlaps content */
+@media (max-width: 767px) {
+  .workspace-mobile-gutter {
+    padding-left: 56px !important;
+  }
+}
+

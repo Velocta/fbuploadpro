@@ -38,6 +38,7 @@ export default function SignupPage() {
   // Form-level general error for compact callout above action button
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [isEmailConflict, setIsEmailConflict] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -45,6 +46,17 @@ export default function SignupPage() {
       const ret = params.get('returnUrl');
       if (ret) {
         setReturnUrl(sanitizeAuthRedirectUrl(ret));
+      }
+      const initialStep = params.get('step');
+      const emailParam = params.get('email');
+      if (emailParam) {
+        setEmail(emailParam);
+      }
+      if (initialStep === 'otp') {
+        setStep('otp');
+      }
+      if (params.get('notice') === 'pending_verification') {
+        setSuccessNotice('We sent a fresh 6-digit verification code. Please confirm your email to complete registration.');
       }
     }
   }, []);
@@ -59,6 +71,9 @@ export default function SignupPage() {
   }, [resendCooldown]);
 
   const clearFieldError = (field: keyof FieldErrors) => {
+    if (field === 'email') {
+      setIsEmailConflict(false);
+    }
     if (fieldErrors[field]) {
       setFieldErrors((prev) => {
         const next = { ...prev };
@@ -75,6 +90,7 @@ export default function SignupPage() {
     e.preventDefault();
     setGeneralError(null);
     setSuccessNotice(null);
+    setIsEmailConflict(false);
 
     const errors: FieldErrors = {};
 
@@ -154,9 +170,10 @@ export default function SignupPage() {
         }
 
         if (res.status === 409 || data.error?.toLowerCase().includes('already registered')) {
+          setIsEmailConflict(true);
           setFieldErrors((prev) => ({
             ...prev,
-            email: 'This email is already registered. Please sign in instead.',
+            email: 'This email is already registered.',
           }));
           setIsSubmitting(false);
           return;
@@ -378,6 +395,41 @@ export default function SignupPage() {
             helperText="Only @gmail.com accounts are supported"
           />
 
+          {isEmailConflict && (
+            <div
+              style={{
+                marginTop: '-8px',
+                marginBottom: SPACING.xs,
+                fontSize: '0.8125rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <Link
+                href={`/login?email=${encodeURIComponent(email.trim())}`}
+                style={{
+                  color: PALETTE.primary,
+                  textDecoration: 'underline',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                }}
+              >
+                Sign in instead
+              </Link>
+              <span style={{ color: 'var(--text-dim, #6b7280)' }}>•</span>
+              <Link
+                href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
+                style={{
+                  color: PALETTE.primary,
+                  textDecoration: 'underline',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                }}
+              >
+                Reset password
+              </Link>
+            </div>
+          )}
+
           <PasswordInput
             label="Password"
             placeholder="••••••••••••"
@@ -461,7 +513,49 @@ export default function SignupPage() {
           </p>
         </form>
       ) : (
-        <form onSubmit={handleOtpSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+        <form onSubmit={handleOtpSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+              borderRadius: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim, #6b7280)' }}>
+                Verification code sent to
+              </span>
+              <span style={{ fontSize: '0.875rem', fontWeight: TYPOGRAPHY.weights.medium, color: 'var(--text-main, #f3f4f6)' }}>
+                {email}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setStep('details');
+                setGeneralError(null);
+                setSuccessNotice(null);
+                setFieldErrors({});
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: PALETTE.primary,
+                fontSize: '0.8125rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: 'pointer',
+                padding: '4px 8px',
+                textDecoration: 'underline',
+              }}
+            >
+              Wrong email? Edit
+            </button>
+          </div>
+
           <div>
             <Input
               label="6-Digit Verification Code"
@@ -487,6 +581,27 @@ export default function SignupPage() {
                 fontWeight: TYPOGRAPHY.weights.bold,
               }}
             />
+            {fieldErrors.otp && fieldErrors.otp.toLowerCase().includes('expired') && (
+              <div style={{ marginTop: '8px', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={isResending || resendCooldown > 0}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: PALETTE.primary,
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  Send fresh code
+                </button>
+              </div>
+            )}
           </div>
 
           <FormErrorCallout message={generalError} />

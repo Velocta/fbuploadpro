@@ -24,6 +24,7 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
   const [password, setPassword] = useState('');
   const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
   const [isResetSuccess, setIsResetSuccess] = useState(initialResetSuccess);
+  const [infoBanner, setInfoBanner] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -35,8 +36,18 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
       if (ret) {
         setReturnUrl(sanitizeAuthRedirectUrl(ret));
       }
+      const emailParam = params.get('email');
+      if (emailParam) {
+        setEmail(emailParam);
+      }
       if (params.get('reset') === 'success') {
         setIsResetSuccess(true);
+      }
+      if (params.get('logout') === 'success') {
+        setInfoBanner('You have been signed out successfully.');
+      }
+      if (params.get('reason') === 'password_changed') {
+        setInfoBanner('Your session was terminated because your password was recently updated. Please sign in again.');
       }
     }
   }, []);
@@ -96,6 +107,13 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 403 && data.requiresOtp) {
+          const targetEmail = data.email || email.trim();
+          const targetUrl = `/signup?step=otp&email=${encodeURIComponent(targetEmail)}&notice=pending_verification`;
+          window.location.href = targetUrl;
+          return;
+        }
+
         if (res.status === 403 && data.redirectUrl) {
           window.location.href = data.redirectUrl;
           return;
@@ -157,6 +175,12 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
             severity="success"
             title="Password Updated"
             message="Your password has been successfully reset. Please sign in with your new credentials."
+          />
+        )}
+        {infoBanner && (
+          <Alert
+            severity="info"
+            message={infoBanner}
           />
         )}
         <Input

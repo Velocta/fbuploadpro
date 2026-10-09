@@ -196,13 +196,19 @@ flowchart LR
     M13[Spec 013: Auth OTP Confirmation & Subdomain Hardening]
     M14[Spec 014: Shared Shadcn-Compatible Sidebar Component]
     M15[Spec 015: Gmail Canonicalization, Phone E.164 & OTP Hardening]
+    M16[Spec 016: Auth UX Refinement & Inline Validation]
+    M17[Spec 017: Auth Flow Audit Remediation]
+    M18[Spec 018: Unified 6-Digit OTP Password Reset Flow]
+    M19[Spec 019: Pure Sidebar-Only Workspace App Shell]
+    M20[Spec 020: Canonical Post-Auth Home Landing Route]
+    M21[Spec 021: Auth Lifecycle, Session & Shell Hardening]
   end
 
   subgraph CurrentFocus [Active Priority]
     UIRecreate[Feature Views Assembly: Spec 002-006 Pages]
   end
 
-  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9 --> M10 --> M11 --> M12 --> M13 --> M14 --> M15 --> UIRecreate
+  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9 --> M10 --> M11 --> M12 --> M13 --> M14 --> M15 --> M16 --> M17 --> M18 --> M19 --> M20 --> M21 --> UIRecreate
 ```
 
 - **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
@@ -225,6 +231,7 @@ flowchart LR
 - **Spec 018 (Completed & Verified)**: **Unified 6-Digit OTP Password Reset Flow** (Eliminated all legacy email magic recovery links in favor of a secure 6-digit numeric OTP recovery flow delivered via Resend; two-step layout on `/forgot-password`: Step 1 collects and canonicalizes Gmail, Step 2 verifies 6-digit code with timing-safe constant-time comparison `timingSafeEqual`, 10-minute expiration, 60-second cooldown on resends, 5-attempt progressive lockout, and immediate post-reset session invalidation; `/reset-password` cleanly guides and redirects visitors to `/forgot-password`).
 - **Spec 019 (Completed & Merged into main)**: **Pure Sidebar-Only Workspace App Shell** (Implemented Linear/Stripe-style headerless desktop canvas giving 100% full-viewport bleed to publisher workflows; unified navigation in shadcn `Sidebar` suite with top Workspace brand monogram header, "Home" top menu item, 1px hairline `SidebarSeparator`, "Facebook" section heading with "Accounts" nested sub-item, and integrated `SidebarRail` edge collapse; anchored footer card with operator name/email, avatar initials, and chevron-up (`^`) trigger popover for theme switching and instant sign-out; discreet floating top-left corner trigger for mobile screens `<768px`).
 - **Spec 020 (Completed & Merged into main)**: **Canonical Post-Authentication Workspace Home Landing Route** (Standardized all post-authentication entry points—login and signup OTP verification—to route directly to the tenant's workspace root `https://${subdomain}.${rootDomain}/` rewriting to the workspace Home page `/tenant/[subdomain]`, eradicating deprecated `/dashboard` routes; updated post-password-reset flow to redirect to `/login?reset=success` with an accessible green confirmation alert banner, taking operators to their workspace Home upon signing in; updated central app gateway middleware to automatically forward authenticated sessions to their workspace root).
+- **Spec 021 (Completed & Verified)**: **Comprehensive Auth Lifecycle, Resilient Session Termination & Workspace Shell Usability Hardening** (Full remediation of all 22 real-world edge cases across authentication, pending registration re-login routing to OTP verification, OTP onboarding error recovery with accessible "Wrong email? Edit" details restoration, persistence of pending verification state across reloads, 1-click "Send fresh code" on expired OTPs, contextual 1-click "Sign in instead" on 409 duplicate registration, bulletproof offline sign-out via client-side cookie wiping and middleware `?logout=success` bypass, cross-tab session termination synchronization via `BroadcastChannel` and storage events, canonical gateway navigation on logout, bfcache leakage prevention via `Cache-Control: no-store` and `pageshow` reload guard, theme persistence in `localStorage` and cookie `fbup_theme` to prevent FOUC, automatic mobile drawer sheet dismissal on navigation, layout gutter reserving mobile clearance for floating trigger, user popover viewport collision boundaries, subtle Caps Lock indication, and uniform rate-limiting copy preventing account enumeration).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 002–006 utilizing the completed Spec 008, Spec 014, Spec 015, Spec 016, Spec 017, Spec 018, Spec 019, and Spec 020 component primitives.
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
 

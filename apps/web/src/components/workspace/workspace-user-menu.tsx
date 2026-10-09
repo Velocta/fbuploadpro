@@ -52,25 +52,97 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
     };
   }, [isOpen]);
 
+  // Initialize theme from storage or DOM attribute
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      const storedTheme = typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null;
+      const docTheme = document.documentElement.getAttribute('data-theme');
+      const activeTheme = storedTheme || docTheme || 'dark';
+      setIsThemeDark(activeTheme !== 'light');
+      document.documentElement.setAttribute('data-theme', activeTheme);
+    }
+  }, []);
+
   const handleSignOut = useCallback(async () => {
     try {
       setIsSigningOut(true);
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {
-      // In all cases, redirect to login
+
+      // 1. Proactively expire client-side session cookies (both root domain and local origin)
+      if (typeof document !== 'undefined') {
+        const hostname = window.location.hostname;
+        const parts = hostname.split('.');
+        const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+
+        document.cookie = `fbup_session=; Max-Age=0; path=/; domain=.${rootDomain}; SameSite=Lax`;
+        document.cookie = 'fbup_session=; Max-Age=0; path=/; SameSite=Lax';
+        document.cookie = `fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${rootDomain}; SameSite=Lax`;
+        document.cookie = 'fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
+      }
+
+      // 2. Broadcast logout across all open tabs
+      if (typeof window !== 'undefined') {
+        try {
+          if (typeof BroadcastChannel !== 'undefined') {
+            const channel = new BroadcastChannel('fbup_auth');
+            channel.postMessage({ type: 'LOGOUT', timestamp: Date.now() });
+            channel.close();
+          }
+        } catch {
+          // Ignore BroadcastChannel errors in unsupported environments
+        }
+
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('fbup_logout_event', String(Date.now()));
+          }
+        } catch {
+          // Ignore localStorage errors
+        }
+      }
+
+      // 3. Fire server logout API with keepalive
+      try {
+        await fetch('/api/auth/logout', { method: 'POST', keepalive: true });
+      } catch {
+        // Continue even if network is degraded or offline
+      }
     } finally {
-      window.location.href = '/login';
+      // 4. Navigate directly to canonical central gateway with ?logout=success
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        const parts = hostname.split('.');
+        const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+        const protocol = window.location.protocol;
+        const port = window.location.port ? `:${window.location.port}` : '';
+        const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
+
+        let targetLoginUrl = '/login?logout=success';
+        if (!isLocal && !hostname.startsWith('app.')) {
+          targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
+        } else if (isLocal && hostname.includes('.') && !hostname.startsWith('app.')) {
+          targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
+        }
+
+        window.location.href = targetLoginUrl;
+      }
     }
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setIsThemeDark((prev) => !prev);
-    // If html data-theme exists, toggle it
-    if (typeof document !== 'undefined') {
-      const current = document.documentElement.getAttribute('data-theme');
-      const nextTheme = current === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', nextTheme);
-    }
+    setIsThemeDark((prev) => {
+      const nextIsDark = !prev;
+      const nextTheme = nextIsDark ? 'dark' : 'light';
+      if (typeof document !== 'undefined') {
+        document.documentElement.setAttribute('data-theme', nextTheme);
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('theme', nextTheme);
+          }
+        } catch {}
+        document.cookie = `fbup_theme=${nextTheme}; path=/; max-age=31536000; SameSite=Lax`;
+      }
+      return nextIsDark;
+    });
   }, []);
 
   return (
@@ -100,6 +172,8 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
             boxShadow: THEME.default.shadows.elevated,
             padding: SPACING.xs,
             zIndex: 60,
+            maxHeight: 'calc(100vh - 80px)',
+            overflowY: 'auto',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',

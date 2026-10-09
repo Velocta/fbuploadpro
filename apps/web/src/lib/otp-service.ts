@@ -43,6 +43,20 @@ export function hashPasswordSync(password: string): string {
   return `${salt.toString('hex')}:${derivedKey.toString('hex')}`;
 }
 
+export function verifyHashedPasswordSync(password: string, storedHash: string): boolean {
+  try {
+    const [saltHex, keyHex] = storedHash.split(':');
+    if (!saltHex || !keyHex) return false;
+    const salt = Buffer.from(saltHex, 'hex');
+    const expectedKey = Buffer.from(keyHex, 'hex');
+    const actualKey = crypto.pbkdf2Sync(password, salt, 100000, expectedKey.length, 'sha256');
+    if (actualKey.length !== expectedKey.length) return false;
+    return crypto.timingSafeEqual(actualKey, expectedKey);
+  } catch {
+    return false;
+  }
+}
+
 export function generateSecureOtp(): string {
   const array = new Uint32Array(1);
   crypto.getRandomValues(array);
@@ -135,6 +149,44 @@ export function getPendingSignup(email: string): PendingSignupEntry | null {
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
   return pendingSignups.get(canonicalEmail) || null;
+}
+
+export function findPendingSignup(email: string): PendingSignupEntry | null {
+  return getPendingSignup(email);
+}
+
+export function verifyPendingSignupPassword(email: string, candidatePassword: string): boolean {
+  cleanupExpiredEntries();
+  const entry = getPendingSignup(email);
+  if (!entry || !entry.data.hashedPassword) return false;
+  return verifyHashedPasswordSync(candidatePassword, entry.data.hashedPassword);
+}
+
+export function refreshPendingSignupOtp(email: string): {
+  success: boolean;
+  otp?: string;
+  error?: string;
+} {
+  cleanupExpiredEntries();
+  const canonicalEmail = resolveCanonicalEmail(email);
+  const entry = pendingSignups.get(canonicalEmail);
+  if (!entry) {
+    return {
+      success: false,
+      error: 'No pending registration found.',
+    };
+  }
+  const now = Date.now();
+  const newOtp = generateSecureOtp();
+  entry.otp = newOtp;
+  entry.lastSentAt = now;
+  entry.expiresAt = now + OTP_TTL_MS;
+  entry.attempts = 0;
+  clearLockout(canonicalEmail);
+  return {
+    success: true,
+    otp: newOtp,
+  };
 }
 
 export function verifySignupOtp(
