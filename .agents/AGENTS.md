@@ -93,6 +93,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - `speckit-taskstoissues`: Exports tasks to GitHub issues.
 - `impeccable`: Design director and anti-slop craft skill.
 - `taste-skill`: Anti-slop frontend design framework.
+- `ux-writing`: User-centered, professional interface copy and microcopy, free of developer jargon.
 
 ### Autonomous Subagents (`.agents/agents/`)
 - `spec-driver`: Lead orchestrator driving the entire SDD lifecycle with `/grill-me` pre-flight alignment.
@@ -150,3 +151,8 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
   - All database schema modifications MUST be written as versioned forward migration files strictly located in `supabase/migrations/YYYYMMDDHHmmss_<name>.sql` and delivered through GitHub Pull Requests.
   - Migrations are automatically executed by the Supabase GitHub Integration whenever code is pushed or merged into `main`.
   - The Supabase MCP server is strictly limited to read-only inspection and diagnostics (`list_tables`, `list_migrations`, `get_project_url`, `get_publishable_keys`, read-only queries), never for manual schema mutation.
+- **Professional UX Writing Standards & Public Web App Tone Enforcement**:
+  - FBUploadPro is a public commercial product; all user-visible copy MUST be professional, human, clear, and trustworthy.
+  - NEVER leak internal technical plumbing, regex logic, or database constraints into UI (e.g., NEVER write "Dots and plus tags will be automatically stripped", "varchar limits", "isolated workspace", "gateway", or "deploy workspace").
+  - NEVER add decorative or fake "operational / server status" dots (`Ready`, `Online`, `Operational`, etc.) to login cards, signup cards, page headers, or standard forms. Status dots are strictly and exclusively reserved for real entity runtime state (e.g., live Facebook page token health, post publishing queue status).
+  - Enforced by `.agents/rules/ux-writing-standards.md` and `.agents/skills/ux-writing/SKILL.md`.
