@@ -44,12 +44,12 @@
 
 ---
 
-## Phase 5: User Story 4 (Priority: P4) - UI Showroom Interactive Verification Harness
+## Phase 5: User Story 4 (Priority: P4) - Showroom & Component Cleanliness
 
-**Purpose**: Build interactive showcase in `apps/showroom` for visual review and demonstration.
+**Purpose**: Ensure showroom and sidebar remain free of mock data and placeholder clutter until user-defined content is implemented.
 
-- [x] T011 [P4] [US4] Implement interactive FBUploadPro workspace showcase page in `apps/showroom/src/app/sidebar/page.tsx`
-- [x] T012 [P4] [US4] Update showroom root navigation in `apps/showroom/src/app/page.tsx` with a direct link and card to the sidebar showcase
+- [x] T011 [P4] [US4] Remove mock data and placeholder pages from `apps/showroom/src/app/sidebar/` per user directive
+- [x] T012 [P4] [US4] Revert `apps/showroom/src/app/page.tsx` to clean baseline, preserving pure unpopulated sidebar primitives
 
 ---
 
