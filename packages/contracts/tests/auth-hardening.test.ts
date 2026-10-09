@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   canonicalizeGmailAddress,
   validateAndFormatE164Phone,
+  validateClientPhoneNumber,
   SignupRequestSchema,
   LoginRequestSchema,
 } from '../src/index.js';
@@ -41,6 +42,47 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       expect(() => canonicalizeGmailAddress('')).toThrow();
       expect(() => canonicalizeGmailAddress('not-an-email')).toThrow();
       expect(() => canonicalizeGmailAddress('@gmail.com')).toThrow();
+    });
+  });
+
+  describe('validateClientPhoneNumber', () => {
+    it('validates and formats valid international phone numbers', () => {
+      const res1 = validateClientPhoneNumber('+1 415 555 2671');
+      expect(res1.isValid).toBe(true);
+      expect(res1.formatted).toBe('+14155552671');
+      expect(res1.error).toBeUndefined();
+
+      const res2 = validateClientPhoneNumber('+92 300 1234567');
+      expect(res2.isValid).toBe(true);
+      expect(res2.formatted).toBe('+923001234567');
+    });
+
+    it('rejects empty phone input', () => {
+      const res = validateClientPhoneNumber('');
+      expect(res.isValid).toBe(false);
+      expect(res.error).toMatch(/Phone number is required/);
+    });
+
+    it('rejects input without leading + (like asdf or 5551234567)', () => {
+      const res1 = validateClientPhoneNumber('asdf');
+      expect(res1.isValid).toBe(false);
+      expect(res1.error).toMatch(/must include an international calling code starting with \+/);
+
+      const res2 = validateClientPhoneNumber('5551234567');
+      expect(res2.isValid).toBe(false);
+      expect(res2.error).toMatch(/must include an international calling code starting with \+/);
+    });
+
+    it('rejects input containing letters after + (like +1asdf)', () => {
+      const res = validateClientPhoneNumber('+1asdf');
+      expect(res.isValid).toBe(false);
+      expect(res.error).toMatch(/Phone numbers cannot contain letters/);
+    });
+
+    it('rejects incomplete numbers like +32433 with too short length or invalid code', () => {
+      const res = validateClientPhoneNumber('+32433');
+      expect(res.isValid).toBe(false);
+      expect(res.error).toMatch(/Please enter a complete, valid international phone number/);
     });
   });
 

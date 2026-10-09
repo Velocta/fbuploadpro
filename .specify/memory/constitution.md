@@ -1,11 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 2.2.0 -> 2.3.0 (MINOR: Added Gmail Canonicalization, Phone E.164, and OTP Hardening governance)
+- Version change: 2.4.0 -> 2.5.0 (MINOR: Added Inline Form Validation, Error Hygiene & Authentication Form Craft governance)
 - List of modified principles:
-  - Technology & Architectural Constraints: Added Section 10 establishing strict Gmail domain restriction, canonicalization (stripping dots and plus tags), E.164 phone validation via libphonenumber-js, and hardened Supabase/Resend OTP security.
+  - Technology & Architectural Constraints: Added Section 11 establishing inline field error validation, prohibition of disruptive modal/alert boxes for field errors, hybrid real-time error clearing, elimination of password strength meters, and full mapping of Zod validation details to field-specific UI states.
 - Added/Modified sections:
-  - Section 10: Strict Gmail Canonicalization, International E.164 Phone Validation, and Hardened OTP Security.
-- Follow-up TODOs: Implement spec 014 for auth hardening.
+  - Section 11: Inline Form Validation, Non-Intrusive Error States, and Edge-Case Input Hygiene.
+- Follow-up TODOs: Implement spec 016 for auth UX refinement.
 -->
 
 # FBUploadPro Constitution
@@ -48,6 +48,13 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Strict Gmail-Only & Email Canonicalization**: FBUploadPro strictly requires `@gmail.com` or `@googlemail.com` email domains for customer registration and authentication. All email addresses must be canonicalized before lookup, validation, or persistence: trim whitespace, lowercase, extract username, strip all dots (`.`), remove plus tags (`+tag` and everything up to `@`), and recombine as `<normalized_username>@gmail.com`. Canonicalization must be enforced on client input, API contract layer (`@fbuploadpro/contracts`), and at the PostgreSQL database substrate with a unique index on normalized emails (`normalized_email`).
     - **International E.164 Phone Validation**: Phone numbers must strictly comply with international E.164 standard formatting (e.g. `+923001234567`). Formatting, country codes, and numeric lengths must be validated using `libphonenumber-js`. Raw, unvalidated strings or non-numeric characters (aside from leading `+`) are prohibited.
     - **Supabase + Resend OTP Security**: Verification OTPs must be cryptographically secure 6-digit numeric codes with 5–10 minute expiration, single-use invalidation upon verification, and timing-safe comparison. Rate limiting per IP and per identifier (email/phone) is mandatory across OTP dispatch routes to prevent Resend credit exhaustion and SMS/email spam bombing. Verification endpoints must enforce progressive backoff and temporary lockout after 3–5 failed attempts. Cleartext passwords must never linger in unhashed memory.
+11. **Inline Form Validation, Non-Intrusive Error States, and Edge-Case Input Hygiene**:
+    - **Field-Level Inline Validation & Error Highlighting**: Form validation errors targeting specific input fields MUST be surfaced directly inline under the relevant input field using red border highlighting (`border: 1px solid var(--accent-3)`, `aria-invalid="true"`) and contextual helper text (`role="alert"`).
+    - **Prohibition of Disruptive Modal/Alert Boxes for Field Errors**: AI agents and frontend components must NEVER display large modal-like alert banners or popups at the top of cards for normal field validation issues (such as missing names, malformed phone numbers, or invalid email formats). General non-field errors (e.g. invalid credentials, system timeouts, rate limits) must appear as compact, non-disruptive inline callouts positioned directly above the primary action button to prevent jarring layout shifts.
+    - **Hybrid Real-Time Validation UX**: Form validation errors must trigger upon form submission attempt and automatically clear and revalidate live as the user corrects their input (on keystroke/change or blur).
+    - **Comprehensive Server-to-Client Error Mapping**: When backend Zod validation fails (`400 Bad Request` with `{ error: 'Validation failed', details: ... }`), the frontend MUST unpack and map the `details` field-by-field directly to their corresponding input elements. Never expose raw generic "Validation failed" banners to users.
+    - **Elimination of Password Strength Meters**: Unnecessary or noisy password strength meters that add visual clutter must not be rendered on authentication forms; password requirements (e.g. minimum 8 characters) must be conveyed cleanly via static helper text and inline validation.
+    - **Client-Side E.164 Phone Validation via `libphonenumber-js`**: Phone input fields must validate international calling codes and numeric length directly on the client using `libphonenumber-js` to provide immediate, specific feedback before submission.
 
 ## Development Workflow & Quality Gates
 
@@ -70,4 +77,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.4.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.5.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

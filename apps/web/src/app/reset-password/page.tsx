@@ -6,8 +6,14 @@ import { useRouter } from 'next/navigation';
 import { Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
+import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
+
+interface FieldErrors {
+  password?: string | undefined;
+  confirmPassword?: string | undefined;
+}
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -15,22 +21,46 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
+
+  const clearFieldError = (field: keyof FieldErrors) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    if (generalError) {
+      setGeneralError(null);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setGeneralError(null);
 
-    if (password.length < 8) {
-      setErrorMessage('Password must be at least 8 characters long.');
+    const errors: FieldErrors = {};
+
+    if (!password) {
+      errors.password = 'Password is required.';
+    } else if (password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long.';
+    }
+
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password.';
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match. Please verify both password fields.');
-      return;
-    }
-
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -43,7 +73,15 @@ export default function ResetPasswordPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Failed to update password. Your reset link may be expired.'));
+        if (res.status === 400 && data.error?.includes('at least 8 characters')) {
+          setFieldErrors({ password: 'Password must be at least 8 characters long.' });
+          setIsSubmitting(false);
+          return;
+        }
+
+        setGeneralError(
+          sanitizeAuthErrorMessage(data.error, 'Failed to update password. Your reset link may be expired.')
+        );
         setIsSubmitting(false);
         return;
       }
@@ -55,7 +93,7 @@ export default function ResetPasswordPage() {
         router.push('/login');
       }, 2000);
     } catch {
-      setErrorMessage('Unable to reset your password. Please check your connection and try again.');
+      setGeneralError('Unable to reset your password. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -80,17 +118,6 @@ export default function ResetPasswordPage() {
         </span>
       }
     >
-      {errorMessage && (
-        <div style={{ marginBottom: SPACING.lg }}>
-          <Alert
-            severity="error"
-            title="Couldn't reset password"
-            message={sanitizeAuthErrorMessage(errorMessage)}
-            onClose={() => setErrorMessage(null)}
-          />
-        </div>
-      )}
-
       {isSuccess ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
           <Alert
@@ -114,12 +141,16 @@ export default function ResetPasswordPage() {
           </Link>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
           <PasswordInput
             label="New Password"
             placeholder="••••••••••••"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            error={fieldErrors.password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearFieldError('password');
+            }}
             disabled={isSubmitting}
             required
             helperText="Minimum 8 characters"
@@ -129,10 +160,16 @@ export default function ResetPasswordPage() {
             label="Confirm New Password"
             placeholder="••••••••••••"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            error={fieldErrors.confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              clearFieldError('confirmPassword');
+            }}
             disabled={isSubmitting}
             required
           />
+
+          <FormErrorCallout message={generalError} style={{ marginTop: SPACING.xs }} />
 
           <Button
             type="submit"

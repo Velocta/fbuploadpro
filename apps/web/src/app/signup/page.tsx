@@ -5,9 +5,19 @@ import Link from 'next/link';
 import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
-import { PasswordStrengthMeter } from '@/components/auth/password-strength-meter';
+import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
+import { validateClientPhoneNumber } from '@fbuploadpro/contracts';
+
+interface FieldErrors {
+  name?: string | undefined;
+  phone?: string | undefined;
+  email?: string | undefined;
+  password?: string | undefined;
+  confirmPassword?: string | undefined;
+  otp?: string | undefined;
+}
 
 export default function SignupPage() {
   const [step, setStep] = useState<'details' | 'otp'>('details');
@@ -21,7 +31,11 @@ export default function SignupPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Field-specific validation errors for inline red border and helper error display
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  // Form-level general error for compact callout above action button
+  const [generalError, setGeneralError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,43 +57,70 @@ export default function SignupPage() {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  const clearFieldError = (field: keyof FieldErrors) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    if (generalError) {
+      setGeneralError(null);
+    }
+  };
+
   const handleDetailsSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setGeneralError(null);
     setSuccessNotice(null);
 
+    const errors: FieldErrors = {};
+
+    // 1. Full name validation
     if (!name.trim()) {
-      setErrorMessage('Full name is required.');
-      return;
+      errors.name = 'Full name is required.';
+    } else if (name.trim().length > 100) {
+      errors.name = 'Full name cannot exceed 100 characters.';
     }
-    const cleanPhone = phone.trim();
-    if (!cleanPhone) {
-      setErrorMessage('Phone number is required.');
-      return;
+
+    // 2. Comprehensive phone validation with libphonenumber-js
+    const phoneValidation = validateClientPhoneNumber(phone);
+    if (!phoneValidation.isValid) {
+      errors.phone = phoneValidation.error || 'Please enter a valid international phone number.';
     }
-    if (!cleanPhone.startsWith('+')) {
-      setErrorMessage('Please include your country calling code starting with + (e.g. +1 555 123 4567 or +92 300 1234567).');
-      return;
-    }
+
+    // 3. Gmail restriction & validation
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('A valid email address is required.');
-      return;
+      errors.email = 'A valid email address is required.';
+    } else {
+      const domain = cleanEmail.split('@')[1];
+      if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+        errors.email = 'Registration is limited to @gmail.com (or @googlemail.com) accounts.';
+      }
     }
-    const domain = cleanEmail.split('@')[1];
-    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
-      setErrorMessage('Registration is currently limited to @gmail.com (or @googlemail.com) email addresses.');
-      return;
+
+    // 4. Password validation
+    if (!password) {
+      errors.password = 'Password is required.';
+    } else if (password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long.';
     }
-    if (password.length < 8) {
-      setErrorMessage('Password must be at least 8 characters long.');
-      return;
+
+    // 5. Confirm password validation
+    if (!confirmPassword) {
+      errors.confirmPassword = 'Please confirm your password.';
+    } else if (password !== confirmPassword) {
+      errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
     }
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match. Please verify both password fields.');
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -97,7 +138,35 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Unable to create your account at this moment. Please try again shortly.'));
+        if (res.status === 400 && data.details) {
+          const mappedErrors: FieldErrors = {};
+          for (const [key, msgs] of Object.entries(data.details)) {
+            if (Array.isArray(msgs) && msgs.length > 0 && typeof msgs[0] === 'string') {
+              mappedErrors[key as keyof FieldErrors] = msgs[0];
+            }
+          }
+          if (Object.keys(mappedErrors).length > 0) {
+            setFieldErrors(mappedErrors);
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
+        if (res.status === 409 || data.error?.toLowerCase().includes('already registered')) {
+          setFieldErrors((prev) => ({
+            ...prev,
+            email: 'This email is already registered. Please sign in instead.',
+          }));
+          setIsSubmitting(false);
+          return;
+        }
+
+        setGeneralError(
+          sanitizeAuthErrorMessage(
+            data.error,
+            'Unable to create your account at this moment. Please try again shortly.'
+          )
+        );
         setIsSubmitting(false);
         return;
       }
@@ -106,6 +175,7 @@ export default function SignupPage() {
         setStep('otp');
         setResendCooldown(60);
         setOtp('');
+        setFieldErrors({});
         setIsSubmitting(false);
         return;
       }
@@ -114,22 +184,23 @@ export default function SignupPage() {
         window.location.href = data.redirectUrl;
       }
     } catch {
-      setErrorMessage('Unable to create your account at this moment. Please check your connection and try again.');
+      setGeneralError('Unable to create your account at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
 
   const handleOtpSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setGeneralError(null);
     setSuccessNotice(null);
 
     const cleanOtp = otp.replace(/\D/g, '').trim();
     if (cleanOtp.length !== 6) {
-      setErrorMessage('Please enter the complete 6-digit verification code.');
+      setFieldErrors({ otp: 'Please enter the complete 6-digit verification code.' });
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -146,7 +217,9 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Invalid or expired verification code. Please try again.'));
+        setFieldErrors({
+          otp: sanitizeAuthErrorMessage(data.error, 'Invalid or expired verification code. Please try again.'),
+        });
         setIsSubmitting(false);
         return;
       }
@@ -155,7 +228,7 @@ export default function SignupPage() {
         window.location.href = data.redirectUrl;
       }
     } catch {
-      setErrorMessage('Unable to verify code at this moment. Please check your connection and try again.');
+      setGeneralError('Unable to verify code at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -163,8 +236,9 @@ export default function SignupPage() {
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || isResending) return;
 
-    setErrorMessage(null);
+    setGeneralError(null);
     setSuccessNotice(null);
+    setFieldErrors({});
     setIsResending(true);
 
     try {
@@ -177,7 +251,7 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Unable to resend code right now.'));
+        setGeneralError(sanitizeAuthErrorMessage(data.error, 'Unable to resend code right now.'));
         if (data.cooldownSecondsRemaining) {
           setResendCooldown(data.cooldownSecondsRemaining);
         }
@@ -189,7 +263,7 @@ export default function SignupPage() {
       setResendCooldown(60);
       setIsResending(false);
     } catch {
-      setErrorMessage('Failed to resend verification code. Please check your connection.');
+      setGeneralError('Failed to resend verification code. Please check your connection.');
       setIsResending(false);
     }
   };
@@ -222,8 +296,9 @@ export default function SignupPage() {
             type="button"
             onClick={() => {
               setStep('details');
-              setErrorMessage(null);
+              setGeneralError(null);
               setSuccessNotice(null);
+              setFieldErrors({});
             }}
             style={{
               background: 'transparent',
@@ -240,17 +315,6 @@ export default function SignupPage() {
         )
       }
     >
-      {errorMessage && (
-        <div style={{ marginBottom: SPACING.lg }}>
-          <Alert
-            severity="error"
-            title={step === 'details' ? "Couldn't create account" : 'Verification Failed'}
-            message={sanitizeAuthErrorMessage(errorMessage)}
-            onClose={() => setErrorMessage(null)}
-          />
-        </div>
-      )}
-
       {successNotice && (
         <div style={{ marginBottom: SPACING.lg }}>
           <Alert
@@ -263,13 +327,17 @@ export default function SignupPage() {
       )}
 
       {step === 'details' ? (
-        <form onSubmit={handleDetailsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
           <Input
             label="Full Name"
             placeholder="Jane Doe"
             autoComplete="name"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            error={fieldErrors.name}
+            onChange={(e) => {
+              setName(e.target.value);
+              clearFieldError('name');
+            }}
             disabled={isSubmitting}
             required
           />
@@ -280,7 +348,11 @@ export default function SignupPage() {
             placeholder="+1 555 123 4567"
             autoComplete="tel"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            error={fieldErrors.phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              clearFieldError('phone');
+            }}
             disabled={isSubmitting}
             required
             helperText="Include country code starting with + (e.g. +1... or +92...)"
@@ -292,35 +364,46 @@ export default function SignupPage() {
             placeholder="you@gmail.com"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            error={fieldErrors.email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError('email');
+            }}
             disabled={isSubmitting}
             required
             helperText="Only @gmail.com accounts are supported"
           />
 
-          <div>
-            <PasswordInput
-              label="Password"
-              placeholder="••••••••••••"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isSubmitting}
-              required
-              helperText="Minimum 8 characters"
-            />
-            <PasswordStrengthMeter password={password} />
-          </div>
+          <PasswordInput
+            label="Password"
+            placeholder="••••••••••••"
+            autoComplete="new-password"
+            value={password}
+            error={fieldErrors.password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearFieldError('password');
+            }}
+            disabled={isSubmitting}
+            required
+            helperText="Minimum 8 characters"
+          />
 
           <PasswordInput
             label="Confirm Password"
             placeholder="••••••••••••"
             autoComplete="new-password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            error={fieldErrors.confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              clearFieldError('confirmPassword');
+            }}
             disabled={isSubmitting}
             required
           />
+
+          <FormErrorCallout message={generalError} style={{ marginTop: SPACING.xs }} />
 
           <Button
             type="submit"
@@ -368,7 +451,7 @@ export default function SignupPage() {
           </p>
         </form>
       ) : (
-        <form onSubmit={handleOtpSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+        <form onSubmit={handleOtpSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
           <div>
             <Input
               label="6-Digit Verification Code"
@@ -379,7 +462,11 @@ export default function SignupPage() {
               placeholder="••••••"
               autoFocus
               value={otp}
-              onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              error={fieldErrors.otp}
+              onChange={(e) => {
+                setOtp(e.target.value.replace(/\D/g, '').slice(0, 6));
+                clearFieldError('otp');
+              }}
               disabled={isSubmitting}
               required
               helperText="Check your spam folder if you do not see the email in your inbox."
@@ -391,6 +478,8 @@ export default function SignupPage() {
               }}
             />
           </div>
+
+          <FormErrorCallout message={generalError} />
 
           <Button
             type="submit"
