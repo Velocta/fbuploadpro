@@ -26,6 +26,7 @@ import {
   SidebarMenuSubButton,
   SidebarRail,
   SidebarTrigger,
+  SidebarSeparator,
   SIDEBAR_COOKIE_NAME,
   SIDEBAR_WIDTH,
   SIDEBAR_WIDTH_ICON,
@@ -240,6 +241,20 @@ describe('Sidebar Component Suite (Spec 014)', () => {
 
       expect(hasTag('button')).toBe(true);
       expect(hasAttribute('aria-label', 'Toggle Sidebar Rail')).toBe(true);
+    });
+
+    it('renders SidebarSeparator with data-sidebar="separator" attribute', () => {
+      const { hasTag, hasAttribute, html } = render(
+        <SidebarProvider>
+          <Sidebar>
+            <SidebarSeparator />
+          </Sidebar>
+        </SidebarProvider>
+      );
+
+      expect(hasTag('div')).toBe(true);
+      expect(hasAttribute('data-sidebar', 'separator')).toBe(true);
+      expect(html).toContain(THEME.default.borders.hairline);
     });
   });
 

@@ -129,6 +129,7 @@ export {
   SidebarMenuSubButton,
   SidebarRail,
   SidebarTrigger,
+  SidebarSeparator,
   SIDEBAR_COOKIE_NAME,
   SIDEBAR_COOKIE_MAX_AGE,
   SIDEBAR_WIDTH,
@@ -161,4 +162,5 @@ export type {
   SidebarMenuSubButtonProps,
   SidebarRailProps,
   SidebarTriggerProps,
+  SidebarSeparatorProps,
 } from './sidebar';

@@ -1099,3 +1099,32 @@ export const SidebarTrigger = forwardRef<HTMLButtonElement, SidebarTriggerProps>
     );
   }
 );
+
+// ============================================================================
+// 8. SEPARATOR PRIMITIVE
+// ============================================================================
+
+export interface SidebarSeparatorProps
+  extends React.HTMLAttributes<HTMLDivElement> {}
+
+export const SidebarSeparator = forwardRef<HTMLDivElement, SidebarSeparatorProps>(
+  function SidebarSeparator({ className, style, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        data-sidebar="separator"
+        className={className}
+        style={{
+          height: '1px',
+          width: '100%',
+          backgroundColor: THEME.default.borders.hairline,
+          margin: `${SPACING.xs} 0`,
+          boxSizing: 'border-box',
+          ...style,
+        }}
+        {...props}
+      />
+    );
+  }
+);
+
