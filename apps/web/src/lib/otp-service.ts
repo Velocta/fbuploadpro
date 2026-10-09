@@ -155,6 +155,10 @@ export function findPendingSignup(email: string): PendingSignupEntry | null {
   return getPendingSignup(email);
 }
 
+export function isPendingSignup(email: string): boolean {
+  return getPendingSignup(email) !== null;
+}
+
 export function verifyPendingSignupPassword(email: string, candidatePassword: string): boolean {
   cleanupExpiredEntries();
   const entry = getPendingSignup(email);

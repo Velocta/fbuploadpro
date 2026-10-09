@@ -226,6 +226,34 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
       expect(json.error).toBe('Invalid email or password');
     });
 
+    it('returns 403 with requiresOtp when unverified user logs in', async () => {
+      // Stage unverified pending signup in fallback store
+      const { createPendingSignup } = await import('../../src/lib/otp-service');
+      createPendingSignup({
+        name: 'Pending User',
+        phone: '+14155552671',
+        email: 'pending.user@gmail.com',
+        password: 'Password123!',
+      });
+
+      const req = new NextRequest('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'pending.user@gmail.com',
+          password: 'Password123!',
+        }),
+      });
+
+      const res = await handleLogin(req);
+      expect(res.status).toBe(403);
+
+      const json = await res.json();
+      expect(json.requiresOtp).toBe(true);
+      expect(json.email).toBe('pendinguser@gmail.com');
+      expect(json.error).toContain('verify your email');
+    });
+
     it('rejects non-Gmail domains with 400 Bad Request on login', async () => {
       const req = new NextRequest('http://localhost:3000/api/auth/login', {
         method: 'POST',

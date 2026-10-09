@@ -229,7 +229,12 @@ export async function signUpTenantUser(params: {
   email: string;
   password?: string | undefined;
   hashedPassword?: string | undefined;
-}): Promise<{ user: AuthUser; requiresOtp: boolean; simulatedOtp?: string | undefined }> {
+}): Promise<{
+  user: AuthUser;
+  requiresOtp: boolean;
+  simulatedOtp?: string | undefined;
+  cooldownSecondsRemaining?: number | undefined;
+}> {
   let canonicalEmail: string;
   try {
     canonicalEmail = canonicalizeGmailAddress(params.email);
@@ -245,8 +250,52 @@ export async function signUpTenantUser(params: {
   }
 
   const existingUser = await findUserByEmail(canonicalEmail);
-  if (existingUser) {
-    if (existingUser.status !== 'pending_verification') {
+  const supabase = getSupabaseClient();
+
+  if (supabase && existingUser) {
+    // Check if this existing user is already confirmed in Supabase Auth
+    try {
+      const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(existingUser.id);
+      if (!authUserError && authUserData?.user) {
+        if (authUserData.user.email_confirmed_at) {
+          throw new Error('Email is already registered');
+        }
+
+        // User is unconfirmed in Supabase: update details and resend code
+        try {
+          await supabase
+            .from('users')
+            .update({
+              name: params.name,
+              phone: formattedPhone,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingUser.id);
+        } catch (uErr) {
+          console.error('[Supabase PostgREST] User detail update error:', uErr);
+        }
+
+        const resendRes = await resendSignupOtpViaSupabase(canonicalEmail);
+        return {
+          user: {
+            ...existingUser,
+            name: params.name,
+            phone: formattedPhone,
+          },
+          requiresOtp: true,
+          cooldownSecondsRemaining: resendRes.cooldownSecondsRemaining,
+        };
+      }
+    } catch (adminErr: unknown) {
+      if ((adminErr as Error)?.message === 'Email is already registered') {
+        throw adminErr;
+      }
+      console.error('[Supabase Auth Admin] getUserById exception:', adminErr);
+    }
+  } else if (!supabase && existingUser) {
+    // Local / test fallback
+    const { isPendingSignup } = await import('@/lib/otp-service');
+    if (!isPendingSignup(canonicalEmail)) {
       throw new Error('Email is already registered');
     }
     const resendRes = await resendSignupOtpViaSupabase(canonicalEmail);
@@ -254,6 +303,7 @@ export async function signUpTenantUser(params: {
       user: existingUser,
       requiresOtp: true,
       simulatedOtp: resendRes.otp,
+      cooldownSecondsRemaining: resendRes.cooldownSecondsRemaining,
     };
   }
 
@@ -262,7 +312,6 @@ export async function signUpTenantUser(params: {
   const rawPassword = params.password || '';
   const hashedPassword = params.hashedPassword || (rawPassword ? await hashPassword(rawPassword) : '');
 
-  const supabase = getSupabaseClient();
   let userRecord: AuthUser;
 
   if (supabase) {
@@ -278,53 +327,100 @@ export async function signUpTenantUser(params: {
       },
     });
 
-    if (authError || !authData.user) {
-      if (authError?.message?.toLowerCase().includes('already registered')) {
+    if (authError) {
+      if (authError.message?.toLowerCase().includes('already registered')) {
         throw new Error('Email is already registered');
       }
-      throw new Error(authError?.message || 'Authentication registration failed');
+
+      const isRateLimited =
+        authError.message?.toLowerCase().includes('for security purposes') ||
+        /after\s+(\d+)\s+seconds/i.test(authError.message);
+
+      if (isRateLimited) {
+        const match = authError.message.match(/after\s+(\d+)\s+seconds/i);
+        const seconds = match ? parseInt(match[1], 10) : 60;
+
+        // If user already exists in unconfirmed state, allow continuing to OTP step
+        if (existingUser) {
+          return {
+            user: existingUser,
+            requiresOtp: true,
+            cooldownSecondsRemaining: seconds,
+          };
+        }
+
+        // If new email on a rate-limited IP/project, throw rate limit error
+        const rateLimitError = new Error(
+          `For security purposes, please wait ${seconds} seconds before requesting another verification code.`
+        );
+        (rateLimitError as unknown as { code: string; retryAfterSeconds: number }).code = 'RATE_LIMITED';
+        (rateLimitError as unknown as { retryAfterSeconds: number }).retryAfterSeconds = seconds;
+        throw rateLimitError;
+      }
+
+      throw new Error(authError.message || 'Authentication registration failed');
+    }
+
+    if (!authData.user) {
+      throw new Error('Authentication registration failed');
+    }
+
+    // GoTrue anti-enumeration: existing confirmed user returns user with empty identities
+    if (Array.isArray(authData.user.identities) && authData.user.identities.length === 0) {
+      throw new Error('Email is already registered');
     }
 
     const userId = authData.user.id;
+    userRecord = {
+      id: userId,
+      email: canonicalEmail,
+      name: params.name,
+      phone: formattedPhone,
+      subdomain,
+      role: 'user',
+      status: 'active',
+    };
+
     try {
       const { data: inserted, error: insertError } = await supabase
         .from('users')
-        .insert({
-          id: userId,
-          email: canonicalEmail,
-          normalized_email: canonicalEmail,
-          name: params.name,
-          phone: formattedPhone,
-          subdomain,
-          role: 'user',
-          status: 'pending_verification',
-        })
+        .upsert(
+          {
+            id: userId,
+            email: canonicalEmail,
+            normalized_email: canonicalEmail,
+            name: params.name,
+            phone: formattedPhone,
+            subdomain,
+            role: 'user',
+            status: 'active',
+          },
+          { onConflict: 'id' }
+        )
         .select('id, email, name, phone, subdomain, role, status')
         .single();
 
-      if (insertError) {
-        console.error('[Supabase PostgREST] User insert error:', insertError.message);
+      if (!insertError && inserted) {
+        userRecord = inserted as AuthUser;
       }
-      userRecord = (inserted as AuthUser) || {
-        id: userId,
-        email: canonicalEmail,
-        name: params.name,
-        phone: formattedPhone,
-        subdomain,
-        role: 'user',
-        status: 'pending_verification',
-      };
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
-      userRecord = {
-        id: userId,
-        email: canonicalEmail,
-        name: params.name,
-        phone: formattedPhone,
-        subdomain,
-        role: 'user',
-        status: 'pending_verification',
-      };
+    }
+
+    // Persist storage quota via Supabase PostgREST
+    try {
+      await supabase.from('user_storage_quotas').upsert(
+        {
+          user_id: userId,
+          max_bytes: 5368709120,
+          used_bytes: 0,
+          max_assets: 50,
+          used_assets: 0,
+        },
+        { onConflict: 'user_id' }
+      );
+    } catch (quotaErr) {
+      console.error('[Supabase PostgREST] Storage quota insert exception:', quotaErr);
     }
   } else {
     // Local / test fallback
@@ -345,7 +441,7 @@ export async function signUpTenantUser(params: {
       phone: formattedPhone,
       subdomain,
       role: 'user',
-      status: 'pending_verification',
+      status: 'active',
     };
     localUserStore.set(canonicalEmail, userRecord);
     if (hashedPassword) {
@@ -356,12 +452,14 @@ export async function signUpTenantUser(params: {
       user: userRecord,
       requiresOtp: true,
       simulatedOtp: otp,
+      cooldownSecondsRemaining: 60,
     };
   }
 
   return {
     user: userRecord,
     requiresOtp: true,
+    cooldownSecondsRemaining: 60,
   };
 }
 
@@ -501,9 +599,12 @@ export async function resendSignupOtpViaSupabase(email: string): Promise<{
       email: canonicalEmail,
     });
     if (error) {
+      const match = error.message.match(/after\s+(\d+)\s+seconds/i);
+      const cooldown = match ? parseInt(match[1], 10) : undefined;
       return {
         success: false,
         error: error.message,
+        cooldownSecondsRemaining: cooldown,
       };
     }
     return { success: true };
@@ -710,10 +811,23 @@ export async function loginTenantUser(params: {
     });
 
     if (authError) {
+      const isEmailNotConfirmed =
+        authError.message?.toLowerCase().includes('email not confirmed') ||
+        authError.code === 'email_not_confirmed' ||
+        ((authError as { status?: number }).status === 400 &&
+          authError.message?.toLowerCase().includes('confirm'));
+
+      if (isEmailNotConfirmed) {
+        const error = new Error('Please verify your email address to complete registration.');
+        (error as unknown as { code: string; requiresOtp: boolean; email: string }).code = 'REQUIRES_OTP';
+        (error as unknown as { requiresOtp: boolean }).requiresOtp = true;
+        (error as unknown as { email: string }).email = canonicalEmail;
+        throw error;
+      }
       throw new Error('Invalid email or password');
     }
 
-    // If user record wasn't loaded from public.users yet, construct from authenticated user
+    // If user record wasn't loaded from public.users yet, construct from authenticated user and upsert
     if (!user && authData?.user) {
       const metadata = authData.user.user_metadata || {};
       const subdomain = metadata.subdomain || deriveSubdomainFromEmail(canonicalEmail);
@@ -726,6 +840,33 @@ export async function loginTenantUser(params: {
         role: 'user',
         status: 'active',
       };
+      try {
+        await supabase.from('users').upsert(
+          {
+            id: user.id,
+            email: user.email,
+            normalized_email: canonicalEmail,
+            name: user.name,
+            phone: user.phone,
+            subdomain: user.subdomain,
+            role: 'user',
+            status: 'active',
+          },
+          { onConflict: 'id' }
+        );
+        await supabase.from('user_storage_quotas').upsert(
+          {
+            user_id: user.id,
+            max_bytes: 5368709120,
+            used_bytes: 0,
+            max_assets: 50,
+            used_assets: 0,
+          },
+          { onConflict: 'user_id' }
+        );
+      } catch (upsertErr) {
+        console.error('[Supabase PostgREST] User upsert on login error:', upsertErr);
+      }
     }
   } else {
     const storedHash =
@@ -746,14 +887,6 @@ export async function loginTenantUser(params: {
   if (user.status === 'suspended') {
     const error = new Error('Account is suspended');
     (error as unknown as { code: string }).code = 'ACCOUNT_SUSPENDED';
-    throw error;
-  }
-
-  if (user.status === 'pending_verification') {
-    const error = new Error('Please verify your email address to complete registration.');
-    (error as unknown as { code: string; requiresOtp: boolean; email: string }).code = 'REQUIRES_OTP';
-    (error as unknown as { requiresOtp: boolean }).requiresOtp = true;
-    (error as unknown as { email: string }).email = user.email;
     throw error;
   }
 
@@ -922,6 +1055,59 @@ export async function resetUserPasswordWithOtp(params: {
         throw new Error(updateError.message);
       }
     }
+
+    // Ensure public.users profile exists and is active, and storage quotas are provisioned
+    try {
+      const existingUser = await findUserByEmail(canonicalEmail);
+      if (existingUser?.id) {
+        await supabase
+          .from('users')
+          .update({ status: 'active', updated_at: new Date().toISOString() })
+          .eq('id', existingUser.id);
+        await supabase.from('user_storage_quotas').upsert(
+          {
+            user_id: existingUser.id,
+            max_bytes: 5368709120,
+            used_bytes: 0,
+            max_assets: 50,
+            used_assets: 0,
+          },
+          { onConflict: 'user_id' }
+        );
+      } else {
+        const { data: authUserData } = await supabase.auth.getUser();
+        if (authUserData?.user) {
+          const u = authUserData.user;
+          const metadata = u.user_metadata || {};
+          const subdomain = metadata.subdomain || deriveSubdomainFromEmail(canonicalEmail);
+          await supabase.from('users').upsert(
+            {
+              id: u.id,
+              email: u.email || canonicalEmail,
+              normalized_email: canonicalEmail,
+              name: metadata.name || null,
+              phone: metadata.phone || null,
+              subdomain,
+              role: 'user',
+              status: 'active',
+            },
+            { onConflict: 'id' }
+          );
+          await supabase.from('user_storage_quotas').upsert(
+            {
+              user_id: u.id,
+              max_bytes: 5368709120,
+              used_bytes: 0,
+              max_assets: 50,
+              used_assets: 0,
+            },
+            { onConflict: 'user_id' }
+          );
+        }
+      }
+    } catch (profileErr) {
+      console.error('[Supabase PostgREST] Error activating user on password reset:', profileErr);
+    }
   } else {
     // 1. Verify OTP with constant-time comparison and lockout checks in fallback
     const { verifyPasswordResetOtp } = await import('@/lib/otp-service');
@@ -933,6 +1119,23 @@ export async function resetUserPasswordWithOtp(params: {
     // 2. Hash new password in fallback
     const hashed = await hashPassword(params.password);
     localPasswordStore.set(canonicalEmail, hashed);
+
+    let existing = localUserStore.get(canonicalEmail);
+    if (!existing) {
+      const rawSubdomain = deriveSubdomainFromEmail(canonicalEmail);
+      existing = {
+        id: crypto.randomUUID(),
+        email: canonicalEmail,
+        name: null,
+        phone: null,
+        subdomain: rawSubdomain,
+        role: 'user',
+        status: 'active',
+      };
+      localUserStore.set(canonicalEmail, existing);
+    } else {
+      existing.status = 'active';
+    }
   }
 
   // 3. Invalidate existing sessions by updating passwordUpdatedAt

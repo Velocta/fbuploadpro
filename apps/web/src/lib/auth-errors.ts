@@ -109,7 +109,36 @@ export function formatAuthErrorResponse(
     return NextResponse.json({ error: rawMessage }, { status: 400 });
   }
 
-  // 5. Default/Unexpected Failure (Never leak technical details!)
+  // 5. Rate Limit / Cooldown Check (429)
+  const isRateLimited =
+    code === 'RATE_LIMITED' ||
+    rawMessage.toLowerCase().includes('for security purposes') ||
+    rawMessage.toLowerCase().includes('too many') ||
+    /after\s+(\d+)\s+seconds/i.test(rawMessage);
+
+  if (isRateLimited) {
+    const match = rawMessage.match(/after\s+(\d+)\s+seconds/i);
+    const retryAfter = match
+      ? parseInt(match[1], 10)
+      : (error as { retryAfterSeconds?: number })?.retryAfterSeconds || 60;
+    const sanitizedMsg = `For security purposes, please wait ${retryAfter} second${
+      retryAfter === 1 ? '' : 's'
+    } before requesting another verification code.`;
+
+    return NextResponse.json(
+      {
+        error: sanitizedMsg,
+        retryAfterSeconds: retryAfter,
+        cooldownSecondsRemaining: retryAfter,
+      },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(retryAfter) },
+      }
+    );
+  }
+
+  // 6. Default/Unexpected Failure (Never leak technical details!)
   return NextResponse.json(
     { error: sanitizeAuthErrorMessage(rawMessage, fallbackMessage) },
     { status: defaultStatus }

@@ -66,15 +66,19 @@ async function run() {
       continue;
     }
 
+    const isPublicConfig =
+      key.startsWith('NEXT_PUBLIC_') ||
+      key === 'DEFAULT_STORAGE_QUOTA_BYTES';
+
     const payload = {
       key,
       value: val,
-      type: 'plain',
+      type: isPublicConfig ? 'plain' : 'sensitive',
       target: ['production', 'preview'],
     };
 
     if (isDryRun) {
-      console.log(`[DRY-RUN] Would upsert ${key} (targets: production, preview)`);
+      console.log(`[DRY-RUN] Would upsert ${key} as ${payload.type} (targets: production, preview)`);
       syncedCount++;
       continue;
     }

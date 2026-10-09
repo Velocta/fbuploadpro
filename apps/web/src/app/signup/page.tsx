@@ -169,6 +169,19 @@ export default function SignupPage() {
           }
         }
 
+        if (res.status === 429) {
+          const cooldown = data.retryAfterSeconds || data.cooldownSecondsRemaining || 60;
+          setResendCooldown(cooldown);
+          setGeneralError(
+            sanitizeAuthErrorMessage(
+              data.error,
+              `For security purposes, please wait ${cooldown} seconds before trying again.`
+            )
+          );
+          setIsSubmitting(false);
+          return;
+        }
+
         if (res.status === 409 || data.error?.toLowerCase().includes('already registered')) {
           setIsEmailConflict(true);
           setFieldErrors((prev) => ({
@@ -191,7 +204,7 @@ export default function SignupPage() {
 
       if (data.requiresOtp) {
         setStep('otp');
-        setResendCooldown(60);
+        setResendCooldown(data.cooldownSecondsRemaining ?? 60);
         setOtp('');
         setFieldErrors({});
         setIsSubmitting(false);
@@ -466,9 +479,10 @@ export default function SignupPage() {
             variant="primary"
             size="lg"
             isLoading={isSubmitting}
+            disabled={isSubmitting || resendCooldown > 0}
             style={{ width: '100%', marginTop: SPACING.xs }}
           >
-            Create Account
+            {resendCooldown > 0 ? `Please wait (${resendCooldown}s)` : 'Create Account'}
           </Button>
 
           <p

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { SignupRequestSchema, canonicalizeGmailAddress } from '@fbuploadpro/contracts';
-import { findUserByEmail, signUpTenantUser } from '@/lib/supabase-auth';
+import { SignupRequestSchema } from '@fbuploadpro/contracts';
+import { signUpTenantUser } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
@@ -51,25 +51,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 3. Check canonical email uniqueness before dispatching OTP
-    const existingUser = await findUserByEmail(canonicalEmail);
-    if (existingUser && existingUser.status !== 'pending_verification') {
-      return NextResponse.json(
-        {
-          error: 'Email is already registered',
-          code: 'EMAIL_ALREADY_REGISTERED',
-        },
-        { status: 409 }
-      );
-    }
-
-    // 4. Register user with pending_verification status and dispatch OTP via Supabase Auth
+    // 3. Initiate or resume registration and dispatch OTP via Supabase Auth
     const signupResult = await signUpTenantUser(parseResult.data);
 
     return NextResponse.json(
       {
         success: true,
         requiresOtp: signupResult.requiresOtp,
+        cooldownSecondsRemaining: signupResult.cooldownSecondsRemaining,
         email: canonicalEmail,
         message: 'A 6-digit verification code has been sent to your Gmail address.',
       },

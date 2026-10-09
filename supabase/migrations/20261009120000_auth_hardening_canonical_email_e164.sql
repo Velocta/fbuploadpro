@@ -47,6 +47,11 @@ EXECUTE FUNCTION canonicalize_user_email();
 -- Unique constraint index on canonicalized email to prevent multi-account deduplication bypass
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_normalized_email ON users(normalized_email);
 
+-- Clean up non-conforming existing normalized_email values before adding constraint
+UPDATE users
+SET normalized_email = NULL
+WHERE normalized_email IS NOT NULL AND normalized_email !~ '^[a-z0-9]+@gmail\.com$';
+
 -- Enforce canonical format constraint on normalized_email (only alphanumeric lowercase + @gmail.com)
 DO $$
 BEGIN
@@ -57,6 +62,11 @@ BEGIN
       CHECK (normalized_email IS NULL OR normalized_email ~ '^[a-z0-9]+@gmail\.com$');
   END IF;
 END $$;
+
+-- Clean up non-conforming existing phone values before adding constraint
+UPDATE users
+SET phone = NULL
+WHERE phone IS NOT NULL AND (phone = '' OR phone !~ '^\+[1-9][0-9]{6,14}$');
 
 -- Enforce international E.164 standard phone format (+ followed by 7-15 digits)
 DO $$

@@ -87,5 +87,28 @@ describe('Auth Error Sanitization & Zero Leakage (T001, T002)', () => {
       const data = await response.json();
       expect(data.error).toBe('Email is already registered');
     });
+
+    it('returns 429 with retryAfterSeconds for GoTrue security rate limit', async () => {
+      const rateLimitError = new Error('For security purposes, you can only request this after 47 seconds.');
+      const response = formatAuthErrorResponse(rateLimitError);
+
+      expect(response.status).toBe(429);
+      expect(response.headers.get('Retry-After')).toBe('47');
+      const data = await response.json();
+      expect(data.retryAfterSeconds).toBe(47);
+      expect(data.cooldownSecondsRemaining).toBe(47);
+      expect(data.error).toBe('For security purposes, please wait 47 seconds before requesting another verification code.');
+    });
+
+    it('returns 429 when error has RATE_LIMITED code', async () => {
+      const err = new Error('Too many requests');
+      (err as unknown as { code: string; retryAfterSeconds: number }).code = 'RATE_LIMITED';
+      (err as unknown as { retryAfterSeconds: number }).retryAfterSeconds = 30;
+
+      const response = formatAuthErrorResponse(err);
+      expect(response.status).toBe(429);
+      const data = await response.json();
+      expect(data.retryAfterSeconds).toBe(30);
+    });
   });
 });
