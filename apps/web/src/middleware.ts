@@ -59,8 +59,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         }
       }
 
-      // If already authenticated and visiting app root, login, or signup, redirect to their tenant workspace
-      if (session && (pathname === '/' || pathname === '/login' || pathname === '/signup')) {
+      const isLogoutSuccess = request.nextUrl.searchParams.get('logout') === 'success';
+
+      // If already authenticated and visiting app root, login, or signup, redirect to their tenant workspace (unless explicit logout)
+      if (session && !isLogoutSuccess && (pathname === '/' || pathname === '/login' || pathname === '/signup')) {
         const workspaceUrl = new URL(request.url);
         workspaceUrl.host = `${session.subdomain}.${rootDomain}`;
         workspaceUrl.pathname = '/';
@@ -138,9 +140,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     requestHeaders.set('x-user-subdomain', session.subdomain);
   }
 
-  return NextResponse.rewrite(rewriteUrl, {
+  const response = NextResponse.rewrite(rewriteUrl, {
     request: {
       headers: requestHeaders,
     },
   });
+
+  // Prevent browser back-forward cache (bfcache) leaks on authenticated views
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  response.headers.set('Pragma', 'no-cache');
+  response.headers.set('Expires', '0');
+
+  return response;
 }

@@ -57,7 +57,10 @@ export async function POST(request: NextRequest) {
     const existingUser = await findUserByEmail(canonicalEmail);
     if (existingUser) {
       return NextResponse.json(
-        { error: 'Email is already registered' },
+        {
+          error: 'Email is already registered',
+          code: 'EMAIL_ALREADY_REGISTERED',
+        },
         { status: 409 }
       );
     }

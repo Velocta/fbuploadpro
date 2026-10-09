@@ -5,6 +5,9 @@ import {
   createPendingSignup,
   verifySignupOtp,
   resendSignupOtp,
+  findPendingSignup,
+  verifyPendingSignupPassword,
+  refreshPendingSignupOtp,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
@@ -120,5 +123,52 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     const result = verifySignupOtp('nonexistent@gmail.com', '123456');
     expect(result.success).toBe(false);
     expect(result.error).toContain('No pending registration found');
+  });
+
+  it('correctly finds pending signup and verifies password against pre-hashed staged record', () => {
+    const signupData = {
+      name: 'Elena Fisher',
+      phone: '+14155552671',
+      email: 'elena.fisher+uncharted@gmail.com',
+      password: 'StrongPassword123!',
+    };
+
+    createPendingSignup(signupData);
+
+    const pending = findPendingSignup('elenafisher@gmail.com');
+    expect(pending).not.toBeNull();
+    expect(pending?.data.name).toBe('Elena Fisher');
+
+    // Valid password check
+    const isCorrect = verifyPendingSignupPassword('elenafisher@gmail.com', 'StrongPassword123!');
+    expect(isCorrect).toBe(true);
+
+    // Invalid password check
+    const isIncorrect = verifyPendingSignupPassword('elenafisher@gmail.com', 'WrongPassword123!');
+    expect(isIncorrect).toBe(false);
+
+    // Non-existent email check
+    const nonExistent = verifyPendingSignupPassword('nonexistent@gmail.com', 'Password123!');
+    expect(nonExistent).toBe(false);
+  });
+
+  it('refreshes pending signup OTP and resets lockout counters', () => {
+    const signupData = {
+      name: 'Nathan Drake',
+      phone: '+14155552671',
+      email: 'nathan.drake@gmail.com',
+      password: 'AdventureTime123!',
+    };
+
+    const initial = createPendingSignup(signupData);
+    const refresh = refreshPendingSignupOtp('nathandrake@gmail.com');
+    expect(refresh.success).toBe(true);
+    expect(refresh.otp).toBeDefined();
+    expect(refresh.otp).toHaveLength(6);
+
+    // New OTP can be verified successfully
+    const verifyResult = verifySignupOtp('nathandrake@gmail.com', refresh.otp!);
+    expect(verifyResult.success).toBe(true);
+    expect(verifyResult.signupData?.name).toBe('Nathan Drake');
   });
 });

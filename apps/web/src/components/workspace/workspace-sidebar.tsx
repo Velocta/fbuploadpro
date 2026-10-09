@@ -32,7 +32,7 @@ export interface WorkspaceSidebarProps {
 export function WorkspaceSidebar({ subdomain, user }: WorkspaceSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = !isMobile && state === 'collapsed';
 
   const homeHref = `/tenant/${subdomain}`;
@@ -40,6 +40,13 @@ export function WorkspaceSidebar({ subdomain, user }: WorkspaceSidebarProps) {
 
   const isHomeActive = pathname === homeHref;
   const isAccountsActive = pathname ? pathname.startsWith(accountsHref) : false;
+
+  const handleNavigate = (href: string) => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+    router.push(href);
+  };
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
@@ -125,7 +132,7 @@ export function WorkspaceSidebar({ subdomain, user }: WorkspaceSidebarProps) {
             <SidebarMenuButton
               isActive={isHomeActive}
               tooltip="Home"
-              onClick={() => router.push(homeHref)}
+              onClick={() => handleNavigate(homeHref)}
               leftIcon={
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
@@ -150,7 +157,7 @@ export function WorkspaceSidebar({ subdomain, user }: WorkspaceSidebarProps) {
                 <SidebarMenuButton
                   isActive={isAccountsActive}
                   tooltip="Accounts"
-                  onClick={() => router.push(accountsHref)}
+                  onClick={() => handleNavigate(accountsHref)}
                   leftIcon={
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />

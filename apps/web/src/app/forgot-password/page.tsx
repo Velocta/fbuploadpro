@@ -127,7 +127,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
       }
 
       setCooldownSeconds(60);
-      setResendSuccessMessage('A fresh verification code has been dispatched to your email.');
+      setResendSuccessMessage('A fresh verification code has been dispatched. Any previous codes have been invalidated.');
       setIsResending(false);
     } catch {
       setGeneralError('Failed to resend code. Please check your connection.');

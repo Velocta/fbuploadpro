@@ -1,11 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 2.6.0 -> 2.7.0 (MINOR: Amended Section 12 to govern 6-digit OTP-based password recovery, removing email magic recovery links)
+- Version change: 2.9.0 -> 2.10.0 (MINOR: Added Principle 15 governing full auth lifecycle, resilient session termination, and workspace shell usability)
 - List of modified principles:
-  - Technology & Architectural Constraints: Amended Section 12 to replace email magic links with unified 6-digit OTP password recovery dispatched via Resend, enforcing 10-minute TTL, 60-second cooldown, timing-safe verification, and 5-attempt progressive lockout.
+  - Technology & Architectural Constraints: Added Section 15 to govern pending unverified registration recovery, OTP onboarding error recovery, bulletproof offline and multi-tab sign-out synchronization, bfcache leakage prevention, and workspace shell responsive and theming guardrails.
 - Added/Modified sections:
-  - Section 12: Defense-in-Depth Authentication Redirects, 6-Digit OTP Password Reset Lifecycle, and Credential Memory Zero-Retention.
-- Follow-up TODOs: Implement Spec 018 for unified OTP password reset flow.
+  - Section 15: Comprehensive Authentication Lifecycle, Resilient Session Termination & Workspace Shell Usability Guardrails.
+- Follow-up TODOs: Implement Spec 021 for complete authentication lifecycle, signout, and shell usability hardening.
 -->
 
 # FBUploadPro Constitution
@@ -71,6 +71,14 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Post-Password Reset Sign-In Redirection**: Upon successful 6-digit OTP password reset and creation of a new password, the user MUST be redirected to the central Sign In page (`/login`) accompanied by a clear success notification confirming their password has been updated. Upon signing in with their new credentials, they are landed directly on their workspace Home page.
     - **Deep-Link Return URL Preservation**: When a valid, authorized `returnUrl` is provided during login or signup, it takes precedence over the default Home destination provided it satisfies strict open-redirect sanitization rules.
     - **Central Gateway Forwarding**: Authenticated sessions attempting to access central auth routes (`app.${rootDomain}/`, `/login`, `/signup`) are automatically routed to their workspace root (`https://${session.subdomain}.${rootDomain}/`).
+15. **Comprehensive Authentication Lifecycle, Resilient Session Termination & Workspace Shell Usability Guardrails**:
+    - **Pending Unverified Registration Re-Login Recovery**: When an unverified registrant attempts to sign in via `/login`, the authentication system MUST NOT report "Invalid email or password". Instead, it must verify credentials against the pending registration record, issue a fresh 6-digit OTP, and route the user directly to the OTP verification screen (`/signup?step=otp&email=...` or `/verify-otp`) with a clear contextual notice.
+    - **OTP Onboarding Error Recovery & Persistence**: The registration OTP verification screen MUST provide an accessible "Change email address" action that navigates back to the registration form with all previously entered fields intact. The pending verification state MUST persist across tab reloads/resumptions. Expired OTP attempts must offer a single-click "Send fresh code" trigger rather than forcing complete form re-entry. Registration attempts for already-registered emails (409 Conflict) MUST provide direct 1-click actions to "Sign in instead" or "Reset password".
+    - **Resilient & Offline Session Termination**: Client-side sign-out procedures MUST immediately expire local session cookies (`fbup_session=; Max-Age=0; path=/; ...`) regardless of network connectivity or API reachability, and navigate directly to the canonical central gateway (`https://app.${rootDomain}/login?logout=success`). The middleware authentication guard MUST permit requests containing `logout=success` to access `/login` unconditionally without triggering automatic session forward redirects.
+    - **Multi-Tab Session & Sign-Out Synchronization**: Workspace sessions MUST synchronize authentication state across all browser tabs via `BroadcastChannel` or `storage` events. When a user signs out in one tab, all other open workspace tabs MUST immediately detect the termination and redirect to the sign-in gateway.
+    - **Back-Forward Cache (bfcache) Leak Prevention**: Authenticated workspace views MUST enforce `Cache-Control: no-store, no-cache, must-revalidate` response headers and monitor `window.onpageshow` (`event.persisted`) to force a hard page reload if a previously signed-out user navigates back using browser navigation controls.
+    - **Workspace Shell Theming & Responsive Usability**: User theme selections MUST be synchronized across both `localStorage` and a persistent cookie (`fbup_theme`) to eliminate theme flicker (FOUC) during server rendering. Mobile drawer sheets (<768px) MUST automatically close upon any navigation link selection. Main layout canvases MUST reserve adequate left padding/gutter on mobile viewports so floating hamburger triggers never obscure page content. User popovers MUST enforce dynamic viewport collision bounds to prevent clipping.
+    - **Session & Security Hygiene**: Client-side API fetch interceptors MUST handle 403 `ACCOUNT_SUSPENDED` responses by immediately transitioning to `/account-suspended`. Password fields MUST present an accessible Caps Lock indicator badge. Rate-limiting messages across login endpoints MUST remain uniform to prevent user enumeration.
 
 ## Development Workflow & Quality Gates
 
@@ -94,4 +102,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.9.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.10.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

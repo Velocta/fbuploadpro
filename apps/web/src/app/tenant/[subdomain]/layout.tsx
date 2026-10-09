@@ -2,6 +2,7 @@ import React from 'react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { MobileNavTrigger } from '@/components/workspace/mobile-nav-trigger';
+import { WorkspaceLifecycleGuard } from '@/components/workspace/workspace-lifecycle-guard';
 import { getServerSessionContext } from '@/lib/auth';
 
 interface TenantLayoutProps {
@@ -25,9 +26,10 @@ export default async function TenantLayout({ params, children }: TenantLayoutPro
 
   return (
     <SidebarProvider>
+      <WorkspaceLifecycleGuard />
       <WorkspaceSidebar subdomain={subdomain} user={user} />
       <MobileNavTrigger />
-      <SidebarInset>
+      <SidebarInset className="workspace-mobile-gutter">
         {children}
       </SidebarInset>
     </SidebarProvider>
