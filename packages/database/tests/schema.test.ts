@@ -50,4 +50,12 @@ describe('Database Migrations Substrate', () => {
     expect(ddl).toContain('CREATE TABLE IF NOT EXISTS publish_logs');
     expect(ddl).not.toContain('tokens_deducted');
   });
+
+  it('0006_users_phone_number.sql adds phone column to users table', () => {
+    const migrationPath = path.resolve(__dirname, '../migrations/0006_users_phone_number.sql');
+    expect(fs.existsSync(migrationPath)).toBe(true);
+
+    const ddl = fs.readFileSync(migrationPath, 'utf8');
+    expect(ddl).toContain('ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);');
+  });
 });

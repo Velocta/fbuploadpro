@@ -1,8 +1,74 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { THEME, COMPONENT_STYLES } from '@/lib/theme';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, Input, Button, Alert, StatusDot } from '@/components/ui';
+import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 export default function LoginPage() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const ret = params.get('returnUrl');
+      if (ret) {
+        setReturnUrl(ret);
+      }
+    }
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!email.trim() || !email.includes('@')) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    if (!password) {
+      setErrorMessage('Please enter your password.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          returnUrl,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 403 && data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+          return;
+        }
+        setErrorMessage(data.error || 'Invalid email or password. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (data.redirectUrl) {
+        window.location.href = data.redirectUrl;
+      }
+    } catch {
+      setErrorMessage('An unexpected network error occurred. Please try again.');
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <main
       style={{
@@ -10,112 +76,95 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: THEME.default.spacing.lg,
-        backgroundColor: THEME.default.surfaces.canvas,
-        color: THEME.default.text.primary,
-        fontFamily: THEME.default.typography.fontFamily,
+        padding: SPACING.lg,
+        backgroundColor: 'var(--bg-canvas, #000000)',
+        color: 'var(--text-main, #ffffff)',
+        fontFamily: TYPOGRAPHY.fontFamily,
       }}
     >
-      <div
-        style={{
-          ...COMPONENT_STYLES.card(THEME.default),
-          padding: THEME.default.spacing.xl,
-          maxWidth: '400px',
-          width: '100%',
-        }}
-      >
-        <h2
-          style={{
-            margin: `0 0 ${THEME.default.spacing.xs} 0`,
-            fontSize: '1.25rem',
-            fontWeight: THEME.default.typography.weights.bold,
-            letterSpacing: THEME.default.typography.tracking.h2,
-          }}
-        >
-          Sign In
-        </h2>
-        <p
-          style={{
-            margin: `0 0 ${THEME.default.spacing.lg} 0`,
-            color: THEME.default.text.secondary,
-            fontSize: '0.875rem',
-          }}
-        >
-          Enter your credentials to access your tenant workspace.
-        </p>
+      <div style={{ maxWidth: '400px', width: '100%' }}>
+        <Card>
+          <CardHeader>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.xs }}>
+              <span
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: TYPOGRAPHY.weights.bold,
+                  letterSpacing: '-0.02em',
+                  color: 'var(--text-main)',
+                }}
+              >
+                FBUploadPro <span style={{ color: PALETTE.primary }}>Gateway</span>
+              </span>
+              <StatusDot status="operational" label="Online" />
+            </div>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>
+              Enter your credentials to access your isolated workspace.
+            </CardDescription>
+          </CardHeader>
 
-        <form style={{ display: 'flex', flexDirection: 'column', gap: THEME.default.spacing.md }}>
-          <div>
-            <label
-              htmlFor="email"
-              style={{
-                display: 'block',
-                marginBottom: THEME.default.spacing.xs,
-                fontSize: '0.75rem',
-                fontWeight: THEME.default.typography.weights.semibold,
-                color: THEME.default.text.secondary,
-                letterSpacing: THEME.default.typography.tracking.caption,
-                textTransform: 'uppercase',
-              }}
-            >
-              Email Address
-            </label>
-            <input
-              id="email"
-              type="email"
-              placeholder="you@domain.com"
-              required
-              style={{
-                ...COMPONENT_STYLES.input(THEME.default),
-                width: '100%',
-              }}
-            />
-          </div>
+          <CardContent>
+            {errorMessage && (
+              <div style={{ marginBottom: SPACING.lg }}>
+                <Alert
+                  severity="error"
+                  title="Sign In Error"
+                  message={errorMessage}
+                  onClose={() => setErrorMessage(null)}
+                />
+              </div>
+            )}
 
-          <div>
-            <label
-              htmlFor="password"
-              style={{
-                display: 'block',
-                marginBottom: THEME.default.spacing.xs,
-                fontSize: '0.75rem',
-                fontWeight: THEME.default.typography.weights.semibold,
-                color: THEME.default.text.secondary,
-                letterSpacing: THEME.default.typography.tracking.caption,
-                textTransform: 'uppercase',
-              }}
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              style={{
-                ...COMPONENT_STYLES.input(THEME.default),
-                width: '100%',
-              }}
-            />
-          </div>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+              <Input
+                label="Email Address"
+                type="email"
+                placeholder="you@domain.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isSubmitting}
+                required
+              />
 
-          <button
-            type="submit"
-            style={{
-              ...COMPONENT_STYLES.primaryButton,
-              width: '100%',
-              marginTop: THEME.default.spacing.sm,
-            }}
-          >
-            Sign In
-          </button>
-        </form>
+              <Input
+                label="Password"
+                type="password"
+                placeholder="••••••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isSubmitting}
+                required
+              />
 
-        <div style={{ marginTop: THEME.default.spacing.lg, textAlign: 'center', fontSize: '0.8125rem' }}>
-          <span style={{ color: THEME.default.text.muted }}>Don&apos;t have an account? </span>
-          <Link href="/signup" style={{ color: THEME.default.text.link, textDecoration: 'none' }}>
-            Create one
-          </Link>
-        </div>
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                isLoading={isSubmitting}
+                style={{ width: '100%', marginTop: SPACING.sm }}
+              >
+                Sign In
+              </Button>
+            </form>
+          </CardContent>
+
+          <CardFooter style={{ justifyContent: 'center' }}>
+            <span style={{ fontSize: '0.8125rem', color: 'var(--text-dim, #6b7280)' }}>
+              Don&apos;t have an account?{' '}
+              <Link
+                href="/signup"
+                style={{
+                  color: PALETTE.primary,
+                  textDecoration: 'none',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                }}
+              >
+                Create one
+              </Link>
+            </span>
+          </CardFooter>
+        </Card>
       </div>
     </main>
   );
