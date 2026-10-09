@@ -195,13 +195,32 @@ export const LoginRequestSchema = z.object({
   returnUrl: z.string().optional(),
 });
 
-export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+export const ForgotPasswordRequestSchema = z.object({
+  email: GmailSchema,
+});
+
+export type ForgotPasswordRequest = z.infer<typeof ForgotPasswordRequestSchema>;
+
+export const ResendResetOtpRequestSchema = z.object({
+  email: GmailSchema,
+});
+
+export type ResendResetOtpRequest = z.infer<typeof ResendResetOtpRequestSchema>;
+
+export const ResetPasswordOtpRequestSchema = z.object({
+  email: GmailSchema,
+  otp: z.string().trim().regex(/^\d{6}$/, 'Verification code must be exactly 6 digits'),
+  password: z.string().min(8, 'Password must be at least 8 characters long').max(128, 'Password cannot exceed 128 characters'),
+});
+
+export type ResetPasswordOtpRequest = z.infer<typeof ResetPasswordOtpRequestSchema>;
 
 export const ResetPasswordRequestSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters long').max(128, 'Password cannot exceed 128 characters'),
+  email: z.string().optional(),
+  otp: z.string().optional(),
   token: z.string().optional(),
   code: z.string().optional(),
-  email: z.string().optional(),
 });
 
 export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;

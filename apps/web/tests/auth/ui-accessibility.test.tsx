@@ -51,14 +51,15 @@ describe('WCAG 2.2 AA Accessibility & Usability (AUTH-08 to AUTH-15 / Spec 017 U
 
     it('provides accessible helper text describing recovery dispatch', () => {
       const { hasText } = render(<ForgotPasswordPage />);
-      expect(hasText('We will send a password reset link to your registered Gmail address.')).toBe(true);
+      expect(hasText('We will send a 6-digit verification code to your registered Gmail address.')).toBe(true);
     });
   });
 
   describe('ResetPasswordPage Accessibility (AUTH-14)', () => {
-    it('provides autoComplete="new-password" on both password fields', () => {
-      const { html } = render(<ResetPasswordPage />);
-      expect(html).toContain('autoComplete="new-password"');
+    it('provides accessible redirection guidance to unified recovery flow', () => {
+      const { html, hasText } = render(<ResetPasswordPage />);
+      expect(hasText('Redirecting to Password Recovery')).toBe(true);
+      expect(html).toContain('href="/forgot-password"');
     });
   });
 

@@ -528,12 +528,93 @@ export async function requestPasswordReset(params: {
   };
 }
 
+export async function resetUserPasswordWithOtp(params: {
+  email: string;
+  otp: string;
+  password: string;
+}): Promise<{ message: string }> {
+  if (!params.password || typeof params.password !== 'string' || params.password.length < 8) {
+    throw new Error('Password must be at least 8 characters long');
+  }
+  if (params.password.length > 128) {
+    throw new Error('Password cannot exceed 128 characters');
+  }
+
+  let canonicalEmail: string;
+  try {
+    canonicalEmail = canonicalizeGmailAddress(params.email);
+  } catch {
+    canonicalEmail = params.email.trim().toLowerCase();
+  }
+
+  // 1. Verify OTP with constant-time comparison and lockout checks
+  const { verifyPasswordResetOtp } = await import('@/lib/otp-service');
+  const verification = verifyPasswordResetOtp(canonicalEmail, params.otp);
+  if (!verification.success) {
+    throw new Error(verification.error || 'Invalid or expired verification code.');
+  }
+
+  // 2. Hash new password
+  const hashed = await hashPassword(params.password);
+  localPasswordStore.set(canonicalEmail, hashed);
+
+  // 3. Invalidate existing sessions by updating passwordUpdatedAt
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const user = localUserStore.get(canonicalEmail);
+  if (user) {
+    user.passwordUpdatedAt = nowSeconds;
+  }
+
+  // 4. Update in Supabase / Postgres if configured
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const existingUser = await findUserByEmail(canonicalEmail);
+      if (existingUser?.id) {
+        const { error } = await supabase.auth.admin.updateUserById(existingUser.id, {
+          password: params.password,
+        });
+        if (error) {
+          console.error('[Supabase Auth] resetUserPasswordWithOtp updateUserById error:', error.message);
+        }
+      }
+    } catch (err) {
+      console.error('[Supabase Auth] resetUserPasswordWithOtp exception:', err);
+    }
+  }
+
+  if (process.env.DATABASE_URL) {
+    try {
+      const db = getDbClient();
+      await db.query(
+        'UPDATE users SET updated_at = NOW() WHERE normalized_email = $1 OR email = $1',
+        [canonicalEmail]
+      );
+    } catch (err) {
+      console.error('[Postgres DB] resetUserPasswordWithOtp error:', err);
+    }
+  }
+
+  return {
+    message: 'Your password has been successfully updated.',
+  };
+}
+
 export async function resetUserPassword(params: {
   email?: string | undefined;
   password: string;
+  otp?: string | undefined;
   token?: string | undefined;
   code?: string | undefined;
 }): Promise<{ message: string }> {
+  if (params.otp && params.email) {
+    return resetUserPasswordWithOtp({
+      email: params.email,
+      otp: params.otp,
+      password: params.password,
+    });
+  }
+
   if (!params.password || typeof params.password !== 'string' || params.password.length < 8) {
     throw new Error('Password must be at least 8 characters long');
   }

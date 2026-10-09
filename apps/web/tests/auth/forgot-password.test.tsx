@@ -6,6 +6,13 @@ import ForgotPasswordPage from '../../src/app/forgot-password/page';
 import LoginPage from '../../src/app/login/page';
 import { POST as forgotPasswordHandler } from '../../src/app/api/auth/forgot-password/route';
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+  }),
+}));
+
 describe('Password Recovery - Forgot Password (US1)', () => {
   describe('LoginPage Integration', () => {
     it('renders a Forgot password link directing to /forgot-password', () => {
@@ -22,7 +29,7 @@ describe('Password Recovery - Forgot Password (US1)', () => {
 
       expect(hasText('Reset Password')).toBe(true);
       expect(hasText('Email Address')).toBe(true);
-      expect(hasText('Send Recovery Link')).toBe(true);
+      expect(hasText('Send Verification Code')).toBe(true);
       expect(hasAttribute('type', 'email')).toBe(true);
       expect(html).toContain('href="/login"');
     });
@@ -76,6 +83,7 @@ describe('Password Recovery - Forgot Password (US1)', () => {
 
       const body = await res.json();
       expect(body.success).toBe(true);
+      expect(body.requiresOtp).toBe(true);
       expect(body.message).toBeDefined();
     });
   });

@@ -8,6 +8,10 @@ import {
   _setResetTokenForTesting,
   _resetAuthStores,
 } from '../../src/lib/supabase-auth';
+import {
+  createPasswordResetOtp,
+  _resetOtpStore,
+} from '../../src/lib/otp-service';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -20,6 +24,7 @@ describe('Password Recovery - Reset Password (US2)', () => {
 
   beforeEach(() => {
     _resetAuthStores();
+    _resetOtpStore();
   });
 
   afterEach(() => {
@@ -31,36 +36,12 @@ describe('Password Recovery - Reset Password (US2)', () => {
   });
 
   describe('ResetPasswordPage UI Guard & States', () => {
-    it('renders "Recovery Link Required" alert when token parameter is missing', () => {
-      (global as unknown as { window: unknown }).window = {
-        location: {
-          search: '',
-          hash: '',
-        },
-      };
-
+    it('renders redirection guidance to /forgot-password with recovery button', () => {
       const { hasText, html } = render(<ResetPasswordPage />);
 
-      expect(hasText('Recovery Link Required')).toBe(true);
-      expect(hasText('Password reset requires a valid recovery link')).toBe(true);
+      expect(hasText('Redirecting to Password Recovery')).toBe(true);
+      expect(hasText('Go to Password Recovery')).toBe(true);
       expect(html).toContain('href="/forgot-password"');
-    });
-
-    it('renders password and confirm password inputs when valid token query parameter is present', () => {
-      (global as unknown as { window: unknown }).window = {
-        location: {
-          search: '?token=test-recovery-token-xyz',
-          hash: '',
-        },
-      };
-
-      const { hasText, hasAttribute, html } = render(<ResetPasswordPage />);
-
-      expect(hasText('Set New Password')).toBe(true);
-      expect(hasText('New Password')).toBe(true);
-      expect(hasText('Confirm New Password')).toBe(true);
-      expect(hasText('Update Password')).toBe(true);
-      expect(hasAttribute('type', 'password')).toBe(true);
       expect(html).toContain('href="/login"');
     });
 
@@ -90,7 +71,7 @@ describe('Password Recovery - Reset Password (US2)', () => {
       expect(body.error).toContain('8 characters');
     });
 
-    it('returns 400 when token is missing', async () => {
+    it('returns 400 when token or verification code is missing', async () => {
       const req = new NextRequest('http://localhost:3000/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -103,7 +84,7 @@ describe('Password Recovery - Reset Password (US2)', () => {
       expect(res.status).toBe(400);
 
       const body = await res.json();
-      expect(body.error).toContain('recovery link or token is required');
+      expect(body.error).toContain('verification code or recovery token is required');
     });
 
     it('returns 200 when valid token and password are provided', async () => {
@@ -122,6 +103,31 @@ describe('Password Recovery - Reset Password (US2)', () => {
         body: JSON.stringify({
           token,
           password: 'super-secure-password-123',
+        }),
+      });
+
+      const res = await resetPasswordHandler(req);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.message).toContain('successfully updated');
+    });
+
+    it('returns 200 when valid 6-digit OTP, email, and password are provided', async () => {
+      const email = 'alex.otp.test@gmail.com';
+      const { otp } = createPasswordResetOtp(email);
+
+      const req = new NextRequest('http://localhost:3000/api/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-for': '198.51.100.5',
+        },
+        body: JSON.stringify({
+          email,
+          otp,
+          password: 'new-valid-password-789',
         }),
       });
 
