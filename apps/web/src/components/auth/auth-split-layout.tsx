@@ -30,43 +30,96 @@ const BrandLogo = () => (
   </svg>
 );
 
-const FeatureCheckIcon = () => (
+const ShieldCheckIcon = () => (
   <svg
     width="18"
     height="18"
-    viewBox="0 0 20 20"
+    viewBox="0 0 24 24"
     fill="none"
-    xmlns="http://www.w3.org/2000/svg"
+    stroke={PALETTE.primary}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
     style={{ flexShrink: 0, marginTop: '2px' }}
     aria-hidden="true"
   >
-    <circle cx="10" cy="10" r="9" fill="rgba(250, 215, 52, 0.12)" stroke={PALETTE.primary} strokeWidth="1" />
-    <path
-      d="M6.5 10.2L8.8 12.5L13.5 7.5"
-      stroke={PALETTE.primary}
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <path d="m9 12 2 2 4-4" />
   </svg>
 );
 
-const HIGHLIGHTS = [
+const CloudIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={PALETTE.primary}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0, marginTop: '2px' }}
+    aria-hidden="true"
+  >
+    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+  </svg>
+);
+
+const CommentIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={PALETTE.primary}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0, marginTop: '2px' }}
+    aria-hidden="true"
+  >
+    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
+  </svg>
+);
+
+const LockIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke={PALETTE.primary}
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0, marginTop: '2px' }}
+    aria-hidden="true"
+  >
+    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+
+const VALUE_PILLARS = [
   {
-    title: 'Automated Queue Slots',
-    desc: 'Set recurring daily publishing schedules per Facebook Page with 1-minute precision.',
+    icon: <LockIcon />,
+    title: 'Zero Credential Sharing',
+    desc: 'You never give away your password. Connect safely through Meta’s official authorization without risk.',
   },
   {
-    title: 'Direct R2 Storage Ingestion',
-    desc: 'Upload high-definition reels and image sets straight from your browser with zero egress bottlenecks.',
+    icon: <CloudIcon />,
+    title: '100% Cloud-Powered Automation',
+    desc: 'Your scheduled reels and posts publish on time around the clock, even when your computer is turned off.',
   },
   {
-    title: 'Native Graph API v26.0 Delivery',
-    desc: 'Official direct publishing to Facebook Reels and Feed with automated first comments on launch.',
+    icon: <CommentIcon />,
+    title: 'Automated First Comments',
+    desc: 'Engage audience and share links instantly with automated first comments posted the second your content goes live.',
   },
   {
-    title: 'Dedicated Page Insights',
-    desc: 'Real-time monitoring of follower growth, video watch minutes, impressions, and audience reactions.',
+    icon: <ShieldCheckIcon />,
+    title: 'Safe & Ban-Protected',
+    desc: 'Uses Meta-approved official publishing standards to keep your Facebook Pages and Instagram accounts fully protected.',
   },
 ];
 
@@ -140,7 +193,7 @@ export function AuthSplitLayout({
       `}</style>
 
       <div className="auth-split-wrapper">
-        {/* Left Column: Brand & Value Showcase */}
+        {/* Left Column: Brand & Security Showcase */}
         <section className="auth-showcase-panel" aria-label="FBUploadPro Showcase">
           <div>
             <Link
@@ -165,7 +218,7 @@ export function AuthSplitLayout({
               </span>
             </Link>
 
-            <div style={{ marginTop: '56px' }}>
+            <div style={{ marginTop: '48px' }}>
               <div
                 style={{
                   display: 'inline-flex',
@@ -183,39 +236,28 @@ export function AuthSplitLayout({
                   marginBottom: SPACING.md,
                 }}
               >
-                Cloud-Native Publishing Engine
+                Secure Cloud Automation
               </div>
 
+              {/* User Mandated Headline */}
               <h1
                 style={{
-                  fontSize: '2.125rem',
-                  lineHeight: 1.2,
+                  fontSize: '1.875rem',
+                  lineHeight: 1.3,
                   fontWeight: TYPOGRAPHY.weights.heavy,
                   letterSpacing: TYPOGRAPHY.tracking.h1,
-                  margin: `0 0 ${SPACING.md} 0`,
+                  margin: `0 0 ${SPACING.lg} 0`,
                   color: '#ffffff',
                 }}
               >
-                Automate Facebook publishing with precision.
+                Automate Facebook and Instagram <span style={{ color: PALETTE.primary }}>100% on the cloud</span> without ever giving away your credentials, making this the most secure way of automation.
               </h1>
 
-              <p
-                style={{
-                  fontSize: '0.9375rem',
-                  lineHeight: 1.6,
-                  color: 'var(--text-sub, #9ca3af)',
-                  margin: `0 0 ${SPACING.xxl} 0`,
-                  maxWidth: '520px',
-                }}
-              >
-                Engineered for creators, digital marketers, and media operators to schedule, queue, and publish reels and photos across multiple pages seamlessly.
-              </p>
-
-              {/* Highlights List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-                {HIGHLIGHTS.map((item) => (
+              {/* Feature Pillars (Zero Technical Jargon) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg, marginTop: SPACING.xl }}>
+                {VALUE_PILLARS.map((item) => (
                   <div key={item.title} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.md }}>
-                    <FeatureCheckIcon />
+                    {item.icon}
                     <div>
                       <div
                         style={{
@@ -230,9 +272,9 @@ export function AuthSplitLayout({
                       <div
                         style={{
                           fontSize: '0.8125rem',
-                          color: 'var(--text-dim, #6b7280)',
-                          marginTop: '2px',
-                          lineHeight: 1.4,
+                          color: 'var(--text-sub, #9ca3af)',
+                          marginTop: '3px',
+                          lineHeight: 1.45,
                         }}
                       >
                         {item.desc}
@@ -244,10 +286,10 @@ export function AuthSplitLayout({
             </div>
           </div>
 
-          {/* Footer note on showcase */}
+          {/* Clean Trust & Security Footer */}
           <div
             style={{
-              paddingTop: SPACING.xl,
+              paddingTop: SPACING.lg,
               borderTop: '1px solid var(--border-subtle, #1f242d)',
               display: 'flex',
               alignItems: 'center',
@@ -256,8 +298,8 @@ export function AuthSplitLayout({
               color: 'var(--text-dim, #6b7280)',
             }}
           >
-            <span>Multi-tenant data isolation</span>
-            <span>Unrestricted publishing entitlement</span>
+            <span>Official Meta OAuth Security</span>
+            <span>Zero Password Access</span>
           </div>
         </section>
 
