@@ -40,7 +40,7 @@
 
 - [ ] CHK013 Is Cumulative Layout Shift (CLS) quantified as 0.00 for Skeleton placeholders replacing dynamic content? [Measurability, Spec §SC-004]
 - [ ] CHK014 Are tabular data numeric displays specified to use monospace tabular numbers (`tabular-nums`) to prevent jitter? [Clarity, Spec §FR-010]
-- [ ] CHK015 Are showroom visual verification harnesses isolated exclusively in `apps/showroom` with zero mock code leakage? [Boundary, Spec §FR-017]
+- [ ] CHK015 Are component visual verification harnesses isolated with zero mock code leakage into application production code? [Boundary, Spec §FR-017]
 
 ---
 

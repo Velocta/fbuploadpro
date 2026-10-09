@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User prompt: "I want to create a shared component sidebar https://ui.shadcn.com/docs/components/base/sidebar I want this sidebar plan it properly using speckit read your agents file and build it and then show me the mock in showroom"
+**Input**: User prompt: "I want to create a shared component sidebar https://ui.shadcn.com/docs/components/base/sidebar I want this sidebar plan it properly using speckit read your agents file and build it"
 
 ---
 
@@ -20,7 +20,7 @@ The sidebar provides:
 - Keyboard navigation (global shortcut `Cmd+B` / `Ctrl+B`) and seamless cookie persistence (`sidebar_state`) with client fallback to prevent layout shifts.
 - Rich composable building blocks: `SidebarProvider`, `Sidebar`, `SidebarHeader`, `SidebarContent`, `SidebarFooter`, `SidebarGroup`, `SidebarGroupLabel`, `SidebarGroupAction`, `SidebarGroupContent`, `SidebarMenu`, `SidebarMenuItem`, `SidebarMenuButton`, `SidebarMenuAction`, `SidebarMenuBadge`, `SidebarMenuSub`, `SidebarRail`, `SidebarTrigger`, and `SidebarInset`.
 - Complete adherence to `DESIGN.md` and `.agents/rules/theme-standards.md`: dark/light surface tokens, 1px neutral hairline dividers, unboxed 6px luminous status dots, zero capsule pill badges, and accessible tooltips.
-- An interactive UI showroom showcase in `apps/showroom` demonstrating an authentic FBUploadPro workspace navigation tree with live switching between expanded and icon modes.
+- Clean composable architecture demonstrating an authentic FBUploadPro workspace navigation tree with live switching between expanded and icon modes.
 
 ---
 
@@ -29,7 +29,7 @@ The sidebar provides:
 ### Session 2026-10-09
 - Q: How should the sidebar handle collapsed states and responsive mobile behavior? → A: Full Shadcn spec: Collapses to an icon rail on desktop, slides out as an off-canvas drawer with backdrop on mobile, and supports keyboard shortcut (Cmd/Ctrl+B).
 - Q: How should sidebar expanded/collapsed state be persisted across page navigations and reloads? → A: Cookie persistence (`sidebar_state`) with client fallback to prevent SSR layout shifts in Next.js 16 App Router.
-- Q: What navigation hierarchy and variants would you like showcased in the UI showroom? → A: Complete FBUploadPro Workspace mock: Workspace/Account header switcher, categorized navigation groups (Core Publishing, Assets, Analytics, Settings), unboxed status indicator, and user account footer.
+- Q: What navigation hierarchy and variants would you like showcased? → A: Complete FBUploadPro Workspace navigation: Workspace/Account header switcher, categorized navigation groups (Core Publishing, Assets, Analytics, Settings), unboxed status indicator, and user account footer.
 
 ---
 
@@ -93,20 +93,20 @@ As a frontend developer and product creator, I want a rich set of modular sideba
 
 ---
 
-### User Story 4 - UI Showroom Interactive Verification Harness (Priority: P4)
+### User Story 4 - Pure Component Primitives & Layout Cleanliness (Priority: P4)
 
-As a developer and stakeholder, I want to interactively inspect all states of the sidebar component in `apps/showroom` on port 3001, so that visual fidelity, theme compliance, responsiveness, and interaction mechanics can be evaluated before merging.
+As a developer, I want pure unpopulated sidebar primitives free of placeholder clutter, so that application views can mount custom navigation hierarchies cleanly.
 
-**Why this priority**: Enforces the pre-merge UI showroom rule, giving stakeholders an interactive environment to test both light and dark modes, variants, and mobile drawer transitions.
+**Why this priority**: Enforces component cleanliness, keeping reusable components pure and production-ready for user-defined content.
 
 **Independent Test**:
-- Open the showroom page at `/` (or `/sidebar`).
+- Mount sidebar primitives in test layouts.
 - Interactively toggle desktop collapse, mobile drawer, variants (standard vs. inset), and verify zero styling regressions or hardcoded color leaks.
 
 **Acceptance Scenarios**:
-1. **Given** the showroom running on port 3001, **When** visiting the sidebar preview, **Then** a full FBUploadPro workspace layout is displayed with authentic navigation sections (Publishing, Assets, Analytics, Settings).
-2. **Given** interactive controls in the showroom, **When** switching theme modes (dark vs. light), **Then** all surfaces, borders, and active highlights cleanly adapt using `apps/web/src/lib/theme.ts` tokens.
-3. **Given** the showroom page, **When** the collapse toggle is activated, **Then** the sidebar animates smoothly between expanded and collapsed icon states.
+1. **Given** pure sidebar primitives, **When** mounted in application layouts, **Then** all navigation sections adapt seamlessly.
+2. **Given** theme modes (dark vs. light), **Then** all surfaces, borders, and active highlights cleanly adapt using `apps/web/src/lib/theme.ts` tokens.
+3. **Given** the sidebar, **When** the collapse toggle is activated, **Then** the sidebar animates smoothly between expanded and collapsed icon states.
 
 ---
 
@@ -138,7 +138,7 @@ As a developer and stakeholder, I want to interactively inspect all states of th
 - **FR-012**: System MUST provide `SidebarRail` edge toggle bar and `SidebarTrigger` button.
 - **FR-013**: System MUST export all sidebar primitives from `@fbuploadpro/web` UI barrel (`apps/web/src/components/ui/index.ts`).
 - **FR-014**: All sidebar components MUST strictly reference visual styling tokens from `apps/web/src/lib/theme.ts` or CSS variables. ZERO ad-hoc hex literals, ZERO arbitrary border widths, and ZERO capsule pill badges.
-- **FR-015**: Showroom harness in `apps/showroom` MUST present an interactive mock workspace with authentic navigation and theme switching.
+- **FR-015**: Sidebar suite MUST provide clean unpopulated primitives free of mock data for user-defined content.
 
 ---
 
@@ -150,7 +150,7 @@ As a developer and stakeholder, I want to interactively inspect all states of th
 - **SC-002**: Zero layout flash during SSR: sidebar hydration respects `sidebar_state` cookie without visual layout shifts (CLS < 0.05).
 - **SC-003**: 100% automated test coverage for core interactions: unit/integration test suite covering provider context, toggle trigger, shortcut, collapse mode, and mobile drawer.
 - **SC-004**: 100% theme compliance: 0 hardcoded hex color literals outside `theme.ts`, verified by code audit and quality gate.
-- **SC-005**: Showroom harness runs cleanly on port 3001 showcasing all states.
+- **SC-005**: All component tests pass cleanly with zero lint errors or hardcoded style regressions.
 
 ---
 

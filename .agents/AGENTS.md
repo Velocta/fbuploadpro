@@ -143,8 +143,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
   - All frontend code and theme configurations in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` must strictly conform to `DESIGN.md` without modifying the root design specification document itself.
   - Only the human project lead may directly alter or update `DESIGN.md`.
 - **Post-PR Vercel Preview Link Protocol**:
-  - UI previews are validated directly via Vercel Preview Deployments generated automatically for every Pull Request.
-  - The standalone showroom application (`apps/showroom`) and Cloudflare tunnels are decommissioned. All UI components are verified directly within `apps/web`.
+  - UI previews are validated directly via Vercel Preview Deployments generated automatically for every Pull Request. All UI components are verified directly within `apps/web`.
   - When a Pull Request is opened or updated, the agent MUST only surface and present the live Vercel preview deployment URL if the PR includes UI changes (e.g. pages, layouts, styles, components in `apps/web`) for interactive user inspection and review prior to requesting merge approval. For non-UI PRs (pure backend, database migrations, devops, or documentation), do not show a preview link.
 - **Prohibition on Running Migrations via Supabase MCP (`apply_migration` / `execute_sql`)**:
   - AI agents and automated tools MUST NEVER use the Supabase MCP server or direct ad-hoc SQL execution tools (`apply_migration`, `execute_sql`, etc.) to run, apply, or execute database schema migrations on the remote database.

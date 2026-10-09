@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "now i want to create reuseable components create a spec on which ones to create", constrained to fundamental, essential web application components ("dont think interms of our project only make ones that are essential to a webapp for now") located in `apps/web/src/components/ui/` with preview harnesses in `apps/showroom`.
+**Input**: User description: "now i want to create reuseable components create a spec on which ones to create", constrained to fundamental, essential web application components ("dont think interms of our project only make ones that are essential to a webapp for now") located in `apps/web/src/components/ui/`.
 
 ---
 
@@ -96,18 +96,18 @@ As a user waiting for data to load or monitoring operational statuses, I want un
 
 ---
 
-### User Story 5 - Interactive Showroom Showcase (Priority: P3)
+### User Story 5 - Reusable Component Suite Integration & Theme Testing (Priority: P3)
 
-As a designer, QA engineer, or developer, I want an isolated visual showroom harness for all reusable components so that I can interactively inspect, stress-test, and verify every component variant across both dark and light themes before merging into production.
+As a designer, QA engineer, or developer, I want all reusable components to adapt seamlessly across both dark and light themes so that they can be used across application interfaces with consistent visual fidelity.
 
-**Why this priority**: Guarantees visual regression prevention and ensures that mock harnesses remain strictly isolated in `apps/showroom` rather than polluting `apps/web`.
+**Why this priority**: Guarantees visual regression prevention and ensures that all components respect theme contracts without visual defects.
 
-**Independent Test**: Can be verified by running the showroom application, navigating through the reusable component catalogue, switching between dark and light modes, and verifying all interaction states.
+**Independent Test**: Can be verified by running automated component tests across dark and light modes, and verifying all interaction states.
 
 **Acceptance Scenarios**:
 
-1. **Given** the showroom running on port 3001, **When** visiting the component suite section, **Then** all essential components are rendered with interactive state toggles (default, hover, active, loading, disabled, error).
-2. **Given** theme controls in the showroom, **When** switching between Dark and Light mode, **Then** all components cleanly invert surfaces, text contrast, and hairlines according to the design system specification without flickering or contrast degradation.
+1. **Given** essential UI components, **When** rendered in test benches, **Then** all essential components support interactive state toggles (default, hover, active, loading, disabled, error).
+2. **Given** theme tokens, **When** switching between Dark and Light mode, **Then** all components cleanly invert surfaces, text contrast, and hairlines according to the design system specification without flickering or contrast degradation.
 
 ---
 
@@ -141,7 +141,7 @@ As a designer, QA engineer, or developer, I want an isolated visual showroom har
 - **FR-014**: System MUST provide an `Alert` callout banner component supporting `info`, `success`, `warning`, and `error` severities with matching semantic boundary accents.
 - **FR-015**: System MUST provide a lightweight floating `Tooltip` component supporting hover and keyboard focus triggers with accessible `role="tooltip"`.
 - **FR-016**: All components MUST consume theme tokens and CSS variables strictly from the centralized design system (`apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`), with zero hardcoded ad-hoc hex codes or styles.
-- **FR-017**: All components MUST reside under `apps/web/src/components/ui/` and be mirrored with interactive preview harnesses in `apps/showroom`.
+- **FR-017**: All components MUST reside under `apps/web/src/components/ui/` with full TypeScript types and test coverage.
 
 ---
 
@@ -168,7 +168,7 @@ As a designer, QA engineer, or developer, I want an isolated visual showroom har
 - **SC-002**: 100% of interactive controls (Button, Input, Checkbox, Switch, Tabs, Dialog) pass automated accessibility audits (axe-core / WAI-ARIA) with 0 violations.
 - **SC-003**: Primary button text contrast exceeds 14.0:1 in both dark and light modes, satisfying WCAG AAA standards.
 - **SC-004**: Loading placeholder skeletons render instantaneously with 0.00 Cumulative Layout Shift (CLS) when replaced by real content.
-- **SC-005**: All component preview benches in `apps/showroom` render interactively with zero mock code or test fixtures introduced into `apps/web`.
+- **SC-005**: All component test suites execute cleanly with zero test failures across all component states.
 - **SC-006**: 100% quality gate pass across the monorepo (`pnpm turbo run build lint typecheck test`) with zero TypeScript errors and zero linter warnings.
 
 ---
@@ -178,4 +178,3 @@ As a designer, QA engineer, or developer, I want an isolated visual showroom har
 - Components are built for React 19 and Next.js 16 App Router using modern functional component standards (zero `set-state-in-effect`).
 - Styling leverages native CSS custom properties defined in `apps/web/src/app/globals.css` and token constants in `apps/web/src/lib/theme.ts`.
 - No external heavy component libraries (such as MUI or Chakra) will be added; components are lightweight, dependency-free React 19 primitives with accessible native semantics.
-- All mock data and showroom display harnesses reside exclusively in `apps/showroom` on port 3001.

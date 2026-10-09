@@ -8,7 +8,7 @@
 
 ## Summary
 
-Deliver a comprehensive suite of accessible, high-craft, lightweight React 19 UI component primitives for the web application (`apps/web/src/components/ui/`), styled strictly with the **Binance Precision Dual-Theme** (`apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`). The components cover all universal web app interactions (Buttons, Inputs, Textareas, Checkboxes, Switches, Selects, Cards, Dialogs/Modals, Tabs, Tables, StatusDots, Tags, Skeletons, Alerts, Tooltips) and are mirrored with interactive testing benches in `apps/showroom` (port 3001) for visual regression verification.
+Deliver a comprehensive suite of accessible, high-craft, lightweight React 19 UI component primitives for the web application (`apps/web/src/components/ui/`), styled strictly with the **Binance Precision Dual-Theme** (`apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`). The components cover all universal web app interactions (Buttons, Inputs, Textareas, Checkboxes, Switches, Selects, Cards, Dialogs/Modals, Tabs, Tables, StatusDots, Tags, Skeletons, Alerts, Tooltips) and are tested with thorough unit and accessibility test suites.
 
 ---
 
@@ -19,10 +19,10 @@ Deliver a comprehensive suite of accessible, high-craft, lightweight React 19 UI
 **Storage**: N/A (Client UI component layer)  
 **Testing**: Vitest (`apps/web/tests/components/`)  
 **Target Platform**: Evergreen Web Browsers (Chromium, Firefox, Safari)  
-**Project Type**: Reusable UI component library (`apps/web/src/components/ui/`) + Visual Sandbox (`apps/showroom`)  
+**Project Type**: Reusable UI component library (`apps/web/src/components/ui/`)  
 **Performance Goals**: 60fps animations, 0.00 Cumulative Layout Shift (CLS), instantaneous theme switching  
 **Constraints**: Zero external heavyweight UI libraries (pure native React 19 + ARIA), WCAG AAA button contrast ($\ge 14:1$), 100% theme token compliance via `theme.ts` & `globals.css` (zero ad-hoc hex codes, zero capsule pill badges)  
-**Scale/Scope**: 15 atomic UI components, 6 showroom preview testbenches  
+**Scale/Scope**: 15 atomic UI components  
 
 ---
 
@@ -36,7 +36,7 @@ Deliver a comprehensive suite of accessible, high-craft, lightweight React 19 UI
 - [X] **IV. Zero-Trust Boundary Validation**: Strict TypeScript prop typing and HTML form constraints.
 - [X] **V. Atomic PRs & Git Hygiene**: Tasks partitioned into small, atomic PR slices (<150–200 LoC).
 - [X] **VIII. Theme Token Authority (`apps/web/src/lib/theme.ts`)**: 100% of styles derived from `theme.ts` and CSS variables in `globals.css`. Strict unboxed 6px luminous status dots with micro-halos; zero capsule pill badges; `DESIGN.md` remains strictly untouched.
-- [X] **Pre-Merge UI Showroom**: Component preview harnesses isolated strictly in `apps/showroom` on port 3001 with zero mock code in `apps/web`.
+- [X] **Pure Primitives**: Component primitives isolated with zero mock code in `apps/web`.
 - [X] **Mandatory Human Approval Gate**: Direct merge to `main` requires explicit human approval.
 
 ---
@@ -51,7 +51,7 @@ specs/008-reusable-ui-components/
 ├── plan.md              # Architectural blueprint
 ├── research.md          # Technical research & decisions
 ├── data-model.md        # Prop models & TypeScript interfaces
-├── quickstart.md        # Showroom & test verification guide
+├── quickstart.md        # Test verification guide
 ├── checklists/
 │   └── requirements.md  # Specification quality checklist
 ├── contracts/
@@ -87,14 +87,6 @@ apps/web/tests/components/
 ├── tabs.test.tsx
 ├── status-dot.test.tsx
 └── accessibility.test.tsx
-
-apps/showroom/src/app/
-├── components/
-│   ├── form-controls-showcase.tsx
-│   ├── surfaces-showcase.tsx
-│   ├── navigation-showcase.tsx
-│   └── feedback-showcase.tsx
-└── page.tsx             # Updated showroom dashboard with component suite
 ```
 
 ---

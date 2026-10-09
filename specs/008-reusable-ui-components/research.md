@@ -57,9 +57,9 @@
 
 ---
 
-### Decision 5: Showroom Verification & Zero Mock Leakage
+### Decision 5: Component Verification & Zero Mock Leakage
 
-* **Decision**: Keep `apps/web` 100% production-pure. All mock data, state toggles, and interactive test benches for the UI components reside in `apps/showroom` (port 3001).
+* **Decision**: Keep `apps/web` 100% production-pure. Mock data and placeholder components must never contaminate production component libraries.
 * **Rationale**:
-  - Constitution Pre-Merge UI Showroom rule mandates zero mock code contaminating `apps/web`.
-  - Showroom provides isolated interactive harness for mobile/desktop viewports, dark/light themes, and edge cases.
+  - Codebase governance mandates zero mock code contaminating production packages.
+  - Test suites provide isolated verification harnesses for viewports, dark/light themes, and edge cases.

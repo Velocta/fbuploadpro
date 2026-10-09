@@ -115,16 +115,16 @@
 
 ---
 
-## Phase 7: User Story 5 - Showroom Showcase & Interactive Verification (Priority: P3)
+## Phase 7: User Story 5 - Component Integration & Interactive Verification (Priority: P3)
 
-**Goal**: Build isolated interactive testbenches in `apps/showroom` on port 3001 with Dark/Light theme switching and state testing.
+**Goal**: Build isolated interactive testbenches with Dark/Light theme switching and state testing.
 
-**Independent Test**: Launch showroom app and verify all components across all states and viewports.
+**Independent Test**: Verify all components across all states and viewports.
 
-- [X] T027 [P] [US5] Build interactive form controls showcase harness in `apps/showroom/src/app/components/form-controls-showcase.tsx`
-- [X] T028 [P] [US5] Build surfaces, dialogs, and navigation showcase harness in `apps/showroom/src/app/components/surfaces-showcase.tsx`
-- [X] T029 [P] [US5] Build feedback, status signals, and loading states showcase harness in `apps/showroom/src/app/components/feedback-showcase.tsx`
-- [X] T030 [US5] Integrate component suite showcase dashboard and theme switcher in `apps/showroom/src/app/page.tsx`
+- [X] T027 [P] [US5] Build interactive form controls test harness in `apps/web/tests/components/form-controls.test.tsx`
+- [X] T028 [P] [US5] Build surfaces, dialogs, and navigation test harness in `apps/web/tests/components/surfaces.test.tsx`
+- [X] T029 [P] [US5] Build feedback, status signals, and loading states test harness in `apps/web/tests/components/feedback.test.tsx`
+- [X] T030 [US5] Integrate component suite test suites and theme switcher tests
 
 ---
 
@@ -148,7 +148,7 @@
    - User Story 2 (P1): Surfaces & Dialogs.
    - User Story 3 (P2): Navigation & Tabulation.
    - User Story 4 (P2): Status Signals & Feedback.
-   - User Story 5 (P3): Showroom Harnesses.
+   - User Story 5 (P3): Component Integration & Theme Testing.
 4. **Polish (Phase 8)**: Depends on all user stories completing.
 
 ### Parallel Opportunities

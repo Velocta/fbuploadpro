@@ -6,13 +6,13 @@
 
 ## 1. Summary
 
-This plan details the implementation of a modular, accessible, Shadcn-compatible Sidebar component suite in `@fbuploadpro/web` (`apps/web/src/components/ui/sidebar.tsx`), fully integrated with canonical theme tokens (`apps/web/src/lib/theme.ts`) and tested in the UI Showroom (`apps/showroom`).
+This plan details the implementation of a modular, accessible, Shadcn-compatible Sidebar component suite in `@fbuploadpro/web` (`apps/web/src/components/ui/sidebar.tsx`), fully integrated with canonical theme tokens (`apps/web/src/lib/theme.ts`).
 
 Key capabilities:
 1. `SidebarProvider` managing expanded/collapsed state, mobile sheet visibility, `isMobile` media query, `sidebar_state` cookie persistence, and `Cmd+B` / `Ctrl+B` keyboard toggle.
 2. `Sidebar` supporting collapsible icon rail (`48px` width) on desktop and slide-over overlay drawer on mobile viewports.
 3. Full primitive ecosystem: Header, Content, Footer, Inset, Groups, Menus, Actions, Badges, Submenus, Rail, and Trigger.
-4. UI Showroom interactive mock in `apps/showroom` showcasing an authentic FBUploadPro navigation hierarchy with theme switching.
+4. Pure unpopulated primitives free of placeholder clutter for user-defined content.
 
 ---
 
@@ -20,7 +20,6 @@ Key capabilities:
 
 - **Framework**: Next.js 16 (App Router) + React 19 (`apps/web`). Event-driven state updates, zero `set-state-in-effect`.
 - **Theme Authority**: `apps/web/src/lib/theme.ts` & `apps/web/src/app/globals.css`. Strict adherence to 8-color palette, 1px neutral hairlines (`#1f242d`), unboxed 6px luminous dots (`STATUS_SIGNALS`), and zero capsule pills.
-- **Showroom Isolation**: Showroom previews reside strictly in `apps/showroom` (zero mock code inside `apps/web`).
 - **Testing**: Vitest + React Testing Library (`apps/web/tests/ui/sidebar.test.tsx`).
 - **Quality Gate**: `pnpm turbo run build lint typecheck test` must pass 100% with zero errors.
 
@@ -40,13 +39,6 @@ apps/web/
 └── tests/
     └── ui/
         └── sidebar.test.tsx            # Unit & interaction tests for sidebar suite
-
-apps/showroom/
-└── src/
-    └── app/
-        ├── page.tsx                    # Updated showroom home with navigation to /sidebar
-        └── sidebar/
-            └── page.tsx                # Interactive FBUploadPro workspace showcase
 ```
 
 ---
@@ -112,19 +104,12 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 
 ---
 
-## 5. UI Showroom Implementation
+## 5. Component Primitives and Theme Verification
 
-Create `apps/showroom/src/app/sidebar/page.tsx`:
-- Authentic FBUploadPro Workspace Layout:
-  - Header: Team Workspace switcher ("Vinsmoke Media" with unboxed 6px luminous operational dot).
-  - Group 1 (Publishing): Dashboard, Facebook Pages, Media Library, Queue / Schedule.
-  - Group 2 (Analytics): Performance Insights, Audience Reports.
-  - Group 3 (Settings): Page Connections, API Tokens, Preferences.
-  - Footer: User profile card ("Alex Vinsmoke", Account Settings, Sign Out).
-- Interactive Showroom Controls:
-  - Toggle desktop/mobile preview.
-  - Toggle standard vs. inset variant.
-  - Dark / Light theme mode switcher.
+Verify pure unpopulated primitives in `apps/web/src/components/ui/sidebar.tsx`:
+- Header, content, footer, rail, and group primitives mount cleanly.
+- Dark / Light theme tokens adapt using canonical `apps/web/src/lib/theme.ts`.
+- Zero placeholder mock data polluting reusable component libraries.
 
 ---
 
