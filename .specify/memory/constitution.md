@@ -31,7 +31,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
 
 1. **Package Management & Tooling**: `pnpm` workspaces configured with Turborepo (`turbo.json`) for pipeline orchestration and task caching.
 2. **TypeScript Standards**: TypeScript in strict mode across all packages and applications (`"strict": true`, `"noImplicitAny": true`, `"exactOptionalPropertyTypes": true`). No unchecked type coercions (`any`).
-3. **Database & Authentication (Supabase)**: PostgreSQL substrate powered by Supabase with forward SQL migrations, connection pooling (PgBouncer/transaction pooler for edge runtimes, direct port 5432 for schema DDL), and Supabase Auth integration.
+3. **Database & Authentication (Supabase)**: PostgreSQL substrate powered by Supabase with forward SQL migrations maintained under `/supabase/migrations/` using the Supabase GitHub Integration standard (`YYYYMMDDHHmmss_<name>.sql`), connection pooling (PgBouncer/transaction pooler for edge runtimes, direct port 5432 for schema DDL), and Supabase Auth integration.
 4. **Web Application Hosting (Vercel)**: Next.js 16 App Router using React 19 standards hosted on Vercel, adhering strictly to event-driven state transitions (prohibiting `react-hooks/set-state-in-effect`).
 5. **Edge Execution & Media Storage (Cloudflare)**:
    - **Workers**: Cloudflare Workers edge runtime (`apps/worker`) executing high-throughput scheduling and Facebook publishing dispatchers.
