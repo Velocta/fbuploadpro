@@ -122,6 +122,12 @@ export default function ForgotPasswordPage() {
               fontSize: '0.8125rem',
               cursor: 'pointer',
               textAlign: 'center',
+              padding: '10px 12px',
+              minHeight: '44px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
             }}
           >
             Try a different email address
@@ -133,6 +139,7 @@ export default function ForgotPasswordPage() {
             label="Email Address"
             type="email"
             placeholder="you@gmail.com"
+            autoComplete="email"
             value={email}
             error={emailError}
             onChange={(e) => {

@@ -1,11 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 2.4.0 -> 2.5.0 (MINOR: Added Inline Form Validation, Error Hygiene & Authentication Form Craft governance)
+- Version change: 2.5.0 -> 2.6.0 (MINOR: Added Section 12 on Authentication Redirects, Password Recovery Integrity, and Credential Memory Zero-Retention)
 - List of modified principles:
-  - Technology & Architectural Constraints: Added Section 11 establishing inline field error validation, prohibition of disruptive modal/alert boxes for field errors, hybrid real-time error clearing, elimination of password strength meters, and full mapping of Zod validation details to field-specific UI states.
+  - Technology & Architectural Constraints: Added Section 12 establishing strict relative-path open redirect prevention, cryptographic password reset token verification, zero-retention pre-hashing for OTP staging, and session synchronization/invalidation.
 - Added/Modified sections:
-  - Section 11: Inline Form Validation, Non-Intrusive Error States, and Edge-Case Input Hygiene.
-- Follow-up TODOs: Implement spec 016 for auth UX refinement.
+  - Section 12: Defense-in-Depth Authentication Redirects, Password Recovery Integrity, and Credential Memory Zero-Retention.
+- Follow-up TODOs: Implement spec 017 for complete audit remediation.
 -->
 
 # FBUploadPro Constitution
@@ -56,6 +56,12 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Elimination of Password Strength Meters**: Unnecessary or noisy password strength meters that add visual clutter must not be rendered on authentication forms; password requirements (e.g. minimum 8 characters) must be conveyed cleanly via static helper text and inline validation.
     - **Client-Side E.164 Phone Validation via `libphonenumber-js`**: Phone input fields must validate international calling codes and numeric length directly on the client using `libphonenumber-js` to provide immediate, specific feedback before submission.
 
+12. **Defense-in-Depth Authentication Redirects, Password Recovery Integrity, and Credential Memory Zero-Retention**:
+    - **Open Redirect Elimination**: Post-authentication and post-registration redirects via `returnUrl` MUST strictly be relative paths (`returnUrl.startsWith('/') && !returnUrl.startsWith('//')`) or strictly verified authorized tenant domains (`new URL(returnUrl).hostname === \`${subdomain}.${rootDomain}\``). Loose substring checks (such as `includes(user.subdomain)`) are permanently forbidden.
+    - **Cryptographic Password Reset Token Verification**: Password reset operations MUST cryptographically bind and verify the recovery token on both client and server before applying credential mutations. Arbitrary password override endpoints without token verification are strictly prohibited. When a reset token is missing, invalid, or expired, the user interface MUST display an explicit invalid/expired state rather than rendering an active password input form.
+    - **Credential Memory Zero-Retention**: Plaintext passwords MUST NEVER be stored in server-side heap memory or session/staging caches during multi-step registration or OTP verification flows. Passwords must be pre-hashed immediately upon arrival before staging.
+    - **Session Lifecycle & Invalidation**: Session tokens and cookie lifespans MUST be synchronized (30 days). Successful password updates MUST invalidate pre-existing active sessions to prevent persistent unauthorized access.
+
 ## Development Workflow & Quality Gates
 
 1. **Ideation & Governance**: Broad proposals and milestone announcements begin in GitHub Discussions.
@@ -77,4 +83,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.5.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.6.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

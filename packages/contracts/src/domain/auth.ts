@@ -191,11 +191,20 @@ export type SignupRequest = z.infer<typeof SignupRequestSchema>;
 
 export const LoginRequestSchema = z.object({
   email: GmailSchema,
-  password: z.string().min(1, 'Password is required'),
+  password: z.string().min(1, 'Password is required').max(128, 'Password cannot exceed 128 characters'),
   returnUrl: z.string().optional(),
 });
 
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+
+export const ResetPasswordRequestSchema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters long').max(128, 'Password cannot exceed 128 characters'),
+  token: z.string().optional(),
+  code: z.string().optional(),
+  email: z.string().optional(),
+});
+
+export type ResetPasswordRequest = z.infer<typeof ResetPasswordRequestSchema>;
 
 export const AuthSuccessResponseSchema = z.object({
   success: z.literal(true),

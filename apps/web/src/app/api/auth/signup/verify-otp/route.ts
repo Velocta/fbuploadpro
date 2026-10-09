@@ -5,6 +5,7 @@ import { registerTenantUser, getCookieDomain } from '@/lib/supabase-auth';
 import { verifySignupOtp } from '@/lib/otp-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,19 +70,8 @@ export async function POST(request: NextRequest) {
       verification.signupData
     );
 
-    // Deep-link preservation
-    let finalRedirectUrl = defaultRedirectUrl;
-    if (returnUrl && typeof returnUrl === 'string') {
-      const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-      const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
-      const protocol = isLocal ? 'http' : 'https';
-
-      if (returnUrl.startsWith('/')) {
-        finalRedirectUrl = `${protocol}://${user.subdomain}.${rootDomain}${returnUrl}`;
-      } else if (returnUrl.includes(user.subdomain)) {
-        finalRedirectUrl = returnUrl;
-      }
-    }
+    // Deep-link preservation with strict open redirect defense
+    const finalRedirectUrl = sanitizeAuthRedirectUrl(returnUrl, user.subdomain);
 
     const response = NextResponse.json(
       {

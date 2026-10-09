@@ -9,10 +9,12 @@ import {
   type UserStatus,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
+import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 
 // In-memory credential store for test/CI fallback when Supabase external cluster is not configured
 const localPasswordStore = new Map<string, string>();
 const localUserStore = new Map<string, AuthUser>();
+const localResetTokenStore = new Map<string, { email: string; expiresAt: number }>();
 
 export function getSupabaseClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -116,6 +118,7 @@ export interface AuthUser {
   subdomain: string;
   role: UserRole;
   status: UserStatus;
+  passwordUpdatedAt?: number | undefined;
 }
 
 /**
@@ -224,7 +227,8 @@ export async function registerTenantUser(params: {
   name: string;
   phone: string;
   email: string;
-  password: string;
+  password?: string | undefined;
+  hashedPassword?: string | undefined;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
   let canonicalEmail: string;
   try {
@@ -253,11 +257,12 @@ export async function registerTenantUser(params: {
   let userId: string;
   let userRecord: AuthUser;
   const supabase = getSupabaseClient();
+  const rawOrHashedPassword = params.hashedPassword || params.password || '';
 
   if (supabase) {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: canonicalEmail,
-      password: params.password,
+      password: rawOrHashedPassword,
       options: {
         data: {
           name: params.name,
@@ -331,7 +336,9 @@ export async function registerTenantUser(params: {
     }
   } else {
     userId = crypto.randomUUID();
-    const hashed = await hashPassword(params.password);
+    const hashed = rawOrHashedPassword.includes(':')
+      ? rawOrHashedPassword
+      : await hashPassword(rawOrHashedPassword);
     localPasswordStore.set(canonicalEmail, hashed);
 
     userRecord = {
@@ -376,7 +383,8 @@ export async function registerTenantUser(params: {
       role: userRecord.role,
       status: userRecord.status,
     },
-    sessionSecret
+    sessionSecret,
+    86400 * 30 // 30 days matching fbup_session cookie maxAge
   );
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
@@ -461,19 +469,12 @@ export async function loginTenantUser(params: {
       role: user.role,
       status: user.status,
     },
-    sessionSecret
+    sessionSecret,
+    86400 * 30 // 30 days matching fbup_session cookie maxAge
   );
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
-  const protocol = isLocal ? 'http' : 'https';
-
-  let redirectUrl = `${protocol}://${user.subdomain}.${rootDomain}/dashboard`;
-  if (params.returnUrl && params.returnUrl.startsWith('/')) {
-    redirectUrl = `${protocol}://${user.subdomain}.${rootDomain}${params.returnUrl}`;
-  } else if (params.returnUrl && params.returnUrl.includes(user.subdomain)) {
-    redirectUrl = params.returnUrl;
-  }
+  const redirectUrl = sanitizeAuthRedirectUrl(params.returnUrl, user.subdomain, rootDomain);
 
   return {
     user,
@@ -485,7 +486,7 @@ export async function loginTenantUser(params: {
 export async function requestPasswordReset(params: {
   email: string;
   redirectTo?: string | undefined;
-}): Promise<{ message: string }> {
+}): Promise<{ message: string; resetToken?: string | undefined }> {
   let canonicalEmail: string;
   try {
     canonicalEmail = canonicalizeGmailAddress(params.email);
@@ -500,6 +501,13 @@ export async function requestPasswordReset(params: {
       message: 'If an account exists with this email address, a recovery link has been sent.',
     };
   }
+
+  // Generate fallback recovery token for local/test environments
+  const resetToken = crypto.randomUUID();
+  localResetTokenStore.set(resetToken, {
+    email: canonicalEmail,
+    expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour expiration
+  });
 
   const supabase = getSupabaseClient();
   if (supabase) {
@@ -516,6 +524,7 @@ export async function requestPasswordReset(params: {
 
   return {
     message: 'If an account exists with this email address, a recovery link has been sent.',
+    resetToken,
   };
 }
 
@@ -523,27 +532,97 @@ export async function resetUserPassword(params: {
   email?: string | undefined;
   password: string;
   token?: string | undefined;
+  code?: string | undefined;
 }): Promise<{ message: string }> {
-  if (params.password.length < 8) {
+  if (!params.password || typeof params.password !== 'string' || params.password.length < 8) {
     throw new Error('Password must be at least 8 characters long');
+  }
+  if (params.password.length > 128) {
+    throw new Error('Password cannot exceed 128 characters');
+  }
+
+  const recoveryToken = params.token || params.code;
+  if (!recoveryToken || typeof recoveryToken !== 'string' || !recoveryToken.trim()) {
+    throw new Error('A valid password reset link or token is required.');
   }
 
   const supabase = getSupabaseClient();
   if (supabase) {
-    const { error } = await supabase.auth.updateUser({
-      password: params.password,
-    });
-    if (error) {
-      console.error('[Supabase Auth] updateUser error:', error.message);
-      throw new Error(error.message);
+    if (params.code) {
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
+      if (exchangeError || !data?.session) {
+        throw new Error('Invalid or expired password reset link.');
+      }
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: params.password,
+      });
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+    } else {
+      const { error } = await supabase.auth.updateUser({
+        password: params.password,
+      });
+      if (error) {
+        throw new Error(error.message);
+      }
     }
-  } else if (params.email) {
-    const emailLower = params.email.trim().toLowerCase();
+  } else {
+    // Local / test fallback store
+    let targetEmail: string | null = null;
+    const tokenKey = recoveryToken.trim();
+    const tokenEntry = localResetTokenStore.get(tokenKey);
+
+    if (tokenEntry) {
+      if (Date.now() > tokenEntry.expiresAt) {
+        localResetTokenStore.delete(tokenKey);
+        throw new Error('Password reset link has expired. Please request a new link.');
+      }
+      targetEmail = tokenEntry.email;
+      // Single-use token invalidation
+      localResetTokenStore.delete(tokenKey);
+    } else {
+      throw new Error('Invalid or expired password reset link.');
+    }
+
+    if (!targetEmail) {
+      throw new Error('Invalid or expired password reset link.');
+    }
+
     const hashed = await hashPassword(params.password);
-    localPasswordStore.set(emailLower, hashed);
+    localPasswordStore.set(targetEmail, hashed);
+
+    // Invalidate existing sessions by updating passwordUpdatedAt
+    const user = localUserStore.get(targetEmail);
+    if (user) {
+      user.passwordUpdatedAt = Math.floor(Date.now() / 1000);
+    }
   }
 
   return {
     message: 'Your password has been successfully updated.',
   };
+}
+
+export function _resetAuthStores(): void {
+  localPasswordStore.clear();
+  localUserStore.clear();
+  localResetTokenStore.clear();
+}
+
+export function _setResetTokenForTesting(
+  token: string,
+  data: { email: string; expiresAt: number }
+): void {
+  localResetTokenStore.set(token, data);
+}
+
+export async function validateSessionActive(session: SessionPayload): Promise<boolean> {
+  const user = await findUserByEmail(session.email);
+  if (!user) return false;
+  if (user.status !== 'active') return false;
+  if (user.passwordUpdatedAt && session.iat < user.passwordUpdatedAt) {
+    return false;
+  }
+  return true;
 }

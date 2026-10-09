@@ -92,6 +92,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         .fbu-input-field:hover:not(:disabled):not(:focus) {
           border-color: var(--border-strong);
         }
+        .fbu-password-toggle:focus-visible {
+          outline: 2px solid var(--primary) !important;
+          outline-offset: 2px !important;
+        }
       `}</style>
       <div
         className={containerClassName}
@@ -170,6 +174,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
               onClick={() => setShowPassword((prev) => !prev)}
               disabled={disabled}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="fbu-password-toggle"
               style={{
                 position: 'absolute',
                 right: SPACING.sm,

@@ -8,6 +8,7 @@ import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
+import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 
 interface FieldErrors {
   email?: string | undefined;
@@ -27,7 +28,7 @@ export default function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const ret = params.get('returnUrl');
       if (ret) {
-        setReturnUrl(ret);
+        setReturnUrl(sanitizeAuthRedirectUrl(ret));
       }
     }
   }, []);
@@ -114,7 +115,7 @@ export default function LoginPage() {
       }
 
       if (data.redirectUrl) {
-        window.location.href = data.redirectUrl;
+        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl);
       }
     } catch {
       setGeneralError('Unable to sign in at this moment. Please check your connection and try again.');
@@ -147,6 +148,7 @@ export default function LoginPage() {
           label="Email Address"
           type="email"
           placeholder="you@gmail.com"
+          helperText="Only @gmail.com accounts are supported"
           autoComplete="username"
           value={email}
           error={fieldErrors.email}
@@ -168,6 +170,7 @@ export default function LoginPage() {
             }}
           >
             <label
+              htmlFor="login-password"
               style={{
                 fontSize: '0.8125rem',
                 fontWeight: TYPOGRAPHY.weights.medium,
@@ -190,6 +193,7 @@ export default function LoginPage() {
             </Link>
           </div>
           <PasswordInput
+            id="login-password"
             placeholder="••••••••••••"
             autoComplete="current-password"
             value={password}

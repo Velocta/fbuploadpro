@@ -1,0 +1,77 @@
+/**
+ * Secure Post-Authentication Redirection Sanitizer (Spec 017 / AUTH-01)
+ *
+ * Enforces strict defense against open redirect vulnerabilities by ensuring
+ * that any `returnUrl` provided after login or OTP verification resolves
+ * strictly to internal application routes or the user's authorized tenant subdomain.
+ */
+
+export function sanitizeAuthRedirectUrl(
+  rawReturnUrl: string | null | undefined,
+  userSubdomain?: string | undefined,
+  rootDomain: string = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000'
+): string {
+  const cleanRoot = rootDomain.toLowerCase().split(':')[0] || 'localhost';
+  const isLocal = cleanRoot.includes('localhost') || cleanRoot.includes('127.0.0.1');
+  const protocol = isLocal ? 'http' : 'https';
+  const defaultUrl = userSubdomain
+    ? `${protocol}://${userSubdomain}.${rootDomain}/dashboard`
+    : '/dashboard';
+
+  if (!rawReturnUrl || typeof rawReturnUrl !== 'string') {
+    return defaultUrl;
+  }
+
+  const trimmed = rawReturnUrl.trim();
+  if (!trimmed) {
+    return defaultUrl;
+  }
+
+  // 1. Reject protocol-relative URLs (e.g. //evil.com) and backslashes (e.g. /\evil.com)
+  if (trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return defaultUrl;
+  }
+
+  // 2. Reject javascript:, data:, and vbscript: URIs
+  if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
+    return defaultUrl;
+  }
+
+  // 3. Relative path handling (starts with single '/')
+  if (trimmed.startsWith('/')) {
+    // Reject any relative path containing colon to avoid scheme interpretation
+    if (trimmed.includes(':')) {
+      return defaultUrl;
+    }
+    return userSubdomain
+      ? `${protocol}://${userSubdomain}.${rootDomain}${trimmed}`
+      : trimmed;
+  }
+
+  // 4. Fully-qualified URL validation
+  try {
+    const parsed = new URL(trimmed);
+    const actualHostname = parsed.hostname.toLowerCase();
+
+    // Reject non-http/https protocols
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return defaultUrl;
+    }
+
+    if (userSubdomain) {
+      const expectedHostname = `${userSubdomain}.${cleanRoot}`.toLowerCase();
+      // Must strictly match the user's specific tenant workspace host
+      if (actualHostname === expectedHostname) {
+        return trimmed;
+      }
+    } else {
+      if (actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`)) {
+        return trimmed;
+      }
+    }
+  } catch {
+    return defaultUrl;
+  }
+
+  return defaultUrl;
+}
