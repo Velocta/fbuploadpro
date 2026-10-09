@@ -1,7 +1,7 @@
-# Technical Plan: Auth Gmail Canonicalization, Phone E.164 & Hardened OTP Security (Spec 014)
+# Technical Plan: Auth Gmail Canonicalization, Phone E.164 & Hardened OTP Security (Spec 015)
 
 **Feature Branch**: `feat/014-auth-gmail-canonicalization-phone-e164-and-otp-hardening`  
-**Prerequisites**: `specs/014-auth-gmail-canonicalization-phone-e164-and-otp-hardening/spec.md`
+**Prerequisites**: `specs/015-auth-gmail-canonicalization-phone-e164-and-otp-hardening/spec.md`
 
 ---
 
