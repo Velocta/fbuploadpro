@@ -9,6 +9,7 @@ export interface AuthSplitLayoutProps {
   description: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  formPosition?: 'left' | 'right';
 }
 
 const BrandLogo = () => (
@@ -128,7 +129,195 @@ export function AuthSplitLayout({
   description,
   children,
   footer,
+  formPosition = 'left',
 }: AuthSplitLayoutProps) {
+  const isFormLeft = formPosition === 'left';
+
+  const showcaseNode = (
+    <section
+      className={`auth-showcase-panel${isFormLeft ? ' auth-showcase-right' : ''}`}
+      aria-label="FBUploadPro Showcase"
+    >
+      <div>
+        <Link
+          href="/login"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: SPACING.md,
+            textDecoration: 'none',
+            color: 'var(--text-main, #ffffff)',
+          }}
+        >
+          <BrandLogo />
+          <span
+            style={{
+              fontSize: '1.125rem',
+              fontWeight: TYPOGRAPHY.weights.bold,
+              letterSpacing: TYPOGRAPHY.tracking.h3,
+            }}
+          >
+            FBUploadPro
+          </span>
+        </Link>
+
+        <div style={{ marginTop: '48px' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: SPACING.xs,
+              padding: '4px 10px',
+              borderRadius: RADII.xs,
+              backgroundColor: 'rgba(250, 215, 52, 0.10)',
+              border: `1px solid rgba(250, 215, 52, 0.25)`,
+              fontSize: '0.75rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              color: PALETTE.primary,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              marginBottom: SPACING.md,
+            }}
+          >
+            Secure Cloud Automation
+          </div>
+
+          {/* User Mandated Headline */}
+          <h1
+            style={{
+              fontSize: '1.875rem',
+              lineHeight: 1.3,
+              fontWeight: TYPOGRAPHY.weights.heavy,
+              letterSpacing: TYPOGRAPHY.tracking.h1,
+              margin: `0 0 ${SPACING.lg} 0`,
+              color: '#ffffff',
+            }}
+          >
+            Automate Facebook and Instagram <span style={{ color: PALETTE.primary }}>100% on the cloud</span> without ever giving away your credentials, making this the most secure way of automation.
+          </h1>
+
+          {/* Feature Pillars (Zero Technical Jargon) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg, marginTop: SPACING.xl }}>
+            {VALUE_PILLARS.map((item) => (
+              <div key={item.title} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.md }}>
+                {item.icon}
+                <div>
+                  <div
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: TYPOGRAPHY.weights.semibold,
+                      color: '#ffffff',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {item.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '0.8125rem',
+                      color: 'var(--text-sub, #9ca3af)',
+                      marginTop: '3px',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {item.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Clean Trust & Security Footer */}
+      <div
+        style={{
+          paddingTop: SPACING.lg,
+          borderTop: '1px solid var(--border-subtle, #1f242d)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.75rem',
+          color: 'var(--text-dim, #6b7280)',
+        }}
+      >
+        <span>Official Meta OAuth Security</span>
+        <span>Zero Password Access</span>
+      </div>
+    </section>
+  );
+
+  const formNode = (
+    <main className="auth-form-panel">
+      <div className="auth-form-box">
+        {/* Mobile Header (rendered when screen < 1024px) */}
+        <div className="auth-mobile-header">
+          <BrandLogo />
+          <span
+            style={{
+              fontSize: '1.125rem',
+              fontWeight: TYPOGRAPHY.weights.bold,
+              letterSpacing: TYPOGRAPHY.tracking.h3,
+            }}
+          >
+            FBUploadPro
+          </span>
+        </div>
+
+        {/* Auth Card Container */}
+        <div
+          style={{
+            backgroundColor: 'var(--bg-panel, #0b0e14)',
+            border: '1px solid var(--border-subtle, #1f242d)',
+            borderRadius: RADII.md,
+            padding: '32px 28px',
+            boxSizing: 'border-box',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+          }}
+        >
+          <div style={{ marginBottom: SPACING.xl }}>
+            <h2
+              style={{
+                fontSize: '1.5rem',
+                fontWeight: TYPOGRAPHY.weights.bold,
+                letterSpacing: TYPOGRAPHY.tracking.h2,
+                margin: `0 0 ${SPACING.xs} 0`,
+                color: 'var(--text-main, #ffffff)',
+              }}
+            >
+              {title}
+            </h2>
+            <p
+              style={{
+                fontSize: '0.875rem',
+                color: 'var(--text-sub, #9ca3af)',
+                margin: 0,
+                lineHeight: 1.5,
+              }}
+            >
+              {description}
+            </p>
+          </div>
+
+          {children}
+
+          {footer && (
+            <div
+              style={{
+                marginTop: SPACING.xl,
+                paddingTop: SPACING.lg,
+                borderTop: '1px solid var(--border-subtle, #1f242d)',
+                textAlign: 'center',
+              }}
+            >
+              {footer}
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+
   return (
     <>
       <style>{`
@@ -152,6 +341,11 @@ export function AuthSplitLayout({
           border-right: 1px solid var(--border-subtle, #1f242d);
           box-sizing: border-box;
           position: relative;
+        }
+        .auth-showcase-panel.auth-showcase-right {
+          border-right: none;
+          border-left: 1px solid var(--border-subtle, #1f242d);
+          background: radial-gradient(circle at 82% 22%, rgba(250, 215, 52, 0.08) 0%, transparent 60%), #000000;
         }
         .auth-form-panel {
           flex: 1 1 50%;
@@ -193,185 +387,17 @@ export function AuthSplitLayout({
       `}</style>
 
       <div className="auth-split-wrapper">
-        {/* Left Column: Brand & Security Showcase */}
-        <section className="auth-showcase-panel" aria-label="FBUploadPro Showcase">
-          <div>
-            <Link
-              href="/login"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: SPACING.md,
-                textDecoration: 'none',
-                color: 'var(--text-main, #ffffff)',
-              }}
-            >
-              <BrandLogo />
-              <span
-                style={{
-                  fontSize: '1.125rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  letterSpacing: TYPOGRAPHY.tracking.h3,
-                }}
-              >
-                FBUploadPro
-              </span>
-            </Link>
-
-            <div style={{ marginTop: '48px' }}>
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: SPACING.xs,
-                  padding: '4px 10px',
-                  borderRadius: RADII.xs,
-                  backgroundColor: 'rgba(250, 215, 52, 0.10)',
-                  border: `1px solid rgba(250, 215, 52, 0.25)`,
-                  fontSize: '0.75rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: PALETTE.primary,
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                  marginBottom: SPACING.md,
-                }}
-              >
-                Secure Cloud Automation
-              </div>
-
-              {/* User Mandated Headline */}
-              <h1
-                style={{
-                  fontSize: '1.875rem',
-                  lineHeight: 1.3,
-                  fontWeight: TYPOGRAPHY.weights.heavy,
-                  letterSpacing: TYPOGRAPHY.tracking.h1,
-                  margin: `0 0 ${SPACING.lg} 0`,
-                  color: '#ffffff',
-                }}
-              >
-                Automate Facebook and Instagram <span style={{ color: PALETTE.primary }}>100% on the cloud</span> without ever giving away your credentials, making this the most secure way of automation.
-              </h1>
-
-              {/* Feature Pillars (Zero Technical Jargon) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg, marginTop: SPACING.xl }}>
-                {VALUE_PILLARS.map((item) => (
-                  <div key={item.title} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.md }}>
-                    {item.icon}
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '0.875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: '#ffffff',
-                          lineHeight: 1.3,
-                        }}
-                      >
-                        {item.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '0.8125rem',
-                          color: 'var(--text-sub, #9ca3af)',
-                          marginTop: '3px',
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {item.desc}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Clean Trust & Security Footer */}
-          <div
-            style={{
-              paddingTop: SPACING.lg,
-              borderTop: '1px solid var(--border-subtle, #1f242d)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: '0.75rem',
-              color: 'var(--text-dim, #6b7280)',
-            }}
-          >
-            <span>Official Meta OAuth Security</span>
-            <span>Zero Password Access</span>
-          </div>
-        </section>
-
-        {/* Right Column: Focused Auth Form */}
-        <main className="auth-form-panel">
-          <div className="auth-form-box">
-            {/* Mobile Header (rendered when screen < 1024px) */}
-            <div className="auth-mobile-header">
-              <BrandLogo />
-              <span
-                style={{
-                  fontSize: '1.125rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  letterSpacing: TYPOGRAPHY.tracking.h3,
-                }}
-              >
-                FBUploadPro
-              </span>
-            </div>
-
-            {/* Auth Card Container */}
-            <div
-              style={{
-                backgroundColor: 'var(--bg-panel, #0b0e14)',
-                border: '1px solid var(--border-subtle, #1f242d)',
-                borderRadius: RADII.md,
-                padding: '32px 28px',
-                boxSizing: 'border-box',
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-              }}
-            >
-              <div style={{ marginBottom: SPACING.xl }}>
-                <h2
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: TYPOGRAPHY.weights.bold,
-                    letterSpacing: TYPOGRAPHY.tracking.h2,
-                    margin: `0 0 ${SPACING.xs} 0`,
-                    color: 'var(--text-main, #ffffff)',
-                  }}
-                >
-                  {title}
-                </h2>
-                <p
-                  style={{
-                    fontSize: '0.875rem',
-                    color: 'var(--text-sub, #9ca3af)',
-                    margin: 0,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {description}
-                </p>
-              </div>
-
-              {children}
-
-              {footer && (
-                <div
-                  style={{
-                    marginTop: SPACING.xl,
-                    paddingTop: SPACING.lg,
-                    borderTop: '1px solid var(--border-subtle, #1f242d)',
-                    textAlign: 'center',
-                  }}
-                >
-                  {footer}
-                </div>
-              )}
-            </div>
-          </div>
-        </main>
+        {isFormLeft ? (
+          <>
+            {formNode}
+            {showcaseNode}
+          </>
+        ) : (
+          <>
+            {showcaseNode}
+            {formNode}
+          </>
+        )}
       </div>
     </>
   );
