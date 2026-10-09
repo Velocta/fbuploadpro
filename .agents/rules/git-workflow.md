@@ -18,8 +18,9 @@ Follow Conventional Commits:
 - **Traceability**: Reference the active specification ID from `specs/` and associated GitHub Issue (`Closes #X`).
 - **Quality Gates**: All automated checks (`pnpm turbo run build lint typecheck test`) must pass with 100% test pass rate and 0 errors/warnings prior to requesting review.
 
-## 4. Documentation Synchronization
-- Every pull request or merge to `main` must include synchronized updates to `docs/` (e.g., updating roadmap milestone statuses in `docs/foundational-knowledge.md`, architecture diagrams, environment configurations, and API contracts) to prevent documentation drift.
+## 4. Documentation Synchronization in the Same PR (Never Separate Docs PRs)
+- All documentation updates under `docs/` (e.g., updating roadmap milestone statuses in `docs/foundational-knowledge.md`, architecture diagrams, environment configurations, and API contracts) MUST ALWAYS be included and committed directly in the SAME Pull Request as the feature, fix, or code modifications.
+- AI agents and engineers MUST NEVER create separate, standalone Pull Requests solely for documentation synchronization. Code and documentation must ship together atomically in one PR.
 
 ## 5. Mandatory Human Approval Gate Prior to Merging
 - Autonomous merges or auto-merging without explicit human confirmation are strictly prohibited.

@@ -85,6 +85,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
 3. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates before merge.
 4. **Post-PR Vercel Preview Deployments**: UI previews are validated directly via automated Vercel Preview Deployments generated on each Pull Request. If and only if the PR includes UI changes, the live Vercel preview link must be presented to the user for interactive visual inspection before requesting merge approval. Non-UI PRs do not surface a preview link.
 5. **Mandatory Human Approval Gate**: Autonomous or unapproved merges to `main` are strictly forbidden. The agent must explicitly ask for and receive user approval prior to executing any merge, regardless of whether the PR contains frontend, backend, database, or infrastructure changes.
+6. **Single Combined PR Documentation Protocol (Never Separate Docs PRs)**: All documentation updates under `docs/` (including milestone roadmaps, architectural knowledge, API contracts, or schemas) MUST ALWAYS be included and committed directly in the SAME Pull Request as the implementation or architectural changes. Creating separate standalone PRs solely for documentation updates is strictly prohibited.
 
 ## Governance
 
@@ -93,4 +94,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.8.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.9.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
