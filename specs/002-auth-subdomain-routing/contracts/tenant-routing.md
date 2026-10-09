@@ -42,5 +42,5 @@ export function getTenantRewriteUrl(
 ): URL;
 ```
 
-- Input: `subdomain = 'alpha'`, `pathname = '/dashboard'`, `baseUrl = 'http://alpha.localhost:3000/dashboard'`
-- Output: `http://alpha.localhost:3000/tenant/alpha/dashboard`
+- Input: `subdomain = 'alpha'`, `pathname = '/'`, `baseUrl = 'http://alpha.localhost:3000/'`
+- Output: `http://alpha.localhost:3000/tenant/alpha`

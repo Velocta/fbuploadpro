@@ -11,9 +11,9 @@ Prove that malicious `returnUrl` parameters are completely neutralized.
 1. Send `POST /api/auth/login` with `returnUrl = "https://evil.com/?victim"`.
 2. Inspect the response body `redirectUrl`:
    - **Expected**: Does NOT redirect to `evil.com`.
-   - **Outcome**: Evaluates to `http(s)://{subdomain}.{rootDomain}/dashboard`.
-3. Send `POST /api/auth/login` with valid relative `returnUrl = "/media"`.
-   - **Expected**: Redirects to `http(s)://{subdomain}.{rootDomain}/media`.
+   - **Outcome**: Evaluates to `http(s)://{subdomain}.{rootDomain}`.
+3. Send `POST /api/auth/login` with valid relative `returnUrl = "/settings"`.
+   - **Expected**: Redirects to `http(s)://{subdomain}.{rootDomain}/settings`.
 
 ### Scenario 2: Memory Zero-Retention of Plaintext Passwords
 Prove that plaintext credentials never linger in heap memory.

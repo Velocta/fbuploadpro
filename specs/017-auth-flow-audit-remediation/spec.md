@@ -20,12 +20,12 @@ So that malicious third-party links cannot hijack my browser session and redirec
 Prevents critical security compromise (CVSS 7.4). Attackers must never be able to abuse `returnUrl` to redirect authenticated users to external phishing destinations.
 
 **Independent Test**:
-Can be fully tested by attempting login and OTP verification with external redirect parameters (e.g. `returnUrl=https://evil.com/?victim`, `returnUrl=//evil.com`, `returnUrl=javascript:...`) and verifying the application safely falls back to the internal dashboard (`/dashboard`) or strictly permits valid relative paths.
+Can be fully tested by attempting login and OTP verification with external redirect parameters (e.g. `returnUrl=https://evil.com/?victim`, `returnUrl=//evil.com`, `returnUrl=javascript:...`) and verifying the application safely falls back to the internal workspace or strictly permits valid relative paths.
 
 **Acceptance Scenarios**:
-1. **Given** an unauthenticated user on `/login?returnUrl=/media`, **When** they submit valid credentials, **Then** they are redirected to `https://{subdomain}.{rootDomain}/media`.
-2. **Given** an unauthenticated user on `/login?returnUrl=https://attacker.com/?subdomain`, **When** they submit valid credentials, **Then** the application ignores the external domain and redirects to `https://{subdomain}.{rootDomain}/dashboard`.
-3. **Given** a new user on `/signup` completing OTP verification with `returnUrl=//evil.com`, **When** OTP is verified, **Then** the application rejects protocol-relative redirect and routes to the user's workspace dashboard.
+1. **Given** an unauthenticated user on `/login?returnUrl=/settings`, **When** they submit valid credentials, **Then** they are redirected to `https://{subdomain}.{rootDomain}/settings`.
+2. **Given** an unauthenticated user on `/login?returnUrl=https://attacker.com/?subdomain`, **When** they submit valid credentials, **Then** the application ignores the external domain and redirects to `https://{subdomain}.{rootDomain}`.
+3. **Given** a new user on `/signup` completing OTP verification with `returnUrl=//evil.com`, **When** OTP is verified, **Then** the application rejects protocol-relative redirect and routes to the user's workspace.
 
 ---
 
@@ -111,10 +111,10 @@ Can be tested by inspecting DOM labeling (`htmlFor`), tabbing through all contro
 ### Edge Cases
 
 - **Open redirect attempts**:
-  - `returnUrl=//evil.com` -> rejected, defaults to dashboard.
-  - `returnUrl=https://attacker.com/user_subdomain` -> rejected, defaults to dashboard.
-  - `returnUrl=/dashboard/reels` -> accepted, redirects to `https://{subdomain}.{rootDomain}/dashboard/reels`.
-  - `returnUrl=https://{subdomain}.{rootDomain}/dashboard` -> accepted.
+  - `returnUrl=//evil.com` -> rejected, defaults to workspace root.
+  - `returnUrl=https://attacker.com/user_subdomain` -> rejected, defaults to workspace root.
+  - `returnUrl=/settings` -> accepted, redirects to `https://{subdomain}.{rootDomain}/settings`.
+  - `returnUrl=https://{subdomain}.{rootDomain}` -> accepted.
 - **Direct visit to `/reset-password`**:
   - No query param `code` and no hash `access_token` -> displays clean "Invalid or Expired Link" warning card with "Request new link" action.
 - **Expired/Tampered reset token**:

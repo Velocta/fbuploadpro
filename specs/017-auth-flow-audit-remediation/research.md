@@ -14,7 +14,7 @@
   - Safe rule: A redirect URL is only allowed if:
     1. It is a strictly relative path: starts with `/` and NOT `//`, containing no colon or backslash before the first path delimiter.
     2. OR, if it is a fully-qualified URL, its `URL.host` strictly equals `${userSubdomain}.${rootDomain}` and its protocol is `http:` (local) or `https:` (production).
-    3. All other values fall back safely to `https://${userSubdomain}.${rootDomain}/dashboard`.
+    3. All other values fall back safely to `https://${userSubdomain}.${rootDomain}`.
 - **Alternatives Considered**:
   - Regex domain match: Prone to regex evasion and catastrophic backtracking.
   - Rejecting all `returnUrl` parameters: Degrades user experience for deep-linked features.

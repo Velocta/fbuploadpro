@@ -6,7 +6,7 @@
 
 ## Summary
 
-Implement Next.js Edge Middleware for multi-tenant subdomain host routing (`{subdomain}.domain.com/*` -> `/tenant/[subdomain]/*`), edge-safe HMAC-SHA256 session authentication, tenant ownership verification, Role-Based Access Control (`user`, `seller`, `admin`), and a responsive multi-tenant dashboard shell displaying workspace context and token balance.
+Implement Next.js Edge Middleware for multi-tenant subdomain host routing (`{subdomain}.domain.com/*` -> `/tenant/[subdomain]/*`), edge-safe HMAC-SHA256 session authentication, tenant ownership verification, Role-Based Access Control (`user`, `seller`, `admin`), and a responsive multi-tenant workspace shell displaying workspace context.
 
 ## Technical Context
 
@@ -22,7 +22,7 @@ Implement Next.js Edge Middleware for multi-tenant subdomain host routing (`{sub
 
 **Project Type**: Web Application & Shared Monorepo Contracts
 
-**Performance Goals**: Subdomain parsing & edge rewrite in <2ms; Server-rendered dashboard shell in <200ms
+**Performance Goals**: Subdomain parsing & edge rewrite in <2ms; Server-rendered workspace shell in <200ms
 
 **Constraints**: Zero Node.js TCP dependencies in Edge middleware; Strict tenant isolation on `subdomain` / `userId`; Zero secret leaks
 
@@ -81,13 +81,11 @@ apps/web/
 │       │   └── page.tsx     # Authentication login view
 │       └── tenant/
 │           └── [subdomain]/
-│               ├── layout.tsx # Tenant workspace shell (Header, Subdomain badge, Balance)
-│               ├── page.tsx   # Workspace index (redirects to /dashboard)
-│               └── dashboard/
-│                   └── page.tsx # Workspace dashboard overview
+│               ├── layout.tsx # Tenant workspace shell
+│               └── page.tsx   # Workspace index
 └── tests/
     ├── middleware.test.ts   # Edge middleware routing & auth tests
-    └── dashboard.test.ts    # Dashboard shell server component tests
+    └── dashboard.test.ts    # Workspace shell tests
 ```
 
 ## Complexity Tracking

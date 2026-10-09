@@ -46,11 +46,9 @@ curl -X GET "http://localhost:3000/api/tenant/myworkspace/pages/{pageId}/insight
 
 ---
 
-## 3. UI Journey Validation
+## 3. End-to-End API Validation
 
-1. Navigate to `/tenant/myworkspace/accounts`.
-2. Locate connected Facebook Page and click **View Insights**.
-3. Verify navigation to `/tenant/myworkspace/pages/[pageId]/insights`.
-4. Check that skeleton loading cards appear without layout shift (CLS = 0).
-5. Toggle between `7d`, `14d`, `28d`, and `90d` filters; verify charts update smoothly.
-6. Click **Refresh Data**; verify loading spinner activates and timestamp updates.
+1. Query `GET /api/tenant/myworkspace/pages/[pageId]/insights?range=28d`.
+2. Verify response contains `overview`, `timeSeries`, `reactions`, and `demographics`.
+3. Verify `cacheStatus` returns `miss` on first request, then `hit` on subsequent query within 15 minutes.
+4. Pass `refresh=true` and verify cache bypass.

@@ -105,16 +105,12 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 
 ---
 
-## Phase 7: UI & Dashboard Integration [UI SLATED FOR RECREATION]
+## Phase 7: API & Backend Integration Complete
 
 > [!NOTE]
-> Frontend components in `apps/web` have been cleared and are slated for recreation following *Taste Skill* and *Impeccable* guidelines. Backend OAuth endpoints, AES-256-GCM encryption, and health APIs remain fully operational.
+> Backend OAuth endpoints, AES-256-GCM encryption, and health APIs remain fully operational.
 
-**Purpose**: Deliver user interface components for multi-account management, account switching, page discovery, and selective import at `/tenant/[subdomain]/accounts`.
-
-- [ ] T072 [P] Recreate multi-account switcher and account card component displaying display name, status badge, token expiration horizon, and connect/disconnect buttons in `apps/web/src/components/facebook/account-list.tsx` (Issue: #107)
-- [ ] T073 [P] Recreate Facebook Page discovery modal component with selective checkboxes, follower counts, and import confirmation in `apps/web/src/components/facebook/page-discovery-modal.tsx` (Issue: #108)
-- [ ] T074 Recreate tenant accounts page integrating account list, imported pages table, discovery modal, and status indicators in `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx` (Issue: #109)
+**Purpose**: Multi-account management, account switching, page discovery, and selective import endpoints are implemented and verified.
 
 ---
 
@@ -159,5 +155,5 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 1. Add User Story 2 (T062–T065) ➔ Facebook Page discovery and selective import (zero groups).
 2. Add User Story 3 (T066–T068) ➔ Multi-account health monitoring & error 190 handling.
 3. Add User Story 4 (T069–T071) ➔ Granular disconnection and tenant isolation.
-4. Add UI Integration (T072–T074) ➔ Multi-account dashboard view at `/tenant/[subdomain]/accounts`.
+4. API & Backend Integration ➔ Multi-account management endpoints.
 5. Polish & Quality Gates (T075–T077) ➔ Security audit and Turborepo 100% clean.

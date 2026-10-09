@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Authentication & Multi-Tenant Subdomain Routing Isolation: Next.js edge middleware rewriting {subdomain}.domain.com to tenant workspaces, tenant subdomain ownership verification and RBAC for roles: user, seller, admin, and dashboard shell displaying user workspace, subdomain, and role context."
+**Input**: User description: "Authentication & Multi-Tenant Subdomain Routing Isolation: Next.js edge middleware rewriting {subdomain}.domain.com to tenant workspaces, tenant subdomain ownership verification and RBAC for roles: user, seller, admin, and workspace shell displaying user workspace, subdomain, and role context."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -20,7 +20,7 @@ When a visitor or registered user navigates to a customer-specific web address (
 
 **Acceptance Scenarios**:
 
-1. **Given** an incoming request with a valid tenant host (e.g. `client.example.com/dashboard`), **When** evaluated at the routing boundary, **Then** the request is internally routed to the tenant workspace for `client` while preserving the URL path in the user's browser.
+1. **Given** an incoming request with a valid tenant host (e.g. `client.example.com`), **When** evaluated at the routing boundary, **Then** the request is internally routed to the tenant workspace for `client` while preserving the URL path in the user's browser.
 2. **Given** an incoming request to the root domain (e.g. `example.com` or `www.example.com`), **When** processed by the edge router, **Then** it serves the main platform public home page without tenant workspace rewriting.
 3. **Given** a request with a reserved system identifier (e.g. `api`, `admin`, `billing`, `auth`), **When** received at the routing boundary, **Then** it is processed as a platform utility rather than being rewritten to a tenant workspace.
 4. **Given** a request targeting a non-existent or unregistered subdomain slug, **When** looked up by the system, **Then** it returns an unambiguous Tenant Not Found status.
@@ -29,7 +29,7 @@ When a visitor or registered user navigates to a customer-specific web address (
 
 ### User Story 2 - Tenant Subdomain Ownership Verification & Authentication Guard (Priority: P2)
 
-When a user attempts to access a protected workspace under a specific subdomain (e.g. `acme.fbuploadpro.com/dashboard`), the system validates their authentication session and verifies that their authenticated identity owns or belongs to the target subdomain. If an authenticated user belonging to `tenant-a` attempts to access `tenant-b.fbuploadpro.com`, the system rejects the cross-tenant request and safely redirects them to their own authorized workspace.
+When a user attempts to access a protected workspace under a specific subdomain (e.g. `acme.fbuploadpro.com`), the system validates their authentication session and verifies that their authenticated identity owns or belongs to the target subdomain. If an authenticated user belonging to `tenant-a` attempts to access `tenant-b.fbuploadpro.com`, the system rejects the cross-tenant request and safely redirects them to their own authorized workspace.
 
 **Why this priority**: Subdomain routing alone does not prevent unauthorized access; strict ownership verification ensures that authenticated users cannot access or view other tenants' workspaces.
 
@@ -54,27 +54,24 @@ The platform supports three distinct user roles: `user` (standard publishing ope
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated user with role `user`, **When** accessing standard workspace dashboard features, **Then** access is allowed; **When** attempting to access administrative management endpoints, **Then** access is denied with a 403 Forbidden error.
+1. **Given** an authenticated user with role `user`, **When** accessing standard workspace features, **Then** access is allowed; **When** attempting to access administrative management endpoints, **Then** access is denied with a 403 Forbidden error.
 2. **Given** an authenticated user with role `seller`, **When** accessing seller-tier features, **Then** access is granted; **When** attempting to access platform-wide admin controls, **Then** access is denied.
 3. **Given** an authenticated user with role `admin`, **When** accessing any tenant workspace or platform-wide administration route, **Then** privileged access is granted.
 
 ---
 
-### User Story 4 - Multi-Tenant Workspace Dashboard Shell (Priority: P4)
+### User Story 4 - Multi-Tenant Workspace Shell (Priority: P4)
 
-> [!NOTE]
-> **UI Recreation In-Progress**: The frontend UI shell is slated for recreation under *Taste Skill* and *Impeccable* guidelines without legacy token counters.
+Once authenticated and authorized, a user accesses the workspace shell. The shell displays key tenant context including the active workspace subdomain badge, user display name, and current user role without leaking sensitive credentials or internal configuration.
 
-Once authenticated and authorized, a user accesses the workspace dashboard shell. The shell displays key tenant context including the active workspace subdomain badge, user display name, and current user role. The dashboard shell provides persistent navigation across social account connections, media library, and posting queues without leaking sensitive credentials or internal configuration.
+**Why this priority**: The workspace shell gives the user immediate situational awareness of their identity and tenant workspace.
 
-**Why this priority**: The dashboard shell is the central user interface where operational management happens, giving the user immediate situational awareness of their identity and tenant workspace.
-
-**Independent Test**: Can be tested by rendering the dashboard shell for a verified session and verifying that display name, subdomain badge, and role badge accurately reflect the session's data, with responsive layout elements.
+**Independent Test**: Can be tested by rendering the workspace shell for a verified session and verifying that display name, subdomain badge, and role badge accurately reflect the session's data, with responsive layout elements.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authorized workspace session, **When** the dashboard shell renders, **Then** it clearly displays the workspace subdomain, current user name, and assigned role.
-2. **Given** an authorized workspace session, **When** inspecting the dashboard header, **Then** the tenant subdomain badge and user role are cleanly displayed without token meters.
+1. **Given** an authorized workspace session, **When** the workspace shell renders, **Then** it clearly displays the workspace subdomain, current user name, and assigned role.
+2. **Given** an authorized workspace session, **When** inspecting the workspace shell, **Then** the tenant subdomain badge and user role are cleanly displayed without token meters.
 3. **Given** any error in downstream data retrieval during shell rendering, **When** an error occurs, **Then** the shell presents a graceful degraded state without exposing internal server stack traces or database connection strings.
 
 ---
@@ -101,7 +98,7 @@ Once authenticated and authorized, a user accesses the workspace dashboard shell
 - **FR-007**: The system MUST redirect unauthenticated requests targeting protected tenant workspace routes to the login flow.
 - **FR-008**: The system MUST enforce Role-Based Access Control (RBAC) across `user`, `seller`, and `admin` roles, guarding privileged routes and capabilities.
 - **FR-009**: The system MUST reject access for users with suspended account status, redirecting them to an account status notice.
-- **FR-010**: The system MUST provide a multi-tenant dashboard shell displaying the user workspace name, subdomain slug badge, and user role badge (with UI slated for recreation).
+- **FR-010**: The system MUST provide a multi-tenant workspace shell displaying the user workspace name, subdomain slug badge, and user role badge.
 - **FR-011**: The system MUST sanitize all user-facing session envelopes and error responses to ensure zero database credentials, connection strings, or internal infrastructure topologies are leaked.
 
 ### Key Entities *(include if feature involves data)*
@@ -109,7 +106,7 @@ Once authenticated and authorized, a user accesses the workspace dashboard shell
 - **Session Context**: The authenticated identity envelope. Key attributes: user identifier (UUID), user email, display name, assigned subdomain slug, user role (`user`, `seller`, `admin`), account status (`active`, `suspended`), session expiration timestamp.
 - **Tenant Workspace Context**: The resolved tenant route context. Key attributes: subdomain slug, tenant status, owner user identifier, workspace display settings.
 - **Role Permission Matrix**: The access control mapping that defines permissible actions and viewable routes per role (`user`, `seller`, `admin`).
-- **Dashboard State**: The tenant operational summary. Key attributes: tenant subdomain, display name, role, connected accounts summary count.
+- **Workspace State**: The tenant operational summary. Key attributes: tenant subdomain, display name, role.
 
 ## Success Criteria *(mandatory)*
 
@@ -119,7 +116,7 @@ Once authenticated and authorized, a user accesses the workspace dashboard shell
 - **SC-002**: 100% of cross-tenant access attempts by authenticated users are blocked and safely redirected to their own authorized workspace.
 - **SC-003**: 100% of unauthenticated requests to protected workspace routes are redirected to login.
 - **SC-004**: Role permissions are strictly enforced with 0 unauthorized role privilege escalations.
-- **SC-005**: Dashboard shell accurately renders workspace identity and user role badge within 200ms on server rendering.
+- **SC-005**: Workspace shell accurately renders workspace identity and user role badge within 200ms on server rendering.
 - **SC-006**: Monorepo builds, typechecks, lints, and test suites across all packages and apps maintain a 100% pass rate.
 
 ## Assumptions

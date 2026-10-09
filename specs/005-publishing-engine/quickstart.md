@@ -65,7 +65,7 @@ pnpm --filter @fbuploadpro/web test
 - `GET /api/tenant/[subdomain]/pages/[pageId]/slots` and `POST` handlers enforce tenant isolation.
 - `POST /api/tenant/[subdomain]/publishing/queue` validates page connection and slot schedule.
 - `GET /api/tenant/[subdomain]/publishing/queue` lists items with upcoming schedule calculation.
-- Publishing queue page at `/tenant/[subdomain]/publishing` (slated for UI recreation) renders schedule visualizer, slot manager, and manual action controls.
+- `GET /api/tenant/[subdomain]/publishing/logs` retrieves execution history and audit logs.
 
 ---
 

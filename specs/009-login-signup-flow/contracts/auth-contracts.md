@@ -26,7 +26,7 @@ Creates user identity in Supabase Auth, provisions PostgreSQL profile, and sets 
       "role": "user",
       "status": "active"
     },
-    "redirectUrl": "https://alexmercer.fbuploadpro.com/dashboard"
+    "redirectUrl": "https://alexmercer.fbuploadpro.com"
   }
   ```
 * **Set-Cookie Header**:
@@ -44,8 +44,7 @@ Verifies credentials, checks account status, and issues session cookie.
   ```json
   {
     "email": "alex.mercer+marketing@agency.com",
-    "password": "StrongPassword123!",
-    "returnUrl": "https://alexmercer.fbuploadpro.com/publishing"
+    "password": "StrongPassword123!"
   }
   ```
 * **Success Response (200 OK)**:
@@ -60,7 +59,7 @@ Verifies credentials, checks account status, and issues session cookie.
       "role": "user",
       "status": "active"
     },
-    "redirectUrl": "https://alexmercer.fbuploadpro.com/publishing"
+    "redirectUrl": "https://alexmercer.fbuploadpro.com"
   }
   ```
 * **Error Responses**:

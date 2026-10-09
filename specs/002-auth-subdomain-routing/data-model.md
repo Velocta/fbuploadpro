@@ -74,12 +74,12 @@ The permission mapping governing route and action access:
 
 ---
 
-### 1.4 Workspace Dashboard State (`WorkspaceDashboardState`)
+### 1.4 Workspace Shell State (`WorkspaceShellState`)
 
-The server-rendered state loaded for the multi-tenant dashboard shell:
+The server-rendered state loaded for the multi-tenant workspace shell:
 
 ```typescript
-export interface WorkspaceDashboardState {
+export interface WorkspaceShellState {
   user: {
     id: string;
     email: string;
@@ -88,10 +88,6 @@ export interface WorkspaceDashboardState {
     role: 'user' | 'seller' | 'admin';
     status: 'active' | 'suspended';
     createdAt: string;
-  };
-  metrics: {
-    connectedAccountsCount: number;
-    connectedPagesCount: number;
   };
 }
 ```
@@ -114,5 +110,5 @@ stateDiagram-v2
     CheckOwnership --> RedirectOwnWorkspace : Subdomain mismatch & Role != 'admin'
     CheckOwnership --> RenderWorkspaceShell : Subdomain matches OR Role == 'admin'
 
-    RenderWorkspaceShell --> DashboardReady : Token balance & tenant data retrieved
+    RenderWorkspaceShell --> WorkspaceReady : Tenant data verified
 ```

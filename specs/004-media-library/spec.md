@@ -109,7 +109,7 @@ As a content creator, I want to inspect full-screen video playback and high-reso
 - **FR-012**: The system MUST allow users to create, edit, and delete reusable caption templates with titles, text content, and tags.
 - **FR-013**: The system MUST allow users to attach a caption template to any media item as its default publishing copy.
 - **FR-014**: The system MUST allow users to permanently delete media assets, purging the record from the database and deleting the corresponding cloud storage object to reclaim quota.
-- **FR-015**: The system MUST provide an interactive media management UI at `/tenant/[subdomain]/media` featuring storage metering, drag-and-drop upload zone, folder sidebar, tag filtering, and asset preview modals (UI slated for recreation following Taste Skill & Impeccable guidelines).
+- **FR-015**: The system MUST provide dedicated media management APIs featuring storage metering, upload confirmation, folder hierarchies, tag filtering, and caption templates.
 
 ---
 

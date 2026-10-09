@@ -13,7 +13,7 @@
 ```mermaid
 flowchart TD
     subgraph ClientLayer ["Client Devices & Browsers"]
-        UserBrowser["User / Creator Browser\n(Web UI / Mobile Dashboard)"]
+        UserBrowser["User / Creator Browser\n(Web Application / Mobile Web)"]
     end
 
     subgraph EdgeEntry ["Edge Ingress & Routing (Cloudflare & Vercel)"]
@@ -54,7 +54,7 @@ flowchart TD
 |---|---|---|---|
 | **Marketing Site** | **Independent Host** | Landing Page, Terms, Privacy | High-converting marketing landing pages, Terms of Service (`/terms`), Privacy Policy (`/privacy`), SEO content, deployed independently. |
 | **Web App Gateway** | **Vercel** | `app.fbuploadpro.com` (`apps/web`) | Central authentication gateway, serving `/login`, `/signup`, and cross-subdomain auth handoffs. |
-| **Tenant Workspaces** | **Vercel** | `{username}.fbuploadpro.com` (`apps/web`) | User workspace dashboard, dedicated Media Library, queue slot configuration, Page analytics. |
+| **Tenant Workspaces** | **Vercel** | `{username}.fbuploadpro.com` (`apps/web`) | User workspace root and dedicated tenant tools. |
 | **Database & Identity** | **Supabase** | Managed PostgreSQL & Supabase Auth | User identity/sessions, multi-tenant tables (`user_id`), transaction pooling, and automated schema migrations via `/supabase/migrations` and GitHub integration. |
 | **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks (`SKIP LOCKED`), direct media streaming to Meta APIs. |
 | **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage, presigned direct PC-to-bucket uploads, thumbnail cache. |
@@ -81,7 +81,7 @@ The platform adopts a decoupled multi-domain topology:
 2. **Central Application Gateway (`app.fbuploadpro.com`)**:
    - The primary entry door to the SaaS application.
    - Hosts public authentication: `/login` and `/signup`.
-   - Upon successful authentication, automatically redirects the user to their personal workspace (`https://{username}.fbuploadpro.com/dashboard`).
+   - Upon successful authentication, automatically redirects the user to their personal workspace (`https://{username}.fbuploadpro.com`).
 3. **Dedicated User Workspaces (`https://{username}.fbuploadpro.com`)**:
    - Every registered user operates within their dedicated tenant subdomain.
    - Authentication cookies are set on the apex wildcard cookie domain (`.fbuploadpro.com`), ensuring uninterrupted session continuity between `app.fbuploadpro.com` and `{username}.fbuploadpro.com`.
@@ -91,7 +91,7 @@ The platform adopts a decoupled multi-domain topology:
 ### B. Active Construction & Staging Demo Domain (`vinsmokemedia.online`)
 During initial feature assembly, integration testing, and staging, the platform is configured with `vinsmokemedia.online`:
 - **Central Application Gateway**: `https://app.vinsmokemedia.online` (`/login`, `/signup`).
-- **Dedicated Tenant Workspaces**: `https://{username}.vinsmokemedia.online` (`/dashboard`, media library, queues, insights).
+- **Dedicated Tenant Workspaces**: `https://{username}.vinsmokemedia.online`.
 - **Wildcard Session Cookie**: `.vinsmokemedia.online` (enables cross-subdomain authentication continuity).
 - **Supabase Auth Allowlist**: `https://app.vinsmokemedia.online/**` and `https://*.vinsmokemedia.online/**`.
 - **Vercel Domains**: `app.vinsmokemedia.online` and `*.vinsmokemedia.online` with CNAME `cname.vercel-dns.com`.
@@ -151,7 +151,7 @@ Publishing is driven by an automated, queue-based slot architecture:
 
 ## 7. Dedicated Facebook Page Insights & Analytics
 
-Insights are accessible in a dedicated, per-page view (rather than cluttering the workspace dashboard):
+Insights are accessible via dedicated analytics endpoints:
 
 - **Overview & Growth**:
   - Current Fan Count (Likes) & Total Followers Count.
@@ -213,7 +213,7 @@ flowchart LR
 - **Spec 006 (Completed & Merged; UI Slated for Assembly)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
 - **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
 - **Spec 008 (Completed & Merged into main)**: **Essential Reusable UI Components** (15 production-ready, accessible React 19 primitives in `apps/web/src/components/ui/`: Button, Input, Textarea, Checkbox, Switch, Select, Card, Dialog/Modal, Tabs, Table, StatusDot, Tag, Skeleton, Alert, Tooltip with 325 passing unit tests).
-- **Spec 009 (Completed & Merged into main)**: **Supabase Authentication, Login & Registration Flow** (Full registration with Name, Phone, Email, Password; real-time automatic subdomain derivation stripping dots and plus tags; Supabase Auth integration; root-domain cookie scoping `.fbuploadpro.com`; automatic redirect to `{subdomain}.fbuploadpro.com/dashboard`; dual-theme UI using Spec 008 primitives).
+- **Spec 009 (Completed & Merged into main)**: **Supabase Authentication, Login & Registration Flow** (Full registration with Name, Phone, Email, Password; real-time automatic subdomain derivation stripping dots and plus tags; Supabase Auth integration; root-domain cookie scoping `.fbuploadpro.com`; automatic redirect to `{subdomain}.fbuploadpro.com`; dual-theme UI using Spec 008 primitives).
 - **Spec 010 (Completed & Merged into main)**: **Professional Auth UI/UX Redesign & Default Login Page** (Eliminated placeholder landing card; configured root `/` to redirect directly to `/login`; crafted professional split-screen layout with brand showcase and feature pillars; added accessible show/hide password toggle; removed subdomain preview box from `/signup` for clean UX).
 - **Spec 011 (Completed & Merged into main)**: **Password Reset & Recovery Flow** (Added "Forgot password?" link on sign-in form; created `/forgot-password` recovery email portal with confirmation state; created `/reset-password` credential update form with password confirmation and minimum length validation; added backend recovery endpoints via Supabase Auth).
 - **Spec 012 (Completed & Merged into main)**: **Auth Security Leak Prevention & Fault-Tolerant Resilience** (Centralized `formatAuthErrorResponse` and `sanitizeAuthErrorMessage`; completely masked internal technical plumbing exceptions like `ECONNREFUSED` and database socket errors behind customer-safe copy; prioritized Supabase HTTPS PostgREST queries over raw TCP sockets on serverless; added comprehensive resilience integration test suites).

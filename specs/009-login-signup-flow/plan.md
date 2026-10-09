@@ -14,12 +14,12 @@ Spec 009 implements production-grade authentication for FBUploadPro, encompassin
    - Registers user in Supabase Auth and mirrors profile into PostgreSQL `users` table with `role = 'user'`, `status = 'active'`.
    - Initializes default media storage quota (5GB / 50 assets in `storage_quotas`).
    - Issues cryptographically signed root-domain session cookie (`fbup_session`).
-   - Immediately redirects to `{subdomain}.fbuploadpro.com/dashboard`.
+   - Immediately redirects to `{subdomain}.fbuploadpro.com`.
 2. **Tenant Sign-In (`/login`)**:
    - Authenticates credentials via Supabase Auth (`signInWithPassword`).
    - Verifies user status (`active` vs `suspended`).
    - Issues root-domain session cookie.
-   - Redirects to `{subdomain}.fbuploadpro.com/dashboard` or preserved `returnUrl`.
+   - Redirects to `{subdomain}.fbuploadpro.com` or preserved `returnUrl`.
 3. **Session Invalidation (`/api/auth/logout`)**:
    - Calls Supabase `signOut()`.
    - Expires root-domain session cookie across `.fbuploadpro.com`.

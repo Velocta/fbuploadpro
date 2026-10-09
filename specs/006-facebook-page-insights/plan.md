@@ -6,7 +6,7 @@
 
 ## Summary
 
-Implement a dedicated Facebook Page Insights analytics suite delivering deep visibility into connected Facebook Page performance. Build a hybrid server-side proxy and snapshot ingestion engine: query Facebook Graph API v26.0 on-demand with 15-minute server caching to safeguard rate limits, while storing daily historical metric snapshots in PostgreSQL (`page_insights_daily_snapshots`) via Cloudflare Worker scheduled background sync. Expose a secure, tenant-isolated API endpoint (`GET /api/tenant/[subdomain]/pages/[pageId]/insights`) that decrypts Page access tokens server-side using AES-256-GCM with zero token leakage. Ship a high-craft dashboard page at `/tenant/[subdomain]/pages/[pageId]/insights` featuring date range filters (7d, 14d, 28d, 90d), KPI scorecards, interactive Recharts visualizations (follower growth area charts, video retention composed charts, reaction sentiment bars), and ranked demographic distribution progress bars adhering strictly to *Taste Skill* and *Impeccable* standards.
+Implement a dedicated Facebook Page Insights analytics suite delivering deep visibility into connected Facebook Page performance. Build a hybrid server-side proxy and snapshot ingestion engine: query Facebook Graph API v26.0 on-demand with 15-minute server caching to safeguard rate limits, while storing daily historical metric snapshots in PostgreSQL (`page_insights_daily_snapshots`) via Cloudflare Worker scheduled background sync. Expose a secure, tenant-isolated API endpoint (`GET /api/tenant/[subdomain]/pages/[pageId]/insights`) that decrypts Page access tokens server-side using AES-256-GCM with zero token leakage.
 
 ## Technical Context
 
@@ -75,26 +75,14 @@ packages/database/
 apps/web/
 ├── src/
 │   ├── app/
-│   │   ├── api/tenant/[subdomain]/pages/[pageId]/insights/
-│   │   │   └── route.ts          # Server-side insights proxy with 15m cache
-│   │   └── tenant/[subdomain]/pages/[pageId]/insights/
-│   │       ├── page.tsx          # Dedicated Insights Dashboard page
-│   │       └── loading.tsx       # Zero-CLS loading skeleton
-│   ├── components/insights/
-│   │   ├── insights-header.tsx    # Header, range selector, refresh trigger
-│   │   ├── kpi-scorecards.tsx     # Fans, followers, views, engagement cards
-│   │   ├── growth-chart.tsx       # Follower vs unfollower area chart
-│   │   ├── video-metrics-chart.tsx# 30s complete views & watch time composed chart
-│   │   ├── reactions-chart.tsx    # Reactions distribution bar chart
-│   │   ├── demographics-bars.tsx  # Top countries & cities progress bars
-│   │   └── insights-alerts.tsx    # Health & token status banner
+│   │   └── api/tenant/[subdomain]/pages/[pageId]/insights/
+│   │       └── route.ts          # Server-side insights proxy with 15m cache
 │   └── lib/insights/
 │       ├── facebook-insights-client.ts # Graph API v26.0 fetcher & normalizer
 │       └── insights-cache.ts     # In-memory/TTL cache manager
 └── tests/
-    ├── api/page-insights.test.ts # Server proxy API integration tests
-    ├── security/insights-token-leakage.test.ts # Zero token leakage assertion
-    └── components/insights-page.test.tsx # UI component & chart tests
+    ├── api/page-insights-overview.test.ts # Server proxy API integration tests
+    └── security/insights-token-leakage.test.ts # Zero token leakage assertion
 
 apps/worker/
 ├── src/

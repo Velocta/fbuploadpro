@@ -112,13 +112,7 @@ This document decomposes Spec 005 into 33 atomic, dependency-ordered tasks (T114
 ### Implementation for User Story 4
 - [X] T137 [US4] Implement execution outcome status update and `publish_logs` insertion in `apps/worker/src/settlement.ts` (Issue: #212)
 - [X] T138 [US4] Implement Publish Logs API route handler in `apps/web/src/app/api/tenant/[subdomain]/publishing/logs/route.ts` (Issue: #213)
-- [ ] T139 [P] Recreate Recurring Queue Slots Manager component in `apps/web/src/components/publishing/slots-manager.tsx` (Issue: #214)
-- [ ] T140 [P] Recreate Upcoming Schedule Visualizer and Queue Item Card in `apps/web/src/components/publishing/queue-timeline.tsx` (Issue: #215)
-- [ ] T141 [P] Recreate Enqueue Asset Modal with caption and first-comment editor in `apps/web/src/components/publishing/enqueue-modal.tsx` (Issue: #216)
-- [ ] T142 [P] Recreate Publish History & Audit Logs component in `apps/web/src/components/publishing/publish-logs-table.tsx` (Issue: #217)
-- [ ] T143 Recreate full Publishing Dashboard page at `apps/web/src/app/tenant/[subdomain]/publishing/page.tsx` (Issue: #218)
-
-**Checkpoint**: Backend dispatcher and logging operational; Publishing UI slated for recreation.
+**Checkpoint**: Backend dispatcher, queue management APIs, and audit logging operational.
 
 ---
 

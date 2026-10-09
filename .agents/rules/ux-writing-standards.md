@@ -7,7 +7,7 @@
 
 ## 1. Core Mandate: Commercial SaaS Tone Across All Surfaces
 
-FBUploadPro is a public commercial product designed for creators, digital agencies, and business operators. Every user-visible text element—including page headers, navigation, dashboard metrics, modal dialogs, form labels, placeholder text, helper instructions, validation feedback, error banners, empty states, and action buttons—must adhere to professional software standards.
+FBUploadPro is a public commercial product designed for creators, digital agencies, and business operators. Every user-visible text element—including page headers, navigation, interface metrics, modal dialogs, form labels, placeholder text, helper instructions, validation feedback, error banners, empty states, and action buttons—must adhere to professional software standards.
 
 > **CRITICAL DIRECTIVE**: Never write robotic, lazy, or engineer-slop copy. Software must speak to users in the language of their domain and workflows, never in the vocabulary of internal implementation details.
 

@@ -6,13 +6,13 @@
 
 **Status**: Draft
 
-**Input**: User description: "Fully working login and sign up page using Supabase authentication. Registration requires Name, Phone number, Email, and Password. Subdomain is automatically derived from email (stripping dots and plus signs/tags). Root domain cookie sharing (.fbuploadpro.com) with HttpOnly, Secure, SameSite=Lax for seamless tenant subdomain access. Immediately redirect to user's tenant dashboard ({subdomain}.domain.com/dashboard), honoring returnUrl if provided."
+**Input**: User description: "Fully working login and sign up page using Supabase authentication. Registration requires Name, Phone number, Email, and Password. Subdomain is automatically derived from email (stripping dots and plus signs/tags). Root domain cookie sharing (.fbuploadpro.com) with HttpOnly, Secure, SameSite=Lax for seamless tenant subdomain access. Immediately redirect to user's tenant workspace ({subdomain}.domain.com), honoring returnUrl if provided."
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Tenant Registration with Automatic Subdomain Derivation (Priority: P1) 🎯 MVP
 
-A new user visits the platform sign-up portal (`/signup` or `app.fbuploadpro.com/signup`). They enter their Full Name, Phone Number, Email Address, and Password. As the user types their email, the system automatically derives and previews their tenant workspace subdomain in real time (e.g., `jane.doe+campaigns@agency.com` becomes `janedoe.fbuploadpro.com`). Upon clicking "Create Workspace", the system creates the user identity via Supabase Auth, provisions their tenant record in the database with role `user` and status `active`, initializes default storage quotas (5GB / 50 media assets), establishes an authenticated session cookie scoped to the root domain (`.fbuploadpro.com`), and automatically redirects them into their isolated workspace dashboard (`janedoe.fbuploadpro.com/dashboard`).
+A new user visits the platform sign-up portal (`/signup` or `app.fbuploadpro.com/signup`). They enter their Full Name, Phone Number, Email Address, and Password. As the user types their email, the system automatically derives and previews their tenant workspace subdomain in real time (e.g., `jane.doe+campaigns@agency.com` becomes `janedoe.fbuploadpro.com`). Upon clicking "Create Workspace", the system creates the user identity via Supabase Auth, provisions their tenant record in the database with role `user` and status `active`, initializes default storage quotas (5GB / 50 media assets), establishes an authenticated session cookie scoped to the root domain (`.fbuploadpro.com`), and automatically redirects them into their isolated workspace (`janedoe.fbuploadpro.com`).
 
 **Why this priority**: Registration is the fundamental entry point for acquiring users and provisioning tenant workspaces. Without automated registration and subdomain generation, new operators cannot access the platform.
 
@@ -22,7 +22,7 @@ A new user visits the platform sign-up portal (`/signup` or `app.fbuploadpro.com
 
 1. **Given** a new visitor on `/signup`, **When** they input `John Doe`, `+15551234567`, `john.doe+reels@example.com`, and a valid password, **Then** the interface dynamically derives the subdomain slug `johndoe` and renders a live preview badge `johndoe.fbuploadpro.com`.
 2. **Given** valid registration inputs, **When** the user submits the form, **Then** Supabase Auth registers the user, a corresponding record is created in `public.users` with `role = 'user'`, `status = 'active'`, and derived subdomain `johndoe`, and default media quotas (5GB) are initialized in `storage_quotas`.
-3. **Given** successful registration, **When** the session response completes, **Then** an HTTP-only, Secure session cookie (`fbup_session` / Supabase auth session) scoped to the root domain (`Domain=.fbuploadpro.com`) is set, and the client is automatically redirected to `http(s)://johndoe.{rootDomain}/dashboard`.
+3. **Given** successful registration, **When** the session response completes, **Then** an HTTP-only, Secure session cookie (`fbup_session` / Supabase auth session) scoped to the root domain (`Domain=.fbuploadpro.com`) is set, and the client is automatically redirected to `http(s)://johndoe.{rootDomain}`.
 4. **Given** an email address whose derived username collides with an existing tenant subdomain (e.g. `johndoe` already exists), **When** evaluated during derivation or submission, **Then** the system automatically resolves the collision by appending a deterministic numeric increment (e.g., `johndoe1`, `johndoe2`) or displays an informative availability status.
 5. **Given** an invalid email, duplicate registered email, weak password (<8 characters), or invalid phone format, **When** submitted, **Then** the system prevents submission, displays clear inline validation errors, and presents an error banner using the `Alert` component without losing user input.
 
@@ -30,7 +30,7 @@ A new user visits the platform sign-up portal (`/signup` or `app.fbuploadpro.com
 
 ### User Story 2 - Tenant Workspace Sign-In & Multi-Tenant Session Transfer (Priority: P2)
 
-An existing operator navigates to the sign-in page (`/login` or `app.fbuploadpro.com/login`). They provide their registered email address and password. The system verifies their credentials via Supabase Authentication, retrieves their associated tenant subdomain and profile from the database, asserts their account status is `active`, sets the root-domain session cookie, and immediately redirects them to their tenant workspace dashboard (`{subdomain}.fbuploadpro.com/dashboard`). If the user arrived at `/login` via an intercepted protected URL (e.g. `?returnUrl=https://acme.fbuploadpro.com/media`), the system validates the return URL and redirects them to their intended destination upon successful authentication.
+An existing operator navigates to the sign-in page (`/login` or `app.fbuploadpro.com/login`). They provide their registered email address and password. The system verifies their credentials via Supabase Authentication, retrieves their associated tenant subdomain and profile from the database, asserts their account status is `active`, sets the root-domain session cookie, and immediately redirects them to their tenant workspace (`{subdomain}.fbuploadpro.com`). If the user arrived at `/login` via an intercepted protected URL (e.g. `?returnUrl=https://acme.fbuploadpro.com/media`), the system validates the return URL and redirects them to their intended destination upon successful authentication.
 
 **Why this priority**: Registered users must be able to sign back into their tenant workspaces securely from any device or browser session without friction.
 
@@ -38,7 +38,7 @@ An existing operator navigates to the sign-in page (`/login` or `app.fbuploadpro
 
 **Acceptance Scenarios**:
 
-1. **Given** an active registered user, **When** they enter their correct email and password on `/login`, **Then** the system authenticates the user with Supabase, issues a root-domain session cookie, and redirects them to their tenant dashboard (`{subdomain}.{rootDomain}/dashboard`).
+1. **Given** an active registered user, **When** they enter their correct email and password on `/login`, **Then** the system authenticates the user with Supabase, issues a root-domain session cookie, and redirects them to their tenant workspace (`{subdomain}.{rootDomain}`).
 2. **Given** an unauthenticated visitor who was redirected from `{subdomain}.{rootDomain}/media` with `?returnUrl=...`, **When** they successfully log in, **Then** the system redirects them directly to the specified `returnUrl` within their authorized workspace.
 3. **Given** invalid credentials (incorrect password or unregistered email), **When** submitted, **Then** the system returns a sanitized 401 Unauthorized error and displays a visible `Alert` banner with "Invalid email or password", preserving the entered email in the input.
 4. **Given** a user whose account is marked `suspended` in `public.users`, **When** attempting to log in, **Then** authentication is halted, no tenant session is granted, and the user is redirected to `/account-suspended` with a clear contact administrator notice.
@@ -74,7 +74,7 @@ An authenticated user can securely terminate their session from any tenant works
 **Acceptance Scenarios**:
 
 1. **Given** an active authenticated session, **When** the user triggers sign-out via `POST /api/auth/logout`, **Then** the server clears the `fbup_session` cookie with `Max-Age=0` and `Domain=.fbuploadpro.com`.
-2. **Given** a cleared session, **When** the browser navigates to `{subdomain}.fbuploadpro.com/dashboard`, **Then** Next.js middleware intercepts the unauthenticated request and redirects the user to `app.fbuploadpro.com/login`.
+2. **Given** a cleared session, **When** the browser navigates to `{subdomain}.fbuploadpro.com`, **Then** Next.js middleware intercepts the unauthenticated request and redirects the user to `app.fbuploadpro.com/login`.
 
 ---
 
@@ -85,7 +85,7 @@ An authenticated user can securely terminate their session from any tenant works
 - **Reserved Subdomain Protection**: If an email derives a reserved platform slug (e.g. `admin@domain.com` -> `admin`, `api@domain.com` -> `api`, `app@domain.com` -> `app`), the system must prevent assignment of reserved slugs and append a suffix (e.g. `admin1`) or prompt for a customized slug.
 - **Root Domain vs Localhost Cookie Scoping**: In production, cookies are scoped to `Domain=.fbuploadpro.com`; in local development, cookies must omit the domain attribute or use `localhost` so cookies persist seamlessly across `localhost:3000` and `test.localhost:3000`.
 - **Supabase Auth vs PostgreSQL Synchronization**: If Supabase Auth succeeds but the database insert fails (e.g., transient database error), the system must cleanly handle the error, rollback or delete the orphaned Supabase user, and return a graceful error message to the user without leaving corrupt state.
-- **Session Expiration During Active Use**: If a session expires while an operator is on the dashboard, subsequent API requests return 401 with `WWW-Authenticate`, and client navigation redirects to `/login?returnUrl=...`.
+- **Session Expiration During Active Use**: If a session expires while an operator is in the workspace, subsequent API requests return 401 with `WWW-Authenticate`, and client navigation redirects to `/login?returnUrl=...`.
 
 ---
 
@@ -100,7 +100,7 @@ An authenticated user can securely terminate their session from any tenant works
 - **FR-005**: The system MUST authenticate users and manage password credentials via Supabase Authentication (`@supabase/supabase-js` / `@supabase/ssr`).
 - **FR-006**: Upon successful registration, the system MUST synchronize the user record into `public.users` (`id`, `email`, `name`, `subdomain`, `role = 'user'`, `status = 'active'`) and initialize the default storage quota (5GB / 50 assets) in `public.storage_quotas`.
 - **FR-007**: The system MUST issue an authenticated session cookie (`fbup_session`) signed cryptographically and scoped to the root domain (`Domain=.fbuploadpro.com` in production, or omitted for `localhost`) with `HttpOnly = true`, `Secure = true` (in production), `SameSite = Lax`, and `Path = /`.
-- **FR-008**: Upon successful authentication or registration, the system MUST redirect the user to their tenant workspace dashboard (`http(s)://{subdomain}.{rootDomain}/dashboard`), or to the validated `returnUrl` parameter if supplied.
+- **FR-008**: Upon successful authentication or registration, the system MUST redirect the user to their tenant workspace (`http(s)://{subdomain}.{rootDomain}`), or to the validated `returnUrl` parameter if supplied.
 - **FR-009**: The system MUST block login for users whose account status is `suspended`, safely redirecting them to `/account-suspended`.
 - **FR-010**: The login and registration interfaces MUST be built strictly using the Spec 008 reusable UI components (`Button`, `Input`, `Card`, `Alert`, `StatusDot`) and Binance Precision Dual-Theme tokens from `apps/web/src/lib/theme.ts`.
 - **FR-011**: The system MUST provide a secure sign-out endpoint (`POST /api/auth/logout`) that invalidates the Supabase session, expires the root-domain session cookie (`Max-Age = 0`), and redirects to `/login`.
@@ -122,7 +122,7 @@ An authenticated user can securely terminate their session from any tenant works
 
 - **SC-001**: 100% of registrations with valid email, name, phone, and password successfully generate a valid tenant subdomain and redirect to their workspace within 1.5 seconds.
 - **SC-002**: 100% of dots (`.`) and plus signs (`+`) are cleanly stripped from the derived subdomain slug (e.g. `john.doe+reels@gmail.com` reliably produces `johndoe`).
-- **SC-003**: 100% of authentications set an `HttpOnly`, `SameSite=Lax` cookie scoped to the root domain, allowing immediate access to `{subdomain}.domain.com/dashboard` without re-authenticating.
+- **SC-003**: 100% of authentications set an `HttpOnly`, `SameSite=Lax` cookie scoped to the root domain, allowing immediate access to `{subdomain}.domain.com` without re-authenticating.
 - **SC-004**: Zero ad-hoc CSS colors, custom border declarations, or capsule pill badges in the login and signup forms; 100% compliance with `apps/web/src/lib/theme.ts`.
 - **SC-005**: 100% of unit and integration tests for authentication pass cleanly in the Turborepo test pipeline.
 - **SC-006**: Suspended accounts are 100% blocked from logging in or receiving active session tokens.
