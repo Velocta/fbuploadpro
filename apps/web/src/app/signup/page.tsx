@@ -12,6 +12,7 @@ export default function SignupPage() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -33,6 +34,10 @@ export default function SignupPage() {
     }
     if (password.length < 8) {
       setErrorMessage('Password must be at least 8 characters long.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match. Please verify both password fields.');
       return;
     }
 
@@ -138,6 +143,15 @@ export default function SignupPage() {
           helperText="Minimum 8 characters"
         />
 
+        <PasswordInput
+          label="Confirm Password"
+          placeholder="••••••••••••"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          disabled={isSubmitting}
+          required
+        />
+
         <Button
           type="submit"
           variant="primary"
@@ -145,7 +159,7 @@ export default function SignupPage() {
           isLoading={isSubmitting}
           style={{ width: '100%', marginTop: SPACING.sm }}
         >
-          Create Workspace
+          Create Account
         </Button>
       </form>
     </AuthSplitLayout>

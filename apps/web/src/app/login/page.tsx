@@ -74,7 +74,7 @@ export default function LoginPage() {
   return (
     <AuthSplitLayout
       title="Sign In"
-      description="Enter your credentials to access your Facebook publishing workspace."
+      description="Welcome back! Sign in to manage and publish your content across Facebook and Instagram."
       footer={
         <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
           Don&apos;t have an account?{' '}

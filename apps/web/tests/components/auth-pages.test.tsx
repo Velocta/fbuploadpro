@@ -7,7 +7,7 @@ import { PALETTE } from '@/lib/theme';
 
 describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
   describe('SignupPage', () => {
-    it('renders all required registration inputs without subdomain preview', () => {
+    it('renders all required registration inputs including confirm password without subdomain preview', () => {
       const { hasText, hasAttribute, html } = render(<SignupPage />);
 
       expect(hasText('Create Account')).toBe(true);
@@ -15,9 +15,9 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
       expect(hasText('Phone Number')).toBe(true);
       expect(hasText('Email Address')).toBe(true);
       expect(hasText('Password')).toBe(true);
+      expect(hasText('Confirm Password')).toBe(true);
       // Per Spec 010 user directive, subdomain preview is removed
       expect(hasText('Workspace URL:')).toBe(false);
-      expect(hasText('Create Workspace')).toBe(true);
 
       expect(hasAttribute('type', 'email')).toBe(true);
       expect(hasAttribute('type', 'tel')).toBe(true);
@@ -39,10 +39,11 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
   });
 
   describe('LoginPage', () => {
-    it('renders credentials inputs and sign-in button', () => {
+    it('renders credentials inputs and updated welcome back description', () => {
       const { hasText, hasAttribute, html } = render(<LoginPage />);
 
       expect(hasText('Sign In')).toBe(true);
+      expect(hasText('Welcome back! Sign in to manage and publish your content across Facebook and Instagram.')).toBe(true);
       expect(hasText('Email Address')).toBe(true);
       expect(hasText('Password')).toBe(true);
       expect(hasAttribute('type', 'email')).toBe(true);
