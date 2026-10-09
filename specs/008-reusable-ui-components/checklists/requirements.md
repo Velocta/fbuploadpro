@@ -31,7 +31,7 @@
 ## Feature Readiness
 
 - [X] All functional requirements have clear acceptance criteria
-- [X] User scenarios cover primary interactive, structural, feedback, and showroom flows
+- [X] User scenarios cover primary interactive, structural, feedback, and theme flows
 - [X] Feature meets measurable outcomes defined in Success Criteria
 - [X] No implementation details leak into specification
 

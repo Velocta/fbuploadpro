@@ -142,10 +142,9 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
   - `DESIGN.md` is permanently frozen and locked as the repository's immutable design system specification.
   - All frontend code and theme configurations in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` must strictly conform to `DESIGN.md` without modifying the root design specification document itself.
   - Only the human project lead may directly alter or update `DESIGN.md`.
-- **Pre-Merge UI Showroom & Review Protocol**:
-  - To prevent context fragmentation and workflow derailment, component previews are batched at the very end when all tasks are complete and the Pull Request is ready for merge.
-  - All mock data and component preview harnesses are strictly isolated in `apps/showroom` (with zero mock code in `apps/web`).
-  - When a PR containing UI components is ready, the agent launches the showroom on port 3001, opens an ephemeral Cloudflare tunnel, and provides the live HTTPS link for the user to interactively inspect all component states before requesting merge approval.
+- **Post-PR Vercel Preview Link Protocol**:
+  - UI previews are validated directly via Vercel Preview Deployments generated automatically for every Pull Request. All UI components are verified directly within `apps/web`.
+  - When a Pull Request is opened or updated, the agent MUST only surface and present the live Vercel preview deployment URL if the PR includes UI changes (e.g. pages, layouts, styles, components in `apps/web`) for interactive user inspection and review prior to requesting merge approval. For non-UI PRs (pure backend, database migrations, devops, or documentation), do not show a preview link.
 - **Prohibition on Running Migrations via Supabase MCP (`apply_migration` / `execute_sql`)**:
   - AI agents and automated tools MUST NEVER use the Supabase MCP server or direct ad-hoc SQL execution tools (`apply_migration`, `execute_sql`, etc.) to run, apply, or execute database schema migrations on the remote database.
   - All database schema modifications MUST be written as versioned forward migration files strictly located in `supabase/migrations/YYYYMMDDHHmmss_<name>.sql` and delivered through GitHub Pull Requests.

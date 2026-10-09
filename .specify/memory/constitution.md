@@ -60,7 +60,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
    - `/speckit-implement` — TDD execution of tasks.
    - `/speckit-converge` — Verification against specification before completion.
 3. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates before merge.
-4. **Pre-Merge Component Showroom**: All mock data and UI component harnesses are isolated in `apps/showroom` (with zero mock code contaminating `apps/web`). Component previews and interactive stress tests are batched at the conclusion of milestone tasks when the PR is ready.
+4. **Post-PR Vercel Preview Deployments**: UI previews are validated directly via automated Vercel Preview Deployments generated on each Pull Request. If and only if the PR includes UI changes, the live Vercel preview link must be presented to the user for interactive visual inspection before requesting merge approval. Non-UI PRs do not surface a preview link.
 5. **Mandatory Human Approval Gate**: Autonomous or unapproved merges to `main` are strictly forbidden. The agent must explicitly ask for and receive user approval prior to executing any merge, regardless of whether the PR contains frontend, backend, database, or infrastructure changes.
 
 ## Governance
@@ -70,4 +70,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.3.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.4.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

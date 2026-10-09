@@ -44,12 +44,12 @@
 
 ---
 
-## Phase 5: User Story 4 (Priority: P4) - Showroom & Component Cleanliness
+## Phase 5: User Story 4 (Priority: P4) - Component Cleanliness
 
-**Purpose**: Ensure showroom and sidebar remain free of mock data and placeholder clutter until user-defined content is implemented.
+**Purpose**: Ensure sidebar primitives remain pure and free of mock data and placeholder clutter for user-defined content.
 
-- [x] T011 [P4] [US4] Remove mock data and placeholder pages from `apps/showroom/src/app/sidebar/` per user directive
-- [x] T012 [P4] [US4] Revert `apps/showroom/src/app/page.tsx` to clean baseline, preserving pure unpopulated sidebar primitives
+- [x] T011 [P4] [US4] Remove mock data and placeholder pages per user directive
+- [x] T012 [P4] [US4] Preserve pure unpopulated sidebar primitives in `apps/web/src/components/ui/sidebar.tsx`
 
 ---
 

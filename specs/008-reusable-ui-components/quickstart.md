@@ -17,18 +17,16 @@ pnpm --version
 
 ---
 
-## 2. Interactive Verification in Showroom (Port 3001)
+## 2. Interactive Verification in `apps/web`
 
-Launch the isolated UI showroom:
+Launch the Next.js web application:
 
 ```bash
 export PATH="/home/agent/.local/nodejs/bin:$PATH"
-pnpm showroom
-# OR
-pnpm turbo run dev --filter=@fbuploadpro/showroom
+pnpm turbo run dev --filter=@fbuploadpro/web
 ```
 
-Navigate to `http://localhost:3001` to test:
+Navigate to `http://localhost:3000` to test:
 1. **Interactive Form Benches**:
    - Verify `Button` states (Primary Gold, Secondary Slate, Ghost, Danger Rose, Loading spinner).
    - Test `Input` focus halos (`rgba(250, 215, 52, 0.35)`), password toggle, error states.

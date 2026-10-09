@@ -24,7 +24,6 @@ flowchart TD
 
     subgraph AppPlane ["Application Control Plane (Next.js 16 App Router)"]
         Web["apps/web\nNext.js 16 App Router + React 19\n(Tenant Subdomain Routing)"]
-        Showroom["apps/showroom\nIsolated UI Sandbox (Port 3001)\n(Pre-merge Visual Verification)"]
     end
 
     subgraph SupabaseCloud ["Supabase (Data Substrate & Identity)"]
@@ -105,7 +104,7 @@ The platform operates on a clear three-tier role taxonomy:
 
 | Role | Primary Purpose | Key Capabilities |
 |---|---|---|
-| **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders and reusable captions, configures Page queue slots, schedules and publishes unlimited posts without credit checks, and monitors Page insights. |
+| **User** | Content Creator / Operator | Connects multiple Facebook profiles, manages personal Media Library, creates custom folders, configures Page queue slots, schedules and publishes unlimited posts without credit checks, and monitors Page insights. |
 | **Seller** | Affiliate / Referral Partner | Onboards users via unique referral links/codes. Tracks referred users' activity and workspace usage. |
 | **Admin** | Platform & System Controller | Manages platform health, system operations, and user statuses. User onboarding and management is completely automated. |
 
@@ -122,10 +121,9 @@ Each user has an isolated, feature-rich Media Library:
 - **Organization & Metadata**:
   - **Custom Folders**: Nested or categorized collections for organizing campaigns, themes, or series.
   - **Tags**: Multi-tag filtering and search for quick asset retrieval.
-  - **Reusable Captions**: A library of saved caption templates and snippets that can be attached to posts with one click.
 - **Storage Infrastructure & Quotas**:
   - High-availability object storage powered by **Cloudflare R2** with zero egress fees.
-  - Per-user storage limits (default 5 GB / 50 assets), with real-time quota tracking.
+  - Per-user storage limits (default 10 GB), with real-time quota tracking.
 
 ---
 
@@ -136,7 +134,7 @@ Publishing is driven by an automated, queue-based slot architecture:
 1. **Recurring Queue Slots**:
    - For each connected Facebook Page, users define recurring publishing time slots (e.g., Daily at `09:00`, `13:00`, and `18:00`).
 2. **Selective Asset Queueing**:
-   - Users select videos or images from their Media Library, assign captions (or reusable caption templates), and add them to target Page queues.
+   - Users select videos or images from their Media Library, assign captions, and add them to target Page queues.
 3. **Automated First Comment**:
    - Users can optionally attach a First Comment (calls to action, affiliate links, hashtags) that is automatically posted immediately after the post goes live.
 4. **Cloudflare Worker Edge Scheduler**:
@@ -210,7 +208,7 @@ flowchart LR
 - **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
 - **Spec 002 (Completed & Merged; UI Slated for Assembly)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
 - **Spec 003 (Completed & Merged; UI Slated for Assembly)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
-- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, reusable caption templates, 5GB/50-asset storage quota meters).
+- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, 10 GB storage quota meters).
 - **Spec 005 (Completed & Merged; UI Slated for Assembly)**: Automated Queue Slots Publishing Engine & Edge Dispatcher (recurring slot definitions, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment).
 - **Spec 006 (Completed & Merged; UI Slated for Assembly)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
 - **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
@@ -234,10 +232,10 @@ All development follows autonomous multi-agent orchestration codified in [`.agen
 1. **Focused Execution & Mandatory Human Merge Gate ("Ask Once, Verify & Approve Before Merge")**:
    - The agent confirms **which spec or feature to work on**.
    - The agent autonomously conducts specification, planning, task decomposition, and implementation across subagents without constant micro-interruptions.
-   - **Pre-Merge UI Showroom**: To keep agent focus sharp and eliminate mock data contamination from `apps/web`, component testing is batched at the very end when all milestone tasks are complete. The agent launches `apps/showroom` and provides an ephemeral public tunnel link for interactive inspection across all states (empty, loading, active, error, mobile/desktop).
+   - **Post-PR Vercel Preview Testing**: UI components and layouts are reviewed and validated using live Vercel Preview Deployments generated automatically for each Pull Request. If and only if the PR modifies UI components or pages, the agent retrieves the preview URL and provides it for interactive user inspection across all states (empty, loading, active, error, mobile/desktop). Non-UI PRs do not surface a preview link.
    - **Mandatory Human Approval Gate**: The agent MUST NEVER merge any PR into `main` without explicitly asking the user and receiving direct approval. This applies to all PRs (frontend, backend, database migrations, devops, or docs).
 2. **Deterministic 7-Stage Sequence**:
-   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement` ➔ `/speckit-converge` ➔ `Pre-Merge Showroom & Human Approval` ➔ `Merge & Deploy`.
+   - `RFC Discussion` ➔ `/speckit-specify` ➔ `/speckit-plan` ➔ `/speckit-tasks` ➔ `/speckit-implement` ➔ `/speckit-converge` ➔ `PR Vercel Preview & Human Approval` ➔ `Merge & Deploy`.
 3. **Clean Chat & Sub-Agent Delegation**:
    - Orchestrator keeps main chat executive-ready, isolating verbose commands into dedicated subagents (`frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`).
 4. **Constitutional Guardrails**:

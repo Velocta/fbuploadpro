@@ -25,6 +25,6 @@ Follow Conventional Commits:
 - Autonomous merges or auto-merging without explicit human confirmation are strictly prohibited.
 - Before merging any PR into `main`, the agent MUST:
   1. Ensure 100% CI checks and Quality Gates pass with zero errors.
-  2. If the PR modifies or adds UI components: launch `apps/showroom` on port 3001, generate an ephemeral Cloudflare tunnel, and provide the live link for user testing.
+  2. If the PR modifies or adds UI components: obtain the live Vercel Preview Deployment URL for the PR and share it in chat for user review and interactive testing.
   3. Formally request human approval in chat (*"PR #X is verified and ready. May I proceed with merging into main?"*).
   4. Wait for explicit human confirmation before executing `gh pr merge`. Even if no frontend code is present, NEVER merge without human approval.
