@@ -1,6 +1,6 @@
-# Tasks: Auth Gmail Canonicalization, Phone E.164 & Hardened OTP Security (Spec 014)
+# Tasks: Auth Gmail Canonicalization, Phone E.164 & Hardened OTP Security (Spec 015)
 
-**Input**: Design documents from `specs/014-auth-gmail-canonicalization-phone-e164-and-otp-hardening/`  
+**Input**: Design documents from `specs/015-auth-gmail-canonicalization-phone-e164-and-otp-hardening/`  
 **Prerequisites**: `spec.md`, `plan.md`, `checklists/requirements.md`
 
 ---

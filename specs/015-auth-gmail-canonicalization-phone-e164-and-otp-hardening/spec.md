@@ -1,4 +1,4 @@
-# Feature Specification: Auth Gmail Canonicalization, Phone E.164 & Hardened OTP Security (Spec 014)
+# Feature Specification: Auth Gmail Canonicalization, Phone E.164 & Hardened OTP Security (Spec 015)
 
 **Feature Branch**: `feat/014-auth-gmail-canonicalization-phone-e164-and-otp-hardening`  
 **Created**: 2026-10-09  
