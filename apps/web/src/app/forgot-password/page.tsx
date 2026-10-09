@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
+import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
@@ -11,20 +12,22 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | undefined>(undefined);
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setEmailError(undefined);
+    setGeneralError(null);
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('Please enter a valid Gmail address.');
+      setEmailError('Please enter a valid Gmail address.');
       return;
     }
     const domain = cleanEmail.split('@')[1];
     if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
-      setErrorMessage('Password recovery is available for @gmail.com (or @googlemail.com) accounts.');
+      setEmailError('Password recovery is available for @gmail.com (or @googlemail.com) accounts.');
       return;
     }
 
@@ -40,7 +43,15 @@ export default function ForgotPasswordPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Failed to send recovery link. Please try again.'));
+        if (res.status === 400 && data.error) {
+          setEmailError(sanitizeAuthErrorMessage(data.error));
+          setIsSubmitting(false);
+          return;
+        }
+
+        setGeneralError(
+          sanitizeAuthErrorMessage(data.error, 'Failed to send recovery link. Please try again.')
+        );
         setIsSubmitting(false);
         return;
       }
@@ -48,7 +59,7 @@ export default function ForgotPasswordPage() {
       setIsSubmitted(true);
       setIsSubmitting(false);
     } catch {
-      setErrorMessage('Unable to process your request at this moment. Please check your connection and try again.');
+      setGeneralError('Unable to process your request at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -73,17 +84,6 @@ export default function ForgotPasswordPage() {
         </span>
       }
     >
-      {errorMessage && (
-        <div style={{ marginBottom: SPACING.lg }}>
-          <Alert
-            severity="error"
-            title="Couldn't send recovery link"
-            message={sanitizeAuthErrorMessage(errorMessage)}
-            onClose={() => setErrorMessage(null)}
-          />
-        </div>
-      )}
-
       {isSubmitted ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
           <Alert
@@ -112,6 +112,8 @@ export default function ForgotPasswordPage() {
             onClick={() => {
               setIsSubmitted(false);
               setEmail('');
+              setEmailError(undefined);
+              setGeneralError(null);
             }}
             style={{
               background: 'transparent',
@@ -126,24 +128,31 @@ export default function ForgotPasswordPage() {
           </button>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
           <Input
             label="Email Address"
             type="email"
             placeholder="you@gmail.com"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            error={emailError}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError(undefined);
+              if (generalError) setGeneralError(null);
+            }}
             disabled={isSubmitting}
             required
             helperText="We will send a password reset link to your registered Gmail address."
           />
+
+          <FormErrorCallout message={generalError} style={{ marginTop: SPACING.xs }} />
 
           <Button
             type="submit"
             variant="primary"
             size="lg"
             isLoading={isSubmitting}
-            style={{ width: '100%', marginTop: SPACING.sm }}
+            style={{ width: '100%', marginTop: SPACING.xs }}
           >
             Send Recovery Link
           </Button>

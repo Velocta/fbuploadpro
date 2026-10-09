@@ -41,6 +41,62 @@ export function canonicalizeGmailAddress(rawEmail: string): string {
   return `${withoutDots}@gmail.com`;
 }
 
+export interface ClientPhoneValidationResult {
+  isValid: boolean;
+  error?: string;
+  formatted?: string;
+}
+
+/**
+ * Validates a raw client phone input and returns specific, friendly error guidance.
+ */
+export function validateClientPhoneNumber(rawPhone: string): ClientPhoneValidationResult {
+  if (!rawPhone || typeof rawPhone !== 'string' || !rawPhone.trim()) {
+    return { isValid: false, error: 'Phone number is required.' };
+  }
+
+  const trimmed = rawPhone.trim();
+  if (!trimmed.startsWith('+')) {
+    return {
+      isValid: false,
+      error: 'Phone number must include an international calling code starting with + (e.g. +1 555 123 4567 or +92 300 1234567).',
+    };
+  }
+
+  const rest = trimmed.slice(1);
+  if (/[a-zA-Z]/.test(rest)) {
+    return {
+      isValid: false,
+      error: 'Phone numbers cannot contain letters. Please enter numbers only.',
+    };
+  }
+
+  const sanitized = '+' + rest.replace(/\D/g, '');
+  if (sanitized.length < 8) {
+    return {
+      isValid: false,
+      error: 'Please enter a complete, valid international phone number.',
+    };
+  }
+
+  if (sanitized.length > 16) {
+    return {
+      isValid: false,
+      error: 'Phone number cannot exceed 15 digits.',
+    };
+  }
+
+  const parsed = parsePhoneNumberFromString(sanitized);
+  if (!parsed || !parsed.isValid()) {
+    return {
+      isValid: false,
+      error: 'Please enter a valid international phone number with a recognized country code.',
+    };
+  }
+
+  return { isValid: true, formatted: parsed.format('E.164') };
+}
+
 /**
  * International E.164 phone number validation and normalization:
  * 1. Requires leading + international country calling code.
@@ -49,27 +105,11 @@ export function canonicalizeGmailAddress(rawEmail: string): string {
  * 4. Returns formatted standard E.164 string (e.g. +923001234567, +15551234567).
  */
 export function validateAndFormatE164Phone(rawPhone: string): string {
-  if (!rawPhone || typeof rawPhone !== 'string') {
-    throw new Error('Phone number is required');
+  const result = validateClientPhoneNumber(rawPhone);
+  if (!result.isValid || !result.formatted) {
+    throw new Error(result.error || 'Please enter a valid international phone number in E.164 format');
   }
-
-  const trimmed = rawPhone.trim();
-  if (!trimmed.startsWith('+')) {
-    throw new Error('Phone number must include an international calling code starting with + (e.g. +15551234567 or +923001234567)');
-  }
-
-  // Strip non-numeric characters except leading +
-  const sanitized = '+' + trimmed.slice(1).replace(/\D/g, '');
-  if (sanitized.length < 8 || sanitized.length > 16) {
-    throw new Error('Please enter a valid international phone number in E.164 format (e.g. +15551234567)');
-  }
-
-  const parsed = parsePhoneNumberFromString(sanitized);
-  if (!parsed || !parsed.isValid()) {
-    throw new Error('Please enter a valid international phone number with a recognized country code (e.g. +15551234567)');
-  }
-
-  return parsed.format('E.164');
+  return result.formatted;
 }
 
 export function deriveSubdomainFromEmail(email: string): string {

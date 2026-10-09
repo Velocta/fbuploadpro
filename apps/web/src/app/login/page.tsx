@@ -2,18 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Input, Button, Alert } from '@/components/ui';
+import { Input, Button } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
+import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
+
+interface FieldErrors {
+  email?: string | undefined;
+  password?: string | undefined;
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -25,25 +32,45 @@ export default function LoginPage() {
     }
   }, []);
 
+  const clearFieldError = (field: keyof FieldErrors) => {
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+    if (generalError) {
+      setGeneralError(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setErrorMessage(null);
+    setGeneralError(null);
+
+    const errors: FieldErrors = {};
 
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
-      setErrorMessage('Please enter a valid Gmail address.');
-      return;
+      errors.email = 'Please enter a valid Gmail address.';
+    } else {
+      const domain = cleanEmail.split('@')[1];
+      if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+        errors.email = 'Only @gmail.com (or @googlemail.com) accounts are supported.';
+      }
     }
-    const domain = cleanEmail.split('@')[1];
-    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
-      setErrorMessage('Only @gmail.com (or @googlemail.com) accounts are supported.');
-      return;
-    }
+
     if (!password) {
-      setErrorMessage('Please enter your password.');
+      errors.password = 'Please enter your password.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
       return;
     }
 
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
@@ -64,7 +91,24 @@ export default function LoginPage() {
           window.location.href = data.redirectUrl;
           return;
         }
-        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Invalid email or password. Please try again.'));
+
+        if (res.status === 400 && data.details) {
+          const mappedErrors: FieldErrors = {};
+          for (const [key, msgs] of Object.entries(data.details)) {
+            if (Array.isArray(msgs) && msgs.length > 0 && typeof msgs[0] === 'string') {
+              mappedErrors[key as keyof FieldErrors] = msgs[0];
+            }
+          }
+          if (Object.keys(mappedErrors).length > 0) {
+            setFieldErrors(mappedErrors);
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
+        setGeneralError(
+          sanitizeAuthErrorMessage(data.error, 'Invalid email or password. Please try again.')
+        );
         setIsSubmitting(false);
         return;
       }
@@ -73,7 +117,7 @@ export default function LoginPage() {
         window.location.href = data.redirectUrl;
       }
     } catch {
-      setErrorMessage('Unable to sign in at this moment. Please check your connection and try again.');
+      setGeneralError('Unable to sign in at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -98,25 +142,18 @@ export default function LoginPage() {
         </span>
       }
     >
-      {errorMessage && (
-        <div style={{ marginBottom: SPACING.lg }}>
-          <Alert
-            severity="error"
-            title="Couldn't sign you in"
-            message={sanitizeAuthErrorMessage(errorMessage)}
-            onClose={() => setErrorMessage(null)}
-          />
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+      <form onSubmit={handleSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
         <Input
           label="Email Address"
           type="email"
           placeholder="you@gmail.com"
           autoComplete="username"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          error={fieldErrors.email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            clearFieldError('email');
+          }}
           disabled={isSubmitting}
           required
         />
@@ -156,19 +193,25 @@ export default function LoginPage() {
             placeholder="••••••••••••"
             autoComplete="current-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            error={fieldErrors.password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              clearFieldError('password');
+            }}
             disabled={isSubmitting}
             required
             aria-label="Password"
           />
         </div>
 
+        <FormErrorCallout message={generalError} style={{ marginTop: SPACING.xs }} />
+
         <Button
           type="submit"
           variant="primary"
           size="lg"
           isLoading={isSubmitting}
-          style={{ width: '100%', marginTop: SPACING.sm }}
+          style={{ width: '100%', marginTop: SPACING.xs }}
         >
           Sign In
         </Button>
