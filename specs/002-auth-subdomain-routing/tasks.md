@@ -79,29 +79,26 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 - [X] T043 [P] [US3] Write integration tests for RBAC route protection in apps/web/tests/rbac-routes.test.ts (Issue: #70)
 
 ### Implementation for User Story 3
-- [X] T044 [US3] Implement RBAC route helper and seller route guard in apps/web/src/lib/rbac.ts and apps/web/src/app/tenant/[subdomain]/seller/page.tsx (Issue: #71)
+- [X] T044 [US3] Implement RBAC route helper and role guards in apps/web/src/lib/rbac.ts (Issue: #71)
 
 **Checkpoint**: At this point, User Stories 1, 2, and 3 work independently.
 
 ---
 
-## Phase 6: User Story 4 - Multi-Tenant Workspace Dashboard Shell (Priority: P4) [UI SLATED FOR RECREATION]
+## Phase 6: User Story 4 - Multi-Tenant Workspace Shell (Priority: P4)
 
-> [!NOTE]
-> The frontend UI components in `apps/web` have been cleared and are slated for recreation following *Taste Skill* and *Impeccable* standards without token balance meters.
+**Goal**: Deliver Next.js App Router workspace shell displaying tenant context.
 
-**Goal**: Deliver Next.js App Router workspace shell displaying tenant subdomain badge and user role badge (with UI slated for recreation).
-
-**Independent Test**: Can be validated by testing server component rendering of dashboard shell, verifying correct tenant subdomain badge and role badge without leaking credentials.
+**Independent Test**: Can be validated by testing server component rendering of workspace shell, verifying tenant isolation without leaking credentials.
 
 ### Tests for User Story 4 (TDD) ⚠️
-- [X] T045 [P] [US4] Write tests for dashboard shell component and tenant layout in apps/web/tests/dashboard.test.ts (Issue: #72)
+- [X] T045 [P] [US4] Write tests for workspace shell component and tenant layout in apps/web/tests/dashboard.test.ts (Issue: #72)
 
-### Implementation for User Story 4 (UI Slated for Recreation)
-- [ ] T046 [US4] Recreate tenant workspace layout with navigation header, subdomain badge, and role badge (zero token counter) in apps/web/src/app/tenant/[subdomain]/layout.tsx (Issue: #73)
-- [ ] T047 [US4] Recreate tenant workspace dashboard page and default redirect in apps/web/src/app/tenant/[subdomain]/page.tsx and apps/web/src/app/tenant/[subdomain]/dashboard/page.tsx (Issue: #74)
+### Implementation for User Story 4
+- [X] T046 [US4] Implement tenant workspace layout canvas wrapper in apps/web/src/app/tenant/[subdomain]/layout.tsx (Issue: #73)
+- [X] T047 [US4] Implement tenant workspace index in apps/web/src/app/tenant/[subdomain]/page.tsx (Issue: #74)
 
-**Checkpoint**: Backend routing complete; UI shell pending recreation.
+**Checkpoint**: Backend routing and workspace shell complete.
 
 ---
 
@@ -143,5 +140,5 @@ This document decomposes the implementation plan into dependency-ordered, atomic
 ### Incremental Delivery
 1. Add User Story 2 (T040-T042) ➔ Session authentication & tenant isolation guard.
 2. Add User Story 3 (T043-T044) ➔ RBAC permissions.
-3. Add User Story 4 (T045-T047) ➔ Dashboard shell with live token balance.
+3. Add User Story 4 (T045-T047) ➔ Workspace shell.
 4. Polish & Quality Gates (T048-T049) ➔ Turborepo 100% clean.

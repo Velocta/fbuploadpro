@@ -6,7 +6,7 @@
 
 ## Summary
 
-Implement an isolated, dedicated Media Library per user workspace supporting direct-from-PC uploads of short-form videos and images directly to Cloudflare R2 via presigned `PUT` URLs. Enforce a 5 GB default baseline storage quota with two-phase reservation and atomic accounting. Support custom organizational folders with non-destructive deletion (`ON DELETE SET NULL`), multi-tag taxonomy with JSONB indexing, client-side metadata and thumbnail extraction (HTML5 Canvas/Video), a reusable copywriting caption templates vault, full-screen playback/inspection modals, and safe asset purging with instant quota reclamation. Deliver an interactive React 19 / Next.js 16 UI at `/tenant/[subdomain]/media`.
+Implement an isolated, dedicated Media Library per user workspace supporting direct-from-PC uploads of short-form videos and images directly to Cloudflare R2 via presigned `PUT` URLs. Enforce a 5 GB default baseline storage quota with two-phase reservation and atomic accounting. Support custom organizational folders with non-destructive deletion (`ON DELETE SET NULL`), multi-tag taxonomy with JSONB indexing, client-side metadata and thumbnail extraction (HTML5 Canvas/Video), a reusable copywriting caption templates vault, full-screen playback/inspection modals, and safe asset purging with instant quota reclamation. Deliver dedicated backend media management APIs and R2 storage integration.
 
 ## Technical Context
 

@@ -28,7 +28,7 @@ curl -X POST http://localhost:3000/api/auth/signup \
 ```
 Expected output:
 * HTTP 201 Created
-* `redirectUrl: "http://janetester.localhost:3000/dashboard"`
+* `redirectUrl: "http://janetester.localhost:3000"`
 * `Set-Cookie: fbup_session=...; HttpOnly; SameSite=Lax; Path=/`
 
 ### 2. Test Login

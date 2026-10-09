@@ -12,7 +12,7 @@
 
 ### User Story 1 - Connecting Multiple Facebook Accounts & Encrypted Token Storage (Priority: P1) 🎯 MVP
 
-A tenant workspace user can connect multiple distinct Facebook accounts (for example, a personal profile, an agency manager account, or client representative profiles) to their single tenant workspace. For each account connection, the user initiates a secure OAuth 2.0 flow from the workspace dashboard. Upon authorization on Facebook, the platform securely receives and exchanges the authorization code for a long-lived user access token (valid up to 60 days). The system records the Facebook account's identity (`fb_account_id`), display name, token validity period, and connection status, encrypting the access token with AES-256-GCM before persisting it in the database. When the user connects additional Facebook accounts, each new account is added alongside existing accounts without overriding or conflicting with previously connected accounts.
+A tenant workspace user can connect multiple distinct Facebook accounts (for example, a personal profile, an agency manager account, or client representative profiles) to their single tenant workspace. For each account connection, the user initiates a secure OAuth 2.0 flow. Upon authorization on Facebook, the platform securely receives and exchanges the authorization code for a long-lived user access token (valid up to 60 days). The system records the Facebook account's identity (`fb_account_id`), display name, token validity period, and connection status, encrypting the access token with AES-256-GCM before persisting it in the database. When the user connects additional Facebook accounts, each new account is added alongside existing accounts without overriding or conflicting with previously connected accounts.
 
 **Why this priority**: Users and agencies manage social media across multiple personal or client Facebook profiles. Enabling multi-account connection with isolated encrypted token storage is the core foundation for all downstream page discovery and publishing.
 
@@ -46,7 +46,7 @@ Once one or more Facebook accounts are connected, the user can select any specif
 
 ### User Story 3 - Multi-Account Health Monitoring, Token Expiration & Re-Authentication (Priority: P3)
 
-The workspace dashboard provides a unified social accounts overview where users can view all connected Facebook accounts and their respective imported Pages. Each account and Page displays real-time operational status (`Active`, `Expired`, `Rate Limited`, `Disconnected`) and token expiration horizons. If Account A's token expires or is invalidated upstream (e.g. via password change), Account A is flagged with an expiration warning, while Account B and its associated Pages remain fully active and functional. Users can refresh or reconnect any individual account with a single click.
+The workspace provides a unified social accounts overview where users can view all connected Facebook accounts and their respective imported Pages. Each account and Page displays real-time operational status (`Active`, `Expired`, `Rate Limited`, `Disconnected`) and token expiration horizons. If Account A's token expires or is invalidated upstream (e.g. via password change), Account A is flagged with an expiration warning, while Account B and its associated Pages remain fully active and functional. Users can refresh or reconnect any individual account with a single click.
 
 **Why this priority**: Long-lived Facebook user tokens expire after approximately 60 days, and upstream permission changes can invalidate tokens at any time. Multi-account health monitoring ensures partial credential failures do not halt operations for healthy accounts.
 
@@ -104,7 +104,7 @@ A user can disconnect an individual Facebook Page or an entire Facebook account 
 - **FR-012**: The system MUST allow users to disconnect an individual Facebook account, safely detaching its linked pages and destroying its encrypted tokens, without affecting other connected accounts.
 - **FR-013**: The system MUST allow users to disconnect individual Facebook Pages without affecting sibling pages or the parent Facebook account.
 - **FR-014**: The system MUST sanitize all API responses and client view models to ensure zero exposure of raw access tokens or encryption keys.
-- **FR-015**: The system MUST provide a multi-account workspace UI at `/tenant/[subdomain]/accounts` displaying all connected accounts, account switching/filtering, discovered page selection, and real-time connection health (UI slated for recreation following Taste Skill & Impeccable guidelines).
+- **FR-015**: The system MUST provide multi-account management APIs displaying all connected accounts, account switching/filtering, discovered page selection, and real-time connection health.
 
 ### Key Entities *(include if feature involves data)*
 

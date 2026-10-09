@@ -8,7 +8,7 @@
 - [x] All redirect parameters (`returnUrl`) validated against strict relative path check (`startsWith('/') && !startsWith('//')`)
 - [x] Protocol-relative URLs (`//evil.com`) and data/javascript URIs blocked
 - [x] Fully-qualified URLs permitted ONLY if host matches exact `{subdomain}.{rootDomain}`
-- [x] Fallback always routes to safe internal tenant dashboard
+- [x] Fallback always routes to safe internal tenant workspace root
 
 ## 2. Password Reset Lifecycle & Authorization (OWASP A07: Identification and Authentication Failures)
 

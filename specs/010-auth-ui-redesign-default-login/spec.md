@@ -24,7 +24,7 @@ The new authentication experience follows a split-screen layout:
 
 ### User Story 1 - Default Root Navigation to Login (Priority: P1) 🎯 MVP
 
-When any visitor or operator navigates to the root URL (`/` or `app.fbuploadpro.com/`), they are immediately and seamlessly redirected to `/login`. The temporary placeholder landing card ("FBUploadPro: High-throughput Facebook publishing automation platform [Sign In] [Create Account]") is completely eliminated. If an authenticated user visits `/` or `/login`, the existing session middleware redirects them to their tenant dashboard (`{subdomain}.fbuploadpro.com/dashboard`).
+When any visitor or operator navigates to the root URL (`/` or `app.fbuploadpro.com/`), they are immediately and seamlessly redirected to `/login`. The temporary placeholder landing card ("FBUploadPro: High-throughput Facebook publishing automation platform [Sign In] [Create Account]") is completely eliminated. If an authenticated user visits `/` or `/login`, the existing session middleware redirects them to their tenant workspace (`{subdomain}.fbuploadpro.com`).
 
 **Why this priority**: Eliminates confusing temporary placeholder screens and establishes `/login` as the default front door of the web application.
 
@@ -36,7 +36,7 @@ When any visitor or operator navigates to the root URL (`/` or `app.fbuploadpro.
 **Acceptance Scenarios**:
 1. **Given** an unauthenticated visitor, **When** they navigate to `/`, **Then** the server redirects them to `/login`.
 2. **Given** an unauthenticated visitor on `app.{rootDomain}/`, **When** they request `/`, **Then** middleware routes them directly to `/login`.
-3. **Given** an authenticated user with an active session, **When** they request `/` or `/login`, **Then** middleware redirects them to their tenant workspace dashboard (`{subdomain}.{rootDomain}/dashboard`).
+3. **Given** an authenticated user with an active session, **When** they request `/` or `/login`, **Then** middleware redirects them to their tenant workspace (`{subdomain}.{rootDomain}`).
 
 ---
 
@@ -53,7 +53,7 @@ When an existing operator visits `/login`, they encounter a high-craft split-scr
 - Render `/login` on desktop (1440px) and mobile (375px).
 - Verify responsive layout (split-screen on desktop; clean stacked card with brand header on mobile).
 - Toggle password visibility and verify eye icon state and input masking.
-- Submit invalid credentials and verify `Alert` banner; submit valid credentials and verify redirection to `{subdomain}.{rootDomain}/dashboard`.
+- Submit invalid credentials and verify `Alert` banner; submit valid credentials and verify redirection to `{subdomain}.{rootDomain}`.
 
 **Acceptance Scenarios**:
 1. **Given** a visitor on `/login` at desktop width (>1024px), **When** the page renders, **Then** a split-screen presentation is shown with the brand showcase on the left and the sign-in form on the right.
@@ -70,7 +70,7 @@ When a prospective user visits `/signup`, they see the matching split-screen aes
 - The left showcase column presents creator benefits (multi-profile management, direct R2 media uploads, automated first comments).
 - The right column hosts the registration form collecting Full Name, Phone Number, Email Address, and Password with show/hide toggle.
 - Per explicit user decision, the raw subdomain preview badge is removed from the form for maximum elegance.
-- Upon successful submission, the account is created, the session cookie is issued, and the user is redirected into their new workspace dashboard.
+- Upon successful submission, the account is created, the session cookie is issued, and the user is redirected into their new workspace.
 
 **Why this priority**: Seamless user onboarding with unified brand aesthetics, eliminating clutter while preserving all required registration data fields.
 
@@ -78,13 +78,13 @@ When a prospective user visits `/signup`, they see the matching split-screen aes
 - Visit `/signup`.
 - Verify the split-screen layout and that no subdomain preview box is displayed.
 - Verify client validation for required fields, email format, and 8+ character password.
-- Test successful registration redirecting to the tenant dashboard.
+- Test successful registration redirecting to the tenant workspace.
 
 **Acceptance Scenarios**:
 1. **Given** a visitor on `/signup`, **When** viewing the registration form, **Then** inputs for Full Name, Phone Number, Email Address, and Password are present, and the subdomain preview badge is absent.
 2. **Given** the password field, **When** clicking the eye toggle, **Then** the password characters become visible or masked.
 3. **Given** form validation failure (e.g. password < 8 characters), **When** attempting submission, **Then** an informative validation message is displayed.
-4. **Given** successful registration, **When** `POST /api/auth/signup` completes, **Then** the user is redirected to `{subdomain}.{rootDomain}/dashboard`.
+4. **Given** successful registration, **When** `POST /api/auth/signup` completes, **Then** the user is redirected to `{subdomain}.{rootDomain}`.
 5. **Given** the "Already have an account?" footer, **When** clicked, **Then** the user navigates smoothly to `/login`.
 
 ---

@@ -45,7 +45,7 @@ flowchart TD
     OTPStore -->|Validated| SupabaseAuth
     SupabaseAuth -->|Provision User & Storage| DB[(Supabase / Postgres)]
     VerifyOTPAPI -->|Set fbup_session Cookie| OTPView
-    OTPView -->|Redirect to Tenant Workspace| Dashboard["/dashboard or returnUrl"]
+    OTPView -->|Redirect to Tenant Workspace| WorkspaceRoot["Workspace root or returnUrl"]
 
     TenantAuthReq -->|Yes| RedirectGateway
     TenantAuthReq -->|No| TenantWorkspace

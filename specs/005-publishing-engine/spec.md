@@ -63,23 +63,20 @@ As a social media creator, I want the system's background edge dispatcher to aut
 
 ---
 
-## User Story 4 - Execution Outcome Logging, Retry Handling & Publishing UI (Priority: P4)
+## User Story 4 - Execution Outcome Logging & Retry Handling (Priority: P4)
 
-> [!NOTE]
-> **Architecture & UI Update**: The token-based usage system has been retired in favor of flat workspace subscription access. The frontend publishing schedule UI at `/tenant/[subdomain]/publishing` is slated for recreation following *Taste Skill* and *Impeccable* guidelines.
-
-As a platform operator and creator, I want automated execution outcome logging, retry handling for transient network errors, and an interactive schedule dashboard, so that I have complete transparency into publishing status and reliable post dispatching.
+As a platform operator and creator, I want automated execution outcome logging and retry handling for transient network errors, so that I have complete transparency into publishing status and reliable post dispatching.
 
 **Why this priority**: Operational reliability and publishing transparency. Protects users from transient failures and provides complete audit logs and controls.
 
-**Independent Test**: Can be validated by executing a successful publish (asserting status becomes `published` and an execution log record is created), executing a simulated failed publish (asserting error logged and retry incremented), and inspecting the queue timeline UI at `/tenant/[subdomain]/publishing`.
+**Independent Test**: Can be validated by executing a successful publish (asserting status becomes `published` and an execution log record is created), executing a simulated failed publish (asserting error logged and retry incremented), and inspecting the queue execution logs.
 
 **Acceptance Scenarios**:
 
 1. **Given** a queue item that successfully publishes to Facebook, **When** publication completes, **Then** post ID is recorded, an execution log entry is created in `publish_logs`, and status transitions to `published`.
 2. **Given** a queue item where Facebook Graph API returns a non-fatal temporary error (e.g., rate limit or network glitch), **When** processing fails, **Then** the item retry count is incremented, error diagnostics are recorded, and next retry is scheduled.
 3. **Given** a queue item that reaches maximum retry attempts (e.g. 3 attempts) or encounters a fatal permission/account error, **When** it fails, **Then** status transitions to `failed`, an error log entry is recorded with full diagnostic details, and the user is alerted.
-4. **Given** an authenticated user navigating to `/tenant/[subdomain]/publishing`, **When** the page loads, **Then** the user sees an interactive schedule timeline of upcoming slots, currently queued items, published post history, slot management controls, and manual "Publish Now" / "Skip" actions (slated for UI recreation).
+4. **Given** an authenticated user querying queue status via API, **When** requested, **Then** the user receives upcoming slots, currently queued items, published post history, and execution logs.
 
 ---
 
@@ -114,7 +111,7 @@ As a platform operator and creator, I want automated execution outcome logging, 
 - **FR-013**: The worker MUST post the automated first comment to `/{post_id}/comments` immediately following successful post creation when configured.
 - **FR-014**: [RETIRED] Per-action token deduction has been retired.
 - **FR-015**: The system MUST record detailed error logs with retry metadata (maximum 3 retries for transient errors) on publication failure.
-- **FR-016**: The system MUST provide an interactive publishing management UI at `/tenant/[subdomain]/publishing` featuring slot configuration, upcoming schedule visualizer, manual trigger, and publishing history logs (UI slated for recreation following Taste Skill & Impeccable guidelines).
+- **FR-016**: The system MUST provide publishing queue management APIs featuring slot configuration, upcoming schedule calculation, manual trigger, and publishing history logs.
 
 ---
 

@@ -65,12 +65,12 @@ Handles the authorization code redirect from Facebook.
 - **Query Parameters**: Validated against `FacebookOAuthCallbackQuerySchema`.
 - **Processing**:
   1. Verify signed `state` parameter: HMAC signature, validity period (`exp`), and match against active session (`userId`, `subdomain`).
-  2. If `error` is present, redirect to `/tenant/{subdomain}/accounts?error={error_description}`.
+  2. If `error` is present, redirect to `/tenant/{subdomain}?error={error_description}`.
   3. Exchange temporary `code` for short-lived token via Graph API.
   4. Exchange short-lived token for long-lived token (~60 days) via `fb_exchange_token`.
   5. Fetch Facebook user profile via Graph API `/me`.
   6. Symmetrically encrypt the long-lived token using AES-256-GCM (`TOKEN_ENCRYPTION_KEY`).
   7. Upsert into `facebook_accounts` on conflict `(user_id, fb_account_id)`:
      - Updates `encrypted_access_token`, `token_expires_at`, `status = 'active'`, `updated_at = now()`.
-  8. Redirect to `/tenant/{subdomain}/accounts?connected=1`.
+  8. Redirect to `/tenant/{subdomain}?connected=1`.
 - **Error Handling**: Graceful redirect with sanitized error parameters; never leak tokens or keys.

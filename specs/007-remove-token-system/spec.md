@@ -49,15 +49,15 @@ As an active content creator with connected Facebook Pages, I want to queue and 
 
 ### User Story 3 - UI & Client Experience Cleanup (Priority: P3)
 
-As a workspace tenant user navigating the platform dashboard, media library, and publishing views, I want a clean, unencumbered user interface that displays my connected pages, media library, and publishing schedules without misleading token balances, coin icons, or top-up badges, so that my experience reflects an unrestricted, professional tool.
+As a workspace tenant user navigating the platform workspace and publishing tools, I want a clean, unencumbered user interface that displays my connected pages, media assets, and publishing schedules without misleading token balances, coin icons, or top-up badges, so that my experience reflects an unrestricted, professional tool.
 
 **Why this priority**: User-facing trust and visual clarity. Lingering token counters, balance badges, or purchasing prompts create confusion, misrepresent the platform's commercial model, and clutter workspace navigation.
 
-**Independent Test**: Can be validated by navigating through the tenant workspace layout, publishing queue views, and post activity logs, asserting that no token balance counters, credit badges, or token deduction columns appear in navigation headers or log tables, while all navigation, Page selectors, and publication logs function cleanly.
+**Independent Test**: Can be validated by navigating through the tenant workspace layout, publishing queue views, and post activity logs, asserting that no token balance counters, credit badges, or token deduction columns appear in navigation or log tables, while all navigation, Page selectors, and publication logs function cleanly.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated tenant user loading their workspace header, **When** the workspace layout renders, **Then** the user profile and workspace switchers are displayed without any token balance badges, token count counters, or wallet icons.
+1. **Given** an authenticated tenant user loading their workspace, **When** the workspace layout renders, **Then** the user profile and workspace elements are displayed without any token balance badges, token count counters, or wallet icons.
 2. **Given** a user reviewing publication activity logs, **When** the log list is rendered, **Then** the logs display publication timestamp, target Page name, status (success, retry, failed), and external post links, with no token deduction column or debit metric.
 3. **Given** a user scheduling posts from the Media Library or Queue screen, **When** the submission interface loads, **Then** no pre-flight token balance warning, token deduction estimate, or "Buy Tokens" call-to-action is rendered anywhere in the workflow.
 

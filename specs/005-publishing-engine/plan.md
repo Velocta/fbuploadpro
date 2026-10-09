@@ -6,7 +6,7 @@
 
 ## Summary
 
-Implement an automated queue slots publishing engine uniting connected Facebook Pages (Spec 003) and user Media Library assets (Spec 004). Support recurring daily publishing time slots per Facebook Page with compound uniqueness on `(user_id, fb_page_id, slot_time)` and timezone awareness. Support selective asset queueing from the Media Library with custom captions, caption template attachment, and an optional automated first comment. Build a Cloudflare Worker edge scheduler (`apps/worker`) executing every minute via cron triggers, claiming due posts via PostgreSQL row-level locks (`SELECT ... FOR UPDATE SKIP LOCKED`), streaming video reels and photos directly to Facebook Graph API v26.0, and executing automated first comments. Enforce atomic 1-token deduction on successful publication, comprehensive error logging, retry limits, and an interactive queue management dashboard at `/tenant/[subdomain]/publishing`.
+Implement an automated queue slots publishing engine uniting connected Facebook Pages (Spec 003) and user Media Library assets (Spec 004). Support recurring daily publishing time slots per Facebook Page with compound uniqueness on `(user_id, fb_page_id, slot_time)` and timezone awareness. Support selective asset queueing from the Media Library with custom captions, caption template attachment, and an optional automated first comment. Build a Cloudflare Worker edge scheduler (`apps/worker`) executing every minute via cron triggers, claiming due posts via PostgreSQL row-level locks (`SELECT ... FOR UPDATE SKIP LOCKED`), streaming video reels and photos directly to Facebook Graph API v26.0, and executing automated first comments with comprehensive error logging and retry limits.
 
 ## Technical Context
 

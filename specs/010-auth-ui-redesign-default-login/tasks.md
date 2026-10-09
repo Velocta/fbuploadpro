@@ -39,7 +39,7 @@
 **Purpose**: Remake `/signup` into the matching split-screen layout, removing the subdomain preview badge.
 
 - [x] T008 [P3] [US3] Redesign `apps/web/src/app/signup/page.tsx` using `AuthSplitLayout` and `PasswordInput`, removing the subdomain preview box
-- [x] T009 [P3] [US3] Wire up form validation, error alert banner, submit button loading state, and redirection to tenant dashboard in `apps/web/src/app/signup/page.tsx`
+- [x] T009 [P3] [US3] Wire up form validation, error alert banner, submit button loading state, and redirection to tenant workspace in `apps/web/src/app/signup/page.tsx`
 
 ---
 

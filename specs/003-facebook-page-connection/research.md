@@ -152,7 +152,7 @@ Implement structured error handling and lifecycle status tracking:
    - When Graph API responds with error subcode 458 (app uninstalled), 460 (password changed), or 463 (token expired):
    - Transition account status to `expired`.
    - Transition linked pages to `invalid_token`.
-   - Display prominent reconnection banner in workspace dashboard.
+   - Display prominent reconnection banner in workspace.
 2. **Graph API Rate Limiting (Codes 4, 17, 32)**:
    - Transition page/account status to `fb_rate_limited`.
    - Prevent background automated retries until rate limit backoff period elapses.

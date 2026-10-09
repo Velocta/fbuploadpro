@@ -61,33 +61,33 @@ As a content marketing operator, I want to see detailed reaction sentiment break
 
 ---
 
-### User Story 4 - Dedicated High-Craft Insights Dashboard Page (Priority: P4)
+### User Story 4 - Dedicated Page Insights Analytics Contracts & API Querying (Priority: P4)
 
 > [!NOTE]
-> **UI Recreation In-Progress**: The frontend Insights dashboard view is slated for recreation following *Taste Skill* and *Impeccable* standards. The underlying server-side proxy API, 15-minute cache, and worker daily snapshot sync are fully functional.
+> Backend Graph API proxy, TTL cache, and worker daily snapshot sync remain fully operational.
 
-As a user navigating my personal workspace, I want a dedicated, beautifully crafted Page Insights view at `/tenant/[subdomain]/pages/[pageId]/insights`, featuring quick date range selectors, KPI delta scorecards, interactive Recharts visualizations, and clear health status banners, so that I have a fast, enjoyable, and responsive analytical command center.
+As an API client or analytics service within the tenant workspace, I want a dedicated, structured analytical endpoint at `/api/tenant/[subdomain]/pages/[pageId]/insights`, featuring quick date range selectors, KPI delta calculations, time series metrics, and clear health status indicators, so that insights data is available through standardized JSON contracts.
 
-**Why this priority**: User experience floor. Adheres to *Taste Skill* and *Impeccable* standards—avoiding clunky AI templates in favor of crisp typography, responsive layout, seamless loading skeletons, and fluid micro-interactions.
+**Why this priority**: Analytics presentation and consumption layer. Provides structured, validated payloads for follower growth, video watch time, reaction sentiments, and demographic distributions.
 
-**Independent Test**: Can be validated by navigating to `/tenant/[subdomain]/pages/[pageId]/insights` in the web application, verifying breadcrumb linkage back to Pages list, asserting that KPI cards, charts (AreaChart, ComposedChart, BarChart), and demographic bars render without hydration errors, and verifying that clicking "Refresh Data" triggers a background refetch with a spinning indicator.
+**Independent Test**: Can be validated by executing `GET /api/tenant/[subdomain]/pages/[pageId]/insights`, asserting that KPI summaries, time series points, and demographic distributions match contract schemas, and verifying that expired tokens return actionable reconnection error structures.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated user on the Pages dashboard, **When** they click "View Insights" on a connected Facebook Page card/row, **Then** they are smoothly navigated to `/tenant/[subdomain]/pages/[pageId]/insights` with Page title and avatar in the header.
-2. **Given** the Insights page loading state, **When** data is being fetched, **Then** the page displays structured skeleton cards that match the exact final layout to prevent layout shift (CLS = 0).
-3. **Given** an expired or invalid Facebook Page access token, **When** the Insights page loads, **Then** instead of a blank screen or raw error message, it presents an actionable amber banner informing the user that reconnection is required with a direct 1-click reconnect button.
-4. **Given** the responsive desktop and mobile viewports, **When** the user resizes or navigates on a mobile device, **Then** charts and metric grids adapt cleanly to stacked layouts without horizontal overflow.
+1. **Given** an authenticated user querying Page insights, **When** they request data via `/api/tenant/[subdomain]/pages/[pageId]/insights`, **Then** the endpoint returns structured metrics with date range metadata.
+2. **Given** an insights request in progress, **When** data is cached or being fetched, **Then** response payloads maintain consistent structure.
+3. **Given** an expired or invalid Facebook Page access token, **When** the insights endpoint is queried, **Then** instead of crashing, it returns an actionable error informing the client that reconnection is required.
+4. **Given** valid responses, **When** parsed, **Then** all metric fields conform to `@fbuploadpro/contracts` definitions.
 
 ---
 
 ### User Story 5 - Daily Metric Snapshots & Background Edge Sync (Priority: P5)
 
-As a platform administrator and user, I want the system's background worker to periodically capture daily metric snapshots in PostgreSQL (`page_insights_daily_snapshots`), so that users retain historical insights beyond Facebook's native rolling retention windows and benefit from instant cached dashboard loads.
+As a platform administrator and user, I want the system's background worker to periodically capture daily metric snapshots in PostgreSQL (`page_insights_daily_snapshots`), so that users retain historical insights beyond Facebook's native rolling retention windows and benefit from instant cached analytical loads.
 
-**Why this priority**: Long-term data durability and performance optimization. Enables fast dashboard cold starts from database storage while archiving historical performance for future year-over-year reporting.
+**Why this priority**: Long-term data durability and performance optimization. Enables fast cold starts from database storage while archiving historical performance for future year-over-year reporting.
 
-**Independent Test**: Can be validated by executing the background snapshot sync routine in Cloudflare Worker for an active Page, asserting that a row is upserted into `page_insights_daily_snapshots` under `(user_id, fb_page_id, snapshot_date)`, and confirming that subsequent web dashboard queries read directly from snapshots when Graph API is unreachable or rate-limited.
+**Independent Test**: Can be validated by executing the background snapshot sync routine in Cloudflare Worker for an active Page, asserting that a row is upserted into `page_insights_daily_snapshots` under `(user_id, fb_page_id, snapshot_date)`, and confirming that subsequent client queries read directly from snapshots when Graph API is unreachable or rate-limited.
 
 **Acceptance Scenarios**:
 
@@ -140,16 +140,14 @@ As a platform administrator and user, I want the system's background worker to p
 ### 4. Edge Worker Background Sync (`apps/worker`)
 - Cron trigger running daily / hourly to refresh fan counts and store daily metric snapshots into PostgreSQL via `@fbuploadpro/database/edge`.
 
-### 5. Frontend UI Components (`apps/web`)
-- Page route: `src/app/tenant/[subdomain]/pages/[pageId]/insights/page.tsx`
-- Components:
-  - `InsightsHeader`: Page metadata, back link, date range selector, refresh button.
-  - `OverviewKpiCards`: Follower count, Fan count, Total Video Views, Engagement Rate.
-  - `GrowthChartCard`: Area chart showing followers vs unfollows.
-  - `VideoPerformanceCard`: Composed chart showing 30s completions and total watch time.
-  - `ReactionsDistributionCard`: Sentiment breakdown bar chart.
-  - `DemographicsCard`: Top countries and cities progress bars.
-  - `InsightsEmptyState` & `InsightsErrorState`: Reconnection prompts and error handling.
+### 5. Analytics Presentation Contracts (`packages/contracts`)
+- Contracts & schemas:
+  - `OverviewKpiCards` data contracts: Follower count, Fan count, Total Video Views, Engagement Rate.
+  - `GrowthChart` data contracts: Follower trends and engagement metrics.
+  - `VideoPerformance` data contracts: 30s completions and total watch time.
+  - `ReactionsDistribution` contracts: Sentiment breakdown.
+  - `Demographics` contracts: Top countries and cities distributions.
+  - `InsightsEmptyState` & `InsightsErrorState`: Reconnection prompts and error structures.
 
 ---
 

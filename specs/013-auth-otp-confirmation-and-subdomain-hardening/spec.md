@@ -32,7 +32,7 @@ Submit registration details on `/signup`, verify that a 6-digit OTP is generated
    **Then** a cryptographically secure 6-digit OTP is generated with a 10-minute expiry, an email is dispatched via Resend, and the UI transitions smoothly to the OTP verification screen displaying the user's email address.
 2. **Given** the user is on the OTP verification screen,  
    **When** they enter the correct 6-digit code and submit,  
-   **Then** the account is provisioned in the database, the `fbup_session` cookie is set, and the user is redirected to their tenant workspace `/dashboard` (or `returnUrl` if provided).
+   **Then** the account is provisioned in the database, the `fbup_session` cookie is set, and the user is redirected to their tenant workspace (or `returnUrl` if provided).
 3. **Given** the user enters an incorrect or expired OTP,  
    **When** they submit,  
    **Then** an error alert is shown ("Invalid or expired verification code. Please check your email or request a new code.") without exposing backend exceptions.
@@ -47,16 +47,16 @@ Submit registration details on `/signup`, verify that a 6-digit OTP is generated
 As a user or customer visiting a tenant subdomain (e.g., `client.fbuploadpro.com` or `client.localhost:3000`), when I navigate to any authentication path (`/login`, `/signup`, `/forgot-password`, `/reset-password`), the Edge middleware cleanly redirects me via HTTP 307 to the central app gateway (`https://app.fbuploadpro.com${pathname}`), preserving all query parameters (such as `returnUrl`).
 
 **Why this priority**:
-Customer tenant subdomains only host private workspace tools (`/dashboard`, `/media`, etc.). Rewriting auth paths to `/tenant/[subdomain]/login` causes 404 Not Found errors because auth views are centralized on the root/gateway app.
+Customer tenant subdomains only host private workspace tools. Rewriting auth paths to `/tenant/[subdomain]/login` causes 404 Not Found errors because auth views are centralized on the root/gateway app.
 
 **Independent Test**:
-Send requests to `http://acme.localhost:3000/login?returnUrl=/media`, `/signup`, `/forgot-password`, and `/reset-password`. Assert that the middleware returns an HTTP 307 redirect to `http://app.localhost:3000/...` with the original query string intact.
+Send requests to `http://acme.localhost:3000/login?returnUrl=/action`, `/signup`, `/forgot-password`, and `/reset-password`. Assert that the middleware returns an HTTP 307 redirect to `http://app.localhost:3000/...` with the original query string intact.
 
 **Acceptance Scenarios**:
 
-1. **Given** an unauthenticated request to `https://tenant.fbuploadpro.com/login?returnUrl=%2Fdashboard`,  
+1. **Given** an unauthenticated request to `https://tenant.fbuploadpro.com/login?returnUrl=%2Faction`,  
    **When** processed by the edge middleware,  
-   **Then** the response is an HTTP 307 redirecting to `https://app.fbuploadpro.com/login?returnUrl=%2Fdashboard`.
+   **Then** the response is an HTTP 307 redirecting to `https://app.fbuploadpro.com/login?returnUrl=%2Faction`.
 2. **Given** requests to `/signup`, `/forgot-password`, or `/reset-password` on a tenant subdomain,  
    **When** processed by middleware,  
    **Then** the response redirects cleanly to the corresponding path on `app.fbuploadpro.com`.
@@ -126,7 +126,7 @@ Visit `/login?returnUrl=/media/upload`, click "Create one", verify URL is `/sign
    **Then** the destination URL contains `returnUrl`.
 2. **Given** a `returnUrl` on `/signup`,  
    **When** completing OTP verification,  
-   **Then** the user is redirected to their tenant subdomain with `returnUrl` rather than default `/dashboard`.
+   **Then** the user is redirected to their tenant subdomain with `returnUrl` rather than default workspace root.
 
 ---
 
