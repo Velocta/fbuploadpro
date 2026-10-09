@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -33,7 +34,7 @@ export default function ForgotPasswordPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(data.error || 'Failed to send recovery link. Please try again.');
+        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Failed to send recovery link. Please try again.'));
         setIsSubmitting(false);
         return;
       }
@@ -41,7 +42,7 @@ export default function ForgotPasswordPage() {
       setIsSubmitted(true);
       setIsSubmitting(false);
     } catch {
-      setErrorMessage('An unexpected network error occurred. Please try again.');
+      setErrorMessage('Unable to process your request at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -71,7 +72,7 @@ export default function ForgotPasswordPage() {
           <Alert
             severity="error"
             title="Couldn't send recovery link"
-            message={errorMessage}
+            message={sanitizeAuthErrorMessage(errorMessage)}
             onClose={() => setErrorMessage(null)}
           />
         </div>

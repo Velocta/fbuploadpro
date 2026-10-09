@@ -10,6 +10,7 @@ import {
 
 // In-memory credential store for test/CI fallback when Supabase external cluster is not configured
 const localPasswordStore = new Map<string, string>();
+const localUserStore = new Map<string, AuthUser>();
 
 export function getSupabaseClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -115,24 +116,95 @@ export interface AuthUser {
   status: UserStatus;
 }
 
+/**
+ * Resilient multi-runtime user lookup:
+ * 1. Checks Supabase PostgREST over HTTPS when Supabase client is available.
+ * 2. Checks PostgreSQL database client ONLY if DATABASE_URL is explicitly configured.
+ * 3. Falls back to in-memory test store without throwing unhandled network exceptions.
+ */
+export async function findUserByEmail(emailLower: string): Promise<AuthUser | null> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, name, phone, subdomain, role, status')
+        .ilike('email', emailLower)
+        .maybeSingle();
+
+      if (error) {
+        console.error('[Supabase PostgREST] findUserByEmail error:', error.message);
+      } else if (data) {
+        return data as AuthUser;
+      }
+    } catch (err) {
+      console.error('[Supabase PostgREST] findUserByEmail exception:', err);
+    }
+  }
+
+  try {
+    const db = getDbClient();
+    const user = await db.queryOne<AuthUser>(
+      'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE LOWER(email) = $1',
+      [emailLower]
+    );
+    if (user) return user;
+  } catch (err) {
+    console.error('[Postgres DB] findUserByEmail error:', err);
+  }
+
+  return localUserStore.get(emailLower) || null;
+}
+
 export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<string> {
-  const db = getDbClient();
+  const supabase = getSupabaseClient();
   let candidate = baseSubdomain;
   let counter = 1;
 
-  while (true) {
-    const existing = await db.queryOne<{ id: string }>(
-      'SELECT id FROM users WHERE subdomain = $1',
-      [candidate]
-    );
+  if (supabase) {
+    try {
+      while (true) {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id')
+          .eq('subdomain', candidate)
+          .maybeSingle();
 
-    if (!existing) {
+        if (error) {
+          console.error('[Supabase PostgREST] resolveUniqueSubdomain error:', error.message);
+          return candidate;
+        }
+        if (!data) {
+          return candidate;
+        }
+        candidate = `${baseSubdomain}${counter}`;
+        counter++;
+      }
+    } catch (err) {
+      console.error('[Supabase PostgREST] resolveUniqueSubdomain exception:', err);
       return candidate;
     }
-
-    candidate = `${baseSubdomain}${counter}`;
-    counter++;
   }
+
+  try {
+    const db = getDbClient();
+    while (true) {
+      const existing = await db.queryOne<{ id: string }>(
+        'SELECT id FROM users WHERE subdomain = $1',
+        [candidate]
+      );
+      if (!existing) {
+        return candidate;
+      }
+      candidate = `${baseSubdomain}${counter}`;
+      counter++;
+    }
+  } catch (err) {
+    console.error('[Postgres DB] resolveUniqueSubdomain error:', err);
+    return candidate;
+  }
+
+  return candidate;
 }
 
 export async function registerTenantUser(params: {
@@ -141,14 +213,10 @@ export async function registerTenantUser(params: {
   email: string;
   password: string;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
-  const db = getDbClient();
   const emailLower = params.email.trim().toLowerCase();
 
   // Check email uniqueness
-  const existingUser = await db.queryOne<{ id: string }>(
-    'SELECT id FROM users WHERE LOWER(email) = $1',
-    [emailLower]
-  );
+  const existingUser = await findUserByEmail(emailLower);
   if (existingUser) {
     throw new Error('Email is already registered');
   }
@@ -158,6 +226,7 @@ export async function registerTenantUser(params: {
   const subdomain = await resolveUniqueSubdomain(rawSubdomain);
 
   let userId: string;
+  let userRecord: AuthUser;
   const supabase = getSupabaseClient();
 
   if (supabase) {
@@ -174,52 +243,110 @@ export async function registerTenantUser(params: {
     });
 
     if (authError || !authData.user) {
-      throw new Error(authError?.message || 'Supabase authentication registration failed');
+      throw new Error(authError?.message || 'Authentication registration failed');
     }
     userId = authData.user.id;
+
+    // Persist in users table via Supabase PostgREST
+    try {
+      const { data: inserted, error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: emailLower,
+          name: params.name,
+          phone: params.phone,
+          subdomain,
+          role: 'user',
+          status: 'active',
+        })
+        .select('id, email, name, phone, subdomain, role, status')
+        .single();
+
+      if (insertError) {
+        console.error('[Supabase PostgREST] User insert error:', insertError.message);
+      }
+      userRecord = (inserted as AuthUser) || {
+        id: userId,
+        email: emailLower,
+        name: params.name,
+        phone: params.phone,
+        subdomain,
+        role: 'user',
+        status: 'active',
+      };
+    } catch (insertErr) {
+      console.error('[Supabase PostgREST] User insert exception:', insertErr);
+      userRecord = {
+        id: userId,
+        email: emailLower,
+        name: params.name,
+        phone: params.phone,
+        subdomain,
+        role: 'user',
+        status: 'active',
+      };
+    }
+
+    // Persist storage quota via Supabase PostgREST
+    try {
+      await supabase.from('user_storage_quotas').upsert(
+        {
+          user_id: userId,
+          max_bytes: 5368709120,
+          used_bytes: 0,
+          max_assets: 50,
+          used_assets: 0,
+        },
+        { onConflict: 'user_id' }
+      );
+    } catch (quotaErr) {
+      console.error('[Supabase PostgREST] Storage quota insert exception:', quotaErr);
+    }
   } else {
     userId = crypto.randomUUID();
     const hashed = await hashPassword(params.password);
     localPasswordStore.set(emailLower, hashed);
+
+    userRecord = {
+      id: userId,
+      email: emailLower,
+      name: params.name,
+      phone: params.phone,
+      subdomain,
+      role: 'user',
+      status: 'active',
+    };
+    localUserStore.set(emailLower, userRecord);
+
+    try {
+      const db = getDbClient();
+      await db.query(
+        `INSERT INTO users (id, email, name, phone, subdomain, role, status, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
+         ON CONFLICT (id) DO NOTHING`,
+        [userId, emailLower, params.name, params.phone, subdomain]
+      );
+      await db.query(
+        `INSERT INTO storage_quotas (user_id, max_bytes, used_bytes, max_assets, used_assets)
+         VALUES ($1, 5368709120, 0, 50, 0)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [userId]
+      );
+    } catch (dbErr) {
+      console.error('[Postgres DB] User insert error:', dbErr);
+    }
   }
-
-  // Provision user in PostgreSQL users table
-  const inserted = await db.queryOne<{
-    id: string;
-    email: string;
-    name: string | null;
-    phone: string | null;
-    subdomain: string;
-    role: UserRole;
-    status: UserStatus;
-  }>(
-    `INSERT INTO users (id, email, name, phone, subdomain, role, status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
-     RETURNING id, email, name, phone, subdomain, role, status`,
-    [userId, emailLower, params.name, params.phone, subdomain]
-  );
-
-  if (!inserted) {
-    throw new Error('Failed to create tenant user in database');
-  }
-
-  // Initialize storage quota for user (5GB / 50 assets)
-  await db.query(
-    `INSERT INTO storage_quotas (user_id, max_bytes, used_bytes, max_assets, used_assets)
-     VALUES ($1, 5368709120, 0, 50, 0)
-     ON CONFLICT (user_id) DO NOTHING`,
-    [userId]
-  );
 
   const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
   const token = await signSessionToken(
     {
-      userId: inserted.id,
-      email: inserted.email,
-      name: inserted.name,
-      subdomain: inserted.subdomain,
-      role: inserted.role,
-      status: inserted.status,
+      userId: userRecord.id,
+      email: userRecord.email,
+      name: userRecord.name,
+      subdomain: userRecord.subdomain,
+      role: userRecord.role,
+      status: userRecord.status,
     },
     sessionSecret
   );
@@ -227,10 +354,10 @@ export async function registerTenantUser(params: {
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
   const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
   const protocol = isLocal ? 'http' : 'https';
-  const redirectUrl = `${protocol}://${inserted.subdomain}.${rootDomain}/dashboard`;
+  const redirectUrl = `${protocol}://${userRecord.subdomain}.${rootDomain}/dashboard`;
 
   return {
-    user: inserted,
+    user: userRecord,
     token,
     redirectUrl,
   };
@@ -241,41 +368,33 @@ export async function loginTenantUser(params: {
   password: string;
   returnUrl?: string | undefined;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
-  const db = getDbClient();
   const emailLower = params.email.trim().toLowerCase();
-
-  const user = await db.queryOne<{
-    id: string;
-    email: string;
-    name: string | null;
-    phone: string | null;
-    subdomain: string;
-    role: UserRole;
-    status: UserStatus;
-  }>(
-    'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE LOWER(email) = $1',
-    [emailLower]
-  );
-
-  if (!user) {
-    throw new Error('Invalid email or password');
-  }
-
-  if (user.status === 'suspended') {
-    const error = new Error('Account is suspended');
-    (error as unknown as { code: string }).code = 'ACCOUNT_SUSPENDED';
-    throw error;
-  }
+  let user = await findUserByEmail(emailLower);
 
   const supabase = getSupabaseClient();
   if (supabase) {
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: emailLower,
       password: params.password,
     });
 
     if (authError) {
       throw new Error('Invalid email or password');
+    }
+
+    // If user record wasn't loaded from public.users yet, construct from authenticated user
+    if (!user && authData?.user) {
+      const metadata = authData.user.user_metadata || {};
+      const subdomain = metadata.subdomain || deriveSubdomainFromEmail(emailLower);
+      user = {
+        id: authData.user.id,
+        email: authData.user.email || emailLower,
+        name: metadata.name || null,
+        phone: metadata.phone || null,
+        subdomain,
+        role: 'user',
+        status: 'active',
+      };
     }
   } else {
     const storedHash = localPasswordStore.get(emailLower);
@@ -285,6 +404,16 @@ export async function loginTenantUser(params: {
         throw new Error('Invalid email or password');
       }
     }
+  }
+
+  if (!user) {
+    throw new Error('Invalid email or password');
+  }
+
+  if (user.status === 'suspended') {
+    const error = new Error('Account is suspended');
+    (error as unknown as { code: string }).code = 'ACCOUNT_SUSPENDED';
+    throw error;
   }
 
   const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -324,29 +453,24 @@ export async function requestPasswordReset(params: {
 }): Promise<{ message: string }> {
   const emailLower = params.email.trim().toLowerCase();
 
-  try {
-    const db = getDbClient();
-    const user = await db.queryOne<{ id: string; email: string }>(
-      'SELECT id, email FROM users WHERE LOWER(email) = $1',
-      [emailLower]
-    );
-
-    // For security against email enumeration, return confirmation even if email not found
-    if (!user) {
-      return {
-        message: 'If an account exists with this email address, a recovery link has been sent.',
-      };
-    }
-  } catch {
-    // In test/mock environment where DB connection is unavailable, proceed safely
+  const user = await findUserByEmail(emailLower);
+  // For security against email enumeration, return confirmation even if email not found
+  if (!user && !getSupabaseClient()) {
+    return {
+      message: 'If an account exists with this email address, a recovery link has been sent.',
+    };
   }
 
   const supabase = getSupabaseClient();
   if (supabase) {
-    const options = params.redirectTo ? { redirectTo: params.redirectTo } : undefined;
-    const { error } = await supabase.auth.resetPasswordForEmail(emailLower, options);
-    if (error) {
-      throw new Error(error.message);
+    try {
+      const options = params.redirectTo ? { redirectTo: params.redirectTo } : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(emailLower, options);
+      if (error) {
+        console.error('[Supabase Auth] resetPasswordForEmail error:', error.message);
+      }
+    } catch (err) {
+      console.error('[Supabase Auth] resetPasswordForEmail exception:', err);
     }
   }
 
@@ -370,6 +494,7 @@ export async function resetUserPassword(params: {
       password: params.password,
     });
     if (error) {
+      console.error('[Supabase Auth] updateUser error:', error.message);
       throw new Error(error.message);
     }
   } else if (params.email) {

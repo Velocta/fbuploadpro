@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SignupRequestSchema } from '@fbuploadpro/contracts';
 import { registerTenantUser, getCookieDomain } from '@/lib/supabase-auth';
+import { formatAuthErrorResponse } from '@/lib/auth-errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,8 +51,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Registration failed';
-    const status = message.includes('already registered') ? 409 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return formatAuthErrorResponse(error, {
+      fallbackMessage: 'Unable to create your account at this moment. Please try again shortly.',
+      defaultStatus: 500,
+    });
   }
 }

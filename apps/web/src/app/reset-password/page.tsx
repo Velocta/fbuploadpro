@@ -7,6 +7,7 @@ import { Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -42,7 +43,7 @@ export default function ResetPasswordPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(data.error || 'Failed to update password. Your reset link may be expired.');
+        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Failed to update password. Your reset link may be expired.'));
         setIsSubmitting(false);
         return;
       }
@@ -54,7 +55,7 @@ export default function ResetPasswordPage() {
         router.push('/login');
       }, 2000);
     } catch {
-      setErrorMessage('An unexpected network error occurred. Please try again.');
+      setErrorMessage('Unable to reset your password. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -84,7 +85,7 @@ export default function ResetPasswordPage() {
           <Alert
             severity="error"
             title="Couldn't reset password"
-            message={errorMessage}
+            message={sanitizeAuthErrorMessage(errorMessage)}
             onClose={() => setErrorMessage(null)}
           />
         </div>

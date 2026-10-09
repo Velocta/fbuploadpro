@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { LoginRequestSchema } from '@fbuploadpro/contracts';
 import { loginTenantUser, getCookieDomain } from '@/lib/supabase-auth';
+import { formatAuthErrorResponse } from '@/lib/auth-errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,19 +51,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    const err = error as { code?: string; message?: string };
-    if (err.code === 'ACCOUNT_SUSPENDED' || err.message?.includes('suspended')) {
-      return NextResponse.json(
-        {
-          error: 'Account is suspended',
-          redirectUrl: '/account-suspended',
-        },
-        { status: 403 }
-      );
-    }
-
-    const message = err.message || 'Authentication failed';
-    const status = message.includes('Invalid email or password') ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return formatAuthErrorResponse(error, {
+      fallbackMessage: 'Unable to sign in at this moment. Please try again shortly.',
+      defaultStatus: 500,
+    });
   }
 }

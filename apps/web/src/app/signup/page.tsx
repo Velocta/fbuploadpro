@@ -6,6 +6,7 @@ import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
@@ -58,7 +59,7 @@ export default function SignupPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setErrorMessage(data.error || 'Registration failed. Please check your details and try again.');
+        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Unable to create your account at this moment. Please try again shortly.'));
         setIsSubmitting(false);
         return;
       }
@@ -67,7 +68,7 @@ export default function SignupPage() {
         window.location.href = data.redirectUrl;
       }
     } catch {
-      setErrorMessage('An unexpected network error occurred. Please try again.');
+      setErrorMessage('Unable to create your account at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -97,7 +98,7 @@ export default function SignupPage() {
           <Alert
             severity="error"
             title="Couldn't create account"
-            message={errorMessage}
+            message={sanitizeAuthErrorMessage(errorMessage)}
             onClose={() => setErrorMessage(null)}
           />
         </div>

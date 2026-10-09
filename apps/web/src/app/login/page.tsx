@@ -6,6 +6,7 @@ import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -57,7 +58,7 @@ export default function LoginPage() {
           window.location.href = data.redirectUrl;
           return;
         }
-        setErrorMessage(data.error || 'Invalid email or password. Please try again.');
+        setErrorMessage(sanitizeAuthErrorMessage(data.error, 'Invalid email or password. Please try again.'));
         setIsSubmitting(false);
         return;
       }
@@ -66,7 +67,7 @@ export default function LoginPage() {
         window.location.href = data.redirectUrl;
       }
     } catch {
-      setErrorMessage('An unexpected network error occurred. Please try again.');
+      setErrorMessage('Unable to sign in at this moment. Please check your connection and try again.');
       setIsSubmitting(false);
     }
   };
@@ -96,7 +97,7 @@ export default function LoginPage() {
           <Alert
             severity="error"
             title="Couldn't sign you in"
-            message={errorMessage}
+            message={sanitizeAuthErrorMessage(errorMessage)}
             onClose={() => setErrorMessage(null)}
           />
         </div>
