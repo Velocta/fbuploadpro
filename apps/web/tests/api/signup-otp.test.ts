@@ -219,4 +219,49 @@ describe('Signup OTP API Flow (Spec 014 - Hardened)', () => {
     const body = await limitedRes.json();
     expect(body.error).toContain('Too many verification requests for this email address');
   });
+
+  it('rejects non-gmail address on OTP verification', async () => {
+    const req = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'user@yahoo.com',
+        otp: '123456',
+      }),
+    });
+
+    const res = await verifyOtpHandler(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain('Only @gmail.com');
+  });
+
+  it('enforces IP rate limiting on OTP verification after 10 requests', async () => {
+    const ip = '10.20.30.40';
+    for (let i = 0; i < 10; i++) {
+      const req = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
+        body: JSON.stringify({
+          email: 'testuser@gmail.com',
+          otp: '123456',
+        }),
+      });
+      await verifyOtpHandler(req);
+    }
+
+    // 11th request from same IP should return 429
+    const limitedReq = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-forwarded-for': ip },
+      body: JSON.stringify({
+        email: 'testuser@gmail.com',
+        otp: '123456',
+      }),
+    });
+    const limitedRes = await verifyOtpHandler(limitedReq);
+    expect(limitedRes.status).toBe(429);
+    const body = await limitedRes.json();
+    expect(body.error).toContain('Too many verification attempts from this IP');
+  });
 });

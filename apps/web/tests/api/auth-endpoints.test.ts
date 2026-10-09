@@ -225,6 +225,51 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
       const json = await res.json();
       expect(json.error).toBe('Invalid email or password');
     });
+
+    it('rejects non-Gmail domains with 400 Bad Request on login', async () => {
+      const req = new NextRequest('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'user@yahoo.com',
+          password: 'Password123!',
+        }),
+      });
+
+      const res = await handleLogin(req);
+      expect(res.status).toBe(400);
+
+      const json = await res.json();
+      expect(json.error).toBe('Validation failed');
+    });
+
+    it('enforces email identifier rate limit on login after 5 attempts', async () => {
+      const email = 'ratelimiteduser@gmail.com';
+      const mockDb: Partial<DatabaseClient> = {
+        queryOne: vi.fn().mockResolvedValue(null),
+      };
+      vi.spyOn(dbModule, 'getDbClient').mockReturnValue(mockDb as DatabaseClient);
+
+      for (let i = 0; i < 5; i++) {
+        const req = new NextRequest('http://localhost:3000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-forwarded-for': `192.168.10.${i + 1}` },
+          body: JSON.stringify({ email, password: 'WrongPassword!' }),
+        });
+        await handleLogin(req);
+      }
+
+      // 6th attempt should return 429
+      const blockedReq = new NextRequest('http://localhost:3000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-forwarded-for': '192.168.10.99' },
+        body: JSON.stringify({ email, password: 'WrongPassword!' }),
+      });
+      const blockedRes = await handleLogin(blockedReq);
+      expect(blockedRes.status).toBe(429);
+      const blockedJson = await blockedRes.json();
+      expect(blockedJson.error).toContain('Too many sign in attempts for this account');
+    });
   });
 
   describe('POST /api/auth/logout', () => {

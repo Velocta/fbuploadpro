@@ -1,17 +1,46 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { registerTenantUser, getCookieDomain } from '@/lib/supabase-auth';
 import { verifySignupOtp } from '@/lib/otp-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
+import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    const clientIp = extractClientIp(request.headers);
+
+    // IP rate limiting on OTP verification attempts (10 requests per 60s)
+    const ipLimit = checkRateLimit(`verify_otp:ip:${clientIp}`, 10, 60 * 1000);
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many verification attempts from this IP. Please wait ${ipLimit.retryAfterSeconds} seconds before trying again.`,
+          retryAfterSeconds: ipLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const body = await request.json();
     const { email, otp, returnUrl } = body || {};
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return NextResponse.json(
         { error: 'Valid email address is required.' },
+        { status: 400 }
+      );
+    }
+
+    let canonicalEmail: string;
+    try {
+      canonicalEmail = canonicalizeGmailAddress(email);
+    } catch {
+      return NextResponse.json(
+        { error: 'Only @gmail.com (or @googlemail.com) addresses are permitted.' },
         { status: 400 }
       );
     }
@@ -23,11 +52,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const emailLower = email.trim().toLowerCase();
     const cleanOtp = otp.trim();
 
     // Verify OTP against pending registrations
-    const verification = verifySignupOtp(emailLower, cleanOtp);
+    const verification = verifySignupOtp(canonicalEmail, cleanOtp);
 
     if (!verification.success || !verification.signupData) {
       return NextResponse.json(

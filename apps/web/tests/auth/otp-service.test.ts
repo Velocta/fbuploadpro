@@ -50,6 +50,11 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(result.signupData).toBeDefined();
     expect(result.signupData?.name).toBe('Sarah Connor');
     expect(result.signupData?.email).toBe('sarahconnor@gmail.com');
+
+    // Immediate second attempt with same OTP must fail (single-use consumption)
+    const secondAttempt = verifySignupOtp('sarahconnor@gmail.com', otp);
+    expect(secondAttempt.success).toBe(false);
+    expect(secondAttempt.error).toContain('No pending registration found');
   });
 
   it('rejects incorrect OTP and counts attempts', () => {

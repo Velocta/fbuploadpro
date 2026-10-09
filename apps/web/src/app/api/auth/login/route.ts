@@ -37,6 +37,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Account identifier rate limiting to prevent brute-force attacks (max 5 attempts per 60s per email)
+    const emailLimit = checkRateLimit(`login:email:${parseResult.data.email}`, 5, 60 * 1000);
+    if (!emailLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many sign in attempts for this account. Please wait ${emailLimit.retryAfterSeconds} seconds before trying again.`,
+          retryAfterSeconds: emailLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(emailLimit.retryAfterSeconds) },
+        }
+      );
+    }
+
     const { user, token, redirectUrl } = await loginTenantUser(parseResult.data);
 
     const response = NextResponse.json(
