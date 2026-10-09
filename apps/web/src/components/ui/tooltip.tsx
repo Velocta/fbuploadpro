@@ -1,5 +1,5 @@
 import React, { cloneElement, useId, useState } from 'react';
-import { RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { RADII, SPACING, TYPOGRAPHY } from '../../lib/theme';
 
 export interface TooltipProps {
   content: string;
