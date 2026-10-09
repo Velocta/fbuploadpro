@@ -79,6 +79,10 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Back-Forward Cache (bfcache) Leak Prevention**: Authenticated workspace views MUST enforce `Cache-Control: no-store, no-cache, must-revalidate` response headers and monitor `window.onpageshow` (`event.persisted`) to force a hard page reload if a previously signed-out user navigates back using browser navigation controls.
     - **Workspace Shell Theming & Responsive Usability**: User theme selections MUST be synchronized across both `localStorage` and a persistent cookie (`fbup_theme`) to eliminate theme flicker (FOUC) during server rendering. Mobile drawer sheets (<768px) MUST automatically close upon any navigation link selection. Main layout canvases MUST reserve adequate left padding/gutter on mobile viewports so floating hamburger triggers never obscure page content. User popovers MUST enforce dynamic viewport collision bounds to prevent clipping.
     - **Session & Security Hygiene**: Client-side API fetch interceptors MUST handle 403 `ACCOUNT_SUSPENDED` responses by immediately transitioning to `/account-suspended`. Password fields MUST present an accessible Caps Lock indicator badge. Rate-limiting messages across login endpoints MUST remain uniform to prevent user enumeration.
+16. **Left-Aligned Authentication Split Layout Architecture**:
+    - **F-Pattern Primary Focus**: All authentication and account recovery screens (`/login`, `/signup`, `/forgot-password`, `/reset-password`) utilizing `AuthSplitLayout` MUST position the primary interactive authentication forms (`<main className="auth-form-panel">`) on the left side and the secondary brand showcase panel (`<section className="auth-showcase-panel">`) on the right side on desktop/wide viewports (>= 1024px). This matches user cognitive eye-scanning patterns (left-to-right reading order), placing high-priority input forms immediately in primary focus.
+    - **Visual Hierarchy & Outer Glow**: When the brand showcase panel is positioned on the right, its ambient gold radial glow gradient MUST align with the outer edge (`circle at 82% 22%`) and its interior border hairline MUST anchor to the left edge (`border-left: 1px solid var(--border-subtle)`), maintaining cohesive aesthetic equilibrium.
+    - **Mobile Single-Column Experience**: On mobile and tablet viewports (< 1024px), the secondary showcase panel remains hidden while the auth form occupies full viewport width with the mobile brand header displayed above the form card.
 
 ## Development Workflow & Quality Gates
 
@@ -102,4 +106,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.10.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.11.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09

@@ -71,5 +71,40 @@ describe('Auth Redesign Components (Spec 010)', () => {
       expect(hasText('Ready')).toBe(false);
       expect(hasText('Operational Status')).toBe(false);
     });
+
+    it('renders form panel on the left by default (Spec 022)', () => {
+      const { html } = render(
+        <AuthSplitLayout title="Sign In" description="Enter credentials">
+          <div>Form Child</div>
+        </AuthSplitLayout>
+      );
+
+      const formIndex = html.indexOf('class="auth-form-panel"');
+      const showcaseIndex = html.indexOf('class="auth-showcase-panel auth-showcase-right"');
+
+      expect(formIndex).toBeGreaterThan(-1);
+      expect(showcaseIndex).toBeGreaterThan(-1);
+      expect(formIndex).toBeLessThan(showcaseIndex);
+    });
+
+    it('renders showcase on the left when formPosition="right" is explicitly configured', () => {
+      const { html } = render(
+        <AuthSplitLayout
+          title="Sign In"
+          description="Enter credentials"
+          formPosition="right"
+        >
+          <div>Form Child</div>
+        </AuthSplitLayout>
+      );
+
+      const formIndex = html.indexOf('class="auth-form-panel"');
+      const showcaseIndex = html.indexOf('class="auth-showcase-panel"');
+
+      expect(formIndex).toBeGreaterThan(-1);
+      expect(showcaseIndex).toBeGreaterThan(-1);
+      expect(showcaseIndex).toBeLessThan(formIndex);
+      expect(html).not.toContain('class="auth-showcase-panel auth-showcase-right"');
+    });
   });
 });
