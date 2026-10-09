@@ -8,6 +8,7 @@ build/
 .next/
 out/
 .turbo/
+.vercel/
 *.tsbuildinfo
 next-env.d.ts
 

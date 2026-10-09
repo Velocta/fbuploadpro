@@ -143,18 +143,10 @@ npx wrangler secret put DATABASE_URL
 npx wrangler secret put FB_ENCRYPTION_MASTER_KEY
 ```
 
-### 3. In Web Host (Vercel / Cloudflare Pages)
-Add all Web App variables from `.env.production.example`:
-- `DATABASE_URL`
-- `NEXT_PUBLIC_ROOT_DOMAIN`
-- `NEXT_PUBLIC_APP_URL`
-- `SESSION_SECRET`
-- `TOKEN_ENCRYPTION_KEY`
-- `FACEBOOK_APP_ID`
-- `FACEBOOK_APP_SECRET`
-- `R2_ACCOUNT_ID`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_BUCKET_NAME`
-- `R2_PUBLIC_URL`
-- `DEFAULT_STORAGE_QUOTA_BYTES`
+### 3. In Web Host (Vercel)
+Instead of manually inputting secrets in the Vercel Dashboard, synchronize them directly from GitHub Secrets using the automated workflow [`.github/workflows/sync-vercel-env.yml`](../.github/workflows/sync-vercel-env.yml).
+
+1. Ensure `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are set in GitHub Repository Secrets.
+2. Ensure application secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SESSION_SECRET`, etc.) are configured in GitHub Repository Secrets.
+3. Trigger the **Sync Secrets to Vercel** workflow via GitHub Actions (`workflow_dispatch` or push to `main`).
+4. The workflow will automatically upsert all variables into Vercel production and preview environments via the Vercel REST API.
