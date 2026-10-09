@@ -1,6 +1,10 @@
 {
   "$schema": "https://modelcontextprotocol.io/schema/mcp.json",
   "mcpServers": {
-    "_comment": "Add your project-specific MCP servers here to expose external tools, APIs, and databases to your agents."
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=wkumiztsvfwobxxflqpn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions&skip_elicitations=execute_sql%2Capply_migration",
+      "serverUrl": "https://mcp.supabase.com/mcp?project_ref=wkumiztsvfwobxxflqpn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions&skip_elicitations=execute_sql%2Capply_migration"
+    }
   }
 }
