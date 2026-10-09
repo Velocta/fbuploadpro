@@ -1,30 +1,36 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as handleSignup } from '../../src/app/api/auth/signup/route';
+import { POST as handleVerifyOtp } from '../../src/app/api/auth/signup/verify-otp/route';
 import { POST as handleLogin } from '../../src/app/api/auth/login/route';
 import { POST as handleLogout } from '../../src/app/api/auth/logout/route';
 import { GET as handleMe } from '../../src/app/api/auth/me/route';
 import * as dbModule from '../../src/lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
+import { getPendingSignup, _resetOtpStore } from '../../src/lib/otp-service';
 
 describe('Auth API Endpoints (Spec 009)', () => {
   const testUserId = '11111111-1111-4111-a111-111111111111';
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    _resetOtpStore();
     process.env.SESSION_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
+    process.env.DATABASE_URL = 'postgresql://mock:mock@localhost:5432/mock_db';
   });
 
   describe('POST /api/auth/signup', () => {
     it('creates new tenant user, derives subdomain stripping dots and tags, and sets session cookie', async () => {
       const mockDb: Partial<DatabaseClient> = {
         queryOne: vi.fn()
-          // First call: Check if email exists -> null
+          // Step 1: handleSignup findUserByEmail -> null
           .mockResolvedValueOnce(null)
-          // Second call: Check if subdomain exists -> null
+          // Step 2: registerTenantUser findUserByEmail -> null
           .mockResolvedValueOnce(null)
-          // Third call: RETURNING inserted user
+          // Step 2: resolveUniqueSubdomain check if 'johndoe' exists -> null
+          .mockResolvedValueOnce(null)
+          // Step 2: RETURNING inserted user
           .mockResolvedValueOnce({
             id: testUserId,
             email: 'john.doe+reels@example.com',
@@ -51,14 +57,33 @@ describe('Auth API Endpoints (Spec 009)', () => {
       });
 
       const res = await handleSignup(req);
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(200);
 
       const json = await res.json();
       expect(json.success).toBe(true);
-      expect(json.user.subdomain).toBe('johndoe');
-      expect(json.redirectUrl).toBe('http://johndoe.localhost:3000/dashboard');
+      expect(json.requiresOtp).toBe(true);
 
-      const setCookie = res.headers.get('set-cookie');
+      const pending = getPendingSignup('john.doe+reels@example.com');
+      expect(pending).not.toBeNull();
+
+      const verifyReq = new NextRequest('http://localhost:3000/api/auth/signup/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'john.doe+reels@example.com',
+          otp: pending!.otp,
+        }),
+      });
+
+      const verifyRes = await handleVerifyOtp(verifyReq);
+      expect(verifyRes.status).toBe(201);
+
+      const verifyJson = await verifyRes.json();
+      expect(verifyJson.success).toBe(true);
+      expect(verifyJson.user.subdomain).toBe('johndoe');
+      expect(verifyJson.redirectUrl).toBe('http://johndoe.localhost:3000/dashboard');
+
+      const setCookie = verifyRes.headers.get('set-cookie');
       expect(setCookie).toContain('fbup_session=');
     });
 
