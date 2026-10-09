@@ -113,14 +113,46 @@ export default function LoginPage() {
           required
         />
 
-        <PasswordInput
-          label="Password"
-          placeholder="••••••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={isSubmitting}
-          required
-        />
+        <div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: SPACING.xs,
+            }}
+          >
+            <label
+              style={{
+                fontSize: '0.8125rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: 'var(--text-sub)',
+                lineHeight: 1.25,
+              }}
+            >
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              style={{
+                fontSize: '0.8125rem',
+                color: PALETTE.primary,
+                textDecoration: 'none',
+                fontWeight: TYPOGRAPHY.weights.medium,
+              }}
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <PasswordInput
+            placeholder="••••••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={isSubmitting}
+            required
+            aria-label="Password"
+          />
+        </div>
 
         <Button
           type="submit"
