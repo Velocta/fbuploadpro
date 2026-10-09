@@ -54,4 +54,4 @@
 
 - [x] T020 Run `pnpm turbo run build lint typecheck test` to ensure 100% passing tests and zero errors.
 - [x] T021 Synchronize documentation: update roadmap in `docs/foundational-knowledge.md` for Spec 021 in the SAME pull request.
-- [ ] T022 Commit changes atomically, push feature branch, create PR, and surface Vercel preview link for user approval.
+- [x] T022 Commit changes atomically, push feature branch, create PR, and surface Vercel preview link for user approval.
