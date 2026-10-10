@@ -118,7 +118,7 @@ function isAllowedCustomDomainHost(
   if (userSubdomain) {
     const expectedHostname = `${userSubdomain}.${cleanRoot}`.toLowerCase();
     if (actualHostname === expectedHostname) return true;
-    return Boolean(serverPreviewHost && actualHostname === serverPreviewHost.toLowerCase());
+    return actualHostname === serverPreviewHost?.toLowerCase();
   }
   return actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`);
 }
