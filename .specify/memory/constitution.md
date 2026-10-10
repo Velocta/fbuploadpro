@@ -107,6 +107,14 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
       - **`368` + Subcode `1404082`** (`"You've already posted this. Posting the same content repeatedly..."`): Keeps both `facebook_accounts.status` and `facebook_pages.status` as `'active'`, and immediately marks the post (`queue_items.status`) as `'failed'` without retry, recording the duplicate-post rejection reason.
       - **API Call Volume Rate Limits (`4`, `17`, `32`, `341`, `613`, `80000`–`80014`)**: Transient HTTP rate limits MUST keep both `facebook_accounts.status` and `facebook_pages.status` as `'active'` while backing off and retrying.
 
+20. **Dedicated Facebook Accounts Management Section & Dual-Mode Multi-Browser Connection Architecture (Spec 027)**:
+    - **Dedicated Scope & Minimalist Account Health UI**: The Facebook Accounts view at `/tenant/[subdomain]/accounts` MUST focus exclusively on managing connected Facebook profiles, access credentials, and lifecycle health (with Facebook Pages strictly separated). Connected account cards MUST present a clean, minimalist profile presentation: avatar, display name, gender, profile link, connected pages count, and connection timestamp. When an account is healthy (`status === 'active'`), the UI MUST NOT display artificial "Operational", "Ready", or glowing status dots. When attention is required (`status === 'expired'`), the card presents a clear "Re-authentication required" callout alongside a dedicated **Reconnect** button. The Reconnect button MUST NOT be displayed on active accounts.
+    - **Dual-Mode Connection Modal (Direct & Magic Link)**: Initiating account connection presents a centered modal offering:
+      1. **Direct Connection**: For profiles open in the current browser, redirecting to the Facebook OAuth dialog.
+      2. **Magic Link Connection**: For profiles logged into another browser (e.g. Brave, Firefox, Incognito, or client device) without requiring FBUploadPro authentication on that machine. The workspace generates a 15-minute cryptographically signed token (`/connect/facebook?token=...`) with a 1-click Copy Link button and live expiration timer.
+    - **Pure Automatic Workspace Polling & Remote Success Standalone View**: While the Magic Link modal is open, the workspace performs background polling every 3 seconds against `/api/tenant/[subdomain]/accounts`, automatically detecting the newly connected profile, displaying a success animation, and refreshing the accounts grid without manual intervention. Completing authorization in the remote browser redirects to `/connect/facebook/success` displaying a clean confirmation that the tab can safely be closed.
+    - **Safety Disconnect Confirmation**: Disconnecting an account requires confirmation via a `Dialog` modal explicitly warning of cascading detachments of linked Facebook Pages before executing `DELETE /api/tenant/[subdomain]/accounts/[accountId]`.
+
 ## Development Workflow & Quality Gates
 
 1. **Ideation & Governance**: Broad proposals and milestone announcements begin in GitHub Discussions.
@@ -129,4 +137,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.14.1 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-10
+**Version**: 2.15.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-10

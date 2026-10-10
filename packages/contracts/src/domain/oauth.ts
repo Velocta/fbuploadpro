@@ -7,9 +7,20 @@ export const OAuthStatePayloadSchema = z.object({
   nonce: z.string().min(16),
   iat: z.number().int(),
   exp: z.number().int(),
+  isMagic: z.boolean().optional(),
 });
 
 export type OAuthStatePayload = z.infer<typeof OAuthStatePayloadSchema>;
+
+export const MagicLinkTokenPayloadSchema = z.object({
+  tenantSubdomain: z.string().min(1).max(50),
+  userId: z.string().uuid(),
+  nonce: z.string().min(16),
+  iat: z.number().int(),
+  exp: z.number().int(),
+});
+
+export type MagicLinkTokenPayload = z.infer<typeof MagicLinkTokenPayloadSchema>;
 
 export const FacebookOAuthCallbackQuerySchema = z.object({
   code: z.string().min(1).optional(),
@@ -171,3 +182,88 @@ export async function verifyOAuthState(
 
   return payload;
 }
+
+export async function signMagicLinkToken(
+  payload: MagicLinkTokenPayload,
+  secret: string
+): Promise<string> {
+  const validatedPayload = MagicLinkTokenPayloadSchema.parse(payload);
+  const encodedPayload = base64UrlEncode(JSON.stringify(validatedPayload));
+
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const signatureBuffer = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    encoder.encode(encodedPayload)
+  );
+
+  const signatureHex = bufferToHex(signatureBuffer);
+  return `${encodedPayload}.${signatureHex}`;
+}
+
+export async function verifyMagicLinkToken(
+  token: string,
+  secret: string
+): Promise<MagicLinkTokenPayload> {
+  if (!token || typeof token !== 'string' || !token.includes('.')) {
+    throw new ValidationError('Invalid magic link token format');
+  }
+
+  const [encodedPayload, providedSignature] = token.split('.');
+  if (!encodedPayload || !providedSignature) {
+    throw new ValidationError('Invalid magic link token format');
+  }
+
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const expectedSignatureBuffer = await crypto.subtle.sign(
+    'HMAC',
+    cryptoKey,
+    encoder.encode(encodedPayload)
+  );
+  const expectedSignatureHex = bufferToHex(expectedSignatureBuffer);
+
+  if (expectedSignatureHex !== providedSignature) {
+    throw new UnauthorizedError('Magic link token signature verification failed');
+  }
+
+  let parsed: unknown;
+  try {
+    const jsonStr = base64UrlDecode(encodedPayload);
+    parsed = JSON.parse(jsonStr);
+  } catch (err) {
+    throw new ValidationError(
+      'Failed to decode magic link token payload',
+      err instanceof Error ? err : undefined
+    );
+  }
+
+  const payload = MagicLinkTokenPayloadSchema.parse(parsed);
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.exp < nowSeconds) {
+    throw new UnauthorizedError('Magic link has expired');
+  }
+
+  return payload;
+}
+

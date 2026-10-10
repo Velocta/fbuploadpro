@@ -160,11 +160,21 @@ export async function handleFacebookCallback(
       ]
     );
 
+    if (statePayload.isMagic) {
+      const magicSuccessUrl = new URL('/connect/facebook/success', request.url);
+      return NextResponse.redirect(magicSuccessUrl);
+    }
+
     destinationUrl.searchParams.set('connected', '1');
     return NextResponse.redirect(destinationUrl);
   } catch (err) {
     // Redirect to destination with safe generic error parameter rather than leaking internal details
     console.warn('[FacebookOAuth] Callback exchange error:', err instanceof Error ? err.message : String(err));
+    if (statePayload?.isMagic) {
+      const magicErrorUrl = new URL('/connect/facebook/error', request.url);
+      magicErrorUrl.searchParams.set('reason', 'internal_oauth_error');
+      return NextResponse.redirect(magicErrorUrl);
+    }
     destinationUrl.searchParams.set('error', 'internal_oauth_error');
     return NextResponse.redirect(destinationUrl);
   }
