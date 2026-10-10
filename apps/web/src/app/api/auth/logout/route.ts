@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getSupabaseClient, getCookieDomain } from '@/lib/supabase-auth';
 
-export async function POST() {
+export async function POST(request?: NextRequest) {
   try {
     const supabase = getSupabaseClient();
     if (supabase) {
@@ -17,7 +17,7 @@ export async function POST() {
     );
 
     const isProduction = process.env.NODE_ENV === 'production';
-    const domain = getCookieDomain();
+    const domain = getCookieDomain(request?.headers.get('host'));
 
     response.cookies.set('fbup_session', '', {
       httpOnly: true,

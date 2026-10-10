@@ -56,8 +56,44 @@ describe('Open Redirect Defense - sanitizeAuthRedirectUrl (Spec 017 / AUTH-01)',
       expect(sanitizeAuthRedirectUrl('/media', subdomain, 'localhost:3000')).toBe(
         'https://fbuploadpro-git-preview-test.vercel.app/media'
       );
+      expect(
+        sanitizeAuthRedirectUrl(
+          'https://fbuploadpro-git-preview-test.vercel.app/tenant/acmecorp',
+          subdomain,
+          'localhost:3000'
+        )
+      ).toBe('https://fbuploadpro-git-preview-test.vercel.app/tenant/acmecorp');
     } finally {
       process.env.VERCEL_URL = originalVercelUrl;
     }
+  });
+
+  it('routes to requestHost /tenant/[subdomain] when request originates from a .vercel.app host even if rootDomain is a custom domain', () => {
+    expect(
+      sanitizeAuthRedirectUrl(
+        null,
+        subdomain,
+        'vinsmokemedia.online',
+        'fbuploadpro-preview.vercel.app'
+      )
+    ).toBe('https://fbuploadpro-preview.vercel.app/tenant/acmecorp');
+  });
+
+  it('routes to https://<subdomain>.<customDomain>/ when rootDomain is configured and request originates from custom domain', () => {
+    expect(
+      sanitizeAuthRedirectUrl(
+        null,
+        subdomain,
+        'vinsmokemedia.online',
+        'app.vinsmokemedia.online'
+      )
+    ).toBe('https://acmecorp.vinsmokemedia.online/');
+    expect(
+      sanitizeAuthRedirectUrl(
+        'https://acmecorp.vinsmokemedia.online/',
+        subdomain,
+        'vinsmokemedia.online'
+      )
+    ).toBe('https://acmecorp.vinsmokemedia.online/');
   });
 });

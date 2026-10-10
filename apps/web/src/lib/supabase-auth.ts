@@ -35,12 +35,36 @@ export function getSupabaseClient(): SupabaseClient | null {
   return null;
 }
 
-export function getCookieDomain(): string | undefined {
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  if (rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1')) {
+export function getCookieDomain(requestHost?: string | null): string | undefined {
+  const rawRoot = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
+  const cleanRoot = rawRoot
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .split('/')[0]
+    ?.split(':')[0] || 'localhost';
+
+  if (
+    cleanRoot.includes('localhost') ||
+    cleanRoot.includes('127.0.0.1') ||
+    cleanRoot.endsWith('.vercel.app')
+  ) {
     return undefined;
   }
-  return process.env.COOKIE_DOMAIN || `.${rootDomain}`;
+
+  if (requestHost) {
+    const cleanHost = requestHost.trim().toLowerCase().split(':')[0] || '';
+    if (
+      cleanHost.includes('localhost') ||
+      cleanHost.includes('127.0.0.1') ||
+      cleanHost.endsWith('.vercel.app') ||
+      (cleanHost !== cleanRoot && !cleanHost.endsWith(`.${cleanRoot}`))
+    ) {
+      return undefined;
+    }
+  }
+
+  return process.env.COOKIE_DOMAIN?.trim() || `.${cleanRoot}`;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -467,6 +491,7 @@ export async function verifySignupOtpViaSupabase(params: {
   email: string;
   otp: string;
   returnUrl?: string | undefined;
+  requestHost?: string | null | undefined;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
   let canonicalEmail: string;
   try {
@@ -570,7 +595,12 @@ export async function verifySignupOtpViaSupabase(params: {
   );
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  const redirectUrl = sanitizeAuthRedirectUrl(params.returnUrl, userRecord.subdomain, rootDomain);
+  const redirectUrl = sanitizeAuthRedirectUrl(
+    params.returnUrl,
+    userRecord.subdomain,
+    rootDomain,
+    params.requestHost
+  );
 
   return {
     user: userRecord,
@@ -794,6 +824,7 @@ export async function loginTenantUser(params: {
   email: string;
   password: string;
   returnUrl?: string | undefined;
+  requestHost?: string | null | undefined;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
   let canonicalEmail: string;
   try {
@@ -905,7 +936,12 @@ export async function loginTenantUser(params: {
   );
 
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  const redirectUrl = sanitizeAuthRedirectUrl(params.returnUrl, user.subdomain, rootDomain);
+  const redirectUrl = sanitizeAuthRedirectUrl(
+    params.returnUrl,
+    user.subdomain,
+    rootDomain,
+    params.requestHost
+  );
 
   return {
     user,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { THEME, COMPONENT_STYLES } from '@/lib/theme';
+import { THEME, SPACING, RADII, TYPOGRAPHY } from '@/lib/theme';
 
 interface TenantIndexPageProps {
   params: Promise<{ subdomain: string }>;
@@ -12,17 +12,27 @@ export default async function TenantIndexPage({ params }: Readonly<TenantIndexPa
     <div
       style={{
         maxWidth: '800px',
+        width: '100%',
         margin: '0 auto',
-        padding: THEME.default.spacing.xl,
+        padding: SPACING.xl,
       }}
     >
-      <div style={{ ...COMPONENT_STYLES.card(THEME.default), padding: THEME.default.spacing.xl }}>
+      <div
+        style={{
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          borderRadius: RADII.md,
+          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+          padding: SPACING.xl,
+        }}
+      >
         <h1
           style={{
-            margin: `0 0 ${THEME.default.spacing.xs} 0`,
+            margin: `0 0 ${SPACING.xs} 0`,
             fontSize: '1.5rem',
-            fontWeight: THEME.default.typography.weights.bold,
-            letterSpacing: THEME.default.typography.tracking.h1,
+            fontWeight: TYPOGRAPHY.weights.bold,
+            letterSpacing: TYPOGRAPHY.tracking.h1,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
           }}
         >
           Workspace: {subdomain}
@@ -30,7 +40,7 @@ export default async function TenantIndexPage({ params }: Readonly<TenantIndexPa
         <p
           style={{
             margin: 0,
-            color: THEME.default.text.secondary,
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
             fontSize: '0.875rem',
           }}
         >

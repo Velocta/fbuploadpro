@@ -1,6 +1,6 @@
 /**
  * @file workspace-sidebar.test.tsx
- * @description Unit tests for WorkspaceSidebar component (Spec 019 / US2).
+ * @description Unit tests for WorkspaceSidebar component (Spec 019 & Spec 025 / US2, US3).
  */
 
 import React from 'react';
@@ -18,9 +18,9 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-describe('WorkspaceSidebar Component (Spec 019)', () => {
-  it('renders workspace branding and subdomain name in header', () => {
-    const { hasText, html } = render(
+describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
+  it('renders TeamSwitcher header using SidebarMenuButton size="lg" with brand monogram FB, subdomain, FBUploadPro, and ChevronsUpDown icon', () => {
+    const { hasText, hasAttribute, html } = render(
       <SidebarProvider>
         <WorkspaceSidebar
           subdomain="acme"
@@ -29,14 +29,19 @@ describe('WorkspaceSidebar Component (Spec 019)', () => {
       </SidebarProvider>
     );
 
+    expect(hasAttribute('data-slot', 'sidebar-header')).toBe(true);
+    expect(hasAttribute('data-size', 'lg')).toBe(true);
     expect(hasText('acme')).toBe(true);
     expect(hasText('FBUploadPro')).toBe(true);
     expect(hasText('FB')).toBe(true);
     expect(html).toContain(PALETTE.primary);
+    // ChevronsUpDown SVG paths
+    expect(html).toContain('m7 15 5 5 5-5');
+    expect(html).toContain('m7 9 5-5 5 5');
   });
 
-  it('renders Home item, SidebarSeparator, and Facebook Accounts section', () => {
-    const { hasText, hasAttribute } = render(
+  it('renders Home item, SidebarSeparator, and Collapsible Facebook section with SidebarMenuSub and SidebarMenuSubButton for Accounts', () => {
+    const { hasText, hasAttribute, html } = render(
       <SidebarProvider>
         <WorkspaceSidebar
           subdomain="acme"
@@ -47,11 +52,22 @@ describe('WorkspaceSidebar Component (Spec 019)', () => {
 
     // Primary items per user directive
     expect(hasText('Home')).toBe(true);
+    expect(hasText('Platform')).toBe(true);
     expect(hasText('Facebook')).toBe(true);
     expect(hasText('Accounts')).toBe(true);
 
     // Separator line present
     expect(hasAttribute('data-sidebar', 'separator')).toBe(true);
+
+    // Collapsible + CollapsibleTrigger + SidebarMenuSub + SidebarMenuSubButton hierarchy
+    expect(hasAttribute('data-slot', 'collapsible')).toBe(true);
+    expect(hasAttribute('data-slot', 'collapsible-trigger')).toBe(true);
+    expect(hasAttribute('data-slot', 'collapsible-content')).toBe(true);
+    expect(hasAttribute('data-slot', 'sidebar-menu-sub')).toBe(true);
+    expect(hasAttribute('data-slot', 'sidebar-menu-sub-item')).toBe(true);
+    expect(hasAttribute('data-slot', 'sidebar-menu-sub-button')).toBe(true);
+    // Rotating ChevronRight icon path
+    expect(html).toContain('m9 18 6-6-6-6');
   });
 
   it('marks Home as active when pathname matches tenant home', () => {
@@ -69,8 +85,8 @@ describe('WorkspaceSidebar Component (Spec 019)', () => {
     expect(html).toContain('aria-current="page"');
   });
 
-  it('renders user details and avatar initials in footer', () => {
-    const { hasText } = render(
+  it('renders user details and avatar initials in footer using NavUser pattern', () => {
+    const { hasText, hasAttribute } = render(
       <SidebarProvider>
         <WorkspaceSidebar
           subdomain="acme"
@@ -79,8 +95,10 @@ describe('WorkspaceSidebar Component (Spec 019)', () => {
       </SidebarProvider>
     );
 
+    expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
     expect(hasText('Jane Doe')).toBe(true);
     expect(hasText('jane@example.com')).toBe(true);
     expect(hasText('JD')).toBe(true);
   });
 });
+
