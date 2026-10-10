@@ -1,13 +1,12 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { handleCreateUploadUrl } from '../../src/app/api/tenant/[subdomain]/media/upload-url/route';
 import { MockStorageProvider } from '../../src/lib/storage';
-import type { DatabaseClient } from '@fbuploadpro/database';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
-describe('Presigned Upload URL Endpoint (T086, T089, T090 - POST /api/tenant/[subdomain]/media/upload-url)', () => {
+describe('Presigned Upload URL Endpoint (POST /api/tenant/[subdomain]/media/upload-url)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   let validSessionCookie: string;
   let mockStorage: MockStorageProvider;
@@ -91,53 +90,7 @@ describe('Presigned Upload URL Endpoint (T086, T089, T090 - POST /api/tenant/[su
     expect(res.status).toBe(400);
   });
 
-  it('rejects upload request when user storage quota is exceeded with 403 INSUFFICIENT_STORAGE_QUOTA', async () => {
-    const mockDb: Partial<DatabaseClient> = {
-      query: vi.fn().mockImplementation((sql: string) => {
-        if (sql.includes('FROM user_storage_quotas')) {
-          return Promise.resolve([
-            {
-              total_bytes: '5368709120',
-              used_bytes: '5368700000', // Only ~9120 bytes left
-            },
-          ]);
-        }
-        return Promise.resolve([]);
-      }),
-    };
-
-    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/upload-url', {
-      method: 'POST',
-      headers: { cookie: validSessionCookie },
-      body: JSON.stringify({
-        fileName: 'video.mp4',
-        fileSize: 50000000, // 50 MB
-        mimeType: 'video/mp4',
-      }),
-    });
-    const res = await handleCreateUploadUrl(req, 'acme', mockDb as DatabaseClient, mockStorage);
-
-    expect(res.status).toBe(403);
-    const body = await res.json();
-    expect(body.error).toBe('INSUFFICIENT_STORAGE_QUOTA');
-    expect(body.message).toContain('Storage quota exceeded');
-  });
-
   it('generates presigned PUT URLs with hierarchical isolation and valid response contract', async () => {
-    const mockDb: Partial<DatabaseClient> = {
-      query: vi.fn().mockImplementation((sql: string) => {
-        if (sql.includes('FROM user_storage_quotas')) {
-          return Promise.resolve([
-            {
-              total_bytes: '5368709120',
-              used_bytes: '1073741824', // 1 GB used, plenty of space
-            },
-          ]);
-        }
-        return Promise.resolve([]);
-      }),
-    };
-
     const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/upload-url', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
@@ -148,7 +101,7 @@ describe('Presigned Upload URL Endpoint (T086, T089, T090 - POST /api/tenant/[su
         thumbnailMimeType: 'image/webp',
       }),
     });
-    const res = await handleCreateUploadUrl(req, 'acme', mockDb as DatabaseClient, mockStorage);
+    const res = await handleCreateUploadUrl(req, 'acme', mockStorage);
 
     expect(res.status).toBe(200);
     const data = await res.json();

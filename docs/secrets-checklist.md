@@ -26,7 +26,6 @@ This document details every required secret, environment variable, and credentia
 | `R2_SECRET_ACCESS_KEY` | R2 S3 Secret Access Key | ✅ | ❌ | ✅ | ❌ |
 | `R2_BUCKET_NAME` | R2 Bucket identifier | ✅ | ❌ | ✅ | ❌ |
 | `R2_PUBLIC_URL` | HTTPS CDN / custom domain | ✅ | ❌ | ✅ | ❌ |
-| `DEFAULT_STORAGE_QUOTA_BYTES` | Positive integer (bytes) | Optional | ❌ | Optional | ❌ |
 | `CLOUDFLARE_API_TOKEN` | Bearer Token (Workers + R2) | ❌ | ❌ | ❌ | ✅ |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account Hex ID | ❌ | ❌ | ❌ | ✅ |
 

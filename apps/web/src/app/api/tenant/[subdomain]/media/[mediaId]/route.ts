@@ -43,18 +43,6 @@ async function authenticateUser(request: NextRequest, subdomain: string) {
   return { session };
 }
 
-function parseTags(tags: unknown): string[] {
-  if (Array.isArray(tags)) return tags;
-  if (typeof tags === 'string') {
-    try {
-      return JSON.parse(tags);
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
 function formatMediaRow(row: any) {
   return MediaItemResponseSchema.parse({
     id: row.id,
@@ -71,8 +59,6 @@ function formatMediaRow(row: any) {
     durationSeconds:
       row.duration_seconds !== null ? Number(row.duration_seconds) : null,
     aspectRatio: row.aspect_ratio,
-    tags: parseTags(row.tags),
-    captionTemplateId: row.caption_template_id,
     captionText: row.caption_text,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
@@ -99,7 +85,7 @@ export async function handleGetMedia(
   const rows = (await db.query(
     `SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
             storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-            aspect_ratio, tags, caption_template_id, caption_text,
+            aspect_ratio, caption_text,
             created_at, updated_at
      FROM media_items
      WHERE id = $1 AND user_id = $2`,
@@ -150,7 +136,7 @@ export async function handleUpdateMedia(
   const db = dbClient ?? getDbClient();
 
   const existingMedia = (await db.query(
-    `SELECT id, folder_id, caption_template_id, caption_text
+    `SELECT id, folder_id, caption_text
      FROM media_items
      WHERE id = $1 AND user_id = $2`,
     [mediaId, auth.session.userId]
@@ -174,32 +160,6 @@ export async function handleUpdateMedia(
     }
   }
 
-  let captionTextToSave: string | null | undefined = parsed.data.captionText;
-
-  if (
-    parsed.data.captionTemplateId !== undefined &&
-    parsed.data.captionTemplateId !== null
-  ) {
-    const captionRows = (await db.query(
-      `SELECT id, content FROM caption_templates WHERE id = $1 AND user_id = $2`,
-      [parsed.data.captionTemplateId, auth.session.userId]
-    )) as any[];
-
-    if (!captionRows || captionRows.length === 0) {
-      return NextResponse.json(
-        {
-          error: 'CAPTION_TEMPLATE_NOT_FOUND',
-          message: 'Specified caption template was not found',
-        },
-        { status: 404 }
-      );
-    }
-
-    if (captionTextToSave === undefined) {
-      captionTextToSave = captionRows[0].content;
-    }
-  }
-
   const updates: string[] = ['updated_at = now()'];
   const values: any[] = [];
   let paramIdx = 1;
@@ -212,17 +172,9 @@ export async function handleUpdateMedia(
     updates.push(`folder_id = $${paramIdx++}`);
     values.push(parsed.data.folderId);
   }
-  if (parsed.data.tags !== undefined) {
-    updates.push(`tags = $${paramIdx++}`);
-    values.push(JSON.stringify(parsed.data.tags));
-  }
-  if (parsed.data.captionTemplateId !== undefined) {
-    updates.push(`caption_template_id = $${paramIdx++}`);
-    values.push(parsed.data.captionTemplateId);
-  }
-  if (captionTextToSave !== undefined) {
+  if (parsed.data.captionText !== undefined) {
     updates.push(`caption_text = $${paramIdx++}`);
-    values.push(captionTextToSave);
+    values.push(parsed.data.captionText);
   }
 
   values.push(mediaId, auth.session.userId);
@@ -232,7 +184,7 @@ export async function handleUpdateMedia(
     WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
     RETURNING id, user_id, folder_id, name, file_size, mime_type, media_type,
               storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-              aspect_ratio, tags, caption_template_id, caption_text,
+              aspect_ratio, caption_text,
               created_at, updated_at
   `;
 
@@ -263,7 +215,7 @@ export async function handleDeleteMedia(
 
   const db = dbClient ?? getDbClient();
   const rows = (await db.query(
-    `SELECT id, user_id, storage_key, thumbnail_key, file_size
+    `SELECT id, user_id, storage_key, thumbnail_key
      FROM media_items
      WHERE id = $1 AND user_id = $2`,
     [mediaId, auth.session.userId]
@@ -274,7 +226,6 @@ export async function handleDeleteMedia(
   }
 
   const item = rows[0];
-  const fileSize = Number(item.file_size);
 
   const storage = storageService ?? getStorageService();
   if (item.storage_key) {
@@ -297,27 +248,9 @@ export async function handleDeleteMedia(
     [mediaId, auth.session.userId]
   );
 
-  const quotaRows = (await db.query(
-    `UPDATE user_storage_quotas
-     SET used_bytes = GREATEST(0, used_bytes - $1),
-         updated_at = now()
-     WHERE user_id = $2
-     RETURNING total_bytes, used_bytes`,
-    [fileSize, auth.session.userId]
-  )) as any[];
-
-  let remainingQuotaBytes = 5368709120;
-  if (quotaRows && quotaRows.length > 0) {
-    const total = Number(quotaRows[0].total_bytes);
-    const used = Number(quotaRows[0].used_bytes);
-    remainingQuotaBytes = Math.max(0, total - used);
-  }
-
   const payload = DeleteMediaItemResponseSchema.parse({
     success: true,
     mediaId,
-    reclaimedBytes: fileSize,
-    remainingQuotaBytes,
   });
 
   return NextResponse.json(payload);

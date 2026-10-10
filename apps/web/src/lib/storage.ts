@@ -13,7 +13,6 @@ export const R2ConfigSchema = z.object({
   secretAccessKey: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),
   bucketName: z.string().min(1, 'R2_BUCKET_NAME is required'),
   publicUrl: z.string().url('R2_PUBLIC_URL must be a valid URL'),
-  defaultQuotaBytes: z.coerce.number().int().positive().default(5368709120), // 5 GB
 });
 
 export type R2Config = z.infer<typeof R2ConfigSchema>;
@@ -24,7 +23,6 @@ export function getR2Config(): R2Config | null {
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
   const bucketName = process.env.R2_BUCKET_NAME;
   const publicUrl = process.env.R2_PUBLIC_URL;
-  const defaultQuotaBytes = process.env.DEFAULT_STORAGE_QUOTA_BYTES ?? '5368709120';
 
   if (!accountId || !accessKeyId || !secretAccessKey || !bucketName || !publicUrl) {
     return null;
@@ -36,7 +34,6 @@ export function getR2Config(): R2Config | null {
     secretAccessKey,
     bucketName,
     publicUrl,
-    defaultQuotaBytes,
   });
 
   return result.success ? result.data : null;

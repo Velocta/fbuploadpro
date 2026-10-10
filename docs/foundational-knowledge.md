@@ -112,18 +112,17 @@ The platform operates on a clear three-tier role taxonomy:
 
 ## 5. Dedicated User Media Library
 
-Each user has an isolated, feature-rich Media Library:
+Each user has an isolated, streamlined Media Library:
 
 - **Multi-Media Support**: Full support for both **short-form videos** (Reels / feed videos) and **images**.
 - **Direct PC Ingestion**: Users upload assets directly from their local computer.
   - Browser-to-storage direct uploads via Cloudflare R2 presigned URLs (preventing web application server bottlenecks).
   - Fast upload handling with automated thumbnail preview generation.
-- **Organization & Metadata**:
-  - **Custom Folders**: Nested or categorized collections for organizing campaigns, themes, or series.
-  - **Tags**: Multi-tag filtering and search for quick asset retrieval.
-- **Storage Infrastructure & Quotas**:
-  - High-availability object storage powered by **Cloudflare R2** with zero egress fees.
-  - Per-user storage limits (default 10 GB), with real-time quota tracking.
+- **Organization & Direct Per-Asset Captions**:
+  - **Custom Folders**: Clean folder hierarchy for organizing campaigns, themes, or series (without decorative folder color badges or multi-tag bloat).
+  - **Direct Asset Caption (`caption_text`)**: Every video and image has 1 direct editable caption, defaulting automatically on upload confirmation to the filename with its extension stripped (e.g., `My Viral Reel.mp4` $\rightarrow$ `My Viral Reel`).
+- **Unrestricted Cloudflare R2 Storage**:
+  - High-availability object storage powered by **Cloudflare R2** with zero egress fees and zero per-user storage quota caps (`user_storage_quotas` and `caption_templates` abolished in Spec 028).
 
 ---
 
@@ -207,19 +206,21 @@ flowchart LR
     M24[Spec 024: Native Supabase Auth Lifecycle & Cooldown Resilience]
     M25[Spec 025: Facebook Metadata Ingestion & PostgreSQL Status ENUMs]
     M26[Spec 026: Production Shadcn Sidebar Rebuild]
+    M27[Spec 027: Dedicated Facebook Accounts Management]
+    M28[Spec 028: Purge Media Library Bloat]
   end
 
   subgraph CurrentFocus [Active Priority]
-    UIRecreate[Feature Views Assembly: Spec 002-006 Pages]
+    UIRecreate[Feature Views Assembly: Spec 004-006 Pages]
   end
 
-  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9 --> M10 --> M11 --> M12 --> M13 --> M14 --> M15 --> M16 --> M17 --> M18 --> M19 --> M20 --> M21 --> M22 --> M23 --> M24 --> M25 --> M26 --> UIRecreate
+  M1 --> M2 --> M3 --> M4 --> M5 --> M6 --> M7 --> M8 --> M9 --> M10 --> M11 --> M12 --> M13 --> M14 --> M15 --> M16 --> M17 --> M18 --> M19 --> M20 --> M21 --> M22 --> M23 --> M24 --> M25 --> M26 --> M27 --> M28 --> UIRecreate
 ```
 
 - **Spec 001 (Completed & Merged)**: Turborepo monorepo, dual Node/Edge database clients, baseline schema, health probes.
 - **Spec 002 (Completed & Merged; UI Slated for Assembly)**: Native Web Crypto HMAC-SHA256 session auth, subdomain routing middleware, RBAC shell.
-- **Spec 003 (Completed & Merged; UI Slated for Assembly)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
-- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy, 10 GB storage quota meters).
+- **Spec 003 (Completed & Merged)**: Facebook Graph API v26.0 OAuth, AES-256-GCM encrypted token storage, selective page discovery, multi-account management UI.
+- **Spec 004 (Completed & Merged; UI Slated for Assembly)**: Dedicated Media Library & Cloudflare R2 Uploads (direct presigned upload/confirm, folder hierarchy).
 - **Spec 005 (Completed & Merged; UI Slated for Assembly)**: Automated Queue Slots Publishing Engine & Edge Dispatcher (recurring slot definitions, Cloudflare Worker edge dispatcher with `FOR UPDATE SKIP LOCKED`, Facebook Graph API v26.0 video/photo publisher, automated first comment).
 - **Spec 006 (Completed & Merged; UI Slated for Assembly)**: Dedicated Facebook Page Insights (Server-side proxy, 15m cache, time-series followers, video views, watch time, reactions, demographics, worker daily snapshot cron sync).
 - **Spec 007 (Completed & Merged)**: **Purge Token System & Enforce Unrestricted Publishing** (Abolished prepaid token credits, token transactions, atomic token decrements, queue balance gates, clean DDL purge of `tokens_balance` / `tokens_deducted` / `token_transactions`, and granted unrestricted publishing for active users).
@@ -243,11 +244,12 @@ flowchart LR
 - **Spec 025 (Completed & Verified)**: **Facebook Account & Page Profile Metadata Ingestion & Persistence (`profile_picture_url`, `gender`, `account_link`), PostgreSQL Status `ENUM` Types & Graph API Error/Status Reference** (Added nullable `profile_picture_url TEXT`, `gender VARCHAR(50)`, and `account_link TEXT` columns to `facebook_accounts` and `profile_picture_url TEXT` to `facebook_pages`, and converted `users.status`, `facebook_accounts.status`, and `facebook_pages.status` to native PostgreSQL `ENUM` types (`user_status`, `facebook_account_status`, and `facebook_page_status` including `'paused'`) via forward migration; extended `@fbuploadpro/contracts` with `UserStatusEnum`, `FacebookAccountStatusEnum`, `FacebookPageStatusEnum` (with `'paused'`), `profilePictureUrl`, `gender`, `accountLink`, and `'page_checkpoint'`; updated `evaluateGraphApiError`, `evaluatePageHealth`, and worker `dispatchItem`/`settleOutcome` so Error `368` + Subcode `1390008` sets `facebook_pages.status = 'fb_rate_limited'` with automatic 3-day recovery to `'active'`, Error `368` + Subcode `4854002` sets `facebook_pages.status = 'page_checkpoint'` requiring mobile Facebook verification and manual reactivation, and Error `368` + Subcode `1404082` marks the post as `'failed'` with duplicate-content reason while keeping the Page `'active'`; documented complete Facebook Graph API error codes, subcodes, rate limits, `/user` node errors, and status mappings in [`docs/facebook-graph-api/`](./facebook-graph-api/README.md)).
 - **Spec 026 (Completed & Merged into main)**: **Production Shadcn Sidebar Architecture Rebuild** (Rebuilt `apps/web/src/components/ui/sidebar.tsx`, `workspace-sidebar.tsx`, and `workspace-user-menu.tsx` to match the official `ui.shadcn.com/docs/components/base/sidebar` specification with 100% structural and visual fidelity: two-layer fixed container + normal-flow gap spacer, zero overflow clipping of tooltips or popovers, reactive dual-theme CSS variable binding, `Collapsible` + `SidebarMenuSub` navigation hierarchy for "Facebook -> Accounts", single dedicated workspace brand header without switcher arrows, `SidebarMenuButton size="lg"` footer `NavUser` pattern with `ChevronsUpDown` and unclipped floating dropdown menu, `SidebarInput` and `SidebarMenuSkeleton` primitives, and standard `SidebarTrigger` (`PanelLeft` icon) on both desktop and mobile alongside `SidebarRail`).
 - **Spec 027 (Completed & Verified)**: **Dedicated Facebook Accounts Management Section & Dual-Mode Connection Flow** (Built dedicated `/tenant/[subdomain]/accounts` view with clean minimalist profile cards: avatar, display name, gender, profile link, connected pages count, and connection timestamp; zero artificial status badges or dots when active; clear warning callout and Reconnect button strictly when expired; dual-mode Connect Facebook Account modal offering Direct Connection in the same browser and 15-minute copyable Magic Link for cross-browser sessions with pure 3-second automatic polling and standalone remote success page at `/connect/facebook/success`; safety disconnect modal dialog warning of linked Facebook Page detachment before cascading deletion).
+- **Spec 028 (Completed & Verified)**: **Purge Media Library Bloat (Caption Templates, Multi-Tag Taxonomy, Folder Colors & Storage Quotas)** (Dropped `caption_templates` and `user_storage_quotas` tables, `media_items.caption_template_id`, `media_items.tags`, `idx_media_items_tags`, and `media_folders.color` via forward migration `20261010182000_purge_media_library_bloat.sql`; deleted `/media/captions` and `/media/quota` API routes and `caption.ts` contract; removed all broken `user_storage_quotas` / `storage_quotas` upserts from `supabase-auth.ts`; retained a single direct editable `caption_text` per video/image defaulting on upload confirmation to the filename with its extension stripped via `deriveDefaultCaptionFromFilename`).
 - **SonarQube Cloud Scanner Integration (Completed & Verified)**: **Continuous Code Quality & Security Inspection** (Integrated SonarQube Cloud project `Velocta_fbuploadpro2` under organization `velocta-1` using root `sonar-project.properties` and the official GitHub Action `SonarSource/sonarqube-scan-action@v8.3.0` in `.github/workflows/sonar.yml` with full monorepo path mapping and test execution coverage).
 - **SonarQube Quality Audit Remediation (Completed & Verified)**: **Vulnerability & Bug Hardening** (Remediated CI lifecycle vulnerabilities with `--ignore-scripts`, pinned all GitHub Actions to immutable full commit SHAs, resolved keyboard accessibility with semantic button triggers and `onKeyDown` listeners across `workspace-user-menu.tsx`, `dialog.tsx`, and `switch.tsx`, eliminated regex super-linear backtracking, replaced `charCodeAt` with `codePointAt`, un-nested conditional ternaries in UI primitives, and tuned scanner exclusions for immutable database migrations and UI boilerplate).
 - **SonarQube Reliability Hardening (Completed & Verified)**: **Zero Reliability Violations** (Remediated all 52 open Reliability issues under the “Sonar way for Agentic AI” quality gate: eradicated radix-less `parseInt`/`isNaN` across slot scheduler, crypto, and auth error parsers with `Number.parseInt`/`Number.isNaN`, replaced `charCodeAt`/`fromCharCode` and string replacements with `codePointAt`/`fromCodePoint` and `replaceAll`, eliminated all un-awaited `async` functions across worker dispatcher, client mocks, and auth callbacks, resolved JSX spacing and ARIA interactive container rules in UI primitives, and tuned global exclusions for non-production scripts).
 - **Middleware Redirect Loop Elimination & Multi-Subdomain Session Propagation (Completed & Verified)**: Resolved the infinite redirect ping-pong loop between central app gateway (`app.${rootDomain}`) and tenant workspace subdomains (`${subdomain}.${rootDomain}`); cleared URL search query strings on workspace redirects in `buildAuthenticatedWorkspaceRedirect`, prevented `returnUrl` nested accumulation by deleting duplicate parameters before encoding, added `isReturnUrlTargetingTenant` loop detection on `/login` to terminate recursive bounces when workspaces reject unauthenticated visits, and purged legacy host-only cookies across login, OTP verification, and logout routes to prevent browser cookie shadowing.
-- **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 002–006 utilizing the completed Spec 008, Spec 014, Spec 015, Spec 016, Spec 017, Spec 018, Spec 019, Spec 020, and Spec 025 component primitives.
+- **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 004–006 utilizing the completed Spec 008, Spec 014, Spec 015, Spec 016, Spec 017, Spec 018, Spec 019, Spec 020, Spec 025, Spec 027, and Spec 028 primitives.
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
 
 ---

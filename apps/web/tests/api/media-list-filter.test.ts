@@ -6,7 +6,7 @@ import type { DatabaseClient } from '@fbuploadpro/database';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
-describe('Media Items Listing & Filtering (T093, T096 - GET /api/tenant/[subdomain]/media)', () => {
+describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   const folderId = '22222222-2222-4222-a222-222222222222';
   let validSessionCookie: string;
@@ -65,8 +65,6 @@ describe('Media Items Listing & Filtering (T093, T096 - GET /api/tenant/[subdoma
             thumbnail_url: `https://media.fbuploadpro.com/users/${userId}/thumbnails/33333333-3333-4333-a333-333333333333.webp`,
             duration_seconds: '30.00',
             aspect_ratio: '9:16',
-            tags: ['promo'],
-            caption_template_id: null,
             caption_text: 'Promo copy',
             created_at: new Date('2026-10-07T12:00:00Z'),
             updated_at: new Date('2026-10-07T12:00:00Z'),
@@ -87,9 +85,10 @@ describe('Media Items Listing & Filtering (T093, T096 - GET /api/tenant/[subdoma
     expect(data.offset).toBe(0);
     expect(data.items).toHaveLength(1);
     expect(data.items[0].name).toBe('reel1.mp4');
+    expect(data.items[0].captionText).toBe('Promo copy');
   });
 
-  it('filters media items by folderId and tag', async () => {
+  it('filters media items by folderId, mediaType, and search', async () => {
     let capturedSql = '';
     let capturedParams: any[] = [];
 
@@ -105,7 +104,7 @@ describe('Media Items Listing & Filtering (T093, T096 - GET /api/tenant/[subdoma
     };
 
     const req = new NextRequest(
-      `http://localhost:3000/api/tenant/acme/media?folderId=${folderId}&tag=viral&mediaType=video&search=spring`,
+      `http://localhost:3000/api/tenant/acme/media?folderId=${folderId}&mediaType=video&search=spring`,
       { headers: { cookie: validSessionCookie } }
     );
     const res = await handleListMedia(req, 'acme', mockDb as DatabaseClient);
@@ -113,7 +112,6 @@ describe('Media Items Listing & Filtering (T093, T096 - GET /api/tenant/[subdoma
     expect(res.status).toBe(200);
     expect(capturedSql).toContain('folder_id =');
     expect(capturedSql).toContain('media_type =');
-    expect(capturedSql).toContain('tags @>');
     expect(capturedSql).toContain('ILIKE');
     expect(capturedParams).toContain(folderId);
     expect(capturedParams).toContain('video');

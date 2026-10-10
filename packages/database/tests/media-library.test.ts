@@ -7,19 +7,21 @@ describe('Media Library DDL Migration & Schema Suite', () => {
     __dirname,
     '../migrations/0003_media_library.sql'
   );
+  const purgeMigrationPath = path.resolve(
+    __dirname,
+    '../../../supabase/migrations/20261010182000_purge_media_library_bloat.sql'
+  );
 
-  it('0003_media_library.sql exists and creates required tables', () => {
+  it('0003_media_library.sql exists and creates baseline media tables', () => {
     expect(fs.existsSync(migrationPath)).toBe(true);
 
     const ddl = fs.readFileSync(migrationPath, 'utf8');
 
-    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS user_storage_quotas');
     expect(ddl).toContain('CREATE TABLE IF NOT EXISTS media_folders');
-    expect(ddl).toContain('CREATE TABLE IF NOT EXISTS caption_templates');
     expect(ddl).toContain('CREATE TABLE IF NOT EXISTS media_items');
   });
 
-  it('enforces multi-tenant composite foreign keys and non-destructive deletion', () => {
+  it('enforces multi-tenant composite foreign keys for media_folders', () => {
     const ddl = fs.readFileSync(migrationPath, 'utf8');
 
     // Composite foreign key ensuring folder belongs to user, with ON DELETE SET NULL
@@ -29,43 +31,20 @@ describe('Media Library DDL Migration & Schema Suite', () => {
     expect(ddl).toContain(
       'REFERENCES media_folders(user_id, id) ON DELETE SET NULL'
     );
-
-    // Composite foreign key ensuring caption belongs to user, with ON DELETE SET NULL
-    expect(ddl).toContain(
-      'CONSTRAINT fk_media_items_user_caption FOREIGN KEY (user_id, caption_template_id)'
-    );
-    expect(ddl).toContain(
-      'REFERENCES caption_templates(user_id, id) ON DELETE SET NULL'
-    );
   });
 
-  it('enforces uniqueness per user workspace for folders and captions', () => {
-    const ddl = fs.readFileSync(migrationPath, 'utf8');
+  it('20261010182000_purge_media_library_bloat.sql drops caption_templates, user_storage_quotas, tags, and folder color', () => {
+    expect(fs.existsSync(purgeMigrationPath)).toBe(true);
 
-    expect(ddl).toContain(
-      'CONSTRAINT uq_media_folders_user_name UNIQUE (user_id, name)'
-    );
-    expect(ddl).toContain(
-      'CONSTRAINT uq_caption_templates_user_title UNIQUE (user_id, title)'
-    );
-    expect(ddl).toContain(
-      'storage_key VARCHAR(500) NOT NULL UNIQUE'
-    );
-  });
+    const purgeDdl = fs.readFileSync(purgeMigrationPath, 'utf8');
 
-  it('enforces non-negative storage check constraints', () => {
-    const ddl = fs.readFileSync(migrationPath, 'utf8');
-
-    expect(ddl).toContain('total_bytes BIGINT NOT NULL DEFAULT 5368709120 CHECK (total_bytes >= 0)');
-    expect(ddl).toContain('used_bytes BIGINT NOT NULL DEFAULT 0 CHECK (used_bytes >= 0)');
-    expect(ddl).toContain('file_size BIGINT NOT NULL CHECK (file_size > 0)');
-  });
-
-  it('configures GIN indexing for multi-tag querying', () => {
-    const ddl = fs.readFileSync(migrationPath, 'utf8');
-
-    expect(ddl).toContain(
-      'CREATE INDEX IF NOT EXISTS idx_media_items_tags ON media_items USING GIN (tags)'
-    );
+    expect(purgeDdl).toContain('DROP CONSTRAINT IF EXISTS fk_media_items_user_caption');
+    expect(purgeDdl).toContain('DROP COLUMN IF EXISTS caption_template_id');
+    expect(purgeDdl).toContain('DROP INDEX IF EXISTS idx_media_items_tags');
+    expect(purgeDdl).toContain('DROP COLUMN IF EXISTS tags');
+    expect(purgeDdl).toContain('ALTER TABLE media_folders');
+    expect(purgeDdl).toContain('DROP COLUMN IF EXISTS color');
+    expect(purgeDdl).toContain('DROP TABLE IF EXISTS caption_templates CASCADE');
+    expect(purgeDdl).toContain('DROP TABLE IF EXISTS user_storage_quotas CASCADE');
   });
 });

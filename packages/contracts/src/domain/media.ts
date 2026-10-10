@@ -11,6 +11,19 @@ export const AllowedMediaMimeTypes = [
 
 export const AllowedThumbnailMimeTypes = ['image/webp', 'image/jpeg'] as const;
 
+/**
+ * Strips the trailing file extension from a filename to produce the default media caption.
+ * Example: "My Viral Reel.mp4" -> "My Viral Reel"
+ */
+export function deriveDefaultCaptionFromFilename(fileName: string): string {
+  const trimmed = fileName.trim();
+  const lastDotIndex = trimmed.lastIndexOf('.');
+  if (lastDotIndex > 0) {
+    return trimmed.slice(0, lastDotIndex).trim();
+  }
+  return trimmed;
+}
+
 export const UploadUrlRequestSchema = z.object({
   fileName: z.string().trim().min(1).max(255),
   fileSize: z.number().int().positive().max(524288000), // Max 500 MB
@@ -46,8 +59,6 @@ export const ConfirmUploadRequestSchema = z.object({
   durationSeconds: z.number().nonnegative().nullable().optional(),
   aspectRatio: z.string().min(1).max(20).default('unknown'),
   folderId: z.string().uuid().nullable().optional(),
-  tags: z.array(z.string().min(1).max(50)).default([]),
-  captionTemplateId: z.string().uuid().nullable().optional(),
   captionText: z.string().max(5000).nullable().optional(),
 });
 
@@ -67,8 +78,6 @@ export const MediaItemResponseSchema = z.object({
   thumbnailUrl: z.string().url().nullable(),
   durationSeconds: z.number().nullable(),
   aspectRatio: z.string(),
-  tags: z.array(z.string()),
-  captionTemplateId: z.string().uuid().nullable(),
   captionText: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -79,7 +88,6 @@ export type MediaItemResponse = z.infer<typeof MediaItemResponseSchema>;
 export const MediaListQuerySchema = z.object({
   folderId: z.string().uuid().or(z.literal('unorganized')).optional(),
   mediaType: z.enum(['video', 'image']).optional(),
-  tag: z.string().optional(),
   search: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
@@ -99,8 +107,6 @@ export type MediaListResponse = z.infer<typeof MediaListResponseSchema>;
 export const UpdateMediaItemRequestSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   folderId: z.string().uuid().nullable().optional(),
-  tags: z.array(z.string().trim().min(1).max(50)).optional(),
-  captionTemplateId: z.string().uuid().nullable().optional(),
   captionText: z.string().max(5000).nullable().optional(),
 });
 
@@ -109,8 +115,6 @@ export type UpdateMediaItemRequest = z.infer<typeof UpdateMediaItemRequestSchema
 export const DeleteMediaItemResponseSchema = z.object({
   success: z.literal(true),
   mediaId: z.string().uuid(),
-  reclaimedBytes: z.number().int().positive(),
-  remainingQuotaBytes: z.number().int().nonnegative(),
 });
 
 export type DeleteMediaItemResponse = z.infer<typeof DeleteMediaItemResponseSchema>;

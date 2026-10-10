@@ -19,13 +19,11 @@ describe('Cloudflare R2 Storage Configuration', () => {
       secretAccessKey: 'sec_123',
       bucketName: 'media-bucket',
       publicUrl: 'https://media.fbuploadpro.com',
-      defaultQuotaBytes: '5368709120',
     });
 
     expect(valid.success).toBe(true);
     if (valid.success) {
       expect(valid.data.bucketName).toBe('media-bucket');
-      expect(valid.data.defaultQuotaBytes).toBe(5368709120);
     }
   });
 

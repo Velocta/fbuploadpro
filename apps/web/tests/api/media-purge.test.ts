@@ -10,7 +10,7 @@ import type { DatabaseClient } from '@fbuploadpro/database';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
-describe('Media Inspection & Purging (T101, T102, T103)', () => {
+describe('Media Inspection & Purging', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   const mediaId = '22222222-2222-4222-a222-222222222222';
   let validSessionCookie: string;
@@ -34,7 +34,7 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
     validSessionCookie = `fbup_session=${token}`;
   });
 
-  describe('GET /api/tenant/[subdomain]/media/[mediaId] (T102)', () => {
+  describe('GET /api/tenant/[subdomain]/media/[mediaId]', () => {
     it('rejects unauthenticated requests with 401 Unauthorized', async () => {
       const req = new NextRequest(`http://localhost:3000/api/tenant/acme/media/${mediaId}`);
       const res = await handleGetMedia(req, 'acme', mediaId);
@@ -69,7 +69,7 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns media asset details with technical metadata', async () => {
+    it('returns media asset details with technical metadata and direct caption', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockResolvedValue([
           {
@@ -86,8 +86,6 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
             thumbnail_url: `https://pub-r2.example.com/tenants/acme/media/${mediaId}/thumb.webp`,
             duration_seconds: '15.50',
             aspect_ratio: '9:16',
-            tags: ['reel', 'product'],
-            caption_template_id: null,
             caption_text: 'Check out our new launch!',
             created_at: new Date('2026-10-07T10:00:00Z'),
             updated_at: new Date('2026-10-07T10:00:00Z'),
@@ -109,11 +107,11 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
       expect(body.mediaType).toBe('video');
       expect(body.aspectRatio).toBe('9:16');
       expect(body.durationSeconds).toBe(15.5);
-      expect(body.tags).toEqual(['reel', 'product']);
+      expect(body.captionText).toBe('Check out our new launch!');
     });
   });
 
-  describe('DELETE /api/tenant/[subdomain]/media/[mediaId] (T103)', () => {
+  describe('DELETE /api/tenant/[subdomain]/media/[mediaId]', () => {
     it('rejects unauthenticated requests with 401 Unauthorized', async () => {
       const req = new NextRequest(`http://localhost:3000/api/tenant/acme/media/${mediaId}`, {
         method: 'DELETE',
@@ -159,7 +157,7 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
       expect(res.status).toBe(404);
     });
 
-    it('deletes asset from R2, purges DB record, and decrements storage quota atomically', async () => {
+    it('deletes asset from R2 and purges DB record without quota accounting', async () => {
       const primaryKey = `tenants/acme/media/${mediaId}/clip.mp4`;
       const thumbKey = `tenants/acme/media/${mediaId}/clip_thumb.webp`;
       const fileSize = 50000000;
@@ -179,14 +177,6 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
           }
           if (sql.includes('DELETE FROM media_items')) {
             return Promise.resolve([]);
-          }
-          if (sql.includes('UPDATE user_storage_quotas')) {
-            return Promise.resolve([
-              {
-                total_bytes: '5368709120',
-                used_bytes: '100000000',
-              },
-            ]);
           }
           return Promise.resolve([]);
         }),
@@ -209,8 +199,8 @@ describe('Media Inspection & Purging (T101, T102, T103)', () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.mediaId).toBe(mediaId);
-      expect(body.reclaimedBytes).toBe(fileSize);
-      expect(body.remainingQuotaBytes).toBe(5368709120 - 100000000);
+      expect('reclaimedBytes' in body).toBe(false);
+      expect('remainingQuotaBytes' in body).toBe(false);
 
       // Verify storage objects were deleted
       expect(mockStorage.deletedKeys.has(primaryKey)).toBe(true);

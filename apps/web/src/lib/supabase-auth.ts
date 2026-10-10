@@ -431,22 +431,6 @@ export async function signUpTenantUser(params: {
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
     }
-
-    // Persist storage quota via Supabase PostgREST
-    try {
-      await supabase.from('user_storage_quotas').upsert(
-        {
-          user_id: userId,
-          max_bytes: 5368709120,
-          used_bytes: 0,
-          max_assets: 50,
-          used_assets: 0,
-        },
-        { onConflict: 'user_id' }
-      );
-    } catch (quotaErr) {
-      console.error('[Supabase PostgREST] Storage quota insert exception:', quotaErr);
-    }
   } else {
     // Local / test fallback
     const { createPendingSignup } = await import('@/lib/otp-service');
@@ -529,23 +513,6 @@ export async function verifySignupOtpViaSupabase(params: {
         .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`);
     } catch (updateErr) {
       console.error('[Supabase PostgREST] Status activation error:', updateErr);
-    }
-
-    if (userRecord?.id) {
-      try {
-        await supabase.from('user_storage_quotas').upsert(
-          {
-            user_id: userRecord.id,
-            max_bytes: 5368709120,
-            used_bytes: 0,
-            max_assets: 50,
-            used_assets: 0,
-          },
-          { onConflict: 'user_id' }
-        );
-      } catch (quotaErr) {
-        console.error('[Supabase PostgREST] Storage quota upsert error:', quotaErr);
-      }
     }
 
     userRecord = await findUserByEmail(canonicalEmail);
@@ -740,22 +707,6 @@ export async function registerTenantUser(params: {
         status: 'active',
       };
     }
-
-    // Persist storage quota via Supabase PostgREST
-    try {
-      await supabase.from('user_storage_quotas').upsert(
-        {
-          user_id: userId,
-          max_bytes: 5368709120,
-          used_bytes: 0,
-          max_assets: 50,
-          used_assets: 0,
-        },
-        { onConflict: 'user_id' }
-      );
-    } catch (quotaErr) {
-      console.error('[Supabase PostgREST] Storage quota insert exception:', quotaErr);
-    }
   } else {
     userId = crypto.randomUUID();
     const hashed = rawOrHashedPassword.includes(':')
@@ -782,12 +733,6 @@ export async function registerTenantUser(params: {
            VALUES ($1, $2, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
            ON CONFLICT (id) DO NOTHING`,
           [userId, canonicalEmail, params.name, formattedPhone, subdomain]
-        );
-        await db.query(
-          `INSERT INTO storage_quotas (user_id, max_bytes, used_bytes, max_assets, used_assets)
-           VALUES ($1, 5368709120, 0, 50, 0)
-           ON CONFLICT (user_id) DO NOTHING`,
-          [userId]
         );
       } catch (dbErr) {
         console.error('[Postgres DB] User insert error:', dbErr);
@@ -885,16 +830,6 @@ export async function loginTenantUser(params: {
             status: 'active',
           },
           { onConflict: 'id' }
-        );
-        await supabase.from('user_storage_quotas').upsert(
-          {
-            user_id: user.id,
-            max_bytes: 5368709120,
-            used_bytes: 0,
-            max_assets: 50,
-            used_assets: 0,
-          },
-          { onConflict: 'user_id' }
         );
       } catch (upsertErr) {
         console.error('[Supabase PostgREST] User upsert on login error:', upsertErr);
@@ -1093,7 +1028,7 @@ export async function resetUserPasswordWithOtp(params: {
       }
     }
 
-    // Ensure public.users profile exists and is active, and storage quotas are provisioned
+    // Ensure public.users profile exists and is active
     try {
       const existingUser = await findUserByEmail(canonicalEmail);
       if (existingUser?.id) {
@@ -1101,16 +1036,6 @@ export async function resetUserPasswordWithOtp(params: {
           .from('users')
           .update({ status: 'active', updated_at: new Date().toISOString() })
           .eq('id', existingUser.id);
-        await supabase.from('user_storage_quotas').upsert(
-          {
-            user_id: existingUser.id,
-            max_bytes: 5368709120,
-            used_bytes: 0,
-            max_assets: 50,
-            used_assets: 0,
-          },
-          { onConflict: 'user_id' }
-        );
       } else {
         const { data: authUserData } = await supabase.auth.getUser();
         if (authUserData?.user) {
@@ -1129,16 +1054,6 @@ export async function resetUserPasswordWithOtp(params: {
               status: 'active',
             },
             { onConflict: 'id' }
-          );
-          await supabase.from('user_storage_quotas').upsert(
-            {
-              user_id: u.id,
-              max_bytes: 5368709120,
-              used_bytes: 0,
-              max_assets: 50,
-              used_assets: 0,
-            },
-            { onConflict: 'user_id' }
           );
         }
       }

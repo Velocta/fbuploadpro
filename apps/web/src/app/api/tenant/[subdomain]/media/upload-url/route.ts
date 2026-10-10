@@ -6,14 +6,11 @@ import {
   verifySessionToken,
   type IStorageService,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../lib/db';
 import { getStorageService } from '../../../../../../lib/storage';
-import type { DatabaseClient } from '@fbuploadpro/database';
 
 export async function handleCreateUploadUrl(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const sessionSecret =
@@ -55,30 +52,8 @@ export async function handleCreateUploadUrl(
   }
 
   const body = parsed.data;
-  const db = dbClient ?? getDbClient();
 
-  // 4. Storage quota pre-check
-  const quotaRows = (await db.query(
-    `SELECT total_bytes, used_bytes FROM user_storage_quotas WHERE user_id = $1`,
-    [session.userId]
-  )) as any[];
-
-  const defaultTotalBytes = 5368709120; // 5 GB
-  const totalBytes = quotaRows.length > 0 ? Number(quotaRows[0].total_bytes) : defaultTotalBytes;
-  const usedBytes = quotaRows.length > 0 ? Number(quotaRows[0].used_bytes) : 0;
-  const remainingBytes = Math.max(0, totalBytes - usedBytes);
-
-  if (body.fileSize > remainingBytes) {
-    return NextResponse.json(
-      {
-        error: 'INSUFFICIENT_STORAGE_QUOTA',
-        message: 'Storage quota exceeded. Please delete existing media to free up space.',
-      },
-      { status: 403 }
-    );
-  }
-
-  // 5. Build isolated object keys
+  // 4. Build isolated object keys
   const sanitizedFileName = body.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const mediaId = randomUUID();
   const mediaKey = `users/${session.userId}/media/${mediaId}/${sanitizedFileName}`;

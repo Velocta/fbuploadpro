@@ -36,6 +36,7 @@ describe('Supabase Migrations Convention Suite', () => {
       'users_phone_number',
       'auth_hardening_canonical_email_e164',
       'facebook_profile_picture_url',
+      'purge_media_library_bloat',
     ];
 
     for (const slug of expectedSlugs) {

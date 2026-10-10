@@ -1,30 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   ConfirmUploadRequestSchema,
+  deriveDefaultCaptionFromFilename,
   MediaItemResponseSchema,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { getDbClient } from '../../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
-
-class QuotaExceededError extends Error {
-  constructor(message = 'Storage quota exceeded') {
-    super(message);
-    this.name = 'QuotaExceededError';
-  }
-}
-
-function parseTags(tags: unknown): string[] {
-  if (Array.isArray(tags)) return tags;
-  if (typeof tags === 'string') {
-    try {
-      return JSON.parse(tags);
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
 
 export async function handleConfirmUpload(
   request: NextRequest,
@@ -75,39 +57,24 @@ export async function handleConfirmUpload(
   const body = parsed.data;
   const db = dbClient ?? getDbClient();
 
+  const resolvedCaptionText =
+    body.captionText !== undefined
+      ? body.captionText
+      : deriveDefaultCaptionFromFilename(body.name);
+
   try {
-    const executeInTx = async (tx: { query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }> }) => {
-      // Ensure user quota baseline exists
-      await tx.query(
-        `INSERT INTO user_storage_quotas (user_id, total_bytes, used_bytes)
-         VALUES ($1, 5368709120, 0)
-         ON CONFLICT (user_id) DO NOTHING`,
-        [session.userId]
-      );
-
-      // Atomically check and increment quota
-      const updateRes = await tx.query(
-        `UPDATE user_storage_quotas
-         SET used_bytes = used_bytes + $1, updated_at = now()
-         WHERE user_id = $2 AND used_bytes + $1 <= total_bytes
-         RETURNING total_bytes, used_bytes`,
-        [body.fileSize, session.userId]
-      );
-
-      if (!updateRes.rows || updateRes.rows.length === 0 || (updateRes.rowCount !== undefined && updateRes.rowCount === 0)) {
-        throw new QuotaExceededError();
-      }
-
-      // Insert media asset
+    const executeInsert = async (tx: {
+      query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>;
+    }) => {
       const insertRes = await tx.query(
         `INSERT INTO media_items (
            id, user_id, folder_id, name, file_size, mime_type, media_type,
            storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-           aspect_ratio, tags, caption_template_id, caption_text, created_at, updated_at
+           aspect_ratio, caption_text, created_at, updated_at
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7,
            $8, $9, $10, $11, $12,
-           $13, $14, $15, $16, now(), now()
+           $13, $14, now(), now()
          )
          RETURNING *`,
         [
@@ -124,9 +91,7 @@ export async function handleConfirmUpload(
           body.thumbnailUrl ?? null,
           body.durationSeconds ?? null,
           body.aspectRatio ?? 'unknown',
-          JSON.stringify(body.tags ?? []),
-          body.captionTemplateId ?? null,
-          body.captionText ?? null,
+          resolvedCaptionText,
         ]
       );
 
@@ -135,9 +100,9 @@ export async function handleConfirmUpload(
 
     let insertedRow: any;
     if (typeof db.withTransaction === 'function') {
-      insertedRow = await db.withTransaction(executeInTx);
+      insertedRow = await db.withTransaction(executeInsert);
     } else {
-      insertedRow = await executeInTx({
+      insertedRow = await executeInsert({
         query: async (sql, params) => {
           const rows = await db.query(sql, params);
           return { rows, rowCount: rows.length };
@@ -162,21 +127,13 @@ export async function handleConfirmUpload(
           ? Number(insertedRow.duration_seconds)
           : null,
       aspectRatio: insertedRow.aspect_ratio ?? 'unknown',
-      tags: parseTags(insertedRow.tags),
-      captionTemplateId: insertedRow.caption_template_id ?? null,
       captionText: insertedRow.caption_text ?? null,
       createdAt: new Date(insertedRow.created_at).toISOString(),
       updatedAt: new Date(insertedRow.updated_at).toISOString(),
     });
 
     return NextResponse.json(responsePayload, { status: 201 });
-  } catch (err) {
-    if (err instanceof QuotaExceededError) {
-      return NextResponse.json(
-        { error: 'INSUFFICIENT_STORAGE_QUOTA', message: 'Storage quota exceeded' },
-        { status: 403 }
-      );
-    }
+  } catch (_err) {
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to confirm media upload' },
       { status: 500 }
