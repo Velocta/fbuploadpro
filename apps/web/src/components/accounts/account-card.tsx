@@ -40,7 +40,7 @@ export function AccountCard({
         year: 'numeric',
       });
     } catch (_e) {
-      // Gracefully fall back to 'Recent' if the timestamp is malformed or invalid
+      // Ignored because invalid dates safely fallback to recent
       return 'Recent';
     }
   }, [account.createdAt]);

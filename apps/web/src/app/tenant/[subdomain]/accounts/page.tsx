@@ -108,7 +108,7 @@ export default function TenantAccountsPage() {
         });
       }
     } catch (_err) {
-      // Catch network or server error and display a user-friendly error notice
+      // Ignored because a user-facing notification is displayed instead of throwing
       setBannerNotice({
         type: 'error',
         message: 'An error occurred while disconnecting the account.',

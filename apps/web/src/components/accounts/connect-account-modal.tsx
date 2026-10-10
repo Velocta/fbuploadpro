@@ -20,6 +20,85 @@ interface ConnectAccountModalProps {
   existingAccountIds?: string[];
 }
 
+interface ConnectOptionButtonProps {
+  testId: string;
+  disabled: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}
+
+function ConnectOptionButton({
+  testId,
+  disabled,
+  onClick,
+  icon,
+  title,
+  description,
+}: Readonly<ConnectOptionButtonProps>) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      disabled={disabled}
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: SPACING.md,
+        padding: SPACING.lg,
+        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderRadius: RADII.md,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        textAlign: 'left',
+        transition: 'border-color 0.15s ease, background-color 0.15s ease',
+        width: '100%',
+      }}
+    >
+      <div
+        style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: RADII.sm,
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          color: PALETTE.primary,
+        }}
+      >
+        {icon}
+      </div>
+
+      <div style={{ flex: 1 }}>
+        <div
+          style={{
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            fontSize: '0.9375rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            marginBottom: '4px',
+          }}
+        >
+          {title}
+        </div>
+        <div
+          style={{
+            fontSize: '0.8125rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            lineHeight: 1.4,
+          }}
+        >
+          {description}
+        </div>
+      </div>
+    </button>
+  );
+}
+
 export function ConnectAccountModal({
   subdomain,
   open,
@@ -72,7 +151,7 @@ export function ConnectAccountModal({
       setRemainingSeconds(data.expiresInSeconds ?? 900);
       setView('magic');
     } catch (_err) {
-      // Catch network or generation failure and display a friendly retry message
+      // Ignored because generation error is handled via user-facing error state
       setMagicError('Unable to generate magic link. Please try again.');
     } finally {
       setIsGeneratingMagic(false);
@@ -87,7 +166,7 @@ export function ConnectAccountModal({
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (_err) {
-      // Clipboard write failed or permission denied; user can manually select and copy the input link
+      // Ignored because clipboard write failure falls back to manual link selection
       setCopySuccess(false);
     }
   };
@@ -136,7 +215,7 @@ export function ConnectAccountModal({
         }, 1500);
       }
     } catch (_e) {
-      // Silently retry on next poll cycle
+      // Ignored because polling failures are silently retried on the next cycle
     }
   }, [subdomain, onAccountConnected, onOpenChange]);
 
@@ -182,106 +261,34 @@ export function ConnectAccountModal({
 
           {view === 'choose' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-              {/* Option 1: Direct Connection */}
-              <button
-                type="button"
-                data-testid="connect-option-direct"
+              <ConnectOptionButton
+                testId="connect-option-direct"
                 disabled={isDirectConnecting}
                 onClick={handleDirectConnect}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: SPACING.md,
-                  padding: SPACING.lg,
-                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.md,
-                  cursor: isDirectConnecting ? 'not-allowed' : 'pointer',
-                  textAlign: 'left',
-                  transition: 'border-color 0.15s ease, background-color 0.15s ease',
-                  width: '100%',
-                }}
-              >
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: RADII.sm,
-                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    color: PALETTE.primary,
-                  }}
-                >
+                title={isDirectConnecting ? 'Redirecting to Facebook...' : 'Connect in this browser'}
+                description="Use this option if you are already signed into your Facebook profile in this browser window."
+                icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                     <line x1="8" y1="21" x2="16" y2="21" />
                     <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
-                </div>
+                }
+              />
 
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '0.9375rem', color: `var(--text-main, ${THEME.default.text.primary})`, marginBottom: '4px' }}>
-                    {isDirectConnecting ? 'Redirecting to Facebook...' : 'Connect in this browser'}
-                  </div>
-                  <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.4 }}>
-                    Use this option if you are already signed into your Facebook profile in this browser window.
-                  </div>
-                </div>
-              </button>
-
-              {/* Option 2: Magic Link */}
-              <button
-                type="button"
-                data-testid="connect-option-magic"
+              <ConnectOptionButton
+                testId="connect-option-magic"
                 disabled={isGeneratingMagic}
                 onClick={handleStartMagicLink}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: SPACING.md,
-                  padding: SPACING.lg,
-                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.md,
-                  cursor: isGeneratingMagic ? 'not-allowed' : 'pointer',
-                  textAlign: 'left',
-                  transition: 'border-color 0.15s ease, background-color 0.15s ease',
-                  width: '100%',
-                }}
-              >
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: RADII.sm,
-                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    color: PALETTE.primary,
-                  }}
-                >
+                title={isGeneratingMagic ? 'Generating Magic Link...' : 'Connect via Magic Link'}
+                description="Use this option if your Facebook account is open in another browser, incognito window, or profile."
+                icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </svg>
-                </div>
-
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '0.9375rem', color: `var(--text-main, ${THEME.default.text.primary})`, marginBottom: '4px' }}>
-                    {isGeneratingMagic ? 'Generating Magic Link...' : 'Connect via Magic Link'}
-                  </div>
-                  <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.4 }}>
-                    Use this option if your Facebook account is open in another browser, incognito window, or profile.
-                  </div>
-                </div>
-              </button>
+                }
+              />
             </div>
           )}
 
