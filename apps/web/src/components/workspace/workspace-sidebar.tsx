@@ -120,26 +120,6 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   FBUploadPro
                 </span>
               </div>
-
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                style={{
-                  marginLeft: 'auto',
-                  flexShrink: 0,
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                }}
-              >
-                <path d="m7 15 5 5 5-5" />
-                <path d="m7 9 5-5 5 5" />
-              </svg>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

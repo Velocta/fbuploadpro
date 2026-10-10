@@ -19,8 +19,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
-  it('renders TeamSwitcher header using SidebarMenuButton size="lg" with brand monogram FB, subdomain, FBUploadPro, and ChevronsUpDown icon', () => {
-    const { hasText, hasAttribute, html } = render(
+  it('renders workspace identity header using SidebarMenuButton size="lg" with brand monogram FB, subdomain, and FBUploadPro without switcher chevrons', () => {
+    const { hasText, hasAttribute, html, findTags } = render(
       <SidebarProvider>
         <WorkspaceSidebar
           subdomain="acme"
@@ -35,9 +35,12 @@ describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
     expect(hasText('FBUploadPro')).toBe(true);
     expect(hasText('FB')).toBe(true);
     expect(html).toContain(PALETTE.primary);
-    // ChevronsUpDown SVG paths
-    expect(html).toContain('m7 15 5 5 5-5');
-    expect(html).toContain('m7 9 5-5 5 5');
+
+    // Single workspace model: header has no switcher chevron arrows
+    const headers = findTags('header');
+    expect(headers.length).toBeGreaterThanOrEqual(1);
+    expect(headers[0]?.outerHtml).not.toContain('m7 15 5 5 5-5');
+    expect(headers[0]?.outerHtml).not.toContain('m7 9 5-5 5 5');
   });
 
   it('renders Home item, SidebarSeparator, and Collapsible Facebook section with SidebarMenuSub and SidebarMenuSubButton for Accounts', () => {
