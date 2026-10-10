@@ -79,6 +79,11 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
                 followers_count: 52000,
                 tasks: ['CREATE_CONTENT', 'MANAGE'],
                 access_token: 'page_token_1001_secret',
+                picture: {
+                  data: {
+                    url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1001.jpg',
+                  },
+                },
               },
               {
                 id: 'page_1002',
@@ -116,7 +121,11 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
       const page2 = json.pages.find((p: { fbPageId: string }) => p.fbPageId === 'page_1002');
 
       expect(page1.isImported).toBe(true);
+      expect(page1.profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1001.jpg'
+      );
       expect(page2.isImported).toBe(false);
+      expect(page2.profilePictureUrl).toBeNull();
 
       // Verify zero token leakage in response
       const resString = JSON.stringify(json);
@@ -168,6 +177,11 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
                 followers_count: 14000,
                 tasks: ['CREATE_CONTENT'],
                 access_token: 'page_token_1002_raw_secret_value',
+                picture: {
+                  data: {
+                    url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1002.jpg',
+                  },
+                },
               },
             ],
           }),
@@ -198,7 +212,17 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
       expect(json.importedCount).toBe(1);
 
       expect(savedPages).toHaveLength(1);
-      const [uId, accId, fbPageId, pageName, category, tasksJson, followers, encryptedToken] = savedPages[0];
+      const [
+        uId,
+        accId,
+        fbPageId,
+        pageName,
+        category,
+        _tasksJson,
+        followers,
+        encryptedToken,
+        profilePictureUrl,
+      ] = savedPages[0];
 
       expect(uId).toBe(userId);
       expect(accId).toBe(accountId);
@@ -208,6 +232,9 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
       expect(followers).toBe(14000);
       expect(encryptedToken).toBeTypeOf('string');
       expect(encryptedToken).toContain(':');
+      expect(profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1002.jpg'
+      );
 
       // Verify page token decodes back to original
       const decrypted = await decryptToken(encryptedToken, TEST_ENCRYPTION_KEY);
@@ -225,6 +252,8 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
             accountDisplayName: 'Alex Marketing',
             fbPageId: 'page_1001',
             pageName: 'Brand Flagship Page',
+            profile_picture_url:
+              'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1001.jpg',
             category: 'Retail Company',
             followersCount: 52000,
             status: 'active',
@@ -245,6 +274,9 @@ describe('Facebook Pages Discovery & Selective Import (User Story 2 - T062)', ()
       const json = await res.json();
       expect(json.total).toBe(1);
       expect(json.pages[0].pageName).toBe('Brand Flagship Page');
+      expect(json.pages[0].profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/page_1001.jpg'
+      );
 
       // Never leak tokens
       const str = JSON.stringify(json);

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   ListFacebookPagesResponseSchema,
+  evaluatePageHealth,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { getDbClient } from '../../../../../lib/db';
@@ -10,6 +11,12 @@ function extractFollowersCount(row: any): number {
   if (typeof row.followers_count === 'number') return row.followers_count;
   if (typeof row.followersCount === 'number') return row.followersCount;
   return 0;
+}
+
+function extractPagePictureUrl(row: any): string | null {
+  if (typeof row.profile_picture_url === 'string') return row.profile_picture_url;
+  if (typeof row.profilePictureUrl === 'string') return row.profilePictureUrl;
+  return null;
 }
 
 export async function handleListPages(
@@ -49,6 +56,7 @@ export async function handleListPages(
       a.display_name AS account_display_name,
       p.fb_page_id,
       p.page_name,
+      p.profile_picture_url,
       p.category,
       p.followers_count,
       p.status,
@@ -74,6 +82,12 @@ export async function handleListPages(
       }
     }
 
+    const updatedAt = row.updated_at || row.updatedAt;
+    const effectiveStatus = evaluatePageHealth({
+      status: row.status ?? 'active',
+      updatedAt,
+    });
+
     return {
       id: row.id,
       facebookAccountId: row.facebook_account_id || row.facebookAccountId,
@@ -81,12 +95,13 @@ export async function handleListPages(
         row.account_display_name || row.accountDisplayName || '',
       fbPageId: row.fb_page_id || row.fbPageId,
       pageName: row.page_name || row.pageName,
+      profilePictureUrl: extractPagePictureUrl(row),
       category: row.category ?? null,
       followersCount: extractFollowersCount(row),
-      status: row.status ?? 'active',
+      status: effectiveStatus,
       tasks: parsedTasks,
       createdAt: row.created_at || row.createdAt,
-      updatedAt: row.updated_at || row.updatedAt,
+      updatedAt,
     };
   });
 

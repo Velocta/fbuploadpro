@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FacebookPageStatus } from './facebook.js';
 
 // ==========================================
 // Edge Dispatcher & Facebook Graph API Contracts (T117)
@@ -34,6 +35,8 @@ export interface DispatchOutcome {
   fbCommentId?: string;
   errorMessage?: string;
   errorCode?: number;
+  errorSubcode?: number;
+  targetPageStatus?: FacebookPageStatus;
 }
 
 // Publish Log Domain Model

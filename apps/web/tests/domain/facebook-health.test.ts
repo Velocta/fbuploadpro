@@ -4,6 +4,7 @@ import {
   evaluateGraphApiError,
   evaluateTokenExpiry,
   evaluateAccountHealth,
+  evaluatePageHealth,
   signSessionToken,
 } from '@fbuploadpro/contracts';
 import { handleListAccounts } from '../../src/app/api/tenant/[subdomain]/accounts/route';
@@ -60,12 +61,72 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(generic190?.requiresReauth).toBe(true);
     });
 
-    it('maps rate limit codes 4, 17, 32, 613 to fb_rate_limited as transient errors without re-auth', () => {
-      for (const code of [4, 17, 32, 613]) {
+    it('maps error 368 + subcode 1390008 (or default 368) to fb_rate_limited with 3-day auto-recovery', () => {
+      const rateLimitBlock = evaluateGraphApiError(368, 1390008);
+      expect(rateLimitBlock).not.toBeNull();
+      expect(rateLimitBlock?.accountStatus).toBe('active');
+      expect(rateLimitBlock?.pageStatus).toBe('fb_rate_limited');
+      expect(rateLimitBlock?.isTransient).toBe(true);
+      expect(rateLimitBlock?.requiresReauth).toBe(false);
+      expect(rateLimitBlock?.cooldownDays).toBe(3);
+
+      const default368 = evaluateGraphApiError(368);
+      expect(default368?.pageStatus).toBe('fb_rate_limited');
+      expect(default368?.cooldownDays).toBe(3);
+    });
+
+    it('maps error 368 + subcode 4854002 to page_checkpoint requiring mobile verification and manual reactivation', () => {
+      const checkpoint = evaluateGraphApiError(368, 4854002);
+      expect(checkpoint).not.toBeNull();
+      expect(checkpoint?.accountStatus).toBe('active');
+      expect(checkpoint?.pageStatus).toBe('page_checkpoint');
+      expect(checkpoint?.isTransient).toBe(false);
+      expect(checkpoint?.requiresReauth).toBe(false);
+      expect(checkpoint?.requiresManualVerification).toBe(true);
+      expect(checkpoint?.message).toContain('Confirm your identity before you can publish as this Page');
+      expect(checkpoint?.message).toContain('mobile');
+    });
+
+    it('maps error 368 + subcode 1404082 (duplicate content) as non-transient post failure while keeping pageStatus active', () => {
+      const duplicate = evaluateGraphApiError(368, 1404082);
+      expect(duplicate).not.toBeNull();
+      expect(duplicate?.accountStatus).toBe('active');
+      expect(duplicate?.pageStatus).toBe('active');
+      expect(duplicate?.isTransient).toBe(false);
+      expect(duplicate?.requiresReauth).toBe(false);
+      expect(duplicate?.message).toContain("You've already posted this");
+    });
+
+    it('auto-turns fb_rate_limited pages to active after 3 days while keeping page_checkpoint and paused until manual reactivation', () => {
+      const blockedAt = new Date('2026-10-01T12:00:00Z');
+      const after2Days = new Date('2026-10-03T12:00:00Z');
+      const after3Days = new Date('2026-10-04T12:00:00Z');
+
+      expect(
+        evaluatePageHealth({ status: 'fb_rate_limited', updatedAt: blockedAt }, after2Days)
+      ).toBe('fb_rate_limited');
+      expect(
+        evaluatePageHealth({ status: 'fb_rate_limited', updatedAt: blockedAt }, after3Days)
+      ).toBe('active');
+
+      // page_checkpoint never auto-recovers even after 10 days; must be manually turned to active
+      const after10Days = new Date('2026-10-11T12:00:00Z');
+      expect(
+        evaluatePageHealth({ status: 'page_checkpoint', updatedAt: blockedAt }, after10Days)
+      ).toBe('page_checkpoint');
+
+      // paused never auto-recovers even after 10 days; remains paused until user toggles active
+      expect(
+        evaluatePageHealth({ status: 'paused', updatedAt: blockedAt }, after10Days)
+      ).toBe('paused');
+    });
+
+    it('maps API rate limit codes 4, 17, 32, 341, 613, 80001 as transient errors keeping accountStatus and pageStatus active', () => {
+      for (const code of [4, 17, 32, 341, 613, 80001]) {
         const rateLimit = evaluateGraphApiError(code);
         expect(rateLimit).not.toBeNull();
         expect(rateLimit?.accountStatus).toBe('active');
-        expect(rateLimit?.pageStatus).toBe('fb_rate_limited');
+        expect(rateLimit?.pageStatus).toBe('active');
         expect(rateLimit?.isTransient).toBe(true);
         expect(rateLimit?.requiresReauth).toBe(false);
       }
@@ -137,6 +198,11 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
                 id: '22222222-2222-4222-a222-222222222222',
                 fbAccountId: 'fb_act_active',
                 displayName: 'Active Creator Account',
+                profile_picture_url:
+                  'https://platform-lookaside.fbsbx.com/platform/profilepic/creator.jpg',
+                gender: 'female',
+                account_link:
+                  'https://www.facebook.com/app_scoped_user_id/fb_act_active/',
                 status: 'active',
                 tokenExpiresAt: futureDate,
                 connectedPagesCount: 2,
@@ -180,9 +246,19 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
 
       expect(activeAcc.status).toBe('active');
       expect(activeAcc.connectedPagesCount).toBe(2);
+      expect(activeAcc.profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/creator.jpg'
+      );
+      expect(activeAcc.gender).toBe('female');
+      expect(activeAcc.accountLink).toBe(
+        'https://www.facebook.com/app_scoped_user_id/fb_act_active/'
+      );
 
       expect(expiredAcc.status).toBe('expired'); // Evaluated to expired
       expect(expiredAcc.connectedPagesCount).toBe(1);
+      expect(expiredAcc.profilePictureUrl).toBeNull();
+      expect(expiredAcc.gender).toBeNull();
+      expect(expiredAcc.accountLink).toBeNull();
 
       // Zero token exposure assertion
       const rawString = JSON.stringify(json);

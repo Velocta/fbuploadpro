@@ -2,9 +2,11 @@ import {
   type ClaimedQueueItem,
   ClaimedQueueItemSchema,
   type DispatchOutcome,
+  type FacebookPageStatus,
   type IFacebookPublishClient,
   type IPublishDispatcher,
   decryptToken,
+  evaluateGraphApiError,
 } from '@fbuploadpro/contracts';
 import { FacebookGraphError, FacebookPublishClient } from './fb-client.js';
 import { settleOutcome } from './settlement.js';
@@ -151,23 +153,47 @@ export async function dispatchItem(
     }
   } catch (err: unknown) {
     const isAuthError = err instanceof FacebookGraphError ? err.isAuthError : false;
+    const isPermanentPolicyError =
+      err instanceof FacebookGraphError ? err.isPermanentPolicyError : false;
     const isRateLimit = err instanceof FacebookGraphError ? err.isRateLimit : false;
     let errorCode: number | undefined;
+    let errorSubcode: number | undefined;
     if (err instanceof FacebookGraphError) {
       errorCode = err.code;
+      errorSubcode = err.errorSubcode;
     } else if (typeof (err as { code?: number })?.code === 'number') {
       errorCode = (err as { code: number }).code;
     }
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const rawMessage = err instanceof Error ? err.message : String(err);
 
-    // Rate limits or transient errors can be retried if retryCount < maxRetries
-    const canRetry = (isRateLimit || !isAuthError) && item.retryCount < item.maxRetries;
+    const evaluation =
+      errorCode !== undefined ? evaluateGraphApiError(errorCode, errorSubcode) : null;
+
+    let targetPageStatus: FacebookPageStatus | undefined;
+    if (errorCode === 368 && evaluation && evaluation.pageStatus !== 'active') {
+      targetPageStatus = evaluation.pageStatus;
+    }
+
+    const errorMessage =
+      errorCode === 368 && (errorSubcode === 4854002 || errorSubcode === 1404082) && evaluation
+        ? evaluation.message
+        : rawMessage;
+
+    // Rate limits or transient errors can be retried if retryCount < maxRetries;
+    // auth errors (190/102) and permanent 368 subcodes (4854002 checkpoint, 1404082 duplicate post) fail immediately.
+    const canRetry =
+      !isAuthError &&
+      !isPermanentPolicyError &&
+      (isRateLimit || !isAuthError) &&
+      item.retryCount < item.maxRetries;
 
     const outcome: DispatchOutcome = {
       queueItemId: item.id,
       status: canRetry ? 'retry' : 'failed',
       errorMessage,
       ...(errorCode !== undefined ? { errorCode } : {}),
+      ...(errorSubcode !== undefined ? { errorSubcode } : {}),
+      ...(targetPageStatus !== undefined ? { targetPageStatus } : {}),
     };
     return outcome;
   }

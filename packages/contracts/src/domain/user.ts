@@ -37,6 +37,7 @@ export const UserRoleSchema = z.enum(['user', 'seller', 'admin']);
 export type UserRole = z.infer<typeof UserRoleSchema>;
 
 export const UserStatusSchema = z.enum(['active', 'suspended']);
+export const UserStatusEnum = UserStatusSchema.enum;
 export type UserStatus = z.infer<typeof UserStatusSchema>;
 
 export const UserSchema = z.object({

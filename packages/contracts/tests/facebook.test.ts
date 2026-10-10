@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DiscoveredPageSchema,
   FacebookAccountSchema,
+  FacebookAccountStatusEnum,
   FacebookAccountStatusSchema,
+  FacebookAccountViewSchema,
   FacebookPageSchema,
+  FacebookPageStatusEnum,
   FacebookPageStatusSchema,
+  FacebookPageViewSchema,
 } from '../src/domain/facebook.js';
 
 describe('Facebook Account & Page Domain Schemas', () => {
@@ -12,10 +17,13 @@ describe('Facebook Account & Page Domain Schemas', () => {
   const pageId = '770e8400-e29b-41d4-a716-446655440002';
 
   describe('FacebookAccountStatusSchema', () => {
-    it('accepts valid statuses', () => {
+    it('accepts valid statuses and exposes FacebookAccountStatusEnum', () => {
       expect(FacebookAccountStatusSchema.parse('active')).toBe('active');
       expect(FacebookAccountStatusSchema.parse('disconnected')).toBe('disconnected');
       expect(FacebookAccountStatusSchema.parse('expired')).toBe('expired');
+      expect(FacebookAccountStatusEnum.active).toBe('active');
+      expect(FacebookAccountStatusEnum.disconnected).toBe('disconnected');
+      expect(FacebookAccountStatusEnum.expired).toBe('expired');
     });
 
     it('rejects invalid statuses', () => {
@@ -41,6 +49,44 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(parsed.userId).toBe(userId);
       expect(parsed.fbAccountId).toBe('act_1092837465');
       expect(parsed.status).toBe('active');
+      expect(parsed.profilePictureUrl).toBeNull();
+      expect(parsed.gender).toBeNull();
+      expect(parsed.accountLink).toBeNull();
+    });
+
+    it('accepts profilePictureUrl, gender, and accountLink and defaults them to null when omitted', () => {
+      const withMetadata = FacebookAccountSchema.parse({
+        ...validAccount,
+        profilePictureUrl: 'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg',
+        gender: 'female',
+        accountLink: 'https://www.facebook.com/app_scoped_user_id/1092837465/',
+      });
+      expect(withMetadata.profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg'
+      );
+      expect(withMetadata.gender).toBe('female');
+      expect(withMetadata.accountLink).toBe(
+        'https://www.facebook.com/app_scoped_user_id/1092837465/'
+      );
+
+      const viewWithMetadata = FacebookAccountViewSchema.parse({
+        id: accountId,
+        fbAccountId: 'act_1092837465',
+        displayName: 'Main Media Ops',
+        profilePictureUrl: 'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg',
+        gender: 'female',
+        accountLink: 'https://www.facebook.com/app_scoped_user_id/1092837465/',
+        status: 'active',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      expect(viewWithMetadata.profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg'
+      );
+      expect(viewWithMetadata.gender).toBe('female');
+      expect(viewWithMetadata.accountLink).toBe(
+        'https://www.facebook.com/app_scoped_user_id/1092837465/'
+      );
     });
 
     it('applies default status when omitted', () => {
@@ -58,11 +104,19 @@ describe('Facebook Account & Page Domain Schemas', () => {
   });
 
   describe('FacebookPageStatusSchema', () => {
-    it('accepts valid page statuses', () => {
+    it('accepts valid page statuses and exposes FacebookPageStatusEnum', () => {
       expect(FacebookPageStatusSchema.parse('active')).toBe('active');
+      expect(FacebookPageStatusSchema.parse('paused')).toBe('paused');
       expect(FacebookPageStatusSchema.parse('fb_rate_limited')).toBe('fb_rate_limited');
+      expect(FacebookPageStatusSchema.parse('page_checkpoint')).toBe('page_checkpoint');
       expect(FacebookPageStatusSchema.parse('invalid_token')).toBe('invalid_token');
       expect(FacebookPageStatusSchema.parse('disconnected')).toBe('disconnected');
+      expect(FacebookPageStatusEnum.active).toBe('active');
+      expect(FacebookPageStatusEnum.paused).toBe('paused');
+      expect(FacebookPageStatusEnum.fb_rate_limited).toBe('fb_rate_limited');
+      expect(FacebookPageStatusEnum.page_checkpoint).toBe('page_checkpoint');
+      expect(FacebookPageStatusEnum.invalid_token).toBe('invalid_token');
+      expect(FacebookPageStatusEnum.disconnected).toBe('disconnected');
     });
 
     it('rejects invalid statuses', () => {
@@ -89,6 +143,32 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(parsed.userId).toBe(userId);
       expect(parsed.facebookAccountId).toBe(accountId);
       expect(parsed.followersCount).toBe(12500);
+      expect(parsed.profilePictureUrl).toBeNull();
+    });
+
+    it('accepts profilePictureUrl on FacebookPageSchema, FacebookPageViewSchema, and DiscoveredPageSchema', () => {
+      const picUrl = 'https://platform-lookaside.fbsbx.com/platform/profilepic/page.jpg';
+      const parsedPage = FacebookPageSchema.parse({ ...validPage, profilePictureUrl: picUrl });
+      expect(parsedPage.profilePictureUrl).toBe(picUrl);
+
+      const parsedPageView = FacebookPageViewSchema.parse({
+        id: pageId,
+        facebookAccountId: accountId,
+        fbPageId: 'page_987654321',
+        pageName: 'Tech Deals Daily',
+        profilePictureUrl: picUrl,
+        status: 'active',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      expect(parsedPageView.profilePictureUrl).toBe(picUrl);
+
+      const parsedDiscovered = DiscoveredPageSchema.parse({
+        fbPageId: 'page_987654321',
+        pageName: 'Tech Deals Daily',
+        profilePictureUrl: picUrl,
+      });
+      expect(parsedDiscovered.profilePictureUrl).toBe(picUrl);
     });
 
     it('defaults followersCount to 0 and status to active', () => {

@@ -5,6 +5,7 @@ export const FacebookAccountStatusSchema = z.enum([
   'disconnected',
   'expired',
 ]);
+export const FacebookAccountStatusEnum = FacebookAccountStatusSchema.enum;
 export type FacebookAccountStatus = z.infer<typeof FacebookAccountStatusSchema>;
 
 export const FacebookAccountSchema = z.object({
@@ -12,6 +13,9 @@ export const FacebookAccountSchema = z.object({
   userId: z.string().uuid(),
   fbAccountId: z.string().min(1).max(100),
   displayName: z.string().min(1).max(255),
+  profilePictureUrl: z.string().url().nullable().optional().default(null),
+  gender: z.string().max(50).nullable().optional().default(null),
+  accountLink: z.string().url().nullable().optional().default(null),
   encryptedAccessToken: z.string().default(''),
   tokenExpiresAt: z.coerce.date().nullable().optional(),
   status: FacebookAccountStatusSchema.default('active'),
@@ -26,6 +30,9 @@ export const FacebookAccountViewSchema = z.object({
   id: z.string().uuid(),
   fbAccountId: z.string().min(1).max(100),
   displayName: z.string().min(1).max(255),
+  profilePictureUrl: z.string().url().nullable().optional().default(null),
+  gender: z.string().max(50).nullable().optional().default(null),
+  accountLink: z.string().url().nullable().optional().default(null),
   status: FacebookAccountStatusSchema,
   tokenExpiresAt: z.coerce.date().nullable().optional(),
   connectedPagesCount: z.number().int().nonnegative().default(0),
@@ -47,10 +54,13 @@ export type ListFacebookAccountsResponse = z.infer<
 
 export const FacebookPageStatusSchema = z.enum([
   'active',
+  'paused',
   'fb_rate_limited',
+  'page_checkpoint',
   'invalid_token',
   'disconnected',
 ]);
+export const FacebookPageStatusEnum = FacebookPageStatusSchema.enum;
 export type FacebookPageStatus = z.infer<typeof FacebookPageStatusSchema>;
 
 export const FacebookPageSchema = z.object({
@@ -59,6 +69,7 @@ export const FacebookPageSchema = z.object({
   facebookAccountId: z.string().uuid(),
   fbPageId: z.string().min(1).max(100),
   pageName: z.string().min(1).max(255),
+  profilePictureUrl: z.string().url().nullable().optional().default(null),
   category: z.string().max(100).nullable().optional(),
   tasks: z.array(z.string()).default([]),
   followersCount: z.number().int().nonnegative().default(0),
@@ -77,6 +88,7 @@ export const FacebookPageViewSchema = z.object({
   accountDisplayName: z.string().optional(),
   fbPageId: z.string().min(1).max(100),
   pageName: z.string().min(1).max(255),
+  profilePictureUrl: z.string().url().nullable().optional().default(null),
   category: z.string().nullable().optional(),
   followersCount: z.number().int().nonnegative().default(0),
   status: FacebookPageStatusSchema,
@@ -101,6 +113,7 @@ export type ListFacebookPagesResponse = z.infer<
 export const DiscoveredPageSchema = z.object({
   fbPageId: z.string().min(1).max(100),
   pageName: z.string().min(1).max(255),
+  profilePictureUrl: z.string().url().nullable().optional().default(null),
   category: z.string().nullable().optional(),
   followersCount: z.number().int().nonnegative().default(0),
   tasks: z.array(z.string()).default([]),
