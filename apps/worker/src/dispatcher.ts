@@ -36,7 +36,7 @@ SET status = 'publishing', updated_at = now()
 WHERE id = ANY($1);
 `.trim();
 
-async function extractRows<T = unknown>(result: unknown): Promise<T[]> {
+function extractRows<T = unknown>(result: unknown): T[] {
   if (Array.isArray(result)) {
     return result as T[];
   }
@@ -75,7 +75,7 @@ export async function claimDueItems(
 ): Promise<ClaimedQueueItem[]> {
   const executeClaim = async (client: Queryable): Promise<ClaimedQueueItem[]> => {
     const rawResult = await client.query(CLAIM_DUE_ITEMS_SQL, [limit]);
-    const rows = await extractRows<Record<string, unknown>>(rawResult);
+    const rows = extractRows<Record<string, unknown>>(rawResult);
     if (rows.length === 0) {
       return [];
     }
@@ -284,24 +284,24 @@ export class PublishDispatcher implements IPublishDispatcher {
   ) {}
 
   async claimDueItems(limit: number = 10): Promise<ClaimedQueueItem[]> {
-    return claimDueItems(this.db, limit);
+    return await claimDueItems(this.db, limit);
   }
 
   async dispatchItem(item: ClaimedQueueItem): Promise<DispatchOutcome> {
-    return dispatchItem(item, this.fbClient, this.masterKey);
+    return await dispatchItem(item, this.fbClient, this.masterKey);
   }
 
   async settleOutcome(outcome: DispatchOutcome, item?: ClaimedQueueItem): Promise<void> {
     if (item) {
-      return settleOutcome(this.db, item, outcome);
+      return await settleOutcome(this.db, item, outcome);
     }
-    return recordDispatchOutcome(this.db, outcome);
+    return await recordDispatchOutcome(this.db, outcome);
   }
 
   async runDispatchCycle(
     limit: number = 10
   ): Promise<{ processed: number; succeeded: number; failed: number; retried: number }> {
-    return runDispatchCycle({
+    return await runDispatchCycle({
       db: this.db,
       fbClient: this.fbClient,
       masterKey: this.masterKey,

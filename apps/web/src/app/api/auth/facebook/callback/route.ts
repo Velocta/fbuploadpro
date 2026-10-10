@@ -154,5 +154,5 @@ export async function handleFacebookCallback(
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  return handleFacebookCallback(request);
+  return await handleFacebookCallback(request);
 }

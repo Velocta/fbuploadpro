@@ -66,19 +66,20 @@ export class MockStorageProvider implements IStorageService {
   public requestedUploadKeys: Set<string> = new Set();
   public publicUrlBase: string = 'https://media.fbuploadpro.com';
 
-  async getPresignedUploadUrl(params: PresignedUploadParams): Promise<PresignedUploadResult> {
+  getPresignedUploadUrl(params: PresignedUploadParams): Promise<PresignedUploadResult> {
     const expiresIn = params.expiresInSeconds ?? 900;
     this.requestedUploadKeys.add(params.key);
-    return {
+    return Promise.resolve({
       uploadUrl: `https://mock-r2.fbuploadpro.com/upload/${encodeURIComponent(params.key)}?expires=${expiresIn}`,
       publicUrl: this.getPublicUrl(params.key),
       expiresInSeconds: expiresIn,
-    };
+    });
   }
 
-  async deleteObject(key: string): Promise<void> {
+  deleteObject(key: string): Promise<void> {
     this.deletedKeys.add(key);
     this.requestedUploadKeys.delete(key);
+    return Promise.resolve();
   }
 
   getPublicUrl(key: string): string {

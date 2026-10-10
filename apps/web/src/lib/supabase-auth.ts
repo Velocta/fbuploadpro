@@ -80,7 +80,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   if (!saltHex || !expectedHashHex) return false;
 
   const salt = new Uint8Array(
-    saltHex.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []
+    saltHex.match(/.{1,2}/g)?.map((byte) => Number.parseInt(byte, 16)) || []
   );
 
   const encoder = new TextEncoder();
@@ -338,7 +338,7 @@ export async function signUpTenantUser(params: {
 
       if (isRateLimited) {
         const match = authError.message.match(/after\s+(\d+)\s+seconds/i);
-        const seconds = match ? parseInt(match[1], 10) : 60;
+        const seconds = match ? Number.parseInt(match[1], 10) : 60;
 
         // If user already exists in unconfirmed state, allow continuing to OTP step
         if (existingUser) {
@@ -600,7 +600,7 @@ export async function resendSignupOtpViaSupabase(email: string): Promise<{
     });
     if (error) {
       const match = error.message.match(/after\s+(\d+)\s+seconds/i);
-      const cooldown = match ? parseInt(match[1], 10) : undefined;
+      const cooldown = match ? Number.parseInt(match[1], 10) : undefined;
       return {
         success: false,
         error: error.message,

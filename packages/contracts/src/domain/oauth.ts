@@ -48,24 +48,24 @@ function base64UrlEncode(str: string): string {
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
     if (b !== undefined) {
-      binary += String.fromCharCode(b);
+      binary += String.fromCodePoint(b);
     }
   }
   return btoa(binary)
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
     .replace(/={1,2}$/, '');
 }
 
 function base64UrlDecode(str: string): string {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  let base64 = str.replaceAll('-', '+').replaceAll('_', '/');
   while (base64.length % 4) {
     base64 += '=';
   }
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+    bytes[i] = binary.codePointAt(i) ?? 0;
   }
   return new TextDecoder().decode(bytes);
 }

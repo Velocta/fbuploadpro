@@ -522,8 +522,7 @@ export default function SignupPage() {
               }}
             >
               Privacy Policy
-            </a>
-            .
+            </a>.
           </p>
         </form>
       ) : (

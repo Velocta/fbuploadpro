@@ -18,14 +18,14 @@ export type SessionPayload = z.infer<typeof SessionPayloadSchema>;
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
+    binary += String.fromCodePoint(bytes[i]!);
   }
   const base64 = btoa(binary);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/={1,2}$/, '');
+  return base64.replaceAll('+', '-').replaceAll('/', '_').replace(/={1,2}$/, '');
 }
 
 function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
-  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  let base64 = str.replaceAll('-', '+').replaceAll('_', '/');
   while (base64.length % 4) {
     base64 += '=';
   }
@@ -33,14 +33,14 @@ function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
   const buffer = new ArrayBuffer(binary.length);
   const bytes = new Uint8Array(buffer);
   for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
+    bytes[i] = binary.codePointAt(i) ?? 0;
   }
   return bytes;
 }
 
 async function getHmacKey(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  return crypto.subtle.importKey(
+  return await crypto.subtle.importKey(
     'raw',
     encoder.encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },

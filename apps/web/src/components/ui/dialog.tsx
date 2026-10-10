@@ -171,9 +171,10 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
   return (
     <div
       role="presentation"
-      onClick={() => setOpen(false)}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') setOpen(false);
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          setOpen(false);
+        }
       }}
       style={{
         position: 'fixed',
@@ -199,8 +200,6 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
         className={`fbu-dialog-panel ${className}`}
         style={{
           position: 'relative',
