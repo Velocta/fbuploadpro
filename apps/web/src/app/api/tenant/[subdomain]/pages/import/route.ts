@@ -87,7 +87,7 @@ export async function handleImportPages(
   const graphUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
   graphUrl.searchParams.set(
     'fields',
-    'id,name,category,tasks,access_token,followers_count'
+    'id,name,category,tasks,access_token,followers_count,picture{url}'
   );
 
   const graphRes = await fetch(graphUrl.toString(), {
@@ -118,11 +118,12 @@ export async function handleImportPages(
         ? Math.max(0, pageItem.followers_count)
         : 0;
     const tasksJson = JSON.stringify(Array.isArray(pageItem.tasks) ? pageItem.tasks : []);
+    const profilePictureUrl = pageItem.picture?.data?.url ?? null;
 
     const result = (await db.query(
       `INSERT INTO facebook_pages (
-        user_id, facebook_account_id, fb_page_id, page_name, category, tasks, followers_count, encrypted_access_token
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        user_id, facebook_account_id, fb_page_id, page_name, category, tasks, followers_count, encrypted_access_token, profile_picture_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (user_id, fb_page_id) DO UPDATE SET
         facebook_account_id = EXCLUDED.facebook_account_id,
         page_name = EXCLUDED.page_name,
@@ -130,6 +131,7 @@ export async function handleImportPages(
         tasks = EXCLUDED.tasks,
         followers_count = EXCLUDED.followers_count,
         encrypted_access_token = EXCLUDED.encrypted_access_token,
+        profile_picture_url = EXCLUDED.profile_picture_url,
         status = 'active',
         updated_at = now()
       RETURNING id, fb_page_id, page_name`,
@@ -142,6 +144,7 @@ export async function handleImportPages(
         tasksJson,
         followers,
         encryptedPageToken,
+        profilePictureUrl,
       ]
     )) as any[];
 

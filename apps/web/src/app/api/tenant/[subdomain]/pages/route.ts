@@ -49,6 +49,7 @@ export async function handleListPages(
       a.display_name AS account_display_name,
       p.fb_page_id,
       p.page_name,
+      p.profile_picture_url,
       p.category,
       p.followers_count,
       p.status,
@@ -81,6 +82,8 @@ export async function handleListPages(
         row.account_display_name || row.accountDisplayName || '',
       fbPageId: row.fb_page_id || row.fbPageId,
       pageName: row.page_name || row.pageName,
+      profilePictureUrl:
+        row.profile_picture_url ?? row.profilePictureUrl ?? null,
       category: row.category ?? null,
       followersCount: extractFollowersCount(row),
       status: row.status ?? 'active',

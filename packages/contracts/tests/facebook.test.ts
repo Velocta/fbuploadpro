@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DiscoveredPageSchema,
   FacebookAccountSchema,
   FacebookAccountStatusSchema,
+  FacebookAccountViewSchema,
   FacebookPageSchema,
   FacebookPageStatusSchema,
+  FacebookPageViewSchema,
 } from '../src/domain/facebook.js';
 
 describe('Facebook Account & Page Domain Schemas', () => {
@@ -41,6 +44,30 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(parsed.userId).toBe(userId);
       expect(parsed.fbAccountId).toBe('act_1092837465');
       expect(parsed.status).toBe('active');
+      expect(parsed.profilePictureUrl).toBeNull();
+    });
+
+    it('accepts a valid profilePictureUrl and defaults to null when omitted or null', () => {
+      const withPic = FacebookAccountSchema.parse({
+        ...validAccount,
+        profilePictureUrl: 'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg',
+      });
+      expect(withPic.profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg'
+      );
+
+      const viewWithPic = FacebookAccountViewSchema.parse({
+        id: accountId,
+        fbAccountId: 'act_1092837465',
+        displayName: 'Main Media Ops',
+        profilePictureUrl: 'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg',
+        status: 'active',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      expect(viewWithPic.profilePictureUrl).toBe(
+        'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg'
+      );
     });
 
     it('applies default status when omitted', () => {
@@ -89,6 +116,32 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(parsed.userId).toBe(userId);
       expect(parsed.facebookAccountId).toBe(accountId);
       expect(parsed.followersCount).toBe(12500);
+      expect(parsed.profilePictureUrl).toBeNull();
+    });
+
+    it('accepts profilePictureUrl on FacebookPageSchema, FacebookPageViewSchema, and DiscoveredPageSchema', () => {
+      const picUrl = 'https://platform-lookaside.fbsbx.com/platform/profilepic/page.jpg';
+      const parsedPage = FacebookPageSchema.parse({ ...validPage, profilePictureUrl: picUrl });
+      expect(parsedPage.profilePictureUrl).toBe(picUrl);
+
+      const parsedPageView = FacebookPageViewSchema.parse({
+        id: pageId,
+        facebookAccountId: accountId,
+        fbPageId: 'page_987654321',
+        pageName: 'Tech Deals Daily',
+        profilePictureUrl: picUrl,
+        status: 'active',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      });
+      expect(parsedPageView.profilePictureUrl).toBe(picUrl);
+
+      const parsedDiscovered = DiscoveredPageSchema.parse({
+        fbPageId: 'page_987654321',
+        pageName: 'Tech Deals Daily',
+        profilePictureUrl: picUrl,
+      });
+      expect(parsedDiscovered.profilePictureUrl).toBe(picUrl);
     });
 
     it('defaults followersCount to 0 and status to active', () => {

@@ -78,11 +78,24 @@ describe('Facebook OAuth Contracts & State Signing', () => {
     );
   });
 
-  it('should validate user profile response schema', () => {
+  it('should validate user profile response schema with and without picture.data.url', () => {
     const profile = {
       id: '1000123456789',
       name: 'Taylor Mark',
     };
     expect(FacebookUserProfileResponseSchema.parse(profile)).toEqual(profile);
+
+    const profileWithPicture = {
+      id: '1000123456789',
+      name: 'Taylor Mark',
+      picture: {
+        data: {
+          url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/taylor.jpg',
+        },
+      },
+    };
+    expect(FacebookUserProfileResponseSchema.parse(profileWithPicture)).toEqual(
+      profileWithPicture
+    );
   });
 });

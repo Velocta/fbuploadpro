@@ -106,7 +106,7 @@ export async function handleFacebookCallback(
 
     // 4. Fetch user profile from /me
     const meUrl = new URL('https://graph.facebook.com/v26.0/me');
-    meUrl.searchParams.set('fields', 'id,name');
+    meUrl.searchParams.set('fields', 'id,name,picture{url}');
     const meRes = await fetch(meUrl.toString(), {
       headers: {
         Authorization: `Bearer ${longTokenData.access_token}`,
@@ -118,6 +118,7 @@ export async function handleFacebookCallback(
     }
     const meJson = await meRes.json();
     const meProfile = FacebookUserProfileResponseSchema.parse(meJson);
+    const profilePictureUrl = meProfile.picture?.data?.url ?? null;
 
     // 5. Encrypt long-lived token using Web Crypto AES-256-GCM
     const encryptedToken = await encryptToken(
@@ -132,17 +133,25 @@ export async function handleFacebookCallback(
     const db = dbClient ?? getDbClient();
     await db.query(
       `INSERT INTO facebook_accounts (
-        user_id, fb_account_id, display_name, encrypted_access_token, token_expires_at, status, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, 'active', now())
+        user_id, fb_account_id, display_name, encrypted_access_token, token_expires_at, profile_picture_url, status, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'active', now())
       ON CONFLICT (user_id, fb_account_id)
       DO UPDATE SET
         display_name = EXCLUDED.display_name,
         encrypted_access_token = EXCLUDED.encrypted_access_token,
         token_expires_at = EXCLUDED.token_expires_at,
+        profile_picture_url = EXCLUDED.profile_picture_url,
         status = 'active',
         updated_at = now()
       RETURNING id`,
-      [userId, meProfile.id, meProfile.name, encryptedToken, expiresAt]
+      [
+        userId,
+        meProfile.id,
+        meProfile.name,
+        encryptedToken,
+        expiresAt,
+        profilePictureUrl,
+      ]
     );
 
     destinationUrl.searchParams.set('connected', '1');

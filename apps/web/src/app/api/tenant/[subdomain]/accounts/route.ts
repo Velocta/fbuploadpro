@@ -42,6 +42,7 @@ export async function handleListAccounts(
       a.id,
       a.fb_account_id,
       a.display_name,
+      a.profile_picture_url,
       a.status,
       a.token_expires_at,
       a.created_at,
@@ -50,7 +51,7 @@ export async function handleListAccounts(
     FROM facebook_accounts a
     LEFT JOIN facebook_pages p ON p.facebook_account_id = a.id AND p.user_id = a.user_id
     WHERE a.user_id = $1
-    GROUP BY a.id, a.fb_account_id, a.display_name, a.status, a.token_expires_at, a.created_at, a.updated_at
+    GROUP BY a.id, a.fb_account_id, a.display_name, a.profile_picture_url, a.status, a.token_expires_at, a.created_at, a.updated_at
     ORDER BY a.created_at DESC`,
     [session.userId]
   )) as any[];
@@ -67,6 +68,8 @@ export async function handleListAccounts(
       id: row.id,
       fbAccountId: row.fb_account_id || row.fbAccountId,
       displayName: row.display_name || row.displayName,
+      profilePictureUrl:
+        row.profile_picture_url ?? row.profilePictureUrl ?? null,
       status: computedStatus,
       tokenExpiresAt,
       connectedPagesCount: Number(

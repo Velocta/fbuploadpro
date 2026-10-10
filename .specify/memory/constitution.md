@@ -94,6 +94,11 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Unconfirmed Sign-In Recovery**: Sign-in attempts with valid credentials where the email is not yet confirmed in GoTrue (`Email not confirmed`) return HTTP 403 `requiresOtp: true`, seamlessly routing the user to the verification view (`/signup?step=otp`) rather than presenting misleading "Invalid email or password" errors.
     - **GoTrue Security Cooldown Handling & Form Resilience**: When GoTrue throttles verification dispatch (`For security purposes, you can only request this after X seconds`), the system extracts the remaining cooldown duration. If the user returns to the form with the same email, they smoothly transition back to the OTP screen with the remaining cooldown timer active. If throttled on new requests, the server returns HTTP 429 (`retryAfterSeconds: X`), and the frontend disables the primary action button with a live countdown (`Please wait (Xs)`), automatically re-enabling when the cooldown elapses.
 
+19. **Facebook Account & Page Profile Picture URL Ingestion & Persistence (Spec 025)**:
+    - **Schema Columns (`profile_picture_url`)**: Both `facebook_accounts` and `facebook_pages` tables MUST include a nullable `profile_picture_url TEXT` column (`profilePictureUrl` in TypeScript/Zod domain contracts) to persist the avatar/picture URL of connected Facebook profiles and imported Facebook Pages.
+    - **Automatic Graph API v26.0 Ingestion**: During Facebook OAuth account connection (`/api/auth/facebook/callback`), the `/me` request MUST include `fields=id,name,picture{url}` and persist `picture.data.url` (or `null` if absent) into `facebook_accounts.profile_picture_url`. During Facebook Page discovery (`/api/tenant/[subdomain]/accounts/[accountId]/pages/discover`) and selective Page import (`/api/tenant/[subdomain]/pages/import`), the `/me/accounts` request MUST include `picture{url}` in its `fields` list, surfacing `profilePictureUrl` on discovered pages and persisting it into `facebook_pages.profile_picture_url`.
+    - **Sanitized Read Models**: Tenant API endpoints listing connected accounts (`/api/tenant/[subdomain]/accounts`) and imported pages (`/api/tenant/[subdomain]/pages`) MUST expose `profilePictureUrl: string | null` on their sanitized view models while maintaining strict zero-token-exposure guarantees.
+
 ## Development Workflow & Quality Gates
 
 1. **Ideation & Governance**: Broad proposals and milestone announcements begin in GitHub Discussions.
@@ -116,4 +121,4 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.13.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-09
+**Version**: 2.14.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-10

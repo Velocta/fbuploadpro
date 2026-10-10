@@ -36,6 +36,15 @@ export type FacebookTokenExchangeResponse = z.infer<
 export const FacebookUserProfileResponseSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+  picture: z
+    .object({
+      data: z
+        .object({
+          url: z.string().url().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 export type FacebookUserProfileResponse = z.infer<

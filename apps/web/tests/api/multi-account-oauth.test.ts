@@ -44,23 +44,34 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     const validState = await signOAuthState(statePayload, TEST_SECRET);
 
     // Mock in-memory database storage simulating ON CONFLICT (user_id, fb_account_id)
-    const storedAccounts = new Map<string, { fbAccountId: string; displayName: string; token: string }>();
+    const storedAccounts = new Map<
+      string,
+      { fbAccountId: string; displayName: string; token: string; profilePictureUrl: string | null }
+    >();
 
     const mockDb = {
       query: vi.fn().mockImplementation((_sql, params) => {
-        const [uId, fbAccountId, displayName, token] = params;
+        const [uId, fbAccountId, displayName, token, _expiresAt, profilePictureUrl] = params;
         const key = `${uId}:${fbAccountId}`;
-        storedAccounts.set(key, { fbAccountId, displayName, token });
+        storedAccounts.set(key, { fbAccountId, displayName, token, profilePictureUrl });
         return Promise.resolve([{ id: 'acc_id' }]);
       }),
     } as unknown as DatabaseClient;
 
-    // Simulate Account 1 connection
+    // Simulate Account 1 connection (with picture.data.url)
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'short_1', token_type: 'bearer' })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'long_1', token_type: 'bearer', expires_in: 5184000 })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'fb_user_alpha', name: 'Alpha Agency Profile' })));
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'fb_user_alpha',
+            name: 'Alpha Agency Profile',
+            picture: { data: { url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/alpha.jpg' } },
+          })
+        )
+      );
 
     const req1 = new NextRequest(
       `http://localhost:3000/api/auth/facebook/callback?code=code_alpha&state=${validState}`,
@@ -68,7 +79,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     );
     await handleFacebookCallback(req1, mockDb);
 
-    // Simulate Account 2 connection
+    // Simulate Account 2 connection (without picture -> null fallback)
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'short_2', token_type: 'bearer' })))
@@ -81,13 +92,17 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     );
     await handleFacebookCallback(req2, mockDb);
 
-    // Verify both distinct accounts are preserved in the workspace
+    // Verify both distinct accounts are preserved in the workspace with profile_picture_url
     expect(storedAccounts.size).toBe(2);
     expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.displayName).toBe('Alpha Agency Profile');
+    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.profilePictureUrl).toBe(
+      'https://platform-lookaside.fbsbx.com/platform/profilepic/alpha.jpg'
+    );
     expect(storedAccounts.get(`${userId}:fb_user_beta`)?.displayName).toBe('Beta Personal Profile');
+    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.profilePictureUrl).toBeNull();
   });
 
-  it('updates existing credentials when reconnecting the same Facebook account', async () => {
+  it('updates existing credentials and profile_picture_url when reconnecting the same Facebook account', async () => {
     const statePayload = {
       tenantSubdomain: 'acme',
       userId,
@@ -97,13 +112,16 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     };
     const validState = await signOAuthState(statePayload, TEST_SECRET);
 
-    const storedAccounts = new Map<string, { fbAccountId: string; displayName: string; token: string }>();
+    const storedAccounts = new Map<
+      string,
+      { fbAccountId: string; displayName: string; token: string; profilePictureUrl: string | null }
+    >();
 
     const mockDb = {
       query: vi.fn().mockImplementation((_sql, params) => {
-        const [uId, fbAccountId, displayName, token] = params;
+        const [uId, fbAccountId, displayName, token, _expiresAt, profilePictureUrl] = params;
         const key = `${uId}:${fbAccountId}`;
-        storedAccounts.set(key, { fbAccountId, displayName, token });
+        storedAccounts.set(key, { fbAccountId, displayName, token, profilePictureUrl });
         return Promise.resolve([{ id: 'acc_id' }]);
       }),
     } as unknown as DatabaseClient;
@@ -121,12 +139,20 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     );
     await handleFacebookCallback(req1, mockDb);
 
-    // Reconnection of same fbAccountId
+    // Reconnection of same fbAccountId with updated avatar
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'short_2', token_type: 'bearer' })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'long_refreshed', token_type: 'bearer', expires_in: 5184000 })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'fb_user_same', name: 'Same Profile Renamed' })));
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            id: 'fb_user_same',
+            name: 'Same Profile Renamed',
+            picture: { data: { url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/refreshed.jpg' } },
+          })
+        )
+      );
 
     const req2 = new NextRequest(
       `http://localhost:3000/api/auth/facebook/callback?code=code_2&state=${validState}`,
@@ -137,5 +163,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     // Size remains 1 (no duplicate rows created)
     expect(storedAccounts.size).toBe(1);
     expect(storedAccounts.get(`${userId}:fb_user_same`)?.displayName).toBe('Same Profile Renamed');
+    expect(storedAccounts.get(`${userId}:fb_user_same`)?.profilePictureUrl).toBe(
+      'https://platform-lookaside.fbsbx.com/platform/profilepic/refreshed.jpg'
+    );
   });
 });

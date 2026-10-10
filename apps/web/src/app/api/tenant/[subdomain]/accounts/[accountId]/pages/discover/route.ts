@@ -69,7 +69,7 @@ export async function handleDiscoverPages(
   const graphUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
   graphUrl.searchParams.set(
     'fields',
-    'id,name,category,tasks,access_token,followers_count'
+    'id,name,category,tasks,access_token,followers_count,picture{url}'
   );
 
   const graphRes = await fetch(graphUrl.toString(), {
@@ -103,6 +103,7 @@ export async function handleDiscoverPages(
     .map((item) => ({
       fbPageId: String(item.id),
       pageName: String(item.name),
+      profilePictureUrl: item.picture?.data?.url ?? null,
       category: item.category ?? null,
       followersCount:
         typeof item.followers_count === 'number'
