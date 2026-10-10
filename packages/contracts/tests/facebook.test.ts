@@ -106,11 +106,13 @@ describe('Facebook Account & Page Domain Schemas', () => {
   describe('FacebookPageStatusSchema', () => {
     it('accepts valid page statuses and exposes FacebookPageStatusEnum', () => {
       expect(FacebookPageStatusSchema.parse('active')).toBe('active');
+      expect(FacebookPageStatusSchema.parse('paused')).toBe('paused');
       expect(FacebookPageStatusSchema.parse('fb_rate_limited')).toBe('fb_rate_limited');
       expect(FacebookPageStatusSchema.parse('page_checkpoint')).toBe('page_checkpoint');
       expect(FacebookPageStatusSchema.parse('invalid_token')).toBe('invalid_token');
       expect(FacebookPageStatusSchema.parse('disconnected')).toBe('disconnected');
       expect(FacebookPageStatusEnum.active).toBe('active');
+      expect(FacebookPageStatusEnum.paused).toBe('paused');
       expect(FacebookPageStatusEnum.fb_rate_limited).toBe('fb_rate_limited');
       expect(FacebookPageStatusEnum.page_checkpoint).toBe('page_checkpoint');
       expect(FacebookPageStatusEnum.invalid_token).toBe('invalid_token');

@@ -54,6 +54,7 @@ export type ListFacebookAccountsResponse = z.infer<
 
 export const FacebookPageStatusSchema = z.enum([
   'active',
+  'paused',
   'fb_rate_limited',
   'page_checkpoint',
   'invalid_token',

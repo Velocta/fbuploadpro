@@ -97,7 +97,7 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(duplicate?.message).toContain("You've already posted this");
     });
 
-    it('auto-turns fb_rate_limited pages to active after 3 days while keeping page_checkpoint until manual reactivation', () => {
+    it('auto-turns fb_rate_limited pages to active after 3 days while keeping page_checkpoint and paused until manual reactivation', () => {
       const blockedAt = new Date('2026-10-01T12:00:00Z');
       const after2Days = new Date('2026-10-03T12:00:00Z');
       const after3Days = new Date('2026-10-04T12:00:00Z');
@@ -114,6 +114,11 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(
         evaluatePageHealth({ status: 'page_checkpoint', updatedAt: blockedAt }, after10Days)
       ).toBe('page_checkpoint');
+
+      // paused never auto-recovers even after 10 days; remains paused until user toggles active
+      expect(
+        evaluatePageHealth({ status: 'paused', updatedAt: blockedAt }, after10Days)
+      ).toBe('paused');
     });
 
     it('maps API rate limit codes 4, 17, 32, 341, 613, 80001 as transient errors keeping accountStatus and pageStatus active', () => {

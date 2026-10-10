@@ -25,6 +25,7 @@ END $$;
 DO $$ BEGIN
     CREATE TYPE facebook_page_status AS ENUM (
         'active',
+        'paused',
         'fb_rate_limited',
         'page_checkpoint',
         'invalid_token',
@@ -34,6 +35,7 @@ EXCEPTION
     WHEN duplicate_object THEN NULL;
 END $$;
 
+ALTER TYPE facebook_page_status ADD VALUE IF NOT EXISTS 'paused';
 ALTER TYPE facebook_page_status ADD VALUE IF NOT EXISTS 'page_checkpoint';
 
 -- 2. Convert users.status to user_status ENUM

@@ -201,6 +201,7 @@ export function evaluateAccountHealth(
 
 /**
  * Dynamically computes Page health status:
+ * - 'paused': user explicitly paused publishing on this Page; remains 'paused' until manually resumed.
  * - 'fb_rate_limited' (Error 368 / Subcode 1390008) automatically turns back to 'active' after 3 days.
  * - 'page_checkpoint' (Error 368 / Subcode 4854002) remains 'page_checkpoint' until manually turned to 'active'.
  */
@@ -211,6 +212,10 @@ export function evaluatePageHealth(
   },
   now: Date = new Date()
 ): FacebookPageStatus {
+  if (page.status === 'paused') {
+    return 'paused';
+  }
+
   if (page.status === 'fb_rate_limited' && page.updatedAt) {
     const updatedDate = new Date(page.updatedAt);
     const elapsedMs = now.getTime() - updatedDate.getTime();
