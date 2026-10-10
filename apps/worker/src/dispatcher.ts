@@ -48,8 +48,17 @@ function extractRows<T = unknown>(result: unknown): T[] {
 
 function toSafeString(val: unknown): string {
   if (typeof val === 'string') return val;
-  if (val === null || val === undefined) return '';
-  return typeof val === 'object' ? JSON.stringify(val) : String(val);
+  if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') {
+    return val.toString();
+  }
+  if (typeof val === 'object' && val !== null) {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return '';
+    }
+  }
+  return '';
 }
 
 function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueItem {
