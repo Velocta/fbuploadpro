@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DiscoveredPageSchema,
   FacebookAccountSchema,
+  FacebookAccountStatusEnum,
   FacebookAccountStatusSchema,
   FacebookAccountViewSchema,
   FacebookPageSchema,
+  FacebookPageStatusEnum,
   FacebookPageStatusSchema,
   FacebookPageViewSchema,
 } from '../src/domain/facebook.js';
@@ -15,10 +17,13 @@ describe('Facebook Account & Page Domain Schemas', () => {
   const pageId = '770e8400-e29b-41d4-a716-446655440002';
 
   describe('FacebookAccountStatusSchema', () => {
-    it('accepts valid statuses', () => {
+    it('accepts valid statuses and exposes FacebookAccountStatusEnum', () => {
       expect(FacebookAccountStatusSchema.parse('active')).toBe('active');
       expect(FacebookAccountStatusSchema.parse('disconnected')).toBe('disconnected');
       expect(FacebookAccountStatusSchema.parse('expired')).toBe('expired');
+      expect(FacebookAccountStatusEnum.active).toBe('active');
+      expect(FacebookAccountStatusEnum.disconnected).toBe('disconnected');
+      expect(FacebookAccountStatusEnum.expired).toBe('expired');
     });
 
     it('rejects invalid statuses', () => {
@@ -99,12 +104,17 @@ describe('Facebook Account & Page Domain Schemas', () => {
   });
 
   describe('FacebookPageStatusSchema', () => {
-    it('accepts valid page statuses', () => {
+    it('accepts valid page statuses and exposes FacebookPageStatusEnum', () => {
       expect(FacebookPageStatusSchema.parse('active')).toBe('active');
       expect(FacebookPageStatusSchema.parse('fb_rate_limited')).toBe('fb_rate_limited');
       expect(FacebookPageStatusSchema.parse('page_checkpoint')).toBe('page_checkpoint');
       expect(FacebookPageStatusSchema.parse('invalid_token')).toBe('invalid_token');
       expect(FacebookPageStatusSchema.parse('disconnected')).toBe('disconnected');
+      expect(FacebookPageStatusEnum.active).toBe('active');
+      expect(FacebookPageStatusEnum.fb_rate_limited).toBe('fb_rate_limited');
+      expect(FacebookPageStatusEnum.page_checkpoint).toBe('page_checkpoint');
+      expect(FacebookPageStatusEnum.invalid_token).toBe('invalid_token');
+      expect(FacebookPageStatusEnum.disconnected).toBe('disconnected');
     });
 
     it('rejects invalid statuses', () => {

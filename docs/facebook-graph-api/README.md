@@ -12,9 +12,9 @@ This directory contains the authoritative reference for **Facebook Graph API v26
 
 ## 1. FBUploadPro Account & Page Status Values
 
-### 1.1 `facebook_accounts.status` (`FacebookAccountStatusSchema`)
+### 1.1 `facebook_accounts.status` (`facebook_account_status` PostgreSQL `ENUM` & `FacebookAccountStatusEnum`)
 
-Defined in [`packages/contracts/src/domain/facebook.ts`](../../packages/contracts/src/domain/facebook.ts) and enforced via `CHECK (status IN ('active', 'expired', 'disconnected'))` on the `facebook_accounts` PostgreSQL table:
+Defined in [`packages/contracts/src/domain/facebook.ts`](../../packages/contracts/src/domain/facebook.ts) (`FacebookAccountStatusSchema` / `FacebookAccountStatusEnum`) and enforced as a native PostgreSQL `ENUM` type `facebook_account_status AS ENUM ('active', 'disconnected', 'expired')` on the `facebook_accounts` table:
 
 | Status Value | Meaning | How It Is Triggered | User / System Action |
 | :--- | :--- | :--- | :--- |
@@ -24,9 +24,9 @@ Defined in [`packages/contracts/src/domain/facebook.ts`](../../packages/contract
 
 ---
 
-### 1.2 `facebook_pages.status` (`FacebookPageStatusSchema`)
+### 1.2 `facebook_pages.status` (`facebook_page_status` PostgreSQL `ENUM` & `FacebookPageStatusEnum`)
 
-Defined in [`packages/contracts/src/domain/facebook.ts`](../../packages/contracts/src/domain/facebook.ts) and enforced on the `facebook_pages` PostgreSQL table:
+Defined in [`packages/contracts/src/domain/facebook.ts`](../../packages/contracts/src/domain/facebook.ts) (`FacebookPageStatusSchema` / `FacebookPageStatusEnum`) and enforced as a native PostgreSQL `ENUM` type `facebook_page_status AS ENUM ('active', 'fb_rate_limited', 'page_checkpoint', 'invalid_token', 'disconnected')` on the `facebook_pages` table:
 
 | Status Value | Meaning | How It Is Triggered | User / System Action |
 | :--- | :--- | :--- | :--- |

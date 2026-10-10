@@ -4,6 +4,7 @@ import {
   SubdomainSchema,
   UserRoleSchema,
   UserSchema,
+  UserStatusEnum,
   UserStatusSchema,
 } from '../src/domain/user.js';
 
@@ -60,9 +61,11 @@ describe('User Domain Schemas & Invariants', () => {
   });
 
   describe('UserStatusSchema', () => {
-    it('accepts active and suspended statuses', () => {
+    it('accepts active and suspended statuses and exposes UserStatusEnum', () => {
       expect(UserStatusSchema.parse('active')).toBe('active');
       expect(UserStatusSchema.parse('suspended')).toBe('suspended');
+      expect(UserStatusEnum.active).toBe('active');
+      expect(UserStatusEnum.suspended).toBe('suspended');
     });
 
     it('rejects invalid statuses', () => {

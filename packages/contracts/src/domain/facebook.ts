@@ -5,6 +5,7 @@ export const FacebookAccountStatusSchema = z.enum([
   'disconnected',
   'expired',
 ]);
+export const FacebookAccountStatusEnum = FacebookAccountStatusSchema.enum;
 export type FacebookAccountStatus = z.infer<typeof FacebookAccountStatusSchema>;
 
 export const FacebookAccountSchema = z.object({
@@ -58,6 +59,7 @@ export const FacebookPageStatusSchema = z.enum([
   'invalid_token',
   'disconnected',
 ]);
+export const FacebookPageStatusEnum = FacebookPageStatusSchema.enum;
 export type FacebookPageStatus = z.infer<typeof FacebookPageStatusSchema>;
 
 export const FacebookPageSchema = z.object({
