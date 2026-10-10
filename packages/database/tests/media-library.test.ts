@@ -11,6 +11,10 @@ describe('Media Library DDL Migration & Schema Suite', () => {
     __dirname,
     '../../../supabase/migrations/20261010182000_purge_media_library_bloat.sql'
   );
+  const nestedMigrationPath = path.resolve(
+    __dirname,
+    '../../../supabase/migrations/20261010190000_nested_media_folders.sql'
+  );
 
   it('0003_media_library.sql exists and creates baseline media tables', () => {
     expect(fs.existsSync(migrationPath)).toBe(true);
@@ -46,5 +50,21 @@ describe('Media Library DDL Migration & Schema Suite', () => {
     expect(purgeDdl).toContain('DROP COLUMN IF EXISTS color');
     expect(purgeDdl).toContain('DROP TABLE IF EXISTS caption_templates CASCADE');
     expect(purgeDdl).toContain('DROP TABLE IF EXISTS user_storage_quotas CASCADE');
+  });
+
+  it('20261010190000_nested_media_folders.sql adds parent_id, recursive composite FK, sibling unique indexes, and cascading media deletion', () => {
+    expect(fs.existsSync(nestedMigrationPath)).toBe(true);
+
+    const nestedDdl = fs.readFileSync(nestedMigrationPath, 'utf8');
+
+    expect(nestedDdl).toContain('ADD COLUMN IF NOT EXISTS parent_id UUID NULL');
+    expect(nestedDdl).toContain('DROP CONSTRAINT IF EXISTS uq_media_folders_user_name');
+    expect(nestedDdl).toContain('chk_media_folders_no_self_parent');
+    expect(nestedDdl).toContain('fk_media_folders_user_parent');
+    expect(nestedDdl).toContain('idx_media_folders_root_name');
+    expect(nestedDdl).toContain('idx_media_folders_child_name');
+    expect(nestedDdl).toContain('idx_media_folders_user_parent');
+    expect(nestedDdl).toContain('fk_media_items_user_folder');
+    expect(nestedDdl).toContain('ON DELETE CASCADE');
   });
 });

@@ -139,4 +139,27 @@ describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', 
     expect(res.status).toBe(200);
     expect(capturedSql).toContain('folder_id IS NULL');
   });
+
+  it('applies sortBy and sortOrder allowlist to ORDER BY', async () => {
+    let capturedSql = '';
+
+    const mockDb: Partial<DatabaseClient> = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        capturedSql = sql;
+        if (sql.includes('SELECT COUNT(*)')) {
+          return Promise.resolve([{ total: 0 }]);
+        }
+        return Promise.resolve([]);
+      }),
+    };
+
+    const req = new NextRequest(
+      'http://localhost:3000/api/tenant/acme/media?sortBy=name&sortOrder=asc',
+      { headers: { cookie: validSessionCookie } }
+    );
+    const res = await handleListMedia(req, 'acme', mockDb as DatabaseClient);
+
+    expect(res.status).toBe(200);
+    expect(capturedSql).toContain('ORDER BY LOWER(name) ASC');
+  });
 });

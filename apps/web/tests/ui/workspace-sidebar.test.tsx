@@ -10,16 +10,20 @@ import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { THEME, PALETTE } from '@/lib/theme';
 import { render } from '../components/setup';
 
+let mockPathname = '/tenant/acme';
+const mockPush = vi.fn();
+
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/tenant/acme',
+  usePathname: () => mockPathname,
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
     replace: vi.fn(),
   }),
 }));
 
-describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
+describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
   it('renders workspace identity header using SidebarMenuButton size="lg" with brand monogram FB, subdomain, and FBUploadPro without switcher chevrons', () => {
+    mockPathname = '/tenant/acme';
     const { hasText, hasAttribute, html, findTags } = render(
       <SidebarProvider>
         <WorkspaceSidebar
@@ -43,7 +47,8 @@ describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
     expect(headers[0]?.outerHtml).not.toContain('m7 9 5-5 5 5');
   });
 
-  it('renders Home item, SidebarSeparator, and Collapsible Facebook section with SidebarMenuSub and SidebarMenuSubButton for Accounts', () => {
+  it('renders Home and Media Library in the primary top group above SidebarSeparator, followed by Collapsible Facebook section', () => {
+    mockPathname = '/tenant/acme';
     const { hasText, hasAttribute, html } = render(
       <SidebarProvider>
         <WorkspaceSidebar
@@ -55,9 +60,20 @@ describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
 
     // Primary items per user directive
     expect(hasText('Home')).toBe(true);
+    expect(hasText('Media Library')).toBe(true);
     expect(hasText('Platform')).toBe(true);
     expect(hasText('Facebook')).toBe(true);
     expect(hasText('Accounts')).toBe(true);
+
+    // Verify ordering: Home -> Media Library -> Separator -> Platform
+    const homeIndex = html.indexOf('Home');
+    const mediaIndex = html.indexOf('Media Library');
+    const separatorIndex = html.indexOf('data-sidebar="separator"');
+    const platformIndex = html.indexOf('Platform');
+    expect(homeIndex).toBeGreaterThan(-1);
+    expect(mediaIndex).toBeGreaterThan(homeIndex);
+    expect(separatorIndex).toBeGreaterThan(mediaIndex);
+    expect(platformIndex).toBeGreaterThan(separatorIndex);
 
     // Separator line present
     expect(hasAttribute('data-sidebar', 'separator')).toBe(true);
@@ -74,6 +90,7 @@ describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
   });
 
   it('marks Home as active when pathname matches tenant home', () => {
+    mockPathname = '/tenant/acme';
     const { html } = render(
       <SidebarProvider>
         <WorkspaceSidebar
@@ -88,7 +105,27 @@ describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
     expect(html).toContain('aria-current="page"');
   });
 
+  it('marks Media Library as active when pathname starts with /tenant/acme/media', () => {
+    mockPathname = '/tenant/acme/media';
+    const { html, findTags } = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    expect(html).toContain('aria-current="page"');
+    const buttons = findTags('button');
+    const activeMediaBtn = buttons.find(
+      (b) => b.innerHTML.includes('Media Library') && b.attributes['data-active'] === 'true'
+    );
+    expect(activeMediaBtn).toBeDefined();
+  });
+
   it('renders user details and avatar initials in footer using NavUser pattern', () => {
+    mockPathname = '/tenant/acme';
     const { hasText, hasAttribute } = render(
       <SidebarProvider>
         <WorkspaceSidebar
@@ -104,4 +141,5 @@ describe('WorkspaceSidebar Component (Spec 019 & Spec 025)', () => {
     expect(hasText('JD')).toBe(true);
   });
 });
+
 
