@@ -108,6 +108,11 @@ function validateFullUrl(
       return defaultUrl;
     }
 
+    if (parsed.searchParams.has('returnUrl')) {
+      parsed.searchParams.delete('returnUrl');
+      trimmed = parsed.toString();
+    }
+
     if (isBrowserPreview) {
       const browserHost = window.location.hostname.toLowerCase();
       const isSameBrowserHost = actualHostname === browserHost;
@@ -189,15 +194,25 @@ export function sanitizeAuthRedirectUrl(
     if (trimmed.includes(':')) {
       return defaultUrl;
     }
+    let cleanTrimmed = trimmed;
+    try {
+      const dummy = new URL(trimmed, 'https://localhost');
+      if (dummy.searchParams.has('returnUrl')) {
+        dummy.searchParams.delete('returnUrl');
+        cleanTrimmed = `${dummy.pathname}${dummy.search}${dummy.hash}`;
+      }
+    } catch {
+      // Retain trimmed as fallback
+    }
     if (isBrowserPreview) {
-      return `${window.location.origin}${trimmed}`;
+      return `${window.location.origin}${cleanTrimmed}`;
     }
     if (serverPreviewHost) {
-      return `https://${serverPreviewHost}${trimmed}`;
+      return `https://${serverPreviewHost}${cleanTrimmed}`;
     }
     return userSubdomain
-      ? `${protocol}://${userSubdomain}.${normalizedRoot}${trimmed}`
-      : trimmed;
+      ? `${protocol}://${userSubdomain}.${normalizedRoot}${cleanTrimmed}`
+      : cleanTrimmed;
   }
 
   // 4. Fully-qualified URL validation

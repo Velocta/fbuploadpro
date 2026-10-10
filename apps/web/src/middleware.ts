@@ -61,7 +61,39 @@ function buildAuthenticatedWorkspaceRedirect(
   const workspaceUrl = new URL(request.url);
   workspaceUrl.host = `${session.subdomain}.${rootDomain}`;
   workspaceUrl.pathname = '/';
+  workspaceUrl.search = '';
+  workspaceUrl.hash = '';
   return NextResponse.redirect(workspaceUrl);
+}
+
+function isReturnUrlTargetingTenant(
+  returnUrlParam: string | null | undefined,
+  tenantSubdomain: string,
+  rootDomain: string
+): boolean {
+  if (!returnUrlParam) return false;
+  try {
+    const parsed = new URL(returnUrlParam);
+    const host = parsed.hostname.toLowerCase();
+    const cleanRoot = rootDomain.toLowerCase().split(':')[0] || '';
+    const expectedHost = `${tenantSubdomain}.${cleanRoot}`.toLowerCase();
+    if (host === expectedHost) return true;
+    if (
+      host.endsWith('.vercel.app') &&
+      (parsed.pathname === `/tenant/${tenantSubdomain}` ||
+        parsed.pathname.startsWith(`/tenant/${tenantSubdomain}/`))
+    ) {
+      return true;
+    }
+  } catch {
+    if (
+      returnUrlParam === `/tenant/${tenantSubdomain}` ||
+      returnUrlParam.startsWith(`/tenant/${tenantSubdomain}/`)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function buildTenantHeaders(
@@ -95,7 +127,9 @@ function handleDirectTenantPathOnApex(
 ): NextResponse {
   if (!session) {
     const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('returnUrl', request.url);
+    const cleanReturnUrl = new URL(request.url);
+    cleanReturnUrl.searchParams.delete('returnUrl');
+    loginUrl.searchParams.set('returnUrl', cleanReturnUrl.toString());
     return NextResponse.redirect(loginUrl, 307);
   }
 
@@ -149,6 +183,30 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         pathname === '/' || pathname === '/login' || pathname === '/signup';
 
       if (session && session.status !== 'suspended' && !isLogoutSuccess && isEntryOrAuthRoute) {
+        const returnUrlParam = request.nextUrl.searchParams.get('returnUrl');
+        const isBouncedFromWorkspace = isReturnUrlTargetingTenant(
+          returnUrlParam,
+          session.subdomain,
+          rootDomain
+        );
+
+        if (isBouncedFromWorkspace) {
+          const response = NextResponse.next();
+          response.cookies.set('fbup_session', '', {
+            path: '/',
+            maxAge: 0,
+          });
+          const cleanRoot = rootDomain.toLowerCase().split(':')[0];
+          if (cleanRoot && !cleanRoot.includes('localhost') && !cleanRoot.includes('127.0.0.1')) {
+            response.cookies.set('fbup_session', '', {
+              path: '/',
+              domain: `.${cleanRoot}`,
+              maxAge: 0,
+            });
+          }
+          return response;
+        }
+
         return buildAuthenticatedWorkspaceRedirect(request, session, host, rootDomain);
       }
 
@@ -179,7 +237,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     const loginUrl = new URL(request.url);
     loginUrl.host = `app.${rootDomain}`;
     loginUrl.pathname = '/login';
-    loginUrl.searchParams.set('returnUrl', request.url);
+    const cleanReturnUrl = new URL(request.url);
+    cleanReturnUrl.searchParams.delete('returnUrl');
+    loginUrl.searchParams.set('returnUrl', cleanReturnUrl.toString());
     return NextResponse.redirect(loginUrl, 307);
   }
 

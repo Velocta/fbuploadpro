@@ -127,6 +127,14 @@ export async function POST(request: NextRequest) {
       maxAge: 86400 * 30, // 30 days
     });
 
+    if (domain) {
+      // Clear legacy host-only cookie to avoid browser cookie shadowing
+      response.headers.append(
+        'Set-Cookie',
+        `fbup_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${isProduction ? '; Secure' : ''}`
+      );
+    }
+
     return response;
   } catch (error: unknown) {
     return formatAuthErrorResponse(error, {

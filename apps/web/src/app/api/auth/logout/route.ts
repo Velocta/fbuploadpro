@@ -28,6 +28,14 @@ export async function POST(request?: NextRequest) {
       maxAge: 0,
     });
 
+    if (domain) {
+      // Also clear host-only cookie if domain-wide cookie is active
+      response.headers.append(
+        'Set-Cookie',
+        `fbup_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${isProduction ? '; Secure' : ''}`
+      );
+    }
+
     return response;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Logout failed';

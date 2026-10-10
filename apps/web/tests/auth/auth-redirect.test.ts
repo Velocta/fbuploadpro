@@ -96,4 +96,22 @@ describe('Open Redirect Defense - sanitizeAuthRedirectUrl (Spec 017 / AUTH-01)',
       )
     ).toBe('https://acmecorp.vinsmokemedia.online/');
   });
+
+  it('strips nested returnUrl parameters from redirect targets to prevent echo loops', () => {
+    expect(
+      sanitizeAuthRedirectUrl(
+        'https://acmecorp.vinsmokemedia.online/?returnUrl=https%3A%2F%2Facmecorp.vinsmokemedia.online%2F',
+        subdomain,
+        'vinsmokemedia.online'
+      )
+    ).toBe('https://acmecorp.vinsmokemedia.online/');
+
+    expect(
+      sanitizeAuthRedirectUrl(
+        '/dashboard?returnUrl=/login',
+        subdomain,
+        'vinsmokemedia.online'
+      )
+    ).toBe('https://acmecorp.vinsmokemedia.online/dashboard');
+  });
 });
