@@ -78,7 +78,7 @@ export function Alert({
   className = '',
   style,
   ...props
-}: AlertProps) {
+}: Readonly<AlertProps>) {
   const config = severityConfig[severity];
   const role = severity === 'error' || severity === 'warning' ? 'alert' : 'status';
 

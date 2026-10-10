@@ -45,11 +45,11 @@ function parseSlotTime(slotTime: string): { hour: number; minute: number; second
   const parts = slotTime.trim().split(':');
   if (parts.length < 2) return null;
 
-  const hour = parseInt(parts[0]!, 10);
-  const minute = parseInt(parts[1]!, 10);
-  const second = parts.length > 2 ? parseInt(parts[2]!, 10) : 0;
+  const hour = Number.parseInt(parts[0]!, 10);
+  const minute = Number.parseInt(parts[1]!, 10);
+  const second = parts.length > 2 ? Number.parseInt(parts[2]!, 10) : 0;
 
-  if (isNaN(hour) || isNaN(minute) || isNaN(second)) return null;
+  if (Number.isNaN(hour) || Number.isNaN(minute) || Number.isNaN(second)) return null;
   if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) return null;
 
   return { hour, minute, second };
@@ -62,12 +62,12 @@ function getZonedDateParts(
   const dtf = getFormatter(timeZone);
   const parts = Object.fromEntries(dtf.formatToParts(date).map((p) => [p.type, p.value]));
   return {
-    year: parseInt(parts.year!, 10),
-    month: parseInt(parts.month!, 10),
-    day: parseInt(parts.day!, 10),
-    hour: parseInt(parts.hour!, 10),
-    minute: parseInt(parts.minute!, 10),
-    second: parseInt(parts.second!, 10),
+    year: Number.parseInt(parts.year!, 10),
+    month: Number.parseInt(parts.month!, 10),
+    day: Number.parseInt(parts.day!, 10),
+    hour: Number.parseInt(parts.hour!, 10),
+    minute: Number.parseInt(parts.minute!, 10),
+    second: Number.parseInt(parts.second!, 10),
   };
 }
 
@@ -75,12 +75,12 @@ function getTimezoneOffsetMs(date: Date, timeZone: string): number {
   const dtf = getFormatter(timeZone);
   const parts = Object.fromEntries(dtf.formatToParts(date).map((p) => [p.type, p.value]));
   const localDateAsUtc = Date.UTC(
-    parseInt(parts.year!, 10),
-    parseInt(parts.month!, 10) - 1,
-    parseInt(parts.day!, 10),
-    parseInt(parts.hour!, 10),
-    parseInt(parts.minute!, 10),
-    parseInt(parts.second!, 10)
+    Number.parseInt(parts.year!, 10),
+    Number.parseInt(parts.month!, 10) - 1,
+    Number.parseInt(parts.day!, 10),
+    Number.parseInt(parts.hour!, 10),
+    Number.parseInt(parts.minute!, 10),
+    Number.parseInt(parts.second!, 10)
   );
   return localDateAsUtc - date.getTime();
 }
@@ -118,12 +118,12 @@ export function calculateNextVacantSlot(
     return null;
   }
 
-  const effectiveNow = params.now instanceof Date && !isNaN(params.now.getTime())
+  const effectiveNow = params.now instanceof Date && !Number.isNaN(params.now.getTime())
     ? params.now
     : new Date();
 
   const validExistingTimes = (params.existingScheduledTimes || []).filter(
-    (d) => d instanceof Date && !isNaN(d.getTime())
+    (d) => d instanceof Date && !Number.isNaN(d.getTime())
   );
 
   const isOccupied = (candidateTime: Date): boolean => {

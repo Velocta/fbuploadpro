@@ -142,9 +142,9 @@ export function formatAuthErrorResponse(
     /after\s+(\d+)\s+seconds/i.test(rawMessage);
 
   if (isRateLimited) {
-    const match = rawMessage.match(/after\s+(\d+)\s+seconds/i);
+    const match = /after\s+(\d+)\s+seconds/i.exec(rawMessage);
     const retryAfter = match
-      ? parseInt(match[1], 10)
+      ? Number.parseInt(match[1], 10)
       : (error as { retryAfterSeconds?: number })?.retryAfterSeconds || 60;
     const sanitizedMsg = `For security purposes, please wait ${retryAfter} second${
       retryAfter === 1 ? '' : 's'

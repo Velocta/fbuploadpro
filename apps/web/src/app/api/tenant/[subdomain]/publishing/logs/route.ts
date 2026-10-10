@@ -8,6 +8,22 @@ import {
 import { getDbClient } from '../../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
+function formatErrorMessage(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value.toString();
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '';
+    }
+  }
+  return null;
+}
+
 export async function handleListPublishLogs(
   request: NextRequest,
   subdomain: string,
@@ -113,7 +129,7 @@ export async function handleListPublishLogs(
       status: row.status,
       attemptNumber: Number(row.attempt_number ?? 1),
       fbResponseCode: row.fb_response_code != null ? Number(row.fb_response_code) : null,
-      errorMessage: row.error_message ? String(row.error_message) : null,
+      errorMessage: formatErrorMessage(row.error_message),
       errorDetails,
       createdAt: new Date(String(row.created_at)).toISOString(),
     });

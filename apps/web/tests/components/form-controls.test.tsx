@@ -139,7 +139,7 @@ describe('Form Controls: Checkbox, Switch, Select (US1 / T007)', () => {
       );
 
       const inputs = findTags('input');
-      expect(inputs.length).toBe(1);
+      expect(inputs).toHaveLength(1);
       expect(inputs[0].attributes['name']).toBe('notifications_enabled');
       expect(inputs[0].attributes['type']).toBe('checkbox');
     });
@@ -158,10 +158,10 @@ describe('Form Controls: Checkbox, Switch, Select (US1 / T007)', () => {
       );
 
       const selects = findTags('select');
-      expect(selects.length).toBe(1);
+      expect(selects).toHaveLength(1);
 
       const options = findTags('option');
-      expect(options.length).toBe(3);
+      expect(options).toHaveLength(3);
       expect(options[0].attributes['value']).toBe('page-1');
       expect(options[0].innerHTML).toBe('Tech News Daily');
       expect(options[2].attributes['disabled']).toBeDefined();
@@ -178,7 +178,7 @@ describe('Form Controls: Checkbox, Switch, Select (US1 / T007)', () => {
 
       const options = findTags('option');
       // Placeholder is prepended
-      expect(options.length).toBe(4);
+      expect(options).toHaveLength(4);
       expect(options[0].attributes['value']).toBe('');
       expect(options[0].attributes['disabled']).toBeDefined();
       expect(options[0].attributes['hidden']).toBeDefined();

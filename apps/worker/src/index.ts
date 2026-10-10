@@ -83,7 +83,7 @@ export async function handleScheduled(
 }
 
 export default {
-  async fetch(request: Request, _env: Env, _ctx: ExecutionContext): Promise<Response> {
+  fetch(request: Request, _env: Env, _ctx: ExecutionContext): Response {
     const url = new URL(request.url);
 
     if (request.method === 'GET' && url.pathname === '/health') {

@@ -36,7 +36,7 @@ SET status = 'publishing', updated_at = now()
 WHERE id = ANY($1);
 `.trim();
 
-async function extractRows<T = unknown>(result: unknown): Promise<T[]> {
+function extractRows<T = unknown>(result: unknown): T[] {
   if (Array.isArray(result)) {
     return result as T[];
   }
@@ -46,22 +46,37 @@ async function extractRows<T = unknown>(result: unknown): Promise<T[]> {
   return [];
 }
 
+function toSafeString(val: unknown): string {
+  if (typeof val === 'string') return val;
+  if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') {
+    return val.toString();
+  }
+  if (typeof val === 'object' && val !== null) {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
 function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueItem {
   return ClaimedQueueItemSchema.parse({
     id: row.id,
     userId: row.user_id,
     pageId: row.fb_page_id,
     mediaId: row.media_id,
-    caption: String(row.caption ?? ''),
-    firstComment: row.first_comment ? String(row.first_comment) : null,
+    caption: toSafeString(row.caption),
+    firstComment: row.first_comment != null ? toSafeString(row.first_comment) : null,
     retryCount: Number(row.retry_count ?? 0),
     maxRetries: Number(row.max_retries ?? 3),
     mediaType: row.media_type,
-    mediaUrl: String(row.media_url),
-    storageKey: String(row.storage_key),
-    fbPageId: String(row.external_page_id ?? row.fb_page_id),
-    encryptedPageToken: String(row.encrypted_access_token),
-    pageName: String(row.page_name ?? ''),
+    mediaUrl: toSafeString(row.media_url),
+    storageKey: toSafeString(row.storage_key),
+    fbPageId: toSafeString(row.external_page_id ?? row.fb_page_id),
+    encryptedPageToken: toSafeString(row.encrypted_access_token),
+    pageName: toSafeString(row.page_name),
   });
 }
 
@@ -75,7 +90,7 @@ export async function claimDueItems(
 ): Promise<ClaimedQueueItem[]> {
   const executeClaim = async (client: Queryable): Promise<ClaimedQueueItem[]> => {
     const rawResult = await client.query(CLAIM_DUE_ITEMS_SQL, [limit]);
-    const rows = await extractRows<Record<string, unknown>>(rawResult);
+    const rows = extractRows<Record<string, unknown>>(rawResult);
     if (rows.length === 0) {
       return [];
     }
@@ -137,12 +152,12 @@ export async function dispatchItem(
   } catch (err: unknown) {
     const isAuthError = err instanceof FacebookGraphError ? err.isAuthError : false;
     const isRateLimit = err instanceof FacebookGraphError ? err.isRateLimit : false;
-    const errorCode =
-      err instanceof FacebookGraphError
-        ? err.code
-        : typeof (err as { code?: number })?.code === 'number'
-        ? (err as { code: number }).code
-        : undefined;
+    let errorCode: number | undefined;
+    if (err instanceof FacebookGraphError) {
+      errorCode = err.code;
+    } else if (typeof (err as { code?: number })?.code === 'number') {
+      errorCode = (err as { code: number }).code;
+    }
     const errorMessage = err instanceof Error ? err.message : String(err);
 
     // Rate limits or transient errors can be retried if retryCount < maxRetries
@@ -284,24 +299,24 @@ export class PublishDispatcher implements IPublishDispatcher {
   ) {}
 
   async claimDueItems(limit: number = 10): Promise<ClaimedQueueItem[]> {
-    return claimDueItems(this.db, limit);
+    return await claimDueItems(this.db, limit);
   }
 
   async dispatchItem(item: ClaimedQueueItem): Promise<DispatchOutcome> {
-    return dispatchItem(item, this.fbClient, this.masterKey);
+    return await dispatchItem(item, this.fbClient, this.masterKey);
   }
 
   async settleOutcome(outcome: DispatchOutcome, item?: ClaimedQueueItem): Promise<void> {
     if (item) {
-      return settleOutcome(this.db, item, outcome);
+      return await settleOutcome(this.db, item, outcome);
     }
-    return recordDispatchOutcome(this.db, outcome);
+    return await recordDispatchOutcome(this.db, outcome);
   }
 
   async runDispatchCycle(
     limit: number = 10
   ): Promise<{ processed: number; succeeded: number; failed: number; retried: number }> {
-    return runDispatchCycle({
+    return await runDispatchCycle({
       db: this.db,
       fbClient: this.fbClient,
       masterKey: this.masterKey,

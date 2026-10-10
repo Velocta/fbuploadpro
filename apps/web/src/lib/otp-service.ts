@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { canonicalizeGmailAddress, type SignupRequest } from '@fbuploadpro/contracts';
+import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { isLockedOut, recordFailedAttempt, clearLockout } from '@/lib/rate-limiter';
 
 export interface StagedSignupData {
@@ -117,11 +117,10 @@ export function createPendingSignup(data: {
   const otp = generateSecureOtp();
 
   const rawPassword = data.password || '';
-  const hashedPassword = data.hashedPassword
-    ? data.hashedPassword
-    : rawPassword.includes(':')
-    ? rawPassword
-    : hashPasswordSync(rawPassword);
+  let hashedPassword = data.hashedPassword;
+  if (!hashedPassword) {
+    hashedPassword = rawPassword.includes(':') ? rawPassword : hashPasswordSync(rawPassword);
+  }
 
   const entry: PendingSignupEntry = {
     data: {
@@ -162,7 +161,7 @@ export function isPendingSignup(email: string): boolean {
 export function verifyPendingSignupPassword(email: string, candidatePassword: string): boolean {
   cleanupExpiredEntries();
   const entry = getPendingSignup(email);
-  if (!entry || !entry.data.hashedPassword) return false;
+  if (!entry?.data?.hashedPassword) return false;
   return verifyHashedPasswordSync(candidatePassword, entry.data.hashedPassword);
 }
 

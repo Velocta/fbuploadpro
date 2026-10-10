@@ -8,6 +8,18 @@ import {
 import { getDbClient } from '../../../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
+function parseTags(tags: unknown): string[] {
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === 'string') {
+    try {
+      return JSON.parse(tags);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function handleUpdateCaption(
   request: NextRequest,
   subdomain: string,
@@ -82,11 +94,7 @@ export async function handleUpdateCaption(
       userId: row.user_id,
       title: row.title,
       content: row.content,
-      tags: Array.isArray(row.tags)
-        ? row.tags
-        : typeof row.tags === 'string'
-        ? JSON.parse(row.tags)
-        : [],
+      tags: parseTags(row.tags),
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString(),
     });

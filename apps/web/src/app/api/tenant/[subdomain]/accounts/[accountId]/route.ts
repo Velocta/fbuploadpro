@@ -41,8 +41,7 @@ export async function handleDisconnectAccount(
     'SELECT COUNT(*)::int AS count FROM facebook_pages WHERE facebook_account_id = $1 AND user_id = $2',
     [accountId, session.userId]
   )) as any[];
-  const disconnectedPagesCount =
-    countRows && countRows[0] ? Number(countRows[0].count || 0) : 0;
+  const disconnectedPagesCount = Number(countRows?.[0]?.count ?? 0);
 
   // 4. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
   const result = (await db.query(

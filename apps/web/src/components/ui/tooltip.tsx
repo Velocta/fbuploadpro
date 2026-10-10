@@ -16,10 +16,10 @@ export function Tooltip({
   side = 'top',
   open,
   defaultOpen = false,
-}: TooltipProps) {
+}: Readonly<TooltipProps>) {
   const tooltipId = useId();
   const [uncontrolledVisible, setUncontrolledVisible] = useState(defaultOpen);
-  const isVisible = open !== undefined ? open : uncontrolledVisible;
+  const isVisible = open ?? uncontrolledVisible;
   const setIsVisible = (val: boolean) => {
     if (open === undefined) {
       setUncontrolledVisible(val);

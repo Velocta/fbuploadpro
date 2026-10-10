@@ -39,7 +39,7 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
   it('signs and verifies a valid session token using Web Crypto API', async () => {
     const token = await signSessionToken(mockUserSession, TEST_SESSION_SECRET);
     expect(typeof token).toBe('string');
-    expect(token.split('.').length).toBe(3);
+    expect(token.split('.')).toHaveLength(3);
 
     const decoded = await verifySessionToken(token, TEST_SESSION_SECRET);
     expect(decoded.userId).toBe(mockUserSession.userId);

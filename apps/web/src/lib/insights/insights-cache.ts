@@ -5,7 +5,7 @@ export interface CacheEntry<T> {
 }
 
 class InsightsCache {
-  private cache = new Map<string, CacheEntry<unknown>>();
+  private readonly cache = new Map<string, CacheEntry<unknown>>();
 
   get<T>(key: string): CacheEntry<T> | null {
     const entry = this.cache.get(key);

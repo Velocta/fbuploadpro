@@ -130,7 +130,7 @@ export function AuthSplitLayout({
   children,
   footer,
   formPosition = 'left',
-}: AuthSplitLayoutProps) {
+}: Readonly<AuthSplitLayoutProps>) {
   const isFormLeft = formPosition === 'left';
 
   const showcaseNode = (

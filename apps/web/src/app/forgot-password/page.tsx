@@ -49,13 +49,13 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
   }, [step, cooldownSeconds]);
 
   // Step 1: Request OTP
-  const handleRequestOtp = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleRequestOtp = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setEmailError(undefined);
     setGeneralError(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!cleanEmail.includes('@')) {
       setEmailError('Please enter a valid Gmail address.');
       return;
     }
@@ -135,8 +135,14 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
     }
   };
 
+  const getResendButtonLabel = (): string => {
+    if (cooldownSeconds > 0) return `Resend code (${cooldownSeconds}s)`;
+    if (isResending) return 'Sending...';
+    return 'Resend code';
+  };
+
   // Step 2: Submit OTP & Reset Password
-  const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleResetPassword = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setOtpError(undefined);
     setPasswordError(undefined);
@@ -241,7 +247,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
         </span>
       }
     >
-      {isSuccess ? (
+      {isSuccess && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
           <Alert
             severity="success"
@@ -263,7 +269,9 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
             </Button>
           </Link>
         </div>
-      ) : step === 1 ? (
+      )}
+
+      {!isSuccess && step === 1 && (
         <form onSubmit={handleRequestOtp} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
           <Input
             label="Email Address"
@@ -294,7 +302,9 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
             Send Verification Code
           </Button>
         </form>
-      ) : (
+      )}
+
+      {!isSuccess && step !== 1 && (
         <form onSubmit={handleResetPassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
           <Input
             label="Verification Code"
@@ -394,7 +404,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
                 alignItems: 'center',
               }}
             >
-              {cooldownSeconds > 0 ? `Resend code (${cooldownSeconds}s)` : isResending ? 'Sending...' : 'Resend code'}
+              {getResendButtonLabel()}
             </button>
 
             <button

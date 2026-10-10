@@ -146,7 +146,6 @@ export async function handleEnqueueMedia(
       finalScheduledTime = computed.scheduledTime.toISOString();
     }
   } else if (requestedScheduledTime) {
-    finalSlotId = null;
     finalScheduledTime = new Date(requestedScheduledTime).toISOString();
   } else {
     // Auto-compute next vacant slot across all active slots for this page

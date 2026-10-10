@@ -147,12 +147,14 @@ export async function handleFacebookCallback(
 
     destinationUrl.searchParams.set('connected', '1');
     return NextResponse.redirect(destinationUrl);
-  } catch (_e) {
+  } catch (err) {
+    // Redirect to destination with safe generic error parameter rather than leaking internal details
+    console.warn('[FacebookOAuth] Callback exchange error:', err instanceof Error ? err.message : String(err));
     destinationUrl.searchParams.set('error', 'internal_oauth_error');
     return NextResponse.redirect(destinationUrl);
   }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  return handleFacebookCallback(request);
+  return await handleFacebookCallback(request);
 }

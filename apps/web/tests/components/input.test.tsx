@@ -51,8 +51,8 @@ describe('Input & Textarea Components (US1 / T006)', () => {
         const labels = findTags('label');
         const inputs = findTags('input');
 
-        expect(labels.length).toBe(1);
-        expect(inputs.length).toBe(1);
+        expect(labels).toHaveLength(1);
+        expect(inputs).toHaveLength(1);
         const forAttr = labels[0].attributes['for'];
         const idAttr = inputs[0].attributes['id'];
 
@@ -111,7 +111,7 @@ describe('Input & Textarea Components (US1 / T006)', () => {
 
         expect(getAttribute('type')).toBe('password');
         const buttons = findTags('button');
-        expect(buttons.length).toBe(1);
+        expect(buttons).toHaveLength(1);
         expect(buttons[0].attributes['aria-label']).toBe('Show password');
         expect(buttons[0].attributes['type']).toBe('button');
         expect(html).toContain('<svg');
@@ -124,7 +124,7 @@ describe('Input & Textarea Components (US1 / T006)', () => {
 
         expect(getAttribute('type')).toBe('password');
         const buttons = findTags('button');
-        expect(buttons.length).toBe(1);
+        expect(buttons).toHaveLength(1);
         expect(buttons[0].attributes['aria-label']).toBe('Show password');
       });
 
@@ -134,7 +134,7 @@ describe('Input & Textarea Components (US1 / T006)', () => {
         );
 
         const buttons = findTags('button');
-        expect(buttons.length).toBe(1);
+        expect(buttons).toHaveLength(1);
         expect(buttons[0].attributes['disabled']).toBeDefined();
       });
     });

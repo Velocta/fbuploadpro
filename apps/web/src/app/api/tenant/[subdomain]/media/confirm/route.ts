@@ -14,6 +14,18 @@ class QuotaExceededError extends Error {
   }
 }
 
+function parseTags(tags: unknown): string[] {
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === 'string') {
+    try {
+      return JSON.parse(tags);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function handleConfirmUpload(
   request: NextRequest,
   subdomain: string,
@@ -150,11 +162,7 @@ export async function handleConfirmUpload(
           ? Number(insertedRow.duration_seconds)
           : null,
       aspectRatio: insertedRow.aspect_ratio ?? 'unknown',
-      tags: Array.isArray(insertedRow.tags)
-        ? insertedRow.tags
-        : typeof insertedRow.tags === 'string'
-        ? JSON.parse(insertedRow.tags)
-        : [],
+      tags: parseTags(insertedRow.tags),
       captionTemplateId: insertedRow.caption_template_id ?? null,
       captionText: insertedRow.caption_text ?? null,
       createdAt: new Date(insertedRow.created_at).toISOString(),

@@ -10,7 +10,7 @@ interface TenantLayoutProps {
   children: React.ReactNode;
 }
 
-export default async function TenantLayout({ params, children }: TenantLayoutProps) {
+export default async function TenantLayout({ params, children }: Readonly<TenantLayoutProps>) {
   const { subdomain } = await params;
   const session = await getServerSessionContext();
 

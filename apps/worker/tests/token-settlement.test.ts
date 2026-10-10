@@ -4,6 +4,14 @@ import { settleOutcome } from '../src/settlement.js';
 import { runDispatchCycle, type DispatcherDbClient } from '../src/dispatcher.js';
 import { MockFacebookPublishClient } from '../src/fb-client.js';
 
+vi.mock('@fbuploadpro/contracts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@fbuploadpro/contracts')>();
+  return {
+    ...actual,
+    decryptToken: vi.fn().mockResolvedValue('decrypted_token'),
+  };
+});
+
 describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Abolished)', () => {
   const sampleItem: ClaimedQueueItem = {
     id: '11111111-1111-4111-a111-111111111111',
@@ -210,14 +218,6 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
           return Promise.resolve([]);
         }),
       };
-
-      vi.mock('@fbuploadpro/contracts', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('@fbuploadpro/contracts')>();
-        return {
-          ...actual,
-          decryptToken: vi.fn().mockResolvedValue('decrypted_token'),
-        };
-      });
 
       const result = await runDispatchCycle({
         db: mockDb,

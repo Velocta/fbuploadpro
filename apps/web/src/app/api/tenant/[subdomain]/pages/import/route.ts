@@ -109,9 +109,7 @@ export async function handleImportPages(
   const selectedSet = new Set(selectedPageIds);
   const matchedPages = rawItems.filter((item) => selectedSet.has(String(item.id)));
 
-  const importedList: Array<{ id: string; fbPageId: string; pageName: string }> = [];
-
-  for (const pageItem of matchedPages) {
+  const importPromises = matchedPages.map(async (pageItem) => {
     const rawPageToken = pageItem.access_token || rawToken;
     const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
 
@@ -149,13 +147,19 @@ export async function handleImportPages(
 
     if (result && result.length > 0 && result[0]) {
       const row = result[0];
-      importedList.push({
+      return {
         id: row.id,
         fbPageId: row.fb_page_id || row.fbPageId,
         pageName: row.page_name || row.pageName,
-      });
+      };
     }
-  }
+    return null;
+  });
+
+  const resolved = await Promise.all(importPromises);
+  const importedList = resolved.filter(
+    (item): item is { id: string; fbPageId: string; pageName: string } => item !== null
+  );
 
   const responsePayload = ImportPagesResponseSchema.parse({
     success: true,

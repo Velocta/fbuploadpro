@@ -268,42 +268,42 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
   public nextCommentId = 'mock_comment_456';
   public errorToThrow: Error | null = null;
 
-  async publishReel(params: {
+  publishReel(params: {
     pageId: string;
     accessToken: string;
     videoUrl: string;
     caption: string;
   }): Promise<{ postId: string }> {
     if (this.errorToThrow) {
-      throw this.errorToThrow;
+      return Promise.reject(this.errorToThrow);
     }
     this.reelsPublished.push(params);
-    return { postId: this.nextPostId };
+    return Promise.resolve({ postId: this.nextPostId });
   }
 
-  async publishPhoto(params: {
+  publishPhoto(params: {
     pageId: string;
     accessToken: string;
     imageUrl: string;
     caption: string;
   }): Promise<{ postId: string }> {
     if (this.errorToThrow) {
-      throw this.errorToThrow;
+      return Promise.reject(this.errorToThrow);
     }
     this.photosPublished.push(params);
-    return { postId: this.nextPostId };
+    return Promise.resolve({ postId: this.nextPostId });
   }
 
-  async postComment(params: {
+  postComment(params: {
     postId: string;
     accessToken: string;
     message: string;
   }): Promise<{ commentId: string }> {
     if (this.errorToThrow) {
-      throw this.errorToThrow;
+      return Promise.reject(this.errorToThrow);
     }
     this.commentsPosted.push(params);
-    return { commentId: this.nextCommentId };
+    return Promise.resolve({ commentId: this.nextCommentId });
   }
 
   reset(): void {

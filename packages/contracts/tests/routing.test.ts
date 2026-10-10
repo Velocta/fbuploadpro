@@ -3,29 +3,13 @@ import { extractSubdomain, getTenantRewriteUrl } from '../src/domain/routing';
 
 describe('Tenant Subdomain Routing Contracts', () => {
   describe('extractSubdomain', () => {
-    it('correctly identifies apex domain without subdomain', () => {
-      const result = extractSubdomain('fbuploadpro.com', 'fbuploadpro.com');
-      expect(result.isApex).toBe(true);
-      expect(result.subdomain).toBeNull();
-      expect(result.isReserved).toBe(false);
-    });
-
-    it('treats www prefix as apex domain', () => {
-      const result = extractSubdomain('www.fbuploadpro.com', 'fbuploadpro.com');
-      expect(result.isApex).toBe(true);
-      expect(result.subdomain).toBeNull();
-      expect(result.isReserved).toBe(false);
-    });
-
-    it('treats localhost:3000 as apex domain', () => {
-      const result = extractSubdomain('localhost:3000', 'localhost');
-      expect(result.isApex).toBe(true);
-      expect(result.subdomain).toBeNull();
-      expect(result.isReserved).toBe(false);
-    });
-
-    it('treats IP address as apex domain', () => {
-      const result = extractSubdomain('127.0.0.1:3000', 'localhost');
+    it.each([
+      ['fbuploadpro.com', 'fbuploadpro.com', 'apex domain without subdomain'],
+      ['www.fbuploadpro.com', 'fbuploadpro.com', 'www prefix as apex domain'],
+      ['localhost:3000', 'localhost', 'localhost:3000 as apex domain'],
+      ['127.0.0.1:3000', 'localhost', 'IP address as apex domain'],
+    ])('correctly identifies %s as %s', (host, rootDomain) => {
+      const result = extractSubdomain(host, rootDomain);
       expect(result.isApex).toBe(true);
       expect(result.subdomain).toBeNull();
       expect(result.isReserved).toBe(false);

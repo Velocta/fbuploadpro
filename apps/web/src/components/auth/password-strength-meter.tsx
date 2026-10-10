@@ -72,7 +72,7 @@ export function evaluatePasswordStrength(password: string): {
   };
 }
 
-export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) {
+export function PasswordStrengthMeter({ password }: Readonly<PasswordStrengthMeterProps>) {
   if (!password) {
     return null;
   }
@@ -152,9 +152,9 @@ export function PasswordStrengthMeter({ password }: PasswordStrengthMeterProps) 
           marginTop: SPACING.xs,
         }}
       >
-        {criteria.map((item, index) => (
+        {criteria.map((item) => (
           <div
-            key={index}
+            key={item.label}
             style={{
               display: 'flex',
               alignItems: 'center',

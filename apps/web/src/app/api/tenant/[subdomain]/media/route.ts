@@ -7,6 +7,18 @@ import {
 import { getDbClient } from '../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
+function parseTags(tags: unknown): string[] {
+  if (Array.isArray(tags)) return tags;
+  if (typeof tags === 'string') {
+    try {
+      return JSON.parse(tags);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function handleListMedia(
   request: NextRequest,
   subdomain: string,
@@ -107,11 +119,7 @@ export async function handleListMedia(
         ? Number(row.duration_seconds)
         : null,
     aspectRatio: row.aspect_ratio ?? 'unknown',
-    tags: Array.isArray(row.tags)
-      ? row.tags
-      : typeof row.tags === 'string'
-      ? JSON.parse(row.tags)
-      : [],
+    tags: parseTags(row.tags),
     captionTemplateId: row.caption_template_id ?? null,
     captionText: row.caption_text ?? null,
     createdAt: new Date(row.created_at).toISOString(),

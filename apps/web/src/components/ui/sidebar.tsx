@@ -5,7 +5,6 @@ import React, {
   useCallback,
   useContext,
   useEffect,
-  useId,
   useMemo,
   useState,
   forwardRef,
@@ -87,11 +86,11 @@ export function SidebarProvider({
   className,
   style,
   children,
-}: SidebarProviderProps) {
+}: Readonly<SidebarProviderProps>) {
   // Determine initial state: prop -> cookie -> true
   const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(() => {
     const cookieVal = getCookieState();
-    return cookieVal !== null ? cookieVal : defaultOpen;
+    return cookieVal ?? defaultOpen;
   });
 
   const [openMobile, setOpenMobile] = useState<boolean>(false);
@@ -113,7 +112,7 @@ export function SidebarProvider({
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
-  const isOpen = controlledOpen !== undefined ? controlledOpen : uncontrolledOpen;
+  const isOpen = controlledOpen ?? uncontrolledOpen;
 
   const setOpen = useCallback(
     (value: boolean | ((val: boolean) => boolean)) => {

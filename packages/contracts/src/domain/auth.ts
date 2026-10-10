@@ -32,7 +32,7 @@ export function canonicalizeGmailAddress(rawEmail: string): string {
   // 1. Remove plus tags and everything following up to @: e.g. 'johndoe+xyz' -> 'johndoe'
   const withoutPlusTag = username.split('+')[0] ?? '';
   // 2. Strip all dots from username: e.g. 'john.doe' -> 'johndoe'
-  const withoutDots = withoutPlusTag.replace(/\./g, '');
+  const withoutDots = withoutPlusTag.replaceAll('.', '');
 
   if (!withoutDots) {
     throw new Error('Email username cannot be empty');
@@ -87,7 +87,7 @@ export function validateClientPhoneNumber(rawPhone: string): ClientPhoneValidati
   }
 
   const parsed = parsePhoneNumberFromString(sanitized);
-  if (!parsed || !parsed.isValid()) {
+  if (!parsed?.isValid()) {
     return {
       isValid: false,
       error: 'Please enter a valid international phone number with a recognized country code.',

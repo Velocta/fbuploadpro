@@ -35,7 +35,7 @@ export interface RenderResult {
 }
 
 function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 function parseAttributes(attrString: string): Record<string, string> {
@@ -59,25 +59,25 @@ export function render(ui: React.ReactElement): RenderResult {
     hasAttribute: (name: string, value?: string | RegExp) => {
       if (value === undefined) {
         // Boolean or valued attribute presence
-        const regex = new RegExp(`[\\s<]${escapeRegex(name)}(?:=|[\\s/>])`, 'i');
+        const regex = new RegExp(String.raw`[\s<]${escapeRegex(name)}(?:=|[\s/>])`, 'i');
         return regex.test(html);
       }
       if (value instanceof RegExp) {
-        const regex = new RegExp(`[\\s<]${escapeRegex(name)}=["']([^"']*)["']`, 'gi');
+        const regex = new RegExp(String.raw`[\s<]${escapeRegex(name)}=["']([^"']*)["']`, 'gi');
         let match: RegExpExecArray | null;
         while ((match = regex.exec(html)) !== null) {
           if (value.test(match[1])) return true;
         }
         return false;
       }
-      const regex = new RegExp(`[\\s<]${escapeRegex(name)}=["']${escapeRegex(value)}["']`, 'i');
+      const regex = new RegExp(String.raw`[\s<]${escapeRegex(name)}=["']${escapeRegex(value)}["']`, 'i');
       return regex.test(html);
     },
     getAttribute: (name: string) => {
-      const match = html.match(new RegExp(`[\\s<]${escapeRegex(name)}=["']([^"']*)["']`, 'i'));
+      const match = new RegExp(String.raw`[\s<]${escapeRegex(name)}=["']([^"']*)["']`, 'i').exec(html);
       if (match) return match[1];
       // Check boolean attribute
-      if (new RegExp(`[\\s<]${escapeRegex(name)}(?=[\\s/>])`, 'i').test(html)) {
+      if (new RegExp(String.raw`[\s<]${escapeRegex(name)}(?=[\s/>])`, 'i').test(html)) {
         return '';
       }
       return null;
@@ -92,7 +92,7 @@ export function render(ui: React.ReactElement): RenderResult {
       return false;
     },
     hasTag: (tagName: string) => {
-      return new RegExp(`<${escapeRegex(tagName)}(?:\\s|>|/)`, 'i').test(html);
+      return new RegExp(String.raw`<${escapeRegex(tagName)}(?:\s|>|/)`, 'i').test(html);
     },
     findByRole: (role: string) => {
       return new RegExp(`role=["']${escapeRegex(role)}["']`, 'i').test(html);
@@ -100,9 +100,9 @@ export function render(ui: React.ReactElement): RenderResult {
     hasAria: (ariaName: string, value?: string | boolean) => {
       const fullAria = ariaName.startsWith('aria-') ? ariaName : `aria-${ariaName}`;
       if (value === undefined) {
-        return new RegExp(`[\\s<]${escapeRegex(fullAria)}(?:=|[\\s/>])`, 'i').test(html);
+        return new RegExp(String.raw`[\s<]${escapeRegex(fullAria)}(?:=|[\s/>])`, 'i').test(html);
       }
-      return new RegExp(`[\\s<]${escapeRegex(fullAria)}=["']${escapeRegex(String(value))}["']`, 'i').test(html);
+      return new RegExp(String.raw`[\s<]${escapeRegex(fullAria)}=["']${escapeRegex(String(value))}["']`, 'i').test(html);
     },
     hasStyle: (property: string, value?: string | RegExp) => {
       const regex = /style=["']([^"']*)["']/gi;
@@ -110,20 +110,20 @@ export function render(ui: React.ReactElement): RenderResult {
       while ((match = regex.exec(html)) !== null) {
         const styleStr = match[1];
         if (value === undefined) {
-          if (new RegExp(`(^|;)\\s*${escapeRegex(property)}\\s*:`, 'i').test(styleStr)) return true;
+          if (new RegExp(String.raw`(^|;)\s*${escapeRegex(property)}\s*:`, 'i').test(styleStr)) return true;
         } else if (value instanceof RegExp) {
-          const propMatch = styleStr.match(new RegExp(`(?:^|;)\\s*${escapeRegex(property)}\\s*:\\s*([^;]+)`, 'i'));
+          const propMatch = new RegExp(String.raw`(?:^|;)\s*${escapeRegex(property)}\s*:\s*([^;]+)`, 'i').exec(styleStr);
           if (propMatch && value.test(propMatch[1])) return true;
         } else {
-          const propMatch = styleStr.match(new RegExp(`(?:^|;)\\s*${escapeRegex(property)}\\s*:\\s*([^;]+)`, 'i'));
-          if (propMatch && propMatch[1].trim().toLowerCase() === value.trim().toLowerCase()) return true;
+          const propMatch = new RegExp(String.raw`(?:^|;)\s*${escapeRegex(property)}\s*:\s*([^;]+)`, 'i').exec(styleStr);
+          if (propMatch?.[1].trim().toLowerCase() === value.trim().toLowerCase()) return true;
         }
       }
       return false;
     },
     findTags: (tagName: string) => {
       const results: Array<{ outerHtml: string; attributes: Record<string, string>; innerHTML: string }> = [];
-      const regex = new RegExp(`<${escapeRegex(tagName)}\\b([^>]*)>(.*?)</${escapeRegex(tagName)}>`, 'gis');
+      const regex = new RegExp(String.raw`<${escapeRegex(tagName)}\b([^>]*)>(.*?)</${escapeRegex(tagName)}>`, 'gis');
       let match: RegExpExecArray | null;
       while ((match = regex.exec(html)) !== null) {
         results.push({
@@ -133,7 +133,7 @@ export function render(ui: React.ReactElement): RenderResult {
         });
       }
       // Also match self-closing tags
-      const selfClosingRegex = new RegExp(`<${escapeRegex(tagName)}\\b([^>]*)/?>`, 'gi');
+      const selfClosingRegex = new RegExp(String.raw`<${escapeRegex(tagName)}\b([^>]*)/?>`, 'gi');
       while ((match = selfClosingRegex.exec(html)) !== null) {
         // avoid duplicating if already matched
         if (!results.some((r) => r.outerHtml.startsWith(match![0]))) {

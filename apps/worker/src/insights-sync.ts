@@ -30,7 +30,7 @@ interface FacebookPageRow {
   status: string;
 }
 
-async function extractRows<T>(result: unknown): Promise<T[]> {
+function extractRows<T>(result: unknown): T[] {
   if (Array.isArray(result)) {
     return result as T[];
   }
@@ -68,7 +68,7 @@ export async function syncDailyPageInsights(
      FROM facebook_pages
      WHERE status = 'active'`
   );
-  const eligiblePages = await extractRows<FacebookPageRow>(rawPages);
+  const eligiblePages = extractRows<FacebookPageRow>(rawPages);
   result.totalEligible = eligiblePages.length;
 
   for (const page of eligiblePages) {

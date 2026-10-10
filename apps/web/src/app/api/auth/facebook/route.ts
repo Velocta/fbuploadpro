@@ -30,7 +30,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // 2. Generate signed OAuth state
   const now = Math.floor(Date.now() / 1000);
-  const nonce = crypto.randomUUID().replace(/-/g, '');
+  const nonce = crypto.randomUUID().replaceAll('-', '');
   const state = await signOAuthState(
     {
       tenantSubdomain: session.subdomain,

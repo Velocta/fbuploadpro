@@ -88,10 +88,8 @@ export function sanitizeAuthRedirectUrl(
       if (actualHostname === expectedHostname) {
         return trimmed;
       }
-    } else {
-      if (actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`)) {
-        return trimmed;
-      }
+    } else if (actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`)) {
+      return trimmed;
     }
   } catch {
     return defaultUrl;

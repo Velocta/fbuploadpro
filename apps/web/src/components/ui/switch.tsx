@@ -33,7 +33,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
   const switchId = id || generatedId;
 
   const [uncontrolledChecked, setUncontrolledChecked] = useState(defaultChecked);
-  const isChecked = controlledChecked !== undefined ? controlledChecked : uncontrolledChecked;
+  const isChecked = controlledChecked ?? uncontrolledChecked;
 
   const handleToggle = (e?: React.MouseEvent | React.KeyboardEvent) => {
     if (disabled) return;
@@ -73,8 +73,6 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
           userSelect: 'none',
           ...style,
         }}
-        onClick={(e) => handleToggle(e)}
-        onKeyDown={handleKeyDown}
       >
         <button
           ref={ref}

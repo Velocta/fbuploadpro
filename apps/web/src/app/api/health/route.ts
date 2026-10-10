@@ -4,9 +4,7 @@ import { createDatabaseClient, type DatabaseClient } from '@fbuploadpro/database
 let defaultDbClient: DatabaseClient | null = null;
 
 function getDbClient(): DatabaseClient {
-  if (!defaultDbClient) {
-    defaultDbClient = createDatabaseClient();
-  }
+  defaultDbClient ??= createDatabaseClient();
   return defaultDbClient;
 }
 

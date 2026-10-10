@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 export interface TabItem {
   id: string;
@@ -48,20 +48,28 @@ export function Tabs({
   children,
   className = '',
   style,
-}: TabsProps) {
+}: Readonly<TabsProps>) {
   const initialValue = defaultValue || items?.[0]?.id || '';
   const [uncontrolledValue, setUncontrolledValue] = useState(initialValue);
-  const selectedValue = controlledValue !== undefined ? controlledValue : uncontrolledValue;
+  const selectedValue = controlledValue ?? uncontrolledValue;
 
-  const handleSelect = (val: string) => {
-    if (controlledValue === undefined) {
-      setUncontrolledValue(val);
-    }
-    onValueChange?.(val);
-  };
+  const handleSelect = useCallback(
+    (val: string) => {
+      if (controlledValue === undefined) {
+        setUncontrolledValue(val);
+      }
+      onValueChange?.(val);
+    },
+    [controlledValue, onValueChange]
+  );
+
+  const contextValue = useMemo(
+    () => ({ selectedValue, setSelectedValue: handleSelect }),
+    [selectedValue, handleSelect]
+  );
 
   return (
-    <TabsContext.Provider value={{ selectedValue, setSelectedValue: handleSelect }}>
+    <TabsContext.Provider value={contextValue}>
       <div
         className={`fbu-tabs ${className}`}
         style={{
@@ -95,7 +103,7 @@ export function Tabs({
   );
 }
 
-export function TabsList({ className = '', style, children, ...props }: TabsListProps) {
+export function TabsList({ className = '', style, children, ...props }: Readonly<TabsListProps>) {
   return (
     <div
       role="tablist"
@@ -124,7 +132,7 @@ export function TabsTrigger({
   style,
   children,
   ...props
-}: TabsTriggerProps) {
+}: Readonly<TabsTriggerProps>) {
   const ctx = useContext(TabsContext);
   const isSelected = ctx?.selectedValue === value;
 
@@ -173,7 +181,7 @@ export function TabsContent({
   style,
   children,
   ...props
-}: TabsContentProps) {
+}: Readonly<TabsContentProps>) {
   const ctx = useContext(TabsContext);
   const isSelected = ctx?.selectedValue === value;
 

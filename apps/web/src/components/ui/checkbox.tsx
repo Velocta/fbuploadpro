@@ -28,7 +28,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   const checkboxId = id || generatedId;
 
   const [uncontrolledChecked, setUncontrolledChecked] = useState(defaultChecked);
-  const isChecked = controlledChecked !== undefined ? controlledChecked : uncontrolledChecked;
+  const isChecked = controlledChecked ?? uncontrolledChecked;
 
   const handleToggle = (e: React.MouseEvent | React.KeyboardEvent) => {
     if (disabled) return;
