@@ -3,33 +3,14 @@ import { NextRequest } from 'next/server';
 import { middleware } from '../src/middleware';
 
 describe('Next.js Edge Middleware Subdomain Routing (User Story 1)', () => {
-  it('passes apex domain requests through without tenant rewriting', async () => {
-    const req = new NextRequest('http://localhost:3000/', {
-      headers: { host: 'localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.headers.get('x-middleware-rewrite')).toBeNull();
-  });
-
-  it('passes www apex requests through without tenant rewriting', async () => {
-    const req = new NextRequest('http://www.localhost:3000/about', {
-      headers: { host: 'www.localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.headers.get('x-middleware-rewrite')).toBeNull();
-  });
-
-  it('bypasses tenant rewriting for system paths like /api/health', async () => {
-    const req = new NextRequest('http://client.localhost:3000/api/health', {
-      headers: { host: 'client.localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.headers.get('x-middleware-rewrite')).toBeNull();
-  });
-
-  it('bypasses tenant rewriting for reserved subdomains like admin', async () => {
-    const req = new NextRequest('http://admin.localhost:3000/login', {
-      headers: { host: 'admin.localhost:3000' },
+  it.each([
+    ['http://localhost:3000/', 'localhost:3000', 'apex domain requests'],
+    ['http://www.localhost:3000/about', 'www.localhost:3000', 'www apex requests'],
+    ['http://client.localhost:3000/api/health', 'client.localhost:3000', 'system paths like /api/health'],
+    ['http://admin.localhost:3000/login', 'admin.localhost:3000', 'reserved subdomains like admin'],
+  ])('passes %s (%s) through without tenant rewriting', async (url, host) => {
+    const req = new NextRequest(url, {
+      headers: { host },
     });
     const res = await middleware(req);
     expect(res.headers.get('x-middleware-rewrite')).toBeNull();

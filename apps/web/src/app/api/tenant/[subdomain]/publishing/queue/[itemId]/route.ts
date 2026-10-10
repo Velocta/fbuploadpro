@@ -78,14 +78,20 @@ export async function handleUpdateQueueItem(
   }
 
   // 5. Compute updated values
-  const newCaption = parsed.data.caption !== undefined ? parsed.data.caption : (existing.caption ?? '');
-  const newFirstComment =
-    parsed.data.firstComment !== undefined ? parsed.data.firstComment : (existing.first_comment ?? null);
-  const newScheduledTime =
-    parsed.data.scheduledTime !== undefined
-      ? new Date(parsed.data.scheduledTime).toISOString()
-      : (existing.scheduled_time ? new Date(existing.scheduled_time).toISOString() : new Date().toISOString());
-  const newStatus = parsed.data.status !== undefined ? parsed.data.status : existing.status;
+  const resolveScheduledTime = (): string => {
+    if (parsed.data.scheduledTime !== undefined) {
+      return new Date(parsed.data.scheduledTime).toISOString();
+    }
+    if (existing.scheduled_time) {
+      return new Date(existing.scheduled_time).toISOString();
+    }
+    return new Date().toISOString();
+  };
+
+  const newCaption = parsed.data.caption ?? existing.caption ?? '';
+  const newFirstComment = parsed.data.firstComment ?? existing.first_comment ?? null;
+  const newScheduledTime = resolveScheduledTime();
+  const newStatus = parsed.data.status ?? existing.status;
 
   const updateRows = (await db.query(
     `UPDATE queue_items

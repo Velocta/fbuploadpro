@@ -46,22 +46,28 @@ function extractRows<T = unknown>(result: unknown): T[] {
   return [];
 }
 
+function toSafeString(val: unknown): string {
+  if (typeof val === 'string') return val;
+  if (val === null || val === undefined) return '';
+  return typeof val === 'object' ? JSON.stringify(val) : String(val);
+}
+
 function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueItem {
   return ClaimedQueueItemSchema.parse({
     id: row.id,
     userId: row.user_id,
     pageId: row.fb_page_id,
     mediaId: row.media_id,
-    caption: String(row.caption ?? ''),
-    firstComment: row.first_comment ? String(row.first_comment) : null,
+    caption: toSafeString(row.caption),
+    firstComment: row.first_comment != null ? toSafeString(row.first_comment) : null,
     retryCount: Number(row.retry_count ?? 0),
     maxRetries: Number(row.max_retries ?? 3),
     mediaType: row.media_type,
-    mediaUrl: String(row.media_url),
-    storageKey: String(row.storage_key),
-    fbPageId: String(row.external_page_id ?? row.fb_page_id),
-    encryptedPageToken: String(row.encrypted_access_token),
-    pageName: String(row.page_name ?? ''),
+    mediaUrl: toSafeString(row.media_url),
+    storageKey: toSafeString(row.storage_key),
+    fbPageId: toSafeString(row.external_page_id ?? row.fb_page_id),
+    encryptedPageToken: toSafeString(row.encrypted_access_token),
+    pageName: toSafeString(row.page_name),
   });
 }
 
@@ -137,12 +143,12 @@ export async function dispatchItem(
   } catch (err: unknown) {
     const isAuthError = err instanceof FacebookGraphError ? err.isAuthError : false;
     const isRateLimit = err instanceof FacebookGraphError ? err.isRateLimit : false;
-    const errorCode =
-      err instanceof FacebookGraphError
-        ? err.code
-        : typeof (err as { code?: number })?.code === 'number'
-        ? (err as { code: number }).code
-        : undefined;
+    let errorCode: number | undefined;
+    if (err instanceof FacebookGraphError) {
+      errorCode = err.code;
+    } else if (typeof (err as { code?: number })?.code === 'number') {
+      errorCode = (err as { code: number }).code;
+    }
     const errorMessage = err instanceof Error ? err.message : String(err);
 
     // Rate limits or transient errors can be retried if retryCount < maxRetries

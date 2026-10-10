@@ -54,7 +54,7 @@ export function StatusDot({
   showLabel = true,
   className = '',
   style,
-}: StatusDotProps) {
+}: Readonly<StatusDotProps>) {
   const signal = statusConfig[status];
   const displayLabel = label || signal.label;
 

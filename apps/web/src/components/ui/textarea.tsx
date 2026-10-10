@@ -10,7 +10,7 @@ export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextArea
   containerClassName?: string | undefined;
 }
 
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea(
+export const Textarea = forwardRef<HTMLTextAreaElement, Readonly<TextareaProps>>(function Textarea(
   {
     label,
     helperText,
@@ -49,6 +49,12 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       setUncontrolledLength(e.target.value.length);
     }
     onChange?.(e);
+  };
+
+  const getAriaDescribedBy = (): string | undefined => {
+    if (error) return errorId;
+    if (helperText) return helperId;
+    return undefined;
   };
 
   return (
@@ -104,7 +110,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           disabled={disabled}
           onChange={handleChange}
           aria-invalid={Boolean(error)}
-          aria-describedby={error ? errorId : helperText ? helperId : undefined}
+          aria-describedby={getAriaDescribedBy()}
           className={`fbu-textarea-field ${error ? 'has-error' : ''} ${className}`}
           style={{
             width: '100%',
@@ -136,7 +142,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
           }}
         >
           <div style={{ flex: 1 }}>
-            {error ? (
+            {error && (
               <span
                 id={errorId}
                 role="alert"
@@ -149,7 +155,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
               >
                 {error}
               </span>
-            ) : helperText ? (
+            )}
+            {!error && helperText && (
               <span
                 id={helperId}
                 style={{
@@ -161,7 +168,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
               >
                 {helperText}
               </span>
-            ) : null}
+            )}
           </div>
 
           {(showCount || maxLength !== undefined) && (

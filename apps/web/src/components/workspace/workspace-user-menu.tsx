@@ -55,16 +55,14 @@ function redirectToLogout(): void {
   const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
 
   let targetLoginUrl = '/login?logout=success';
-  if (!isLocal && !hostname.startsWith('app.')) {
-    targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
-  } else if (isLocal && hostname.includes('.') && !hostname.startsWith('app.')) {
+  if ((!isLocal && !hostname.startsWith('app.')) || (isLocal && hostname.includes('.') && !hostname.startsWith('app.'))) {
     targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
   }
 
   window.location.href = targetLoginUrl;
 }
 
-export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
+export function WorkspaceUserMenu({ user }: Readonly<WorkspaceUserMenuProps>) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = !isMobile && state === 'collapsed';
   const [isOpen, setIsOpen] = useState(false);
@@ -108,10 +106,10 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
   useEffect(() => {
     if (typeof document !== 'undefined') {
       const storedTheme = typeof localStorage !== 'undefined' ? localStorage.getItem('theme') : null;
-      const docTheme = document.documentElement.getAttribute('data-theme');
+      const docTheme = document.documentElement.dataset.theme;
       const activeTheme = storedTheme || docTheme || 'dark';
       setIsThemeDark(activeTheme !== 'light');
-      document.documentElement.setAttribute('data-theme', activeTheme);
+      document.documentElement.dataset.theme = activeTheme;
     }
   }, []);
 
@@ -135,7 +133,7 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
       const nextIsDark = !prev;
       const nextTheme = nextIsDark ? 'dark' : 'light';
       if (typeof document !== 'undefined') {
-        document.documentElement.setAttribute('data-theme', nextTheme);
+        document.documentElement.dataset.theme = nextTheme;
         try {
           if (typeof localStorage !== 'undefined') {
             localStorage.setItem('theme', nextTheme);

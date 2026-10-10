@@ -6,6 +6,12 @@ import {
 import { getDbClient } from '../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
+function extractFollowersCount(row: any): number {
+  if (typeof row.followers_count === 'number') return row.followers_count;
+  if (typeof row.followersCount === 'number') return row.followersCount;
+  return 0;
+}
+
 export async function handleListPages(
   request: NextRequest,
   subdomain: string,
@@ -76,12 +82,7 @@ export async function handleListPages(
       fbPageId: row.fb_page_id || row.fbPageId,
       pageName: row.page_name || row.pageName,
       category: row.category ?? null,
-      followersCount:
-        typeof row.followers_count === 'number'
-          ? row.followers_count
-          : typeof row.followersCount === 'number'
-            ? row.followersCount
-            : 0,
+      followersCount: extractFollowersCount(row),
       status: row.status ?? 'active',
       tasks: parsedTasks,
       createdAt: row.created_at || row.createdAt,

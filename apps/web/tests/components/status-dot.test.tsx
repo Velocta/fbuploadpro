@@ -81,7 +81,7 @@ describe('Status Signals: StatusDot & Tag (US4 / T021)', () => {
 
       // Only the outer indicator span and the dot span exist — no visible label span
       const spans = findTags('span');
-      expect(spans.length).toBe(2);
+      expect(spans).toHaveLength(2);
       expect(getAttribute('aria-label')).toBe('Status: Operational');
     });
 

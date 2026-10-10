@@ -95,8 +95,8 @@ export class MockStorageProvider implements IStorageService {
 }
 
 export class R2StorageProvider implements IStorageService {
-  private client: S3Client;
-  private config: R2Config;
+  private readonly client: S3Client;
+  private readonly config: R2Config;
 
   constructor(config: R2Config, client?: S3Client) {
     this.config = config;
@@ -137,9 +137,7 @@ export class R2StorageProvider implements IStorageService {
 let activeMockStorage: MockStorageProvider | null = null;
 
 export function getMockStorageProvider(): MockStorageProvider {
-  if (!activeMockStorage) {
-    activeMockStorage = new MockStorageProvider();
-  }
+  activeMockStorage ??= new MockStorageProvider();
   return activeMockStorage;
 }
 

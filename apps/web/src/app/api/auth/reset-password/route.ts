@@ -4,6 +4,16 @@ import { resetUserPassword, resetUserPasswordWithOtp } from '@/lib/supabase-auth
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
+function extractRecoveryToken(token: unknown, code: unknown): string | undefined {
+  if (typeof token === 'string' && token.trim()) {
+    return token.trim();
+  }
+  if (typeof code === 'string' && code.trim()) {
+    return code.trim();
+  }
+  return undefined;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const clientIp = extractClientIp(request.headers);
@@ -41,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanOtp = typeof otp === 'string' ? otp.replace(/\D/g, '').trim() : undefined;
-    const recoveryToken = typeof token === 'string' && token.trim() ? token.trim() : typeof code === 'string' && code.trim() ? code.trim() : undefined;
+    const recoveryToken = extractRecoveryToken(token, code);
 
     if (!cleanOtp && !recoveryToken) {
       return NextResponse.json(

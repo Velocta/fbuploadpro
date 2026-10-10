@@ -8,44 +8,19 @@ describe('Middleware Subdomain Auth Redirection (Spec 013 - Eliminate 404s)', ()
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
   });
 
-  it('redirects /login on tenant subdomain to central app gateway via 307 preserving returnUrl', async () => {
-    const req = new NextRequest('http://acme.localhost:3000/login?returnUrl=%2Fdashboard%2Fmedia', {
+  it.each([
+    ['http://acme.localhost:3000/login?returnUrl=%2Fdashboard%2Fmedia', 'http://app.localhost:3000/login?returnUrl=%2Fdashboard%2Fmedia'],
+    ['http://acme.localhost:3000/signup?plan=pro&returnUrl=%2Fqueue', 'http://app.localhost:3000/signup?plan=pro&returnUrl=%2Fqueue'],
+    ['http://acme.localhost:3000/forgot-password', 'http://app.localhost:3000/forgot-password'],
+    ['http://acme.localhost:3000/reset-password?code=xyz123', 'http://app.localhost:3000/reset-password?code=xyz123'],
+  ])('redirects %s on tenant subdomain to central app gateway %s via 307', async (inputUrl, expectedLocation) => {
+    const req = new NextRequest(inputUrl, {
       headers: { host: 'acme.localhost:3000' },
     });
     const res = await middleware(req);
     expect(res.status).toBe(307);
     const location = res.headers.get('location');
-    expect(location).toBe('http://app.localhost:3000/login?returnUrl=%2Fdashboard%2Fmedia');
-  });
-
-  it('redirects /signup on tenant subdomain to central app gateway via 307 preserving query params', async () => {
-    const req = new NextRequest('http://acme.localhost:3000/signup?plan=pro&returnUrl=%2Fqueue', {
-      headers: { host: 'acme.localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.status).toBe(307);
-    const location = res.headers.get('location');
-    expect(location).toBe('http://app.localhost:3000/signup?plan=pro&returnUrl=%2Fqueue');
-  });
-
-  it('redirects /forgot-password on tenant subdomain to central app gateway via 307', async () => {
-    const req = new NextRequest('http://acme.localhost:3000/forgot-password', {
-      headers: { host: 'acme.localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.status).toBe(307);
-    const location = res.headers.get('location');
-    expect(location).toBe('http://app.localhost:3000/forgot-password');
-  });
-
-  it('redirects /reset-password on tenant subdomain to central app gateway via 307 preserving hash or code', async () => {
-    const req = new NextRequest('http://acme.localhost:3000/reset-password?code=xyz123', {
-      headers: { host: 'acme.localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.status).toBe(307);
-    const location = res.headers.get('location');
-    expect(location).toBe('http://app.localhost:3000/reset-password?code=xyz123');
+    expect(location).toBe(expectedLocation);
   });
 
   it('serves central app gateway directly without redirect loops when host is app gateway', async () => {

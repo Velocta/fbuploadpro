@@ -87,7 +87,7 @@ export function validateClientPhoneNumber(rawPhone: string): ClientPhoneValidati
   }
 
   const parsed = parsePhoneNumberFromString(sanitized);
-  if (!parsed || !parsed.isValid()) {
+  if (!parsed?.isValid()) {
     return {
       isValid: false,
       error: 'Please enter a valid international phone number with a recognized country code.',

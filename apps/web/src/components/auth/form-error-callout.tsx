@@ -16,7 +16,7 @@ export function FormErrorCallout({
   message,
   className = '',
   style,
-}: FormErrorCalloutProps) {
+}: Readonly<FormErrorCalloutProps>) {
   if (!message) {
     return null;
   }

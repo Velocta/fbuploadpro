@@ -17,11 +17,8 @@ function hexToBytes(hex: string): Uint8Array {
 
 function bytesToHex(bytes: Uint8Array): string {
   let hex = '';
-  for (let i = 0; i < bytes.length; i++) {
-    const byte = bytes[i];
-    if (byte !== undefined) {
-      hex += byte.toString(16).padStart(2, '0');
-    }
+  for (const byte of bytes) {
+    hex += byte.toString(16).padStart(2, '0');
   }
   return hex;
 }
@@ -126,9 +123,11 @@ export async function decryptToken(
     );
 
     return new TextDecoder().decode(decryptedBuffer);
-  } catch (_err) {
+  } catch (err) {
+    // SubtleCrypto rejects with OperationError when AES-GCM authentication tag verification fails
     throw new UnauthorizedError(
-      'Failed to decrypt token: authentication tag mismatch or invalid key'
+      'Failed to decrypt token: authentication tag mismatch or invalid key',
+      err instanceof Error ? err : undefined
     );
   }
 }

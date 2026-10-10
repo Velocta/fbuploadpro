@@ -5,7 +5,7 @@ interface TenantIndexPageProps {
   params: Promise<{ subdomain: string }>;
 }
 
-export default async function TenantIndexPage({ params }: TenantIndexPageProps) {
+export default async function TenantIndexPage({ params }: Readonly<TenantIndexPageProps>) {
   const { subdomain } = await params;
 
   return (

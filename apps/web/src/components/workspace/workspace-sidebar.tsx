@@ -29,7 +29,7 @@ export interface WorkspaceSidebarProps {
   } | undefined;
 }
 
-export function WorkspaceSidebar({ subdomain, user }: WorkspaceSidebarProps) {
+export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarProps>) {
   const pathname = usePathname();
   const router = useRouter();
   const { state, isMobile, setOpenMobile } = useSidebar();

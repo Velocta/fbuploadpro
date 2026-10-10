@@ -16,7 +16,7 @@ export function Skeleton({
   className = '',
   style,
   ...props
-}: SkeletonProps) {
+}: Readonly<SkeletonProps>) {
   const getRadius = () => {
     switch (variant) {
       case 'circle':
@@ -41,7 +41,17 @@ export function Skeleton({
     }
   };
 
-  const resolvedWidth = width !== undefined ? (typeof width === 'number' ? `${width}px` : width) : variant === 'circle' ? (height || '40px') : '100%';
+  const getResolvedWidth = () => {
+    if (width !== undefined) {
+      return typeof width === 'number' ? `${width}px` : width;
+    }
+    if (variant === 'circle') {
+      return height || '40px';
+    }
+    return '100%';
+  };
+
+  const resolvedWidth = getResolvedWidth();
   const resolvedHeight = height !== undefined ? (typeof height === 'number' ? `${height}px` : height) : getDefaultHeight();
 
   return (

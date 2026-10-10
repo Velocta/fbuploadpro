@@ -44,7 +44,7 @@ export function Dialog({
   title,
   description,
   children,
-}: DialogProps) {
+}: Readonly<DialogProps>) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;

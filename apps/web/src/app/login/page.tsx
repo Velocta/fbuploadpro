@@ -65,14 +65,14 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setGeneralError(null);
 
     const errors: FieldErrors = {};
 
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!cleanEmail.includes('@')) {
       errors.email = 'Please enter a valid Gmail address.';
     } else {
       const domain = cleanEmail.split('@')[1];

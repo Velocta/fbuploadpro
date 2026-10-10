@@ -113,7 +113,9 @@ export async function handleListPublishLogs(
       status: row.status,
       attemptNumber: Number(row.attempt_number ?? 1),
       fbResponseCode: row.fb_response_code != null ? Number(row.fb_response_code) : null,
-      errorMessage: row.error_message ? String(row.error_message) : null,
+      errorMessage: row.error_message
+        ? (typeof row.error_message === 'object' ? JSON.stringify(row.error_message) : String(row.error_message))
+        : null,
       errorDetails,
       createdAt: new Date(String(row.created_at)).toISOString(),
     });

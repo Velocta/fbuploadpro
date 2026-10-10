@@ -17,8 +17,8 @@ export type SessionPayload = z.infer<typeof SessionPayloadSchema>;
 
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCodePoint(bytes[i]!);
+  for (const byte of bytes) {
+    binary += String.fromCodePoint(byte);
   }
   const base64 = btoa(binary);
   return base64.replaceAll('+', '-').replaceAll('/', '_').replace(/={1,2}$/, '');

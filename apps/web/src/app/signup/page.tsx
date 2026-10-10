@@ -86,7 +86,7 @@ export default function SignupPage() {
     }
   };
 
-  const handleDetailsSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleDetailsSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setGeneralError(null);
     setSuccessNotice(null);
@@ -109,7 +109,7 @@ export default function SignupPage() {
 
     // 3. Gmail restriction & validation
     const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes('@')) {
+    if (!cleanEmail.includes('@')) {
       errors.email = 'A valid email address is required.';
     } else {
       const domain = cleanEmail.split('@')[1];
@@ -220,7 +220,7 @@ export default function SignupPage() {
     }
   };
 
-  const handleOtpSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleOtpSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setGeneralError(null);
     setSuccessNotice(null);

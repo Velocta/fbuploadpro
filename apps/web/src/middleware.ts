@@ -24,7 +24,7 @@ function extractToken(request: NextRequest): string | null {
   if (cookieToken) return cookieToken;
 
   const authHeader = request.headers.get('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader?.startsWith('Bearer ')) {
     return authHeader.slice(7).trim();
   }
 
