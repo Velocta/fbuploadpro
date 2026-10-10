@@ -12,6 +12,58 @@ export interface WorkspaceUserMenuProps {
   } | undefined;
 }
 
+function clearClientSessionCookies(): void {
+  if (typeof document === 'undefined') return;
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+
+  document.cookie = `fbup_session=; Max-Age=0; path=/; domain=.${rootDomain}; SameSite=Lax`;
+  document.cookie = 'fbup_session=; Max-Age=0; path=/; SameSite=Lax';
+  document.cookie = `fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${rootDomain}; SameSite=Lax`;
+  document.cookie = 'fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
+}
+
+function broadcastLogout(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('fbup_auth');
+      channel.postMessage({ type: 'LOGOUT', timestamp: Date.now() });
+      channel.close();
+    }
+  } catch {
+    // Ignore BroadcastChannel errors in unsupported environments
+  }
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('fbup_logout_event', String(Date.now()));
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
+function redirectToLogout(): void {
+  if (typeof window === 'undefined') return;
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+  const protocol = window.location.protocol;
+  const port = window.location.port ? `:${window.location.port}` : '';
+  const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
+
+  let targetLoginUrl = '/login?logout=success';
+  if (!isLocal && !hostname.startsWith('app.')) {
+    targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
+  } else if (isLocal && hostname.includes('.') && !hostname.startsWith('app.')) {
+    targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
+  }
+
+  window.location.href = targetLoginUrl;
+}
+
 export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
   const { state, isMobile } = useSidebar();
   const isCollapsed = !isMobile && state === 'collapsed';
@@ -66,65 +118,15 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
   const handleSignOut = useCallback(async () => {
     try {
       setIsSigningOut(true);
-
-      // 1. Proactively expire client-side session cookies (both root domain and local origin)
-      if (typeof document !== 'undefined') {
-        const hostname = window.location.hostname;
-        const parts = hostname.split('.');
-        const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
-
-        document.cookie = `fbup_session=; Max-Age=0; path=/; domain=.${rootDomain}; SameSite=Lax`;
-        document.cookie = 'fbup_session=; Max-Age=0; path=/; SameSite=Lax';
-        document.cookie = `fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${rootDomain}; SameSite=Lax`;
-        document.cookie = 'fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
-      }
-
-      // 2. Broadcast logout across all open tabs
-      if (typeof window !== 'undefined') {
-        try {
-          if (typeof BroadcastChannel !== 'undefined') {
-            const channel = new BroadcastChannel('fbup_auth');
-            channel.postMessage({ type: 'LOGOUT', timestamp: Date.now() });
-            channel.close();
-          }
-        } catch {
-          // Ignore BroadcastChannel errors in unsupported environments
-        }
-
-        try {
-          if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('fbup_logout_event', String(Date.now()));
-          }
-        } catch {
-          // Ignore localStorage errors
-        }
-      }
-
-      // 3. Fire server logout API with keepalive
+      clearClientSessionCookies();
+      broadcastLogout();
       try {
         await fetch('/api/auth/logout', { method: 'POST', keepalive: true });
       } catch {
         // Continue even if network is degraded or offline
       }
     } finally {
-      // 4. Navigate directly to canonical central gateway with ?logout=success
-      if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-        const parts = hostname.split('.');
-        const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
-        const protocol = window.location.protocol;
-        const port = window.location.port ? `:${window.location.port}` : '';
-        const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
-
-        let targetLoginUrl = '/login?logout=success';
-        if (!isLocal && !hostname.startsWith('app.')) {
-          targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
-        } else if (isLocal && hostname.includes('.') && !hostname.startsWith('app.')) {
-          targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
-        }
-
-        window.location.href = targetLoginUrl;
-      }
+      redirectToLogout();
     }
   }, []);
 
@@ -347,47 +349,73 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
         }}
       >
         {/* User Identity Info */}
-        <div
-          role={isCollapsed ? 'button' : undefined}
-          tabIndex={isCollapsed ? 0 : undefined}
-          onClick={() => isCollapsed && setIsOpen((prev) => !prev)}
-          onKeyDown={(e) => {
-            if (isCollapsed && (e.key === 'Enter' || e.key === ' ')) {
-              e.preventDefault();
-              setIsOpen((prev) => !prev);
-            }
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.sm,
-            minWidth: 0,
-            cursor: isCollapsed ? 'pointer' : 'default',
-          }}
-        >
-          {/* Avatar with Initials */}
-          <div
-            data-testid="workspace-user-avatar"
+        {isCollapsed ? (
+          <button
+            type="button"
+            aria-label="Toggle user menu"
+            onClick={() => setIsOpen((prev) => !prev)}
             style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: RADII.full,
-              backgroundColor: THEME.default.surfaces.subtle,
-              border: `1px solid ${THEME.default.borders.hairline}`,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '0.75rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: THEME.default.text.primary,
-              flexShrink: 0,
-              userSelect: 'none',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
             }}
           >
-            {initials}
-          </div>
+            {/* Avatar with Initials */}
+            <div
+              data-testid="workspace-user-avatar"
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: RADII.full,
+                backgroundColor: THEME.default.surfaces.subtle,
+                border: `1px solid ${THEME.default.borders.hairline}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                color: THEME.default.text.primary,
+                flexShrink: 0,
+                userSelect: 'none',
+              }}
+            >
+              {initials}
+            </div>
+          </button>
+        ) : (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.sm,
+              minWidth: 0,
+            }}
+          >
+            {/* Avatar with Initials */}
+            <div
+              data-testid="workspace-user-avatar"
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: RADII.full,
+                backgroundColor: THEME.default.surfaces.subtle,
+                border: `1px solid ${THEME.default.borders.hairline}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                color: THEME.default.text.primary,
+                flexShrink: 0,
+                userSelect: 'none',
+              }}
+            >
+              {initials}
+            </div>
 
-          {!isCollapsed && (
             <div
               style={{
                 display: 'flex',
@@ -421,8 +449,8 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
                 {displayEmail}
               </span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Caret / Chevron-Up Action Trigger */}
         {!isCollapsed && (

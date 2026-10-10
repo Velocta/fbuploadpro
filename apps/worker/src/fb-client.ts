@@ -45,7 +45,7 @@ export interface FacebookPublishClientOptions {
 
 function trimTrailingSlashes(str: string): string {
   let end = str.length;
-  while (end > 0 && str.charCodeAt(end - 1) === 47) {
+  while (end > 0 && str.codePointAt(end - 1) === 47) {
     end--;
   }
   return str.slice(0, end);
