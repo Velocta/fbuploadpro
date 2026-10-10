@@ -33,6 +33,40 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     validSessionCookie = `fbup_session=${token}`;
   });
 
+  function createMockAccountStore() {
+    const storedAccounts = new Map<
+      string,
+      {
+        fbAccountId: string;
+        displayName: string;
+        token: string;
+        profilePictureUrl: string | null;
+      }
+    >();
+
+    const mockDb = {
+      query: vi.fn().mockImplementation((_sql, params) => {
+        const [
+          uId,
+          fbAccountId,
+          displayName,
+          token,
+          _expiresAt,
+          profilePictureUrl,
+        ] = params;
+        storedAccounts.set(`${uId}:${fbAccountId}`, {
+          fbAccountId,
+          displayName,
+          token,
+          profilePictureUrl,
+        });
+        return Promise.resolve([{ id: 'acc_id' }]);
+      }),
+    } as unknown as DatabaseClient;
+
+    return { storedAccounts, mockDb };
+  }
+
   it('allows connecting multiple distinct Facebook accounts under the same workspace without collisions', async () => {
     const statePayload = {
       tenantSubdomain: 'acme',
@@ -42,21 +76,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
       exp: Math.floor(Date.now() / 1000) + 600,
     };
     const validState = await signOAuthState(statePayload, TEST_SECRET);
-
-    // Mock in-memory database storage simulating ON CONFLICT (user_id, fb_account_id)
-    const storedAccounts = new Map<
-      string,
-      { fbAccountId: string; displayName: string; token: string; profilePictureUrl: string | null }
-    >();
-
-    const mockDb = {
-      query: vi.fn().mockImplementation((_sql, params) => {
-        const [uId, fbAccountId, displayName, token, _expiresAt, profilePictureUrl] = params;
-        const key = `${uId}:${fbAccountId}`;
-        storedAccounts.set(key, { fbAccountId, displayName, token, profilePictureUrl });
-        return Promise.resolve([{ id: 'acc_id' }]);
-      }),
-    } as unknown as DatabaseClient;
+    const { storedAccounts, mockDb } = createMockAccountStore();
 
     // Simulate Account 1 connection (with picture.data.url)
     global.fetch = vi
@@ -111,20 +131,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
       exp: Math.floor(Date.now() / 1000) + 600,
     };
     const validState = await signOAuthState(statePayload, TEST_SECRET);
-
-    const storedAccounts = new Map<
-      string,
-      { fbAccountId: string; displayName: string; token: string; profilePictureUrl: string | null }
-    >();
-
-    const mockDb = {
-      query: vi.fn().mockImplementation((_sql, params) => {
-        const [uId, fbAccountId, displayName, token, _expiresAt, profilePictureUrl] = params;
-        const key = `${uId}:${fbAccountId}`;
-        storedAccounts.set(key, { fbAccountId, displayName, token, profilePictureUrl });
-        return Promise.resolve([{ id: 'acc_id' }]);
-      }),
-    } as unknown as DatabaseClient;
+    const { storedAccounts, mockDb } = createMockAccountStore();
 
     // Initial connection
     global.fetch = vi

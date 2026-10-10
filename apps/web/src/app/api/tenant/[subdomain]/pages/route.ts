@@ -12,6 +12,12 @@ function extractFollowersCount(row: any): number {
   return 0;
 }
 
+function extractPagePictureUrl(row: any): string | null {
+  if (typeof row.profile_picture_url === 'string') return row.profile_picture_url;
+  if (typeof row.profilePictureUrl === 'string') return row.profilePictureUrl;
+  return null;
+}
+
 export async function handleListPages(
   request: NextRequest,
   subdomain: string,
@@ -82,8 +88,7 @@ export async function handleListPages(
         row.account_display_name || row.accountDisplayName || '',
       fbPageId: row.fb_page_id || row.fbPageId,
       pageName: row.page_name || row.pageName,
-      profilePictureUrl:
-        row.profile_picture_url ?? row.profilePictureUrl ?? null,
+      profilePictureUrl: extractPagePictureUrl(row),
       category: row.category ?? null,
       followersCount: extractFollowersCount(row),
       status: row.status ?? 'active',

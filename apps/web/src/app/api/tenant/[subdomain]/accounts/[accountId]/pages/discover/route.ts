@@ -66,13 +66,10 @@ export async function handleDiscoverPages(
   }
 
   // 4. Query Facebook Graph API v26.0 /me/accounts
-  const graphUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
-  graphUrl.searchParams.set(
-    'fields',
-    'id,name,category,tasks,access_token,followers_count,picture{url}'
-  );
+  const discoverEndpoint =
+    'https://graph.facebook.com/v26.0/me/accounts?fields=id,name,category,tasks,access_token,followers_count,picture{url}';
 
-  const graphRes = await fetch(graphUrl.toString(), {
+  const graphRes = await fetch(discoverEndpoint, {
     headers: {
       Authorization: `Bearer ${rawToken}`,
     },
