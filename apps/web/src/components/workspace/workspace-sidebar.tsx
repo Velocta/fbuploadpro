@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Sidebar,
@@ -13,11 +13,17 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarSeparator,
   SidebarRail,
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, PALETTE, RADII, TYPOGRAPHY } from '@/lib/theme';
 import { WorkspaceUserMenu } from './workspace-user-menu';
 
 export interface WorkspaceSidebarProps {
@@ -34,6 +40,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const router = useRouter();
   const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = !isMobile && state === 'collapsed';
+  const [isFacebookOpen, setIsFacebookOpen] = useState(true);
 
   const homeHref = `/tenant/${subdomain}`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
@@ -50,137 +57,225 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      {/* Workspace Identity Header */}
+      {/* Workspace Identity Header (Shadcn TeamSwitcher Pattern) */}
       <SidebarHeader>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: isCollapsed ? 0 : SPACING.sm,
-            justifyContent: isCollapsed ? 'center' : 'flex-start',
-            minHeight: '36px',
-            width: '100%',
-          }}
-        >
-          {/* Brand Monogram Icon */}
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: RADII.sm,
-              backgroundColor: PALETTE.primary,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: PALETTE.background,
-              fontWeight: TYPOGRAPHY.weights.bold,
-              fontSize: '0.875rem',
-              flexShrink: 0,
-              boxShadow: '0 0 12px rgba(240, 185, 11, 0.25)',
-              userSelect: 'none',
-            }}
-          >
-            FB
-          </div>
-
-          {!isCollapsed && (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                minWidth: 0,
-                overflow: 'hidden',
-              }}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size="lg"
+              tooltip={`${subdomain} — FBUploadPro`}
+              onClick={() => handleNavigate(homeHref)}
             >
-              <span
+              <div
+                data-sidebar-icon="true"
                 style={{
-                  fontSize: '0.875rem',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: RADII.md,
+                  backgroundColor: PALETTE.primary,
+                  color: PALETTE.background,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   fontWeight: TYPOGRAPHY.weights.bold,
-                  letterSpacing: TYPOGRAPHY.tracking.h3,
-                  color: THEME.default.text.primary,
-                  textTransform: 'capitalize',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  lineHeight: 1.2,
+                  fontSize: '0.8125rem',
+                  flexShrink: 0,
+                  userSelect: 'none',
                 }}
               >
-                {subdomain}
-              </span>
-              <span
+                FB
+              </div>
+
+              <div
                 style={{
-                  fontSize: '0.6875rem',
-                  color: THEME.default.text.muted,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  lineHeight: 1.2,
+                  display: 'grid',
+                  flex: 1,
+                  textAlign: 'left',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.25,
+                  minWidth: 0,
                 }}
               >
-                FBUploadPro
-              </span>
-            </div>
-          )}
-        </div>
+                <span
+                  style={{
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    textTransform: 'capitalize',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {subdomain}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: `var(--text-dim, ${THEME.default.text.muted})`,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  FBUploadPro
+                </span>
+              </div>
+
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                style={{
+                  marginLeft: 'auto',
+                  flexShrink: 0,
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                <path d="m7 15 5 5 5-5" />
+                <path d="m7 9 5-5 5 5" />
+              </svg>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
 
       {/* Primary Navigation Content */}
       <SidebarContent>
-        {/* Home Item */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              isActive={isHomeActive}
-              tooltip="Home"
-              onClick={() => handleNavigate(homeHref)}
-              leftIcon={
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              }
-            >
-              Home
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-
-        {/* Separator Line Between Home & Facebook */}
-        <SidebarSeparator />
-
-        {/* Facebook Section */}
+        {/* Top Home Navigation Group */}
         <SidebarGroup>
-          <SidebarGroupLabel>Facebook</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  isActive={isAccountsActive}
-                  tooltip="Accounts"
-                  onClick={() => handleNavigate(accountsHref)}
+                  isActive={isHomeActive}
+                  tooltip="Home"
+                  onClick={() => handleNavigate(homeHref)}
                   leftIcon={
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                      <circle cx="9" cy="7" r="4" />
-                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                      <polyline points="9 22 9 12 15 12 15 22" />
                     </svg>
                   }
                 >
-                  Accounts
+                  Home
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Separator Line Between Home & Platform */}
+        <SidebarSeparator />
+
+        {/* Collapsible Facebook -> Accounts Hierarchy (Shadcn NavMain Pattern) */}
+        <SidebarGroup>
+          <SidebarGroupLabel>Platform</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <Collapsible
+                open={isFacebookOpen}
+                onOpenChange={setIsFacebookOpen}
+                defaultOpen={true}
+              >
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      tooltip="Facebook — Accounts"
+                      isActive={isCollapsed && isAccountsActive}
+                      onClick={() => {
+                        if (isCollapsed) {
+                          handleNavigate(accountsHref);
+                        }
+                      }}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                      </svg>
+                      <span
+                        style={{
+                          flex: 1,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        Facebook
+                      </span>
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        style={{
+                          marginLeft: 'auto',
+                          flexShrink: 0,
+                          transform: isFacebookOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                          transition: 'transform 200ms ease',
+                          color: `var(--text-dim, ${THEME.default.text.muted})`,
+                        }}
+                      >
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          isActive={isAccountsActive}
+                          onClick={() => handleNavigate(accountsHref)}
+                        >
+                          Accounts
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
-      {/* User Menu Footer */}
+      {/* User Menu Footer (Shadcn NavUser Pattern) */}
       <SidebarFooter>
         <WorkspaceUserMenu user={user} />
       </SidebarFooter>
 
-      {/* Rail Resizer & Toggle */}
+      {/* Interactive Edge Rail */}
       <SidebarRail />
     </Sidebar>
   );

@@ -8,6 +8,9 @@ import React, {
   useMemo,
   useState,
   forwardRef,
+  cloneElement,
+  isValidElement,
+  Children,
 } from 'react';
 import { PALETTE, THEME, SPACING, RADII, TYPOGRAPHY } from '../../lib/theme';
 import { Tooltip } from './tooltip';
@@ -28,7 +31,7 @@ function getCookieState(): boolean | null {
   const regex = new RegExp(String.raw`(^|;\s*)${SIDEBAR_COOKIE_NAME}=([^;]*)`);
   const match = regex.exec(document.cookie);
   if (!match?.[2]) return null;
-  return match[2] === 'expanded';
+  return match[2] === 'expanded' || match[2] === 'true';
 }
 
 function setCookieState(expanded: boolean) {
@@ -71,11 +74,11 @@ export function useSidebar(): SidebarContextValue {
 // ============================================================================
 
 export interface SidebarProviderProps {
-  defaultOpen?: boolean;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  className?: string;
-  style?: React.CSSProperties;
+  defaultOpen?: boolean | undefined;
+  open?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  className?: string | undefined;
+  style?: React.CSSProperties | undefined;
   children: React.ReactNode;
 }
 
@@ -87,7 +90,6 @@ export function SidebarProvider({
   style,
   children,
 }: Readonly<SidebarProviderProps>) {
-  // Determine initial state: prop -> cookie -> true
   const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(() => {
     const cookieVal = getCookieState();
     return cookieVal ?? defaultOpen;
@@ -96,10 +98,10 @@ export function SidebarProvider({
   const [openMobile, setOpenMobile] = useState<boolean>(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
-  // Responsive mobile media query listener
+  // Responsive mobile media query listener (<768px)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const mql = window.matchMedia('(max-width: 768px)');
+    const mql = window.matchMedia('(max-width: 767px)');
     const onChange = () => {
       const mobile = mql.matches;
       setIsMobile(mobile);
@@ -169,16 +171,21 @@ export function SidebarProvider({
   return (
     <SidebarContext.Provider value={contextValue}>
       <div
+        data-slot="sidebar-wrapper"
         className={className}
-        style={{
-          display: 'flex',
-          minHeight: '100vh',
-          width: '100%',
-          position: 'relative',
-          backgroundColor: THEME.default.surfaces.canvas,
-          color: THEME.default.text.primary,
-          ...style,
-        }}
+        style={
+          {
+            '--sidebar-width': SIDEBAR_WIDTH,
+            '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
+            display: 'flex',
+            minHeight: '100svh',
+            width: '100%',
+            position: 'relative',
+            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            ...style,
+          } as React.CSSProperties
+        }
       >
         {children}
       </div>
@@ -187,7 +194,7 @@ export function SidebarProvider({
 }
 
 // ============================================================================
-// 2. ROOT SIDEBAR COMPONENT
+// 2. ROOT SIDEBAR COMPONENT (Two-Layer Fixed + Gap Architecture)
 // ============================================================================
 
 export type SidebarSide = 'left' | 'right';
@@ -195,9 +202,9 @@ export type SidebarVariant = 'sidebar' | 'floating' | 'inset';
 export type SidebarCollapsible = 'offcanvas' | 'icon' | 'none';
 
 export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
-  side?: SidebarSide;
-  variant?: SidebarVariant;
-  collapsible?: SidebarCollapsible;
+  side?: SidebarSide | undefined;
+  variant?: SidebarVariant | undefined;
+  collapsible?: SidebarCollapsible | undefined;
 }
 
 export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
@@ -215,17 +222,58 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
   const isCollapsed = state === 'collapsed';
 
-  // Desktop width computation
-  let desktopWidth = SIDEBAR_WIDTH;
-  if (collapsible === 'icon' && isCollapsed) {
-    desktopWidth = SIDEBAR_WIDTH_ICON;
-  } else if (collapsible === 'offcanvas' && isCollapsed) {
-    desktopWidth = '0px';
+  // Close mobile drawer on Escape key
+  useEffect(() => {
+    if (!isMobile || !openMobile || typeof window === 'undefined') return;
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenMobile(false);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isMobile, openMobile, setOpenMobile]);
+
+  if (collapsible === 'none') {
+    return (
+      <aside
+        ref={ref}
+        role="navigation"
+        aria-label="Sidebar Navigation"
+        data-slot="sidebar"
+        data-sidebar="sidebar"
+        data-state="expanded"
+        data-collapsible="none"
+        data-variant={variant}
+        data-side={side}
+        className={className}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          width: SIDEBAR_WIDTH,
+          minWidth: SIDEBAR_WIDTH,
+          height: '100svh',
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+          borderRight:
+            side === 'left'
+              ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+              : undefined,
+          borderLeft:
+            side === 'right'
+              ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+              : undefined,
+          boxSizing: 'border-box',
+          ...style,
+        }}
+        {...props}
+      >
+        {children}
+      </aside>
+    );
   }
 
-  // Variant styling adjustments
-  const isFloating = variant === 'floating';
-  // Mobile drawer presentation
+  // Mobile Sheet Drawer Presentation (<768px)
   if (isMobile) {
     let mobileTransform = 'translateX(0)';
     if (!openMobile) {
@@ -234,9 +282,9 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
 
     return (
       <>
-        {/* Mobile Backdrop */}
         {openMobile && (
           <div
+            data-slot="sidebar-backdrop"
             onClick={() => setOpenMobile(false)}
             aria-hidden="true"
             style={{
@@ -249,11 +297,15 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
             }}
           />
         )}
-        {/* Mobile Sheet Panel */}
         <aside
           ref={ref}
           role="navigation"
           aria-label="Sidebar Navigation"
+          data-slot="sidebar"
+          data-sidebar="sidebar"
+          data-mobile="true"
+          data-state={openMobile ? 'open' : 'closed'}
+          data-side={side}
           className={className}
           style={{
             position: 'fixed',
@@ -265,13 +317,21 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
             zIndex: 50,
             display: 'flex',
             flexDirection: 'column',
-            backgroundColor: THEME.default.surfaces.panel,
-            borderRight: side === 'left' ? `1px solid ${THEME.default.borders.hairline}` : undefined,
-            borderLeft: side === 'right' ? `1px solid ${THEME.default.borders.hairline}` : undefined,
-            boxShadow: THEME.default.shadows.elevated,
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            borderRight:
+              side === 'left'
+                ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+                : undefined,
+            borderLeft:
+              side === 'right'
+                ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+                : undefined,
+            boxShadow: `var(--shadow-elevated, ${THEME.default.shadows.elevated})`,
             transform: mobileTransform,
             transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
             visibility: openMobile ? 'visible' : 'hidden',
+            boxSizing: 'border-box',
             ...style,
           }}
           {...props}
@@ -282,7 +342,16 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
     );
   }
 
-  // Desktop Presentation
+  // Desktop Two-Layer Architecture (Normal-flow gap + Fixed full-height container)
+  let desktopWidth = SIDEBAR_WIDTH;
+  if (collapsible === 'icon' && isCollapsed) {
+    desktopWidth = SIDEBAR_WIDTH_ICON;
+  } else if (collapsible === 'offcanvas' && isCollapsed) {
+    desktopWidth = '0px';
+  }
+
+  const isFloating = variant === 'floating';
+
   return (
     <aside
       ref={ref}
@@ -291,52 +360,102 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
       data-state={state}
       data-collapsible={collapsible}
       data-variant={variant}
+      data-side={side}
+      data-slot="sidebar"
       className={className}
       style={{
         position: 'relative',
-        width: desktopWidth,
-        minWidth: desktopWidth,
-        height: isFloating ? `calc(100vh - ${SPACING.xl})` : '100vh',
-        margin: isFloating ? SPACING.md : 0,
-        borderRadius: isFloating ? RADII.md : undefined,
-        display: 'flex',
-        flexDirection: 'column',
-        backgroundColor: THEME.default.surfaces.panel,
-        borderRight: side === 'left' ? `1px solid ${THEME.default.borders.hairline}` : undefined,
-        borderLeft: side === 'right' ? `1px solid ${THEME.default.borders.hairline}` : undefined,
-        boxShadow: isFloating ? THEME.default.shadows.card : undefined,
-        transition: 'width 200ms cubic-bezier(0.4, 0, 0.2, 1), min-width 200ms cubic-bezier(0.4, 0, 0.2, 1)',
-        overflow: 'hidden',
-        boxSizing: 'border-box',
+        flexShrink: 0,
         ...style,
       }}
       {...props}
     >
-      {children}
+      {/* 1. Normal-flow width spacer that pushes SidebarInset smoothly */}
+      <div
+        data-slot="sidebar-gap"
+        style={{
+          width: desktopWidth,
+          minWidth: desktopWidth,
+          transition: 'width 200ms linear, min-width 200ms linear',
+          flexShrink: 0,
+        }}
+      />
+
+      {/* 2. Fixed full-height container with overflow: visible so tooltips & popovers never clip */}
+      <div
+        data-slot="sidebar-container"
+        data-side={side}
+        style={{
+          position: 'fixed',
+          top: 0,
+          bottom: 0,
+          [side]: collapsible === 'offcanvas' && isCollapsed ? `calc(${SIDEBAR_WIDTH} * -1)` : 0,
+          width: desktopWidth,
+          height: '100svh',
+          zIndex: 30,
+          display: 'flex',
+          transition: 'left 200ms linear, right 200ms linear, width 200ms linear',
+          padding: isFloating || variant === 'inset' ? SPACING.sm : 0,
+          boxSizing: 'border-box',
+          overflow: 'visible',
+        }}
+      >
+        <div
+          data-sidebar="sidebar"
+          data-slot="sidebar-inner"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            height: '100%',
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            borderRight:
+              side === 'left' && !isFloating && variant !== 'inset'
+                ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+                : undefined,
+            borderLeft:
+              side === 'right' && !isFloating && variant !== 'inset'
+                ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+                : undefined,
+            border: isFloating
+              ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+              : undefined,
+            borderRadius: isFloating ? RADII.md : undefined,
+            boxShadow: isFloating
+              ? `var(--shadow-card, ${THEME.default.shadows.card})`
+              : undefined,
+            position: 'relative',
+            overflow: 'visible',
+            boxSizing: 'border-box',
+          }}
+        >
+          {children}
+        </div>
+      </div>
     </aside>
   );
 });
 
 // ============================================================================
-// 3. STRUCTURAL SECTIONS (Header, Content, Footer, Inset)
+// 3. STRUCTURAL SECTIONS (Header, Content, Footer, Inset, Input)
 // ============================================================================
 
 export interface SidebarHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export const SidebarHeader = forwardRef<HTMLDivElement, SidebarHeaderProps>(
   function SidebarHeader({ className, style, children, ...props }, ref) {
-    const { state, isMobile } = useSidebar();
-    const isCollapsed = !isMobile && state === 'collapsed';
-
     return (
       <header
         ref={ref}
+        data-slot="sidebar-header"
+        data-sidebar="header"
         className={className}
         style={{
           display: 'flex',
           flexDirection: 'column',
-          padding: isCollapsed ? `${SPACING.md} ${SPACING.xs}` : SPACING.md,
-          borderBottom: `1px solid ${THEME.default.borders.hairline}`,
+          gap: SPACING.sm,
+          padding: SPACING.sm,
           boxSizing: 'border-box',
           flexShrink: 0,
           ...style,
@@ -359,15 +478,17 @@ export const SidebarContent = forwardRef<HTMLDivElement, SidebarContentProps>(
     return (
       <div
         ref={ref}
+        data-slot="sidebar-content"
+        data-sidebar="content"
         className={className}
         style={{
           flex: 1,
+          minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
           gap: SPACING.xs,
-          padding: isCollapsed ? `${SPACING.sm} ${SPACING.xs}` : `${SPACING.sm} ${SPACING.sm}`,
-          overflowY: 'auto',
-          overflowX: 'hidden',
+          overflowY: isCollapsed ? 'visible' : 'auto',
+          overflowX: isCollapsed ? 'visible' : 'hidden',
           boxSizing: 'border-box',
           ...style,
         }}
@@ -383,18 +504,17 @@ export interface SidebarFooterProps extends React.HTMLAttributes<HTMLDivElement>
 
 export const SidebarFooter = forwardRef<HTMLDivElement, SidebarFooterProps>(
   function SidebarFooter({ className, style, children, ...props }, ref) {
-    const { state, isMobile } = useSidebar();
-    const isCollapsed = !isMobile && state === 'collapsed';
-
     return (
       <footer
         ref={ref}
+        data-slot="sidebar-footer"
+        data-sidebar="footer"
         className={className}
         style={{
           display: 'flex',
           flexDirection: 'column',
-          padding: isCollapsed ? `${SPACING.md} ${SPACING.xs}` : SPACING.md,
-          borderTop: `1px solid ${THEME.default.borders.hairline}`,
+          gap: SPACING.sm,
+          padding: SPACING.sm,
           boxSizing: 'border-box',
           flexShrink: 0,
           ...style,
@@ -414,15 +534,18 @@ export const SidebarInset = forwardRef<HTMLDivElement, SidebarInsetProps>(
     return (
       <main
         ref={ref}
+        data-slot="sidebar-inset"
         className={className}
         style={{
           flex: 1,
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
-          height: '100vh',
-          overflowY: 'auto',
-          backgroundColor: THEME.default.surfaces.canvas,
+          minHeight: '100svh',
+          width: '100%',
+          backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+          color: `var(--text-main, ${THEME.default.text.primary})`,
           boxSizing: 'border-box',
           ...style,
         }}
@@ -430,6 +553,35 @@ export const SidebarInset = forwardRef<HTMLDivElement, SidebarInsetProps>(
       >
         {children}
       </main>
+    );
+  }
+);
+
+export interface SidebarInputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+
+export const SidebarInput = forwardRef<HTMLInputElement, SidebarInputProps>(
+  function SidebarInput({ className, style, ...props }, ref) {
+    return (
+      <input
+        ref={ref}
+        data-slot="sidebar-input"
+        data-sidebar="input"
+        className={className}
+        style={{
+          height: '32px',
+          width: '100%',
+          backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          borderRadius: RADII.sm,
+          padding: `0 ${SPACING.sm}`,
+          fontSize: '0.875rem',
+          outline: 'none',
+          boxSizing: 'border-box',
+          ...style,
+        }}
+        {...props}
+      />
     );
   }
 );
@@ -446,11 +598,16 @@ export const SidebarGroup = forwardRef<HTMLDivElement, SidebarGroupProps>(
       <div
         ref={ref}
         role="group"
+        data-slot="sidebar-group"
+        data-sidebar="group"
         className={className}
         style={{
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
-          padding: `${SPACING.xs} 0`,
+          width: '100%',
+          minWidth: 0,
+          padding: SPACING.sm,
           boxSizing: 'border-box',
           ...style,
         }}
@@ -462,46 +619,52 @@ export const SidebarGroup = forwardRef<HTMLDivElement, SidebarGroupProps>(
   }
 );
 
-export interface SidebarGroupLabelProps extends React.HTMLAttributes<HTMLDivElement> {}
+export interface SidebarGroupLabelProps extends React.HTMLAttributes<HTMLDivElement> {
+  asChild?: boolean | undefined;
+}
 
 export const SidebarGroupLabel = forwardRef<HTMLDivElement, SidebarGroupLabelProps>(
-  function SidebarGroupLabel({ className, style, children, ...props }, ref) {
+  function SidebarGroupLabel({ asChild = false, className, style, children, ...props }, ref) {
     const { state, isMobile } = useSidebar();
     const isCollapsed = !isMobile && state === 'collapsed';
 
-    if (isCollapsed) {
-      return (
-        <div
-          ref={ref}
-          style={{
-            height: '1px',
-            backgroundColor: THEME.default.borders.hairline,
-            margin: `${SPACING.xs} ${SPACING.xs}`,
-          }}
-          aria-hidden="true"
-        />
-      );
+    const labelStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      height: '32px',
+      flexShrink: 0,
+      borderRadius: RADII.sm,
+      padding: `0 ${SPACING.sm}`,
+      fontSize: '0.75rem',
+      fontWeight: TYPOGRAPHY.weights.medium,
+      color: `var(--text-dim, ${THEME.default.text.muted})`,
+      transition: 'margin 200ms linear, opacity 200ms linear',
+      marginTop: isCollapsed ? '-32px' : 0,
+      opacity: isCollapsed ? 0 : 1,
+      pointerEvents: isCollapsed ? 'none' : undefined,
+      overflow: 'hidden',
+      userSelect: 'none',
+      boxSizing: 'border-box',
+      ...style,
+    };
+
+    if (asChild && isValidElement(children)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return cloneElement(children as React.ReactElement<any>, {
+        'data-slot': 'sidebar-group-label',
+        'data-sidebar': 'group-label',
+        style: labelStyle,
+      });
     }
 
     return (
       <div
         ref={ref}
+        data-slot="sidebar-group-label"
+        data-sidebar="group-label"
         className={className}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          height: '28px',
-          padding: `0 ${SPACING.sm}`,
-          fontSize: '0.6875rem',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-          color: THEME.default.text.muted,
-          textTransform: 'uppercase',
-          letterSpacing: TYPOGRAPHY.tracking.caption,
-          userSelect: 'none',
-          boxSizing: 'border-box',
-          ...style,
-        }}
+        style={labelStyle}
         {...props}
       >
         {children}
@@ -511,34 +674,57 @@ export const SidebarGroupLabel = forwardRef<HTMLDivElement, SidebarGroupLabelPro
 );
 
 export interface SidebarGroupActionProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  asChild?: boolean | undefined;
+}
 
 export const SidebarGroupAction = forwardRef<HTMLButtonElement, SidebarGroupActionProps>(
-  function SidebarGroupAction({ className, style, children, ...props }, ref) {
+  function SidebarGroupAction({ asChild = false, className, style, children, ...props }, ref) {
+    const { state, isMobile } = useSidebar();
+    const isCollapsed = !isMobile && state === 'collapsed';
     const [isHovered, setIsHovered] = useState(false);
+
+    if (isCollapsed) return null;
+
+    const actionStyle: React.CSSProperties = {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '20px',
+      height: '20px',
+      borderRadius: RADII.xs,
+      border: 'none',
+      backgroundColor: isHovered
+        ? `var(--bg-hover, ${THEME.default.surfaces.hover})`
+        : 'transparent',
+      color: isHovered
+        ? `var(--text-main, ${THEME.default.text.primary})`
+        : `var(--text-dim, ${THEME.default.text.muted})`,
+      cursor: 'pointer',
+      padding: 0,
+      transition: 'all 0.12s ease',
+      ...style,
+    };
+
+    if (asChild && isValidElement(children)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return cloneElement(children as React.ReactElement<any>, {
+        'data-slot': 'sidebar-group-action',
+        'data-sidebar': 'group-action',
+        style: actionStyle,
+      });
+    }
 
     return (
       <button
         ref={ref}
         type="button"
+        data-slot="sidebar-group-action"
+        data-sidebar="group-action"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={className}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '20px',
-          height: '20px',
-          borderRadius: RADII.xs,
-          border: 'none',
-          backgroundColor: isHovered ? THEME.default.surfaces.hover : 'transparent',
-          color: isHovered ? THEME.default.text.primary : THEME.default.text.muted,
-          cursor: 'pointer',
-          padding: 0,
-          transition: 'all 0.12s ease',
-          ...style,
-        }}
+        style={actionStyle}
         {...props}
       >
         {children}
@@ -554,11 +740,14 @@ export const SidebarGroupContent = forwardRef<HTMLDivElement, SidebarGroupConten
     return (
       <div
         ref={ref}
+        data-slot="sidebar-group-content"
+        data-sidebar="group-content"
         className={className}
         style={{
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
+          fontSize: '0.875rem',
           ...style,
         }}
         {...props}
@@ -570,7 +759,173 @@ export const SidebarGroupContent = forwardRef<HTMLDivElement, SidebarGroupConten
 );
 
 // ============================================================================
-// 5. MENU PRIMITIVES
+// 5. COLLAPSIBLE DISCLOSURE PRIMITIVES (Collapsible, Trigger, Content)
+// ============================================================================
+
+export interface CollapsibleContextValue {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  toggle: () => void;
+}
+
+const CollapsibleContext = createContext<CollapsibleContextValue | null>(null);
+
+export function useCollapsible(): CollapsibleContextValue {
+  const context = useContext(CollapsibleContext);
+  if (!context) {
+    throw new Error('useCollapsible must be used within a Collapsible');
+  }
+  return context;
+}
+
+export interface CollapsibleProps extends React.HTMLAttributes<HTMLDivElement> {
+  open?: boolean | undefined;
+  defaultOpen?: boolean | undefined;
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  disabled?: boolean | undefined;
+  asChild?: boolean | undefined;
+}
+
+export const Collapsible = forwardRef<HTMLDivElement, CollapsibleProps>(function Collapsible(
+  {
+    open: controlledOpen,
+    defaultOpen = true,
+    onOpenChange,
+    disabled = false,
+    asChild = false,
+    className,
+    style,
+    children,
+    ...props
+  },
+  ref
+) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState<boolean>(defaultOpen);
+  const isOpen = controlledOpen ?? uncontrolledOpen;
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (disabled) return;
+      if (controlledOpen === undefined) {
+        setUncontrolledOpen(next);
+      }
+      onOpenChange?.(next);
+    },
+    [controlledOpen, disabled, onOpenChange]
+  );
+
+  const toggle = useCallback(() => {
+    handleOpenChange(!isOpen);
+  }, [handleOpenChange, isOpen]);
+
+  const contextValue = useMemo<CollapsibleContextValue>(
+    () => ({
+      open: isOpen,
+      onOpenChange: handleOpenChange,
+      toggle,
+    }),
+    [isOpen, handleOpenChange, toggle]
+  );
+
+  const dataState = isOpen ? 'open' : 'closed';
+
+  if (asChild && isValidElement(children)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (
+      <CollapsibleContext.Provider value={contextValue}>
+        {cloneElement(children as React.ReactElement<any>, {
+          'data-slot': 'collapsible',
+          'data-state': dataState,
+        })}
+      </CollapsibleContext.Provider>
+    );
+  }
+
+  return (
+    <CollapsibleContext.Provider value={contextValue}>
+      <div
+        ref={ref}
+        data-slot="collapsible"
+        data-state={dataState}
+        className={className}
+        style={style}
+        {...props}
+      >
+        {children}
+      </div>
+    </CollapsibleContext.Provider>
+  );
+});
+
+export interface CollapsibleTriggerProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  asChild?: boolean | undefined;
+}
+
+export const CollapsibleTrigger = forwardRef<HTMLButtonElement, CollapsibleTriggerProps>(
+  function CollapsibleTrigger({ asChild = false, onClick, children, ...props }, ref) {
+    const { open, toggle } = useCollapsible();
+    const dataState = open ? 'open' : 'closed';
+
+    if (asChild && isValidElement(children)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const childElement = children as React.ReactElement<any>;
+      return cloneElement(childElement, {
+        'data-slot': 'collapsible-trigger',
+        'data-state': dataState,
+        'aria-expanded': open,
+        onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
+          toggle();
+          childElement.props.onClick?.(e);
+          onClick?.(e);
+        },
+      });
+    }
+
+    return (
+      <button
+        ref={ref}
+        type="button"
+        data-slot="collapsible-trigger"
+        data-state={dataState}
+        aria-expanded={open}
+        onClick={(e) => {
+          toggle();
+          onClick?.(e);
+        }}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  }
+);
+
+export interface CollapsibleContentProps extends React.HTMLAttributes<HTMLDivElement> {}
+
+export const CollapsibleContent = forwardRef<HTMLDivElement, CollapsibleContentProps>(
+  function CollapsibleContent({ className, style, children, ...props }, ref) {
+    const { open } = useCollapsible();
+
+    if (!open) return null;
+
+    return (
+      <div
+        ref={ref}
+        data-slot="collapsible-content"
+        data-state="open"
+        className={className}
+        style={style}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+);
+
+// ============================================================================
+// 6. MENU PRIMITIVES
 // ============================================================================
 
 export interface SidebarMenuProps extends React.HTMLAttributes<HTMLUListElement> {}
@@ -581,6 +936,8 @@ export const SidebarMenu = forwardRef<HTMLUListElement, SidebarMenuProps>(
       <ul
         ref={ref}
         role="menu"
+        data-slot="sidebar-menu"
+        data-sidebar="menu"
         className={className}
         style={{
           listStyle: 'none',
@@ -590,6 +947,7 @@ export const SidebarMenu = forwardRef<HTMLUListElement, SidebarMenuProps>(
           flexDirection: 'column',
           gap: '2px',
           width: '100%',
+          minWidth: 0,
           ...style,
         }}
         {...props}
@@ -608,6 +966,8 @@ export const SidebarMenuItem = forwardRef<HTMLLIElement, SidebarMenuItemProps>(
       <li
         ref={ref}
         role="none"
+        data-slot="sidebar-menu-item"
+        data-sidebar="menu-item"
         className={className}
         style={{
           position: 'relative',
@@ -625,14 +985,18 @@ export const SidebarMenuItem = forwardRef<HTMLLIElement, SidebarMenuItemProps>(
   }
 );
 
+export type SidebarMenuButtonSize = 'default' | 'sm' | 'md' | 'lg';
+export type SidebarMenuButtonVariant = 'default' | 'outline';
+
 export interface SidebarMenuButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  isActive?: boolean;
-  variant?: 'default' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
-  tooltip?: string;
-  leftIcon?: React.ReactNode;
-  rightIcon?: React.ReactNode;
+  isActive?: boolean | undefined;
+  variant?: SidebarMenuButtonVariant | undefined;
+  size?: SidebarMenuButtonSize | undefined;
+  tooltip?: string | undefined;
+  leftIcon?: React.ReactNode | undefined;
+  rightIcon?: React.ReactNode | undefined;
+  asChild?: boolean | undefined;
 }
 
 export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
@@ -640,10 +1004,11 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     {
       isActive = false,
       variant = 'default',
-      size = 'md',
+      size = 'default',
       tooltip,
       leftIcon,
       rightIcon,
+      asChild = false,
       className,
       style,
       children,
@@ -655,73 +1020,82 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     const isCollapsed = !isMobile && state === 'collapsed';
     const [isHovered, setIsHovered] = useState(false);
 
-    let height = '34px';
+    let height = '32px';
     if (size === 'sm') {
-      height = '30px';
+      height = '28px';
     } else if (size === 'lg') {
-      height = '40px';
+      height = '48px';
     }
     const fontSize = size === 'sm' ? '0.75rem' : '0.875rem';
 
-    // Surface & text styling per state
     let bg = 'transparent';
-    let textColor = THEME.default.text.secondary;
-    let iconColor = THEME.default.text.secondary;
+    let textColor = `var(--text-sub, ${THEME.default.text.secondary})`;
+    let iconColor = `var(--text-sub, ${THEME.default.text.secondary})`;
     if (isActive) {
-      bg = THEME.default.surfaces.active;
-      textColor = THEME.default.text.primary;
+      bg = `var(--bg-active, ${THEME.default.surfaces.active})`;
+      textColor = `var(--text-main, ${THEME.default.text.primary})`;
       iconColor = PALETTE.primary;
     } else if (isHovered) {
-      bg = THEME.default.surfaces.hover;
-      textColor = THEME.default.text.primary;
-      iconColor = THEME.default.text.primary;
+      bg = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+      textColor = `var(--text-main, ${THEME.default.text.primary})`;
+      iconColor = `var(--text-main, ${THEME.default.text.primary})`;
     }
 
     let borderStyle = 'none';
     if (variant === 'outline') {
-      borderStyle = `1px solid ${isActive ? PALETTE.primary : THEME.default.borders.hairline}`;
+      borderStyle = `1px solid ${
+        isActive ? PALETTE.primary : `var(--border-subtle, ${THEME.default.borders.hairline})`
+      }`;
     }
 
-    const buttonElement = (
-      <button
-        ref={ref}
-        role="menuitem"
-        aria-current={isActive ? 'page' : undefined}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        className={className}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: isCollapsed ? 'center' : 'flex-start',
-          gap: isCollapsed ? 0 : SPACING.sm,
-          width: '100%',
-          height,
-          padding: isCollapsed ? 0 : `0 ${SPACING.sm}`,
-          borderRadius: RADII.sm,
-          border: borderStyle,
-          backgroundColor: bg,
-          color: textColor,
-          fontSize,
-          fontWeight: isActive ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.regular,
-          cursor: 'pointer',
-          textAlign: 'left',
-          textDecoration: 'none',
-          boxSizing: 'border-box',
-          position: 'relative',
-          transition: 'all 0.12s ease',
-          outline: 'none',
-          ...style,
-        }}
-        {...props}
-      >
-        {/* Active bar indicator on left edge (subtle gold keystone) */}
+    // In collapsed icon mode (48px rail with 8px group/header/footer padding = 32px inner slot):
+    // Button becomes a 32x32 square; size="lg" uses padding: 0 so a 32x32 avatar/logo fills it cleanly.
+    const buttonWidth = isCollapsed ? '32px' : '100%';
+    const buttonHeight = isCollapsed ? '32px' : height;
+    let buttonPadding = `0 ${SPACING.sm}`;
+    if (isCollapsed) {
+      buttonPadding = size === 'lg' ? '0px' : SPACING.sm;
+    }
+
+    // Determine rendered children when leftIcon is not used
+    const childArray = Children.toArray(children);
+    const collapsedDirectChild =
+      isCollapsed && !leftIcon && childArray.length > 1 ? childArray[0] : children;
+
+    const buttonStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: isCollapsed ? 'center' : 'flex-start',
+      gap: isCollapsed ? 0 : SPACING.sm,
+      width: buttonWidth,
+      height: buttonHeight,
+      margin: isCollapsed ? '0 auto' : 0,
+      padding: buttonPadding,
+      borderRadius: RADII.sm,
+      border: borderStyle,
+      backgroundColor: bg,
+      color: textColor,
+      fontSize,
+      fontWeight: isActive ? TYPOGRAPHY.weights.medium : TYPOGRAPHY.weights.regular,
+      cursor: 'pointer',
+      textAlign: 'left',
+      textDecoration: 'none',
+      boxSizing: 'border-box',
+      position: 'relative',
+      transition: 'width 200ms linear, height 200ms linear, padding 200ms linear, background-color 120ms ease, color 120ms ease',
+      outline: 'none',
+      overflow: 'hidden',
+      ...style,
+    };
+
+    const innerContent = (
+      <>
         {isActive && (
           <span
             aria-hidden="true"
             style={{
               position: 'absolute',
-              left: '2px',
+              left: isCollapsed ? '0px' : '2px',
               top: '6px',
               bottom: '6px',
               width: '3px',
@@ -731,52 +1105,92 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           />
         )}
 
-        {leftIcon && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              width: '18px',
-              height: '18px',
-              color: iconColor,
-            }}
-          >
-            {leftIcon}
-          </span>
-        )}
+        {leftIcon ? (
+          <>
+            <span
+              data-sidebar-icon="true"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                width: '16px',
+                height: '16px',
+                color: iconColor,
+              }}
+            >
+              {leftIcon}
+            </span>
 
-        {!isCollapsed && (
-          <span
-            style={{
-              flex: 1,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {children}
-          </span>
-        )}
+            {!isCollapsed && (
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {children}
+              </span>
+            )}
 
-        {!isCollapsed && rightIcon && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              color: THEME.default.text.muted,
-            }}
-          >
-            {rightIcon}
-          </span>
+            {!isCollapsed && rightIcon && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginLeft: 'auto',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                {rightIcon}
+              </span>
+            )}
+          </>
+        ) : (
+          collapsedDirectChild
         )}
-      </button>
+      </>
     );
 
-    // If collapsed and tooltip provided, wrap in Tooltip from Spec 008
+    const buttonElement =
+      asChild && isValidElement(children) ? (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        cloneElement(children as React.ReactElement<any>, {
+          'data-slot': 'sidebar-menu-button',
+          'data-sidebar': 'menu-button',
+          'data-size': size,
+          'data-active': isActive ? 'true' : 'false',
+          'data-collapsed': isCollapsed ? 'true' : 'false',
+          role: 'menuitem',
+          'aria-current': isActive ? 'page' : undefined,
+          style: buttonStyle,
+        })
+      ) : (
+        <button
+          ref={ref}
+          type="button"
+          role="menuitem"
+          data-slot="sidebar-menu-button"
+          data-sidebar="menu-button"
+          data-size={size}
+          data-active={isActive ? 'true' : 'false'}
+          data-collapsed={isCollapsed ? 'true' : 'false'}
+          aria-current={isActive ? 'page' : undefined}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className={className}
+          style={buttonStyle}
+          {...props}
+        >
+          {innerContent}
+        </button>
+      );
+
     if (isCollapsed && tooltip) {
       return (
         <Tooltip content={tooltip} side="right">
@@ -791,12 +1205,13 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
 
 export interface SidebarMenuActionProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  showOnHover?: boolean;
+  showOnHover?: boolean | undefined;
+  asChild?: boolean | undefined;
 }
 
 export const SidebarMenuAction = forwardRef<HTMLButtonElement, SidebarMenuActionProps>(
   function SidebarMenuAction(
-    { showOnHover = false, className, style, children, onClick, ...props },
+    { showOnHover = false, asChild = false, className, style, children, onClick, ...props },
     ref
   ) {
     const { state, isMobile } = useSidebar();
@@ -805,10 +1220,46 @@ export const SidebarMenuAction = forwardRef<HTMLButtonElement, SidebarMenuAction
 
     if (isCollapsed) return null;
 
+    const actionStyle: React.CSSProperties = {
+      position: 'absolute',
+      right: SPACING.xs,
+      top: '50%',
+      transform: 'translateY(-50%)',
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '20px',
+      height: '20px',
+      borderRadius: RADII.xs,
+      border: 'none',
+      backgroundColor: isHovered
+        ? `var(--bg-hover, ${THEME.default.surfaces.hover})`
+        : 'transparent',
+      color: isHovered
+        ? `var(--text-main, ${THEME.default.text.primary})`
+        : `var(--text-dim, ${THEME.default.text.muted})`,
+      opacity: showOnHover && !isHovered ? 0 : 1,
+      cursor: 'pointer',
+      padding: 0,
+      transition: 'all 0.12s ease',
+      ...style,
+    };
+
+    if (asChild && isValidElement(children)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return cloneElement(children as React.ReactElement<any>, {
+        'data-slot': 'sidebar-menu-action',
+        'data-sidebar': 'menu-action',
+        style: actionStyle,
+      });
+    }
+
     return (
       <button
         ref={ref}
         type="button"
+        data-slot="sidebar-menu-action"
+        data-sidebar="menu-action"
         onClick={(e) => {
           e.stopPropagation();
           onClick?.(e);
@@ -816,25 +1267,7 @@ export const SidebarMenuAction = forwardRef<HTMLButtonElement, SidebarMenuAction
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={className}
-        style={{
-          position: 'absolute',
-          right: SPACING.xs,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '24px',
-          height: '24px',
-          borderRadius: RADII.xs,
-          border: 'none',
-          backgroundColor: isHovered ? THEME.default.surfaces.hover : 'transparent',
-          color: isHovered ? THEME.default.text.primary : THEME.default.text.muted,
-          cursor: 'pointer',
-          padding: 0,
-          transition: 'all 0.12s ease',
-          ...style,
-        }}
+        style={actionStyle}
         {...props}
       >
         {children}
@@ -855,6 +1288,8 @@ export const SidebarMenuBadge = forwardRef<HTMLSpanElement, SidebarMenuBadgeProp
     return (
       <span
         ref={ref}
+        data-slot="sidebar-menu-badge"
+        data-sidebar="menu-badge"
         className={className}
         style={{
           display: 'inline-flex',
@@ -864,14 +1299,15 @@ export const SidebarMenuBadge = forwardRef<HTMLSpanElement, SidebarMenuBadgeProp
           minWidth: '18px',
           padding: `0 ${SPACING.xs}`,
           borderRadius: RADII.xs, // Crisp 4px corner, strictly NOT a pill badge
-          backgroundColor: THEME.default.surfaces.subtle,
-          border: `1px solid ${THEME.default.borders.hairline}`,
-          color: THEME.default.text.secondary,
+          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
           fontSize: '0.6875rem',
           fontWeight: TYPOGRAPHY.weights.medium,
           fontFeatureSettings: TYPOGRAPHY.tabularNums,
           lineHeight: 1,
           boxSizing: 'border-box',
+          marginLeft: 'auto',
           ...style,
         }}
         {...props}
@@ -882,8 +1318,59 @@ export const SidebarMenuBadge = forwardRef<HTMLSpanElement, SidebarMenuBadgeProp
   }
 );
 
+export interface SidebarMenuSkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
+  showIcon?: boolean | undefined;
+}
+
+export const SidebarMenuSkeleton = forwardRef<HTMLDivElement, SidebarMenuSkeletonProps>(
+  function SidebarMenuSkeleton({ showIcon = false, className, style, ...props }, ref) {
+    return (
+      <div
+        ref={ref}
+        data-slot="sidebar-menu-skeleton"
+        data-sidebar="menu-skeleton"
+        className={className}
+        style={{
+          display: 'flex',
+          height: '32px',
+          alignItems: 'center',
+          gap: SPACING.sm,
+          borderRadius: RADII.sm,
+          padding: `0 ${SPACING.sm}`,
+          boxSizing: 'border-box',
+          ...style,
+        }}
+        {...props}
+      >
+        {showIcon && (
+          <div
+            data-sidebar="menu-skeleton-icon"
+            style={{
+              width: '16px',
+              height: '16px',
+              borderRadius: RADII.xs,
+              backgroundColor: `var(--bg-hover, ${THEME.default.surfaces.hover})`,
+              flexShrink: 0,
+            }}
+          />
+        )}
+        <div
+          data-sidebar="menu-skeleton-text"
+          style={{
+            height: '16px',
+            flex: 1,
+            maxWidth: '75%',
+            borderRadius: RADII.xs,
+            backgroundColor: `var(--bg-hover, ${THEME.default.surfaces.hover})`,
+          }}
+        />
+      </div>
+    );
+  }
+);
+
 // ============================================================================
-// 6. SUBMENU PRIMITIVES
+// 7. SUBMENU PRIMITIVES
 // ============================================================================
 
 export interface SidebarMenuSubProps extends React.HTMLAttributes<HTMLUListElement> {}
@@ -899,15 +1386,19 @@ export const SidebarMenuSub = forwardRef<HTMLUListElement, SidebarMenuSubProps>(
       <ul
         ref={ref}
         role="menu"
+        data-slot="sidebar-menu-sub"
+        data-sidebar="menu-sub"
         className={className}
         style={{
           listStyle: 'none',
-          margin: `${SPACING.xs} 0 0 ${SPACING.lg}`,
-          padding: `0 0 0 ${SPACING.sm}`,
-          borderLeft: `1px solid ${THEME.default.borders.hairline}`,
+          margin: `2px ${SPACING.md} 2px 14px`,
+          padding: `2px 0 2px 10px`,
+          borderLeft: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           display: 'flex',
           flexDirection: 'column',
           gap: '2px',
+          minWidth: 0,
+          boxSizing: 'border-box',
           ...style,
         }}
         {...props}
@@ -926,8 +1417,11 @@ export const SidebarMenuSubItem = forwardRef<HTMLLIElement, SidebarMenuSubItemPr
       <li
         ref={ref}
         role="none"
+        data-slot="sidebar-menu-sub-item"
+        data-sidebar="menu-sub-item"
         className={className}
         style={{
+          position: 'relative',
           listStyle: 'none',
           margin: 0,
           padding: 0,
@@ -944,54 +1438,83 @@ export const SidebarMenuSubItem = forwardRef<HTMLLIElement, SidebarMenuSubItemPr
 
 export interface SidebarMenuSubButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  isActive?: boolean;
+  isActive?: boolean | undefined;
+  size?: 'sm' | 'md' | undefined;
+  asChild?: boolean | undefined;
 }
 
 export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSubButtonProps>(
   function SidebarMenuSubButton(
-    { isActive = false, className, style, children, ...props },
+    { isActive = false, size = 'md', asChild = false, className, style, children, ...props },
     ref
   ) {
+    const { state, isMobile } = useSidebar();
+    const isCollapsed = !isMobile && state === 'collapsed';
     const [isHovered, setIsHovered] = useState(false);
 
+    if (isCollapsed) return null;
+
     let bg = 'transparent';
-    let textColor = THEME.default.text.secondary;
+    let textColor = `var(--text-sub, ${THEME.default.text.secondary})`;
     if (isActive) {
-      bg = THEME.default.surfaces.active;
-      textColor = THEME.default.text.primary;
+      bg = `var(--bg-active, ${THEME.default.surfaces.active})`;
+      textColor = `var(--text-main, ${THEME.default.text.primary})`;
     } else if (isHovered) {
-      bg = THEME.default.surfaces.hover;
-      textColor = THEME.default.text.primary;
+      bg = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+      textColor = `var(--text-main, ${THEME.default.text.primary})`;
+    }
+
+    const subButtonStyle: React.CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: SPACING.sm,
+      width: '100%',
+      minWidth: 0,
+      height: '28px',
+      padding: `0 ${SPACING.sm}`,
+      borderRadius: RADII.sm,
+      border: 'none',
+      backgroundColor: bg,
+      color: textColor,
+      fontSize: size === 'sm' ? '0.75rem' : '0.8125rem',
+      fontWeight: isActive ? TYPOGRAPHY.weights.medium : TYPOGRAPHY.weights.regular,
+      cursor: 'pointer',
+      textAlign: 'left',
+      textDecoration: 'none',
+      boxSizing: 'border-box',
+      transition: 'all 0.12s ease',
+      outline: 'none',
+      overflow: 'hidden',
+      ...style,
+    };
+
+    if (asChild && isValidElement(children)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return cloneElement(children as React.ReactElement<any>, {
+        'data-slot': 'sidebar-menu-sub-button',
+        'data-sidebar': 'menu-sub-button',
+        'data-size': size,
+        'data-active': isActive ? 'true' : 'false',
+        role: 'menuitem',
+        'aria-current': isActive ? 'page' : undefined,
+        style: subButtonStyle,
+      });
     }
 
     return (
       <button
         ref={ref}
+        type="button"
         role="menuitem"
+        data-slot="sidebar-menu-sub-button"
+        data-sidebar="menu-sub-button"
+        data-size={size}
+        data-active={isActive ? 'true' : 'false'}
         aria-current={isActive ? 'page' : undefined}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={className}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          width: '100%',
-          height: '28px',
-          padding: `0 ${SPACING.sm}`,
-          borderRadius: RADII.xs,
-          border: 'none',
-          backgroundColor: bg,
-          color: textColor,
-          fontSize: '0.8125rem',
-          fontWeight: isActive ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.regular,
-          cursor: 'pointer',
-          textAlign: 'left',
-          textDecoration: 'none',
-          boxSizing: 'border-box',
-          transition: 'all 0.12s ease',
-          outline: 'none',
-          ...style,
-        }}
+        style={subButtonStyle}
         {...props}
       >
         <span
@@ -1010,36 +1533,37 @@ export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSub
 );
 
 // ============================================================================
-// 7. RAIL & TRIGGER
+// 8. RAIL, TRIGGER & SEPARATOR
 // ============================================================================
 
-export interface SidebarRailProps extends React.HTMLAttributes<HTMLButtonElement> {}
+export interface SidebarRailProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {}
 
 export const SidebarRail = forwardRef<HTMLButtonElement, SidebarRailProps>(
   function SidebarRail({ className, style, ...props }, ref) {
-    const { toggleSidebar } = useSidebar();
-    const [isHovered, setIsHovered] = useState(false);
+    const { toggleSidebar, state } = useSidebar();
+    const isCollapsed = state === 'collapsed';
 
     return (
       <button
         ref={ref}
         type="button"
+        data-sidebar="rail"
+        data-slot="sidebar-rail"
         aria-label="Toggle Sidebar Rail"
+        title="Toggle Sidebar"
+        tabIndex={-1}
         onClick={toggleSidebar}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
         className={className}
         style={{
           position: 'absolute',
           top: 0,
-          right: 0,
+          right: '-8px',
           bottom: 0,
-          width: '4px',
+          width: '16px',
           border: 'none',
           padding: 0,
-          cursor: 'col-resize',
-          backgroundColor: isHovered ? PALETTE.primary : 'transparent',
-          transition: 'background-color 150ms ease',
+          cursor: isCollapsed ? 'e-resize' : 'w-resize',
+          backgroundColor: 'transparent',
           zIndex: 20,
           outline: 'none',
           ...style,
@@ -1062,6 +1586,8 @@ export const SidebarTrigger = forwardRef<HTMLButtonElement, SidebarTriggerProps>
       <button
         ref={ref}
         type="button"
+        data-sidebar="trigger"
+        data-slot="sidebar-trigger"
         aria-label="Toggle Sidebar"
         aria-expanded={state === 'expanded'}
         onClick={(e) => {
@@ -1075,12 +1601,16 @@ export const SidebarTrigger = forwardRef<HTMLButtonElement, SidebarTriggerProps>
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          width: '34px',
-          height: '34px',
+          width: '28px',
+          height: '28px',
           borderRadius: RADII.sm,
-          border: `1px solid ${THEME.default.borders.hairline}`,
-          backgroundColor: isHovered ? THEME.default.surfaces.hover : 'transparent',
-          color: isHovered ? THEME.default.text.primary : THEME.default.text.secondary,
+          border: 'none',
+          backgroundColor: isHovered
+            ? `var(--bg-hover, ${THEME.default.surfaces.hover})`
+            : 'transparent',
+          color: isHovered
+            ? `var(--text-main, ${THEME.default.text.primary})`
+            : `var(--text-sub, ${THEME.default.text.secondary})`,
           cursor: 'pointer',
           padding: 0,
           transition: 'all 0.12s ease',
@@ -1108,10 +1638,6 @@ export const SidebarTrigger = forwardRef<HTMLButtonElement, SidebarTriggerProps>
   }
 );
 
-// ============================================================================
-// 8. SEPARATOR PRIMITIVE
-// ============================================================================
-
 export interface SidebarSeparatorProps
   extends React.HTMLAttributes<HTMLDivElement> {}
 
@@ -1120,13 +1646,15 @@ export const SidebarSeparator = forwardRef<HTMLDivElement, SidebarSeparatorProps
     return (
       <div
         ref={ref}
+        role="separator"
         data-sidebar="separator"
+        data-slot="sidebar-separator"
         className={className}
         style={{
           height: '1px',
-          width: '100%',
-          backgroundColor: THEME.default.borders.hairline,
-          margin: `${SPACING.xs} 0`,
+          width: 'auto',
+          backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+          margin: `${SPACING.xs} ${SPACING.sm}`,
           boxSizing: 'border-box',
           ...style,
         }}
@@ -1135,4 +1663,3 @@ export const SidebarSeparator = forwardRef<HTMLDivElement, SidebarSeparatorProps
     );
   }
 );
-
