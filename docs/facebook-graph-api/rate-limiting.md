@@ -2,6 +2,11 @@
 
 **Source**: [`https://developers.facebook.com/docs/graph-api/overview/rate-limiting`](https://developers.facebook.com/docs/graph-api/overview/rate-limiting)
 
+> [!IMPORTANT]
+> **Distinction Between API Volume Rate Limits vs. `fb_rate_limited` (`368`)**:
+> In FBUploadPro, `facebook_pages.status = 'fb_rate_limited'` is reserved **exclusively** for Pages that receive **Error Code `368`** (`Temporarily blocked for policies violations`).
+> All API call volume rate limits documented on this page (`4`, `17`, `32`, `613`, `80000`–`80014`) are **transient HTTP call throttles** — both `facebook_accounts.status` and `facebook_pages.status` remain **`'active'`**, and the worker/caller simply backs off and retries the request.
+
 ---
 
 ## 1. How Facebook Rate Limits Apply to FBUploadPro
@@ -25,12 +30,12 @@ Facebook enforces two distinct rate-limiting engines depending on the endpoint a
 
 | Error Code | Subcode | Official Description | `facebook_accounts.status` | `facebook_pages.status` | FBUploadPro Handling Strategy |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`4`** | — | Indicates that the **app** whose token is being used in the request has reached its rate limit (`200 * Users` per hour). | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Handled in `evaluateGraphApiError(4)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account `'active'`, mark affected Page `'fb_rate_limited'`, inspect `X-App-Usage`, and pause worker retries until usage drops below 100%. |
-| **`17`** | *(none)* | Indicates that the **User** whose token is being used in the request has reached their rate limit (rolling 1-hour window). | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Handled in `evaluateGraphApiError(17)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account `'active'`, mark Page `'fb_rate_limited'`, and retry after backoff. |
-| **`17`** | **`2446079`** | Indicates that the token being used in the Ads API v3.3 or older request has reached its rate limit. | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient rate limit. Keep account `'active'` and mark Page `'fb_rate_limited'`. |
-| **`32`** | — | Indicates that the **User or app** whose token is being used in the **Pages API** request has reached its rate limit (`(#32) Page request limit reached`). | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Handled in `evaluateGraphApiError(32)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account `'active'` and transition Page to `'fb_rate_limited'`. |
-| **`613`** | *(none)* | Indicates that a **custom rate limit** has been reached on the specific API endpoint being called. | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Handled in `evaluateGraphApiError(613)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account `'active'` and transition Page to `'fb_rate_limited'`. |
-| **`613`** | **`1996`** | Indicates that Facebook noticed **inconsistent behavior in the API request volume** of your app (e.g., sudden traffic spikes from recent changes). | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient spike throttle. Keep account `'active'`, transition Page to `'fb_rate_limited'`, and smooth out worker dispatch concurrency. |
+| **`4`** | — | Indicates that the **app** whose token is being used in the request has reached its rate limit (`200 * Users` per hour). | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Handled in `evaluateGraphApiError(4)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account and Page `'active'`, inspect `X-App-Usage`, and back off worker retries until usage drops below 100%. |
+| **`17`** | *(none)* | Indicates that the **User** whose token is being used in the request has reached their rate limit (rolling 1-hour window). | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Handled in `evaluateGraphApiError(17)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account and Page `'active'`, and retry after backoff. |
+| **`17`** | **`2446079`** | Indicates that the token being used in the Ads API v3.3 or older request has reached its rate limit. | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient rate limit. Keep account and Page `'active'`. |
+| **`32`** | — | Indicates that the **User or app** whose token is being used in the **Pages API** request has reached its rate limit (`(#32) Page request limit reached`). | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Handled in `evaluateGraphApiError(32)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account and Page `'active'` and reschedule the queue item for retry. |
+| **`613`** | *(none)* | Indicates that a **custom rate limit** has been reached on the specific API endpoint being called. | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Handled in `evaluateGraphApiError(613)`. Transient (`isTransient = true`, `requiresReauth = false`). Keep account and Page `'active'` and retry after backoff. |
+| **`613`** | **`1996`** | Indicates that Facebook noticed **inconsistent behavior in the API request volume** of your app (e.g., sudden traffic spikes from recent changes). | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient spike throttle. Keep account and Page `'active'`, and smooth out worker dispatch concurrency. |
 
 ---
 
@@ -40,9 +45,9 @@ When queries are overly complex or trigger excessive backend QPS on Meta's infra
 
 | Stability Key | Values / Fields | Official Meaning & Remediation | `facebook_accounts.status` | `facebook_pages.status` |
 | :--- | :--- | :--- | :--- | :--- |
-| **`throttled`** | `True`, `False` | Indicates whether the query was throttled by Facebook's stability protection layer. | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** *(when `True`)* |
-| **`backend_qps`** | `actual_score`, `limit`, `more_info` | First throttling factor. Queries require too many backend requests to handle. Send fewer queries or simplify queries with narrower time ranges and fewer object IDs. | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** |
-| **`complexity_score`** | `actual_score`, `limit`, `more_info` | Second throttling factor. High `complexity_score` means queries request large amounts of data or deep field expansions. Split complex queries into smaller queries and space them out. | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** |
+| **`throttled`** | `True`, `False` | Indicates whether the query was throttled by Facebook's stability protection layer. | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* |
+| **`backend_qps`** | `actual_score`, `limit`, `more_info` | First throttling factor. Queries require too many backend requests to handle. Send fewer queries or simplify queries with narrower time ranges and fewer object IDs. | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* |
+| **`complexity_score`** | `actual_score`, `limit`, `more_info` | Second throttling factor. High `complexity_score` means queries request large amounts of data or deep field expansions. Split complex queries into smaller queries and space them out. | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* |
 
 ---
 
@@ -52,17 +57,17 @@ When a Page, Ad Account, Instagram Account, or Business asset reaches its BUC qu
 
 | Error Code | Subcode | BUC Rate Limit Type | Quota Window & Formula | `facebook_accounts.status` | `facebook_pages.status` | FBUploadPro Handling Strategy |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`80001`** | — | **Pages** (calls made with a **Page** or **System User** access token) | Rolling 24h: `4800 * Engaged Users` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | **Primary Page Publishing Rate Limit**. Keep `facebook_accounts.status = 'active'`. Set `facebook_pages.status = 'fb_rate_limited'`. Read `estimated_time_to_regain_access` (minutes) from `X-Business-Use-Case-Usage` header and defer scheduled posts for this Page until cooldown expires. |
-| **`32`** | — | **Pages** (calls made with a **User** access token) | Rolling 1h Platform User/App limit | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Keep `facebook_accounts.status = 'active'`. Set `facebook_pages.status = 'fb_rate_limited'`. |
-| **`80006`** | — | **Messenger** | Rolling 24h: `200 * Engaged Users` (Conversations: 2/sec/Page; Send API: 300/sec text, 10/sec audio/video; Private Replies: 750/hr) | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Keep `facebook_accounts.status = 'active'`. Set `facebook_pages.status = 'fb_rate_limited'`. |
-| **`80000`** | **`2446079`** | **Ads Insights** | Rolling 1h: Standard `600 + 400 * Active Ads - 0.001 * User Errors`; Advanced `190000 + 400 * Active Ads - 0.001 * User Errors` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80004`** | **`2446079`** | **Ads Management** | Rolling 1h: Standard `300 + 40 * Active Ads`; Advanced `100000 + 40 * Active Ads` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80003`** | **`2446079`** | **Custom Audience** | Rolling 1h (max 700,000): Standard `5000 + 40 * Active Custom Audiences`; Advanced `190000 + 40 * Active Custom Audiences` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80002`** | — | **Instagram Platform** | Rolling 24h: `4800 * Impressions` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80005`** | — | **LeadGen** | Rolling 24h: `4800 * Leads Generated (past 90d)` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80008`** | — | **WhatsApp Business Management API (WABA)** | Rolling 1h: `200/hr` default (`5000/hr` for active WABA) | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80009`** | — | **Catalog Management** | Rolling 1h: `20,000 + 20,000 * log2(DA impressions + PDP visits)` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
-| **`80014`** | — | **Catalog Batch** | Rolling 1m: `8 + 8 * log2(DA impressions + PDP visits)` | **`'active'`** *(unchanged)* | **`'fb_rate_limited'`** | Transient BUC throttle. Keep account `'active'`. |
+| **`80001`** | — | **Pages** (calls made with a **Page** or **System User** access token) | Rolling 24h: `4800 * Engaged Users` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | **Transient Page API Quota Limit**. Keep both `facebook_accounts.status` and `facebook_pages.status` as `'active'`. Read `estimated_time_to_regain_access` (minutes) from `X-Business-Use-Case-Usage` header and reschedule the queue item for retry after cooldown. |
+| **`32`** | — | **Pages** (calls made with a **User** access token) | Rolling 1h Platform User/App limit | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Keep both `facebook_accounts.status` and `facebook_pages.status` as `'active'`. |
+| **`80006`** | — | **Messenger** | Rolling 24h: `200 * Engaged Users` (Conversations: 2/sec/Page; Send API: 300/sec text, 10/sec audio/video; Private Replies: 750/hr) | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Keep both `facebook_accounts.status` and `facebook_pages.status` as `'active'`. |
+| **`80000`** | **`2446079`** | **Ads Insights** | Rolling 1h: Standard `600 + 400 * Active Ads - 0.001 * User Errors`; Advanced `190000 + 400 * Active Ads - 0.001 * User Errors` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80004`** | **`2446079`** | **Ads Management** | Rolling 1h: Standard `300 + 40 * Active Ads`; Advanced `100000 + 40 * Active Ads` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80003`** | **`2446079`** | **Custom Audience** | Rolling 1h (max 700,000): Standard `5000 + 40 * Active Custom Audiences`; Advanced `190000 + 40 * Active Custom Audiences` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80002`** | — | **Instagram Platform** | Rolling 24h: `4800 * Impressions` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80005`** | — | **LeadGen** | Rolling 24h: `4800 * Leads Generated (past 90d)` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80008`** | — | **WhatsApp Business Management API (WABA)** | Rolling 1h: `200/hr` default (`5000/hr` for active WABA) | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80009`** | — | **Catalog Management** | Rolling 1h: `20,000 + 20,000 * log2(DA impressions + PDP visits)` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
+| **`80014`** | — | **Catalog Batch** | Rolling 1m: `8 + 8 * log2(DA impressions + PDP visits)` | **`'active'`** *(unchanged)* | **`'active'`** *(unchanged)* | Transient BUC throttle. Keep account and Page `'active'`. |
 
 ---
 
@@ -94,4 +99,4 @@ When a Page, Ad Account, Instagram Account, or Business asset reaches its BUC qu
 }
 ```
 
-- **Key Rule**: Never transition `facebook_accounts.status` to `'expired'` or `'disconnected'` on ANY rate-limit error (`4`, `17`, `32`, `613`, `80000`–`80014`). The user's OAuth token is still completely valid; only `facebook_pages.status` should be marked `'fb_rate_limited'` while backing off for `estimated_time_to_regain_access` minutes.
+- **Key Rule**: Never transition `facebook_accounts.status` or `facebook_pages.status` on API call volume rate-limit errors (`4`, `17`, `32`, `341`, `613`, `80000`–`80014`) — both remain **`'active'`**, and the queue item is retried after backoff. Only **Error Code `368`** (Page policy block) sets `facebook_pages.status = 'fb_rate_limited'`.

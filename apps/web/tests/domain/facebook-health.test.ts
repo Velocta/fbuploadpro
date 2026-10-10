@@ -60,12 +60,21 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(generic190?.requiresReauth).toBe(true);
     });
 
-    it('maps rate limit codes 4, 17, 32, 613 to fb_rate_limited as transient errors without re-auth', () => {
-      for (const code of [4, 17, 32, 613]) {
+    it('maps error 368 exclusively to fb_rate_limited on pageStatus while keeping accountStatus active', () => {
+      const policyBlock = evaluateGraphApiError(368);
+      expect(policyBlock).not.toBeNull();
+      expect(policyBlock?.accountStatus).toBe('active');
+      expect(policyBlock?.pageStatus).toBe('fb_rate_limited');
+      expect(policyBlock?.isTransient).toBe(true);
+      expect(policyBlock?.requiresReauth).toBe(false);
+    });
+
+    it('maps API rate limit codes 4, 17, 32, 341, 613, 80001 as transient errors keeping accountStatus and pageStatus active', () => {
+      for (const code of [4, 17, 32, 341, 613, 80001]) {
         const rateLimit = evaluateGraphApiError(code);
         expect(rateLimit).not.toBeNull();
         expect(rateLimit?.accountStatus).toBe('active');
-        expect(rateLimit?.pageStatus).toBe('fb_rate_limited');
+        expect(rateLimit?.pageStatus).toBe('active');
         expect(rateLimit?.isTransient).toBe(true);
         expect(rateLimit?.requiresReauth).toBe(false);
       }

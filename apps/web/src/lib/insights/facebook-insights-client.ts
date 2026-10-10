@@ -37,7 +37,7 @@ export async function getPageOverview(
       let healthStatus: PageInsightsHealthStatus = 'active';
       if (evalResult?.pageStatus === 'invalid_token') {
         healthStatus = 'invalid_token';
-      } else if (evalResult?.pageStatus === 'fb_rate_limited') {
+      } else if (evalResult?.pageStatus === 'fb_rate_limited' || evalResult?.isTransient) {
         healthStatus = 'rate_limited';
       } else {
         const msg = String(err.message || '').toLowerCase();

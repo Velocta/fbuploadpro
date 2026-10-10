@@ -10,14 +10,15 @@ export interface GraphApiErrorEvaluation {
 
 /**
  * Maps Facebook Graph API error codes and subcodes to internal domain health states.
- * - Error 190 (with subcodes 458, 460, 463 or general): maps to expired / invalid_token, requiring re-auth.
- * - Error 4, 17, 32, 613: maps to fb_rate_limited, transient.
+ * - Error 190 / 102 (with subcodes 458, 459, 460, 463, 464, 467, 483, 492 or general): maps to expired / invalid_token, requiring re-auth.
+ * - Error 368 (Temporarily blocked for policies violations): maps pageStatus exclusively to 'fb_rate_limited'.
+ * - Error 4, 17, 32, 341, 613, 80000-80014 (API call volume rate limits): keeps accountStatus and pageStatus 'active' with isTransient: true.
  */
 export function evaluateGraphApiError(
   code: number,
   errorSubcode?: number
 ): GraphApiErrorEvaluation | null {
-  if (code === 190) {
+  if (code === 190 || code === 102) {
     if (errorSubcode === 458) {
       return {
         accountStatus: 'expired',
@@ -45,6 +46,15 @@ export function evaluateGraphApiError(
         message: 'Access token has expired.',
       };
     }
+    if (errorSubcode === 492) {
+      return {
+        accountStatus: 'active',
+        pageStatus: 'invalid_token',
+        isTransient: false,
+        requiresReauth: true,
+        message: 'User associated with the Page access token does not have an appropriate role on the Page.',
+      };
+    }
     return {
       accountStatus: 'expired',
       pageStatus: 'invalid_token',
@@ -54,11 +64,31 @@ export function evaluateGraphApiError(
     };
   }
 
-  // Rate limit codes: 4 (app level), 17 (user level), 32 (page level), 613 (calls/sec)
-  if (code === 4 || code === 17 || code === 32 || code === 613) {
+  // Error 368: Page is temporarily blocked/restricted by Facebook for policy violations.
+  // 'fb_rate_limited' on facebook_pages.status is reserved exclusively for code 368.
+  if (code === 368) {
     return {
       accountStatus: 'active',
       pageStatus: 'fb_rate_limited',
+      isTransient: true,
+      requiresReauth: false,
+      message:
+        'Page is temporarily blocked by Facebook for policy violations (Error 368).',
+    };
+  }
+
+  // API request volume rate limit codes: 4 (app), 17 (user), 32 (page), 341 (app limit), 613 (custom), 80000-80014 (BUC)
+  if (
+    code === 4 ||
+    code === 17 ||
+    code === 32 ||
+    code === 341 ||
+    code === 613 ||
+    (code >= 80000 && code <= 80014)
+  ) {
+    return {
+      accountStatus: 'active',
+      pageStatus: 'active',
       isTransient: true,
       requiresReauth: false,
       message:
