@@ -245,6 +245,67 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       expect(outcome.status).toBe('failed');
     });
+
+    it('marks targetPageStatus as fb_rate_limited on error 368 + subcode 1390008', async () => {
+      const mockFbClient = new MockFacebookPublishClient();
+      mockFbClient.errorToThrow = new FacebookGraphError(
+        'We limit how often you can post, comment or do other things...',
+        {
+          message: 'We limit how often you can post, comment or do other things...',
+          code: 368,
+          error_subcode: 1390008,
+        }
+      );
+
+      const outcome = await dispatchItem(sampleClaimedVideoItem, mockFbClient, TEST_MASTER_KEY);
+
+      expect(outcome.errorCode).toBe(368);
+      expect(outcome.errorSubcode).toBe(1390008);
+      expect(outcome.targetPageStatus).toBe('fb_rate_limited');
+    });
+
+    it('marks item failed without retry and sets targetPageStatus to page_checkpoint on error 368 + subcode 4854002', async () => {
+      const mockFbClient = new MockFacebookPublishClient();
+      mockFbClient.errorToThrow = new FacebookGraphError(
+        'Confirm your identity before you can publish as this Page.',
+        {
+          message: 'Confirm your identity before you can publish as this Page.',
+          code: 368,
+          error_subcode: 4854002,
+        }
+      );
+
+      const outcome = await dispatchItem(sampleClaimedVideoItem, mockFbClient, TEST_MASTER_KEY);
+
+      expect(outcome.status).toBe('failed');
+      expect(outcome.errorCode).toBe(368);
+      expect(outcome.errorSubcode).toBe(4854002);
+      expect(outcome.targetPageStatus).toBe('page_checkpoint');
+      expect(outcome.errorMessage).toContain(
+        'Confirm your identity before you can publish as this Page.'
+      );
+      expect(outcome.errorMessage).toContain('mobile');
+    });
+
+    it('marks item failed without retry and keeps page active on error 368 + subcode 1404082 (duplicate content)', async () => {
+      const mockFbClient = new MockFacebookPublishClient();
+      mockFbClient.errorToThrow = new FacebookGraphError(
+        "You've already posted this. Posting the same content repeatedly...",
+        {
+          message: "You've already posted this. Posting the same content repeatedly...",
+          code: 368,
+          error_subcode: 1404082,
+        }
+      );
+
+      const outcome = await dispatchItem(sampleClaimedVideoItem, mockFbClient, TEST_MASTER_KEY);
+
+      expect(outcome.status).toBe('failed');
+      expect(outcome.errorCode).toBe(368);
+      expect(outcome.errorSubcode).toBe(1404082);
+      expect(outcome.targetPageStatus).toBeUndefined();
+      expect(outcome.errorMessage).toContain("You've already posted this");
+    });
   });
 
   describe('T134: Automated First Comment & External Post ID Recording', () => {

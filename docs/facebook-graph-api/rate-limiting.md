@@ -3,9 +3,11 @@
 **Source**: [`https://developers.facebook.com/docs/graph-api/overview/rate-limiting`](https://developers.facebook.com/docs/graph-api/overview/rate-limiting)
 
 > [!IMPORTANT]
-> **Distinction Between API Volume Rate Limits vs. `fb_rate_limited` (`368`)**:
-> In FBUploadPro, `facebook_pages.status = 'fb_rate_limited'` is reserved **exclusively** for Pages that receive **Error Code `368`** (`Temporarily blocked for policies violations`).
-> All API call volume rate limits documented on this page (`4`, `17`, `32`, `613`, `80000`–`80014`) are **transient HTTP call throttles** — both `facebook_accounts.status` and `facebook_pages.status` remain **`'active'`**, and the worker/caller simply backs off and retries the request.
+> **Distinction Between API Volume Rate Limits vs. Error Code `368` Subcodes**:
+> - **`368` + Subcode `1390008`** (`"We limit how often you can post, comment or do other things..."`): Sets `facebook_pages.status = 'fb_rate_limited'` and **automatically turns the Page back to `'active'` after 3 days**.
+> - **`368` + Subcode `4854002`** (`"Confirm your identity before you can publish as this Page."`): Sets `facebook_pages.status = 'page_checkpoint'`. User must log in to Facebook on mobile, switch to the Page, confirm verification, and manually turn the Page back to `'active'`.
+> - **`368` + Subcode `1404082`** (`"You've already posted this. Posting the same content repeatedly..."`): Keeps `facebook_pages.status = 'active'` and marks the post (`queue_items.status`) as `'failed'` with the reason.
+> - **All API call volume rate limits documented on this page (`4`, `17`, `32`, `613`, `80000`–`80014`)** are **transient HTTP call throttles** — both `facebook_accounts.status` and `facebook_pages.status` remain **`'active'`**, and the worker/caller simply backs off and retries the request.
 
 ---
 

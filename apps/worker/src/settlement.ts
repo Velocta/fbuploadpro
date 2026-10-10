@@ -41,11 +41,20 @@ INSERT INTO publish_logs (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 `.trim();
 
+export const UPDATE_PAGE_STATUS_SQL = `
+UPDATE facebook_pages
+SET status = $2,
+    updated_at = now()
+WHERE id = $1 AND user_id = $3;
+`.trim();
+
 /**
  * Atomically settles outcome of a queue item publication.
  * - On success ('published'): Updates queue_items to published and inserts
  *   a success audit log in publish_logs.
  * - On failure/retry: Updates queue_items status and inserts an error audit log in publish_logs.
+ * - When targetPageStatus is present (e.g. 'fb_rate_limited' on 368/1390008 or 'page_checkpoint' on 368/4854002),
+ *   updates facebook_pages.status accordingly.
  */
 export async function settleOutcome(
   db: DispatcherDbClient | Queryable,
@@ -81,7 +90,10 @@ export async function settleOutcome(
       // 2. Record retry publish log
       const errorDetails =
         outcome.errorCode !== undefined
-          ? JSON.stringify({ errorCode: outcome.errorCode })
+          ? JSON.stringify({
+              errorCode: outcome.errorCode,
+              ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+            })
           : null;
 
       await tx.query(INSERT_PUBLISH_LOG_SQL, [
@@ -94,6 +106,14 @@ export async function settleOutcome(
         outcome.errorMessage ?? null,
         errorDetails,
       ]);
+
+      if (outcome.targetPageStatus) {
+        await tx.query(UPDATE_PAGE_STATUS_SQL, [
+          item.pageId,
+          outcome.targetPageStatus,
+          item.userId,
+        ]);
+      }
     } else {
       // 1. Mark queue item as failed
       await tx.query(UPDATE_QUEUE_ITEM_FAILED_SQL, [item.id]);
@@ -101,7 +121,10 @@ export async function settleOutcome(
       // 2. Record failure publish log
       const errorDetails =
         outcome.errorCode !== undefined
-          ? JSON.stringify({ errorCode: outcome.errorCode })
+          ? JSON.stringify({
+              errorCode: outcome.errorCode,
+              ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+            })
           : null;
 
       await tx.query(INSERT_PUBLISH_LOG_SQL, [
@@ -114,6 +137,14 @@ export async function settleOutcome(
         outcome.errorMessage ?? null,
         errorDetails,
       ]);
+
+      if (outcome.targetPageStatus) {
+        await tx.query(UPDATE_PAGE_STATUS_SQL, [
+          item.pageId,
+          outcome.targetPageStatus,
+          item.userId,
+        ]);
+      }
     }
   };
 

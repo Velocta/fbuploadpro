@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   ListFacebookPagesResponseSchema,
+  evaluatePageHealth,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { getDbClient } from '../../../../../lib/db';
@@ -81,6 +82,12 @@ export async function handleListPages(
       }
     }
 
+    const updatedAt = row.updated_at || row.updatedAt;
+    const effectiveStatus = evaluatePageHealth({
+      status: row.status ?? 'active',
+      updatedAt,
+    });
+
     return {
       id: row.id,
       facebookAccountId: row.facebook_account_id || row.facebookAccountId,
@@ -91,10 +98,10 @@ export async function handleListPages(
       profilePictureUrl: extractPagePictureUrl(row),
       category: row.category ?? null,
       followersCount: extractFollowersCount(row),
-      status: row.status ?? 'active',
+      status: effectiveStatus,
       tasks: parsedTasks,
       createdAt: row.created_at || row.createdAt,
-      updatedAt: row.updated_at || row.updatedAt,
+      updatedAt,
     };
   });
 

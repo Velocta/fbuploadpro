@@ -102,6 +102,7 @@ describe('Facebook Account & Page Domain Schemas', () => {
     it('accepts valid page statuses', () => {
       expect(FacebookPageStatusSchema.parse('active')).toBe('active');
       expect(FacebookPageStatusSchema.parse('fb_rate_limited')).toBe('fb_rate_limited');
+      expect(FacebookPageStatusSchema.parse('page_checkpoint')).toBe('page_checkpoint');
       expect(FacebookPageStatusSchema.parse('invalid_token')).toBe('invalid_token');
       expect(FacebookPageStatusSchema.parse('disconnected')).toBe('disconnected');
     });

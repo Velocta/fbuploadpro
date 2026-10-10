@@ -19,6 +19,7 @@ export class FacebookGraphError extends Error {
   public readonly fbtraceId: string | undefined;
   public readonly isRateLimit: boolean;
   public readonly isAuthError: boolean;
+  public readonly isPermanentPolicyError: boolean;
 
   constructor(message: string, errorData?: FacebookGraphErrorData) {
     super(message);
@@ -27,12 +28,15 @@ export class FacebookGraphError extends Error {
     this.errorSubcode = errorData?.error_subcode;
     this.errorType = errorData?.type;
     this.fbtraceId = errorData?.fbtrace_id;
-    this.isAuthError = this.code === 190;
+    this.isAuthError = this.code === 190 || this.code === 102;
+    this.isPermanentPolicyError =
+      this.code === 368 &&
+      (this.errorSubcode === 4854002 || this.errorSubcode === 1404082);
     this.isRateLimit =
       this.code === 4 ||
       this.code === 17 ||
       this.code === 32 ||
-      this.code === 368 ||
+      (this.code === 368 && !this.isPermanentPolicyError) ||
       this.code === 613;
     Object.setPrototypeOf(this, new.target.prototype);
   }
