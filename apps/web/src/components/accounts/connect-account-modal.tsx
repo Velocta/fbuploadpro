@@ -10,7 +10,7 @@ import {
   DialogBody,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 interface ConnectAccountModalProps {
   subdomain: string;
@@ -72,6 +72,7 @@ export function ConnectAccountModal({
       setRemainingSeconds(data.expiresInSeconds ?? 900);
       setView('magic');
     } catch (_err) {
+      // Catch network or generation failure and display a friendly retry message
       setMagicError('Unable to generate magic link. Please try again.');
     } finally {
       setIsGeneratingMagic(false);
@@ -86,7 +87,7 @@ export function ConnectAccountModal({
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (_err) {
-      // Fallback
+      // Clipboard write failed or permission denied; user can manually select and copy the input link
       setCopySuccess(false);
     }
   };

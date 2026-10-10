@@ -108,6 +108,7 @@ export default function TenantAccountsPage() {
         });
       }
     } catch (_err) {
+      // Catch network or server error and display a user-friendly error notice
       setBannerNotice({
         type: 'error',
         message: 'An error occurred while disconnecting the account.',
@@ -116,6 +117,55 @@ export default function TenantAccountsPage() {
       setIsDisconnecting(false);
     }
   };
+
+  let contentNode: React.ReactNode;
+  if (isLoading) {
+    contentNode = (
+      <div
+        data-testid="accounts-loading-skeleton"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+          gap: SPACING.lg,
+        }}
+      >
+        {[1, 2].map((i) => (
+          <div
+            key={i}
+            style={{
+              height: '180px',
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.md,
+              opacity: 0.4,
+            }}
+          />
+        ))}
+      </div>
+    );
+  } else if (accounts.length === 0) {
+    contentNode = <AccountsEmptyState onConnect={() => setIsConnectOpen(true)} />;
+  } else {
+    contentNode = (
+      <div
+        data-testid="accounts-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: SPACING.lg,
+        }}
+      >
+        {accounts.map((account) => (
+          <AccountCard
+            key={account.id}
+            account={account}
+            onReconnect={handleReconnect}
+            onDisconnect={(acc) => setDisconnectingAccount(acc)}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -263,49 +313,7 @@ export default function TenantAccountsPage() {
       )}
 
       {/* Main Content Area */}
-      {isLoading ? (
-        <div
-          data-testid="accounts-loading-skeleton"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-            gap: SPACING.lg,
-          }}
-        >
-          {[1, 2].map((i) => (
-            <div
-              key={i}
-              style={{
-                height: '180px',
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.md,
-                opacity: 0.4,
-              }}
-            />
-          ))}
-        </div>
-      ) : accounts.length === 0 ? (
-        <AccountsEmptyState onConnect={() => setIsConnectOpen(true)} />
-      ) : (
-        <div
-          data-testid="accounts-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-            gap: SPACING.lg,
-          }}
-        >
-          {accounts.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              onReconnect={handleReconnect}
-              onDisconnect={(acc) => setDisconnectingAccount(acc)}
-            />
-          ))}
-        </div>
-      )}
+      {contentNode}
 
       {/* Connect Account Modal */}
       <ConnectAccountModal
