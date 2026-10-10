@@ -3,9 +3,13 @@ import {
   UploadUrlRequestSchema,
   ConfirmUploadRequestSchema,
   CreateFolderRequestSchema,
+  UpdateFolderRequestSchema,
+  MediaFolderSchema,
   MediaListQuerySchema,
   DeleteMediaItemResponseSchema,
   DeleteFolderResponseSchema,
+  BatchMediaRequestSchema,
+  BatchMediaResponseSchema,
   deriveDefaultCaptionFromFilename,
 } from '../src/index.js';
 
@@ -89,40 +93,102 @@ describe('Media Domain Contracts', () => {
     });
   });
 
-  describe('Folder Contracts', () => {
-    it('validates folder creation with name only (no color badge)', () => {
-      const res = CreateFolderRequestSchema.safeParse({
+  describe('Folder Contracts (Nested Hierarchy & Cascading Deletion)', () => {
+    it('validates folder creation with name only or optional parentId', () => {
+      const rootRes = CreateFolderRequestSchema.safeParse({
         name: 'Daily Highlights',
       });
-      expect(res.success).toBe(true);
-      if (res.success) {
-        expect('color' in res.data).toBe(false);
+      expect(rootRes.success).toBe(true);
+      if (rootRes.success) {
+        expect('color' in rootRes.data).toBe(false);
+        expect(rootRes.data.parentId).toBeUndefined();
       }
+
+      const childRes = CreateFolderRequestSchema.safeParse({
+        name: 'October Reels',
+        parentId: '22222222-2222-4222-a222-222222222222',
+      });
+      expect(childRes.success).toBe(true);
     });
 
-    it('validates non-destructive folder delete response schema', () => {
+    it('validates MediaFolderSchema with parentId and subfolderCount defaults', () => {
+      const res = MediaFolderSchema.safeParse({
+        id: '22222222-2222-4222-a222-222222222222',
+        userId: '11111111-1111-4111-a111-111111111111',
+        parentId: null,
+        name: 'Root Folder',
+        itemCount: 5,
+        subfolderCount: 2,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      expect(res.success).toBe(true);
+    });
+
+    it('validates UpdateFolderRequestSchema with name and/or parentId', () => {
+      const moveRes = UpdateFolderRequestSchema.safeParse({
+        parentId: '33333333-3333-4333-a333-333333333333',
+      });
+      expect(moveRes.success).toBe(true);
+    });
+
+    it('validates cascading folder delete response schema', () => {
       const res = DeleteFolderResponseSchema.safeParse({
         success: true,
         deletedFolderId: '22222222-2222-4222-a222-222222222222',
-        preservedItemsCount: 42,
+        deletedSubfoldersCount: 3,
+        deletedItemsCount: 42,
       });
       expect(res.success).toBe(true);
     });
   });
 
-  describe('Media List Query Contracts', () => {
-    it('parses string numbers to integers for pagination', () => {
+  describe('Media List Query & Batch Contracts', () => {
+    it('parses pagination and sortBy/sortOrder with defaults', () => {
       const res = MediaListQuerySchema.safeParse({
         limit: '25',
         offset: '50',
         mediaType: 'video',
+        sortBy: 'file_size',
+        sortOrder: 'asc',
       });
       expect(res.success).toBe(true);
       if (res.success) {
         expect(res.data.limit).toBe(25);
         expect(res.data.offset).toBe(50);
         expect(res.data.mediaType).toBe('video');
+        expect(res.data.sortBy).toBe('file_size');
+        expect(res.data.sortOrder).toBe('asc');
       }
+    });
+
+    it('validates BatchMediaRequestSchema for move, delete, and caption actions', () => {
+      const moveRes = BatchMediaRequestSchema.safeParse({
+        action: 'move',
+        mediaIds: ['11111111-1111-4111-a111-111111111111'],
+        folderId: '22222222-2222-4222-a222-222222222222',
+      });
+      expect(moveRes.success).toBe(true);
+
+      const deleteRes = BatchMediaRequestSchema.safeParse({
+        action: 'delete',
+        mediaIds: ['11111111-1111-4111-a111-111111111111'],
+      });
+      expect(deleteRes.success).toBe(true);
+
+      const captionRes = BatchMediaRequestSchema.safeParse({
+        action: 'caption',
+        mediaIds: ['11111111-1111-4111-a111-111111111111'],
+        captionText: 'Updated batch caption',
+      });
+      expect(captionRes.success).toBe(true);
+
+      const batchResp = BatchMediaResponseSchema.safeParse({
+        success: true,
+        action: 'move',
+        affectedCount: 1,
+      });
+      expect(batchResp.success).toBe(true);
     });
   });
 

@@ -37,6 +37,8 @@ export async function handleListMedia(
     folderId: searchParams.get('folderId') || undefined,
     mediaType: searchParams.get('mediaType') || undefined,
     search: searchParams.get('search') || undefined,
+    sortBy: searchParams.get('sortBy') || undefined,
+    sortOrder: searchParams.get('sortOrder') || undefined,
     limit: searchParams.get('limit') || undefined,
     offset: searchParams.get('offset') || undefined,
   });
@@ -48,7 +50,8 @@ export async function handleListMedia(
     );
   }
 
-  const { folderId, mediaType, search, limit, offset } = parsedQuery.data;
+  const { folderId, mediaType, search, sortBy, sortOrder, limit, offset } =
+    parsedQuery.data;
   const db = dbClient ?? getDbClient();
 
   const conditions: string[] = ['user_id = $1'];
@@ -74,6 +77,14 @@ export async function handleListMedia(
 
   const whereClause = conditions.join(' AND ');
 
+  const SORT_COLUMN_MAP: Record<'created_at' | 'name' | 'file_size', string> = {
+    created_at: 'created_at',
+    name: 'LOWER(name)',
+    file_size: 'file_size',
+  };
+  const orderColumn = SORT_COLUMN_MAP[sortBy] ?? 'created_at';
+  const orderDirection = sortOrder === 'asc' ? 'ASC' : 'DESC';
+
   // 1. Total count
   const countSql = `SELECT COUNT(*)::int AS total FROM media_items WHERE ${whereClause}`;
   const countRows = (await db.query(countSql, params)) as any[];
@@ -81,7 +92,7 @@ export async function handleListMedia(
 
   // 2. Fetch page items
   const queryParams = [...params, limit, offset];
-  const itemsSql = `SELECT * FROM media_items WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
+  const itemsSql = `SELECT * FROM media_items WHERE ${whereClause} ORDER BY ${orderColumn} ${orderDirection} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
   const rows = (await db.query(itemsSql, queryParams)) as any[];
 
   const items = rows.map((row) => ({
