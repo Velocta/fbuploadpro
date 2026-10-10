@@ -1,6 +1,6 @@
 /**
  * @file accounts.test.tsx
- * @description Unit tests for Facebook Accounts UI components (Spec 027).
+ * @description Unit tests for Facebook Accounts UI components (Spec 027 & Spec 029).
  */
 
 import React from 'react';
@@ -8,10 +8,19 @@ import { describe, it, expect, vi } from 'vitest';
 import { AccountCard, type FacebookAccountItem } from '@/components/accounts/account-card';
 import { AccountsEmptyState } from '@/components/accounts/accounts-empty-state';
 import { DisconnectAccountDialog } from '@/components/accounts/disconnect-account-dialog';
-import { ConnectAccountModal } from '@/components/accounts/connect-account-modal';
+import {
+  ConnectAccountModal,
+  MagicLinkView,
+  hasCompletedAccountConnection,
+} from '@/components/accounts/connect-account-modal';
+import {
+  AccountsFilterBar,
+  filterAccountsList,
+  sortAccountsExpiredFirst,
+} from '@/app/tenant/[subdomain]/accounts/page';
 import { render } from '../components/setup';
 
-describe('Facebook Accounts UI Components (Spec 027)', () => {
+describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
   const mockActiveAccount: FacebookAccountItem = {
     id: 'acc-123',
     fbAccountId: 'fb-user-123',
@@ -22,6 +31,13 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
     status: 'active',
     connectedPagesCount: 3,
     createdAt: '2026-10-01T12:00:00Z',
+  };
+
+  const mockZeroPagesAccount: FacebookAccountItem = {
+    ...mockActiveAccount,
+    id: 'acc-zero',
+    displayName: 'Zero Pages Profile',
+    connectedPagesCount: 0,
   };
 
   const mockExpiredAccount: FacebookAccountItem = {
@@ -104,7 +120,7 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
   });
 
   describe('DisconnectAccountDialog', () => {
-    it('renders safety confirmation dialog warning of connected pages detachment', () => {
+    it('renders destructive linked pages warning when connectedPagesCount > 0', () => {
       const onConfirm = vi.fn();
       const onOpenChange = vi.fn();
 
@@ -119,14 +135,39 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
 
       expect(hasText('Disconnect Sarah Connor?')).toBe(true);
       expect(hasText('This Account will no longer be available')).toBe(true);
+      expect(hasAttribute('data-testid', 'disconnect-linked-pages-warning')).toBe(true);
       expect(hasText('3 linked Facebook pages')).toBe(true);
       expect(hasText('Before you disconnect')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-cancel-btn')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-confirm-btn')).toBe(true);
     });
+
+    it('renders calm neutral notice when connectedPagesCount === 0 without Before you disconnect warning (Spec 029)', () => {
+      const onConfirm = vi.fn();
+      const onOpenChange = vi.fn();
+
+      const { hasText, hasAttribute } = render(
+        <DisconnectAccountDialog
+          account={mockZeroPagesAccount}
+          open={true}
+          onOpenChange={onOpenChange}
+          onConfirm={onConfirm}
+        />
+      );
+
+      expect(hasText('Disconnect Zero Pages Profile?')).toBe(true);
+      expect(hasAttribute('data-testid', 'disconnect-zero-pages-notice')).toBe(true);
+      expect(
+        hasText(
+          'No Facebook pages are linked to this account yet. its safe to remove, You can reconnect it anytime.'
+        )
+      ).toBe(true);
+      expect(hasText('Before you disconnect')).toBe(false);
+      expect(hasAttribute('data-testid', 'disconnect-linked-pages-warning')).toBe(false);
+    });
   });
 
-  describe('ConnectAccountModal', () => {
+  describe('ConnectAccountModal & MagicLinkView', () => {
     it('renders connection modal with Direct Connection and Magic Link choices', () => {
       const onOpenChange = vi.fn();
       const onAccountConnected = vi.fn();
@@ -147,5 +188,149 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
       expect(hasAttribute('data-testid', 'connect-option-direct')).toBe(true);
       expect(hasAttribute('data-testid', 'connect-option-magic')).toBe(true);
     });
+
+    it('renders "Reconnect {displayName}" as the modal title when reconnectingAccount is provided (Spec 029)', () => {
+      const { hasText } = render(
+        <ConnectAccountModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          onAccountConnected={vi.fn()}
+          reconnectingAccount={{ id: 'acc-456', displayName: 'John Doe' }}
+        />
+      );
+
+      expect(hasText('Reconnect John Doe')).toBe(true);
+      expect(hasText('Connect Facebook Account')).toBe(false);
+    });
+
+    it('renders click-to-copy magic link input when countdown is active and inline regenerate button when expired at 0:00 (Spec 029)', () => {
+      const activeRender = render(
+        <MagicLinkView
+          magicUrl="https://acme.vinsmokemedia.online/api/auth/facebook/magic?token=abc"
+          remainingSeconds={840}
+          copySuccess={false}
+          isGeneratingMagic={false}
+          onCopyLink={vi.fn()}
+          onRegenerateLink={vi.fn()}
+        />
+      );
+
+      expect(activeRender.hasAttribute('data-testid', 'magic-url-input')).toBe(true);
+      expect(activeRender.hasAttribute('data-testid', 'magic-copy-button')).toBe(true);
+      expect(activeRender.hasAttribute('data-testid', 'magic-regenerate-button')).toBe(false);
+      expect(activeRender.hasText('Link expires in 14:00')).toBe(true);
+
+      const expiredRender = render(
+        <MagicLinkView
+          magicUrl="https://acme.vinsmokemedia.online/api/auth/facebook/magic?token=abc"
+          remainingSeconds={0}
+          copySuccess={false}
+          isGeneratingMagic={false}
+          onCopyLink={vi.fn()}
+          onRegenerateLink={vi.fn()}
+        />
+      );
+
+      expect(expiredRender.hasAttribute('data-testid', 'magic-regenerate-button')).toBe(true);
+      expect(expiredRender.hasText('Link expired — Generate a new link')).toBe(true);
+      expect(expiredRender.hasAttribute('data-testid', 'magic-url-input')).toBe(false);
+      expect(expiredRender.hasText('Magic link expired')).toBe(true);
+    });
+
+    it('hasCompletedAccountConnection detects both newly added accounts and existing expired accounts returning to active (Spec 029)', () => {
+      const initialIds = new Set(['acc-123', 'acc-456']);
+      const initialStates = new Map([
+        ['acc-123', { status: 'active', updatedAt: '2026-10-01T12:00:00Z' }],
+        ['acc-456', { status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }],
+      ]);
+
+      // Unchanged state -> false
+      expect(
+        hasCompletedAccountConnection(
+          [
+            { id: 'acc-123', status: 'active', updatedAt: '2026-10-01T12:00:00Z' },
+            { id: 'acc-456', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' },
+          ],
+          initialIds,
+          initialStates,
+          { id: 'acc-456', displayName: 'John Doe', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }
+        )
+      ).toBe(false);
+
+      // Brand new account added -> true
+      expect(
+        hasCompletedAccountConnection(
+          [
+            { id: 'acc-123', status: 'active', updatedAt: '2026-10-01T12:00:00Z' },
+            { id: 'acc-new-789', status: 'active', updatedAt: '2026-10-10T15:00:00Z' },
+          ],
+          initialIds,
+          initialStates,
+          null
+        )
+      ).toBe(true);
+
+      // Existing expired account returning to active -> true
+      expect(
+        hasCompletedAccountConnection(
+          [
+            { id: 'acc-123', status: 'active', updatedAt: '2026-10-01T12:00:00Z' },
+            { id: 'acc-456', status: 'active', updatedAt: '2026-10-10T15:00:00Z' },
+          ],
+          initialIds,
+          initialStates,
+          { id: 'acc-456', displayName: 'John Doe', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }
+        )
+      ).toBe(true);
+    });
+  });
+
+  describe('Sorting & Agency Search/Filter Bar (Spec 029)', () => {
+    it('sortAccountsExpiredFirst pins expired accounts to the top followed by createdAt DESC', () => {
+      const sorted = sortAccountsExpiredFirst([
+        mockActiveAccount, // active, 2026-10-01
+        mockExpiredAccount, // expired, 2026-09-15
+        {
+          ...mockActiveAccount,
+          id: 'acc-newest',
+          displayName: 'Newest Active',
+          createdAt: '2026-10-09T12:00:00Z',
+        },
+      ]);
+
+      expect(sorted.map((a) => a.id)).toEqual(['acc-456', 'acc-newest', 'acc-123']);
+    });
+
+    it('filterAccountsList filters by searchQuery and statusFilter', () => {
+      const list = [mockExpiredAccount, mockActiveAccount];
+
+      expect(filterAccountsList(list, 'sarah', 'all')).toHaveLength(1);
+      expect(filterAccountsList(list, 'sarah', 'all')[0]?.id).toBe('acc-123');
+      expect(filterAccountsList(list, '', 'expired')).toHaveLength(1);
+      expect(filterAccountsList(list, '', 'expired')[0]?.id).toBe('acc-456');
+      expect(filterAccountsList(list, 'nonexistent', 'all')).toHaveLength(0);
+    });
+
+    it('AccountsFilterBar renders search input and All / Active / Expired filter buttons', () => {
+      const { hasAttribute, hasText } = render(
+        <AccountsFilterBar
+          searchQuery=""
+          onSearchChange={vi.fn()}
+          statusFilter="all"
+          onStatusFilterChange={vi.fn()}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'accounts-filter-bar')).toBe(true);
+      expect(hasAttribute('data-testid', 'accounts-search-input')).toBe(true);
+      expect(hasAttribute('data-testid', 'accounts-filter-all')).toBe(true);
+      expect(hasAttribute('data-testid', 'accounts-filter-active')).toBe(true);
+      expect(hasAttribute('data-testid', 'accounts-filter-expired')).toBe(true);
+      expect(hasText('All')).toBe(true);
+      expect(hasText('Active')).toBe(true);
+      expect(hasText('Expired')).toBe(true);
+    });
   });
 });
+

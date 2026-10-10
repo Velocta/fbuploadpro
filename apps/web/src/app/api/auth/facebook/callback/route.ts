@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  buildTenantUrl,
   encryptToken,
   FacebookTokenExchangeResponseSchema,
   FacebookUserProfileResponseSchema,
@@ -20,6 +21,7 @@ export async function handleFacebookCallback(
   const appSecret = process.env.FACEBOOK_APP_SECRET || '';
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';
   const redirectUri = `${appUrl}/api/auth/facebook/callback`;
 
   const searchParams = request.nextUrl.searchParams;
@@ -30,7 +32,20 @@ export async function handleFacebookCallback(
 
   // Handle upstream OAuth cancellation or error
   if (error) {
-    const target = new URL('/accounts', request.url);
+    let target = new URL('/accounts', request.url);
+    if (state) {
+      try {
+        const statePayload = await verifyOAuthState(state, sessionSecret);
+        target = buildTenantUrl(
+          statePayload.tenantSubdomain,
+          '/accounts',
+          request.url,
+          rootDomain
+        );
+      } catch (_e) {
+        // Fallback to /accounts if state cannot be verified
+      }
+    }
     target.searchParams.set('error', error);
     if (errorDescription) {
       target.searchParams.set('error_description', errorDescription);
@@ -55,9 +70,11 @@ export async function handleFacebookCallback(
   }
 
   const { tenantSubdomain, userId } = statePayload;
-  const destinationUrl = new URL(
-    `/tenant/${tenantSubdomain}/accounts`,
-    request.url
+  const destinationUrl = buildTenantUrl(
+    tenantSubdomain,
+    '/accounts',
+    request.url,
+    rootDomain
   );
 
   try {

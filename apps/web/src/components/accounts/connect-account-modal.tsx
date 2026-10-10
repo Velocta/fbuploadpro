@@ -12,12 +12,59 @@ import {
 } from '@/components/ui/dialog';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
+interface AccountStateRecord {
+  status?: string | undefined;
+  updatedAt?: string | undefined;
+}
+
+interface AccountSnapshot {
+  id: string;
+  status?: string | undefined;
+  updatedAt?: string | undefined;
+}
+
 interface ConnectAccountModalProps {
   subdomain: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAccountConnected: () => void;
   existingAccountIds?: string[];
+  reconnectingAccount?: {
+    id: string;
+    displayName: string;
+    status?: string | undefined;
+    updatedAt?: string | undefined;
+  } | null;
+  initialAccounts?: AccountSnapshot[];
+}
+
+function formatTimer(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+export function hasCompletedAccountConnection(
+  accounts: AccountSnapshot[],
+  initialIds: Set<string>,
+  initialStates: Map<string, AccountStateRecord>,
+  reconnectingAccount?: ConnectAccountModalProps['reconnectingAccount']
+): boolean {
+  return accounts.some((acc) => {
+    if (!initialIds.has(acc.id)) {
+      return true;
+    }
+    if (reconnectingAccount && acc.id === reconnectingAccount.id) {
+      if (acc.status === 'active') return true;
+      if (acc.updatedAt && acc.updatedAt !== reconnectingAccount.updatedAt) return true;
+    }
+    const prevState = initialStates.get(acc.id);
+    if (!prevState) return false;
+    if (prevState.status === 'expired' && acc.status === 'active') {
+      return true;
+    }
+    return Boolean(acc.updatedAt && prevState.updatedAt && acc.updatedAt !== prevState.updatedAt);
+  });
 }
 
 interface ConnectOptionButtonProps {
@@ -99,12 +146,147 @@ function ConnectOptionButton({
   );
 }
 
+interface MagicLinkViewProps {
+  magicUrl: string | null;
+  remainingSeconds: number;
+  copySuccess: boolean;
+  isGeneratingMagic: boolean;
+  onCopyLink: () => void;
+  onRegenerateLink: () => void;
+}
+
+export function MagicLinkView({
+  magicUrl,
+  remainingSeconds,
+  copySuccess,
+  isGeneratingMagic,
+  onCopyLink,
+  onRegenerateLink,
+}: Readonly<MagicLinkViewProps>) {
+  const isExpired = remainingSeconds <= 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+      <p style={{ margin: 0, fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.4 }}>
+        copy and Open this link in the browser where you&apos;re signed into Facebook:
+      </p>
+
+      {isExpired ? (
+        <button
+          type="button"
+          data-testid="magic-regenerate-button"
+          disabled={isGeneratingMagic}
+          onClick={onRegenerateLink}
+          style={{
+            height: '38px',
+            width: '100%',
+            padding: `0 ${SPACING.md}`,
+            backgroundColor: PALETTE.primary,
+            color: PALETTE.background,
+            border: 'none',
+            borderRadius: RADII.sm,
+            fontSize: '0.8125rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            cursor: isGeneratingMagic ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {isGeneratingMagic ? 'Generating Magic Link...' : 'Link expired — Generate a new link'}
+        </button>
+      ) : (
+        <div style={{ display: 'flex', gap: SPACING.xs, alignItems: 'center' }}>
+          <input
+            type="text"
+            readOnly
+            data-testid="magic-url-input"
+            value={magicUrl ?? ''}
+            onClick={onCopyLink}
+            style={{
+              flex: 1,
+              height: '38px',
+              padding: `0 ${SPACING.sm}`,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.sm,
+              fontSize: '0.8125rem',
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              outline: 'none',
+              fontFamily: 'monospace',
+              cursor: 'pointer',
+            }}
+          />
+
+          <button
+            type="button"
+            data-testid="magic-copy-button"
+            onClick={onCopyLink}
+            style={{
+              height: '38px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: copySuccess ? PALETTE.accent4 : PALETTE.primary,
+              color: PALETTE.background,
+              border: 'none',
+              borderRadius: RADII.sm,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: SPACING.xs,
+              whiteSpace: 'nowrap',
+              transition: 'background-color 0.15s ease',
+            }}
+          >
+            {copySuccess ? 'Copied!' : 'Copy Link'}
+          </button>
+        </div>
+      )}
+
+      {/* Countdown & Status */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 14px',
+          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+          borderRadius: RADII.sm,
+          fontSize: '0.75rem',
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span
+            data-testid="magic-pulse-indicator"
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: RADII.full,
+              backgroundColor: isExpired ? PALETTE.accent3 : PALETTE.primary,
+              display: 'inline-block',
+            }}
+          />
+          <span>{isExpired ? 'Magic link expired' : 'Waiting for Facebook approval...'}</span>
+        </div>
+
+        <span data-testid="magic-countdown" style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
+          {isExpired ? 'Link expired' : `Link expires in ${formatTimer(remainingSeconds)}`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const EMPTY_IDS: string[] = [];
+const EMPTY_ACCOUNTS: AccountSnapshot[] = [];
+
 export function ConnectAccountModal({
   subdomain,
   open,
   onOpenChange,
   onAccountConnected,
-  existingAccountIds = [],
+  existingAccountIds = EMPTY_IDS,
+  reconnectingAccount = null,
+  initialAccounts = EMPTY_ACCOUNTS,
 }: Readonly<ConnectAccountModalProps>) {
   const [view, setView] = useState<'choose' | 'magic' | 'success'>('choose');
   const [isDirectConnecting, setIsDirectConnecting] = useState(false);
@@ -114,20 +296,40 @@ export function ConnectAccountModal({
   const [remainingSeconds, setRemainingSeconds] = useState(900); // 15 minutes
   const [magicError, setMagicError] = useState<string | null>(null);
 
+  const wasOpenRef = useRef(false);
   const initialAccountIdsRef = useRef<Set<string>>(new Set(existingAccountIds));
+  const initialAccountStatesRef = useRef<Map<string, AccountStateRecord>>(
+    new Map()
+  );
 
-  // Reset state when modal opens
+  // Reset state when modal transitions to open
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpenRef.current) {
       setView('choose');
       setIsDirectConnecting(false);
       setMagicUrl(null);
       setCopySuccess(false);
       setRemainingSeconds(900);
       setMagicError(null);
-      initialAccountIdsRef.current = new Set(existingAccountIds);
+
+      const ids = new Set<string>(existingAccountIds);
+      const stateMap = new Map<string, AccountStateRecord>();
+      for (const acc of initialAccounts) {
+        ids.add(acc.id);
+        stateMap.set(acc.id, { status: acc.status, updatedAt: acc.updatedAt });
+      }
+      if (reconnectingAccount) {
+        ids.add(reconnectingAccount.id);
+        stateMap.set(reconnectingAccount.id, {
+          status: reconnectingAccount.status ?? 'expired',
+          updatedAt: reconnectingAccount.updatedAt,
+        });
+      }
+      initialAccountIdsRef.current = ids;
+      initialAccountStatesRef.current = stateMap;
     }
-  }, [open, existingAccountIds]);
+    wasOpenRef.current = open;
+  }, [open, existingAccountIds, initialAccounts, reconnectingAccount]);
 
   // Handle Direct Connection redirect
   const handleDirectConnect = () => {
@@ -171,9 +373,11 @@ export function ConnectAccountModal({
     }
   };
 
+  const isLinkExpired = remainingSeconds <= 0;
+
   // Live countdown timer for Magic Link
   useEffect(() => {
-    if (view !== 'magic' || !open) return;
+    if (view !== 'magic' || !open || isLinkExpired) return;
     const interval = setInterval(() => {
       setRemainingSeconds((prev) => {
         if (prev <= 1) {
@@ -185,29 +389,24 @@ export function ConnectAccountModal({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [view, open]);
+  }, [view, open, isLinkExpired]);
 
-  // Format countdown mm:ss
-  const formatTimer = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  // Check for newly connected account
+  // Check for newly connected or reconnected account
   const pollAccounts = useCallback(async () => {
     try {
       const res = await fetch(`/api/tenant/${subdomain}/accounts`);
       if (!res.ok) return;
       const data = await res.json();
-      const accounts = data.accounts || [];
+      const accounts: AccountSnapshot[] = data.accounts || [];
 
-      // Detect if an account not present in initialAccountIdsRef now exists
-      const hasNewAccount = accounts.some(
-        (acc: { id: string }) => !initialAccountIdsRef.current.has(acc.id)
-      );
-
-      if (hasNewAccount) {
+      if (
+        hasCompletedAccountConnection(
+          accounts,
+          initialAccountIdsRef.current,
+          initialAccountStatesRef.current,
+          reconnectingAccount
+        )
+      ) {
         setView('success');
         onAccountConnected();
         setTimeout(() => {
@@ -217,24 +416,28 @@ export function ConnectAccountModal({
     } catch (_e) {
       // Ignored because polling failures are silently retried on the next cycle
     }
-  }, [subdomain, onAccountConnected, onOpenChange]);
+  }, [subdomain, onAccountConnected, onOpenChange, reconnectingAccount]);
 
-  // Pure automatic polling every 3 seconds while in magic view
+  // Pure automatic polling every 3 seconds while in magic view and link is not expired
   useEffect(() => {
-    if (view !== 'magic' || !open) return;
+    if (view !== 'magic' || !open || isLinkExpired) return;
 
     const pollInterval = setInterval(() => {
       void pollAccounts();
     }, 3000);
 
     return () => clearInterval(pollInterval);
-  }, [view, open, pollAccounts]);
+  }, [view, open, isLinkExpired, pollAccounts]);
+
+  const modalTitle = reconnectingAccount
+    ? `Reconnect ${reconnectingAccount.displayName}`
+    : 'Connect Facebook Account';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent style={{ maxWidth: '500px' }} data-testid="connect-account-modal">
         <DialogHeader>
-          <DialogTitle>Connect Facebook Account</DialogTitle>
+          <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription>
             {view === 'choose' && 'Choose where your Facebook account is currently logged in:'}
             {view === 'magic' && 'Open this link in the browser where your Facebook profile is active.'}
@@ -279,7 +482,9 @@ export function ConnectAccountModal({
               <ConnectOptionButton
                 testId="connect-option-magic"
                 disabled={isGeneratingMagic}
-                onClick={handleStartMagicLink}
+                onClick={() => {
+                  void handleStartMagicLink();
+                }}
                 title={isGeneratingMagic ? 'Generating Magic Link...' : 'Different browser or device (Magic Link)'}
                 description="Generates a secure single-use link you can paste into another browser or window."
                 icon={
@@ -293,89 +498,18 @@ export function ConnectAccountModal({
           )}
 
           {view === 'magic' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-              <p style={{ margin: 0, fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.4 }}>
-                copy and Open this link in the browser where you're signed into Facebook:
-              </p>
-
-              {/* Copyable Link Field */}
-              <div style={{ display: 'flex', gap: SPACING.xs, alignItems: 'center' }}>
-                <input
-                  type="text"
-                  readOnly
-                  data-testid="magic-url-input"
-                  value={magicUrl ?? ''}
-                  style={{
-                    flex: 1,
-                    height: '38px',
-                    padding: `0 ${SPACING.sm}`,
-                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    borderRadius: RADII.sm,
-                    fontSize: '0.8125rem',
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    outline: 'none',
-                    fontFamily: 'monospace',
-                  }}
-                />
-
-                <button
-                  type="button"
-                  data-testid="magic-copy-button"
-                  onClick={handleCopyLink}
-                  style={{
-                    height: '38px',
-                    padding: `0 ${SPACING.md}`,
-                    backgroundColor: copySuccess ? PALETTE.accent4 : PALETTE.primary,
-                    color: PALETTE.background,
-                    border: 'none',
-                    borderRadius: RADII.sm,
-                    fontSize: '0.8125rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: SPACING.xs,
-                    whiteSpace: 'nowrap',
-                    transition: 'background-color 0.15s ease',
-                  }}
-                >
-                  {copySuccess ? 'Copied!' : 'Copy Link'}
-                </button>
-              </div>
-
-              {/* Countdown & Status */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                  borderRadius: RADII.sm,
-                  fontSize: '0.75rem',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span
-                    data-testid="magic-pulse-indicator"
-                    style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: RADII.full,
-                      backgroundColor: PALETTE.primary,
-                      display: 'inline-block',
-                    }}
-                  />
-                  <span>Waiting for Facebook approval...</span>
-                </div>
-
-                <span data-testid="magic-countdown" style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
-                  Link expires in {formatTimer(remainingSeconds)}
-                </span>
-              </div>
-            </div>
+            <MagicLinkView
+              magicUrl={magicUrl}
+              remainingSeconds={remainingSeconds}
+              copySuccess={copySuccess}
+              isGeneratingMagic={isGeneratingMagic}
+              onCopyLink={() => {
+                void handleCopyLink();
+              }}
+              onRegenerateLink={() => {
+                void handleStartMagicLink();
+              }}
+            />
           )}
 
           {view === 'success' && (
