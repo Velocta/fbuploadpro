@@ -147,6 +147,29 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
     });
   }, []);
 
+  const avatarElement = (
+    <div
+      data-testid="workspace-user-avatar"
+      style={{
+        width: '28px',
+        height: '28px',
+        borderRadius: RADII.full,
+        backgroundColor: THEME.default.surfaces.subtle,
+        border: `1px solid ${THEME.default.borders.hairline}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '0.75rem',
+        fontWeight: TYPOGRAPHY.weights.semibold,
+        color: THEME.default.text.primary,
+        flexShrink: 0,
+        userSelect: 'none',
+      }}
+    >
+      {initials}
+    </div>
+  );
+
   return (
     <div
       ref={menuRef}
@@ -363,27 +386,7 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
               cursor: 'pointer',
             }}
           >
-            {/* Avatar with Initials */}
-            <div
-              data-testid="workspace-user-avatar"
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: RADII.full,
-                backgroundColor: THEME.default.surfaces.subtle,
-                border: `1px solid ${THEME.default.borders.hairline}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: THEME.default.text.primary,
-                flexShrink: 0,
-                userSelect: 'none',
-              }}
-            >
-              {initials}
-            </div>
+            {avatarElement}
           </button>
         ) : (
           <div
@@ -394,27 +397,7 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
               minWidth: 0,
             }}
           >
-            {/* Avatar with Initials */}
-            <div
-              data-testid="workspace-user-avatar"
-              style={{
-                width: '28px',
-                height: '28px',
-                borderRadius: RADII.full,
-                backgroundColor: THEME.default.surfaces.subtle,
-                border: `1px solid ${THEME.default.borders.hairline}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: THEME.default.text.primary,
-                flexShrink: 0,
-                userSelect: 'none',
-              }}
-            >
-              {initials}
-            </div>
+            {avatarElement}
 
             <div
               style={{
