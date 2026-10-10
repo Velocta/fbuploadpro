@@ -43,7 +43,7 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
       );
 
       expect(hasText('Sarah Connor')).toBe(true);
-      expect(hasText('3 connected pages')).toBe(true);
+      expect(hasText('3 pages linked')).toBe(true);
       expect(hasText('Female')).toBe(true);
       expect(hasAttribute('data-testid', 'account-avatar-img')).toBe(true);
       expect(hasAttribute('data-testid', 'account-profile-link')).toBe(true);
@@ -53,20 +53,21 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
       expect(hasText('Operational')).toBe(false);
       expect(hasText('Critical')).toBe(false);
       expect(hasText('Queued')).toBe(false);
-      expect(hasText('Re-authentication required')).toBe(false);
+      expect(hasText('Session expired — reconnect to resume publishing')).toBe(false);
       expect(html).not.toContain('account-reconnect-button');
     });
 
-    it('renders expired account with Re-authentication required alert and Reconnect button', () => {
+    it('renders expired account with Session expired alert and Reconnect account button', () => {
       const { hasText, hasAttribute } = render(
         <AccountCard account={mockExpiredAccount} />
       );
 
       expect(hasText('John Doe')).toBe(true);
-      expect(hasText('1 connected page')).toBe(true);
+      expect(hasText('1 page linked')).toBe(true);
       expect(hasText('Male')).toBe(true);
       expect(hasText('JD')).toBe(true); // Fallback initials
-      expect(hasText('Re-authentication required')).toBe(true);
+      expect(hasText('Session expired — reconnect to resume publishing')).toBe(true);
+      expect(hasText('Reconnect account')).toBe(true);
       expect(hasAttribute('data-testid', 'account-reconnect-button')).toBe(true);
       expect(hasAttribute('data-testid', 'account-disconnect-button')).toBe(true);
     });
@@ -88,13 +89,15 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
   });
 
   describe('AccountsEmptyState', () => {
-    it('renders friendly zero-accounts empty state with Connect Facebook Account action', () => {
+    it('renders friendly zero-accounts empty state with Connect Facebook Account action and privacy microcopy', () => {
       const onConnect = vi.fn();
       const { hasText, hasAttribute } = render(
         <AccountsEmptyState onConnect={onConnect} />
       );
 
-      expect(hasText('No Facebook Accounts Connected')).toBe(true);
+      expect(hasText('Connect your first Facebook account')).toBe(true);
+      expect(hasText('Link your Facebook Account to import pages')).toBe(true);
+      expect(hasText('We only request permissions to publish reels and manage your pages')).toBe(true);
       expect(hasText('Connect Facebook Account')).toBe(true);
       expect(hasAttribute('data-testid', 'empty-connect-button')).toBe(true);
     });
@@ -114,10 +117,10 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
         />
       );
 
-      expect(hasText('Disconnect Facebook Account')).toBe(true);
-      expect(hasText('Sarah Connor')).toBe(true);
-      expect(hasText('3 Facebook Pages')).toBe(true);
-      expect(hasText('Important Data Notice')).toBe(true);
+      expect(hasText('Disconnect Sarah Connor?')).toBe(true);
+      expect(hasText('This Account will no longer be available')).toBe(true);
+      expect(hasText('3 linked Facebook pages')).toBe(true);
+      expect(hasText('Before you disconnect')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-cancel-btn')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-confirm-btn')).toBe(true);
     });
@@ -139,8 +142,8 @@ describe('Facebook Accounts UI Components (Spec 027)', () => {
       );
 
       expect(hasText('Connect Facebook Account')).toBe(true);
-      expect(hasText('Connect in this browser')).toBe(true);
-      expect(hasText('Connect via Magic Link')).toBe(true);
+      expect(hasText('This browser')).toBe(true);
+      expect(hasText('Different browser or device (Magic Link)')).toBe(true);
       expect(hasAttribute('data-testid', 'connect-option-direct')).toBe(true);
       expect(hasAttribute('data-testid', 'connect-option-magic')).toBe(true);
     });

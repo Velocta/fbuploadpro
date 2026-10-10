@@ -10,7 +10,7 @@ export default function FacebookConnectErrorPage() {
       iconBorder="rgba(246, 70, 93, 0.35)"
       iconColor={PALETTE.accent3}
       title="Connection Link Expired or Invalid"
-      description="This single-use Facebook authorization link has expired or is no longer valid. Please return to your main workspace to generate a fresh link."
+      description="This single-use Facebook authorization link has expired or is no longer valid. Please generate a fresh link."
       icon={
         <svg
           width="24"

@@ -10,7 +10,7 @@ export default function FacebookConnectSuccessPage() {
       iconBorder="rgba(46, 189, 133, 0.35)"
       iconColor={PALETTE.accent4}
       title="Facebook Account Connected Successfully"
-      description="Your Facebook profile has been linked to your workspace. You can safely close this window and return to your main dashboard."
+      description="You're all set! You can close this tab and return to your FbUploadPro dashboard."
       icon={
         <svg
           width="24"
@@ -36,7 +36,7 @@ export default function FacebookConnectSuccessPage() {
           color: `var(--text-dim, ${THEME.default.text.muted})`,
         }}
       >
-        Authorization completed securely via FBUploadPro.
+        Linked to FbUploadPro via Facebook API.
       </div>
     </ConnectStatusLayout>
   );

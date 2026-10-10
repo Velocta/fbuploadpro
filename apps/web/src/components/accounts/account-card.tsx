@@ -41,7 +41,7 @@ export function AccountCard({
       });
     } catch (_e) {
       // Ignored because invalid dates safely fallback to recent
-      return 'Recent';
+      return 'recently';
     }
   }, [account.createdAt]);
 
@@ -205,7 +205,7 @@ export function AccountCard({
       >
         <span data-testid="account-pages-count">
           {account.connectedPagesCount}{' '}
-          {account.connectedPagesCount === 1 ? 'connected page' : 'connected pages'}
+          {account.connectedPagesCount === 1 ? 'page linked' : 'pages linked'}
         </span>
 
         {formattedGender && (
@@ -249,7 +249,7 @@ export function AccountCard({
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
-          <span>Re-authentication required</span>
+          <span>Session expired — reconnect to resume publishing</span>
         </div>
       )}
 
@@ -283,7 +283,7 @@ export function AccountCard({
               gap: SPACING.xs,
             }}
           >
-            <span>Reconnect</span>
+            <span>Reconnect account</span>
           </button>
         ) : (
           <div style={{ flex: 1 }} />
