@@ -212,7 +212,7 @@ export default function SignupPage() {
       }
 
       if (data.redirectUrl) {
-        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl);
+        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl, data.user?.subdomain);
       }
     } catch {
       setGeneralError('Unable to create your account at this moment. Please check your connection and try again.');
@@ -256,7 +256,7 @@ export default function SignupPage() {
       }
 
       if (data.redirectUrl) {
-        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl);
+        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl, data.user?.subdomain);
       }
     } catch {
       setGeneralError('Unable to verify code at this moment. Please check your connection and try again.');

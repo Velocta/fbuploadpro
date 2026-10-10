@@ -31,6 +31,93 @@ function extractToken(request: NextRequest): string | null {
   return null;
 }
 
+async function resolveSession(
+  request: NextRequest,
+  sessionSecret: string
+): Promise<SessionPayload | null> {
+  const token = extractToken(request);
+  if (!token) return null;
+  try {
+    return await verifySessionToken(token, sessionSecret);
+  } catch {
+    return null;
+  }
+}
+
+function buildAuthenticatedWorkspaceRedirect(
+  request: NextRequest,
+  session: SessionPayload,
+  host: string,
+  rootDomain: string
+): NextResponse {
+  const cleanHost = host.toLowerCase().split(':')[0] || '';
+  const isLocalRoot = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
+  const isLocalHost = cleanHost.includes('localhost') || cleanHost.includes('127.0.0.1');
+
+  if (cleanHost.endsWith('.vercel.app') || (isLocalRoot && !isLocalHost)) {
+    return NextResponse.redirect(new URL(`/tenant/${session.subdomain}`, request.url));
+  }
+
+  const workspaceUrl = new URL(request.url);
+  workspaceUrl.host = `${session.subdomain}.${rootDomain}`;
+  workspaceUrl.pathname = '/';
+  return NextResponse.redirect(workspaceUrl);
+}
+
+function buildTenantHeaders(
+  request: NextRequest,
+  subdomain: string,
+  pathname: string,
+  session: SessionPayload
+): Headers {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-tenant-subdomain', subdomain);
+  requestHeaders.set('x-pathname', pathname);
+  requestHeaders.set('x-user-id', session.userId);
+  requestHeaders.set('x-user-role', session.role);
+  requestHeaders.set('x-user-email', session.email);
+  requestHeaders.set('x-user-subdomain', session.subdomain);
+  return requestHeaders;
+}
+
+function applyNoStoreHeaders(response: NextResponse): NextResponse {
+  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  response.headers.set('Pragma', 'no-cache');
+  response.headers.set('Expires', '0');
+  return response;
+}
+
+function handleDirectTenantPathOnApex(
+  request: NextRequest,
+  pathSubdomain: string,
+  pathname: string,
+  session: SessionPayload | null
+): NextResponse {
+  if (!session) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('returnUrl', request.url);
+    return NextResponse.redirect(loginUrl, 307);
+  }
+
+  if (session.status === 'suspended') {
+    return NextResponse.redirect(new URL('/account-suspended', request.url), 307);
+  }
+
+  const access = canAccessTenant(session, pathSubdomain);
+  if (!access.allowed) {
+    if (access.reason === 'mismatch') {
+      return NextResponse.redirect(new URL(`/tenant/${session.subdomain}`, request.url), 307);
+    }
+    return NextResponse.redirect(new URL('/login', request.url), 307);
+  }
+
+  const requestHeaders = buildTenantHeaders(request, pathSubdomain, pathname, session);
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
+  return applyNoStoreHeaders(response);
+}
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
@@ -47,30 +134,25 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // If apex domain or reserved system subdomain, serve root routes
   if (isApex || isReserved || !subdomain) {
-    // Central App Gateway (app.fbuploadpro.com) handling
-    if (subdomain === 'app') {
-      let session: SessionPayload | null = null;
-      const token = extractToken(request);
-      if (token) {
-        try {
-          session = await verifySessionToken(token, sessionSecret);
-        } catch {
-          session = null;
-        }
+    if (isApex && pathname.startsWith('/tenant/')) {
+      const pathSubdomain = pathname.split('/')[2];
+      if (pathSubdomain) {
+        const session = await resolveSession(request, sessionSecret);
+        return handleDirectTenantPathOnApex(request, pathSubdomain, pathname, session);
       }
+    }
 
+    if (subdomain === 'app' || isApex) {
+      const session = await resolveSession(request, sessionSecret);
       const isLogoutSuccess = request.nextUrl.searchParams.get('logout') === 'success';
+      const isEntryOrAuthRoute =
+        pathname === '/' || pathname === '/login' || pathname === '/signup';
 
-      // If already authenticated and visiting app root, login, or signup, redirect to their tenant workspace (unless explicit logout)
-      if (session && !isLogoutSuccess && (pathname === '/' || pathname === '/login' || pathname === '/signup')) {
-        const workspaceUrl = new URL(request.url);
-        workspaceUrl.host = `${session.subdomain}.${rootDomain}`;
-        workspaceUrl.pathname = '/';
-        return NextResponse.redirect(workspaceUrl);
+      if (session && session.status !== 'suspended' && !isLogoutSuccess && isEntryOrAuthRoute) {
+        return buildAuthenticatedWorkspaceRedirect(request, session, host, rootDomain);
       }
 
-      // If unauthenticated on app root (/), redirect to /login
-      if (!session && pathname === '/') {
+      if (!session && subdomain === 'app' && pathname === '/') {
         return NextResponse.redirect(new URL('/login', request.url));
       }
     }
@@ -79,8 +161,6 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   // Customer tenant subdomains only host private workspace routes (/, /accounts, etc.).
-  // Any attempt to access centralized auth routes (/login, /signup, /forgot-password, /reset-password)
-  // on a tenant subdomain is cleanly 307 redirected to the central gateway (app.${rootDomain}) preserving query params.
   const isAuthRoute =
     pathname === '/login' ||
     pathname === '/signup' ||
@@ -93,19 +173,9 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(gatewayUrl, 307);
   }
 
-  let session: SessionPayload | null = null;
-  const token = extractToken(request);
-
-  if (token) {
-    try {
-      session = await verifySessionToken(token, sessionSecret);
-    } catch {
-      session = null;
-    }
-  }
+  const session = await resolveSession(request, sessionSecret);
 
   if (!session) {
-    // Redirect unauthenticated tenant access to central app login
     const loginUrl = new URL(request.url);
     loginUrl.host = `app.${rootDomain}`;
     loginUrl.pathname = '/login';
@@ -129,16 +199,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // Rewrite to tenant workspace path (/tenant/[subdomain]/*)
   const rewriteUrl = getTenantRewriteUrl(subdomain, pathname, request.url);
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-tenant-subdomain', subdomain);
-  requestHeaders.set('x-pathname', pathname);
-
-  if (session) {
-    requestHeaders.set('x-user-id', session.userId);
-    requestHeaders.set('x-user-role', session.role);
-    requestHeaders.set('x-user-email', session.email);
-    requestHeaders.set('x-user-subdomain', session.subdomain);
-  }
+  const requestHeaders = buildTenantHeaders(request, subdomain, pathname, session);
 
   const response = NextResponse.rewrite(rewriteUrl, {
     request: {
@@ -146,10 +207,5 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  // Prevent browser back-forward cache (bfcache) leaks on authenticated views
-  response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  response.headers.set('Pragma', 'no-cache');
-  response.headers.set('Expires', '0');
-
-  return response;
+  return applyNoStoreHeaders(response);
 }
