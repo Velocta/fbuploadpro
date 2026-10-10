@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getSupabaseClient, getCookieDomain } from '@/lib/supabase-auth';
+import {
+  getSupabaseClient,
+  getCookieDomain,
+  purgeHostOnlySessionCookie,
+} from '@/lib/supabase-auth';
 
 export async function POST(request?: NextRequest) {
   try {
@@ -29,11 +33,7 @@ export async function POST(request?: NextRequest) {
     });
 
     if (domain) {
-      // Also clear host-only cookie if domain-wide cookie is active
-      response.headers.append(
-        'Set-Cookie',
-        `fbup_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${isProduction ? '; Secure' : ''}`
-      );
+      purgeHostOnlySessionCookie(response);
     }
 
     return response;

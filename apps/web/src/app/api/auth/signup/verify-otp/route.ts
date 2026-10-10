@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
-import { verifySignupOtpViaSupabase, getCookieDomain } from '@/lib/supabase-auth';
+import {
+  verifySignupOtpViaSupabase,
+  getCookieDomain,
+  purgeHostOnlySessionCookie,
+} from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
@@ -91,11 +95,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (domain) {
-      // Clear legacy host-only cookie to avoid browser cookie shadowing
-      response.headers.append(
-        'Set-Cookie',
-        `fbup_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${isProduction ? '; Secure' : ''}`
-      );
+      purgeHostOnlySessionCookie(response);
     }
 
     return response;

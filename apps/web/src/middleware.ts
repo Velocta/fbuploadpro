@@ -119,6 +119,21 @@ function applyNoStoreHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+function buildLoginRedirectWithCleanReturn(
+  request: NextRequest,
+  targetHost?: string
+): NextResponse {
+  const loginUrl = new URL(targetHost ? request.url : '/login', request.url);
+  if (targetHost) {
+    loginUrl.host = targetHost;
+    loginUrl.pathname = '/login';
+  }
+  const cleanReturnUrl = new URL(request.url);
+  cleanReturnUrl.searchParams.delete('returnUrl');
+  loginUrl.searchParams.set('returnUrl', cleanReturnUrl.toString());
+  return NextResponse.redirect(loginUrl, 307);
+}
+
 function handleDirectTenantPathOnApex(
   request: NextRequest,
   pathSubdomain: string,
@@ -126,11 +141,7 @@ function handleDirectTenantPathOnApex(
   session: SessionPayload | null
 ): NextResponse {
   if (!session) {
-    const loginUrl = new URL('/login', request.url);
-    const cleanReturnUrl = new URL(request.url);
-    cleanReturnUrl.searchParams.delete('returnUrl');
-    loginUrl.searchParams.set('returnUrl', cleanReturnUrl.toString());
-    return NextResponse.redirect(loginUrl, 307);
+    return buildLoginRedirectWithCleanReturn(request);
   }
 
   if (session.status === 'suspended') {
@@ -234,13 +245,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const session = await resolveSession(request, sessionSecret);
 
   if (!session) {
-    const loginUrl = new URL(request.url);
-    loginUrl.host = `app.${rootDomain}`;
-    loginUrl.pathname = '/login';
-    const cleanReturnUrl = new URL(request.url);
-    cleanReturnUrl.searchParams.delete('returnUrl');
-    loginUrl.searchParams.set('returnUrl', cleanReturnUrl.toString());
-    return NextResponse.redirect(loginUrl, 307);
+    return buildLoginRedirectWithCleanReturn(request, `app.${rootDomain}`);
   }
 
   if (session.status === 'suspended') {

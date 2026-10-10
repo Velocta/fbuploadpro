@@ -183,14 +183,17 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     expect(validRes.headers.get('Cache-Control')).toContain('no-store');
   });
 
-  it('wipes returnUrl query parameters when redirecting authenticated user to workspace root', async () => {
-    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
-    const req = new NextRequest('https://app.vinsmokemedia.online/login?returnUrl=https://other.vinsmokemedia.online/', {
+  const buildAppLoginReq = (targetReturnUrl: string) =>
+    new NextRequest(`https://app.vinsmokemedia.online/login?returnUrl=${encodeURIComponent(targetReturnUrl)}`, {
       headers: {
         host: 'app.vinsmokemedia.online',
         cookie: `fbup_session=${userToken}`,
       },
     });
+
+  it('wipes returnUrl query parameters when redirecting authenticated user to workspace root', async () => {
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
+    const req = buildAppLoginReq('https://other.vinsmokemedia.online/');
     const res = await middleware(req);
     expect(res.status).toBe(307);
     const location = res.headers.get('location');
@@ -201,12 +204,7 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
 
   it('breaks redirect ping-pong loop and clears stale cookies when user is bounced to login from their own workspace', async () => {
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
-    const req = new NextRequest('https://app.vinsmokemedia.online/login?returnUrl=https://acme.vinsmokemedia.online/', {
-      headers: {
-        host: 'app.vinsmokemedia.online',
-        cookie: `fbup_session=${userToken}`,
-      },
-    });
+    const req = buildAppLoginReq('https://acme.vinsmokemedia.online/');
     const res = await middleware(req);
     expect(res.status).toBe(200);
     const setCookie = res.headers.get('set-cookie');
