@@ -236,9 +236,8 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
 
   if (collapsible === 'none') {
     return (
-      <aside
+      <nav
         ref={ref}
-        role="navigation"
         aria-label="Sidebar Navigation"
         data-slot="sidebar"
         data-sidebar="sidebar"
@@ -269,7 +268,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
         {...props}
       >
         {children}
-      </aside>
+      </nav>
     );
   }
 
@@ -297,9 +296,8 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
             }}
           />
         )}
-        <aside
+        <nav
           ref={ref}
-          role="navigation"
           aria-label="Sidebar Navigation"
           data-slot="sidebar"
           data-sidebar="sidebar"
@@ -337,7 +335,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
           {...props}
         >
           {children}
-        </aside>
+        </nav>
       </>
     );
   }
@@ -353,9 +351,8 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
   const isFloating = variant === 'floating';
 
   return (
-    <aside
+    <nav
       ref={ref}
-      role="navigation"
       aria-label="Sidebar Navigation"
       data-state={state}
       data-collapsible={collapsible}
@@ -433,7 +430,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
           {children}
         </div>
       </div>
-    </aside>
+    </nav>
   );
 });
 
@@ -1639,20 +1636,20 @@ export const SidebarTrigger = forwardRef<HTMLButtonElement, SidebarTriggerProps>
 );
 
 export interface SidebarSeparatorProps
-  extends React.HTMLAttributes<HTMLDivElement> {}
+  extends React.HTMLAttributes<HTMLHRElement> {}
 
-export const SidebarSeparator = forwardRef<HTMLDivElement, SidebarSeparatorProps>(
+export const SidebarSeparator = forwardRef<HTMLHRElement, SidebarSeparatorProps>(
   function SidebarSeparator({ className, style, ...props }, ref) {
     return (
-      <div
+      <hr
         ref={ref}
-        role="separator"
         data-sidebar="separator"
         data-slot="sidebar-separator"
         className={className}
         style={{
           height: '1px',
           width: 'auto',
+          border: 'none',
           backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
           margin: `${SPACING.xs} ${SPACING.sm}`,
           boxSizing: 'border-box',

@@ -72,8 +72,7 @@ describe('Sidebar Component Suite (Spec 014 & Spec 025)', () => {
         </SidebarProvider>
       );
 
-      expect(hasTag('aside')).toBe(true);
-      expect(hasAttribute('role', 'navigation')).toBe(true);
+      expect(hasTag('nav')).toBe(true);
       expect(hasAttribute('aria-label', 'Sidebar Navigation')).toBe(true);
       expect(hasAttribute('data-state', 'expanded')).toBe(true);
       expect(hasAttribute('data-collapsible', 'icon')).toBe(true);
@@ -438,7 +437,7 @@ describe('Sidebar Component Suite (Spec 014 & Spec 025)', () => {
         </SidebarProvider>
       );
 
-      expect(hasTag('div')).toBe(true);
+      expect(hasTag('hr')).toBe(true);
       expect(hasAttribute('data-sidebar', 'separator')).toBe(true);
       expect(hasAttribute('data-slot', 'sidebar-separator')).toBe(true);
       expect(html).toContain(THEME.default.borders.hairline);
