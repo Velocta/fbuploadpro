@@ -54,7 +54,7 @@ function base64UrlEncode(str: string): string {
   return btoa(binary)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
-    .replace(/=+$/, '');
+    .replace(/={1,2}$/, '');
 }
 
 function base64UrlDecode(str: string): string {

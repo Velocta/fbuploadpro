@@ -113,7 +113,7 @@ export function validateAndFormatE164Phone(rawPhone: string): string {
 }
 
 export function deriveSubdomainFromEmail(email: string): string {
-  if (!email || !email.includes('@')) {
+  if (!email?.includes('@')) {
     return 'workspace';
   }
 
@@ -121,7 +121,7 @@ export function deriveSubdomainFromEmail(email: string): string {
   // 1. Strip plus subaddress tags: e.g. 'john.doe+reels' -> 'john.doe'
   const withoutPlusTag = usernamePart.split('+')[0] || '';
   // 2. Strip all dots: e.g. 'john.doe' -> 'johndoe'
-  const withoutDots = withoutPlusTag.replace(/\./g, '');
+  const withoutDots = withoutPlusTag.replaceAll('.', '');
   // 3. Lowercase and keep alphanumeric and hyphens
   let slug = withoutDots
     .toLowerCase()
@@ -135,7 +135,10 @@ export function deriveSubdomainFromEmail(email: string): string {
   } else if (slug.length < 3) {
     slug = (slug + 'workspace').slice(0, 50);
   } else if (slug.length > 50) {
-    slug = slug.slice(0, 50).replace(/-+$/, '');
+    slug = slug.slice(0, 50);
+    while (slug.endsWith('-')) {
+      slug = slug.slice(0, -1);
+    }
   }
 
   // 5. If slug matches a reserved subdomain, append '1' to avoid conflict

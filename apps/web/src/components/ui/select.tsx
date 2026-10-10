@@ -61,6 +61,18 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     onValueChange?.(e.target.value);
   };
 
+  let describedBy: string | undefined;
+  if (error) {
+    describedBy = errorId;
+  } else if (helperText) {
+    describedBy = helperId;
+  }
+
+  let defaultVal = defaultValue;
+  if (placeholder && defaultValue === undefined && value === undefined) {
+    defaultVal = '';
+  }
+
   return (
     <>
       <style>{`
@@ -105,11 +117,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             ref={ref}
             id={selectId}
             value={value}
-            defaultValue={placeholder && defaultValue === undefined && value === undefined ? '' : defaultValue}
+            defaultValue={defaultVal}
             disabled={disabled}
             onChange={handleChange}
             aria-invalid={Boolean(error)}
-            aria-describedby={error ? errorId : helperText ? helperId : undefined}
+            aria-describedby={describedBy}
             className={`fbu-select-field ${error ? 'has-error' : ''} ${className}`}
             style={{
               width: '100%',
@@ -161,7 +173,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           </div>
         </div>
 
-        {error ? (
+        {error && (
           <span
             id={errorId}
             role="alert"
@@ -173,7 +185,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           >
             {error}
           </span>
-        ) : helperText ? (
+        )}
+        {!error && helperText && (
           <span
             id={helperId}
             style={{
@@ -184,7 +197,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           >
             {helperText}
           </span>
-        ) : null}
+        )}
       </div>
     </>
   );

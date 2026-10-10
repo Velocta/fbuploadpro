@@ -74,6 +74,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
           ...style,
         }}
         onClick={(e) => handleToggle(e)}
+        onKeyDown={handleKeyDown}
       >
         <button
           ref={ref}

@@ -21,7 +21,7 @@ function base64UrlEncode(bytes: Uint8Array): string {
     binary += String.fromCharCode(bytes[i]!);
   }
   const base64 = btoa(binary);
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/={1,2}$/, '');
 }
 
 function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {

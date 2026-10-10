@@ -26,8 +26,9 @@ export const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 function getCookieState(): boolean | null {
   if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp(`(^|;\\s*)${SIDEBAR_COOKIE_NAME}=([^;]*)`));
-  if (!match || !match[2]) return null;
+  const regex = new RegExp(String.raw`(^|;\s*)${SIDEBAR_COOKIE_NAME}=([^;]*)`);
+  const match = regex.exec(document.cookie);
+  if (!match?.[2]) return null;
   return match[2] === 'expanded';
 }
 
@@ -225,10 +226,13 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
 
   // Variant styling adjustments
   const isFloating = variant === 'floating';
-  const isInset = variant === 'inset';
-
   // Mobile drawer presentation
   if (isMobile) {
+    let mobileTransform = 'translateX(0)';
+    if (!openMobile) {
+      mobileTransform = side === 'left' ? 'translateX(-100%)' : 'translateX(100%)';
+    }
+
     return (
       <>
         {/* Mobile Backdrop */}
@@ -266,11 +270,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
             borderRight: side === 'left' ? `1px solid ${THEME.default.borders.hairline}` : undefined,
             borderLeft: side === 'right' ? `1px solid ${THEME.default.borders.hairline}` : undefined,
             boxShadow: THEME.default.shadows.elevated,
-            transform: openMobile
-              ? 'translateX(0)'
-              : side === 'left'
-              ? 'translateX(-100%)'
-              : 'translateX(100%)',
+            transform: mobileTransform,
             transition: 'transform 200ms cubic-bezier(0.4, 0, 0.2, 1)',
             visibility: openMobile ? 'visible' : 'hidden',
             ...style,
@@ -289,7 +289,6 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
       ref={ref}
       role="navigation"
       aria-label="Sidebar Navigation"
-      aria-expanded={!isCollapsed}
       data-state={state}
       data-collapsible={collapsible}
       data-variant={variant}
@@ -657,18 +656,31 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     const isCollapsed = !isMobile && state === 'collapsed';
     const [isHovered, setIsHovered] = useState(false);
 
-    const height = size === 'sm' ? '30px' : size === 'lg' ? '40px' : '34px';
+    let height = '34px';
+    if (size === 'sm') {
+      height = '30px';
+    } else if (size === 'lg') {
+      height = '40px';
+    }
     const fontSize = size === 'sm' ? '0.75rem' : '0.875rem';
 
     // Surface & text styling per state
     let bg = 'transparent';
     let textColor = THEME.default.text.secondary;
+    let iconColor = THEME.default.text.secondary;
     if (isActive) {
       bg = THEME.default.surfaces.active;
       textColor = THEME.default.text.primary;
+      iconColor = PALETTE.primary;
     } else if (isHovered) {
       bg = THEME.default.surfaces.hover;
       textColor = THEME.default.text.primary;
+      iconColor = THEME.default.text.primary;
+    }
+
+    let borderStyle = 'none';
+    if (variant === 'outline') {
+      borderStyle = `1px solid ${isActive ? PALETTE.primary : THEME.default.borders.hairline}`;
     }
 
     const buttonElement = (
@@ -688,10 +700,7 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           height,
           padding: isCollapsed ? 0 : `0 ${SPACING.sm}`,
           borderRadius: RADII.sm,
-          border:
-            variant === 'outline'
-              ? `1px solid ${isActive ? PALETTE.primary : THEME.default.borders.hairline}`
-              : 'none',
+          border: borderStyle,
           backgroundColor: bg,
           color: textColor,
           fontSize,
@@ -732,7 +741,7 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
               flexShrink: 0,
               width: '18px',
               height: '18px',
-              color: isActive ? PALETTE.primary : isHovered ? THEME.default.text.primary : THEME.default.text.secondary,
+              color: iconColor,
             }}
           >
             {leftIcon}

@@ -53,6 +53,14 @@ export function createR2S3Client(config: R2Config): S3Client {
   });
 }
 
+function trimTrailingSlashes(str: string): string {
+  let end = str.length;
+  while (end > 0 && str.codePointAt(end - 1) === 47) {
+    end--;
+  }
+  return str.slice(0, end);
+}
+
 export class MockStorageProvider implements IStorageService {
   public deletedKeys: Set<string> = new Set();
   public requestedUploadKeys: Set<string> = new Set();
@@ -74,7 +82,7 @@ export class MockStorageProvider implements IStorageService {
   }
 
   getPublicUrl(key: string): string {
-    const trimmedBase = this.publicUrlBase.replace(/\/+$/, '');
+    const trimmedBase = trimTrailingSlashes(this.publicUrlBase);
     const trimmedKey = key.replace(/^\/+/, '');
     return `${trimmedBase}/${trimmedKey}`;
   }
@@ -119,7 +127,7 @@ export class R2StorageProvider implements IStorageService {
   }
 
   getPublicUrl(key: string): string {
-    const trimmedBase = this.config.publicUrl.replace(/\/+$/, '');
+    const trimmedBase = trimTrailingSlashes(this.config.publicUrl);
     const trimmedKey = key.replace(/^\/+/, '');
     return `${trimmedBase}/${trimmedKey}`;
   }

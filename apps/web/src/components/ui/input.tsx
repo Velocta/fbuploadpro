@@ -71,8 +71,19 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   const helperId = `${inputId}-helper`;
 
   const [showPassword, setShowPassword] = useState(false);
-  const effectiveType = isPassword || type === 'password' ? (showPassword ? 'text' : 'password') : type;
   const hasPasswordToggle = isPassword || type === 'password';
+
+  let effectiveType = type;
+  if (hasPasswordToggle) {
+    effectiveType = showPassword ? 'text' : 'password';
+  }
+
+  let describedBy: string | undefined;
+  if (error) {
+    describedBy = errorId;
+  } else if (helperText) {
+    describedBy = helperId;
+  }
 
   return (
     <>
@@ -146,7 +157,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             type={effectiveType}
             disabled={disabled}
             aria-invalid={Boolean(error)}
-            aria-describedby={error ? errorId : helperText ? helperId : undefined}
+            aria-describedby={describedBy}
             className={`fbu-input-field ${error ? 'has-error' : ''} ${className}`}
             style={{
               width: '100%',
@@ -168,7 +179,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             {...props}
           />
 
-          {hasPasswordToggle ? (
+          {hasPasswordToggle && (
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
@@ -192,7 +203,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             >
               {showPassword ? <EyeOffIcon /> : <EyeIcon />}
             </button>
-          ) : rightIcon ? (
+          )}
+          {!hasPasswordToggle && rightIcon && (
             <div
               style={{
                 position: 'absolute',
@@ -207,10 +219,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
             >
               {rightIcon}
             </div>
-          ) : null}
+          )}
         </div>
 
-        {error ? (
+        {error && (
           <span
             id={errorId}
             role="alert"
@@ -222,7 +234,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           >
             {error}
           </span>
-        ) : helperText ? (
+        )}
+        {!error && helperText && (
           <span
             id={helperId}
             style={{
@@ -233,7 +246,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           >
             {helperText}
           </span>
-        ) : null}
+        )}
       </div>
     </>
   );
