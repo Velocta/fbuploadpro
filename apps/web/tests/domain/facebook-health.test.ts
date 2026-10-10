@@ -139,6 +139,9 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
                 displayName: 'Active Creator Account',
                 profile_picture_url:
                   'https://platform-lookaside.fbsbx.com/platform/profilepic/creator.jpg',
+                gender: 'female',
+                account_link:
+                  'https://www.facebook.com/app_scoped_user_id/fb_act_active/',
                 status: 'active',
                 tokenExpiresAt: futureDate,
                 connectedPagesCount: 2,
@@ -185,10 +188,16 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(activeAcc.profilePictureUrl).toBe(
         'https://platform-lookaside.fbsbx.com/platform/profilepic/creator.jpg'
       );
+      expect(activeAcc.gender).toBe('female');
+      expect(activeAcc.accountLink).toBe(
+        'https://www.facebook.com/app_scoped_user_id/fb_act_active/'
+      );
 
       expect(expiredAcc.status).toBe('expired'); // Evaluated to expired
       expect(expiredAcc.connectedPagesCount).toBe(1);
       expect(expiredAcc.profilePictureUrl).toBeNull();
+      expect(expiredAcc.gender).toBeNull();
+      expect(expiredAcc.accountLink).toBeNull();
 
       // Zero token exposure assertion
       const rawString = JSON.stringify(json);

@@ -45,28 +45,42 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(parsed.fbAccountId).toBe('act_1092837465');
       expect(parsed.status).toBe('active');
       expect(parsed.profilePictureUrl).toBeNull();
+      expect(parsed.gender).toBeNull();
+      expect(parsed.accountLink).toBeNull();
     });
 
-    it('accepts a valid profilePictureUrl and defaults to null when omitted or null', () => {
-      const withPic = FacebookAccountSchema.parse({
+    it('accepts profilePictureUrl, gender, and accountLink and defaults them to null when omitted', () => {
+      const withMetadata = FacebookAccountSchema.parse({
         ...validAccount,
         profilePictureUrl: 'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg',
+        gender: 'female',
+        accountLink: 'https://www.facebook.com/app_scoped_user_id/1092837465/',
       });
-      expect(withPic.profilePictureUrl).toBe(
+      expect(withMetadata.profilePictureUrl).toBe(
         'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg'
       );
+      expect(withMetadata.gender).toBe('female');
+      expect(withMetadata.accountLink).toBe(
+        'https://www.facebook.com/app_scoped_user_id/1092837465/'
+      );
 
-      const viewWithPic = FacebookAccountViewSchema.parse({
+      const viewWithMetadata = FacebookAccountViewSchema.parse({
         id: accountId,
         fbAccountId: 'act_1092837465',
         displayName: 'Main Media Ops',
         profilePictureUrl: 'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg',
+        gender: 'female',
+        accountLink: 'https://www.facebook.com/app_scoped_user_id/1092837465/',
         status: 'active',
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-01T00:00:00Z'),
       });
-      expect(viewWithPic.profilePictureUrl).toBe(
+      expect(viewWithMetadata.profilePictureUrl).toBe(
         'https://platform-lookaside.fbsbx.com/platform/profilepic/account.jpg'
+      );
+      expect(viewWithMetadata.gender).toBe('female');
+      expect(viewWithMetadata.accountLink).toBe(
+        'https://www.facebook.com/app_scoped_user_id/1092837465/'
       );
     });
 

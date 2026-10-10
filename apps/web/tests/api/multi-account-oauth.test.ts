@@ -41,6 +41,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
         displayName: string;
         token: string;
         profilePictureUrl: string | null;
+        gender: string | null;
+        accountLink: string | null;
       }
     >();
 
@@ -53,12 +55,16 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
           token,
           _expiresAt,
           profilePictureUrl,
+          gender,
+          accountLink,
         ] = params;
         storedAccounts.set(`${uId}:${fbAccountId}`, {
           fbAccountId,
           displayName,
           token,
           profilePictureUrl,
+          gender,
+          accountLink,
         });
         return Promise.resolve([{ id: 'acc_id' }]);
       }),
@@ -78,7 +84,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     const validState = await signOAuthState(statePayload, TEST_SECRET);
     const { storedAccounts, mockDb } = createMockAccountStore();
 
-    // Simulate Account 1 connection (with picture.data.url)
+    // Simulate Account 1 connection (with picture.data.url, gender, and link)
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'short_1', token_type: 'bearer' })))
@@ -88,6 +94,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
           JSON.stringify({
             id: 'fb_user_alpha',
             name: 'Alpha Agency Profile',
+            gender: 'female',
+            link: 'https://www.facebook.com/app_scoped_user_id/fb_user_alpha/',
             picture: { data: { url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/alpha.jpg' } },
           })
         )
@@ -99,7 +107,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     );
     await handleFacebookCallback(req1, mockDb);
 
-    // Simulate Account 2 connection (without picture -> null fallback)
+    // Simulate Account 2 connection (without picture, gender, or link -> null fallback)
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'short_2', token_type: 'bearer' })))
@@ -112,17 +120,23 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     );
     await handleFacebookCallback(req2, mockDb);
 
-    // Verify both distinct accounts are preserved in the workspace with profile_picture_url
+    // Verify both distinct accounts are preserved in the workspace with profile_picture_url, gender, and account_link
     expect(storedAccounts.size).toBe(2);
     expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.displayName).toBe('Alpha Agency Profile');
     expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.profilePictureUrl).toBe(
       'https://platform-lookaside.fbsbx.com/platform/profilepic/alpha.jpg'
     );
+    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.gender).toBe('female');
+    expect(storedAccounts.get(`${userId}:fb_user_alpha`)?.accountLink).toBe(
+      'https://www.facebook.com/app_scoped_user_id/fb_user_alpha/'
+    );
     expect(storedAccounts.get(`${userId}:fb_user_beta`)?.displayName).toBe('Beta Personal Profile');
     expect(storedAccounts.get(`${userId}:fb_user_beta`)?.profilePictureUrl).toBeNull();
+    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.gender).toBeNull();
+    expect(storedAccounts.get(`${userId}:fb_user_beta`)?.accountLink).toBeNull();
   });
 
-  it('updates existing credentials and profile_picture_url when reconnecting the same Facebook account', async () => {
+  it('updates existing credentials, profile_picture_url, gender, and account_link when reconnecting the same Facebook account', async () => {
     const statePayload = {
       tenantSubdomain: 'acme',
       userId,
@@ -146,7 +160,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     );
     await handleFacebookCallback(req1, mockDb);
 
-    // Reconnection of same fbAccountId with updated avatar
+    // Reconnection of same fbAccountId with updated avatar, gender, and link
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'short_2', token_type: 'bearer' })))
@@ -156,6 +170,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
           JSON.stringify({
             id: 'fb_user_same',
             name: 'Same Profile Renamed',
+            gender: 'male',
+            link: 'https://www.facebook.com/app_scoped_user_id/fb_user_same/',
             picture: { data: { url: 'https://platform-lookaside.fbsbx.com/platform/profilepic/refreshed.jpg' } },
           })
         )
@@ -172,6 +188,10 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059)', () => 
     expect(storedAccounts.get(`${userId}:fb_user_same`)?.displayName).toBe('Same Profile Renamed');
     expect(storedAccounts.get(`${userId}:fb_user_same`)?.profilePictureUrl).toBe(
       'https://platform-lookaside.fbsbx.com/platform/profilepic/refreshed.jpg'
+    );
+    expect(storedAccounts.get(`${userId}:fb_user_same`)?.gender).toBe('male');
+    expect(storedAccounts.get(`${userId}:fb_user_same`)?.accountLink).toBe(
+      'https://www.facebook.com/app_scoped_user_id/fb_user_same/'
     );
   });
 });

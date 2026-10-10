@@ -62,7 +62,7 @@ describe('Supabase Migrations Convention Suite', () => {
     expect(content).toContain('check_users_phone_e164');
   });
 
-  it('validates facebook_profile_picture_url migration adds profile_picture_url TEXT to facebook_accounts and facebook_pages', () => {
+  it('validates facebook_profile_picture_url migration adds profile_picture_url, gender, and account_link columns', () => {
     const files = fs.readdirSync(supabaseMigrationsDir);
     const pictureMigration = files.find(f => f.includes('facebook_profile_picture_url.sql'));
     expect(pictureMigration).toBeDefined();
@@ -71,5 +71,7 @@ describe('Supabase Migrations Convention Suite', () => {
     expect(content).toContain('ALTER TABLE facebook_accounts');
     expect(content).toContain('ALTER TABLE facebook_pages');
     expect(content).toContain('ADD COLUMN IF NOT EXISTS profile_picture_url TEXT');
+    expect(content).toContain('ADD COLUMN IF NOT EXISTS gender VARCHAR(50)');
+    expect(content).toContain('ADD COLUMN IF NOT EXISTS account_link TEXT');
   });
 });
