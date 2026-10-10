@@ -18,6 +18,8 @@ import {
   buildQueuedEntriesFromFileList,
   extractDroppedFileEntries,
   executeBoundedUploadBatch,
+  detectDuplicateUploadEntries,
+  type QueuedUploadEntry,
   type UploadBatchState,
 } from './upload-queue-banner';
 import { MediaAssetCard } from './media-asset-card';
@@ -62,6 +64,49 @@ export function buildFolderBreadcrumbs(
   }
 
   return trail;
+}
+
+/**
+ * Formats the full ancestry path label for a media item's folder (e.g. "Reels / Q4 / Fitness" or "Root").
+ */
+export function formatFolderAncestryPath(
+  folderId: string | null,
+  folders: MediaFolder[]
+): string {
+  if (!folderId) return 'All Media';
+  const trail = buildFolderBreadcrumbs(folderId, folders);
+  if (trail.length === 0) return 'All Media';
+  return trail.map((f) => f.name).join(' / ');
+}
+
+/**
+ * Computes updated multi-selection IDs supporting `Shift + Click` range selection.
+ */
+export function computeRangeSelection(
+  displayedIds: string[],
+  currentSelectedIds: string[],
+  targetId: string,
+  lastSelectedId: string | null,
+  shiftKey: boolean
+): string[] {
+  if (shiftKey && lastSelectedId && lastSelectedId !== targetId) {
+    const startIdx = displayedIds.indexOf(lastSelectedId);
+    const endIdx = displayedIds.indexOf(targetId);
+    if (startIdx !== -1 && endIdx !== -1) {
+      const low = Math.min(startIdx, endIdx);
+      const high = Math.max(startIdx, endIdx);
+      const rangeIds = displayedIds.slice(low, high + 1);
+      const nextSet = new Set(currentSelectedIds);
+      for (const id of rangeIds) {
+        nextSet.add(id);
+      }
+      return Array.from(nextSet);
+    }
+  }
+
+  return currentSelectedIds.includes(targetId)
+    ? currentSelectedIds.filter((id) => id !== targetId)
+    : [...currentSelectedIds, targetId];
 }
 
 /**
@@ -111,7 +156,7 @@ export function computeFolderSubtreeImpact(
 }
 
 /**
- * Filters and sorts media items for the active folder view.
+ * Filters and sorts media items for the active folder view or global search across all folders.
  */
 export function filterAndSortMediaItems(
   items: MediaItemResponse[],
@@ -126,8 +171,8 @@ export function filterAndSortMediaItems(
   const trimmedSearch = searchQuery.trim().toLowerCase();
 
   const filtered = items.filter((item) => {
-    // Scope to current folder unless searching across current list
-    if ((item.folderId ?? null) !== currentFolderId) {
+    // When searchQuery is empty, scope to currentFolderId; when searching, match globally across all nested folders
+    if (trimmedSearch.length === 0 && (item.folderId ?? null) !== currentFolderId) {
       return false;
     }
     if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
@@ -165,6 +210,7 @@ export interface MediaLibraryExplorerProps {
   subdomain: string;
   initialFolders?: MediaFolder[];
   initialMediaItems?: MediaItemResponse[];
+  initialTotalMediaCount?: number;
   initialCurrentFolderId?: string | null;
   initialSelectedIds?: string[];
   initialSearchQuery?: string;
@@ -183,13 +229,21 @@ export interface MediaLibraryExplorerProps {
   } | null;
   initialDeleteFolderTarget?: MediaFolder | null;
   initialBatchCaptionModalOpen?: boolean;
+  initialPendingDuplicateUpload?: {
+    allEntries: QueuedUploadEntry[];
+    uniqueEntries: QueuedUploadEntry[];
+    duplicates: QueuedUploadEntry[];
+  } | null;
 }
+
+const MEDIA_PAGE_LIMIT = 100;
 
 export function MediaLibraryExplorer({
   subdomain,
   initialFolders,
   initialMediaItems,
-  initialCurrentFolderId = null,
+  initialTotalMediaCount,
+  initialCurrentFolderId,
   initialSelectedIds = [],
   initialSearchQuery = '',
   initialMediaTypeFilter = 'all',
@@ -200,6 +254,7 @@ export function MediaLibraryExplorer({
   initialMoveModalState = null,
   initialDeleteFolderTarget = null,
   initialBatchCaptionModalOpen = false,
+  initialPendingDuplicateUpload = null,
 }: Readonly<MediaLibraryExplorerProps>) {
   const hasInitialData =
     initialFolders !== undefined || initialMediaItems !== undefined;
@@ -208,10 +263,26 @@ export function MediaLibraryExplorer({
   const [mediaItems, setMediaItems] = useState<MediaItemResponse[]>(
     initialMediaItems ?? []
   );
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(
-    initialCurrentFolderId
+  const [totalMediaCount, setTotalMediaCount] = useState<number>(
+    initialTotalMediaCount ?? (initialMediaItems?.length ?? 0)
   );
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => {
+    if (initialCurrentFolderId !== undefined) {
+      return initialCurrentFolderId;
+    }
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const folderParam = params.get('folder');
+      if (folderParam) return folderParam;
+    }
+    return null;
+  });
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
+  const lastSelectedIdRef = useRef<string | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [mediaTypeFilter, setMediaTypeFilter] = useState<'all' | 'video' | 'image'>(
     initialMediaTypeFilter
@@ -236,6 +307,11 @@ export function MediaLibraryExplorer({
       currentFileName: null,
     }
   );
+  const [pendingDuplicateUpload, setPendingDuplicateUpload] = useState<{
+    allEntries: QueuedUploadEntry[];
+    uniqueEntries: QueuedUploadEntry[];
+    duplicates: QueuedUploadEntry[];
+  } | null>(initialPendingDuplicateUpload);
   const cancelUploadRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -281,7 +357,56 @@ export function MediaLibraryExplorer({
   const [batchCaptionDraft, setBatchCaptionDraft] = useState('');
   const [isBatchBusy, setIsBatchBusy] = useState(false);
 
-  // Fetch folders and current directory media items
+  const isGlobalSearch = searchQuery.trim().length > 0;
+
+  // Browser back/forward button synchronization for ?folder=<id>
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const folderParam = params.get('folder');
+      setCurrentFolderId(folderParam || null);
+      setSelectedIds([]);
+      lastSelectedIdRef.current = null;
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Escape key clears active selection when no modal is open
+  useEffect(() => {
+    if (
+      selectedIds.length === 0 ||
+      previewItem ||
+      folderModalState ||
+      moveModalState ||
+      deleteFolderTarget ||
+      batchCaptionModalOpen ||
+      pendingDuplicateUpload
+    ) {
+      return;
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedIds([]);
+        lastSelectedIdRef.current = null;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    selectedIds.length,
+    previewItem,
+    folderModalState,
+    moveModalState,
+    deleteFolderTarget,
+    batchCaptionModalOpen,
+    pendingDuplicateUpload,
+  ]);
+
+  // Fetch folders and current directory (or global search) media items
   const refreshLibraryData = useCallback(async () => {
     if (!subdomain || hasInitialData) return;
 
@@ -290,16 +415,19 @@ export function MediaLibraryExplorer({
       'asc' | 'desc',
     ];
     const query = new URLSearchParams();
-    query.set('folderId', currentFolderId ?? 'unorganized');
+    const trimmedSearch = searchQuery.trim();
+    if (trimmedSearch.length > 0) {
+      query.set('search', trimmedSearch);
+    } else {
+      query.set('folderId', currentFolderId ?? 'unorganized');
+    }
     if (mediaTypeFilter !== 'all') {
       query.set('mediaType', mediaTypeFilter);
     }
-    if (searchQuery.trim().length > 0) {
-      query.set('search', searchQuery.trim());
-    }
     query.set('sortBy', sortBy);
     query.set('sortOrder', sortOrder);
-    query.set('limit', '100');
+    query.set('limit', String(MEDIA_PAGE_LIMIT));
+    query.set('offset', '0');
 
     try {
       const [foldersRes, mediaRes] = await Promise.all([
@@ -317,8 +445,13 @@ export function MediaLibraryExplorer({
       if (mediaRes.ok) {
         const mediaData = (await mediaRes.json()) as {
           items: MediaItemResponse[];
+          total?: number;
         };
-        setMediaItems(mediaData.items || []);
+        const fetchedItems = mediaData.items || [];
+        setMediaItems(fetchedItems);
+        setTotalMediaCount(
+          typeof mediaData.total === 'number' ? mediaData.total : fetchedItems.length
+        );
       }
     } catch (_err) {
       // Retain existing state if network request fails
@@ -338,10 +471,73 @@ export function MediaLibraryExplorer({
     void refreshLibraryData();
   }, [refreshLibraryData]);
 
+  // Load next page of media items (infinite scroll / load more)
+  const handleLoadMoreMedia = useCallback(async () => {
+    if (!subdomain || isLoadingMore) return;
+    setIsLoadingMore(true);
+
+    const [sortBy, sortOrder] = sortOption.split(':') as [
+      'created_at' | 'name' | 'file_size',
+      'asc' | 'desc',
+    ];
+    const query = new URLSearchParams();
+    const trimmedSearch = searchQuery.trim();
+    if (trimmedSearch.length > 0) {
+      query.set('search', trimmedSearch);
+    } else {
+      query.set('folderId', currentFolderId ?? 'unorganized');
+    }
+    if (mediaTypeFilter !== 'all') {
+      query.set('mediaType', mediaTypeFilter);
+    }
+    query.set('sortBy', sortBy);
+    query.set('sortOrder', sortOrder);
+    query.set('limit', String(MEDIA_PAGE_LIMIT));
+    query.set('offset', String(mediaItems.length));
+
+    try {
+      const mediaRes = await fetch(
+        `/api/tenant/${subdomain}/media?${query.toString()}`
+      );
+      if (mediaRes.ok) {
+        const mediaData = (await mediaRes.json()) as {
+          items: MediaItemResponse[];
+          total?: number;
+        };
+        const nextItems = mediaData.items || [];
+        setMediaItems((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const deduped = nextItems.filter((m) => !existingIds.has(m.id));
+          return [...prev, ...deduped];
+        });
+        if (typeof mediaData.total === 'number') {
+          setTotalMediaCount(mediaData.total);
+        }
+      }
+    } catch (_err) {
+      // Retain existing items on transient failure
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [
+    subdomain,
+    isLoadingMore,
+    sortOption,
+    searchQuery,
+    currentFolderId,
+    mediaTypeFilter,
+    mediaItems.length,
+  ]);
+
   // Derived Explorer Hierarchy
   const breadcrumbs = buildFolderBreadcrumbs(currentFolderId, folders);
   const currentSubfolders = folders
-    .filter((f) => (f.parentId ?? null) === currentFolderId)
+    .filter((f) => {
+      if (isGlobalSearch) {
+        return f.name.toLowerCase().includes(searchQuery.trim().toLowerCase());
+      }
+      return (f.parentId ?? null) === currentFolderId;
+    })
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 
   const displayedMediaItems = hasInitialData
@@ -353,17 +549,75 @@ export function MediaLibraryExplorer({
       })
     : mediaItems;
 
-  // Navigation handler
+  const hasMoreMedia = displayedMediaItems.length < totalMediaCount;
+
+  // IntersectionObserver for automatic infinite scroll
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (
+      !sentinel ||
+      !hasMoreMedia ||
+      isLoading ||
+      isLoadingMore ||
+      typeof IntersectionObserver === 'undefined'
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void handleLoadMoreMedia();
+        }
+      },
+      { rootMargin: '240px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreMedia, isLoading, isLoadingMore, handleLoadMoreMedia]);
+
+  // Navigation handler with URL ?folder=<id> synchronization
   const handleNavigateFolder = (targetFolderId: string | null) => {
     setCurrentFolderId(targetFolderId);
     setSelectedIds([]);
+    lastSelectedIdRef.current = null;
+
+    if (typeof window !== 'undefined' && window.history?.pushState) {
+      try {
+        const url = new URL(window.location.href);
+        if (targetFolderId) {
+          url.searchParams.set('folder', targetFolderId);
+        } else {
+          url.searchParams.delete('folder');
+        }
+        window.history.pushState({ folderId: targetFolderId }, '', url.toString());
+      } catch (_err) {
+        // Ignore URL construction errors in isolated test environments
+      }
+    }
   };
 
-  // Multi-file & Folder Upload Trigger
-  const handleStartUploadBatch = async (
-    entries: ReturnType<typeof buildQueuedEntriesFromFileList>
+  // Execute bounded upload batch (after duplicate check or user confirmation)
+  const runUploadBatch = async (
+    entries: QueuedUploadEntry[],
+    initialSkippedCount = 0
   ) => {
-    if (entries.length === 0) return;
+    if (entries.length === 0) {
+      if (initialSkippedCount > 0) {
+        setUploadState({
+          status: 'completed',
+          totalFiles: initialSkippedCount,
+          completedFiles: 0,
+          failedFiles: 0,
+          skippedFiles: initialSkippedCount,
+          totalBytes: 0,
+          transferredBytes: 0,
+          currentFileName: null,
+        });
+      }
+      return;
+    }
     cancelUploadRef.current = false;
 
     const result = await executeBoundedUploadBatch({
@@ -371,10 +625,12 @@ export function MediaLibraryExplorer({
       baseFolderId: currentFolderId,
       rawEntries: entries,
       existingFolders: folders,
+      initialSkippedCount,
       onStateChange: setUploadState,
       onFoldersUpdated: (updated) => setFolders(updated),
       onItemUploaded: (item) => {
         setMediaItems((prev) => [item, ...prev]);
+        setTotalMediaCount((prev) => prev + 1);
       },
       isCancelled: () => cancelUploadRef.current,
     });
@@ -382,6 +638,29 @@ export function MediaLibraryExplorer({
     if (!hasInitialData && result.uploadedItems.length > 0) {
       await refreshLibraryData();
     }
+  };
+
+  // Multi-file & Folder Upload Trigger with Pre-Upload Duplicate Detection
+  const handleStartUploadBatch = async (entries: QueuedUploadEntry[]) => {
+    if (entries.length === 0) return;
+
+    const detection = detectDuplicateUploadEntries(
+      entries,
+      mediaItems,
+      folders,
+      currentFolderId
+    );
+
+    if (detection.duplicates.length > 0) {
+      setPendingDuplicateUpload({
+        allEntries: entries,
+        uniqueEntries: detection.uniqueEntries,
+        duplicates: detection.duplicates,
+      });
+      return;
+    }
+
+    await runUploadBatch(entries, 0);
   };
 
   // Create or Rename Folder submission
@@ -1628,51 +1907,120 @@ export function MediaLibraryExplorer({
             )}
           </div>
         ) : (
-          <div
-            data-testid="media-assets-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: SPACING.lg,
-            }}
-          >
-            {displayedMediaItems.map((item) => (
-              <MediaAssetCard
-                key={item.id}
-                item={item}
-                selected={selectedIds.includes(item.id)}
-                onToggleSelect={(mediaId) => {
-                  setSelectedIds((prev) =>
-                    prev.includes(mediaId)
-                      ? prev.filter((id) => id !== mediaId)
-                      : [...prev, mediaId]
-                  );
+          <>
+            <div
+              data-testid="media-assets-grid"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                gap: SPACING.lg,
+              }}
+            >
+              {displayedMediaItems.map((item) => (
+                <MediaAssetCard
+                  key={item.id}
+                  item={item}
+                  selected={selectedIds.includes(item.id)}
+                  folderPathLabel={
+                    isGlobalSearch
+                      ? formatFolderAncestryPath(item.folderId, folders)
+                      : null
+                  }
+                  onNavigateFolder={(targetFolderId) => {
+                    setSearchQuery('');
+                    handleNavigateFolder(targetFolderId);
+                  }}
+                  onToggleSelect={(mediaId, options) => {
+                    const displayedIds = displayedMediaItems.map((m) => m.id);
+                    setSelectedIds((prev) =>
+                      computeRangeSelection(
+                        displayedIds,
+                        prev,
+                        mediaId,
+                        lastSelectedIdRef.current,
+                        Boolean(options?.shiftKey)
+                      )
+                    );
+                    lastSelectedIdRef.current = mediaId;
+                  }}
+                  onPreview={(target) => setPreviewItem(target)}
+                  onUpdateCaption={(mediaId, captionText) =>
+                    handleUpdateMediaItem(mediaId, { captionText })
+                  }
+                  onMoveRequest={(target) => {
+                    setSelectedMoveDestinationId(target.folderId ?? null);
+                    setMoveModalState({ targetType: 'media', mediaItem: target });
+                  }}
+                  onDeleteRequest={(target) => void handleDeleteMediaItem(target.id)}
+                />
+              ))}
+            </div>
+
+            {hasMoreMedia && (
+              <div
+                ref={loadMoreSentinelRef}
+                data-testid="infinite-scroll-sentinel"
+                style={{
+                  marginTop: SPACING.lg,
+                  display: 'flex',
+                  justifyContent: 'center',
                 }}
-                onPreview={(target) => setPreviewItem(target)}
-                onUpdateCaption={(mediaId, captionText) =>
-                  handleUpdateMediaItem(mediaId, { captionText })
-                }
-                onMoveRequest={(target) => {
-                  setSelectedMoveDestinationId(target.folderId ?? null);
-                  setMoveModalState({ targetType: 'media', mediaItem: target });
-                }}
-                onDeleteRequest={(target) => void handleDeleteMediaItem(target.id)}
-              />
-            ))}
-          </div>
+              >
+                <button
+                  type="button"
+                  data-testid="load-more-media-btn"
+                  disabled={isLoadingMore}
+                  onClick={() => void handleLoadMoreMedia()}
+                  style={{
+                    ...COMPONENT_STYLES.secondaryButton(THEME.default),
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                  }}
+                >
+                  {isLoadingMore
+                    ? 'Loading more media...'
+                    : `Load more (Showing ${displayedMediaItems.length} of ${totalMediaCount})`}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </section>
 
       {/* Media Preview & Caption Modal */}
-      <MediaPreviewModal
-        item={previewItem}
-        open={Boolean(previewItem)}
-        onOpenChange={(open) => {
-          if (!open) setPreviewItem(null);
-        }}
-        onSave={(mediaId, updates) => handleUpdateMediaItem(mediaId, updates)}
-        onDelete={(mediaId) => handleDeleteMediaItem(mediaId)}
-      />
+      {(() => {
+        const previewIdx = previewItem
+          ? displayedMediaItems.findIndex((m) => m.id === previewItem.id)
+          : -1;
+        const hasPrev = previewIdx > 0;
+        const hasNext =
+          previewIdx !== -1 && previewIdx < displayedMediaItems.length - 1;
+
+        return (
+          <MediaPreviewModal
+            item={previewItem}
+            open={Boolean(previewItem)}
+            hasPrevious={hasPrev}
+            hasNext={hasNext}
+            onPrevious={() => {
+              if (hasPrev) {
+                setPreviewItem(displayedMediaItems[previewIdx - 1] ?? null);
+              }
+            }}
+            onNext={() => {
+              if (hasNext) {
+                setPreviewItem(displayedMediaItems[previewIdx + 1] ?? null);
+              }
+            }}
+            onOpenChange={(open) => {
+              if (!open) setPreviewItem(null);
+            }}
+            onSave={(mediaId, updates) => handleUpdateMediaItem(mediaId, updates)}
+            onDelete={(mediaId) => handleDeleteMediaItem(mediaId)}
+          />
+        );
+      })()}
 
       {/* Create / Rename Folder Modal */}
       <Dialog
@@ -2053,6 +2401,134 @@ export function MediaLibraryExplorer({
               </button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pre-Upload Duplicate Detection Confirmation Modal */}
+      <Dialog
+        open={Boolean(pendingDuplicateUpload)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDuplicateUpload(null);
+        }}
+      >
+        <DialogContent
+          data-testid="duplicate-upload-modal"
+          style={{ maxWidth: '480px' }}
+        >
+          <DialogHeader>
+            <DialogTitle>
+              {pendingDuplicateUpload?.duplicates.length === 1
+                ? '1 Duplicate File Detected'
+                : `${pendingDuplicateUpload?.duplicates.length ?? 0} Duplicate Files Detected`}
+            </DialogTitle>
+            <DialogDescription>
+              Files with the same name and size already exist in this folder. Choose
+              whether to skip duplicates or upload everything anyway.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogBody
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: SPACING.xs,
+            }}
+          >
+            {pendingDuplicateUpload?.duplicates.slice(0, 5).map((dup, idx) => (
+              <div
+                key={`${dup.file.name}-${idx}`}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.sm}`,
+                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  borderRadius: RADII.xs,
+                  fontSize: '0.8125rem',
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: SPACING.sm,
+                }}
+              >
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                  }}
+                >
+                  {dup.file.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: `var(--text-dim, ${THEME.default.text.muted})`,
+                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                    flexShrink: 0,
+                  }}
+                >
+                  Already in folder
+                </span>
+              </div>
+            ))}
+            {(pendingDuplicateUpload?.duplicates.length ?? 0) > 5 && (
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '0.75rem',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                +{(pendingDuplicateUpload?.duplicates.length ?? 0) - 5} more duplicate
+                files
+              </p>
+            )}
+          </DialogBody>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setPendingDuplicateUpload(null)}
+              style={{
+                ...COMPONENT_STYLES.secondaryButton(THEME.default),
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="skip-duplicates-btn"
+              onClick={() => {
+                if (!pendingDuplicateUpload) return;
+                const { uniqueEntries, duplicates } = pendingDuplicateUpload;
+                setPendingDuplicateUpload(null);
+                void runUploadBatch(uniqueEntries, duplicates.length);
+              }}
+              style={{
+                ...COMPONENT_STYLES.secondaryButton(THEME.default),
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+              }}
+            >
+              Skip duplicates ({pendingDuplicateUpload?.duplicates.length ?? 0})
+            </button>
+            <button
+              type="button"
+              data-testid="upload-all-anyway-btn"
+              onClick={() => {
+                if (!pendingDuplicateUpload) return;
+                const { allEntries } = pendingDuplicateUpload;
+                setPendingDuplicateUpload(null);
+                void runUploadBatch(allEntries, 0);
+              }}
+              style={COMPONENT_STYLES.primaryButton}
+            >
+              Upload all anyway
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

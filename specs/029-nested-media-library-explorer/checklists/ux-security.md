@@ -13,3 +13,12 @@
 - [x] Moving a folder checks via recursive CTE that `parentId` is not `folderId` or a descendant of `folderId`.
 - [x] Deleting a folder purges all descendant media objects and thumbnails from Cloudflare R2 before deleting DB records.
 - [x] Batch operations (`move`, `delete`, `caption`) strictly filter by `user_id = session.userId`.
+
+## Explorer Ergonomics, Scale & Safeguards (US5–US7)
+- [x] Global search omits `folderId` when `searchQuery` is non-empty, displaying both matching folders and matching media across all folders with clickable folder path links (`data-testid="media-folder-path-<id>"`) on media cards.
+- [x] Pagination supports both `IntersectionObserver` infinite scroll (`data-testid="infinite-scroll-sentinel"`) and a manual **"Load more (`Showing X of Y`)"** fallback button (`data-testid="load-more-media-btn"`).
+- [x] Active folder synchronizes with `?folder=<id>` in the URL on mount, folder navigation (`history.pushState`), and browser Back/Forward (`popstate`).
+- [x] `Shift + Click` selects contiguous range of media cards; `Escape` clears selection when no modal is open; `ArrowLeft` / `ArrowRight` cycles items inside `MediaPreviewModal`.
+- [x] Hovering a video card for `300ms` plays a muted inline `<video>` preview (`data-testid="hover-video-preview-<id>"`) and cleans up on pointer leave.
+- [x] Duplicate upload detection checks case-insensitive `name` and exact `fileSize` in the target folder and prompts with `data-testid="duplicate-upload-modal"` offering **Skip duplicates** (`data-testid="skip-duplicates-btn"`) and **Upload all anyway** (`data-testid="upload-all-anyway-btn"`).
+

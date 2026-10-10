@@ -71,12 +71,73 @@ An operator can filter the current view by media type (**All**, **Videos**, **Im
 
 ---
 
+### User Story 5 - Global Search Across All Nested Folders & Infinite Scroll Pagination (Priority: P1)
+
+When an operator enters a search query in the Media Library toolbar, the explorer searches globally across all folders and nested subfolders rather than restricting results to the currently open folder. Both matching folders (at any nesting depth) and matching media items across the entire library are displayed, and each media card shows a clickable folder path link (e.g., `Campaign A / Reels`) so the operator can jump straight to that item's folder. When any directory or global search result contains more than 100 items, the grid automatically loads the next page via infinite scroll (`IntersectionObserver`) and provides an explicit **"Load more (`Showing X of Y`)"** fallback button.
+
+**Why this priority**: Essential for finding assets nested deep in folder hierarchies and browsing folders containing hundreds or thousands of videos.
+
+**Independent Test**: Enter a search term while at `All Media`, verify matching subfolders and media items inside nested folders appear with clickable folder path links on each media card, click the folder path on a card to jump directly into that folder, and verify folders with >100 items paginate via infinite scroll and the "Load more" button.
+
+**Acceptance Scenarios**:
+
+1. **Given** an operator has media items inside nested subfolders (`Campaign A / Reels / viral.mp4`) and is currently at `All Media`, **When** they type `"viral"` into the search input, **Then** `GET /api/tenant/[subdomain]/media` is queried without a `folderId` restriction, returning matching items across all folders alongside matching folders, and each media card displays a clickable folder path (`Campaign A / Reels`) that navigates into that folder when clicked.
+2. **Given** a folder or search result with `total > items.length` (e.g., 250 items where the first 100 are loaded), **When** the operator scrolls near the bottom of the grid or clicks the **"Load more (Showing 100 of 250)"** button, **Then** the next page (`offset = 100, limit = 100`) is fetched and appended cleanly without resetting existing items or selections.
+
+---
+
+### User Story 6 - URL Folder Sync (`?folder=<id>`), `Shift + Click` Range Selection, Keyboard Shortcuts & Hover Video Preview (Priority: P1)
+
+Navigating into or out of folders synchronizes the active folder with `?folder=<folderId>` in the browser URL (`history.pushState` / `popstate` listener), enabling native browser Back/Forward navigation, page refreshes that preserve the open folder, and bookmarkable folder links. In the media grid, operators can hold `Shift` while clicking a card checkbox to select a contiguous range of media items, press `Escape` to clear the active selection, and press `ArrowLeft` / `ArrowRight` inside the Media Preview Modal to step through the previous or next item in the current view. Hovering over a video card's thumbnail surface for `300ms` plays a muted inline `<video>` preview loop right inside the card.
+
+**Why this priority**: Delivers desktop-grade file explorer ergonomics for high-speed media curation.
+
+**Independent Test**: Open a folder and verify `?folder=<id>` updates in the URL and survives page refresh / browser Back; `Shift + Click` two cards to select the range between them; press `Escape` to clear selection; hover a video card for `300ms` to verify inline muted `<video>` playback; open the Preview Modal and press `ArrowRight` / `ArrowLeft` to cycle items.
+
+**Acceptance Scenarios**:
+
+1. **Given** the operator clicks a subfolder `"Reels"` (`id = folder-reels`), **When** the view transitions into `"Reels"`, **Then** the browser URL updates to `?folder=folder-reels` (and removes `?folder` when returning to `All Media`), and pressing the browser Back button navigates back to the parent folder.
+2. **Given** 10 media cards in the grid where item #2 was last toggled, **When** the operator holds `Shift` and clicks the checkbox on item #6, **Then** items #2 through #6 are all selected.
+3. **Given** items are selected and no modal is open, **When** the operator presses `Escape`, **Then** the selection is cleared.
+4. **Given** the Media Preview Modal is open for item #2, **When** the operator presses `ArrowRight` (or clicks Next) or `ArrowLeft` (or clicks Previous), **Then** the modal switches to item #3 or item #1 in the active list.
+5. **Given** a video card in the grid, **When** the operator hovers over its thumbnail area for `300ms`, **Then** a muted inline `<video>` element plays inside the card thumbnail surface and stops/unmounts when the pointer leaves.
+
+---
+
+### User Story 7 - Pre-Upload Duplicate File Detection Modal (Priority: P1)
+
+When an operator selects or drops files or a PC folder to upload, the explorer inspects the queued files against existing assets in the resolved target folder(s) (matching case-insensitive `name` and exact `fileSize`). If one or more duplicate files are detected, the explorer presents a **Duplicate Files Detected** modal listing the duplicate count and sample filenames, offering two actions: **Skip duplicates** (which uploads only the non-duplicate files and reports the skipped duplicate count) or **Upload all anyway** (which proceeds with uploading all selected files).
+
+**Why this priority**: Prevents accidental re-uploading of large video batches that were already partially or fully uploaded into a folder.
+
+**Independent Test**: Attempt to upload a batch of 3 files where 1 file matches an existing item's `name` and `fileSize` in the current folder; verify the Duplicate Files Detected modal appears with **"Skip duplicates"** and **"Upload all anyway"** buttons, and verify clicking **"Skip duplicates"** uploads only the 2 new files.
+
+**Acceptance Scenarios**:
+
+1. **Given** a folder already contains `clip1.mp4` (`1048576` bytes), **When** the operator selects `clip1.mp4` (`1048576` bytes) and `clip2.mp4` (`2097152` bytes) for upload into that folder, **Then** a confirmation modal (`data-testid="duplicate-upload-modal"`) appears stating that 1 duplicate file was detected and offering **Skip duplicates** and **Upload all anyway**.
+2. **Given** the Duplicate Files Detected modal is open, **When** the operator clicks **Skip duplicates**, **Then** `clip1.mp4` is skipped (incrementing `skippedFiles`) and only `clip2.mp4` is uploaded.
+3. **Given** the Duplicate Files Detected modal is open, **When** the operator clicks **Upload all anyway**, **Then** both `clip1.mp4` and `clip2.mp4` are uploaded.
+
+---
+
+## Clarifications
+
+### Session 2026-10-10
+
+- Q: How should duplicate file detection behave when uploading files or a folder into the Media Library? → A: Prompt with a modal offering **"Skip duplicates"** or **"Upload all anyway"** when duplicates (matching file name and size in the target folder) are detected.
+- Q: When searching in the Media Library (Global Search across all nested folders), how should results be presented? → A: Show both matching subfolders and matching media across all folders, plus a clickable folder path on each media card to jump to its folder.
+- Q: How should pagination behave when a folder or search result contains more than 100 media items? → A: Automatic infinite scroll when reaching the bottom of the page (with a manual **"Load more"** fallback button).
+- Q: How should these 6 improvements be shipped relative to open PR #343? → A: Add these 6 improvements directly into the currently open Spec 029 / PR #343 branch (`feat/029-nested-media-library-explorer`).
+
+---
+
 ## Edge Cases
 
 - **Circular Folder Move Prevention**: Attempting to move a folder into itself (`parentId = folderId`) or into any of its own descendants must be rejected with HTTP 400 (`INVALID_FOLDER_HIERARCHY`).
 - **Duplicate Sibling Folder Name during PC Folder Upload**: If a subfolder in an uploaded PC directory already exists inside the target parent folder, the uploader reuses the existing subfolder rather than failing with 409.
 - **Unsupported Files in PC Folder Drop**: Hidden system files (e.g., `.DS_Store`, `Thumbs.db`) or unsupported MIME types inside a dropped PC folder are automatically skipped with a non-blocking summary notice while valid videos/images continue uploading.
 - **Large Video Thumbnail Fallback**: If client-side `<video>` frame extraction times out or fails on an unusual codec, upload confirmation still succeeds with `thumbnailKey: null, thumbnailUrl: null` and renders a clean video placeholder icon on the card.
+- **All Files Are Duplicates**: If every file in a selected batch is a duplicate and the user clicks **Skip duplicates**, the upload modal closes cleanly with a feedback message indicating all duplicate files were skipped without starting an empty upload queue.
 
 ## Requirements *(mandatory)*
 
@@ -90,10 +151,19 @@ An operator can filter the current view by media type (**All**, **Videos**, **Im
 - **FR-006**: `POST /api/tenant/[subdomain]/media/batch` MUST support atomic batch operations on an array of `mediaIds` (`action: 'move' | 'delete' | 'caption'`), enforcing strict `user_id` ownership and R2 object cleanup on batch delete.
 - **FR-007**: `apps/web/src/components/workspace/workspace-sidebar.tsx` MUST include a top-level "Media Library" navigation item (`/media`) in the primary top `SidebarGroup` directly below "Home".
 - **FR-008**: `/tenant/[subdomain]/media` MUST render the Google Drive-style Media Library Explorer conforming strictly to `apps/web/src/lib/theme.ts` and `DESIGN.md` (zero hardcoded hex colors, zero capsule pill badges, zero decorative status dots).
+- **FR-009**: When `searchQuery` is non-empty, the explorer MUST perform a global search across all folders (omitting `folderId` from `GET /api/tenant/[subdomain]/media` and matching folders across the entire folder list), rendering a clickable folder path badge (`data-testid="media-folder-path-<id>"`) on each media card so clicking it navigates into that item's folder and clears the search filter.
+- **FR-010**: The explorer MUST track `totalMediaCount` from `GET /api/tenant/[subdomain]/media` and support loading additional pages (`offset`, `limit = 100`) via both an automatic `IntersectionObserver` sentinel at the bottom of the grid and an explicit **"Load more (`Showing X of Y`)"** button (`data-testid="load-more-media-btn"`).
+- **FR-011**: The explorer MUST synchronize `currentFolderId` with the `?folder=<folderId>` URL query parameter on initial mount, folder navigation (`history.pushState`), and browser Back/Forward events (`window.addEventListener('popstate', ...)`).
+- **FR-012**: Media cards MUST support `Shift + Click` range selection across `displayedMediaItems`, `Escape` key to clear selection when no modal is open, and `ArrowLeft` / `ArrowRight` keyboard navigation (plus Previous/Next buttons) inside `MediaPreviewModal`.
+- **FR-013**: `MediaAssetCard` for video items (`mediaType === 'video'`) MUST start a `300ms` hover timer on `onMouseEnter` over the thumbnail surface and render a muted inline `<video>` preview (`data-testid="hover-video-preview-<id>"`) while hovered, cleaning up on `onMouseLeave`.
+- **FR-014**: Before starting an upload batch, the explorer MUST detect duplicate files (matching case-insensitive `name` and exact `fileSize` in the target folder) and, when duplicates exist, open a confirmation modal (`data-testid="duplicate-upload-modal"`) allowing the user to **Skip duplicates** (`data-testid="skip-duplicates-btn"`) or **Upload all anyway** (`data-testid="upload-all-anyway-btn"`).
 
 ## Success Criteria *(mandatory)*
 
 - **SC-001**: Operators can create, nest, rename, move, and cascade-delete folders at any depth with 100% multi-tenant isolation and R2 storage cleanup.
 - **SC-002**: Every uploaded video and image defaults its caption to the extension-stripped filename and supports both inline card editing and Preview Modal editing.
 - **SC-003**: Multi-file and PC folder uploads queue cleanly with bounded concurrency and a single unified Windows Copy-style progress bar.
-- **SC-004**: `pnpm turbo run build lint typecheck test` passes 100% with 0 errors.
+- **SC-004**: Global search finds folders and media items across all nested levels with clickable folder path navigation, and directories with 100+ items paginate via infinite scroll and Load More.
+- **SC-005**: URL `?folder=<id>` sync, `Shift + Click` range selection, keyboard shortcuts (`Escape`, `ArrowLeft`, `ArrowRight`), 300ms hover video preview, and pre-upload duplicate detection modal all pass automated UI and integration tests.
+- **SC-006**: `pnpm turbo run build lint typecheck test` passes 100% with 0 errors.
+

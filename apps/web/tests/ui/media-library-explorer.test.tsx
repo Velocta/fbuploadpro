@@ -2,7 +2,9 @@
  * @file media-library-explorer.test.tsx
  * @description Comprehensive UI & integration tests for Spec 029:
  * Nested Media Library Explorer, Recursive Folders, Bounded Multi-File/Folder Upload,
- * Direct Inline & Modal Caption Editing, and Batch Selection Bar.
+ * Direct Inline & Modal Caption Editing, Batch Selection Bar, Global Search Across
+ * Nested Folders, Infinite Scroll Pagination, URL ?folder=<id> Sync, Shift+Click Range
+ * Selection, 300ms Hover Video Preview, and Pre-Upload Duplicate Detection Modal.
  */
 
 import React from 'react';
@@ -19,14 +21,21 @@ import {
   buildQueuedEntriesFromFileList,
   ensureNestedFolderHierarchy,
   executeBoundedUploadBatch,
+  detectDuplicateUploadEntries,
   type UploadBatchState,
 } from '@/components/media/upload-queue-banner';
-import { MediaAssetCard, formatDuration } from '@/components/media/media-asset-card';
+import {
+  MediaAssetCard,
+  HOVER_VIDEO_PREVIEW_DELAY_MS,
+  formatDuration,
+} from '@/components/media/media-asset-card';
 import { MediaPreviewModal } from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
 import {
   MediaLibraryExplorer,
   buildFolderBreadcrumbs,
+  formatFolderAncestryPath,
+  computeRangeSelection,
   computeFolderSubtreeImpact,
   filterAndSortMediaItems,
 } from '@/components/media/media-library-explorer';
@@ -126,7 +135,7 @@ const SAMPLE_MEDIA_ITEMS: MediaItemResponse[] = [
     thumbnailUrl: null,
     durationSeconds: 125,
     aspectRatio: '16:9',
-    captionText: 'Nested Folder Clip',
+    captionText: 'Viral Nested Folder Clip',
     createdAt: '2026-10-10T13:00:00.000Z',
     updatedAt: '2026-10-10T13:00:00.000Z',
   },
@@ -328,7 +337,7 @@ describe('Spec 029: UploadQueueBanner & Bounded Ingestion Helpers (US3)', () => 
   });
 });
 
-describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2)', () => {
+describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2, US6)', () => {
   it('renders MediaAssetCard with inline caption, multi-select checkbox, rectangular RADII.xs metadata badges, and zero capsule pills', () => {
     const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
     const { hasText, hasAttribute, html } = render(
@@ -344,6 +353,9 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2)', () => {
     );
 
     expect(hasAttribute('data-testid', `media-card-${videoItem.id}`)).toBe(true);
+    expect(hasAttribute('data-testid', `media-thumbnail-surface-${videoItem.id}`)).toBe(
+      true
+    );
     expect(hasAttribute('data-testid', `select-media-${videoItem.id}`)).toBe(true);
     expect(hasAttribute('data-testid', `inline-caption-${videoItem.id}`)).toBe(true);
     expect(hasText('Viral Launch Reel.mp4')).toBe(true);
@@ -355,6 +367,28 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2)', () => {
     // Must use rectangular RADII.xs (4px) and NEVER capsule pills (9999px)
     expect(html).toContain(`border-radius:${RADII.xs}`);
     expect(html).not.toContain('9999px');
+  });
+
+  it('enforces 300ms hover video preview delay and renders muted inline <video> preview when hovered', () => {
+    expect(HOVER_VIDEO_PREVIEW_DELAY_MS).toBe(300);
+
+    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
+    const { hasAttribute } = render(
+      <MediaAssetCard
+        item={videoItem}
+        initialHoverPlaying={true}
+        folderPathLabel="Campaign A / Reels"
+        onNavigateFolder={vi.fn()}
+      />
+    );
+
+    expect(hasAttribute('data-testid', `media-thumbnail-surface-${videoItem.id}`)).toBe(
+      true
+    );
+    expect(hasAttribute('data-testid', `hover-video-preview-${videoItem.id}`)).toBe(
+      true
+    );
+    expect(hasAttribute('data-testid', `media-folder-path-${videoItem.id}`)).toBe(true);
   });
 
   it('falls back to stripped filename when captionText is empty and renders inline caption input when editing', () => {
@@ -371,12 +405,16 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2)', () => {
     expect(formatDuration(125)).toBe('2:05');
   });
 
-  it('renders MediaPreviewModal with video player, technical metadata, and multi-line caption textarea', () => {
+  it('renders MediaPreviewModal with video player, technical metadata, Previous/Next navigation controls, and multi-line caption textarea', () => {
     const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const { hasText, hasAttribute } = render(
+    const { hasText, hasAttribute, findTags } = render(
       <MediaPreviewModal
         item={videoItem}
         open={true}
+        hasPrevious={true}
+        hasNext={true}
+        onPrevious={vi.fn()}
+        onNext={vi.fn()}
         onOpenChange={vi.fn()}
         onSave={vi.fn()}
         onDelete={vi.fn()}
@@ -385,6 +423,8 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2)', () => {
 
     expect(hasAttribute('data-testid', 'media-preview-modal')).toBe(true);
     expect(hasAttribute('data-testid', 'modal-video-player')).toBe(true);
+    expect(hasAttribute('data-testid', 'preview-prev-btn')).toBe(true);
+    expect(hasAttribute('data-testid', 'preview-next-btn')).toBe(true);
     expect(hasAttribute('data-testid', 'modal-filename-input')).toBe(true);
     expect(hasAttribute('data-testid', 'modal-caption-input')).toBe(true);
     expect(hasAttribute('data-testid', 'modal-save-caption-btn')).toBe(true);
@@ -393,10 +433,20 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2)', () => {
     expect(hasText('9:16')).toBe(true);
     expect(hasText('0:45')).toBe(true);
     expect(hasText('Viral Launch Reel 🔥')).toBe(true);
+
+    const buttons = findTags('button');
+    const prevBtn = buttons.find(
+      (b) => b.attributes['data-testid'] === 'preview-prev-btn'
+    );
+    const nextBtn = buttons.find(
+      (b) => b.attributes['data-testid'] === 'preview-next-btn'
+    );
+    expect(prevBtn?.attributes['disabled']).toBeUndefined();
+    expect(nextBtn?.attributes['disabled']).toBeUndefined();
   });
 });
 
-describe('Spec 029: BatchActionBar (US4)', () => {
+describe('Spec 029: BatchActionBar & Shift+Click Range Selection (US4, US6)', () => {
   it('renders selected count, Move to folder, Set caption, and Delete selected buttons when items are selected', () => {
     const { hasText, hasAttribute } = render(
       <BatchActionBar
@@ -418,15 +468,45 @@ describe('Spec 029: BatchActionBar (US4)', () => {
     expect(hasAttribute('data-testid', 'batch-caption-btn')).toBe(true);
     expect(hasAttribute('data-testid', 'batch-delete-btn')).toBe(true);
   });
+
+  it('computes contiguous range selection when Shift+Click is used', () => {
+    const displayedIds = ['m1', 'm2', 'm3', 'm4', 'm5'];
+    const selectedRange = computeRangeSelection(
+      displayedIds,
+      ['m2'],
+      'm4',
+      'm2',
+      true
+    );
+    expect(selectedRange).toEqual(['m2', 'm3', 'm4']);
+
+    // Single click without shift toggles individual item
+    const toggledSingle = computeRangeSelection(
+      displayedIds,
+      ['m2', 'm3', 'm4'],
+      'm3',
+      'm4',
+      false
+    );
+    expect(toggledSingle).toEqual(['m2', 'm4']);
+  });
 });
 
-describe('Spec 029: MediaLibraryExplorer, Breadcrumbs, Subtree Impact & Theme Compliance (US1, US4)', () => {
-  it('computes ancestor breadcrumbs and recursive folder deletion impact accurately', () => {
+describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sync & Duplicate Guard (US1, US4, US5, US6, US7)', () => {
+  it('computes ancestor breadcrumbs, formatted ancestry path labels, and recursive folder deletion impact accurately', () => {
     const trail = buildFolderBreadcrumbs(
       '33333333-3333-4333-8333-333333333333',
       SAMPLE_FOLDERS
     );
     expect(trail.map((f) => f.name)).toEqual(['Campaign A', 'Reels', 'Week 1']);
+
+    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('All Media');
+    expect(
+      formatFolderAncestryPath(
+        '22222222-2222-4222-8222-222222222222',
+        SAMPLE_FOLDERS
+      )
+    ).toBe('Campaign A / Reels');
 
     // Campaign A has 2 direct items + Reels (5 items) + Week 1 (3 items) + Photos (4 items) = 14 total items and 3 descendant subfolders
     const impact = computeFolderSubtreeImpact(
@@ -437,7 +517,7 @@ describe('Spec 029: MediaLibraryExplorer, Breadcrumbs, Subtree Impact & Theme Co
     expect(impact.totalMediaCount).toBe(14);
   });
 
-  it('filters and sorts media items by folder, mediaType, search query, and sort option', () => {
+  it('filters by active folder when searchQuery is empty and searches globally across all nested folders when searchQuery is non-empty', () => {
     const rootVideos = filterAndSortMediaItems(SAMPLE_MEDIA_ITEMS, {
       currentFolderId: null,
       mediaTypeFilter: 'video',
@@ -458,13 +538,111 @@ describe('Spec 029: MediaLibraryExplorer, Breadcrumbs, Subtree Impact & Theme Co
       'Viral Launch Reel.mp4',
     ]);
 
-    const searchedByCaption = filterAndSortMediaItems(SAMPLE_MEDIA_ITEMS, {
+    // Global search across all folders: returns both root item and nested folder item matching "viral"
+    const globalSearchMatches = filterAndSortMediaItems(SAMPLE_MEDIA_ITEMS, {
       currentFolderId: null,
       mediaTypeFilter: 'all',
-      searchQuery: 'viral launch',
+      searchQuery: 'viral',
       sortOption: 'created_at:desc',
     });
-    expect(searchedByCaption).toHaveLength(1);
+    expect(globalSearchMatches).toHaveLength(2);
+    expect(globalSearchMatches.map((i) => i.name)).toEqual([
+      'Nested_Folder_Clip.mp4',
+      'Viral Launch Reel.mp4',
+    ]);
+  });
+
+  it('renders global search results across nested folders with clickable folder path badges on media cards', () => {
+    const { hasText, hasAttribute } = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId={null}
+        initialSearchQuery="viral"
+      />
+    );
+
+    // Both root item (aaaaaaaa...1) and nested folder item (aaaaaaaa...3) match "viral"
+    expect(
+      hasAttribute(
+        'data-testid',
+        'media-folder-path-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+      )
+    ).toBe(true);
+    expect(
+      hasAttribute(
+        'data-testid',
+        'media-folder-path-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3'
+      )
+    ).toBe(true);
+    expect(hasText('Campaign A / Reels')).toBe(true);
+    expect(hasText('Nested_Folder_Clip.mp4')).toBe(true);
+    expect(hasText('Viral Launch Reel.mp4')).toBe(true);
+  });
+
+  it('renders Infinite Scroll sentinel and Load More button when totalMediaCount exceeds loaded items', () => {
+    const { hasText, hasAttribute } = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS.slice(0, 2)}
+        initialTotalMediaCount={250}
+        initialCurrentFolderId={null}
+      />
+    );
+
+    expect(hasAttribute('data-testid', 'infinite-scroll-sentinel')).toBe(true);
+    expect(hasAttribute('data-testid', 'load-more-media-btn')).toBe(true);
+    expect(hasText('Load more (Showing 2 of 250)')).toBe(true);
+  });
+
+  it('detects duplicate files against existing folder items and intra-batch duplicates and renders Duplicate Files Detected modal', () => {
+    const dupFile = new File(['x'], 'Viral Launch Reel.mp4', { type: 'video/mp4' });
+    Object.defineProperty(dupFile, 'size', { value: 15728640 });
+
+    const newFile = new File(['y'], 'Brand_New_Clip.mp4', { type: 'video/mp4' });
+    Object.defineProperty(newFile, 'size', { value: 4194304 });
+
+    const intraDupFile = new File(['y'], 'Brand_New_Clip.mp4', { type: 'video/mp4' });
+    Object.defineProperty(intraDupFile, 'size', { value: 4194304 });
+
+    const entries = [
+      { file: dupFile, relativePath: 'Viral Launch Reel.mp4' },
+      { file: newFile, relativePath: 'Brand_New_Clip.mp4' },
+      { file: intraDupFile, relativePath: 'Brand_New_Clip.mp4' },
+    ];
+
+    const detection = detectDuplicateUploadEntries(
+      entries,
+      SAMPLE_MEDIA_ITEMS,
+      SAMPLE_FOLDERS,
+      null
+    );
+
+    expect(detection.duplicates).toHaveLength(2);
+    expect(detection.uniqueEntries).toHaveLength(1);
+    expect(detection.uniqueEntries[0]?.file.name).toBe('Brand_New_Clip.mp4');
+
+    const { hasText, hasAttribute } = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialPendingDuplicateUpload={{
+          allEntries: entries,
+          uniqueEntries: detection.uniqueEntries,
+          duplicates: detection.duplicates,
+        }}
+      />
+    );
+
+    expect(hasAttribute('data-testid', 'duplicate-upload-modal')).toBe(true);
+    expect(hasAttribute('data-testid', 'skip-duplicates-btn')).toBe(true);
+    expect(hasAttribute('data-testid', 'upload-all-anyway-btn')).toBe(true);
+    expect(hasText('2 Duplicate Files Detected')).toBe(true);
+    expect(hasText('Skip duplicates (2)')).toBe(true);
+    expect(hasText('Upload all anyway')).toBe(true);
   });
 
   it('renders MediaLibraryExplorer with breadcrumb navigation, nested subfolders, destructive delete folder modal impact, and strict theme compliance', () => {

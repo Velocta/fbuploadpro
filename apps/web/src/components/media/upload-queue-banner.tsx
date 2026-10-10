@@ -461,20 +461,124 @@ export async function ensureNestedFolderHierarchy(params: {
   return { folderPathMap, updatedFolders };
 }
 
+export type QueuedUploadEntry = QueuedFileEntry & {
+  relativeSubfolderPath?: string[] | undefined;
+};
+
+export interface DuplicateDetectionResult {
+  duplicates: QueuedUploadEntry[];
+  uniqueEntries: QueuedUploadEntry[];
+}
+
 /**
- * Runs a bounded concurrency upload batch (max 3 concurrent files), updating unified progress via `onStateChange`.
+ * Detects duplicate files in a queued upload batch against existing items in the resolved target folder(s)
+ * as well as intra-batch duplicates (matching case-insensitive file name and exact file size).
  */
-export async function executeBoundedUploadBatch(params: {
+export function detectDuplicateUploadEntries(
+  entriesOrOptions:
+    | QueuedUploadEntry[]
+    | {
+        entries: QueuedUploadEntry[];
+        existingItems?: MediaItemResponse[];
+        existingMediaItems?: MediaItemResponse[];
+        existingFolders: MediaFolder[];
+        baseFolderId: string | null;
+      },
+  existingItemsArg?: MediaItemResponse[],
+  existingFoldersArg?: MediaFolder[],
+  baseFolderIdArg?: string | null
+): DuplicateDetectionResult {
+  const entries = Array.isArray(entriesOrOptions)
+    ? entriesOrOptions
+    : entriesOrOptions.entries;
+  const existingItems = Array.isArray(entriesOrOptions)
+    ? (existingItemsArg ?? [])
+    : (entriesOrOptions.existingItems ?? entriesOrOptions.existingMediaItems ?? []);
+  const existingFolders = Array.isArray(entriesOrOptions)
+    ? (existingFoldersArg ?? [])
+    : entriesOrOptions.existingFolders;
+  const baseFolderId = Array.isArray(entriesOrOptions)
+    ? (baseFolderIdArg ?? null)
+    : entriesOrOptions.baseFolderId;
+
+  const duplicates: QueuedUploadEntry[] = [];
+  const uniqueEntries: QueuedUploadEntry[] = [];
+  const seenInBatch = new Set<string>();
+
+  for (const entry of entries) {
+    const segments =
+      entry.relativeSubfolderPath ??
+      resolveFolderPathSegments(entry.relativePath || entry.file.name);
+
+    let currentParentId: string | null = baseFolderId;
+    let folderExistsOnServer = true;
+
+    for (const rawSegment of segments) {
+      const segmentLower = rawSegment.trim().toLowerCase();
+      const matchedFolder = existingFolders.find(
+        (f) =>
+          (f.parentId ?? null) === currentParentId &&
+          f.name.trim().toLowerCase() === segmentLower
+      );
+      if (matchedFolder) {
+        currentParentId = matchedFolder.id;
+      } else {
+        folderExistsOnServer = false;
+        break;
+      }
+    }
+
+    const cleanName = (entry.file.name.split('/').pop() ?? entry.file.name)
+      .trim()
+      .toLowerCase();
+    const fileSize = entry.file.size;
+    const normalizedPathKey = [
+      baseFolderId ?? 'root',
+      ...segments.map((s) => s.trim().toLowerCase()),
+    ].join('/');
+    const batchKey = `${normalizedPathKey}::${cleanName}::${fileSize}`;
+
+    const isIntraBatchDuplicate = seenInBatch.has(batchKey);
+    seenInBatch.add(batchKey);
+
+    const isExistingServerDuplicate =
+      folderExistsOnServer &&
+      existingItems.some(
+        (item) =>
+          (item.folderId ?? null) === currentParentId &&
+          item.name.trim().toLowerCase() === cleanName &&
+          item.fileSize === fileSize
+      );
+
+    if (isIntraBatchDuplicate || isExistingServerDuplicate) {
+      duplicates.push(entry);
+    } else {
+      uniqueEntries.push(entry);
+    }
+  }
+
+  return { duplicates, uniqueEntries };
+}
+
+export interface ExecuteBoundedUploadBatchOptions {
   subdomain: string;
   baseFolderId: string | null;
   rawEntries: QueuedFileEntry[];
   existingFolders: MediaFolder[];
   onStateChange: (state: UploadBatchState) => void;
-  onItemUploaded?: (item: MediaItemResponse) => void;
-  onFoldersUpdated?: (folders: MediaFolder[]) => void;
-  isCancelled?: () => boolean;
-  fetchImpl?: typeof fetch;
-}): Promise<{
+  onItemUploaded?: ((item: MediaItemResponse) => void) | undefined;
+  onFoldersUpdated?: ((folders: MediaFolder[]) => void) | undefined;
+  isCancelled?: (() => boolean) | undefined;
+  fetchImpl?: typeof fetch | undefined;
+  initialSkippedCount?: number | undefined;
+}
+
+/**
+ * Runs a bounded concurrency upload batch (max 3 concurrent files), updating unified progress via `onStateChange`.
+ */
+export async function executeBoundedUploadBatch(
+  params: ExecuteBoundedUploadBatchOptions
+): Promise<{
   uploadedItems: MediaItemResponse[];
   updatedFolders: MediaFolder[];
 }> {
@@ -488,6 +592,7 @@ export async function executeBoundedUploadBatch(params: {
     onFoldersUpdated,
     isCancelled = () => false,
     fetchImpl = fetch,
+    initialSkippedCount = 0,
   } = params;
 
   const validEntries: Array<{
@@ -495,7 +600,7 @@ export async function executeBoundedUploadBatch(params: {
     relativePath: string;
     mimeType: (typeof AllowedMediaMimeTypes)[number];
   }> = [];
-  let skippedFiles = 0;
+  let skippedFiles = initialSkippedCount;
 
   for (const entry of rawEntries) {
     const mimeType = resolveSupportedMimeType(entry.file);

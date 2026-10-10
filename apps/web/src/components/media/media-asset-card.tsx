@@ -1,20 +1,31 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
 
+export const HOVER_VIDEO_PREVIEW_DELAY_MS = 300;
+
 export interface MediaAssetCardProps {
   item: MediaItemResponse;
-  selected?: boolean;
-  initialEditingCaption?: boolean;
-  onToggleSelect?: (mediaId: string) => void;
-  onPreview?: (item: MediaItemResponse) => void;
-  onUpdateCaption?: (mediaId: string, captionText: string) => Promise<void> | void;
-  onMoveRequest?: (item: MediaItemResponse) => void;
-  onDeleteRequest?: (item: MediaItemResponse) => void;
-  onDragStartMedia?: (e: React.DragEvent<HTMLElement>, item: MediaItemResponse) => void;
+  selected?: boolean | undefined;
+  initialEditingCaption?: boolean | undefined;
+  initialHoverPlaying?: boolean | undefined;
+  folderPathLabel?: string | null | undefined;
+  onNavigateFolder?: ((folderId: string | null) => void) | undefined;
+  onToggleSelect?:
+    | ((mediaId: string, options?: { shiftKey?: boolean }) => void)
+    | undefined;
+  onPreview?: ((item: MediaItemResponse) => void) | undefined;
+  onUpdateCaption?:
+    | ((mediaId: string, captionText: string) => Promise<void> | void)
+    | undefined;
+  onMoveRequest?: ((item: MediaItemResponse) => void) | undefined;
+  onDeleteRequest?: ((item: MediaItemResponse) => void) | undefined;
+  onDragStartMedia?:
+    | ((e: React.DragEvent<HTMLElement>, item: MediaItemResponse) => void)
+    | undefined;
 }
 
 export function formatDuration(seconds: number | null | undefined): string | null {
@@ -31,6 +42,9 @@ export function MediaAssetCard({
   item,
   selected = false,
   initialEditingCaption = false,
+  initialHoverPlaying = false,
+  folderPathLabel = null,
+  onNavigateFolder,
   onToggleSelect,
   onPreview,
   onUpdateCaption,
@@ -48,11 +62,41 @@ export function MediaAssetCard({
     initialEditingCaption ? resolvedCaption : null
   );
   const [isSavingCaption, setIsSavingCaption] = useState(false);
+  const [isHoverPlaying, setIsHoverPlaying] = useState(initialHoverPlaying);
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastShiftKeyRef = useRef(false);
 
   const currentDraft = draftCaption ?? resolvedCaption;
   const formattedDuration = formatDuration(item.durationSeconds);
   const isVideo = item.mediaType === 'video';
   const previewSrc = item.thumbnailUrl || (!isVideo ? item.url : null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleMouseEnterSurface = () => {
+    if (!isVideo || !item.url) return;
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+    }
+    hoverTimerRef.current = setTimeout(() => {
+      setIsHoverPlaying(true);
+    }, HOVER_VIDEO_PREVIEW_DELAY_MS);
+  };
+
+  const handleMouseLeaveSurface = () => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setIsHoverPlaying(false);
+  };
 
   const handleStartEditCaption = () => {
     setDraftCaption(resolvedCaption);
@@ -106,6 +150,9 @@ export function MediaAssetCard({
     >
       {/* Thumbnail & Preview Surface */}
       <div
+        data-testid={`media-thumbnail-surface-${item.id}`}
+        onMouseEnter={handleMouseEnterSurface}
+        onMouseLeave={handleMouseLeaveSurface}
         style={{
           position: 'relative',
           width: '100%',
@@ -136,7 +183,23 @@ export function MediaAssetCard({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          {previewSrc ? (
+          {isHoverPlaying && isVideo && item.url ? (
+            <video
+              data-testid={`hover-video-preview-${item.id}`}
+              src={item.url}
+              muted
+              loop
+              playsInline
+              autoPlay
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                pointerEvents: 'none',
+              }}
+            />
+          ) : previewSrc ? (
             <img
               src={previewSrc}
               alt={item.name}
@@ -223,7 +286,20 @@ export function MediaAssetCard({
             type="checkbox"
             data-testid={`select-media-${item.id}`}
             checked={selected}
-            onChange={() => onToggleSelect?.(item.id)}
+            onMouseDown={(e) => {
+              lastShiftKeyRef.current = Boolean(e.shiftKey);
+            }}
+            onClick={(e) => {
+              lastShiftKeyRef.current = Boolean(e.shiftKey);
+            }}
+            onChange={(e) => {
+              const nativeShift = Boolean(
+                (e.nativeEvent as MouseEvent | undefined)?.shiftKey
+              );
+              const shiftKey = nativeShift || lastShiftKeyRef.current;
+              lastShiftKeyRef.current = false;
+              onToggleSelect?.(item.id, { shiftKey });
+            }}
             aria-label={`Select ${item.name}`}
             style={{
               margin: 0,
@@ -280,7 +356,7 @@ export function MediaAssetCard({
         </div>
       </div>
 
-      {/* Card Body: File Name + Inline Direct Caption Editor + Actions */}
+      {/* Card Body: File Name + Optional Global Search Folder Path + Inline Direct Caption Editor + Actions */}
       <div
         style={{
           padding: SPACING.md,
@@ -323,6 +399,58 @@ export function MediaAssetCard({
             {formatBytes(item.fileSize)}
           </span>
         </div>
+
+        {/* Clickable Folder Path Badge (Shown in Global Search Results) */}
+        {folderPathLabel && (
+          <button
+            type="button"
+            data-testid={`media-folder-path-${item.id}`}
+            onClick={() => onNavigateFolder?.(item.folderId ?? null)}
+            title={`Open folder: ${folderPathLabel}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: SPACING.xs,
+              alignSelf: 'flex-start',
+              maxWidth: '100%',
+              padding: '2px 6px',
+              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.xs,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              cursor: 'pointer',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={PALETTE.primary}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ flexShrink: 0 }}
+            >
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            <span
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {folderPathLabel}
+            </span>
+          </button>
+        )}
 
         {/* Inline Direct Caption Editor */}
         <div>

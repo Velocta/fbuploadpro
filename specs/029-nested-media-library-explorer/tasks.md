@@ -35,3 +35,17 @@
 - [x] T016 Create `apps/web/tests/ui/media-library-explorer.test.tsx` testing the Media Library Explorer UI: breadcrumb navigation, nested subfolder creation & destructive deletion confirmation modal, inline & modal caption editing, batch selection bar (move, caption, delete), search/filter/sort, and the single unified Windows Copy-style upload progress bar.
 - [x] T017 Update `docs/foundational-knowledge.md` to document Spec 029 (Nested Media Library, Recursive Folder Explorer, High-Volume Bounded Ingestion & Direct Caption Editing) in the same Pull Request.
 - [x] T018 Run full Turborepo quality gate `pnpm turbo run build lint typecheck test` and verify 100% pass rate with 0 errors.
+
+## Phase 6: User Story 5, 6 & 7 Frontend — Global Search, Infinite Scroll Pagination, URL Sync, Keyboard/Range Selection, Hover Video Preview & Duplicate Guard (`frontend-engineer`)
+
+- [x] T019 [US7] Update `apps/web/src/components/media/upload-queue-banner.tsx` to export `detectDuplicateUploadEntries` (resolving target folders and matching case-insensitive `name` + exact `fileSize` against existing items) and support `initialSkippedCount` in `executeBoundedUploadBatch`.
+- [x] T020 [US5] [US6] Update `apps/web/src/components/media/media-asset-card.tsx` to support clickable folder path badges (`folderPathLabel`, `onNavigateFolder`, `data-testid="media-folder-path-${item.id}"`), `Shift + Click` checkbox range selection (`onToggleSelect(item.id, { shiftKey: e.shiftKey })`), and `300ms` debounced muted inline `<video>` hover preview (`data-testid="hover-video-preview-${item.id}"`).
+- [x] T021 [US6] Update `apps/web/src/components/media/media-preview-modal.tsx` to support `hasPrevious`, `hasNext`, `onPrevious`, and `onNext` props, rendering Previous (`data-testid="preview-prev-btn"`) and Next (`data-testid="preview-next-btn"`) buttons and `ArrowLeft` / `ArrowRight` keyboard navigation.
+- [x] T022 [US5] [US6] [US7] Update `apps/web/src/components/media/media-library-explorer.tsx` to implement Global Search across all nested folders (`formatFolderAncestryPath`), Infinite Scroll (`data-testid="infinite-scroll-sentinel"`) + **"Load more (`Showing X of Y`)"** button (`data-testid="load-more-media-btn"`), URL `?folder=<id>` synchronization (`history.pushState` & `popstate`), `Shift + Click` range selection (`computeRangeSelection`) & `Escape` selection clear, Preview Modal Previous/Next item cycling, and the Pre-Upload Duplicate Detection Modal (`data-testid="duplicate-upload-modal"` with `data-testid="skip-duplicates-btn"` and `data-testid="upload-all-anyway-btn"`).
+
+## Phase 7: Extended QA Verification, Documentation Sync & Final Convergence (`qa-engineer`)
+
+- [x] T023 [US5] [US6] [US7] Expand `apps/web/tests/ui/media-library-explorer.test.tsx` to test Global Search across nested folders with clickable folder paths, Infinite Scroll & Load More pagination, URL `?folder=<id>` sync & `popstate`, `Shift + Click` range selection & keyboard shortcuts (`Escape`, `ArrowLeft`, `ArrowRight`), `300ms` hover video preview on cards, and the Pre-Upload Duplicate Detection Modal (`Skip duplicates` vs. `Upload all anyway`).
+- [x] T024 Synchronize `docs/foundational-knowledge.md` with the 6 new Spec 029 Media Library capabilities in the same Pull Request.
+- [x] T025 Execute full Turborepo quality gate `pnpm turbo run build lint typecheck test` and verify 100% pass rate with 0 errors.
+

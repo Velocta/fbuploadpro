@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
 import {
   Dialog,
@@ -19,6 +19,10 @@ export interface MediaPreviewModalProps {
   item: MediaItemResponse | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  hasPrevious?: boolean | undefined;
+  hasNext?: boolean | undefined;
+  onPrevious?: (() => void) | undefined;
+  onNext?: (() => void) | undefined;
   onSave?:
     | ((
         mediaId: string,
@@ -32,9 +36,44 @@ export function MediaPreviewModal({
   item,
   open,
   onOpenChange,
+  hasPrevious = false,
+  hasNext = false,
+  onPrevious,
+  onNext,
   onSave,
   onDelete,
 }: Readonly<MediaPreviewModalProps>) {
+  useEffect(() => {
+    if (!open || !item) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement | null;
+      const targetEl = e.target as HTMLElement | null;
+      const tagName = (activeEl?.tagName || targetEl?.tagName || '').toUpperCase();
+      if (
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT' ||
+        activeEl?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (e.key === 'ArrowLeft' && hasPrevious && onPrevious) {
+        e.preventDefault();
+        onPrevious();
+      } else if (e.key === 'ArrowRight' && hasNext && onNext) {
+        e.preventDefault();
+        onNext();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open, item, hasPrevious, hasNext, onPrevious, onNext]);
+
   if (!item) return null;
 
   return (
@@ -46,6 +85,10 @@ export function MediaPreviewModal({
         <MediaPreviewModalBody
           key={`${item.id}-${item.updatedAt}`}
           item={item}
+          hasPrevious={hasPrevious}
+          hasNext={hasNext}
+          onPrevious={onPrevious}
+          onNext={onNext}
           onClose={() => onOpenChange(false)}
           onSave={onSave}
           onDelete={onDelete}
@@ -57,6 +100,10 @@ export function MediaPreviewModal({
 
 interface MediaPreviewModalBodyProps {
   item: MediaItemResponse;
+  hasPrevious?: boolean | undefined;
+  hasNext?: boolean | undefined;
+  onPrevious?: (() => void) | undefined;
+  onNext?: (() => void) | undefined;
   onClose: () => void;
   onSave?:
     | ((
@@ -69,6 +116,10 @@ interface MediaPreviewModalBodyProps {
 
 function MediaPreviewModalBody({
   item,
+  hasPrevious = false,
+  hasNext = false,
+  onPrevious,
+  onNext,
   onClose,
   onSave,
   onDelete,
@@ -112,7 +163,74 @@ function MediaPreviewModalBody({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{item.name}</DialogTitle>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: SPACING.md,
+            paddingRight: '32px',
+          }}
+        >
+          <DialogTitle style={{ paddingRight: 0 }}>{item.name}</DialogTitle>
+
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: SPACING.xs,
+              flexShrink: 0,
+            }}
+          >
+            <button
+              type="button"
+              data-testid="preview-prev-btn"
+              disabled={!hasPrevious}
+              onClick={() => onPrevious?.()}
+              aria-label="Previous media item"
+              style={{
+                height: '28px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                color: hasPrevious
+                  ? `var(--text-main, ${THEME.default.text.primary})`
+                  : `var(--text-dim, ${THEME.default.text.muted})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: hasPrevious ? 'pointer' : 'not-allowed',
+                opacity: hasPrevious ? 1 : 0.5,
+              }}
+            >
+              Previous
+            </button>
+
+            <button
+              type="button"
+              data-testid="preview-next-btn"
+              disabled={!hasNext}
+              onClick={() => onNext?.()}
+              aria-label="Next media item"
+              style={{
+                height: '28px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                color: hasNext
+                  ? `var(--text-main, ${THEME.default.text.primary})`
+                  : `var(--text-dim, ${THEME.default.text.muted})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: hasNext ? 'pointer' : 'not-allowed',
+                opacity: hasNext ? 1 : 0.5,
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
         <DialogDescription>
           Review your media asset and edit its publishing caption.
         </DialogDescription>

@@ -30,10 +30,26 @@ Implement the complete Nested Media Library & File Explorer for FBUploadPro:
      - `media-asset-card.tsx`: Video/image card with thumbnail preview, aspect ratio & duration metadata, multi-select checkbox, draggable handle, and inline click-to-edit `captionText`.
      - `media-preview-modal.tsx`: Full preview dialog with `<video controls>` / high-res `<img>`, technical metadata, and multi-line caption editor.
      - `batch-action-bar.tsx`: Floating selection bar for Bulk Move, Bulk Set Caption, and Bulk Delete.
+5. **Advanced Explorer Scale, Ergonomics & Safeguards (`apps/web/src/components/media/**`)**:
+   - **Global Search Across All Nested Folders**:
+     - When `searchQuery` is non-empty, `refreshLibraryData` omits `folderId` so `GET /api/tenant/[subdomain]/media` queries across all folders for the tenant.
+     - Matching subfolders at any depth are shown with their parent ancestry path, and each `MediaAssetCard` displays a clickable folder path (`data-testid="media-folder-path-<id>"`) formatted via `formatFolderAncestryPath` so clicking it navigates into that folder and clears the search query.
+   - **Infinite Scroll & Load More Pagination**:
+     - Track `totalMediaCount` from `GET /api/tenant/[subdomain]/media` and fetch subsequent pages (`offset = mediaItems.length, limit = 100`) via an `IntersectionObserver` sentinel (`data-testid="infinite-scroll-sentinel"`) and an explicit **"Load more (`Showing X of Y`)"** button (`data-testid="load-more-media-btn"`).
+   - **URL Folder Sync (`?folder=<id>`)**:
+     - Read initial `?folder=<id>` from `window.location.search`, push `?folder=<id>` via `window.history.pushState` on folder navigation, and synchronize `currentFolderId` on `window` `popstate` events for native browser Back/Forward support.
+   - **`Shift + Click` Range Selection & Keyboard Shortcuts**:
+     - Pure helper `computeRangeSelection` selects all displayed media items between the last-toggled item and the `Shift + Click` target item.
+     - Global `Escape` listener clears active selection when no modal is open; `ArrowLeft` / `ArrowRight` (and Previous/Next buttons) in `MediaPreviewModal` cycle through `displayedMediaItems`.
+   - **Hover Video Preview on Cards**:
+     - `300ms` debounced hover timer on video cards mounts a muted inline `<video>` loop (`data-testid="hover-video-preview-<id>"`) inside the card thumbnail surface and unmounts on pointer leave.
+   - **Pre-Upload Duplicate File Detection Modal**:
+     - Pure helper `detectDuplicateUploadEntries` checks queued files against existing media items in the resolved target folder (case-insensitive `name` + exact `fileSize`). When duplicates exist, `MediaLibraryExplorer` opens `data-testid="duplicate-upload-modal"` offering **Skip duplicates** (`data-testid="skip-duplicates-btn"`) or **Upload all anyway** (`data-testid="upload-all-anyway-btn"`).
 
 ## Constitution Check
 
 - **Principle I (SDD & TDD)**: Spec, Plan, Data Model, Contracts, Checklists, and Tasks created before implementation.
 - **Principle III (Multi-Tenant Isolation)**: Composite foreign keys `(user_id, parent_id)` and `(user_id, folder_id)` enforced in PostgreSQL and verified in all route queries.
 - **Principle VIII & IX (Theme Token Authority & Professional UX Copy)**: Strictly consumes `@web/lib/theme` and CSS custom properties (`var(--bg-panel)`, `var(--border-subtle)`, `var(--accent-1)`, etc.); zero hardcoded hex literals, zero capsule pill badges, zero decorative status dots, zero technical plumbing leaks in UI copy.
-- **Principle XXII (Spec 029 Architecture)**: Top-level sidebar placement below Home, unlimited subfolder hierarchy with destructive R2-purging folder deletion, single-canvas Google Drive-style explorer, dual inline + modal caption editing, and bounded upload queue with a single unified Windows Copy-style progress bar.
+- **Principle XXII (Spec 029 Architecture)**: Top-level sidebar placement below Home, unlimited subfolder hierarchy with destructive R2-purging folder deletion, single-canvas Google Drive-style explorer, dual inline + modal caption editing, bounded upload queue with a single unified Windows Copy-style progress bar, global search across all folders, infinite scroll + Load More pagination, URL `?folder=<id>` sync, `Shift + Click` range selection & keyboard shortcuts, 300ms hover video preview, and pre-upload duplicate detection modal.
+
