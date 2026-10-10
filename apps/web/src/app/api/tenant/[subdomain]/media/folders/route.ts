@@ -40,14 +40,13 @@ export async function handleListFolders(
        f.id,
        f.user_id,
        f.name,
-       f.color,
        COUNT(m.id)::int AS item_count,
        f.created_at,
        f.updated_at
      FROM media_folders f
      LEFT JOIN media_items m ON m.folder_id = f.id AND m.user_id = f.user_id
      WHERE f.user_id = $1
-     GROUP BY f.id, f.user_id, f.name, f.color, f.created_at, f.updated_at
+     GROUP BY f.id, f.user_id, f.name, f.created_at, f.updated_at
      ORDER BY f.name ASC`,
     [session.userId]
   )) as any[];
@@ -65,7 +64,6 @@ export async function handleListFolders(
     id: row.id,
     userId: row.user_id,
     name: row.name,
-    color: row.color,
     itemCount: Number(row.item_count ?? 0),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
@@ -126,10 +124,10 @@ export async function handleCreateFolder(
 
   try {
     const rows = (await db.query(
-      `INSERT INTO media_folders (user_id, name, color, created_at, updated_at)
-       VALUES ($1, $2, $3, now(), now())
-       RETURNING id, user_id, name, color, created_at, updated_at`,
-      [session.userId, parsed.data.name, parsed.data.color]
+      `INSERT INTO media_folders (user_id, name, created_at, updated_at)
+       VALUES ($1, $2, now(), now())
+       RETURNING id, user_id, name, created_at, updated_at`,
+      [session.userId, parsed.data.name]
     )) as any[];
 
     const row = rows[0];
@@ -137,7 +135,6 @@ export async function handleCreateFolder(
       id: row.id,
       userId: row.user_id,
       name: row.name,
-      color: row.color,
       itemCount: 0,
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString(),

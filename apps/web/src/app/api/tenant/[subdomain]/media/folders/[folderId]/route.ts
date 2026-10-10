@@ -58,11 +58,10 @@ export async function handleUpdateFolder(
     const updateRows = (await db.query(
       `UPDATE media_folders
        SET name = COALESCE($1, name),
-           color = COALESCE($2, color),
            updated_at = now()
-       WHERE id = $3 AND user_id = $4
-       RETURNING id, user_id, name, color, created_at, updated_at`,
-      [parsed.data.name ?? null, parsed.data.color ?? null, folderId, session.userId]
+       WHERE id = $2 AND user_id = $3
+       RETURNING id, user_id, name, created_at, updated_at`,
+      [parsed.data.name ?? null, folderId, session.userId]
     )) as any[];
 
     if (!updateRows || updateRows.length === 0) {
@@ -84,7 +83,6 @@ export async function handleUpdateFolder(
       id: row.id,
       userId: row.user_id,
       name: row.name,
-      color: row.color,
       itemCount,
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString(),

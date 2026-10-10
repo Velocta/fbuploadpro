@@ -7,18 +7,6 @@ import {
 import { getDbClient } from '../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
-function parseTags(tags: unknown): string[] {
-  if (Array.isArray(tags)) return tags;
-  if (typeof tags === 'string') {
-    try {
-      return JSON.parse(tags);
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
 export async function handleListMedia(
   request: NextRequest,
   subdomain: string,
@@ -48,7 +36,6 @@ export async function handleListMedia(
   const parsedQuery = MediaListQuerySchema.safeParse({
     folderId: searchParams.get('folderId') || undefined,
     mediaType: searchParams.get('mediaType') || undefined,
-    tag: searchParams.get('tag') || undefined,
     search: searchParams.get('search') || undefined,
     limit: searchParams.get('limit') || undefined,
     offset: searchParams.get('offset') || undefined,
@@ -61,7 +48,7 @@ export async function handleListMedia(
     );
   }
 
-  const { folderId, mediaType, tag, search, limit, offset } = parsedQuery.data;
+  const { folderId, mediaType, search, limit, offset } = parsedQuery.data;
   const db = dbClient ?? getDbClient();
 
   const conditions: string[] = ['user_id = $1'];
@@ -77,11 +64,6 @@ export async function handleListMedia(
   if (mediaType) {
     params.push(mediaType);
     conditions.push(`media_type = $${params.length}`);
-  }
-
-  if (tag) {
-    params.push(JSON.stringify([tag]));
-    conditions.push(`tags @> $${params.length}::jsonb`);
   }
 
   if (search) {
@@ -119,8 +101,6 @@ export async function handleListMedia(
         ? Number(row.duration_seconds)
         : null,
     aspectRatio: row.aspect_ratio ?? 'unknown',
-    tags: parseTags(row.tags),
-    captionTemplateId: row.caption_template_id ?? null,
     captionText: row.caption_text ?? null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),

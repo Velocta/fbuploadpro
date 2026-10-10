@@ -57,7 +57,6 @@ describe('Storage Service Providers', () => {
       secretAccessKey: 'fake_secret',
       bucketName: 'fake_bucket',
       publicUrl: 'https://media.customdomain.com',
-      defaultQuotaBytes: 5368709120,
     };
 
     it('computes public URLs correctly using config publicUrl', () => {

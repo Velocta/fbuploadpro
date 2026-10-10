@@ -13,7 +13,7 @@ import type { DatabaseClient } from '@fbuploadpro/database';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
-describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095)', () => {
+describe('Custom Media Folders CRUD & Non-Destructive Deletion', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   const folderId = '22222222-2222-4222-a222-222222222222';
   let validSessionCookie: string;
@@ -51,7 +51,6 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
                 id: folderId,
                 user_id: userId,
                 name: 'Spring Campaigns',
-                color: 'emerald',
                 item_count: 8,
                 created_at: new Date('2026-10-07T10:00:00Z'),
                 updated_at: new Date('2026-10-07T10:00:00Z'),
@@ -80,7 +79,7 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
   });
 
   describe('Create Folder (POST /api/tenant/[subdomain]/media/folders)', () => {
-    it('creates new folder with default color and returns 201 Created', async () => {
+    it('creates new folder and returns 201 Created', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('INSERT INTO media_folders')) {
@@ -89,7 +88,6 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
                 id: folderId,
                 user_id: userId,
                 name: 'Product Launches',
-                color: 'slate',
                 created_at: new Date('2026-10-07T10:00:00Z'),
                 updated_at: new Date('2026-10-07T10:00:00Z'),
               },
@@ -110,7 +108,6 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
       const data = await res.json();
       expect(data.id).toBe(folderId);
       expect(data.name).toBe('Product Launches');
-      expect(data.color).toBe('slate');
       expect(data.itemCount).toBe(0);
     });
 
@@ -133,7 +130,7 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
   });
 
   describe('Update Folder (PATCH /api/tenant/[subdomain]/media/folders/[folderId])', () => {
-    it('updates folder name and color', async () => {
+    it('updates folder name', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('UPDATE media_folders')) {
@@ -142,7 +139,6 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
                 id: folderId,
                 user_id: userId,
                 name: 'Renamed Folder',
-                color: 'blue',
                 created_at: new Date('2026-10-07T10:00:00Z'),
                 updated_at: new Date('2026-10-07T11:00:00Z'),
               },
@@ -158,14 +154,13 @@ describe('Custom Media Folders CRUD & Non-Destructive Deletion (T092, T094, T095
       const req = new NextRequest(`http://localhost:3000/api/tenant/acme/media/folders/${folderId}`, {
         method: 'PATCH',
         headers: { cookie: validSessionCookie },
-        body: JSON.stringify({ name: 'Renamed Folder', color: 'blue' }),
+        body: JSON.stringify({ name: 'Renamed Folder' }),
       });
       const res = await handleUpdateFolder(req, 'acme', folderId, mockDb as DatabaseClient);
 
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.name).toBe('Renamed Folder');
-      expect(data.color).toBe('blue');
       expect(data.itemCount).toBe(5);
     });
 

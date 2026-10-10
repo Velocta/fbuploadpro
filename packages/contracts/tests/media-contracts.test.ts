@@ -3,11 +3,10 @@ import {
   UploadUrlRequestSchema,
   ConfirmUploadRequestSchema,
   CreateFolderRequestSchema,
-  CreateCaptionTemplateRequestSchema,
-  StorageQuotaResponseSchema,
   MediaListQuerySchema,
   DeleteMediaItemResponseSchema,
   DeleteFolderResponseSchema,
+  deriveDefaultCaptionFromFilename,
 } from '../src/index.js';
 
 describe('Media Domain Contracts', () => {
@@ -52,11 +51,11 @@ describe('Media Domain Contracts', () => {
     });
   });
 
-  describe('ConfirmUploadRequestSchema', () => {
-    it('validates complete video confirmation payload', () => {
+  describe('ConfirmUploadRequestSchema & deriveDefaultCaptionFromFilename', () => {
+    it('validates complete video confirmation payload without tags or captionTemplateId', () => {
       const res = ConfirmUploadRequestSchema.safeParse({
         mediaId: '11111111-1111-4111-a111-111111111111',
-        name: 'My Viral Reel',
+        name: 'My Viral Reel.mp4',
         fileSize: 15000000,
         mimeType: 'video/mp4',
         mediaType: 'video',
@@ -66,9 +65,14 @@ describe('Media Domain Contracts', () => {
         thumbnailUrl: 'https://media.fbuploadpro.com/thumb.webp',
         durationSeconds: 45.5,
         aspectRatio: '9:16',
-        tags: ['#viral', '#reels'],
       });
       expect(res.success).toBe(true);
+    });
+
+    it('strips file extension when deriving default caption from filename', () => {
+      expect(deriveDefaultCaptionFromFilename('My Viral Reel.mp4')).toBe('My Viral Reel');
+      expect(deriveDefaultCaptionFromFilename('Promo.Banner.Final.png')).toBe('Promo.Banner.Final');
+      expect(deriveDefaultCaptionFromFilename('NoExtensionFile')).toBe('NoExtensionFile');
     });
 
     it('rejects invalid UUIDs for mediaId', () => {
@@ -86,21 +90,13 @@ describe('Media Domain Contracts', () => {
   });
 
   describe('Folder Contracts', () => {
-    it('validates folder creation with valid color badge', () => {
+    it('validates folder creation with name only (no color badge)', () => {
       const res = CreateFolderRequestSchema.safeParse({
         name: 'Daily Highlights',
-        color: 'emerald',
-      });
-      expect(res.success).toBe(true);
-    });
-
-    it('defaults folder color to slate when omitted', () => {
-      const res = CreateFolderRequestSchema.safeParse({
-        name: 'Unsorted Batch',
       });
       expect(res.success).toBe(true);
       if (res.success) {
-        expect(res.data.color).toBe('slate');
+        expect('color' in res.data).toBe(false);
       }
     });
 
@@ -109,33 +105,6 @@ describe('Media Domain Contracts', () => {
         success: true,
         deletedFolderId: '22222222-2222-4222-a222-222222222222',
         preservedItemsCount: 42,
-      });
-      expect(res.success).toBe(true);
-    });
-  });
-
-  describe('Caption Template Contracts', () => {
-    it('validates caption template creation with copy and tags', () => {
-      const res = CreateCaptionTemplateRequestSchema.safeParse({
-        title: 'Weekly Promo CTA',
-        content: 'Check out our new features! 🔥 Link in bio 👉 https://example.com #growth #saas',
-        tags: ['promo', 'cta'],
-      });
-      expect(res.success).toBe(true);
-    });
-  });
-
-  describe('Storage Quota Contracts', () => {
-    it('validates storage quota response metrics', () => {
-      const res = StorageQuotaResponseSchema.safeParse({
-        userId: '33333333-3333-4333-a333-333333333333',
-        totalBytes: 5368709120,
-        usedBytes: 1073741824,
-        remainingBytes: 4294967296,
-        utilizationPercentage: 20.0,
-        totalItems: 15,
-        videoItems: 10,
-        imageItems: 5,
       });
       expect(res.success).toBe(true);
     });
@@ -158,12 +127,10 @@ describe('Media Domain Contracts', () => {
   });
 
   describe('DeleteMediaItemResponseSchema', () => {
-    it('validates asset deletion response with reclaimed quota metrics', () => {
+    it('validates asset deletion response without quota fields', () => {
       const res = DeleteMediaItemResponseSchema.safeParse({
         success: true,
         mediaId: '44444444-4444-4444-a444-444444444444',
-        reclaimedBytes: 50000000,
-        remainingQuotaBytes: 5318709120,
       });
       expect(res.success).toBe(true);
     });
