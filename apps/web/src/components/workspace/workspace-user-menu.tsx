@@ -53,9 +53,14 @@ function redirectToLogout(): void {
   const protocol = window.location.protocol;
   const port = window.location.port ? `:${window.location.port}` : '';
   const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
+  const isVercelPreview = hostname.endsWith('.vercel.app');
 
   let targetLoginUrl = '/login?logout=success';
-  if ((!isLocal && !hostname.startsWith('app.')) || (isLocal && hostname.includes('.') && !hostname.startsWith('app.'))) {
+  if (
+    !isVercelPreview &&
+    ((!isLocal && !hostname.startsWith('app.')) ||
+      (isLocal && hostname.includes('.') && !hostname.startsWith('app.')))
+  ) {
     targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
   }
 

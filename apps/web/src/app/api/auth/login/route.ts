@@ -56,9 +56,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const requestHost = request.headers.get('host');
     let loginResult;
     try {
-      loginResult = await loginTenantUser(parseResult.data);
+      loginResult = await loginTenantUser({
+        ...parseResult.data,
+        requestHost,
+      });
     } catch (loginErr: unknown) {
       const errObj = loginErr as { code?: string; requiresOtp?: boolean; email?: string };
       if (errObj?.code === 'REQUIRES_OTP' || errObj?.requiresOtp) {
@@ -112,7 +116,7 @@ export async function POST(request: NextRequest) {
     );
 
     const isProduction = process.env.NODE_ENV === 'production';
-    const domain = getCookieDomain();
+    const domain = getCookieDomain(requestHost);
 
     response.cookies.set('fbup_session', token, {
       httpOnly: true,

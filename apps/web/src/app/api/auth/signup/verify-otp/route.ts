@@ -52,12 +52,14 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanOtp = otp.trim();
+    const requestHost = request.headers.get('host');
 
     // Verify OTP via Supabase Auth (or test fallback) and activate user profile
     const { user, token, redirectUrl: finalRedirectUrl } = await verifySignupOtpViaSupabase({
       email: canonicalEmail,
       otp: cleanOtp,
       returnUrl,
+      requestHost,
     });
 
     const response = NextResponse.json(
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
     );
 
     const isProduction = process.env.NODE_ENV === 'production';
-    const domain = getCookieDomain();
+    const domain = getCookieDomain(requestHost);
 
     response.cookies.set('fbup_session', token, {
       httpOnly: true,

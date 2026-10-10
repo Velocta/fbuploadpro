@@ -141,4 +141,45 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     expect(rewriteUrl).not.toBeNull();
     expect(new URL(rewriteUrl!).pathname).toBe('/tenant/acme');
   });
+
+  it('redirects authenticated user on .vercel.app root/login to /tenant/[subdomain]', async () => {
+    const req = new NextRequest('https://fbuploadpro.vercel.app/login', {
+      headers: {
+        host: 'fbuploadpro.vercel.app',
+        cookie: `fbup_session=${userToken}`,
+      },
+    });
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('https://fbuploadpro.vercel.app/tenant/acme');
+  });
+
+  it('protects direct /tenant/[subdomain] access on apex / .vercel.app hosts', async () => {
+    const unauthReq = new NextRequest('https://fbuploadpro.vercel.app/tenant/acme', {
+      headers: { host: 'fbuploadpro.vercel.app' },
+    });
+    const unauthRes = await middleware(unauthReq);
+    expect(unauthRes.status).toBe(307);
+    expect(unauthRes.headers.get('location')).toContain('/login');
+
+    const mismatchReq = new NextRequest('https://fbuploadpro.vercel.app/tenant/acme', {
+      headers: {
+        host: 'fbuploadpro.vercel.app',
+        cookie: `fbup_session=${otherTenantToken}`,
+      },
+    });
+    const mismatchRes = await middleware(mismatchReq);
+    expect(mismatchRes.status).toBe(307);
+    expect(mismatchRes.headers.get('location')).toBe('https://fbuploadpro.vercel.app/tenant/beta');
+
+    const validReq = new NextRequest('https://fbuploadpro.vercel.app/tenant/acme', {
+      headers: {
+        host: 'fbuploadpro.vercel.app',
+        cookie: `fbup_session=${userToken}`,
+      },
+    });
+    const validRes = await middleware(validReq);
+    expect(validRes.status).toBe(200);
+    expect(validRes.headers.get('Cache-Control')).toContain('no-store');
+  });
 });
