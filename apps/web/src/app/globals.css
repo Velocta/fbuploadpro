@@ -71,6 +71,11 @@
   --signal-queued: #fad734;
   --signal-critical: #f6465d;
   --signal-idle: #474d57;
+
+  /* Shadcn Sidebar Layout Dimensions */
+  --sidebar-width: 256px;
+  --sidebar-width-mobile: 288px;
+  --sidebar-width-icon: 48px;
 }
 
 [data-theme="light"],
@@ -131,17 +136,116 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Responsive Mobile-Only Visibility */
+/* Responsive Mobile/Desktop Visibility */
 @media (min-width: 768px) {
   .mobile-only {
     display: none !important;
   }
 }
 
-/* Mobile workspace canvas gutter so floating hamburger trigger never overlaps content */
 @media (max-width: 767px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Mobile workspace canvas gutter so floating trigger never overlaps content */
   .workspace-mobile-gutter {
     padding-left: 56px !important;
   }
 }
+
+/* ============================================================================
+ * SHADCN SIDEBAR PRIMITIVES & REACTIVE THEME STATES (Spec 025)
+ * ============================================================================ */
+
+[data-slot="sidebar-wrapper"] {
+  display: flex;
+  min-height: 100svh;
+  width: 100%;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+}
+
+[data-slot="sidebar-gap"] {
+  position: relative;
+  background-color: transparent;
+  transition: width 200ms linear, min-width 200ms linear;
+  flex-shrink: 0;
+}
+
+[data-slot="sidebar-container"] {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  height: 100svh;
+  z-index: 30;
+  display: flex;
+  transition: left 200ms linear, right 200ms linear, width 200ms linear;
+}
+
+[data-sidebar="sidebar"] {
+  background-color: var(--bg-panel);
+  color: var(--text-main);
+  border-color: var(--border-subtle);
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+}
+
+[data-slot="sidebar-menu-button"]:hover:not(:disabled),
+[data-slot="sidebar-menu-sub-button"]:hover:not(:disabled),
+[data-slot="sidebar-trigger"]:hover:not(:disabled),
+[data-slot="sidebar-group-action"]:hover:not(:disabled),
+[data-slot="sidebar-menu-action"]:hover:not(:disabled),
+.sidebar-dropdown-item:hover:not(:disabled) {
+  background-color: var(--bg-hover) !important;
+  color: var(--text-main) !important;
+}
+
+[data-slot="sidebar-menu-button"][data-active="true"],
+[data-slot="sidebar-menu-sub-button"][data-active="true"] {
+  background-color: var(--bg-active) !important;
+  color: var(--text-main) !important;
+  font-weight: 500;
+}
+
+[data-slot="sidebar-menu-button"]:focus-visible,
+[data-slot="sidebar-menu-sub-button"]:focus-visible,
+[data-slot="sidebar-trigger"]:focus-visible,
+[data-slot="sidebar-group-action"]:focus-visible,
+[data-slot="sidebar-menu-action"]:focus-visible,
+.sidebar-dropdown-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring-focus);
+}
+
+[data-slot="sidebar-rail"] {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  width: 16px;
+  border: none;
+  padding: 0;
+  background: transparent;
+  transition: all 150ms linear;
+}
+
+[data-slot="sidebar-rail"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background-color: transparent;
+  transition: background-color 150ms ease;
+}
+
+[data-slot="sidebar-rail"]:hover::after {
+  background-color: var(--primary);
+}
+
 

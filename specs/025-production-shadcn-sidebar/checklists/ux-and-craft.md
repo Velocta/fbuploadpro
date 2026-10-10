@@ -1,0 +1,10 @@
+# Quality Checklist: 025 Production Shadcn Sidebar Rebuild (UX, Craft & Theme Compliance)
+
+- [x] **CHK-001 (Two-Layer Fixed + Gap Layout)**: Desktop `<Sidebar>` renders both `data-slot="sidebar-gap"` (normal-flow width spacer) and `data-slot="sidebar-container"` (`fixed inset-y-0 z-10 h-svh`).
+- [x] **CHK-002 (Zero Overflow Clipping)**: Hover tooltips on `SidebarMenuButton` in collapsed icon mode (`48px`), `SidebarRail`, and the `WorkspaceUserMenu` dropdown popover (`data-testid="workspace-user-popover"`) are never clipped by `overflow: hidden`.
+- [x] **CHK-003 (Dual-Theme Reactivity)**: Switching between Dark Mode and Light Mode updates all sidebar surfaces (`var(--bg-panel)`), hover fills (`var(--bg-hover)`), active states (`var(--bg-active)`), text (`var(--text-main)`, `var(--text-sub)`), and borders (`var(--border-subtle)`) immediately.
+- [x] **CHK-004 (Collapsed 32px Square Geometry)**: In `collapsible="icon"` collapsed state (`48px` width), `SidebarHeader`, `SidebarContent`, and `SidebarFooter` use `8px` (`p-2`) padding so every `SidebarMenuButton` centers cleanly as a `32px × 32px` (`size-8`) square without horizontal squish or duplicate separator lines.
+- [x] **CHK-005 (Collapsible `SidebarMenuSub` Hierarchy)**: `WorkspaceSidebar` renders "Home", `SidebarSeparator`, and a `Collapsible` "Facebook" `SidebarMenuItem` with rotating `ChevronRight` and nested `SidebarMenuSub > SidebarMenuSubItem > SidebarMenuSubButton` for "Accounts".
+- [x] **CHK-006 (`TeamSwitcher` & `NavUser` `size="lg"` Fidelity)**: Both `SidebarHeader` and `SidebarFooter` use `SidebarMenu > SidebarMenuItem > SidebarMenuButton size="lg"` with a `32px` rounded-lg icon/avatar, two-line truncated text grid, and `ChevronsUpDown` icon.
+- [x] **CHK-007 (Desktop & Mobile `SidebarTrigger`)**: `SidebarTrigger` (`PanelLeft` icon) is accessible on both desktop and mobile viewports alongside `SidebarRail` and `Cmd/Ctrl+B`.
+- [x] **CHK-008 (`DESIGN.md` Immutability & Theme Token Compliance)**: Zero modifications to `DESIGN.md`; zero ad-hoc hex codes outside `theme.ts`/`globals.css`; zero capsule pill badges.

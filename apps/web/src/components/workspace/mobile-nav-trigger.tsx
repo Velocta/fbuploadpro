@@ -16,6 +16,8 @@ export function MobileNavTrigger() {
     <button
       type="button"
       className="mobile-only"
+      data-slot="sidebar-trigger"
+      data-sidebar="trigger"
       data-testid="mobile-nav-trigger"
       aria-label="Open navigation menu"
       onClick={toggleSidebar}
@@ -30,10 +32,10 @@ export function MobileNavTrigger() {
         width: '36px',
         height: '36px',
         borderRadius: RADII.sm,
-        backgroundColor: THEME.default.surfaces.panel,
-        border: `1px solid ${THEME.default.borders.hairline}`,
-        boxShadow: THEME.default.shadows.card,
-        color: THEME.default.text.primary,
+        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+        color: `var(--text-main, ${THEME.default.text.primary})`,
         cursor: 'pointer',
         backdropFilter: 'blur(8px)',
         transition: 'all 0.15s ease',
@@ -42,8 +44,8 @@ export function MobileNavTrigger() {
       }}
     >
       <svg
-        width="18"
-        height="18"
+        width="16"
+        height="16"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -52,9 +54,8 @@ export function MobileNavTrigger() {
         strokeLinejoin="round"
         aria-hidden="true"
       >
-        <line x1="4" x2="20" y1="12" y2="12" />
-        <line x1="4" x2="20" y1="6" y2="6" />
-        <line x1="4" x2="20" y1="18" y2="18" />
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M9 3v18" />
       </svg>
     </button>
   );

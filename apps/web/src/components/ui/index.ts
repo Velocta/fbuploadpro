@@ -106,7 +106,7 @@ export type { AlertProps, AlertSeverity } from './alert';
 export { Tooltip } from './tooltip';
 export type { TooltipProps } from './tooltip';
 
-// Sidebar Navigation Suite (Spec 014)
+// Sidebar Navigation Suite (Spec 014 & Spec 025)
 export {
   useSidebar,
   SidebarProvider,
@@ -115,6 +115,7 @@ export {
   SidebarContent,
   SidebarFooter,
   SidebarInset,
+  SidebarInput,
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupAction,
@@ -124,12 +125,17 @@ export {
   SidebarMenuButton,
   SidebarMenuAction,
   SidebarMenuBadge,
+  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
   SidebarRail,
   SidebarTrigger,
   SidebarSeparator,
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+  useCollapsible,
   SIDEBAR_COOKIE_NAME,
   SIDEBAR_COOKIE_MAX_AGE,
   SIDEBAR_WIDTH,
@@ -148,6 +154,7 @@ export type {
   SidebarContentProps,
   SidebarFooterProps,
   SidebarInsetProps,
+  SidebarInputProps,
   SidebarGroupProps,
   SidebarGroupLabelProps,
   SidebarGroupActionProps,
@@ -155,12 +162,19 @@ export type {
   SidebarMenuProps,
   SidebarMenuItemProps,
   SidebarMenuButtonProps,
+  SidebarMenuButtonSize,
+  SidebarMenuButtonVariant,
   SidebarMenuActionProps,
   SidebarMenuBadgeProps,
+  SidebarMenuSkeletonProps,
   SidebarMenuSubProps,
   SidebarMenuSubItemProps,
   SidebarMenuSubButtonProps,
   SidebarRailProps,
   SidebarTriggerProps,
   SidebarSeparatorProps,
+  CollapsibleContextValue,
+  CollapsibleProps,
+  CollapsibleTriggerProps,
+  CollapsibleContentProps,
 } from './sidebar';
