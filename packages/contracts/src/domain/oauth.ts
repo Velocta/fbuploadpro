@@ -7,9 +7,20 @@ export const OAuthStatePayloadSchema = z.object({
   nonce: z.string().min(16),
   iat: z.number().int(),
   exp: z.number().int(),
+  isMagic: z.boolean().optional(),
 });
 
 export type OAuthStatePayload = z.infer<typeof OAuthStatePayloadSchema>;
+
+export const MagicLinkTokenPayloadSchema = z.object({
+  tenantSubdomain: z.string().min(1).max(50),
+  userId: z.string().uuid(),
+  nonce: z.string().min(16),
+  iat: z.number().int(),
+  exp: z.number().int(),
+});
+
+export type MagicLinkTokenPayload = z.infer<typeof MagicLinkTokenPayloadSchema>;
 
 export const FacebookOAuthCallbackQuerySchema = z.object({
   code: z.string().min(1).optional(),
@@ -87,13 +98,11 @@ function bufferToHex(buffer: ArrayBuffer): string {
   return hexString;
 }
 
-export async function signOAuthState(
-  payload: OAuthStatePayload,
+async function signSignedEnvelope(
+  payloadObj: Record<string, unknown>,
   secret: string
 ): Promise<string> {
-  const validatedPayload = OAuthStatePayloadSchema.parse(payload);
-  const encodedPayload = base64UrlEncode(JSON.stringify(validatedPayload));
-
+  const encodedPayload = base64UrlEncode(JSON.stringify(payloadObj));
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
 
@@ -115,17 +124,18 @@ export async function signOAuthState(
   return `${encodedPayload}.${signatureHex}`;
 }
 
-export async function verifyOAuthState(
+async function verifySignedEnvelope(
   token: string,
-  secret: string
-): Promise<OAuthStatePayload> {
+  secret: string,
+  tokenType: string
+): Promise<unknown> {
   if (!token || typeof token !== 'string' || !token.includes('.')) {
-    throw new ValidationError('Invalid OAuth state format');
+    throw new ValidationError(`Invalid ${tokenType} format`);
   }
 
   const [encodedPayload, providedSignature] = token.split('.');
   if (!encodedPayload || !providedSignature) {
-    throw new ValidationError('Invalid OAuth state format');
+    throw new ValidationError(`Invalid ${tokenType} format`);
   }
 
   const encoder = new TextEncoder();
@@ -147,21 +157,33 @@ export async function verifyOAuthState(
   const expectedSignatureHex = bufferToHex(expectedSignatureBuffer);
 
   if (expectedSignatureHex !== providedSignature) {
-    throw new UnauthorizedError('OAuth state signature verification failed');
+    throw new UnauthorizedError(`${tokenType} signature verification failed`);
   }
 
-  let parsed: unknown;
   try {
     const jsonStr = base64UrlDecode(encodedPayload);
-    parsed = JSON.parse(jsonStr);
+    return JSON.parse(jsonStr);
   } catch (err) {
-    // JSON.parse throws SyntaxError on malformed base64-decoded state payload
     throw new ValidationError(
-      'Failed to decode OAuth state payload',
+      `Failed to decode ${tokenType} payload`,
       err instanceof Error ? err : undefined
     );
   }
+}
 
+export async function signOAuthState(
+  payload: OAuthStatePayload,
+  secret: string
+): Promise<string> {
+  const validatedPayload = OAuthStatePayloadSchema.parse(payload);
+  return await signSignedEnvelope(validatedPayload as unknown as Record<string, unknown>, secret);
+}
+
+export async function verifyOAuthState(
+  token: string,
+  secret: string
+): Promise<OAuthStatePayload> {
+  const parsed = await verifySignedEnvelope(token, secret, 'OAuth state');
   const payload = OAuthStatePayloadSchema.parse(parsed);
 
   const nowSeconds = Math.floor(Date.now() / 1000);
@@ -171,3 +193,27 @@ export async function verifyOAuthState(
 
   return payload;
 }
+
+export async function signMagicLinkToken(
+  payload: MagicLinkTokenPayload,
+  secret: string
+): Promise<string> {
+  const validatedPayload = MagicLinkTokenPayloadSchema.parse(payload);
+  return await signSignedEnvelope(validatedPayload as unknown as Record<string, unknown>, secret);
+}
+
+export async function verifyMagicLinkToken(
+  token: string,
+  secret: string
+): Promise<MagicLinkTokenPayload> {
+  const parsed = await verifySignedEnvelope(token, secret, 'magic link token');
+  const payload = MagicLinkTokenPayloadSchema.parse(parsed);
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (payload.exp < nowSeconds) {
+    throw new UnauthorizedError('Magic link has expired');
+  }
+
+  return payload;
+}
+
