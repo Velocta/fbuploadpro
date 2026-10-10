@@ -92,6 +92,37 @@ function buildBrowserPreviewTenantUrl(
   return `${origin}${tenantPrefix}${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
+function isAllowedBrowserPreviewHost(
+  parsed: URL,
+  actualHostname: string,
+  userSubdomain: string | undefined,
+  cleanRoot: string
+): boolean {
+  const browserHost = window.location.hostname.toLowerCase();
+  if (actualHostname === browserHost) return true;
+  if (userSubdomain && actualHostname === `${userSubdomain}.${cleanRoot}`.toLowerCase()) return true;
+  return Boolean(
+    userSubdomain &&
+      actualHostname.endsWith('.vercel.app') &&
+      (parsed.pathname === `/tenant/${userSubdomain}` ||
+        parsed.pathname.startsWith(`/tenant/${userSubdomain}/`))
+  );
+}
+
+function isAllowedCustomDomainHost(
+  actualHostname: string,
+  userSubdomain: string | undefined,
+  cleanRoot: string,
+  serverPreviewHost: string | null
+): boolean {
+  if (userSubdomain) {
+    const expectedHostname = `${userSubdomain}.${cleanRoot}`.toLowerCase();
+    if (actualHostname === expectedHostname) return true;
+    return actualHostname === serverPreviewHost?.toLowerCase();
+  }
+  return actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`);
+}
+
 function validateFullUrl(
   trimmed: string,
   userSubdomain: string | undefined,
@@ -102,40 +133,23 @@ function validateFullUrl(
 ): string {
   try {
     const parsed = new URL(trimmed);
-    const actualHostname = parsed.hostname.toLowerCase();
-
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
       return defaultUrl;
     }
 
-    if (isBrowserPreview) {
-      const browserHost = window.location.hostname.toLowerCase();
-      const isSameBrowserHost = actualHostname === browserHost;
-      const isTenantHost = Boolean(
-        userSubdomain && actualHostname === `${userSubdomain}.${cleanRoot}`.toLowerCase()
-      );
-      const isVercelTenantPath = Boolean(
-        userSubdomain &&
-          actualHostname.endsWith('.vercel.app') &&
-          (parsed.pathname === `/tenant/${userSubdomain}` ||
-            parsed.pathname.startsWith(`/tenant/${userSubdomain}/`))
-      );
-
-      if (isSameBrowserHost || isTenantHost || isVercelTenantPath) {
-        return buildBrowserPreviewTenantUrl(parsed, userSubdomain);
-      }
-      return defaultUrl;
+    if (parsed.searchParams.has('returnUrl')) {
+      parsed.searchParams.delete('returnUrl');
+      trimmed = parsed.toString();
     }
 
-    if (userSubdomain) {
-      const expectedHostname = `${userSubdomain}.${cleanRoot}`.toLowerCase();
-      if (actualHostname === expectedHostname) {
-        return trimmed;
-      }
-      if (serverPreviewHost && actualHostname === serverPreviewHost.toLowerCase()) {
-        return trimmed;
-      }
-    } else if (actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`)) {
+    const actualHostname = parsed.hostname.toLowerCase();
+    if (isBrowserPreview) {
+      return isAllowedBrowserPreviewHost(parsed, actualHostname, userSubdomain, cleanRoot)
+        ? buildBrowserPreviewTenantUrl(parsed, userSubdomain)
+        : defaultUrl;
+    }
+
+    if (isAllowedCustomDomainHost(actualHostname, userSubdomain, cleanRoot, serverPreviewHost)) {
       return trimmed;
     }
   } catch {
@@ -143,6 +157,43 @@ function validateFullUrl(
   }
 
   return defaultUrl;
+}
+
+function isDangerousRedirectScheme(url: string): boolean {
+  return url.startsWith('//') || url.includes('\\') || /^(?:javascript|data|vbscript):/i.test(url);
+}
+
+function resolveRelativeRedirect(
+  trimmed: string,
+  userSubdomain: string | undefined,
+  normalizedRoot: string,
+  protocol: 'http' | 'https',
+  isBrowserPreview: boolean,
+  serverPreviewHost: string | null,
+  defaultUrl: string
+): string {
+  if (trimmed.includes(':')) {
+    return defaultUrl;
+  }
+  let cleanTrimmed = trimmed;
+  try {
+    const dummy = new URL(trimmed, 'https://localhost');
+    if (dummy.searchParams.has('returnUrl')) {
+      dummy.searchParams.delete('returnUrl');
+      cleanTrimmed = `${dummy.pathname}${dummy.search}${dummy.hash}`;
+    }
+  } catch {
+    // Retain trimmed as fallback
+  }
+  if (isBrowserPreview) {
+    return `${window.location.origin}${cleanTrimmed}`;
+  }
+  if (serverPreviewHost) {
+    return `https://${serverPreviewHost}${cleanTrimmed}`;
+  }
+  return userSubdomain
+    ? `${protocol}://${userSubdomain}.${normalizedRoot}${cleanTrimmed}`
+    : cleanTrimmed;
 }
 
 export function sanitizeAuthRedirectUrl(
@@ -170,37 +221,22 @@ export function sanitizeAuthRedirectUrl(
   }
 
   const trimmed = rawReturnUrl.trim();
-  if (!trimmed) {
+  if (!trimmed || isDangerousRedirectScheme(trimmed)) {
     return defaultUrl;
   }
 
-  // 1. Reject protocol-relative URLs (e.g. //evil.com) and backslashes (e.g. /\evil.com)
-  if (trimmed.startsWith('//') || trimmed.includes('\\')) {
-    return defaultUrl;
-  }
-
-  // 2. Reject javascript:, data:, and vbscript: URIs
-  if (/^(?:javascript|data|vbscript):/i.test(trimmed)) {
-    return defaultUrl;
-  }
-
-  // 3. Relative path handling (starts with single '/')
   if (trimmed.startsWith('/')) {
-    if (trimmed.includes(':')) {
-      return defaultUrl;
-    }
-    if (isBrowserPreview) {
-      return `${window.location.origin}${trimmed}`;
-    }
-    if (serverPreviewHost) {
-      return `https://${serverPreviewHost}${trimmed}`;
-    }
-    return userSubdomain
-      ? `${protocol}://${userSubdomain}.${normalizedRoot}${trimmed}`
-      : trimmed;
+    return resolveRelativeRedirect(
+      trimmed,
+      userSubdomain,
+      normalizedRoot,
+      protocol,
+      isBrowserPreview,
+      serverPreviewHost,
+      defaultUrl
+    );
   }
 
-  // 4. Fully-qualified URL validation
   return validateFullUrl(
     trimmed,
     userSubdomain,

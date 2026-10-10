@@ -182,4 +182,51 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     expect(validRes.status).toBe(200);
     expect(validRes.headers.get('Cache-Control')).toContain('no-store');
   });
+
+  const buildAppLoginReq = (targetReturnUrl: string) =>
+    new NextRequest(`https://app.vinsmokemedia.online/login?returnUrl=${encodeURIComponent(targetReturnUrl)}`, {
+      headers: {
+        host: 'app.vinsmokemedia.online',
+        cookie: `fbup_session=${userToken}`,
+      },
+    });
+
+  it('wipes returnUrl query parameters when redirecting authenticated user to workspace root', async () => {
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
+    const req = buildAppLoginReq('https://other.vinsmokemedia.online/');
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location');
+    expect(location).toBe('https://acme.vinsmokemedia.online/');
+    expect(location).not.toContain('returnUrl');
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
+  });
+
+  it('breaks redirect ping-pong loop and clears stale cookies when user is bounced to login from their own workspace', async () => {
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
+    const req = buildAppLoginReq('https://acme.vinsmokemedia.online/');
+    const res = await middleware(req);
+    expect(res.status).toBe(200);
+    const setCookie = res.headers.get('set-cookie');
+    expect(setCookie).toContain('fbup_session=');
+    expect(setCookie).toContain('Max-Age=0');
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
+  });
+
+  it('prevents nested returnUrl accumulation when unauthenticated user requests protected tenant route', async () => {
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
+    const req = new NextRequest('https://acme.vinsmokemedia.online/?returnUrl=https://acme.vinsmokemedia.online/', {
+      headers: {
+        host: 'acme.vinsmokemedia.online',
+      },
+    });
+    const res = await middleware(req);
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location');
+    expect(location).toContain('https://app.vinsmokemedia.online/login?returnUrl=');
+    const url = new URL(location!);
+    const returnUrl = url.searchParams.get('returnUrl');
+    expect(returnUrl).toBe('https://acme.vinsmokemedia.online/');
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
+  });
 });

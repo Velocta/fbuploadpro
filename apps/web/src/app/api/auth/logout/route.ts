@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { getSupabaseClient, getCookieDomain } from '@/lib/supabase-auth';
+import {
+  getSupabaseClient,
+  getCookieDomain,
+  purgeHostOnlySessionCookie,
+} from '@/lib/supabase-auth';
 
 export async function POST(request?: NextRequest) {
   try {
@@ -27,6 +31,10 @@ export async function POST(request?: NextRequest) {
       domain,
       maxAge: 0,
     });
+
+    if (domain) {
+      purgeHostOnlySessionCookie(response);
+    }
 
     return response;
   } catch (error: unknown) {
