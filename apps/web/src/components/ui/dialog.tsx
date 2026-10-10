@@ -5,6 +5,8 @@ import React, {
   useEffect,
   useRef,
   useState,
+  useCallback,
+  useMemo,
   forwardRef,
 } from 'react';
 import { RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
@@ -47,18 +49,26 @@ export function Dialog({
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
 
-  const setOpen = (next: boolean) => {
-    if (!isControlled) {
-      setUncontrolledOpen(next);
-    }
-    onOpenChange?.(next);
-  };
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (!isControlled) {
+        setUncontrolledOpen(next);
+      }
+      onOpenChange?.(next);
+    },
+    [isControlled, onOpenChange]
+  );
 
   const titleId = useId();
   const descriptionId = useId();
 
+  const contextValue = useMemo(
+    () => ({ open, setOpen, titleId, descriptionId }),
+    [open, setOpen, titleId, descriptionId]
+  );
+
   return (
-    <DialogContext.Provider value={{ open, setOpen, titleId, descriptionId }}>
+    <DialogContext.Provider value={contextValue}>
       {children}
     </DialogContext.Provider>
   );
@@ -162,6 +172,9 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
     <div
       role="presentation"
       onClick={() => setOpen(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setOpen(false);
+      }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -180,13 +193,14 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
         ref={(node) => {
           contentRef.current = node;
           if (typeof ref === 'function') ref(node);
-          else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          else if (ref) (ref as React.RefObject<HTMLDivElement | null>).current = node;
         }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
         className={`fbu-dialog-panel ${className}`}
         style={{
           position: 'relative',

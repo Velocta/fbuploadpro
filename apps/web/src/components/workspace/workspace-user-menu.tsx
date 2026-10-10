@@ -348,7 +348,15 @@ export function WorkspaceUserMenu({ user }: WorkspaceUserMenuProps) {
       >
         {/* User Identity Info */}
         <div
+          role={isCollapsed ? 'button' : undefined}
+          tabIndex={isCollapsed ? 0 : undefined}
           onClick={() => isCollapsed && setIsOpen((prev) => !prev)}
+          onKeyDown={(e) => {
+            if (isCollapsed && (e.key === 'Enter' || e.key === ' ')) {
+              e.preventDefault();
+              setIsOpen((prev) => !prev);
+            }
+          }}
           style={{
             display: 'flex',
             alignItems: 'center',

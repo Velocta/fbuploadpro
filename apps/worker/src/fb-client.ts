@@ -43,12 +43,20 @@ export interface FacebookPublishClientOptions {
   fetchFn?: typeof fetch;
 }
 
+function trimTrailingSlashes(str: string): string {
+  let end = str.length;
+  while (end > 0 && str.charCodeAt(end - 1) === 47) {
+    end--;
+  }
+  return str.slice(0, end);
+}
+
 export class FacebookPublishClient implements IFacebookPublishClient {
   private readonly baseUrl: string;
   private readonly fetchFn: typeof fetch;
 
   constructor(options?: FacebookPublishClientOptions) {
-    this.baseUrl = (options?.baseUrl ?? 'https://graph.facebook.com/v26.0').replace(/\/+$/, '');
+    this.baseUrl = trimTrailingSlashes(options?.baseUrl ?? 'https://graph.facebook.com/v26.0');
     this.fetchFn = options?.fetchFn ?? globalThis.fetch;
   }
 

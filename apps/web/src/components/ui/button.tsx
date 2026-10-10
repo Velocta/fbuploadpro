@@ -33,8 +33,14 @@ const sizeStyles: Record<ButtonSize, React.CSSProperties> = {
   },
 };
 
-const Spinner = ({ size }: { size: ButtonSize }) => {
-  const dimension = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
+const SPINNER_DIMENSIONS: Record<ButtonSize, number> = {
+  sm: 14,
+  md: 16,
+  lg: 18,
+};
+
+const Spinner = ({ size }: { readonly size: ButtonSize }) => {
+  const dimension = SPINNER_DIMENSIONS[size] ?? 16;
   return (
     <svg
       width={dimension}

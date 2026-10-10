@@ -4,8 +4,33 @@ import { NextResponse } from 'next/server';
  * Regex identifying internal infrastructure, database, socket, or technical plumbing terms
  * that MUST NEVER be exposed in client-facing user interfaces or API response bodies.
  */
-const TECHNICAL_LEAK_REGEX =
-  /ECONNREFUSED|127\.0\.0\.1|localhost|5432|postgres|pg_pool|select\s|insert\s|update\s|delete\s|database|socket|timed?\s*out|stack|syntaxerror|uncaught|typeerror|internal\s+server|connection\s+refused/i;
+const TECHNICAL_LEAK_KEYWORDS = [
+  'econnrefused',
+  '127.0.0.1',
+  'localhost',
+  '5432',
+  'postgres',
+  'pg_pool',
+  'database',
+  'socket',
+  'stack',
+  'syntaxerror',
+  'uncaught',
+  'typeerror',
+  'internal server',
+  'connection refused',
+];
+
+const SQL_ACTION_REGEX = /\b(select|insert|update|delete)\s/i;
+const TIMEOUT_REGEX = /timed?\s*out/i;
+
+function hasTechnicalLeak(message: string): boolean {
+  const lower = message.toLowerCase();
+  if (TECHNICAL_LEAK_KEYWORDS.some((keyword) => lower.includes(keyword))) {
+    return true;
+  }
+  return SQL_ACTION_REGEX.test(message) || TIMEOUT_REGEX.test(message);
+}
 
 /**
  * Sanitizes any raw error string before rendering to user-visible frontend components.
@@ -22,7 +47,7 @@ export function sanitizeAuthErrorMessage(
 
   const trimmed = rawMessage.trim();
 
-  if (TECHNICAL_LEAK_REGEX.test(trimmed)) {
+  if (hasTechnicalLeak(trimmed)) {
     return fallbackMessage;
   }
 
@@ -50,12 +75,12 @@ export function formatAuthErrorResponse(
   // Log internal diagnostic error to server logs for operator visibility
   console.error('[Auth Error]', error);
 
-  const rawMessage =
-    error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-      ? error
-      : '';
+  let rawMessage = '';
+  if (error instanceof Error) {
+    rawMessage = error.message;
+  } else if (typeof error === 'string') {
+    rawMessage = error;
+  }
   const code = (error as { code?: string })?.code || '';
 
   // 1. Account Suspended Check (403)
