@@ -40,9 +40,9 @@ export function DisconnectAccountDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent style={{ maxWidth: '460px' }}>
         <DialogHeader>
-          <DialogTitle>Disconnect Facebook Account</DialogTitle>
+          <DialogTitle>Disconnect {account.displayName}?</DialogTitle>
           <DialogDescription>
-            Are you sure you want to disconnect {account.displayName}?
+            This Account will no longer be available
           </DialogDescription>
         </DialogHeader>
 
@@ -59,11 +59,10 @@ export function DisconnectAccountDialog({
             }}
           >
             <p style={{ margin: '0 0 8px 0', fontWeight: TYPOGRAPHY.weights.semibold, color: PALETTE.accent3 }}>
-              Important Data Notice
+              Before you disconnect
             </p>
             <p style={{ margin: 0 }}>
-              Disconnecting this account will permanently remove its stored publishing credentials and safely detach{' '}
-              <strong>{pagesCount} {pagesCount === 1 ? 'Facebook Page' : 'Facebook Pages'}</strong> linked to it.
+              <strong>{pagesCount} linked {pagesCount === 1 ? 'Facebook page' : 'Facebook pages'}</strong> will be Removed, and any scheduled content on them will be removed as well.
             </p>
           </div>
         </DialogBody>

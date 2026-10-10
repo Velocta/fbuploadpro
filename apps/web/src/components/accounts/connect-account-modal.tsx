@@ -236,7 +236,7 @@ export function ConnectAccountModal({
         <DialogHeader>
           <DialogTitle>Connect Facebook Account</DialogTitle>
           <DialogDescription>
-            {view === 'choose' && 'Select how you would like to connect your Facebook profile.'}
+            {view === 'choose' && 'Choose where your Facebook account is currently logged in:'}
             {view === 'magic' && 'Open this link in the browser where your Facebook profile is active.'}
             {view === 'success' && 'Account connected successfully!'}
           </DialogDescription>
@@ -265,8 +265,8 @@ export function ConnectAccountModal({
                 testId="connect-option-direct"
                 disabled={isDirectConnecting}
                 onClick={handleDirectConnect}
-                title={isDirectConnecting ? 'Redirecting to Facebook...' : 'Connect in this browser'}
-                description="Use this option if you are already signed into your Facebook profile in this browser window."
+                title={isDirectConnecting ? 'Redirecting to Facebook...' : 'This browser'}
+                description="Choose this if you are already logged into Facebook in this browser."
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
@@ -280,8 +280,8 @@ export function ConnectAccountModal({
                 testId="connect-option-magic"
                 disabled={isGeneratingMagic}
                 onClick={handleStartMagicLink}
-                title={isGeneratingMagic ? 'Generating Magic Link...' : 'Connect via Magic Link'}
-                description="Use this option if your Facebook account is open in another browser, incognito window, or profile."
+                title={isGeneratingMagic ? 'Generating Magic Link...' : 'Different browser or device (Magic Link)'}
+                description="Generates a secure single-use link you can paste into another browser or window."
                 icon={
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -295,7 +295,7 @@ export function ConnectAccountModal({
           {view === 'magic' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
               <p style={{ margin: 0, fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.4 }}>
-                Copy this single-use link and paste it into the browser where your target Facebook account is logged in:
+                copy and Open this link in the browser where you're signed into Facebook:
               </p>
 
               {/* Copyable Link Field */}
@@ -368,11 +368,11 @@ export function ConnectAccountModal({
                       display: 'inline-block',
                     }}
                   />
-                  <span>Waiting for authorization in other browser...</span>
+                  <span>Waiting for Facebook approval...</span>
                 </div>
 
                 <span data-testid="magic-countdown" style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
-                  Expires in {formatTimer(remainingSeconds)}
+                  Link expires in {formatTimer(remainingSeconds)}
                 </span>
               </div>
             </div>
@@ -409,10 +409,10 @@ export function ConnectAccountModal({
                 </svg>
               </div>
               <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '1rem', color: `var(--text-main, ${THEME.default.text.primary})` }}>
-                Connected!
+                Account connected
               </div>
               <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, marginTop: '4px' }}>
-                Your Facebook profile has been linked to this workspace.
+                your facebook account is successfully connected
               </div>
             </div>
           )}

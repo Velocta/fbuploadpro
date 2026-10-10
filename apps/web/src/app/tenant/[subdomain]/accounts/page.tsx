@@ -54,7 +54,7 @@ export default function TenantAccountsPage() {
     if (connected === '1') {
       setBannerNotice({
         type: 'success',
-        message: 'Facebook account successfully connected.',
+        message: 'Facebook account connected successfully.',
       });
       // Clean query parameters from URL history
       if (typeof window !== 'undefined') {
@@ -63,9 +63,9 @@ export default function TenantAccountsPage() {
         window.history.replaceState({}, '', url.pathname);
       }
     } else if (error) {
-      let message = 'Unable to connect Facebook account. Please try again.';
+      let message = "Couldn't connect to Facebook. Check your permissions and try again.";
       if (error === 'access_denied' || error === 'user_cancelled') {
-        message = 'Connection request was cancelled.';
+        message = 'Connection canceled. No changes were made.';
       }
       setBannerNotice({
         type: 'error',
@@ -99,12 +99,12 @@ export default function TenantAccountsPage() {
         setDisconnectingAccount(null);
         setBannerNotice({
           type: 'success',
-          message: 'Facebook account disconnected successfully.',
+          message: 'Account disconnected.',
         });
       } else {
         setBannerNotice({
           type: 'error',
-          message: 'Failed to disconnect account. Please try again.',
+          message: "Couldn't disconnect account. Please refresh and try again.",
         });
       }
     } catch (_err) {
@@ -210,7 +210,7 @@ export default function TenantAccountsPage() {
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Manage your connected personal and business Facebook profiles and access credentials.
+            Connect your Facebook accounts to manage pages
           </p>
         </div>
 

@@ -54,7 +54,7 @@ export function AccountsEmptyState({ onConnect }: Readonly<AccountsEmptyStatePro
           color: `var(--text-main, ${THEME.default.text.primary})`,
         }}
       >
-        No Facebook Accounts Connected
+        Connect your first Facebook account
       </h2>
 
       <p
@@ -66,7 +66,7 @@ export function AccountsEmptyState({ onConnect }: Readonly<AccountsEmptyStatePro
           maxWidth: '420px',
         }}
       >
-        Connect your Facebook profile to manage publishing credentials and discover your Facebook Pages in FBUploadPro.
+        Link your Facebook Account to import pages
       </p>
 
       <button
@@ -97,6 +97,18 @@ export function AccountsEmptyState({ onConnect }: Readonly<AccountsEmptyStatePro
         </svg>
         <span>Connect Facebook Account</span>
       </button>
+
+      <p
+        style={{
+          margin: `${SPACING.md} 0 0 0`,
+          fontSize: '0.75rem',
+          lineHeight: 1.4,
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+          maxWidth: '420px',
+        }}
+      >
+        We only request permissions to publish reels and manage your pages
+      </p>
     </div>
   );
 }
