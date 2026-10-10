@@ -1316,3 +1316,25 @@ export function purgeHostOnlySessionCookie(response: NextResponse): void {
     `fbup_session=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${isProduction ? '; Secure' : ''}`
   );
 }
+
+export function setSessionCookie(
+  response: NextResponse,
+  token: string,
+  requestHost?: string | null
+): void {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const domain = getCookieDomain(requestHost);
+
+  response.cookies.set('fbup_session', token, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+    path: '/',
+    domain,
+    maxAge: 86400 * 30, // 30 days
+  });
+
+  if (domain) {
+    purgeHostOnlySessionCookie(response);
+  }
+}

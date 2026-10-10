@@ -4,8 +4,7 @@ import { LoginRequestSchema } from '@fbuploadpro/contracts';
 import {
   loginTenantUser,
   resendSignupOtpViaSupabase,
-  getCookieDomain,
-  purgeHostOnlySessionCookie,
+  setSessionCookie,
 } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
@@ -120,21 +119,7 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    const domain = getCookieDomain(requestHost);
-
-    response.cookies.set('fbup_session', token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      path: '/',
-      domain,
-      maxAge: 86400 * 30, // 30 days
-    });
-
-    if (domain) {
-      purgeHostOnlySessionCookie(response);
-    }
+    setSessionCookie(response, token, requestHost);
 
     return response;
   } catch (error: unknown) {
