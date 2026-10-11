@@ -364,12 +364,11 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
     expect(hasText('50%')).toBe(true);
     expect(hasText('Saving to Media Library...')).toBe(true);
 
-    // Must render a single progressbar element
-    const progressBars = findTags('div').filter(
-      (d) => d.attributes['role'] === 'progressbar'
-    );
+    // Must render a single semantic progress element
+    const progressBars = findTags('progress');
     expect(progressBars).toHaveLength(1);
-    expect(progressBars[0]?.attributes['aria-valuenow']).toBe('50');
+    expect(progressBars[0]?.attributes['value']).toBe('50');
+    expect(progressBars[0]?.attributes['max']).toBe('100');
   });
 });
 

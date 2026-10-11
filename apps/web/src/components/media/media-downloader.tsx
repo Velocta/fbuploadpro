@@ -261,8 +261,78 @@ export interface ExecuteDownloaderBatchResult {
   invalidUrls: string[];
 }
 
+async function extractApiErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const errJson = (await res.json()) as { message?: string };
+    return errJson.message ? errJson.message : fallback;
+  } catch {
+    // Response was not valid JSON; return human-friendly fallback message
+    return fallback;
+  }
+}
+
+async function processSingleBatchUrl(params: {
+  subdomain: string;
+  url: string;
+  idx: number;
+  folderId: string | null;
+  fetchImpl: typeof fetch;
+}): Promise<{
+  saved: DownloaderSavedEntry[];
+  failed: DownloaderFailedEntry | null;
+}> {
+  const { subdomain, url, idx, folderId, fetchImpl } = params;
+  try {
+    const res = await fetchImpl(`/api/tenant/${subdomain}/media/downloader`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url,
+        folderId,
+      }),
+    });
+
+    if (res.ok) {
+      const data = (await res.json()) as DownloaderIngestResponse;
+      return {
+        saved: data.items.map((item) => ({
+          item,
+          sourceUrl: data.sourceUrl,
+          platform: data.platform,
+        })),
+        failed: null,
+      };
+    }
+
+    const message = await extractApiErrorMessage(
+      res,
+      'Could not save media from this link. Please check that the link is public.'
+    );
+    return {
+      saved: [],
+      failed: {
+        id: `failed-${idx}-${Date.now()}`,
+        url,
+        folderId,
+        errorMessage: message,
+      },
+    };
+  } catch {
+    // Convert network transport error into a structured retryable failed entry
+    return {
+      saved: [],
+      failed: {
+        id: `failed-${idx}-${Date.now()}`,
+        url,
+        folderId,
+        errorMessage: 'Network connection interrupted while saving this link. Please retry.',
+      },
+    };
+  }
+}
+
 /**
- * Processes a single or multi-line batch of URLs sequentially or in order,
+ * Processes a single or multi-line batch of URLs sequentially in order,
  * deduplicating identical URLs in the batch, emitting unified progress updates,
  * and returning all saved media items (including multi-item carousels) and failed links.
  */
@@ -294,7 +364,10 @@ export async function executeDownloaderBatch(
     invalidCount: invalidUrls.length,
   });
 
-  for (let idx = 0; idx < urls.length; idx += 1) {
+  const runSequential = async (idx: number): Promise<void> => {
+    if (idx >= urls.length) {
+      return;
+    }
     const url = urls[idx]!;
     onProgress?.({
       status: 'downloading',
@@ -305,61 +378,33 @@ export async function executeDownloaderBatch(
       invalidCount: invalidUrls.length,
     });
 
-    try {
-      const res = await fetchImpl(`/api/tenant/${subdomain}/media/downloader`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url,
-          folderId,
-        }),
-      });
+    const outcome = await processSingleBatchUrl({
+      subdomain,
+      url,
+      idx,
+      folderId,
+      fetchImpl,
+    });
 
-      if (res.ok) {
-        const data = (await res.json()) as DownloaderIngestResponse;
-        for (const item of data.items) {
-          savedEntries.push({
-            item,
-            sourceUrl: data.sourceUrl,
-            platform: data.platform,
-          });
-        }
-      } else {
-        let message = 'Could not save media from this link. Please check that the link is public.';
-        try {
-          const errJson = (await res.json()) as { message?: string };
-          if (errJson.message) {
-            message = errJson.message;
-          }
-        } catch (_e) {
-          // Use fallback message
-        }
-        failedEntries.push({
-          id: `failed-${idx}-${Date.now()}`,
-          url,
-          folderId,
-          errorMessage: message,
-        });
-      }
-    } catch (_err) {
-      failedEntries.push({
-        id: `failed-${idx}-${Date.now()}`,
-        url,
-        folderId,
-        errorMessage: 'Network connection interrupted while saving this link. Please retry.',
-      });
+    savedEntries.push(...outcome.saved);
+    if (outcome.failed) {
+      failedEntries.push(outcome.failed);
     }
 
-      const nextUrl = urls[idx + 1] ?? null;
-      onProgress?.({
-        status: idx + 1 === urls.length ? 'completed' : 'downloading',
-        totalLinks: urls.length,
-        completedLinks: idx + 1,
-        currentUrl: nextUrl,
-        duplicateCount,
-        invalidCount: invalidUrls.length,
-      });
-  }
+    const nextUrl = urls[idx + 1] ?? null;
+    onProgress?.({
+      status: idx + 1 === urls.length ? 'completed' : 'downloading',
+      totalLinks: urls.length,
+      completedLinks: idx + 1,
+      currentUrl: nextUrl,
+      duplicateCount,
+      invalidCount: invalidUrls.length,
+    });
+
+    await runSequential(idx + 1);
+  };
+
+  await runSequential(0);
 
   return {
     savedEntries,
@@ -408,21 +453,17 @@ export async function retryFailedDownloadEntry(params: {
       };
     }
 
-    let message = 'Could not save media from this link. Please try again.';
-    try {
-      const errJson = (await res.json()) as { message?: string };
-      if (errJson.message) {
-        message = errJson.message;
-      }
-    } catch (_e) {
-      // Ignore parse error
-    }
+    const message = await extractApiErrorMessage(
+      res,
+      'Could not save media from this link. Please try again.'
+    );
     return {
       ok: false,
       savedEntries: [],
       errorMessage: message,
     };
-  } catch (_err) {
+  } catch {
+    // Convert network error into a user-safe retry failure result
     return {
       ok: false,
       savedEntries: [],
@@ -623,7 +664,7 @@ export function MediaDownloader({
     setIsNewFolderDialogOpen(true);
   }, [selectedFolderId]);
 
-  const handleCreateNewFolder = async (e: React.FormEvent) => {
+  const handleCreateNewFolder = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = newFolderName.trim();
     if (!trimmed) {
@@ -661,7 +702,7 @@ export function MediaDownloader({
     }
   };
 
-  const handleSubmitDownload = async (e: React.FormEvent) => {
+  const handleSubmitDownload = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isDownloading) return;
 
@@ -1102,12 +1143,8 @@ export function MediaDownloader({
           </div>
 
           <div
-            role="progressbar"
-            aria-valuenow={progressPercent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Overall batch download progress"
             style={{
+              position: 'relative',
               width: '100%',
               height: '8px',
               backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
@@ -1116,6 +1153,19 @@ export function MediaDownloader({
               border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
             }}
           >
+            <progress
+              value={progressPercent}
+              max={100}
+              aria-label="Overall batch download progress"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                opacity: 0,
+                pointerEvents: 'none',
+              }}
+            />
             <div
               data-testid="downloader-progress-bar-fill"
               style={{

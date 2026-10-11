@@ -266,26 +266,33 @@ function decodeHtmlEntities(input: string): string {
     .trim();
 }
 
+function normalizeTagEqualsSpacing(tag: string): string {
+  return tag.replaceAll(/\s+/g, ' ').replaceAll(' = ', '=').replaceAll(' =', '=').replaceAll('= ', '=');
+}
+
+function parseMetaTagAttributes(tag: string): Record<string, string> {
+  const normalized = normalizeTagEqualsSpacing(tag);
+  const attrs: Record<string, string> = {};
+  const attrRegex = /([a-zA-Z0-9_:-]+)=(?:"([^"]*)"|'([^']*)')/g;
+  let attrMatch: RegExpExecArray | null;
+  while ((attrMatch = attrRegex.exec(normalized)) !== null) {
+    const attrName = attrMatch[1]?.toLowerCase();
+    const attrVal = attrMatch[2] ?? attrMatch[3] ?? '';
+    if (attrName) {
+      attrs[attrName] = attrVal;
+    }
+  }
+  return attrs;
+}
+
 function extractMetaValues(html: string, keys: string[]): string[] {
   const results: string[] = [];
   const metaTagRegex = /<meta\b[^>]*>/gi;
-  const attrRegex = /([a-zA-Z0-9_:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
   const keySet = new Set(keys.map((k) => k.toLowerCase()));
 
   let tagMatch: RegExpExecArray | null;
   while ((tagMatch = metaTagRegex.exec(html)) !== null) {
-    const tag = tagMatch[0];
-    const attrs: Record<string, string> = {};
-    let attrMatch: RegExpExecArray | null;
-    attrRegex.lastIndex = 0;
-    while ((attrMatch = attrRegex.exec(tag)) !== null) {
-      const attrName = attrMatch[1]?.toLowerCase();
-      const attrVal = attrMatch[2] ?? attrMatch[3] ?? '';
-      if (attrName) {
-        attrs[attrName] = attrVal;
-      }
-    }
-
+    const attrs = parseMetaTagAttributes(tagMatch[0]);
     const prop = (attrs.property ?? attrs.name ?? attrs.itemprop ?? '').toLowerCase();
     const content = attrs.content ? decodeHtmlEntities(attrs.content) : '';
     if (prop && content && keySet.has(prop)) {
@@ -303,103 +310,182 @@ function resolveRelativeUrl(candidate: string, baseUrl: string): string | null {
   }
   try {
     return new URL(trimmed, baseUrl).toString();
-  } catch (_e) {
+  } catch {
     return null;
   }
+}
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+  for (const val of values) {
+    if (typeof val === 'string' && val.trim().length > 0) {
+      return val;
+    }
+  }
+  return null;
 }
 
 interface ParsedHtmlMedia {
   candidates: RemoteMediaCandidate[];
 }
 
-function parseJsonLdNodes(
-  node: unknown,
+interface HtmlMediaAccumulator {
+  videoUrls: string[];
+  imageUrls: string[];
+  thumbnailUrls: string[];
+  captions: string[];
+}
+
+function appendResolvedUrl(target: string[], rawUrl: string | null, baseUrl: string): void {
+  if (!rawUrl) {
+    return;
+  }
+  const resolved = resolveRelativeUrl(rawUrl, baseUrl);
+  if (resolved) {
+    target.push(resolved);
+  }
+}
+
+function extractJsonLdCaption(record: Record<string, unknown>, captions: string[]): void {
+  const rawText = firstNonEmptyString(record.description, record.name, record.headline);
+  if (rawText) {
+    captions.push(decodeHtmlEntities(rawText));
+  }
+}
+
+function extractJsonLdThumbnails(
+  record: Record<string, unknown>,
   baseUrl: string,
-  videos: string[],
-  images: string[],
-  thumbnails: string[],
-  captions: string[]
+  thumbnails: string[]
 ): void {
+  if (typeof record.thumbnailUrl === 'string') {
+    appendResolvedUrl(thumbnails, record.thumbnailUrl, baseUrl);
+    return;
+  }
+  if (Array.isArray(record.thumbnailUrl)) {
+    for (const item of record.thumbnailUrl) {
+      if (typeof item === 'string') {
+        appendResolvedUrl(thumbnails, item, baseUrl);
+      }
+    }
+  }
+}
+
+function extractJsonLdMediaStream(
+  record: Record<string, unknown>,
+  baseUrl: string,
+  acc: HtmlMediaAccumulator
+): void {
+  const typeVal = typeof record['@type'] === 'string' ? record['@type'].toLowerCase() : '';
+  const streamCandidate = firstNonEmptyString(record.contentUrl, record.url);
+  if (typeVal.includes('video')) {
+    appendResolvedUrl(acc.videoUrls, streamCandidate, baseUrl);
+  } else if (typeVal.includes('image')) {
+    appendResolvedUrl(acc.imageUrls, streamCandidate, baseUrl);
+  }
+}
+
+const JSON_LD_NESTED_KEYS = [
+  '@graph',
+  'video',
+  'image',
+  'hasPart',
+  'sharedContent',
+  'associatedMedia',
+] as const;
+
+function parseJsonLdNodes(node: unknown, baseUrl: string, acc: HtmlMediaAccumulator): void {
   if (!node || typeof node !== 'object') {
     return;
   }
   if (Array.isArray(node)) {
     for (const item of node) {
-      parseJsonLdNodes(item, baseUrl, videos, images, thumbnails, captions);
+      parseJsonLdNodes(item, baseUrl, acc);
     }
     return;
   }
 
   const record = node as Record<string, unknown>;
-  const typeVal = typeof record['@type'] === 'string' ? record['@type'].toLowerCase() : '';
+  extractJsonLdCaption(record, acc.captions);
+  extractJsonLdThumbnails(record, baseUrl, acc.thumbnailUrls);
+  extractJsonLdMediaStream(record, baseUrl, acc);
 
-  if (typeof record.description === 'string' && record.description.trim()) {
-    captions.push(decodeHtmlEntities(record.description));
-  } else if (typeof record.name === 'string' && record.name.trim()) {
-    captions.push(decodeHtmlEntities(record.name));
-  } else if (typeof record.headline === 'string' && record.headline.trim()) {
-    captions.push(decodeHtmlEntities(record.headline));
-  }
-
-  if (typeof record.thumbnailUrl === 'string') {
-    const resolved = resolveRelativeUrl(record.thumbnailUrl, baseUrl);
-    if (resolved) thumbnails.push(resolved);
-  } else if (Array.isArray(record.thumbnailUrl)) {
-    for (const t of record.thumbnailUrl) {
-      if (typeof t === 'string') {
-        const resolved = resolveRelativeUrl(t, baseUrl);
-        if (resolved) thumbnails.push(resolved);
-      }
-    }
-  }
-
-  if (typeVal.includes('video')) {
-    const rawVideoUrl =
-      typeof record.contentUrl === 'string'
-        ? record.contentUrl
-        : typeof record.url === 'string'
-          ? record.url
-          : null;
-    if (rawVideoUrl) {
-      const resolved = resolveRelativeUrl(rawVideoUrl, baseUrl);
-      if (resolved) videos.push(resolved);
-    }
-  } else if (typeVal.includes('image')) {
-    const rawImageUrl =
-      typeof record.contentUrl === 'string'
-        ? record.contentUrl
-        : typeof record.url === 'string'
-          ? record.url
-          : null;
-    if (rawImageUrl) {
-      const resolved = resolveRelativeUrl(rawImageUrl, baseUrl);
-      if (resolved) images.push(resolved);
-    }
-  }
-
-  for (const nestedKey of ['@graph', 'video', 'image', 'hasPart', 'sharedContent', 'associatedMedia']) {
+  for (const nestedKey of JSON_LD_NESTED_KEYS) {
     if (record[nestedKey]) {
-      parseJsonLdNodes(record[nestedKey], baseUrl, videos, images, thumbnails, captions);
+      parseJsonLdNodes(record[nestedKey], baseUrl, acc);
     }
   }
 }
 
-function parseHtmlMediaCandidates(html: string, baseUrl: string): ParsedHtmlMedia {
-  const videoUrls: string[] = [];
-  const imageUrls: string[] = [];
-  const thumbnailUrls: string[] = [];
-  const captions: string[] = [];
+function extractJsonLdBlocksFromHtml(
+  html: string,
+  baseUrl: string,
+  acc: HtmlMediaAccumulator
+): void {
+  const jsonLdRegex = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let scriptMatch: RegExpExecArray | null;
+  while ((scriptMatch = jsonLdRegex.exec(html)) !== null) {
+    const rawJson = scriptMatch[1]?.trim();
+    if (!rawJson) {
+      continue;
+    }
+    try {
+      const parsedJson: unknown = JSON.parse(rawJson);
+      parseJsonLdNodes(parsedJson, baseUrl, acc);
+    } catch {
+      // Ignore malformed JSON-LD script blocks in third-party pages
+    }
+  }
+}
 
-  // 1. Extract OpenGraph / Twitter Card captions (descriptions prioritized over titles)
+function extractHtmlVideoTags(html: string, baseUrl: string, videoUrls: string[]): void {
+  const videoSrcRegex = /<(?:video|source)\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  let videoMatch: RegExpExecArray | null;
+  while ((videoMatch = videoSrcRegex.exec(html)) !== null) {
+    const src = videoMatch[1];
+    if (src) {
+      appendResolvedUrl(videoUrls, decodeHtmlEntities(src), baseUrl);
+    }
+  }
+}
+
+function deduplicateUrlsByHttpsKey(urls: string[]): string[] {
+  const unique: string[] = [];
+  const seenKeys = new Set<string>();
+  for (const rawUrl of urls) {
+    const canonicalKey = rawUrl.replace(/^http:\/\//i, 'https://');
+    if (!seenKeys.has(canonicalKey)) {
+      seenKeys.add(canonicalKey);
+      unique.push(rawUrl);
+    }
+  }
+  return unique;
+}
+
+function extractTitleTagFallback(html: string): string | null {
+  const titleMatch = /<title\b[^>]*>([^<]+)<\/title>/i.exec(html);
+  if (!titleMatch?.[1]) {
+    return null;
+  }
+  const cleanedTitle = decodeHtmlEntities(titleMatch[1]);
+  return cleanedTitle.length > 0 ? cleanedTitle : null;
+}
+
+function parseHtmlMediaCandidates(html: string, baseUrl: string): ParsedHtmlMedia {
+  const acc: HtmlMediaAccumulator = {
+    videoUrls: [],
+    imageUrls: [],
+    thumbnailUrls: [],
+    captions: [],
+  };
+
   const metaDescriptions = extractMetaValues(html, [
     'og:description',
     'twitter:description',
     'description',
   ]);
   const metaTitles = extractMetaValues(html, ['og:title', 'twitter:title']);
-  captions.push(...metaDescriptions, ...metaTitles);
+  acc.captions.push(...metaDescriptions, ...metaTitles);
 
-  // 2. Extract OpenGraph / Twitter Card video & image URLs
   const ogVideos = extractMetaValues(html, [
     'og:video:secure_url',
     'og:video:url',
@@ -407,10 +493,7 @@ function parseHtmlMediaCandidates(html: string, baseUrl: string): ParsedHtmlMedi
     'twitter:player:stream',
   ]);
   for (const v of ogVideos) {
-    const resolved = resolveRelativeUrl(v, baseUrl);
-    if (resolved) {
-      videoUrls.push(resolved);
-    }
+    appendResolvedUrl(acc.videoUrls, v, baseUrl);
   }
 
   const ogImages = extractMetaValues(html, [
@@ -421,79 +504,29 @@ function parseHtmlMediaCandidates(html: string, baseUrl: string): ParsedHtmlMedi
     'twitter:image:src',
   ]);
   for (const img of ogImages) {
-    const resolved = resolveRelativeUrl(img, baseUrl);
-    if (resolved) {
-      imageUrls.push(resolved);
+    appendResolvedUrl(acc.imageUrls, img, baseUrl);
+  }
+
+  extractJsonLdBlocksFromHtml(html, baseUrl, acc);
+  extractHtmlVideoTags(html, baseUrl, acc.videoUrls);
+
+  if (acc.captions.length === 0) {
+    const fallbackTitle = extractTitleTagFallback(html);
+    if (fallbackTitle) {
+      acc.captions.push(fallbackTitle);
     }
   }
 
-  // 3. Extract JSON-LD structured data
-  const jsonLdRegex = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let scriptMatch: RegExpExecArray | null;
-  while ((scriptMatch = jsonLdRegex.exec(html)) !== null) {
-    const rawJson = scriptMatch[1]?.trim();
-    if (!rawJson) continue;
-    try {
-      const parsedJson: unknown = JSON.parse(rawJson);
-      parseJsonLdNodes(parsedJson, baseUrl, videoUrls, imageUrls, thumbnailUrls, captions);
-    } catch (_e) {
-      // Ignore malformed JSON-LD blocks
-    }
-  }
-
-  // 4. Extract <video src="..."> and <source src="..."> tags
-  const videoSrcRegex = /<(?:video|source)\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
-  let videoMatch: RegExpExecArray | null;
-  while ((videoMatch = videoSrcRegex.exec(html)) !== null) {
-    const src = videoMatch[1];
-    if (src) {
-      const resolved = resolveRelativeUrl(decodeHtmlEntities(src), baseUrl);
-      if (resolved) {
-        videoUrls.push(resolved);
-      }
-    }
-  }
-
-  // 5. Extract <title> fallback if no caption found yet
-  if (captions.length === 0) {
-    const titleMatch = /<title\b[^>]*>([^<]+)<\/title>/i.exec(html);
-    if (titleMatch?.[1]) {
-      const cleanedTitle = decodeHtmlEntities(titleMatch[1]);
-      if (cleanedTitle) {
-        captions.push(cleanedTitle);
-      }
-    }
-  }
-
-  const primaryCaption = captions.find((c) => c.trim().length > 0)?.trim() ?? null;
-
-  // Deduplicate video URLs (accounting for http vs https pairs of identical host+path)
-  const uniqueVideos: string[] = [];
-  const seenVideoKeys = new Set<string>();
-  for (const vUrl of videoUrls) {
-    const canonicalKey = vUrl.replace(/^http:\/\//i, 'https://');
-    if (!seenVideoKeys.has(canonicalKey)) {
-      seenVideoKeys.add(canonicalKey);
-      uniqueVideos.push(vUrl);
-    }
-  }
-
-  const uniqueImages: string[] = [];
-  const seenImageKeys = new Set<string>();
-  for (const imgUrl of imageUrls) {
-    const canonicalKey = imgUrl.replace(/^http:\/\//i, 'https://');
-    if (!seenImageKeys.has(canonicalKey)) {
-      seenImageKeys.add(canonicalKey);
-      uniqueImages.push(imgUrl);
-    }
-  }
+  const primaryCaption = acc.captions.find((c) => c.trim().length > 0)?.trim() ?? null;
+  const uniqueVideos = deduplicateUrlsByHttpsKey(acc.videoUrls);
+  const uniqueImages = deduplicateUrlsByHttpsKey(acc.imageUrls);
 
   if (uniqueVideos.length > 0) {
-    const defaultThumb = thumbnailUrls[0] ?? uniqueImages[0] ?? null;
+    const defaultThumb = acc.thumbnailUrls[0] ?? uniqueImages[0] ?? null;
     return {
       candidates: uniqueVideos.map((streamUrl, idx) => ({
         streamUrl,
-        thumbnailUrl: idx === 0 ? defaultThumb : (thumbnailUrls[idx] ?? defaultThumb),
+        thumbnailUrl: acc.thumbnailUrls[idx] ?? defaultThumb,
         caption: primaryCaption,
         mediaTypeHint: 'video',
       })),
@@ -514,131 +547,132 @@ function parseHtmlMediaCandidates(html: string, baseUrl: string): ParsedHtmlMedi
   return { candidates: [] };
 }
 
+function classifyMediaTypeHint(rawType: unknown): 'video' | 'image' | undefined {
+  if (typeof rawType !== 'string') {
+    return undefined;
+  }
+  const lower = rawType.toLowerCase();
+  if (lower === 'photo' || lower === 'image') {
+    return 'image';
+  }
+  if (lower === 'video' || lower === 'gif') {
+    return 'video';
+  }
+  return undefined;
+}
+
+function parsePickerArrayItem(
+  rawItem: unknown,
+  topThumb: string | null,
+  topCaption: string | null
+): RemoteMediaCandidate | null {
+  if (!rawItem || typeof rawItem !== 'object') {
+    return null;
+  }
+  const item = rawItem as Record<string, unknown>;
+  const streamUrl = firstNonEmptyString(item.url, item.streamUrl);
+  if (!streamUrl) {
+    return null;
+  }
+
+  return {
+    streamUrl,
+    thumbnailUrl: firstNonEmptyString(item.thumb, item.thumbnailUrl, item.thumbnail) ?? topThumb,
+    caption: firstNonEmptyString(item.caption, item.title) ?? topCaption,
+    fileName: firstNonEmptyString(item.filename),
+    mediaTypeHint: classifyMediaTypeHint(item.type),
+  };
+}
+
+function extractTweetMediaList(mediaObj: Record<string, unknown> | null): unknown[] {
+  if (!mediaObj) {
+    return [];
+  }
+  if (Array.isArray(mediaObj.all)) {
+    return mediaObj.all as unknown[];
+  }
+  const videos = Array.isArray(mediaObj.videos) ? (mediaObj.videos as unknown[]) : [];
+  const photos = Array.isArray(mediaObj.photos) ? (mediaObj.photos as unknown[]) : [];
+  return [...videos, ...photos];
+}
+
+function parseTweetCandidatesFromObject(
+  tweet: Record<string, unknown>,
+  topCaption: string | null
+): RemoteMediaCandidate[] {
+  const tweetText = firstNonEmptyString(tweet.text) ?? topCaption;
+  const mediaObj =
+    tweet.media && typeof tweet.media === 'object'
+      ? (tweet.media as Record<string, unknown>)
+      : null;
+  const mediaList = extractTweetMediaList(mediaObj);
+
+  const tweetCandidates: RemoteMediaCandidate[] = [];
+  for (const entry of mediaList) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const m = entry as Record<string, unknown>;
+    const streamUrl = firstNonEmptyString(m.url);
+    if (!streamUrl) {
+      continue;
+    }
+    const hint = classifyMediaTypeHint(m.type) ?? 'video';
+    tweetCandidates.push({
+      streamUrl,
+      thumbnailUrl: firstNonEmptyString(m.thumbnail_url),
+      caption: tweetText,
+      mediaTypeHint: hint,
+      durationSeconds: typeof m.duration === 'number' ? m.duration : null,
+    });
+  }
+  return tweetCandidates;
+}
+
 function parseJsonPayloadCandidates(payload: unknown): RemoteMediaCandidate[] {
   if (!payload || typeof payload !== 'object') {
     return [];
   }
   const data = payload as Record<string, unknown>;
-  const topCaption =
-    typeof data.caption === 'string'
-      ? data.caption
-      : typeof data.title === 'string'
-        ? data.title
-        : typeof data.description === 'string'
-          ? data.description
-          : null;
-  const topThumb =
-    typeof data.thumbnail === 'string'
-      ? data.thumbnail
-      : typeof data.thumbnailUrl === 'string'
-        ? data.thumbnailUrl
-        : typeof data.thumb === 'string'
-          ? data.thumb
-          : null;
+  const topCaption = firstNonEmptyString(data.caption, data.title, data.description);
+  const topThumb = firstNonEmptyString(data.thumbnail, data.thumbnailUrl, data.thumb);
 
-  // Multi-item picker / carousel format (Cobalt / custom extractor)
-  const arrayField = Array.isArray(data.picker)
-    ? data.picker
-    : Array.isArray(data.items)
-      ? data.items
-      : null;
+  let arrayField: unknown[] | null = null;
+  if (Array.isArray(data.picker)) {
+    arrayField = data.picker;
+  } else if (Array.isArray(data.items)) {
+    arrayField = data.items;
+  }
 
   if (arrayField && arrayField.length > 0) {
-    const candidates: RemoteMediaCandidate[] = [];
-    for (const rawItem of arrayField) {
-      if (!rawItem || typeof rawItem !== 'object') continue;
-      const item = rawItem as Record<string, unknown>;
-      const streamUrl =
-        typeof item.url === 'string'
-          ? item.url
-          : typeof item.streamUrl === 'string'
-            ? item.streamUrl
-            : null;
-      if (!streamUrl) continue;
-
-      const itemType = typeof item.type === 'string' ? item.type.toLowerCase() : '';
-      const mediaTypeHint: 'video' | 'image' | undefined =
-        itemType === 'photo' || itemType === 'image'
-          ? 'image'
-          : itemType === 'video' || itemType === 'gif'
-            ? 'video'
-            : undefined;
-
-      candidates.push({
-        streamUrl,
-        thumbnailUrl:
-          typeof item.thumb === 'string'
-            ? item.thumb
-            : typeof item.thumbnailUrl === 'string'
-              ? item.thumbnailUrl
-              : typeof item.thumbnail === 'string'
-                ? item.thumbnail
-                : topThumb,
-        caption:
-          typeof item.caption === 'string'
-            ? item.caption
-            : typeof item.title === 'string'
-              ? item.title
-              : topCaption,
-        fileName: typeof item.filename === 'string' ? item.filename : null,
-        mediaTypeHint,
-      });
-    }
+    const candidates = arrayField
+      .map((rawItem) => parsePickerArrayItem(rawItem, topThumb, topCaption))
+      .filter((item): item is RemoteMediaCandidate => item !== null);
     if (candidates.length > 0) {
       return candidates;
     }
   }
 
-  // FxTwitter / VxTwitter tweet object format
   if (data.tweet && typeof data.tweet === 'object') {
-    const tweet = data.tweet as Record<string, unknown>;
-    const tweetText = typeof tweet.text === 'string' ? tweet.text : topCaption;
-    const mediaObj =
-      tweet.media && typeof tweet.media === 'object'
-        ? (tweet.media as Record<string, unknown>)
-        : null;
-    const mediaList = Array.isArray(mediaObj?.all)
-      ? (mediaObj.all as unknown[])
-      : [
-          ...(Array.isArray(mediaObj?.videos) ? (mediaObj.videos as unknown[]) : []),
-          ...(Array.isArray(mediaObj?.photos) ? (mediaObj.photos as unknown[]) : []),
-        ];
-
-    const tweetCandidates: RemoteMediaCandidate[] = [];
-    for (const entry of mediaList) {
-      if (!entry || typeof entry !== 'object') continue;
-      const m = entry as Record<string, unknown>;
-      if (typeof m.url !== 'string') continue;
-      const mType = typeof m.type === 'string' ? m.type.toLowerCase() : '';
-      tweetCandidates.push({
-        streamUrl: m.url,
-        thumbnailUrl: typeof m.thumbnail_url === 'string' ? m.thumbnail_url : null,
-        caption: tweetText,
-        mediaTypeHint: mType === 'photo' || mType === 'image' ? 'image' : 'video',
-        durationSeconds: typeof m.duration === 'number' ? m.duration : null,
-      });
-    }
+    const tweetCandidates = parseTweetCandidatesFromObject(
+      data.tweet as Record<string, unknown>,
+      topCaption
+    );
     if (tweetCandidates.length > 0) {
       return tweetCandidates;
     }
   }
 
-  // Single stream object format
-  const singleUrl =
-    typeof data.url === 'string'
-      ? data.url
-      : typeof data.streamUrl === 'string'
-        ? data.streamUrl
-        : null;
+  const singleUrl = firstNonEmptyString(data.url, data.streamUrl);
   if (singleUrl) {
     return [
       {
         streamUrl: singleUrl,
         thumbnailUrl: topThumb,
         caption: topCaption,
-        fileName: typeof data.filename === 'string' ? data.filename : null,
+        fileName: firstNonEmptyString(data.filename),
         durationSeconds: typeof data.duration === 'number' ? data.duration : null,
-        aspectRatio: typeof data.aspectRatio === 'string' ? data.aspectRatio : null,
+        aspectRatio: firstNonEmptyString(data.aspectRatio),
       },
     ];
   }
@@ -646,21 +680,36 @@ function parseJsonPayloadCandidates(payload: unknown): RemoteMediaCandidate[] {
   return [];
 }
 
+function assertContentLengthWithinLimit(response: Response, maxBytes: number): void {
+  const contentLengthHeader = response.headers.get('content-length');
+  if (!contentLengthHeader) {
+    return;
+  }
+  const declaredSize = Number.parseInt(contentLengthHeader, 10);
+  if (!Number.isNaN(declaredSize) && declaredSize > maxBytes) {
+    throw new MediaDownloaderError(
+      'FILE_TOO_LARGE',
+      'This file exceeds the 500 MB maximum size limit.',
+      400
+    );
+  }
+}
+
+function concatUint8Chunks(chunks: Uint8Array[], totalBytes: number): Uint8Array {
+  const combined = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return combined;
+}
+
 async function readResponseBytesWithLimit(
   response: Response,
   maxBytes: number
 ): Promise<Uint8Array> {
-  const contentLengthHeader = response.headers.get('content-length');
-  if (contentLengthHeader) {
-    const declaredSize = Number.parseInt(contentLengthHeader, 10);
-    if (!Number.isNaN(declaredSize) && declaredSize > maxBytes) {
-      throw new MediaDownloaderError(
-        'FILE_TOO_LARGE',
-        'This file exceeds the 500 MB maximum size limit.',
-        400
-      );
-    }
-  }
+  assertContentLengthWithinLimit(response, maxBytes);
 
   if (!response.body) {
     const buffer = await response.arrayBuffer();
@@ -697,13 +746,26 @@ async function readResponseBytesWithLimit(
     }
   }
 
-  const combined = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    combined.set(chunk, offset);
-    offset += chunk.byteLength;
+  return concatUint8Chunks(chunks, totalBytes);
+}
+
+function classifyThumbnailFormat(
+  rawMime: string | undefined,
+  pathname: string
+): { mime: 'image/webp' | 'image/jpeg'; ext: 'webp' | 'jpeg' } | null {
+  const lowerPath = pathname.toLowerCase();
+  if (rawMime === 'image/webp' || lowerPath.endsWith('.webp')) {
+    return { mime: 'image/webp', ext: 'webp' };
   }
-  return combined;
+  if (
+    rawMime === 'image/jpeg' ||
+    rawMime === 'image/jpg' ||
+    lowerPath.endsWith('.jpg') ||
+    lowerPath.endsWith('.jpeg')
+  ) {
+    return { mime: 'image/jpeg', ext: 'jpeg' };
+  }
+  return null;
 }
 
 async function tryUploadVideoThumbnail(
@@ -732,25 +794,16 @@ async function tryUploadVideoThumbnail(
     if (!response.ok) {
       return { thumbnailKey: null, thumbnailUrl: null };
     }
-    if (response.url) {
-      const redirectCheck = validateSafeRemoteUrl(response.url);
-      if (!redirectCheck.valid) {
-        return { thumbnailKey: null, thumbnailUrl: null };
-      }
+    if (response.url && !validateSafeRemoteUrl(response.url).valid) {
+      return { thumbnailKey: null, thumbnailUrl: null };
     }
 
     const rawMime = (response.headers.get('content-type') ?? '')
       .split(';')[0]
       ?.trim()
       .toLowerCase();
-    const isWebp = rawMime === 'image/webp' || safeCheck.url.pathname.toLowerCase().endsWith('.webp');
-    const isJpeg =
-      rawMime === 'image/jpeg' ||
-      rawMime === 'image/jpg' ||
-      safeCheck.url.pathname.toLowerCase().endsWith('.jpg') ||
-      safeCheck.url.pathname.toLowerCase().endsWith('.jpeg');
-
-    if (!isWebp && !isJpeg) {
+    const format = classifyThumbnailFormat(rawMime, safeCheck.url.pathname);
+    if (!format) {
       return { thumbnailKey: null, thumbnailUrl: null };
     }
 
@@ -759,51 +812,28 @@ async function tryUploadVideoThumbnail(
       return { thumbnailKey: null, thumbnailUrl: null };
     }
 
-    const thumbMime = isWebp ? 'image/webp' : 'image/jpeg';
-    const thumbExt = isWebp ? 'webp' : 'jpeg';
-    const thumbnailKey = `users/${userId}/thumbnails/${mediaId}.${thumbExt}`;
+    const thumbnailKey = `users/${userId}/thumbnails/${mediaId}.${format.ext}`;
     const uploaded = await storage.putObject({
       key: thumbnailKey,
       body: bytes,
-      contentType: thumbMime,
+      contentType: format.mime,
     });
 
     return {
       thumbnailKey: uploaded.key,
       thumbnailUrl: uploaded.publicUrl,
     };
-  } catch (_e) {
+  } catch {
+    // Non-fatal: if optional video thumbnail download fails, proceed with the saved video
     return { thumbnailKey: null, thumbnailUrl: null };
   }
 }
 
-async function downloadAndStoreSingleCandidate(
-  candidate: RemoteMediaCandidate,
-  index: number,
-  userId: string,
-  storage: IStorageService,
+async function fetchCandidateResponse(
+  normalizedStreamUrl: string,
   fetchFn: typeof fetch,
   prefetchedResponse?: Response
-): Promise<UploadedDownloadedMediaItem> {
-  const safeCheck = validateSafeRemoteUrl(candidate.streamUrl);
-  if (!safeCheck.valid || !safeCheck.url) {
-    throw new MediaDownloaderError(
-      'UNSAFE_URL',
-      safeCheck.reason ?? 'The resolved media stream address is not allowed.',
-      400
-    );
-  }
-
-  const normalizedStreamUrl = normalizeCloudDriveUrl(safeCheck.url);
-  const normalizedCheck = validateSafeRemoteUrl(normalizedStreamUrl);
-  if (!normalizedCheck.valid) {
-    throw new MediaDownloaderError(
-      'UNSAFE_URL',
-      normalizedCheck.reason ?? 'The resolved media stream address is not allowed.',
-      400
-    );
-  }
-
+): Promise<Response> {
   let response: Response;
   if (prefetchedResponse) {
     response = prefetchedResponse;
@@ -816,7 +846,7 @@ async function downloadAndStoreSingleCandidate(
         },
         redirect: 'follow',
       });
-    } catch (_e) {
+    } catch {
       throw new MediaDownloaderError(
         'DOWNLOAD_FAILED',
         'Could not connect to the remote media server. Please try again.',
@@ -844,17 +874,57 @@ async function downloadAndStoreSingleCandidate(
     );
   }
 
+  return response;
+}
+
+function validateAndNormalizeStreamUrl(rawStreamUrl: string): string {
+  const safeCheck = validateSafeRemoteUrl(rawStreamUrl);
+  if (!safeCheck.valid || !safeCheck.url) {
+    throw new MediaDownloaderError(
+      'UNSAFE_URL',
+      safeCheck.reason ?? 'The resolved media stream address is not allowed.',
+      400
+    );
+  }
+
+  const normalizedStreamUrl = normalizeCloudDriveUrl(safeCheck.url);
+  const normalizedCheck = validateSafeRemoteUrl(normalizedStreamUrl);
+  if (!normalizedCheck.valid) {
+    throw new MediaDownloaderError(
+      'UNSAFE_URL',
+      normalizedCheck.reason ?? 'The resolved media stream address is not allowed.',
+      400
+    );
+  }
+
+  return normalizedStreamUrl;
+}
+
+async function downloadAndStoreSingleCandidate(
+  candidate: RemoteMediaCandidate,
+  index: number,
+  userId: string,
+  storage: IStorageService,
+  fetchFn: typeof fetch,
+  prefetchedResponse?: Response
+): Promise<UploadedDownloadedMediaItem> {
+  const normalizedStreamUrl = validateAndNormalizeStreamUrl(candidate.streamUrl);
+  const response = await fetchCandidateResponse(
+    normalizedStreamUrl,
+    fetchFn,
+    prefetchedResponse
+  );
+
+  const effectiveUrl = response.url || normalizedStreamUrl;
   const dispositionName = extractFilenameFromContentDisposition(
     response.headers.get('content-disposition')
   );
   const rawFileName =
-    candidate.fileName ??
-    dispositionName ??
-    deriveFileNameFromUrl(response.url || normalizedStreamUrl, index);
+    candidate.fileName ?? dispositionName ?? deriveFileNameFromUrl(effectiveUrl, index);
 
   const mimeType = resolveAllowedMimeType(
     response.headers.get('content-type'),
-    response.url || normalizedStreamUrl,
+    effectiveUrl,
     rawFileName,
     candidate.mediaTypeHint
   );
@@ -888,23 +958,16 @@ async function downloadAndStoreSingleCandidate(
   });
 
   const mediaType: 'video' | 'image' = mimeType.startsWith('video/') ? 'video' : 'image';
-
-  let thumbnailKey: string | null = null;
-  let thumbnailUrl: string | null = null;
-
-  if (mediaType === 'image') {
-    thumbnailUrl = uploadRes.publicUrl;
-  } else {
-    const thumbResult = await tryUploadVideoThumbnail(
-      candidate.thumbnailUrl,
-      userId,
-      mediaId,
-      storage,
-      fetchFn
-    );
-    thumbnailKey = thumbResult.thumbnailKey;
-    thumbnailUrl = thumbResult.thumbnailUrl;
-  }
+  const thumbResult =
+    mediaType === 'image'
+      ? { thumbnailKey: null, thumbnailUrl: uploadRes.publicUrl }
+      : await tryUploadVideoThumbnail(
+          candidate.thumbnailUrl,
+          userId,
+          mediaId,
+          storage,
+          fetchFn
+        );
 
   const trimmedCaption = candidate.caption?.trim() ?? '';
   const captionText =
@@ -920,8 +983,8 @@ async function downloadAndStoreSingleCandidate(
     mediaType,
     storageKey: uploadRes.key,
     url: uploadRes.publicUrl,
-    thumbnailKey,
-    thumbnailUrl,
+    thumbnailKey: thumbResult.thumbnailKey,
+    thumbnailUrl: thumbResult.thumbnailUrl,
     durationSeconds: candidate.durationSeconds ?? null,
     aspectRatio: candidate.aspectRatio ?? 'unknown',
     captionText,
@@ -945,9 +1008,140 @@ async function tryResolveFromFxTwitter(
     }
     const fxJson: unknown = await fxRes.json();
     return parseJsonPayloadCandidates(fxJson);
-  } catch (_e) {
+  } catch {
+    // Fallback quietly when FxTwitter API is unreachable
     return [];
   }
+}
+
+async function tryResolveViaExternalExtractor(
+  configuredExtractorUrl: string | null,
+  canonicalSourceUrl: string,
+  fetchFn: typeof fetch
+): Promise<RemoteMediaCandidate[]> {
+  if (!configuredExtractorUrl || configuredExtractorUrl.trim().length === 0) {
+    return [];
+  }
+  try {
+    const extRes = await fetchFn(configuredExtractorUrl.trim(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ url: canonicalSourceUrl }),
+    });
+    if (!extRes.ok) {
+      return [];
+    }
+    const extJson: unknown = await extRes.json();
+    return parseJsonPayloadCandidates(extJson);
+  } catch {
+    // Fall back to built-in serverless resolver if external extractor is unreachable
+    return [];
+  }
+}
+
+async function parseOkInitialResponse(
+  initialResponse: Response,
+  normalizedUrl: string,
+  sourceUrl: URL,
+  platform: DownloaderSourcePlatform,
+  fetchFn: typeof fetch
+): Promise<{
+  candidates: RemoteMediaCandidate[];
+  prefetchedBinaryResponse?: Response;
+}> {
+  const contentType = initialResponse.headers.get('content-type') ?? '';
+  const lowerContentType = contentType.toLowerCase();
+  const effectiveUrl = initialResponse.url || normalizedUrl;
+  const dispositionFileName = extractFilenameFromContentDisposition(
+    initialResponse.headers.get('content-disposition')
+  );
+  const directMime = resolveAllowedMimeType(contentType, effectiveUrl, dispositionFileName);
+
+  if (directMime) {
+    return {
+      prefetchedBinaryResponse: initialResponse,
+      candidates: [
+        {
+          streamUrl: effectiveUrl,
+          fileName: dispositionFileName,
+        },
+      ],
+    };
+  }
+
+  if (lowerContentType.includes('application/json') || lowerContentType.includes('text/json')) {
+    try {
+      const jsonData: unknown = await initialResponse.json();
+      return { candidates: parseJsonPayloadCandidates(jsonData) };
+    } catch {
+      // Return empty candidates when JSON response body cannot be parsed
+      return { candidates: [] };
+    }
+  }
+
+  const htmlText = await initialResponse.text();
+  const parsedHtml = parseHtmlMediaCandidates(htmlText, effectiveUrl);
+  if (parsedHtml.candidates.length === 0 && platform === 'x') {
+    return { candidates: await tryResolveFromFxTwitter(sourceUrl, fetchFn) };
+  }
+  return { candidates: parsedHtml.candidates };
+}
+
+async function resolveCandidatesBuiltIn(
+  sourceUrl: URL,
+  platform: DownloaderSourcePlatform,
+  fetchFn: typeof fetch
+): Promise<{
+  candidates: RemoteMediaCandidate[];
+  prefetchedBinaryResponse?: Response;
+}> {
+  const normalizedUrl = validateAndNormalizeStreamUrl(sourceUrl.toString());
+
+  let initialResponse: Response;
+  try {
+    initialResponse = await fetchFn(normalizedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+        Accept: '*/*',
+      },
+      redirect: 'follow',
+    });
+  } catch {
+    throw new MediaDownloaderError(
+      'DOWNLOAD_FAILED',
+      'Could not reach the provided link. Please verify the link and try again.',
+      502
+    );
+  }
+
+  if (initialResponse.url) {
+    const redirectSafety = validateSafeRemoteUrl(initialResponse.url);
+    if (!redirectSafety.valid) {
+      throw new MediaDownloaderError(
+        'UNSAFE_URL',
+        redirectSafety.reason ?? 'Redirected to a restricted network address.',
+        400
+      );
+    }
+  }
+
+  if (!initialResponse.ok) {
+    const fallbackCandidates =
+      platform === 'x' ? await tryResolveFromFxTwitter(sourceUrl, fetchFn) : [];
+    if (fallbackCandidates.length === 0) {
+      throw new MediaDownloaderError(
+        'DOWNLOAD_FAILED',
+        `Could not retrieve content from this link (status ${initialResponse.status}).`,
+        502
+      );
+    }
+    return { candidates: fallbackCandidates };
+  }
+
+  return parseOkInitialResponse(initialResponse, normalizedUrl, sourceUrl, platform, fetchFn);
 }
 
 export async function resolveAndUploadMediaFromUrl(
@@ -966,124 +1160,21 @@ export async function resolveAndUploadMediaFromUrl(
   const canonicalSourceUrl = sourceValidation.url.toString();
   const platform = detectSourcePlatform(canonicalSourceUrl);
   const configuredExtractorUrl =
-    params.extractorApiUrl !== undefined
-      ? params.extractorApiUrl
-      : (process.env.DOWNLOADER_EXTRACTOR_API_URL ?? null);
+    params.extractorApiUrl === undefined
+      ? (process.env.DOWNLOADER_EXTRACTOR_API_URL ?? null)
+      : params.extractorApiUrl;
 
-  let candidates: RemoteMediaCandidate[] = [];
+  let candidates = await tryResolveViaExternalExtractor(
+    configuredExtractorUrl,
+    canonicalSourceUrl,
+    fetchFn
+  );
   let prefetchedBinaryResponse: Response | undefined;
 
-  // 1. Try pluggable external extractor API if configured
-  if (configuredExtractorUrl && configuredExtractorUrl.trim().length > 0) {
-    try {
-      const extRes = await fetchFn(configuredExtractorUrl.trim(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ url: canonicalSourceUrl }),
-      });
-      if (extRes.ok) {
-        const extJson: unknown = await extRes.json();
-        candidates = parseJsonPayloadCandidates(extJson);
-      }
-    } catch (_e) {
-      // Fall back to built-in serverless resolver if external extractor is unreachable
-    }
-  }
-
-  // 2. Built-in serverless resolution when extractor did not yield candidates
   if (candidates.length === 0) {
-    const normalizedUrl = normalizeCloudDriveUrl(sourceValidation.url);
-    const normalizedSafe = validateSafeRemoteUrl(normalizedUrl);
-    if (!normalizedSafe.valid) {
-      throw new MediaDownloaderError(
-        'UNSAFE_URL',
-        normalizedSafe.reason ?? 'Unsafe destination URL.',
-        400
-      );
-    }
-
-    let initialResponse: Response;
-    try {
-      initialResponse = await fetchFn(normalizedUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
-          Accept: '*/*',
-        },
-        redirect: 'follow',
-      });
-    } catch (_e) {
-      throw new MediaDownloaderError(
-        'DOWNLOAD_FAILED',
-        'Could not reach the provided link. Please verify the link and try again.',
-        502
-      );
-    }
-
-    if (initialResponse.url) {
-      const redirectSafety = validateSafeRemoteUrl(initialResponse.url);
-      if (!redirectSafety.valid) {
-        throw new MediaDownloaderError(
-          'UNSAFE_URL',
-          redirectSafety.reason ?? 'Redirected to a restricted network address.',
-          400
-        );
-      }
-    }
-
-    if (!initialResponse.ok) {
-      if (platform === 'x') {
-        candidates = await tryResolveFromFxTwitter(sourceValidation.url, fetchFn);
-      }
-      if (candidates.length === 0) {
-        throw new MediaDownloaderError(
-          'DOWNLOAD_FAILED',
-          `Could not retrieve content from this link (status ${initialResponse.status}).`,
-          502
-        );
-      }
-    } else {
-      const contentType = initialResponse.headers.get('content-type') ?? '';
-      const lowerContentType = contentType.toLowerCase();
-      const dispositionFileName = extractFilenameFromContentDisposition(
-        initialResponse.headers.get('content-disposition')
-      );
-      const directMime = resolveAllowedMimeType(
-        contentType,
-        initialResponse.url || normalizedUrl,
-        dispositionFileName
-      );
-
-      if (directMime) {
-        prefetchedBinaryResponse = initialResponse;
-        candidates = [
-          {
-            streamUrl: initialResponse.url || normalizedUrl,
-            fileName: dispositionFileName,
-          },
-        ];
-      } else if (
-        lowerContentType.includes('application/json') ||
-        lowerContentType.includes('text/json')
-      ) {
-        try {
-          const jsonData: unknown = await initialResponse.json();
-          candidates = parseJsonPayloadCandidates(jsonData);
-        } catch (_e) {
-          candidates = [];
-        }
-      } else {
-        const htmlText = await initialResponse.text();
-        const parsedHtml = parseHtmlMediaCandidates(htmlText, initialResponse.url || normalizedUrl);
-        candidates = parsedHtml.candidates;
-
-        if (candidates.length === 0 && platform === 'x') {
-          candidates = await tryResolveFromFxTwitter(sourceValidation.url, fetchFn);
-        }
-      }
-    }
+    const builtIn = await resolveCandidatesBuiltIn(sourceValidation.url, platform, fetchFn);
+    candidates = builtIn.candidates;
+    prefetchedBinaryResponse = builtIn.prefetchedBinaryResponse;
   }
 
   if (candidates.length === 0) {
@@ -1094,19 +1185,18 @@ export async function resolveAndUploadMediaFromUrl(
     );
   }
 
-  const uploadedItems: UploadedDownloadedMediaItem[] = [];
-  for (let i = 0; i < candidates.length; i += 1) {
-    const candidate = candidates[i]!;
-    const item = await downloadAndStoreSingleCandidate(
-      candidate,
-      i,
-      params.userId,
-      params.storage,
-      fetchFn,
-      i === 0 ? prefetchedBinaryResponse : undefined
-    );
-    uploadedItems.push(item);
-  }
+  const uploadedItems = await Promise.all(
+    candidates.map((candidate, idx) =>
+      downloadAndStoreSingleCandidate(
+        candidate,
+        idx,
+        params.userId,
+        params.storage,
+        fetchFn,
+        idx === 0 ? prefetchedBinaryResponse : undefined
+      )
+    )
+  );
 
   return {
     sourceUrl: canonicalSourceUrl,
@@ -1114,3 +1204,4 @@ export async function resolveAndUploadMediaFromUrl(
     items: uploadedItems,
   };
 }
+

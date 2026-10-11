@@ -72,6 +72,96 @@ function mapRowToMediaItemResponse(row: MediaItemDbRow): MediaItemResponse {
   });
 }
 
+async function verifyFolderOwnership(
+  db: DatabaseClient,
+  targetFolderId: string,
+  userId: string
+): Promise<boolean> {
+  const checkFolder = async (
+    queryFn: (sql: string, params?: unknown[]) => Promise<unknown>
+  ) => {
+    const res = await queryFn(
+      'SELECT id FROM media_folders WHERE id = $1 AND user_id = $2',
+      [targetFolderId, userId]
+    );
+    return normalizeQueryRows<{ id: string }>(res);
+  };
+
+  if (typeof db.query === 'function') {
+    const rows = await checkFolder((sql, params) => db.query(sql, params));
+    return rows.length > 0;
+  }
+  if (typeof db.withTransaction === 'function') {
+    const rows = await db.withTransaction((tx) =>
+      checkFolder((sql, params) => tx.query(sql, params))
+    );
+    return rows.length > 0;
+  }
+  return false;
+}
+
+async function insertSingleResolvedItem(
+  tx: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+  userId: string,
+  targetFolderId: string | null,
+  item: Awaited<ReturnType<typeof resolveAndUploadMediaFromUrl>>['items'][number]
+): Promise<MediaItemDbRow | null> {
+  const insertRes = await tx.query(
+    `INSERT INTO media_items (
+       id, user_id, folder_id, name, file_size, mime_type, media_type,
+       storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
+       aspect_ratio, caption_text, created_at, updated_at
+     ) VALUES (
+       $1, $2, $3, $4, $5, $6, $7,
+       $8, $9, $10, $11, $12,
+       $13, $14, now(), now()
+     )
+     RETURNING *`,
+    [
+      item.mediaId,
+      userId,
+      targetFolderId,
+      item.name,
+      item.fileSize,
+      item.mimeType,
+      item.mediaType,
+      item.storageKey,
+      item.url,
+      item.thumbnailKey,
+      item.thumbnailUrl,
+      item.durationSeconds,
+      item.aspectRatio,
+      item.captionText,
+    ]
+  );
+
+  const rows = normalizeQueryRows<MediaItemDbRow>(insertRes);
+  return rows[0] ?? null;
+}
+
+async function persistResolvedMediaItems(
+  db: DatabaseClient,
+  userId: string,
+  targetFolderId: string | null,
+  items: Awaited<ReturnType<typeof resolveAndUploadMediaFromUrl>>['items']
+): Promise<MediaItemDbRow[]> {
+  const executeInserts = async (tx: {
+    query: (sql: string, params?: unknown[]) => Promise<unknown>;
+  }): Promise<MediaItemDbRow[]> => {
+    const inserted = await Promise.all(
+      items.map((item) => insertSingleResolvedItem(tx, userId, targetFolderId, item))
+    );
+    return inserted.filter((row): row is MediaItemDbRow => row !== null);
+  };
+
+  if (typeof db.withTransaction === 'function') {
+    return db.withTransaction(executeInserts);
+  }
+  return executeInserts({
+    query: (sql, params) => db.query(sql, params),
+  });
+}
+
 export async function handleDownloadMediaFromUrl(
   request: NextRequest,
   subdomain: string,
@@ -93,7 +183,7 @@ export async function handleDownloadMediaFromUrl(
   let session;
   try {
     session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -106,7 +196,7 @@ export async function handleDownloadMediaFromUrl(
   let rawBody: unknown;
   try {
     rawBody = await request.json();
-  } catch (_e) {
+  } catch {
     return NextResponse.json(
       { error: 'INVALID_REQUEST', message: 'Invalid JSON request payload.' },
       { status: 400 }
@@ -144,24 +234,8 @@ export async function handleDownloadMediaFromUrl(
   try {
     // 4. Verify destination folder ownership if folderId is specified
     if (targetFolderId !== null) {
-      const checkFolder = async (queryFn: (sql: string, params?: unknown[]) => Promise<unknown>) => {
-        const res = await queryFn(
-          'SELECT id FROM media_folders WHERE id = $1 AND user_id = $2',
-          [targetFolderId, session.userId]
-        );
-        return normalizeQueryRows<{ id: string }>(res);
-      };
-
-      let folderRows: { id: string }[] = [];
-      if (typeof db.query === 'function') {
-        folderRows = await checkFolder((sql, params) => db.query(sql, params));
-      } else if (typeof db.withTransaction === 'function') {
-        folderRows = await db.withTransaction((tx) =>
-          checkFolder((sql, params) => tx.query(sql, params))
-        );
-      }
-
-      if (folderRows.length === 0) {
+      const folderExists = await verifyFolderOwnership(db, targetFolderId, session.userId);
+      if (!folderExists) {
         return NextResponse.json(
           {
             error: 'FOLDER_NOT_FOUND',
@@ -182,56 +256,12 @@ export async function handleDownloadMediaFromUrl(
     });
 
     // 6. Persist all resolved media items inside a transaction
-    const executeInserts = async (tx: {
-      query: (sql: string, params?: unknown[]) => Promise<unknown>;
-    }): Promise<MediaItemDbRow[]> => {
-      const insertedRows: MediaItemDbRow[] = [];
-      for (const item of resolved.items) {
-        const insertRes = await tx.query(
-          `INSERT INTO media_items (
-             id, user_id, folder_id, name, file_size, mime_type, media_type,
-             storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-             aspect_ratio, caption_text, created_at, updated_at
-           ) VALUES (
-             $1, $2, $3, $4, $5, $6, $7,
-             $8, $9, $10, $11, $12,
-             $13, $14, now(), now()
-           )
-           RETURNING *`,
-          [
-            item.mediaId,
-            session.userId,
-            targetFolderId,
-            item.name,
-            item.fileSize,
-            item.mimeType,
-            item.mediaType,
-            item.storageKey,
-            item.url,
-            item.thumbnailKey,
-            item.thumbnailUrl,
-            item.durationSeconds,
-            item.aspectRatio,
-            item.captionText,
-          ]
-        );
-
-        const rows = normalizeQueryRows<MediaItemDbRow>(insertRes);
-        if (rows[0]) {
-          insertedRows.push(rows[0]);
-        }
-      }
-      return insertedRows;
-    };
-
-    let insertedRows: MediaItemDbRow[];
-    if (typeof db.withTransaction === 'function') {
-      insertedRows = await db.withTransaction(executeInserts);
-    } else {
-      insertedRows = await executeInserts({
-        query: (sql, params) => db.query(sql, params),
-      });
-    }
+    const insertedRows = await persistResolvedMediaItems(
+      db,
+      session.userId,
+      targetFolderId,
+      resolved.items
+    );
 
     const responseItems = insertedRows.map(mapRowToMediaItemResponse);
     const responsePayload = DownloaderIngestResponseSchema.parse({

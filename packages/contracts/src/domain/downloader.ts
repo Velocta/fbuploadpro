@@ -98,20 +98,33 @@ export function detectSourcePlatform(rawUrl: string): DownloaderSourcePlatform {
   return 'web';
 }
 
+function isDocumentationOrBenchmarkIpv4(a: number, b: number, c: number): boolean {
+  if (a === 192 && b === 0) {
+    return c === 0 || c === 2;
+  }
+  if (a === 198) {
+    return b === 18 || b === 19 || (b === 51 && c === 100);
+  }
+  return a === 203 && b === 0 && c === 113;
+}
+
 function isPrivateOrReservedIpv4(a: number, b: number, c: number, _d: number): boolean {
-  if (a === 0) return true; // 0.0.0.0/8 unspecified
-  if (a === 10) return true; // 10.0.0.0/8 RFC1918
-  if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 CGNAT
-  if (a === 127) return true; // 127.0.0.0/8 loopback
-  if (a === 169 && b === 254) return true; // 169.254.0.0/16 link-local / cloud metadata
-  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12 RFC1918
-  if (a === 192 && b === 0 && (c === 0 || c === 2)) return true; // 192.0.0.0/24 & 192.0.2.0/24
-  if (a === 192 && b === 168) return true; // 192.168.0.0/16 RFC1918
-  if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmark
-  if (a === 198 && b === 51 && c === 100) return true; // 198.51.100.0/24 TEST-NET-2
-  if (a === 203 && b === 0 && c === 113) return true; // 203.0.113.0/24 TEST-NET-3
-  if (a >= 224) return true; // 224.0.0.0/4 multicast & 240.0.0.0/4 reserved
-  return false;
+  if (a === 0 || a === 10 || a === 127 || a >= 224) {
+    return true;
+  }
+  if (a === 100) {
+    return b >= 64 && b <= 127;
+  }
+  if (a === 169) {
+    return b === 254;
+  }
+  if (a === 172) {
+    return b >= 16 && b <= 31;
+  }
+  if (a === 192 && b === 168) {
+    return true;
+  }
+  return isDocumentationOrBenchmarkIpv4(a, b, c);
 }
 
 function isUnsafeIpv6(rawIpv6: string): boolean {
@@ -177,6 +190,59 @@ export interface SafeUrlValidationResult {
   reason?: string;
 }
 
+function stripTrailingDots(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 46) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+function isLocalHostname(rawHost: string): boolean {
+  return (
+    rawHost === 'localhost' ||
+    rawHost.endsWith('.localhost') ||
+    rawHost.endsWith('.local') ||
+    rawHost.endsWith('.internal')
+  );
+}
+
+function validateIpv4Host(rawHost: string): string | null {
+  const octets = rawHost.split('.').map((part) => Number.parseInt(part, 10));
+  if (octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
+    return 'Invalid IPv4 address in link.';
+  }
+  if (isPrivateOrReservedIpv4(octets[0]!, octets[1]!, octets[2]!, octets[3]!)) {
+    return 'Private and loopback network addresses are not allowed.';
+  }
+  return null;
+}
+
+function validateParsedHostSafety(rawHost: string): string | null {
+  if (!rawHost || isLocalHostname(rawHost)) {
+    return rawHost
+      ? 'Local and internal network addresses are not allowed.'
+      : 'Please enter a valid link with a public domain.';
+  }
+
+  if (rawHost.startsWith('[') && rawHost.endsWith(']')) {
+    const ipv6Inner = rawHost.slice(1, -1);
+    return isUnsafeIpv6(ipv6Inner)
+      ? 'Private and loopback network addresses are not allowed.'
+      : null;
+  }
+
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(rawHost)) {
+    return validateIpv4Host(rawHost);
+  }
+
+  if (!rawHost.includes('.')) {
+    return 'Please enter a valid link with a public domain.';
+  }
+
+  return null;
+}
+
 export function validateSafeRemoteUrl(rawUrl: string): SafeUrlValidationResult {
   const trimmed = rawUrl.trim();
   if (!trimmed || trimmed.length > 2048) {
@@ -189,7 +255,7 @@ export function validateSafeRemoteUrl(rawUrl: string): SafeUrlValidationResult {
   let parsed: URL;
   try {
     parsed = new URL(trimmed);
-  } catch (_e) {
+  } catch {
     return {
       valid: false,
       reason: 'Please enter a valid link starting with http:// or https://.',
@@ -210,61 +276,12 @@ export function validateSafeRemoteUrl(rawUrl: string): SafeUrlValidationResult {
     };
   }
 
-  const rawHost = parsed.hostname.toLowerCase().replace(/\.+$/, '');
-  if (!rawHost) {
+  const rawHost = stripTrailingDots(parsed.hostname.toLowerCase());
+  const hostError = validateParsedHostSafety(rawHost);
+  if (hostError) {
     return {
       valid: false,
-      reason: 'Please enter a valid link with a public domain.',
-    };
-  }
-
-  if (
-    rawHost === 'localhost' ||
-    rawHost.endsWith('.localhost') ||
-    rawHost.endsWith('.local') ||
-    rawHost.endsWith('.internal')
-  ) {
-    return {
-      valid: false,
-      reason: 'Local and internal network addresses are not allowed.',
-    };
-  }
-
-  // IPv6 literal check
-  if (rawHost.startsWith('[') && rawHost.endsWith(']')) {
-    const ipv6Inner = rawHost.slice(1, -1);
-    if (isUnsafeIpv6(ipv6Inner)) {
-      return {
-        valid: false,
-        reason: 'Private and loopback network addresses are not allowed.',
-      };
-    }
-    return { valid: true, url: parsed };
-  }
-
-  // IPv4 address check
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(rawHost)) {
-    const octets = rawHost.split('.').map((part) => Number.parseInt(part, 10));
-    if (octets.some((n) => Number.isNaN(n) || n < 0 || n > 255)) {
-      return {
-        valid: false,
-        reason: 'Invalid IPv4 address in link.',
-      };
-    }
-    if (isPrivateOrReservedIpv4(octets[0]!, octets[1]!, octets[2]!, octets[3]!)) {
-      return {
-        valid: false,
-        reason: 'Private and loopback network addresses are not allowed.',
-      };
-    }
-    return { valid: true, url: parsed };
-  }
-
-  // Ensure standard domain has at least one dot and valid TLD characters
-  if (!rawHost.includes('.')) {
-    return {
-      valid: false,
-      reason: 'Please enter a valid link with a public domain.',
+      reason: hostError,
     };
   }
 
@@ -279,7 +296,7 @@ export interface BatchUrlDeduplicationResult {
 }
 
 export function deduplicateBatchUrls(rawInput: string): BatchUrlDeduplicationResult {
-  const lines = rawInput.split(/\r?\n/);
+  const lines = rawInput.replaceAll('\r\n', '\n').replaceAll('\r', '\n').split('\n');
   const seen = new Set<string>();
   const urls: string[] = [];
   const invalidUrls: string[] = [];
