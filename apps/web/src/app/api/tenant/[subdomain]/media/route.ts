@@ -36,6 +36,8 @@ export async function handleListMedia(
   const parsedQuery = MediaListQuerySchema.safeParse({
     folderId: searchParams.get('folderId') || undefined,
     mediaType: searchParams.get('mediaType') || undefined,
+    aspectRatio: searchParams.get('aspectRatio') || undefined,
+    captionStatus: searchParams.get('captionStatus') || undefined,
     search: searchParams.get('search') || undefined,
     sortBy: searchParams.get('sortBy') || undefined,
     sortOrder: searchParams.get('sortOrder') || undefined,
@@ -50,8 +52,17 @@ export async function handleListMedia(
     );
   }
 
-  const { folderId, mediaType, search, sortBy, sortOrder, limit, offset } =
-    parsedQuery.data;
+  const {
+    folderId,
+    mediaType,
+    aspectRatio,
+    captionStatus,
+    search,
+    sortBy,
+    sortOrder,
+    limit,
+    offset,
+  } = parsedQuery.data;
   const db = dbClient ?? getDbClient();
 
   const conditions: string[] = ['user_id = $1'];
@@ -67,6 +78,17 @@ export async function handleListMedia(
   if (mediaType) {
     params.push(mediaType);
     conditions.push(`media_type = $${params.length}`);
+  }
+
+  if (aspectRatio) {
+    params.push(aspectRatio);
+    conditions.push(`aspect_ratio = $${params.length}`);
+  }
+
+  if (captionStatus === 'has_caption') {
+    conditions.push("caption_text IS NOT NULL AND BTRIM(caption_text) <> ''");
+  } else if (captionStatus === 'empty_caption') {
+    conditions.push("(caption_text IS NULL OR BTRIM(caption_text) = '')");
   }
 
   if (search) {

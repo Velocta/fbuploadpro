@@ -36,6 +36,7 @@ export function DisconnectAccountDialog({
 
   const pagesCount = account.connectedPagesCount;
   const pagesLabel = pagesCount === 1 ? 'Facebook page' : 'Facebook pages';
+  const linkedPages = account.connectedPages ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -84,6 +85,26 @@ export function DisconnectAccountDialog({
               <p style={{ margin: 0 }}>
                 <strong>{pagesCount} linked {pagesLabel}</strong> will be Removed, and any scheduled content on them will be removed as well.
               </p>
+              {linkedPages.length > 0 && (
+                <ul
+                  data-testid="disconnect-linked-pages-list"
+                  style={{
+                    margin: `${SPACING.sm} 0 0 0`,
+                    paddingLeft: SPACING.lg,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  {linkedPages.map((page) => (
+                    <li
+                      key={page.id}
+                      data-testid={`disconnect-linked-page-${page.id}`}
+                      style={{ marginBottom: '2px' }}
+                    >
+                      {page.pageName}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </DialogBody>
