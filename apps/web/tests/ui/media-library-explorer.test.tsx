@@ -21,6 +21,7 @@ import {
   buildQueuedEntriesFromFileList,
   ensureNestedFolderHierarchy,
   executeBoundedUploadBatch,
+  runBoundedUploadQueue,
   detectDuplicateUploadEntries,
   type UploadBatchState,
 } from '@/components/media/upload-queue-banner';
@@ -29,10 +30,15 @@ import {
   HOVER_VIDEO_PREVIEW_DELAY_MS,
   formatDuration,
 } from '@/components/media/media-asset-card';
-import { MediaPreviewModal } from '@/components/media/media-preview-modal';
+import { MediaTableRow } from '@/components/media/media-table-row';
+import {
+  MediaPreviewModal,
+  captureVideoFrameAsWebp,
+} from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
 import {
   MediaLibraryExplorer,
+  MEDIA_VIEW_MODE_STORAGE_KEY,
   buildFolderBreadcrumbs,
   formatFolderAncestryPath,
   computeRangeSelection,
@@ -692,3 +698,276 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     expect(html).toContain(PALETTE.primary);
   });
 });
+
+describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspect Ratio/Caption Filters & Video Frame Thumbnail Picker (US1–US4)', () => {
+  it('US1: renders Grid View by default and switches to Compact Table View with MediaTableRow when initialViewMode="table"', () => {
+    expect(MEDIA_VIEW_MODE_STORAGE_KEY).toBe('fbuploadpro:media-view-mode');
+
+    const gridRender = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId={null}
+      />
+    );
+
+    expect(gridRender.hasAttribute('data-testid', 'view-mode-grid-btn')).toBe(true);
+    expect(gridRender.hasAttribute('data-testid', 'view-mode-table-btn')).toBe(true);
+    expect(gridRender.hasAttribute('data-testid', 'media-assets-grid')).toBe(true);
+    expect(gridRender.hasAttribute('data-testid', 'media-table-view')).toBe(false);
+
+    const tableRender = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId={null}
+        initialViewMode="table"
+      />
+    );
+
+    expect(tableRender.hasAttribute('data-testid', 'media-table-view')).toBe(true);
+    expect(
+      tableRender.hasAttribute(
+        'data-testid',
+        'media-row-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+      )
+    ).toBe(true);
+    expect(
+      tableRender.hasAttribute(
+        'data-testid',
+        'media-row-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
+      )
+    ).toBe(true);
+    expect(tableRender.html).not.toContain('9999px');
+  });
+
+  it('US1: renders MediaTableRow with inline caption editing, rectangular metadata badges, and folder path badge', () => {
+    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
+    const rowRender = render(
+      <table>
+        <tbody>
+          <MediaTableRow
+            item={videoItem}
+            selected={true}
+            folderPathLabel="Campaign A / Reels"
+            onNavigateFolder={vi.fn()}
+            onToggleSelect={vi.fn()}
+            onPreview={vi.fn()}
+            onUpdateCaption={vi.fn()}
+            onMoveRequest={vi.fn()}
+            onDeleteRequest={vi.fn()}
+          />
+        </tbody>
+      </table>
+    );
+
+    expect(rowRender.hasAttribute('data-testid', `media-row-${videoItem.id}`)).toBe(
+      true
+    );
+    expect(
+      rowRender.hasAttribute('data-testid', `table-inline-caption-${videoItem.id}`)
+    ).toBe(true);
+    expect(rowRender.hasText('Viral Launch Reel.mp4')).toBe(true);
+    expect(rowRender.hasText('Viral Launch Reel 🔥')).toBe(true);
+    expect(rowRender.hasText('9:16')).toBe(true);
+    expect(rowRender.hasText('0:45')).toBe(true);
+    expect(rowRender.hasText('15.0 MB')).toBe(true);
+    expect(rowRender.hasText('Campaign A / Reels')).toBe(true);
+    expect(rowRender.html).not.toContain('9999px');
+
+    const editingRender = render(
+      <table>
+        <tbody>
+          <MediaTableRow item={videoItem} initialEditingCaption={true} />
+        </tbody>
+      </table>
+    );
+    expect(
+      editingRender.hasAttribute('data-testid', `table-caption-input-${videoItem.id}`)
+    ).toBe(true);
+  });
+
+  it('US2: renders Pause, Resume, and Retry Failed controls in UploadQueueBanner and supports cooperative pause/resume in runBoundedUploadQueue', async () => {
+    const uploadingRender = render(
+      <UploadQueueBanner
+        state={{
+          status: 'uploading',
+          totalFiles: 10,
+          completedFiles: 3,
+          failedFiles: 0,
+          skippedFiles: 0,
+          totalBytes: 50 * 1024 * 1024,
+          transferredBytes: 15 * 1024 * 1024,
+          currentFileName: 'clip_4.mp4',
+        }}
+        onPause={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    expect(uploadingRender.hasAttribute('data-testid', 'pause-upload-btn')).toBe(true);
+
+    const failedFileEntry = {
+      file: new File(['err'], 'failed_clip.mp4', { type: 'video/mp4' }),
+      relativePath: 'failed_clip.mp4',
+    };
+    const pausedWithFailedRender = render(
+      <UploadQueueBanner
+        state={{
+          status: 'paused',
+          totalFiles: 10,
+          completedFiles: 4,
+          failedFiles: 2,
+          skippedFiles: 0,
+          totalBytes: 50 * 1024 * 1024,
+          transferredBytes: 20 * 1024 * 1024,
+          currentFileName: 'clip_5.mp4',
+          failedEntries: [failedFileEntry],
+        }}
+        onResume={vi.fn()}
+        onRetryFailed={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    expect(
+      pausedWithFailedRender.hasAttribute('data-testid', 'resume-upload-btn')
+    ).toBe(true);
+    expect(
+      pausedWithFailedRender.hasAttribute('data-testid', 'retry-failed-uploads-btn')
+    ).toBe(true);
+    expect(
+      pausedWithFailedRender.hasText('Paused — 4 of 10 files uploaded')
+    ).toBe(true);
+    expect(pausedWithFailedRender.hasText('Retry Failed (2)')).toBe(true);
+
+    // Verify cooperative pause & resume in runBoundedUploadQueue
+    let paused = true;
+    const resumeResolvers: Array<() => void> = [];
+    const processed: number[] = [];
+
+    const queuePromise = runBoundedUploadQueue({
+      items: [1, 2, 3],
+      concurrency: 2,
+      isPaused: () => paused,
+      waitIfPaused: async () => {
+        if (!paused) return;
+        await new Promise<void>((resolve) => {
+          resumeResolvers.push(resolve);
+        });
+      },
+      worker: async (item) => {
+        processed.push(item);
+      },
+    });
+
+    await new Promise((r) => setTimeout(r, 15));
+    expect(processed).toHaveLength(0);
+
+    paused = false;
+    while (resumeResolvers.length > 0) {
+      resumeResolvers.shift()?.();
+    }
+    await queuePromise;
+    expect(processed.sort()).toEqual([1, 2, 3]);
+  });
+
+  it('US3: filters media items by Aspect Ratio (9:16, 16:9, 1:1) and Caption Status (has_caption, empty_caption) and renders toolbar filter selects', () => {
+    const allRootAndNested = SAMPLE_MEDIA_ITEMS;
+
+    const verticalOnly = filterAndSortMediaItems(allRootAndNested, {
+      currentFolderId: null,
+      mediaTypeFilter: 'all',
+      aspectRatioFilter: '9:16',
+      captionStatusFilter: 'all',
+      searchQuery: 'a', // global search to include all 3 items
+      sortOption: 'created_at:desc',
+    });
+    expect(verticalOnly.map((i) => i.name)).toEqual(['Viral Launch Reel.mp4']);
+
+    const landscapeOnly = filterAndSortMediaItems(allRootAndNested, {
+      currentFolderId: null,
+      mediaTypeFilter: 'all',
+      aspectRatioFilter: '16:9',
+      captionStatusFilter: 'all',
+      searchQuery: 'a',
+      sortOption: 'created_at:desc',
+    });
+    expect(landscapeOnly.map((i) => i.name)).toEqual(['Nested_Folder_Clip.mp4']);
+
+    const squareMissingCaption = filterAndSortMediaItems(allRootAndNested, {
+      currentFolderId: null,
+      mediaTypeFilter: 'all',
+      aspectRatioFilter: '1:1',
+      captionStatusFilter: 'empty_caption',
+      searchQuery: '',
+      sortOption: 'created_at:desc',
+    });
+    expect(squareMissingCaption.map((i) => i.name)).toEqual([
+      'Product_Showcase_Banner.png',
+    ]);
+
+    const hasCaptionRoot = filterAndSortMediaItems(allRootAndNested, {
+      currentFolderId: null,
+      mediaTypeFilter: 'all',
+      aspectRatioFilter: 'all',
+      captionStatusFilter: 'has_caption',
+      searchQuery: '',
+      sortOption: 'created_at:desc',
+    });
+    expect(hasCaptionRoot.map((i) => i.name)).toEqual(['Viral Launch Reel.mp4']);
+
+    const explorerRender = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId={null}
+        initialAspectRatioFilter="9:16"
+        initialCaptionStatusFilter="has_caption"
+      />
+    );
+    expect(
+      explorerRender.hasAttribute('data-testid', 'media-aspect-ratio-select')
+    ).toBe(true);
+    expect(
+      explorerRender.hasAttribute('data-testid', 'media-caption-status-select')
+    ).toBe(true);
+    expect(explorerRender.hasText('Viral Launch Reel.mp4')).toBe(true);
+    expect(explorerRender.hasText('Product_Showcase_Banner.png')).toBe(false);
+  });
+
+  it('US4: renders "Set Current Frame as Thumbnail" button for video items in MediaPreviewModal (and omits it for images) and provides captureVideoFrameAsWebp fallback', async () => {
+    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
+    const imageItem = SAMPLE_MEDIA_ITEMS[1]!;
+
+    const videoModal = render(
+      <MediaPreviewModal
+        item={videoItem}
+        open={true}
+        onOpenChange={vi.fn()}
+        onUpdateThumbnail={vi.fn()}
+      />
+    );
+    expect(
+      videoModal.hasAttribute('data-testid', 'set-video-frame-thumbnail-btn')
+    ).toBe(true);
+    expect(videoModal.hasText('Set Current Frame as Thumbnail')).toBe(true);
+
+    const imageModal = render(
+      <MediaPreviewModal
+        item={imageItem}
+        open={true}
+        onOpenChange={vi.fn()}
+        onUpdateThumbnail={vi.fn()}
+      />
+    );
+    expect(
+      imageModal.hasAttribute('data-testid', 'set-video-frame-thumbnail-btn')
+    ).toBe(false);
+
+    const captured = await captureVideoFrameAsWebp(null);
+    expect(captured.dataUrl.startsWith('data:image/webp;base64,')).toBe(true);
+  });
+});
+

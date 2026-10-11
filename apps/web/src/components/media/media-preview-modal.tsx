@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
 import {
   Dialog,
@@ -14,6 +14,80 @@ import {
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
 import { formatDuration } from './media-asset-card';
+
+export interface CapturedVideoFrame {
+  blob: Blob | null;
+  dataUrl: string;
+}
+
+const FALLBACK_WEBP_DATA_URL =
+  'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
+
+/**
+ * Captures the current frame from a `<video>` element onto a `<canvas>` scaled to a 640px max dimension
+ * and encodes it as WebP (`0.85` quality), with a safe fallback for headless/JSDOM or cross-origin environments.
+ */
+export async function captureVideoFrameAsWebp(
+  videoElement: HTMLVideoElement | null
+): Promise<CapturedVideoFrame> {
+  if (typeof document === 'undefined') {
+    return { blob: null, dataUrl: FALLBACK_WEBP_DATA_URL };
+  }
+
+  try {
+    const rawWidth = videoElement?.videoWidth || 640;
+    const rawHeight = videoElement?.videoHeight || 360;
+    const maxDim = 640;
+    const scale = Math.min(1, maxDim / Math.max(rawWidth, rawHeight, 1));
+    const width = Math.max(1, Math.round(rawWidth * scale));
+    const height = Math.max(1, Math.round(rawHeight * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    let dataUrl = FALLBACK_WEBP_DATA_URL;
+    try {
+      const ctx = canvas.getContext('2d');
+      if (ctx && videoElement) {
+        ctx.drawImage(videoElement, 0, 0, width, height);
+      }
+      if (typeof canvas.toDataURL === 'function') {
+        const encoded = canvas.toDataURL('image/webp', 0.85);
+        if (encoded && encoded.startsWith('data:image/')) {
+          dataUrl = encoded;
+        }
+      }
+    } catch (_drawErr) {
+      dataUrl = FALLBACK_WEBP_DATA_URL;
+    }
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      if (typeof canvas.toBlob !== 'function') {
+        resolve(null);
+        return;
+      }
+      const timer = setTimeout(() => resolve(null), 60);
+      try {
+        canvas.toBlob(
+          (b) => {
+            clearTimeout(timer);
+            resolve(b);
+          },
+          'image/webp',
+          0.85
+        );
+      } catch (_blobErr) {
+        clearTimeout(timer);
+        resolve(null);
+      }
+    });
+
+    return { blob, dataUrl };
+  } catch (_err) {
+    return { blob: null, dataUrl: FALLBACK_WEBP_DATA_URL };
+  }
+}
 
 export interface MediaPreviewModalProps {
   item: MediaItemResponse | null;
@@ -29,7 +103,14 @@ export interface MediaPreviewModalProps {
         updates: { name?: string; captionText?: string }
       ) => Promise<void> | void)
     | undefined;
+  onUpdateThumbnail?:
+    | ((
+        mediaId: string,
+        captured: CapturedVideoFrame
+      ) => Promise<void> | void)
+    | undefined;
   onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
+  initialThumbnailUpdated?: boolean | undefined;
 }
 
 export function MediaPreviewModal({
@@ -41,7 +122,9 @@ export function MediaPreviewModal({
   onPrevious,
   onNext,
   onSave,
+  onUpdateThumbnail,
   onDelete,
+  initialThumbnailUpdated = false,
 }: Readonly<MediaPreviewModalProps>) {
   useEffect(() => {
     if (!open || !item) return;
@@ -91,7 +174,9 @@ export function MediaPreviewModal({
           onNext={onNext}
           onClose={() => onOpenChange(false)}
           onSave={onSave}
+          onUpdateThumbnail={onUpdateThumbnail}
           onDelete={onDelete}
+          initialThumbnailUpdated={initialThumbnailUpdated}
         />
       </DialogContent>
     </Dialog>
@@ -111,7 +196,14 @@ interface MediaPreviewModalBodyProps {
         updates: { name?: string; captionText?: string }
       ) => Promise<void> | void)
     | undefined;
+  onUpdateThumbnail?:
+    | ((
+        mediaId: string,
+        captured: CapturedVideoFrame
+      ) => Promise<void> | void)
+    | undefined;
   onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
+  initialThumbnailUpdated?: boolean | undefined;
 }
 
 function MediaPreviewModalBody({
@@ -122,7 +214,9 @@ function MediaPreviewModalBody({
   onNext,
   onClose,
   onSave,
+  onUpdateThumbnail,
   onDelete,
+  initialThumbnailUpdated = false,
 }: Readonly<MediaPreviewModalBodyProps>) {
   const defaultCaption =
     item.captionText !== null && item.captionText !== undefined && item.captionText.length > 0
@@ -133,9 +227,23 @@ function MediaPreviewModalBody({
   const [captionText, setCaptionText] = useState(defaultCaption);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
+  const [thumbnailUpdated, setThumbnailUpdated] = useState(initialThumbnailUpdated);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const isVideo = item.mediaType === 'video';
   const durationLabel = formatDuration(item.durationSeconds);
+
+  const handleCaptureThumbnail = async () => {
+    setIsCapturingThumbnail(true);
+    try {
+      const captured = await captureVideoFrameAsWebp(videoRef.current);
+      await onUpdateThumbnail?.(item.id, captured);
+      setThumbnailUpdated(true);
+    } finally {
+      setIsCapturingThumbnail(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -259,9 +367,11 @@ function MediaPreviewModalBody({
         >
           {isVideo ? (
             <video
+              ref={videoRef}
               data-testid="modal-video-player"
               src={item.url}
               poster={item.thumbnailUrl ?? undefined}
+              crossOrigin="anonymous"
               controls
               playsInline
               style={{
@@ -285,6 +395,54 @@ function MediaPreviewModalBody({
             />
           )}
         </div>
+
+        {/* Custom Video Frame Thumbnail Picker Action Row */}
+        {isVideo && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: SPACING.sm,
+              flexWrap: 'wrap',
+            }}
+          >
+            <button
+              type="button"
+              data-testid="set-video-frame-thumbnail-btn"
+              disabled={isCapturingThumbnail}
+              onClick={() => void handleCaptureThumbnail()}
+              style={{
+                height: '32px',
+                padding: `0 ${SPACING.md}`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                cursor: isCapturingThumbnail ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {isCapturingThumbnail
+                ? 'Setting thumbnail...'
+                : 'Set Current Frame as Thumbnail'}
+            </button>
+
+            {thumbnailUpdated && (
+              <span
+                data-testid="thumbnail-updated-notice"
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  color: PALETTE.accent4,
+                }}
+              >
+                Thumbnail updated from current frame.
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Technical Metadata Readout */}
         <div

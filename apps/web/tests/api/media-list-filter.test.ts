@@ -162,4 +162,48 @@ describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', 
     expect(res.status).toBe(200);
     expect(capturedSql).toContain('ORDER BY LOWER(name) ASC');
   });
+
+  it('filters media items by aspectRatio and captionStatus (has_caption / empty_caption)', async () => {
+    let capturedSql = '';
+    let capturedParams: any[] = [];
+
+    const mockDb: Partial<DatabaseClient> = {
+      query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+        capturedSql = sql;
+        capturedParams = params;
+        if (sql.includes('SELECT COUNT(*)')) {
+          return Promise.resolve([{ total: 0 }]);
+        }
+        return Promise.resolve([]);
+      }),
+    };
+
+    const reqHasCaption = new NextRequest(
+      'http://localhost:3000/api/tenant/acme/media?aspectRatio=9:16&captionStatus=has_caption',
+      { headers: { cookie: validSessionCookie } }
+    );
+    const resHasCaption = await handleListMedia(
+      reqHasCaption,
+      'acme',
+      mockDb as DatabaseClient
+    );
+
+    expect(resHasCaption.status).toBe(200);
+    expect(capturedSql).toContain('aspect_ratio =');
+    expect(capturedSql).toContain("caption_text IS NOT NULL AND BTRIM(caption_text) <> ''");
+    expect(capturedParams).toContain('9:16');
+
+    const reqEmptyCaption = new NextRequest(
+      'http://localhost:3000/api/tenant/acme/media?captionStatus=empty_caption',
+      { headers: { cookie: validSessionCookie } }
+    );
+    const resEmptyCaption = await handleListMedia(
+      reqEmptyCaption,
+      'acme',
+      mockDb as DatabaseClient
+    );
+
+    expect(resEmptyCaption.status).toBe(200);
+    expect(capturedSql).toContain("(caption_text IS NULL OR BTRIM(caption_text) = '')");
+  });
 });
