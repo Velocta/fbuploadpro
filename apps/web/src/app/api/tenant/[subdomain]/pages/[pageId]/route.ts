@@ -36,16 +36,32 @@ export async function handleDisconnectPage(
 
   const db = dbClient ?? getDbClient();
 
-  // 3. Delete page record scoped to user_id
+  // 3. Soft-delete page record scoped to user_id (status = 'disconnected', wipe encrypted token)
   const result = (await db.query(
-    'DELETE FROM facebook_pages WHERE id = $1 AND user_id = $2 RETURNING id',
+    `UPDATE facebook_pages
+     SET status = 'disconnected',
+         encrypted_access_token = '',
+         updated_at = now()
+     WHERE id = $1 AND user_id = $2
+     RETURNING id, fb_page_id`,
     [pageId, session.userId]
   )) as any[];
 
-  if (!result || result.length === 0) {
+  if (!result || result.length === 0 || !result[0]) {
     return NextResponse.json(
       { error: 'Facebook page not found' },
       { status: 404 }
+    );
+  }
+
+  const fbPageId = result[0].fb_page_id || result[0].fbPageId;
+  if (fbPageId) {
+    await db.query(
+      `UPDATE queue_items
+       SET status = 'cancelled',
+           updated_at = now()
+       WHERE user_id = $1 AND fb_page_id = $2 AND status = 'queued'`,
+      [session.userId, String(fbPageId)]
     );
   }
 

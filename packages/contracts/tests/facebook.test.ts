@@ -171,7 +171,7 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(parsedDiscovered.profilePictureUrl).toBe(picUrl);
     });
 
-    it('defaults followersCount to 0 and status to active', () => {
+    it('defaults followersCount, startingFollowers, and currentFollowers to 0 and status to active', () => {
       const minimalPage = {
         id: pageId,
         userId,
@@ -183,11 +183,58 @@ describe('Facebook Account & Page Domain Schemas', () => {
       };
       const parsed = FacebookPageSchema.parse(minimalPage);
       expect(parsed.followersCount).toBe(0);
+      expect(parsed.startingFollowers).toBe(0);
+      expect(parsed.currentFollowers).toBe(0);
       expect(parsed.status).toBe('active');
     });
 
-    it('rejects negative followersCount', () => {
+    it('supports startingFollowers, currentFollowers, and positive, zero, or negative followersGained in FacebookPageViewSchema', () => {
+      const baseView = {
+        id: pageId,
+        facebookAccountId: accountId,
+        fbPageId: 'page_987654321',
+        pageName: 'Tech Deals Daily',
+        status: 'active' as const,
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      };
+
+      const positiveGrowth = FacebookPageViewSchema.parse({
+        ...baseView,
+        startingFollowers: 10000,
+        currentFollowers: 12450,
+        followersGained: 2450,
+        followersCount: 12450,
+      });
+      expect(positiveGrowth.startingFollowers).toBe(10000);
+      expect(positiveGrowth.currentFollowers).toBe(12450);
+      expect(positiveGrowth.followersGained).toBe(2450);
+
+      const zeroGrowth = FacebookPageViewSchema.parse({
+        ...baseView,
+        startingFollowers: 10000,
+        currentFollowers: 10000,
+        followersGained: 0,
+        followersCount: 10000,
+      });
+      expect(zeroGrowth.followersGained).toBe(0);
+
+      const negativeGrowth = FacebookPageViewSchema.parse({
+        ...baseView,
+        startingFollowers: 10000,
+        currentFollowers: 9880,
+        followersGained: -120,
+        followersCount: 9880,
+      });
+      expect(negativeGrowth.startingFollowers).toBe(10000);
+      expect(negativeGrowth.currentFollowers).toBe(9880);
+      expect(negativeGrowth.followersGained).toBe(-120);
+    });
+
+    it('rejects negative followersCount, startingFollowers, or currentFollowers', () => {
       expect(FacebookPageSchema.safeParse({ ...validPage, followersCount: -1 }).success).toBe(false);
+      expect(FacebookPageSchema.safeParse({ ...validPage, startingFollowers: -1 }).success).toBe(false);
+      expect(FacebookPageSchema.safeParse({ ...validPage, currentFollowers: -1 }).success).toBe(false);
     });
 
     it('rejects invalid foreign key UUIDs or empty fields', () => {

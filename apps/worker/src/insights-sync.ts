@@ -243,10 +243,10 @@ export async function syncDailyPageInsights(
         );
       }
 
-      // 7. Update followers_count in facebook_pages table
+      // 7. Update current_followers in facebook_pages table (preserving starting_followers baseline)
       await db.query(
         `UPDATE facebook_pages
-         SET followers_count = $1, updated_at = now()
+         SET current_followers = $1, updated_at = now()
          WHERE id = $2`,
         [followersCount, page.id]
       );
