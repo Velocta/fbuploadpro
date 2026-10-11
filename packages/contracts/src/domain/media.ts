@@ -89,6 +89,8 @@ export const MediaListQuerySchema = z.object({
   folderId: z.string().uuid().or(z.literal('unorganized')).optional(),
   mediaType: z.enum(['video', 'image']).optional(),
   search: z.string().optional(),
+  sortBy: z.enum(['created_at', 'name', 'file_size']).default('created_at'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -118,3 +120,30 @@ export const DeleteMediaItemResponseSchema = z.object({
 });
 
 export type DeleteMediaItemResponse = z.infer<typeof DeleteMediaItemResponseSchema>;
+
+export const BatchMediaRequestSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('move'),
+    mediaIds: z.array(z.string().uuid()).min(1).max(500),
+    folderId: z.string().uuid().nullable(),
+  }),
+  z.object({
+    action: z.literal('delete'),
+    mediaIds: z.array(z.string().uuid()).min(1).max(500),
+  }),
+  z.object({
+    action: z.literal('caption'),
+    mediaIds: z.array(z.string().uuid()).min(1).max(500),
+    captionText: z.string().max(2200).nullable(),
+  }),
+]);
+
+export type BatchMediaRequest = z.infer<typeof BatchMediaRequestSchema>;
+
+export const BatchMediaResponseSchema = z.object({
+  success: z.literal(true),
+  action: z.enum(['move', 'delete', 'caption']),
+  affectedCount: z.number().int().min(0),
+});
+
+export type BatchMediaResponse = z.infer<typeof BatchMediaResponseSchema>;

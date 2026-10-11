@@ -43,9 +43,11 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const [isFacebookOpen, setIsFacebookOpen] = useState(true);
 
   const homeHref = `/tenant/${subdomain}`;
+  const mediaHref = `/tenant/${subdomain}/media`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
 
   const isHomeActive = pathname === homeHref;
+  const isMediaActive = pathname ? pathname.startsWith(mediaHref) : false;
   const isAccountsActive = pathname ? pathname.startsWith(accountsHref) : false;
 
   const handleNavigate = (href: string) => {
@@ -127,7 +129,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
 
       {/* Primary Navigation Content */}
       <SidebarContent>
-        {/* Top Home Navigation Group */}
+        {/* Top Primary Navigation Group (Home & Media Library) */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -156,11 +158,37 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   Home
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isMediaActive}
+                  tooltip="Media Library"
+                  onClick={() => handleNavigate(mediaHref)}
+                  leftIcon={
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                      <polygon points="10 11 16 14 10 17 10 11" />
+                    </svg>
+                  }
+                >
+                  Media Library
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Separator Line Between Home & Platform */}
+        {/* Separator Line Between Primary Navigation & Platform */}
         <SidebarSeparator />
 
         {/* Collapsible Facebook -> Accounts Hierarchy (Shadcn NavMain Pattern) */}

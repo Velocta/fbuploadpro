@@ -39,14 +39,17 @@ export async function handleListFolders(
     `SELECT 
        f.id,
        f.user_id,
+       f.parent_id,
        f.name,
-       COUNT(m.id)::int AS item_count,
+       COALESCE(COUNT(DISTINCT m.id), 0)::int AS item_count,
+       COALESCE(COUNT(DISTINCT sf.id), 0)::int AS subfolder_count,
        f.created_at,
        f.updated_at
      FROM media_folders f
      LEFT JOIN media_items m ON m.folder_id = f.id AND m.user_id = f.user_id
+     LEFT JOIN media_folders sf ON sf.parent_id = f.id AND sf.user_id = f.user_id
      WHERE f.user_id = $1
-     GROUP BY f.id, f.user_id, f.name, f.created_at, f.updated_at
+     GROUP BY f.id, f.user_id, f.parent_id, f.name, f.created_at, f.updated_at
      ORDER BY f.name ASC`,
     [session.userId]
   )) as any[];
@@ -63,8 +66,10 @@ export async function handleListFolders(
   const folders = folderRows.map((row) => ({
     id: row.id,
     userId: row.user_id,
+    parentId: row.parent_id ?? null,
     name: row.name,
     itemCount: Number(row.item_count ?? 0),
+    subfolderCount: Number(row.subfolder_count ?? 0),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }));
@@ -121,21 +126,41 @@ export async function handleCreateFolder(
   }
 
   const db = dbClient ?? getDbClient();
+  const parentId = parsed.data.parentId ?? null;
 
   try {
+    if (parentId !== null) {
+      const parentRows = (await db.query(
+        `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
+        [parentId, session.userId]
+      )) as any[];
+
+      if (!parentRows || parentRows.length === 0) {
+        return NextResponse.json(
+          {
+            error: 'PARENT_FOLDER_NOT_FOUND',
+            message: 'Parent folder not found',
+          },
+          { status: 404 }
+        );
+      }
+    }
+
     const rows = (await db.query(
-      `INSERT INTO media_folders (user_id, name, created_at, updated_at)
-       VALUES ($1, $2, now(), now())
-       RETURNING id, user_id, name, created_at, updated_at`,
-      [session.userId, parsed.data.name]
+      `INSERT INTO media_folders (user_id, parent_id, name, created_at, updated_at)
+       VALUES ($1, $2, $3, now(), now())
+       RETURNING id, user_id, parent_id, name, created_at, updated_at`,
+      [session.userId, parentId, parsed.data.name]
     )) as any[];
 
     const row = rows[0];
     const responsePayload = FolderResponseSchema.parse({
       id: row.id,
       userId: row.user_id,
+      parentId: row.parent_id ?? parentId,
       name: row.name,
       itemCount: 0,
+      subfolderCount: 0,
       createdAt: new Date(row.created_at).toISOString(),
       updatedAt: new Date(row.updated_at).toISOString(),
     });
@@ -146,7 +171,7 @@ export async function handleCreateFolder(
       return NextResponse.json(
         {
           error: 'FOLDER_NAME_ALREADY_EXISTS',
-          message: 'A folder with this name already exists in your workspace',
+          message: 'A folder with this name already exists in this location',
         },
         { status: 409 }
       );
