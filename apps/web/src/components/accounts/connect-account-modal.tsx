@@ -12,25 +12,29 @@ import {
 } from '@/components/ui/dialog';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
-interface AccountStateRecord {
+export interface AccountStateRecord {
   status?: string | undefined;
   updatedAt?: string | undefined;
 }
 
-interface AccountSnapshot {
+export interface AccountSnapshot {
   id: string;
+  fbAccountId?: string | undefined;
+  displayName?: string | undefined;
   status?: string | undefined;
   updatedAt?: string | undefined;
 }
 
-interface ConnectAccountModalProps {
+export interface ConnectAccountModalProps {
   subdomain: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAccountConnected: () => void;
+  onConnectionNotice?: (notice: { type: 'success' | 'error'; message: string }) => void;
   existingAccountIds?: string[];
   reconnectingAccount?: {
     id: string;
+    fbAccountId?: string | undefined;
     displayName: string;
     status?: string | undefined;
     updatedAt?: string | undefined;
@@ -38,10 +42,107 @@ interface ConnectAccountModalProps {
   initialAccounts?: AccountSnapshot[];
 }
 
+export type PollOutcome =
+  | { matched: false }
+  | { matched: true; kind: 'connected'; accountName?: string | undefined }
+  | { matched: true; kind: 'already_connected'; accountName: string }
+  | {
+      matched: true;
+      kind: 'reconnected_mismatch';
+      newAccountName: string;
+      expectedAccountName: string;
+    };
+
 function formatTimer(totalSeconds: number): string {
   const mins = Math.floor(totalSeconds / 60);
   const secs = totalSeconds % 60;
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+function isAccountUpdatedInSnapshot(
+  acc: AccountSnapshot,
+  initialIds: Set<string>,
+  initialStates: Map<string, AccountStateRecord>
+): boolean {
+  if (!initialIds.has(acc.id)) {
+    return true;
+  }
+  const prevState = initialStates.get(acc.id);
+  if (!prevState) {
+    return false;
+  }
+  if (prevState.status === 'expired' && acc.status === 'active') {
+    return true;
+  }
+  return Boolean(acc.updatedAt && prevState.updatedAt && acc.updatedAt !== prevState.updatedAt);
+}
+
+function isTargetReconnected(
+  acc: AccountSnapshot,
+  reconnectingAccount: NonNullable<ConnectAccountModalProps['reconnectingAccount']>,
+  initialStates: Map<string, AccountStateRecord>
+): boolean {
+  const isMatchingId =
+    acc.id === reconnectingAccount.id ||
+    Boolean(reconnectingAccount.fbAccountId && acc.fbAccountId === reconnectingAccount.fbAccountId);
+  if (!isMatchingId) {
+    return false;
+  }
+  const prevState = initialStates.get(acc.id);
+  const prevStatus = prevState?.status ?? reconnectingAccount.status ?? 'expired';
+  if (prevStatus === 'expired' && acc.status === 'active') {
+    return true;
+  }
+  const prevUpdatedAt = prevState?.updatedAt ?? reconnectingAccount.updatedAt;
+  return Boolean(acc.updatedAt && prevUpdatedAt && acc.updatedAt !== prevUpdatedAt);
+}
+
+export function evaluateAccountConnectionPoll(
+  accounts: AccountSnapshot[],
+  initialIds: Set<string>,
+  initialStates: Map<string, AccountStateRecord>,
+  reconnectingAccount?: ConnectAccountModalProps['reconnectingAccount']
+): PollOutcome {
+  if (reconnectingAccount) {
+    const targetAcc = accounts.find((acc) =>
+      isTargetReconnected(acc, reconnectingAccount, initialStates)
+    );
+    if (targetAcc) {
+      return { matched: true, kind: 'connected', accountName: targetAcc.displayName };
+    }
+    const differentAcc = accounts.find(
+      (acc) =>
+        acc.id !== reconnectingAccount.id &&
+        isAccountUpdatedInSnapshot(acc, initialIds, initialStates)
+    );
+    if (differentAcc) {
+      return {
+        matched: true,
+        kind: 'reconnected_mismatch',
+        newAccountName: differentAcc.displayName || 'another account',
+        expectedAccountName: reconnectingAccount.displayName,
+      };
+    }
+    return { matched: false };
+  }
+
+  const newAcc = accounts.find((acc) => !initialIds.has(acc.id));
+  if (newAcc) {
+    return { matched: true, kind: 'connected', accountName: newAcc.displayName };
+  }
+
+  const refreshedAcc = accounts.find((acc) =>
+    isAccountUpdatedInSnapshot(acc, initialIds, initialStates)
+  );
+  if (refreshedAcc) {
+    return {
+      matched: true,
+      kind: 'already_connected',
+      accountName: refreshedAcc.displayName || 'Account',
+    };
+  }
+
+  return { matched: false };
 }
 
 export function hasCompletedAccountConnection(
@@ -50,21 +151,22 @@ export function hasCompletedAccountConnection(
   initialStates: Map<string, AccountStateRecord>,
   reconnectingAccount?: ConnectAccountModalProps['reconnectingAccount']
 ): boolean {
-  return accounts.some((acc) => {
-    if (!initialIds.has(acc.id)) {
-      return true;
-    }
-    if (acc.id === reconnectingAccount?.id) {
-      if (acc.status === 'active') return true;
-      if (acc.updatedAt && acc.updatedAt !== reconnectingAccount.updatedAt) return true;
-    }
-    const prevState = initialStates.get(acc.id);
-    if (!prevState) return false;
-    if (prevState.status === 'expired' && acc.status === 'active') {
-      return true;
-    }
-    return Boolean(acc.updatedAt && prevState.updatedAt && acc.updatedAt !== prevState.updatedAt);
-  });
+  return evaluateAccountConnectionPoll(accounts, initialIds, initialStates, reconnectingAccount)
+    .matched;
+}
+
+export function buildDirectConnectUrl(
+  reconnectingAccount?: ConnectAccountModalProps['reconnectingAccount']
+): string {
+  if (!reconnectingAccount) {
+    return '/api/auth/facebook';
+  }
+  const params = new URLSearchParams();
+  if (reconnectingAccount.fbAccountId) {
+    params.set('expectedFbAccountId', reconnectingAccount.fbAccountId);
+  }
+  params.set('expectedDisplayName', reconnectingAccount.displayName);
+  return `/api/auth/facebook?${params.toString()}`;
 }
 
 interface ConnectOptionButtonProps {
@@ -276,6 +378,68 @@ export function MagicLinkView({
   );
 }
 
+interface ConnectionResultViewProps {
+  completionNotice: {
+    kind: 'connected' | 'already_connected' | 'reconnected_mismatch';
+    message: string;
+  } | null;
+}
+
+export function ConnectionResultView({
+  completionNotice,
+}: Readonly<ConnectionResultViewProps>) {
+  const isMismatch = completionNotice?.kind === 'reconnected_mismatch';
+  const heading = isMismatch ? 'Different account connected' : 'Account connected';
+  const subtext =
+    completionNotice?.message ?? 'your facebook account is successfully connected';
+
+  return (
+    <div
+      data-testid="magic-success-animation"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px 0',
+        textAlign: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: RADII.full,
+          backgroundColor: isMismatch
+            ? 'rgba(246, 70, 93, 0.15)'
+            : 'rgba(46, 189, 133, 0.15)',
+          border: `1px solid ${
+            isMismatch ? 'rgba(246, 70, 93, 0.35)' : 'rgba(46, 189, 133, 0.35)'
+          }`,
+          color: isMismatch ? PALETTE.accent3 : PALETTE.accent4,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: SPACING.sm,
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+      <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '1rem', color: `var(--text-main, ${THEME.default.text.primary})` }}>
+        {heading}
+      </div>
+      <div
+        data-testid={isMismatch ? 'magic-mismatch-notice' : 'magic-success-message'}
+        style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, marginTop: '4px' }}
+      >
+        {subtext}
+      </div>
+    </div>
+  );
+}
+
 const EMPTY_IDS: string[] = [];
 const EMPTY_ACCOUNTS: AccountSnapshot[] = [];
 
@@ -284,6 +448,7 @@ export function ConnectAccountModal({
   open,
   onOpenChange,
   onAccountConnected,
+  onConnectionNotice,
   existingAccountIds = EMPTY_IDS,
   reconnectingAccount = null,
   initialAccounts = EMPTY_ACCOUNTS,
@@ -295,6 +460,10 @@ export function ConnectAccountModal({
   const [copySuccess, setCopySuccess] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(900); // 15 minutes
   const [magicError, setMagicError] = useState<string | null>(null);
+  const [completionNotice, setCompletionNotice] = useState<{
+    kind: 'connected' | 'already_connected' | 'reconnected_mismatch';
+    message: string;
+  } | null>(null);
 
   const wasOpenRef = useRef(false);
   const initialAccountIdsRef = useRef<Set<string>>(new Set(existingAccountIds));
@@ -311,6 +480,7 @@ export function ConnectAccountModal({
       setCopySuccess(false);
       setRemainingSeconds(900);
       setMagicError(null);
+      setCompletionNotice(null);
 
       const ids = new Set<string>(existingAccountIds);
       const stateMap = new Map<string, AccountStateRecord>();
@@ -334,7 +504,7 @@ export function ConnectAccountModal({
   // Handle Direct Connection redirect
   const handleDirectConnect = () => {
     setIsDirectConnecting(true);
-    window.location.href = '/api/auth/facebook';
+    window.location.href = buildDirectConnectUrl(reconnectingAccount);
   };
 
   // Generate Magic Link
@@ -342,9 +512,17 @@ export function ConnectAccountModal({
     setIsGeneratingMagic(true);
     setMagicError(null);
     try {
-      const res = await fetch(`/api/tenant/${subdomain}/accounts/magic-link`, {
-        method: 'POST',
-      });
+      const requestInit: RequestInit = reconnectingAccount
+        ? {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              expectedFbAccountId: reconnectingAccount.fbAccountId,
+              expectedDisplayName: reconnectingAccount.displayName,
+            }),
+          }
+        : { method: 'POST' };
+      const res = await fetch(`/api/tenant/${subdomain}/accounts/magic-link`, requestInit);
       if (!res.ok) {
         throw new Error('Failed to generate connection link');
       }
@@ -399,14 +577,26 @@ export function ConnectAccountModal({
       const data = await res.json();
       const accounts: AccountSnapshot[] = data.accounts || [];
 
-      if (
-        hasCompletedAccountConnection(
-          accounts,
-          initialAccountIdsRef.current,
-          initialAccountStatesRef.current,
-          reconnectingAccount
-        )
-      ) {
+      const outcome = evaluateAccountConnectionPoll(
+        accounts,
+        initialAccountIdsRef.current,
+        initialAccountStatesRef.current,
+        reconnectingAccount
+      );
+
+      if (outcome.matched) {
+        if (outcome.kind === 'reconnected_mismatch') {
+          const message = `You signed into ${outcome.newAccountName} instead of ${outcome.expectedAccountName}. ${outcome.expectedAccountName} still needs to be reconnected.`;
+          setCompletionNotice({ kind: 'reconnected_mismatch', message });
+          onConnectionNotice?.({ type: 'error', message });
+        } else if (outcome.kind === 'already_connected') {
+          const message = `This Facebook account (${outcome.accountName}) is already connected — its session was refreshed.`;
+          setCompletionNotice({ kind: 'already_connected', message });
+          onConnectionNotice?.({ type: 'success', message });
+        } else {
+          setCompletionNotice(null);
+        }
+
         setView('success');
         onAccountConnected();
         setTimeout(() => {
@@ -416,7 +606,7 @@ export function ConnectAccountModal({
     } catch (_e) {
       // Ignored because polling failures are silently retried on the next cycle
     }
-  }, [subdomain, onAccountConnected, onOpenChange, reconnectingAccount]);
+  }, [subdomain, onAccountConnected, onConnectionNotice, onOpenChange, reconnectingAccount]);
 
   // Pure automatic polling every 3 seconds while in magic view and link is not expired
   useEffect(() => {
@@ -513,42 +703,7 @@ export function ConnectAccountModal({
           )}
 
           {view === 'success' && (
-            <div
-              data-testid="magic-success-animation"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '24px 0',
-                textAlign: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: RADII.full,
-                  backgroundColor: 'rgba(46, 189, 133, 0.15)',
-                  border: '1px solid rgba(46, 189, 133, 0.35)',
-                  color: PALETTE.accent4,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: SPACING.sm,
-                }}
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-              <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '1rem', color: `var(--text-main, ${THEME.default.text.primary})` }}>
-                Account connected
-              </div>
-              <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, marginTop: '4px' }}>
-                your facebook account is successfully connected
-              </div>
-            </div>
+            <ConnectionResultView completionNotice={completionNotice} />
           )}
         </DialogBody>
 

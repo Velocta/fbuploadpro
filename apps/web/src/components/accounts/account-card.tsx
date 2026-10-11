@@ -3,32 +3,145 @@
 import React from 'react';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
+export interface FacebookAccountLinkedPageItem {
+  id: string;
+  pageName: string;
+  profilePictureUrl?: string | null | undefined;
+}
+
 export interface FacebookAccountItem {
   id: string;
   fbAccountId: string;
   displayName: string;
-  profilePictureUrl?: string | null;
-  gender?: string | null;
-  accountLink?: string | null;
+  profilePictureUrl?: string | null | undefined;
+  gender?: string | null | undefined;
+  accountLink?: string | null | undefined;
   status: 'active' | 'disconnected' | 'expired';
-  tokenExpiresAt?: string | null;
+  tokenExpiresAt?: string | null | undefined;
   connectedPagesCount: number;
+  connectedPages?: FacebookAccountLinkedPageItem[] | undefined;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt?: string | undefined;
 }
 
 interface AccountCardProps {
   account: FacebookAccountItem;
   onReconnect?: (account: FacebookAccountItem) => void;
   onDisconnect?: (account: FacebookAccountItem) => void;
+  defaultPagesExpanded?: boolean;
+  forceAvatarError?: boolean;
+}
+
+export function getInitials(name: string, fallback = 'FB'): string {
+  return (name || fallback)
+    .split(' ')
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
+
+function LinkedPageRow({ page }: Readonly<{ page: FacebookAccountLinkedPageItem }>) {
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+  const showImg = Boolean(page.profilePictureUrl) && failedUrl !== page.profilePictureUrl;
+  const pageInitials = getInitials(page.pageName, 'PG');
+
+  return (
+    <div
+      data-testid={`account-linked-page-${page.id}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACING.sm,
+        padding: '4px 0',
+        fontSize: '0.8125rem',
+        color: `var(--text-main, ${THEME.default.text.primary})`,
+      }}
+    >
+      {showImg ? (
+        <img
+          src={page.profilePictureUrl!}
+          alt={page.pageName}
+          onError={() => setFailedUrl(page.profilePictureUrl ?? '__error__')}
+          style={{
+            width: '22px',
+            height: '22px',
+            borderRadius: RADII.full,
+            objectFit: 'cover',
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            flexShrink: 0,
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            width: '22px',
+            height: '22px',
+            borderRadius: RADII.full,
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.625rem',
+            fontWeight: TYPOGRAPHY.weights.bold,
+            flexShrink: 0,
+          }}
+        >
+          {pageInitials}
+        </div>
+      )}
+      <span
+        style={{
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {page.pageName}
+      </span>
+    </div>
+  );
+}
+
+export function AccountLinkedPagesList({
+  pages,
+}: Readonly<{ pages: FacebookAccountLinkedPageItem[] }>) {
+  return (
+    <div
+      data-testid="account-linked-pages-list"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+        padding: `${SPACING.xs} ${SPACING.sm}`,
+        marginBottom: SPACING.md,
+        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderRadius: RADII.sm,
+      }}
+    >
+      {pages.map((page) => (
+        <LinkedPageRow key={page.id} page={page} />
+      ))}
+    </div>
+  );
 }
 
 export function AccountCard({
   account,
   onReconnect,
   onDisconnect,
+  defaultPagesExpanded = false,
+  forceAvatarError = false,
 }: Readonly<AccountCardProps>) {
   const isExpired = account.status === 'expired';
+  const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(
+    forceAvatarError ? (account.profilePictureUrl ?? '__forced__') : null
+  );
+  const [isPagesExpanded, setIsPagesExpanded] = React.useState(defaultPagesExpanded);
 
   // Format connection date
   const formattedDate = React.useMemo(() => {
@@ -45,17 +158,21 @@ export function AccountCard({
     }
   }, [account.createdAt]);
 
-  const initials = (account.displayName || 'FB')
-    .split(' ')
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = getInitials(account.displayName, 'FB');
 
   const formattedGender = account.gender
     ? account.gender.charAt(0).toUpperCase() + account.gender.slice(1)
     : null;
+
+  const showAvatarImg =
+    Boolean(account.profilePictureUrl) &&
+    !forceAvatarError &&
+    failedAvatarUrl !== account.profilePictureUrl;
+
+  const linkedPages = account.connectedPages ?? [];
+  const pagesCountLabel = `${account.connectedPagesCount} ${
+    account.connectedPagesCount === 1 ? 'page linked' : 'pages linked'
+  }`;
 
   return (
     <div
@@ -81,11 +198,12 @@ export function AccountCard({
         }}
       >
         {/* Avatar */}
-        {account.profilePictureUrl ? (
+        {showAvatarImg ? (
           <img
-            src={account.profilePictureUrl}
+            src={account.profilePictureUrl!}
             alt={account.displayName}
             data-testid="account-avatar-img"
+            onError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
             style={{
               width: '48px',
               height: '48px',
@@ -203,10 +321,47 @@ export function AccountCard({
           marginBottom: SPACING.md,
         }}
       >
-        <span data-testid="account-pages-count">
-          {account.connectedPagesCount}{' '}
-          {account.connectedPagesCount === 1 ? 'page linked' : 'pages linked'}
-        </span>
+        {account.connectedPagesCount > 0 ? (
+          <button
+            type="button"
+            data-testid="account-pages-toggle"
+            aria-expanded={isPagesExpanded}
+            onClick={() => setIsPagesExpanded((prev) => !prev)}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: SPACING.xs,
+              padding: 0,
+              background: 'none',
+              border: 'none',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              fontSize: '0.8125rem',
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            <span data-testid="account-pages-count">{pagesCountLabel}</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{
+                transform: isPagesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.15s ease',
+              }}
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+        ) : (
+          <span data-testid="account-pages-count">{pagesCountLabel}</span>
+        )}
 
         {formattedGender && (
           <>
@@ -215,6 +370,11 @@ export function AccountCard({
           </>
         )}
       </div>
+
+      {/* Expandable Linked Pages List */}
+      {isPagesExpanded && linkedPages.length > 0 && (
+        <AccountLinkedPagesList pages={linkedPages} />
+      )}
 
       {/* Re-authentication Warning (Strictly when expired) */}
       {isExpired && (

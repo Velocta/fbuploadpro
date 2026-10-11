@@ -129,9 +129,12 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
 
     let savedEncryptedToken = '';
     const mockDb = {
-      query: vi.fn().mockImplementation((sql, params) => {
-        savedEncryptedToken = params[3];
-        return Promise.resolve([{ id: 'acc_123' }]);
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        if (typeof sql === 'string' && sql.includes('INSERT INTO facebook_accounts')) {
+          savedEncryptedToken = params[3] as string;
+          return Promise.resolve([{ id: 'acc_123' }]);
+        }
+        return Promise.resolve([]);
       }),
     } as unknown as DatabaseClient;
 
@@ -259,4 +262,142 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     expect(body.accounts[1].displayName).toBe('Active Newer Account');
     expect(body.accounts[1].status).toBe('active');
   });
+
+  it('redirects remote Magic Link cancellation (isMagic: true, error=access_denied) to /connect/facebook/error?reason=cancelled (Spec 031)', async () => {
+    const magicState = await signOAuthState(
+      {
+        tenantSubdomain: 'acme',
+        userId,
+        nonce: 'magic_cancel_nonce_12345',
+        isMagic: true,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 600,
+      },
+      TEST_SECRET
+    );
+
+    const mockDb = { query: vi.fn() } as unknown as DatabaseClient;
+    const req = new NextRequest(
+      `http://localhost:3000/api/auth/facebook/callback?error=access_denied&error_description=Permissions+error&state=${magicState}`
+    );
+
+    const res = await handleFacebookCallback(req, mockDb);
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location')!;
+    expect(location).toBe('http://localhost:3000/connect/facebook/error?reason=cancelled');
+    expect(location).not.toContain('/accounts');
+  });
+
+  it('redirects remote Magic Link token exchange or /me failure (isMagic: true) to /connect/facebook/error?reason=oauth_failed (Spec 031)', async () => {
+    const magicState = await signOAuthState(
+      {
+        tenantSubdomain: 'acme',
+        userId,
+        nonce: 'magic_fail_nonce_12345',
+        isMagic: true,
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 600,
+      },
+      TEST_SECRET
+    );
+
+    // 1. Short-lived token exchange fails
+    global.fetch = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'Invalid verification code' } }), {
+        status: 400,
+      })
+    );
+
+    const mockDb = { query: vi.fn() } as unknown as DatabaseClient;
+    const req1 = new NextRequest(
+      `http://localhost:3000/api/auth/facebook/callback?code=bad_code&state=${magicState}`
+    );
+
+    const res1 = await handleFacebookCallback(req1, mockDb);
+    expect(res1.status).toBe(307);
+    expect(res1.headers.get('location')).toBe(
+      'http://localhost:3000/connect/facebook/error?reason=oauth_failed'
+    );
+
+    // 2. /me profile fetch fails
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'short_tok', token_type: 'bearer' }), {
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: 'long_tok', token_type: 'bearer' }), {
+          status: 200,
+        })
+      )
+      .mockResolvedValueOnce(new Response('Graph API error', { status: 500 }));
+
+    const req2 = new NextRequest(
+      `http://localhost:3000/api/auth/facebook/callback?code=good_code&state=${magicState}`
+    );
+    const res2 = await handleFacebookCallback(req2, mockDb);
+    expect(res2.status).toBe(307);
+    expect(res2.headers.get('location')).toBe(
+      'http://localhost:3000/connect/facebook/error?reason=oauth_failed'
+    );
+  });
+
+  it('maps connected_pages onto connectedPages array in handleListAccounts (Spec 031)', async () => {
+    const page1Id = '22222222-3333-4444-8555-666666666601';
+    const page2Id = '22222222-3333-4444-8555-666666666602';
+    const mockDb = {
+      query: vi.fn().mockResolvedValue([
+        {
+          id: '11111111-2222-4333-8444-555555555501',
+          fb_account_id: 'fb_with_pages',
+          display_name: 'Account With Linked Pages',
+          profile_picture_url: null,
+          gender: 'female',
+          account_link: null,
+          status: 'active',
+          token_expires_at: new Date(Date.now() + 86400 * 1000).toISOString(),
+          connected_pages_count: 2,
+          connected_pages: [
+            {
+              id: page1Id,
+              pageName: 'Alpha Brand Page',
+              profilePictureUrl: 'https://graph.facebook.com/v26.0/p1/picture',
+            },
+            {
+              id: page2Id,
+              pageName: 'Beta Creator Page',
+              profilePictureUrl: null,
+            },
+          ],
+          created_at: new Date('2026-10-10T12:00:00Z'),
+          updated_at: new Date('2026-10-10T12:00:00Z'),
+        },
+      ]),
+    } as unknown as DatabaseClient;
+
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/accounts', {
+      headers: { cookie: validSessionCookie },
+    });
+
+    const res = await handleListAccounts(req, 'acme', mockDb);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.accounts).toHaveLength(1);
+    expect(body.accounts[0].connectedPagesCount).toBe(2);
+    expect(body.accounts[0].connectedPages).toEqual([
+      {
+        id: page1Id,
+        pageName: 'Alpha Brand Page',
+        profilePictureUrl: 'https://graph.facebook.com/v26.0/p1/picture',
+      },
+      {
+        id: page2Id,
+        pageName: 'Beta Creator Page',
+        profilePictureUrl: null,
+      },
+    ]);
+  });
 });
+

@@ -41,6 +41,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       iat: now,
       exp: now + 600, // 10 minutes
       isMagic: true,
+      ...(payload.expectedFbAccountId
+        ? { expectedFbAccountId: payload.expectedFbAccountId }
+        : {}),
+      ...(payload.expectedDisplayName
+        ? { expectedDisplayName: payload.expectedDisplayName }
+        : {}),
     },
     sessionSecret
   );

@@ -1,6 +1,6 @@
 /**
  * @file accounts.test.tsx
- * @description Unit tests for Facebook Accounts UI components (Spec 027 & Spec 029).
+ * @description Unit tests for Facebook Accounts UI components (Spec 027, Spec 029 & Spec 031).
  */
 
 import React from 'react';
@@ -10,17 +10,24 @@ import { AccountsEmptyState } from '@/components/accounts/accounts-empty-state';
 import { DisconnectAccountDialog } from '@/components/accounts/disconnect-account-dialog';
 import {
   ConnectAccountModal,
+  ConnectionResultView,
   MagicLinkView,
+  evaluateAccountConnectionPoll,
   hasCompletedAccountConnection,
 } from '@/components/accounts/connect-account-modal';
 import {
   AccountsFilterBar,
   filterAccountsList,
+  resolveOAuthRedirectNotice,
   sortAccountsExpiredFirst,
 } from '@/app/tenant/[subdomain]/accounts/page';
+import {
+  ConnectErrorView,
+  getConnectErrorCopy,
+} from '@/app/connect/facebook/error/page';
 import { render } from '../components/setup';
 
-describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
+describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () => {
   const mockActiveAccount: FacebookAccountItem = {
     id: 'acc-123',
     fbAccountId: 'fb-user-123',
@@ -30,6 +37,11 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
     accountLink: 'https://facebook.com/sarahconnor',
     status: 'active',
     connectedPagesCount: 3,
+    connectedPages: [
+      { id: 'page-1', pageName: 'Cyberdyne Reels', profilePictureUrl: 'https://graph.facebook.com/v26.0/p1/picture' },
+      { id: 'page-2', pageName: 'Tech Resistance Daily', profilePictureUrl: null },
+      { id: 'page-3', pageName: 'Future Chronicles', profilePictureUrl: null },
+    ],
     createdAt: '2026-10-01T12:00:00Z',
   };
 
@@ -38,6 +50,7 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
     id: 'acc-zero',
     displayName: 'Zero Pages Profile',
     connectedPagesCount: 0,
+    connectedPages: [],
   };
 
   const mockExpiredAccount: FacebookAccountItem = {
@@ -88,6 +101,33 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
       expect(hasAttribute('data-testid', 'account-disconnect-button')).toBe(true);
     });
 
+    it('falls back to monogram initials avatar when forceAvatarError is true (Spec 031)', () => {
+      const { hasAttribute, hasText } = render(
+        <AccountCard account={mockActiveAccount} forceAvatarError={true} />
+      );
+
+      expect(hasAttribute('data-testid', 'account-avatar-initials')).toBe(true);
+      expect(hasAttribute('data-testid', 'account-avatar-img')).toBe(false);
+      expect(hasText('SC')).toBe(true);
+    });
+
+    it('renders expandable pages toggle when connectedPagesCount > 0 and displays linked page names when expanded (Spec 031)', () => {
+      const collapsed = render(
+        <AccountCard account={mockActiveAccount} defaultPagesExpanded={false} />
+      );
+      expect(collapsed.hasAttribute('data-testid', 'account-pages-toggle')).toBe(true);
+      expect(collapsed.hasAttribute('data-testid', 'account-linked-pages-list')).toBe(false);
+
+      const expanded = render(
+        <AccountCard account={mockActiveAccount} defaultPagesExpanded={true} />
+      );
+      expect(expanded.hasAttribute('data-testid', 'account-pages-toggle')).toBe(true);
+      expect(expanded.hasAttribute('data-testid', 'account-linked-pages-list')).toBe(true);
+      expect(expanded.hasText('Cyberdyne Reels')).toBe(true);
+      expect(expanded.hasText('Tech Resistance Daily')).toBe(true);
+      expect(expanded.hasText('Future Chronicles')).toBe(true);
+    });
+
     it('triggers onDisconnect callback when Disconnect button is clicked', () => {
       const onDisconnect = vi.fn();
       const onReconnect = vi.fn();
@@ -120,7 +160,7 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
   });
 
   describe('DisconnectAccountDialog', () => {
-    it('renders destructive linked pages warning when connectedPagesCount > 0', () => {
+    it('renders destructive linked pages warning and linked page names list when connectedPagesCount > 0 (Spec 031)', () => {
       const onConfirm = vi.fn();
       const onOpenChange = vi.fn();
 
@@ -136,8 +176,12 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
       expect(hasText('Disconnect Sarah Connor?')).toBe(true);
       expect(hasText('This Account will no longer be available')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-linked-pages-warning')).toBe(true);
+      expect(hasAttribute('data-testid', 'disconnect-linked-pages-list')).toBe(true);
       expect(hasText('3 linked Facebook pages')).toBe(true);
       expect(hasText('Before you disconnect')).toBe(true);
+      expect(hasText('Cyberdyne Reels')).toBe(true);
+      expect(hasText('Tech Resistance Daily')).toBe(true);
+      expect(hasText('Future Chronicles')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-cancel-btn')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-confirm-btn')).toBe(true);
     });
@@ -167,7 +211,38 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
     });
   });
 
-  describe('ConnectAccountModal & MagicLinkView', () => {
+  describe('ConnectErrorView & getConnectErrorCopy (Spec 031)', () => {
+    it('renders context-aware title and description for cancelled, oauth_failed, and default expired reasons', () => {
+      expect(getConnectErrorCopy('cancelled')).toEqual({
+        title: 'Connection Canceled',
+        description: 'Connection canceled. No changes were made. You can close this tab.',
+      });
+      expect(getConnectErrorCopy('oauth_failed')).toEqual({
+        title: "Couldn't Connect to Facebook",
+        description: "Couldn't connect to Facebook. Check your permissions and try again.",
+      });
+      expect(getConnectErrorCopy(undefined).title).toBe('Connection Link Expired or Invalid');
+
+      const cancelledRender = render(<ConnectErrorView reason="cancelled" />);
+      expect(cancelledRender.hasText('Connection Canceled')).toBe(true);
+      expect(
+        cancelledRender.hasText(
+          'Connection canceled. No changes were made. You can close this tab.'
+        )
+      ).toBe(true);
+
+      const failedRender = render(<ConnectErrorView reason="oauth_failed" />);
+      expect(failedRender.hasText('Connect to Facebook')).toBe(true);
+      expect(
+        failedRender.hasText('Check your permissions and try again.')
+      ).toBe(true);
+
+      const expiredRender = render(<ConnectErrorView />);
+      expect(expiredRender.hasText('Connection Link Expired or Invalid')).toBe(true);
+    });
+  });
+
+  describe('ConnectAccountModal, MagicLinkView & Poll Mismatch/Already-Connected Detection', () => {
     it('renders connection modal with Direct Connection and Magic Link choices', () => {
       const onOpenChange = vi.fn();
       const onAccountConnected = vi.fn();
@@ -283,6 +358,119 @@ describe('Facebook Accounts UI Components (Spec 027 & Spec 029)', () => {
           { id: 'acc-456', displayName: 'John Doe', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }
         )
       ).toBe(true);
+    });
+
+    it('detects wrong-account mismatch and already-connected refresh across polling, ConnectionResultView, and resolveOAuthRedirectNotice (Spec 031)', () => {
+      const initialIds = new Set(['acc-john']);
+      const initialStates = new Map([
+        ['acc-john', { status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }],
+      ]);
+
+      // 1. Reconnecting John Doe, but Jane Smith is added instead
+      const mismatchOutcome = evaluateAccountConnectionPoll(
+        [
+          {
+            id: 'acc-john',
+            fbAccountId: 'fb-john',
+            displayName: 'John Doe',
+            status: 'expired',
+            updatedAt: '2026-09-15T10:00:00Z',
+          },
+          {
+            id: 'acc-jane',
+            fbAccountId: 'fb-jane',
+            displayName: 'Jane Smith',
+            status: 'active',
+            updatedAt: '2026-10-11T08:00:00Z',
+          },
+        ],
+        initialIds,
+        initialStates,
+        {
+          id: 'acc-john',
+          fbAccountId: 'fb-john',
+          displayName: 'John Doe',
+          status: 'expired',
+          updatedAt: '2026-09-15T10:00:00Z',
+        }
+      );
+
+      expect(mismatchOutcome).toEqual({
+        matched: true,
+        kind: 'reconnected_mismatch',
+        newAccountName: 'Jane Smith',
+        expectedAccountName: 'John Doe',
+      });
+
+      const mismatchMessage =
+        'You signed into Jane Smith instead of John Doe. John Doe still needs to be reconnected.';
+      const mismatchView = render(
+        <ConnectionResultView
+          completionNotice={{
+            kind: 'reconnected_mismatch',
+            message: mismatchMessage,
+          }}
+        />
+      );
+      expect(mismatchView.hasAttribute('data-testid', 'magic-mismatch-notice')).toBe(true);
+      expect(mismatchView.hasText(mismatchMessage)).toBe(true);
+
+      const directMismatchNotice = resolveOAuthRedirectNotice(
+        new URLSearchParams({
+          reconnected_mismatch: '1',
+          newAccountName: 'Jane Smith',
+          expectedAccountName: 'John Doe',
+        })
+      );
+      expect(directMismatchNotice?.notice).toEqual({
+        type: 'error',
+        message: mismatchMessage,
+      });
+
+      // 2. Standard Connect flow where an already-connected account has its session refreshed
+      const alreadyConnectedOutcome = evaluateAccountConnectionPoll(
+        [
+          {
+            id: 'acc-john',
+            fbAccountId: 'fb-john',
+            displayName: 'John Doe',
+            status: 'active',
+            updatedAt: '2026-10-11T08:05:00Z',
+          },
+        ],
+        initialIds,
+        initialStates,
+        null
+      );
+
+      expect(alreadyConnectedOutcome).toEqual({
+        matched: true,
+        kind: 'already_connected',
+        accountName: 'John Doe',
+      });
+
+      const alreadyMessage =
+        'This Facebook account (John Doe) is already connected — its session was refreshed.';
+      const alreadyView = render(
+        <ConnectionResultView
+          completionNotice={{
+            kind: 'already_connected',
+            message: alreadyMessage,
+          }}
+        />
+      );
+      expect(alreadyView.hasText(alreadyMessage)).toBe(true);
+
+      const directAlreadyNotice = resolveOAuthRedirectNotice(
+        new URLSearchParams({
+          connected: 'already',
+          accountName: 'John Doe',
+        })
+      );
+      expect(directAlreadyNotice?.notice).toEqual({
+        type: 'success',
+        message: alreadyMessage,
+      });
     });
   });
 
