@@ -35,6 +35,8 @@ export function DisconnectAccountDialog({
   };
 
   const pagesCount = account.connectedPagesCount;
+  const pagesLabel = pagesCount === 1 ? 'Facebook page' : 'Facebook pages';
+  const linkedPages = account.connectedPages ?? [];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -47,24 +49,64 @@ export function DisconnectAccountDialog({
         </DialogHeader>
 
         <DialogBody>
-          <div
-            style={{
-              padding: SPACING.md,
-              backgroundColor: 'rgba(246, 70, 93, 0.08)',
-              border: '1px solid rgba(246, 70, 93, 0.25)',
-              borderRadius: RADII.sm,
-              fontSize: '0.8125rem',
-              lineHeight: 1.5,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            <p style={{ margin: '0 0 8px 0', fontWeight: TYPOGRAPHY.weights.semibold, color: PALETTE.accent3 }}>
-              Before you disconnect
-            </p>
-            <p style={{ margin: 0 }}>
-              <strong>{pagesCount} linked {pagesCount === 1 ? 'Facebook page' : 'Facebook pages'}</strong> will be Removed, and any scheduled content on them will be removed as well.
-            </p>
-          </div>
+          {pagesCount === 0 ? (
+            <div
+              data-testid="disconnect-zero-pages-notice"
+              style={{
+                padding: SPACING.md,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.sm,
+                fontSize: '0.8125rem',
+                lineHeight: 1.5,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              <p style={{ margin: 0 }}>
+                No Facebook pages are linked to this account yet. its safe to remove, You can reconnect it anytime.
+              </p>
+            </div>
+          ) : (
+            <div
+              data-testid="disconnect-linked-pages-warning"
+              style={{
+                padding: SPACING.md,
+                backgroundColor: 'rgba(246, 70, 93, 0.08)',
+                border: '1px solid rgba(246, 70, 93, 0.25)',
+                borderRadius: RADII.sm,
+                fontSize: '0.8125rem',
+                lineHeight: 1.5,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
+            >
+              <p style={{ margin: '0 0 8px 0', fontWeight: TYPOGRAPHY.weights.semibold, color: PALETTE.accent3 }}>
+                Before you disconnect
+              </p>
+              <p style={{ margin: 0 }}>
+                <strong>{pagesCount} linked {pagesLabel}</strong> will be Removed, and any scheduled content on them will be removed as well.
+              </p>
+              {linkedPages.length > 0 && (
+                <ul
+                  data-testid="disconnect-linked-pages-list"
+                  style={{
+                    margin: `${SPACING.sm} 0 0 0`,
+                    paddingLeft: SPACING.lg,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  {linkedPages.map((page) => (
+                    <li
+                      key={page.id}
+                      data-testid={`disconnect-linked-page-${page.id}`}
+                      style={{ marginBottom: '2px' }}
+                    >
+                      {page.pageName}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </DialogBody>
 
         <DialogFooter>
@@ -98,7 +140,7 @@ export function DisconnectAccountDialog({
               height: '36px',
               padding: `0 ${SPACING.md}`,
               backgroundColor: PALETTE.accent3,
-              color: '#ffffff',
+              color: PALETTE.text,
               border: 'none',
               borderRadius: RADII.sm,
               fontSize: '0.875rem',

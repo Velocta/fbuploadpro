@@ -8,6 +8,8 @@ export const OAuthStatePayloadSchema = z.object({
   iat: z.number().int(),
   exp: z.number().int(),
   isMagic: z.boolean().optional(),
+  expectedFbAccountId: z.string().min(1).optional(),
+  expectedDisplayName: z.string().min(1).optional(),
 });
 
 export type OAuthStatePayload = z.infer<typeof OAuthStatePayloadSchema>;
@@ -18,6 +20,8 @@ export const MagicLinkTokenPayloadSchema = z.object({
   nonce: z.string().min(16),
   iat: z.number().int(),
   exp: z.number().int(),
+  expectedFbAccountId: z.string().min(1).optional(),
+  expectedDisplayName: z.string().min(1).optional(),
 });
 
 export type MagicLinkTokenPayload = z.infer<typeof MagicLinkTokenPayloadSchema>;

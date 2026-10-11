@@ -1,6 +1,29 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { signMagicLinkToken, verifySessionToken } from '@fbuploadpro/contracts';
 
+async function extractExpectedAccountFromBody(request: NextRequest): Promise<{
+  expectedFbAccountId?: string | undefined;
+  expectedDisplayName?: string | undefined;
+}> {
+  try {
+    const body = (await request.json()) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object') {
+      return {};
+    }
+    const expectedFbAccountId =
+      typeof body.expectedFbAccountId === 'string' && body.expectedFbAccountId.trim()
+        ? body.expectedFbAccountId.trim()
+        : undefined;
+    const expectedDisplayName =
+      typeof body.expectedDisplayName === 'string' && body.expectedDisplayName.trim()
+        ? body.expectedDisplayName.trim()
+        : undefined;
+    return { expectedFbAccountId, expectedDisplayName };
+  } catch {
+    return {};
+  }
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ subdomain: string }> }
@@ -32,6 +55,9 @@ export async function POST(
   }
 
   // 3. Generate 15-minute cryptographically signed magic token
+  const { expectedFbAccountId, expectedDisplayName } =
+    await extractExpectedAccountFromBody(request);
+
   const now = Math.floor(Date.now() / 1000);
   const nonce = crypto.randomUUID().replaceAll('-', '');
   const expiresInSeconds = 900; // 15 minutes
@@ -44,6 +70,8 @@ export async function POST(
       nonce,
       iat: now,
       exp,
+      ...(expectedFbAccountId ? { expectedFbAccountId } : {}),
+      ...(expectedDisplayName ? { expectedDisplayName } : {}),
     },
     sessionSecret
   );

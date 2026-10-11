@@ -29,6 +29,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // 2. Generate signed OAuth state
+  const expectedFbAccountId =
+    request.nextUrl.searchParams.get('expectedFbAccountId')?.trim() || undefined;
+  const expectedDisplayName =
+    request.nextUrl.searchParams.get('expectedDisplayName')?.trim() || undefined;
   const now = Math.floor(Date.now() / 1000);
   const nonce = crypto.randomUUID().replaceAll('-', '');
   const state = await signOAuthState(
@@ -38,6 +42,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       nonce,
       iat: now,
       exp: now + 600, // 10 minutes
+      ...(expectedFbAccountId ? { expectedFbAccountId } : {}),
+      ...(expectedDisplayName ? { expectedDisplayName } : {}),
     },
     sessionSecret
   );
