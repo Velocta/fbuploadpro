@@ -103,7 +103,8 @@ export async function handleUpdateMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient,
+  storageService?: IStorageService
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
   if (auth.error || !auth.session) return auth.error!;
@@ -136,7 +137,7 @@ export async function handleUpdateMedia(
   const db = dbClient ?? getDbClient();
 
   const existingMedia = (await db.query(
-    `SELECT id, folder_id, caption_text
+    `SELECT id, folder_id, caption_text, thumbnail_key
      FROM media_items
      WHERE id = $1 AND user_id = $2`,
     [mediaId, auth.session.userId]
@@ -176,6 +177,14 @@ export async function handleUpdateMedia(
     updates.push(`caption_text = $${paramIdx++}`);
     values.push(parsed.data.captionText);
   }
+  if (parsed.data.thumbnailKey !== undefined) {
+    updates.push(`thumbnail_key = $${paramIdx++}`);
+    values.push(parsed.data.thumbnailKey);
+  }
+  if (parsed.data.thumbnailUrl !== undefined) {
+    updates.push(`thumbnail_url = $${paramIdx++}`);
+    values.push(parsed.data.thumbnailUrl);
+  }
 
   values.push(mediaId, auth.session.userId);
   const updateQuery = `
@@ -191,6 +200,20 @@ export async function handleUpdateMedia(
   const updatedRows = (await db.query(updateQuery, values)) as any[];
   if (!updatedRows || updatedRows.length === 0) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+  }
+
+  const previousThumbnailKey = existingMedia[0]?.thumbnail_key as string | null | undefined;
+  if (
+    parsed.data.thumbnailKey !== undefined &&
+    previousThumbnailKey &&
+    previousThumbnailKey !== parsed.data.thumbnailKey
+  ) {
+    const storage = storageService ?? getStorageService();
+    try {
+      await storage.deleteObject(previousThumbnailKey);
+    } catch (_e) {
+      // Continue even if old R2 thumbnail cleanup fails
+    }
   }
 
   return NextResponse.json(formatMediaRow(updatedRows[0]));

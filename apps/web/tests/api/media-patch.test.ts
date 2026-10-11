@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { handleUpdateMedia } from '../../src/app/api/tenant/[subdomain]/media/[mediaId]/route';
+import { MockStorageProvider } from '../../src/lib/storage';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -204,5 +205,74 @@ describe('Media Item Patch & Direct Caption Editing (PATCH /api/tenant/[subdomai
     const body = await res.json();
     expect(body.folderId).toBeNull();
     expect(body.captionText).toBeNull();
+  });
+
+  it('updates thumbnailKey and thumbnailUrl and deletes superseded R2 thumbnail_key', async () => {
+    const mockStorage = new MockStorageProvider();
+    const oldThumbKey = `tenants/acme/media/${mediaId}/old-thumb.webp`;
+    const newThumbKey = `tenants/acme/media/${mediaId}/custom-frame.webp`;
+    const newThumbUrl = `https://pub-r2.example.com/${newThumbKey}`;
+
+    const mockDb: Partial<DatabaseClient> = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM media_items') && sql.includes('SELECT')) {
+          return Promise.resolve([
+            {
+              id: mediaId,
+              user_id: userId,
+              folder_id: null,
+              caption_text: 'Reel caption',
+              thumbnail_key: oldThumbKey,
+            },
+          ]);
+        }
+        if (sql.includes('UPDATE media_items')) {
+          return Promise.resolve([
+            {
+              id: mediaId,
+              user_id: userId,
+              folder_id: null,
+              name: 'reel.mp4',
+              file_size: '52428800',
+              mime_type: 'video/mp4',
+              media_type: 'video',
+              storage_key: `tenants/acme/media/${mediaId}/reel.mp4`,
+              url: `https://pub-r2.example.com/tenants/acme/media/${mediaId}/reel.mp4`,
+              thumbnail_key: newThumbKey,
+              thumbnail_url: newThumbUrl,
+              duration_seconds: '20.00',
+              aspect_ratio: '9:16',
+              caption_text: 'Reel caption',
+              created_at: new Date('2026-10-07T10:00:00Z'),
+              updated_at: new Date('2026-10-07T12:00:00Z'),
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    };
+
+    const req = new NextRequest(`http://localhost:3000/api/tenant/acme/media/${mediaId}`, {
+      method: 'PATCH',
+      headers: { cookie: validSessionCookie },
+      body: JSON.stringify({
+        thumbnailKey: newThumbKey,
+        thumbnailUrl: newThumbUrl,
+      }),
+    });
+
+    const res = await handleUpdateMedia(
+      req,
+      'acme',
+      mediaId,
+      mockDb as DatabaseClient,
+      mockStorage
+    );
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.thumbnailKey).toBe(newThumbKey);
+    expect(body.thumbnailUrl).toBe(newThumbUrl);
+    expect(mockStorage.deletedKeys.has(oldThumbKey)).toBe(true);
   });
 });

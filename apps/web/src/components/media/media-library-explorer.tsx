@@ -23,8 +23,17 @@ import {
   type UploadBatchState,
 } from './upload-queue-banner';
 import { MediaAssetCard } from './media-asset-card';
-import { MediaPreviewModal } from './media-preview-modal';
+import { MediaTableRow } from './media-table-row';
+import { MediaPreviewModal, type CapturedVideoFrame } from './media-preview-modal';
 import { BatchActionBar } from './batch-action-bar';
+
+export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
+
+export type MediaViewMode = 'grid' | 'table';
+
+export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1';
+
+export type CaptionStatusFilterKey = 'all' | 'has_caption' | 'empty_caption';
 
 export type SortOptionKey =
   | 'created_at:desc'
@@ -163,11 +172,20 @@ export function filterAndSortMediaItems(
   options: {
     currentFolderId: string | null;
     mediaTypeFilter: 'all' | 'video' | 'image';
+    aspectRatioFilter?: AspectRatioFilterKey | undefined;
+    captionStatusFilter?: CaptionStatusFilterKey | undefined;
     searchQuery: string;
     sortOption: SortOptionKey;
   }
 ): MediaItemResponse[] {
-  const { currentFolderId, mediaTypeFilter, searchQuery, sortOption } = options;
+  const {
+    currentFolderId,
+    mediaTypeFilter,
+    aspectRatioFilter = 'all',
+    captionStatusFilter = 'all',
+    searchQuery,
+    sortOption,
+  } = options;
   const trimmedSearch = searchQuery.trim().toLowerCase();
 
   const filtered = items.filter((item) => {
@@ -177,6 +195,18 @@ export function filterAndSortMediaItems(
     }
     if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
       return false;
+    }
+    if (aspectRatioFilter !== 'all' && item.aspectRatio !== aspectRatioFilter) {
+      return false;
+    }
+    if (captionStatusFilter === 'has_caption') {
+      if (!item.captionText || item.captionText.trim().length === 0) {
+        return false;
+      }
+    } else if (captionStatusFilter === 'empty_caption') {
+      if (item.captionText && item.captionText.trim().length > 0) {
+        return false;
+      }
     }
     if (trimmedSearch.length > 0) {
       const nameMatch = item.name.toLowerCase().includes(trimmedSearch);
@@ -213,8 +243,11 @@ export interface MediaLibraryExplorerProps {
   initialTotalMediaCount?: number;
   initialCurrentFolderId?: string | null;
   initialSelectedIds?: string[];
+  initialViewMode?: MediaViewMode;
   initialSearchQuery?: string;
   initialMediaTypeFilter?: 'all' | 'video' | 'image';
+  initialAspectRatioFilter?: AspectRatioFilterKey;
+  initialCaptionStatusFilter?: CaptionStatusFilterKey;
   initialSortOption?: SortOptionKey;
   initialUploadState?: UploadBatchState;
   initialPreviewItem?: MediaItemResponse | null;
@@ -245,8 +278,11 @@ export function MediaLibraryExplorer({
   initialTotalMediaCount,
   initialCurrentFolderId,
   initialSelectedIds = [],
+  initialViewMode,
   initialSearchQuery = '',
   initialMediaTypeFilter = 'all',
+  initialAspectRatioFilter = 'all',
+  initialCaptionStatusFilter = 'all',
   initialSortOption = 'created_at:desc',
   initialUploadState,
   initialPreviewItem = null,
@@ -268,6 +304,34 @@ export function MediaLibraryExplorer({
   );
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+  const [viewMode, setViewMode] = useState<MediaViewMode>(() => {
+    if (initialViewMode !== undefined) {
+      return initialViewMode;
+    }
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
+        if (stored === 'grid' || stored === 'table') {
+          return stored;
+        }
+      } catch (_err) {
+        // Ignore storage read errors in restricted environments
+      }
+    }
+    return 'grid';
+  });
+
+  const handleChangeViewMode = (nextMode: MediaViewMode) => {
+    setViewMode(nextMode);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem(MEDIA_VIEW_MODE_STORAGE_KEY, nextMode);
+      } catch (_err) {
+        // Ignore storage write errors
+      }
+    }
+  };
+
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => {
     if (initialCurrentFolderId !== undefined) {
       return initialCurrentFolderId;
@@ -287,6 +351,11 @@ export function MediaLibraryExplorer({
   const [mediaTypeFilter, setMediaTypeFilter] = useState<'all' | 'video' | 'image'>(
     initialMediaTypeFilter
   );
+  const [aspectRatioFilter, setAspectRatioFilter] = useState<AspectRatioFilterKey>(
+    initialAspectRatioFilter
+  );
+  const [captionStatusFilter, setCaptionStatusFilter] =
+    useState<CaptionStatusFilterKey>(initialCaptionStatusFilter);
   const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
   const [isLoading, setIsLoading] = useState(!hasInitialData);
   const [feedbackBanner, setFeedbackBanner] = useState<{
@@ -313,8 +382,44 @@ export function MediaLibraryExplorer({
     duplicates: QueuedUploadEntry[];
   } | null>(initialPendingDuplicateUpload);
   const cancelUploadRef = useRef(false);
+  const pauseUploadRef = useRef(false);
+  const pauseWaitersRef = useRef<Array<() => void>>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+
+  const releasePauseWaiters = useCallback(() => {
+    const waiters = pauseWaitersRef.current.splice(
+      0,
+      pauseWaitersRef.current.length
+    );
+    for (const resolve of waiters) {
+      resolve();
+    }
+  }, []);
+
+  const waitIfUploadPaused = useCallback(async () => {
+    while (pauseUploadRef.current && !cancelUploadRef.current) {
+      await new Promise<void>((resolve) => {
+        pauseWaitersRef.current.push(resolve);
+      });
+    }
+  }, []);
+
+  // Tab-Close Protection (beforeunload) when an upload batch is active or paused
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (uploadState.status !== 'uploading' && uploadState.status !== 'paused') {
+      return;
+    }
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [uploadState.status]);
 
   // Drag-and-drop state
   const [isDropzoneActive, setIsDropzoneActive] = useState(false);
@@ -424,6 +529,12 @@ export function MediaLibraryExplorer({
     if (mediaTypeFilter !== 'all') {
       query.set('mediaType', mediaTypeFilter);
     }
+    if (aspectRatioFilter !== 'all') {
+      query.set('aspectRatio', aspectRatioFilter);
+    }
+    if (captionStatusFilter !== 'all') {
+      query.set('captionStatus', captionStatusFilter);
+    }
     query.set('sortBy', sortBy);
     query.set('sortOrder', sortOrder);
     query.set('limit', String(MEDIA_PAGE_LIMIT));
@@ -463,6 +574,8 @@ export function MediaLibraryExplorer({
     hasInitialData,
     currentFolderId,
     mediaTypeFilter,
+    aspectRatioFilter,
+    captionStatusFilter,
     searchQuery,
     sortOption,
   ]);
@@ -489,6 +602,12 @@ export function MediaLibraryExplorer({
     }
     if (mediaTypeFilter !== 'all') {
       query.set('mediaType', mediaTypeFilter);
+    }
+    if (aspectRatioFilter !== 'all') {
+      query.set('aspectRatio', aspectRatioFilter);
+    }
+    if (captionStatusFilter !== 'all') {
+      query.set('captionStatus', captionStatusFilter);
     }
     query.set('sortBy', sortBy);
     query.set('sortOrder', sortOrder);
@@ -526,6 +645,8 @@ export function MediaLibraryExplorer({
     searchQuery,
     currentFolderId,
     mediaTypeFilter,
+    aspectRatioFilter,
+    captionStatusFilter,
     mediaItems.length,
   ]);
 
@@ -544,6 +665,8 @@ export function MediaLibraryExplorer({
     ? filterAndSortMediaItems(mediaItems, {
         currentFolderId,
         mediaTypeFilter,
+        aspectRatioFilter,
+        captionStatusFilter,
         searchQuery,
         sortOption,
       })
@@ -598,6 +721,22 @@ export function MediaLibraryExplorer({
     }
   };
 
+  // Pause / Resume / Retry Upload Controls
+  const handlePauseUpload = () => {
+    pauseUploadRef.current = true;
+    setUploadState((prev) =>
+      prev.status === 'uploading' ? { ...prev, status: 'paused' } : prev
+    );
+  };
+
+  const handleResumeUpload = () => {
+    pauseUploadRef.current = false;
+    setUploadState((prev) =>
+      prev.status === 'paused' ? { ...prev, status: 'uploading' } : prev
+    );
+    releasePauseWaiters();
+  };
+
   // Execute bounded upload batch (after duplicate check or user confirmation)
   const runUploadBatch = async (
     entries: QueuedUploadEntry[],
@@ -614,11 +753,14 @@ export function MediaLibraryExplorer({
           totalBytes: 0,
           transferredBytes: 0,
           currentFileName: null,
+          failedEntries: [],
         });
       }
       return;
     }
     cancelUploadRef.current = false;
+    pauseUploadRef.current = false;
+    releasePauseWaiters();
 
     const result = await executeBoundedUploadBatch({
       subdomain,
@@ -633,11 +775,18 @@ export function MediaLibraryExplorer({
         setTotalMediaCount((prev) => prev + 1);
       },
       isCancelled: () => cancelUploadRef.current,
+      isPaused: () => pauseUploadRef.current,
+      waitIfPaused: waitIfUploadPaused,
     });
 
     if (!hasInitialData && result.uploadedItems.length > 0) {
       await refreshLibraryData();
     }
+  };
+
+  const handleRetryFailedUploads = (failedEntries: QueuedUploadEntry[]) => {
+    if (failedEntries.length === 0) return;
+    void runUploadBatch(failedEntries, 0);
   };
 
   // Multi-file & Folder Upload Trigger with Pre-Upload Duplicate Detection
@@ -661,6 +810,109 @@ export function MediaLibraryExplorer({
     }
 
     await runUploadBatch(entries, 0);
+  };
+
+  // Custom Video Frame Thumbnail Update Handler
+  const handleUpdateVideoThumbnail = async (
+    mediaId: string,
+    captured: CapturedVideoFrame
+  ) => {
+    const targetItem = mediaItems.find((m) => m.id === mediaId) ?? previewItem;
+    let nextThumbnailKey: string | null | undefined = undefined;
+    let nextThumbnailUrl: string = captured.dataUrl;
+
+    if (!hasInitialData && captured.blob && targetItem) {
+      try {
+        const urlRes = await fetch(
+          `/api/tenant/${subdomain}/media/upload-url`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileName: targetItem.name,
+              fileSize: targetItem.fileSize,
+              mimeType: targetItem.mimeType,
+              thumbnailMimeType: 'image/webp',
+            }),
+          }
+        );
+        if (urlRes.ok) {
+          const presigned = (await urlRes.json()) as {
+            thumbnailKey: string;
+            thumbnailUploadUrl: string;
+            publicThumbnailUrl: string;
+          };
+          const isMockStorageUrl = presigned.thumbnailUploadUrl.includes(
+            'mock-r2.fbuploadpro.com'
+          );
+          if (!isMockStorageUrl) {
+            await fetch(presigned.thumbnailUploadUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'image/webp' },
+              body: captured.blob,
+            });
+          }
+          nextThumbnailKey = presigned.thumbnailKey;
+          nextThumbnailUrl = presigned.publicThumbnailUrl;
+        }
+      } catch (_err) {
+        // Fallback to captured dataUrl when presigned storage is unavailable
+      }
+    }
+
+    const patchPayload: {
+      thumbnailKey?: string | null;
+      thumbnailUrl: string;
+    } = {
+      thumbnailUrl: nextThumbnailUrl,
+      ...(nextThumbnailKey !== undefined
+        ? { thumbnailKey: nextThumbnailKey }
+        : {}),
+    };
+
+    setMediaItems((prev) =>
+      prev.map((item) =>
+        item.id === mediaId
+          ? {
+              ...item,
+              thumbnailUrl: nextThumbnailUrl,
+              ...(nextThumbnailKey !== undefined
+                ? { thumbnailKey: nextThumbnailKey }
+                : {}),
+            }
+          : item
+      )
+    );
+    setPreviewItem((prev) =>
+      prev && prev.id === mediaId
+        ? {
+            ...prev,
+            thumbnailUrl: nextThumbnailUrl,
+            ...(nextThumbnailKey !== undefined
+              ? { thumbnailKey: nextThumbnailKey }
+              : {}),
+          }
+        : prev
+    );
+
+    try {
+      const res = await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchPayload),
+      });
+      if (res.ok) {
+        const updated = (await res.json()) as MediaItemResponse;
+        setMediaItems((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item))
+        );
+        setPreviewItem((prev) =>
+          prev && prev.id === updated.id ? updated : prev
+        );
+      }
+    } catch (_err) {
+      // Keep optimistic thumbnail update
+    }
   };
 
   // Create or Rename Folder submission
@@ -1317,8 +1569,13 @@ export function MediaLibraryExplorer({
       {/* Single Unified Windows Copy-Style Upload Progress Banner */}
       <UploadQueueBanner
         state={uploadState}
+        onPause={handlePauseUpload}
+        onResume={handleResumeUpload}
+        onRetryFailed={handleRetryFailedUploads}
         onCancel={() => {
           cancelUploadRef.current = true;
+          pauseUploadRef.current = false;
+          releasePauseWaiters();
         }}
         onDismiss={() =>
           setUploadState((prev) => ({
@@ -1435,7 +1692,7 @@ export function MediaLibraryExplorer({
         })}
       </nav>
 
-      {/* Search, Filter & Sort Toolbar */}
+      {/* Search, Filter, Sort & View Mode Toolbar */}
       <div
         data-testid="media-explorer-toolbar"
         style={{
@@ -1467,7 +1724,7 @@ export function MediaLibraryExplorer({
           />
         </div>
 
-        {/* Filter Buttons & Sort Select */}
+        {/* Filter Controls, Sort Select & View Mode Toggle */}
         <div
           style={{
             display: 'flex',
@@ -1527,6 +1784,49 @@ export function MediaLibraryExplorer({
           </div>
 
           <select
+            data-testid="media-aspect-ratio-select"
+            value={aspectRatioFilter}
+            onChange={(e) =>
+              setAspectRatioFilter(e.target.value as AspectRatioFilterKey)
+            }
+            aria-label="Filter by aspect ratio"
+            style={{
+              ...COMPONENT_STYLES.input(THEME.default),
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              padding: `0 ${SPACING.md}`,
+              cursor: 'pointer',
+            }}
+          >
+            <option value="all">All ratios</option>
+            <option value="9:16">9:16 Vertical</option>
+            <option value="16:9">16:9 Landscape</option>
+            <option value="1:1">1:1 Square</option>
+          </select>
+
+          <select
+            data-testid="media-caption-status-select"
+            value={captionStatusFilter}
+            onChange={(e) =>
+              setCaptionStatusFilter(e.target.value as CaptionStatusFilterKey)
+            }
+            aria-label="Filter by caption status"
+            style={{
+              ...COMPONENT_STYLES.input(THEME.default),
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              padding: `0 ${SPACING.md}`,
+              cursor: 'pointer',
+            }}
+          >
+            <option value="all">All captions</option>
+            <option value="has_caption">Has caption</option>
+            <option value="empty_caption">Missing caption</option>
+          </select>
+
+          <select
             data-testid="media-sort-select"
             value={sortOption}
             onChange={(e) => setSortOption(e.target.value as SortOptionKey)}
@@ -1545,6 +1845,77 @@ export function MediaLibraryExplorer({
             <option value="name:asc">Name (A–Z)</option>
             <option value="file_size:desc">Largest size</option>
           </select>
+
+          {/* Grid View (default) vs. Compact Table View Toggle */}
+          <div
+            role="group"
+            aria-label="View mode"
+            style={{
+              display: 'inline-flex',
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.sm,
+              padding: '2px',
+              gap: '2px',
+            }}
+          >
+            <button
+              type="button"
+              data-testid="view-mode-grid-btn"
+              aria-pressed={viewMode === 'grid'}
+              onClick={() => handleChangeViewMode('grid')}
+              style={{
+                height: '32px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor:
+                  viewMode === 'grid'
+                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
+                    : 'transparent',
+                color:
+                  viewMode === 'grid'
+                    ? `var(--text-main, ${THEME.default.text.primary})`
+                    : `var(--text-sub, ${THEME.default.text.secondary})`,
+                border: 'none',
+                borderRadius: RADII.xs,
+                fontSize: '0.8125rem',
+                fontWeight:
+                  viewMode === 'grid'
+                    ? TYPOGRAPHY.weights.semibold
+                    : TYPOGRAPHY.weights.medium,
+                cursor: 'pointer',
+              }}
+            >
+              Grid
+            </button>
+            <button
+              type="button"
+              data-testid="view-mode-table-btn"
+              aria-pressed={viewMode === 'table'}
+              onClick={() => handleChangeViewMode('table')}
+              style={{
+                height: '32px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor:
+                  viewMode === 'table'
+                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
+                    : 'transparent',
+                color:
+                  viewMode === 'table'
+                    ? `var(--text-main, ${THEME.default.text.primary})`
+                    : `var(--text-sub, ${THEME.default.text.secondary})`,
+                border: 'none',
+                borderRadius: RADII.xs,
+                fontSize: '0.8125rem',
+                fontWeight:
+                  viewMode === 'table'
+                    ? TYPOGRAPHY.weights.semibold
+                    : TYPOGRAPHY.weights.medium,
+                cursor: 'pointer',
+              }}
+            >
+              Table
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1860,7 +2231,9 @@ export function MediaLibraryExplorer({
                 color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
-              {searchQuery.trim()
+              {searchQuery.trim() ||
+              aspectRatioFilter !== 'all' ||
+              captionStatusFilter !== 'all'
                 ? 'No matching media found'
                 : 'This folder has no media assets yet'}
             </h3>
@@ -1872,89 +2245,256 @@ export function MediaLibraryExplorer({
                 maxWidth: '460px',
               }}
             >
-              {searchQuery.trim()
-                ? 'Try adjusting your search keywords or media type filter.'
+              {searchQuery.trim() ||
+              aspectRatioFilter !== 'all' ||
+              captionStatusFilter !== 'all'
+                ? 'Try adjusting your search keywords or active filters.'
                 : 'Drag and drop videos, images, or entire folders from your computer here to start organizing your content.'}
             </p>
-            {!searchQuery.trim() && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: SPACING.sm,
-                  marginTop: SPACING.xs,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  style={COMPONENT_STYLES.primaryButton}
-                >
-                  Upload Files
-                </button>
-                <button
-                  type="button"
-                  onClick={() => folderInputRef.current?.click()}
+            {!searchQuery.trim() &&
+              aspectRatioFilter === 'all' &&
+              captionStatusFilter === 'all' && (
+                <div
                   style={{
-                    ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: SPACING.sm,
+                    marginTop: SPACING.xs,
                   }}
                 >
-                  Upload Folder
-                </button>
-              </div>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    style={COMPONENT_STYLES.primaryButton}
+                  >
+                    Upload Files
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => folderInputRef.current?.click()}
+                    style={{
+                      ...COMPONENT_STYLES.secondaryButton(THEME.default),
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
+                      borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    }}
+                  >
+                    Upload Folder
+                  </button>
+                </div>
+              )}
           </div>
         ) : (
           <>
-            <div
-              data-testid="media-assets-grid"
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: SPACING.lg,
-              }}
-            >
-              {displayedMediaItems.map((item) => (
-                <MediaAssetCard
-                  key={item.id}
-                  item={item}
-                  selected={selectedIds.includes(item.id)}
-                  folderPathLabel={
-                    isGlobalSearch
-                      ? formatFolderAncestryPath(item.folderId, folders)
-                      : null
-                  }
-                  onNavigateFolder={(targetFolderId) => {
-                    setSearchQuery('');
-                    handleNavigateFolder(targetFolderId);
+            {viewMode === 'table' ? (
+              <div
+                data-testid="media-table-view"
+                style={{
+                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  borderRadius: RADII.md,
+                  boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+                  overflowX: 'auto',
+                }}
+              >
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    textAlign: 'left',
                   }}
-                  onToggleSelect={(mediaId, options) => {
-                    const displayedIds = displayedMediaItems.map((m) => m.id);
-                    setSelectedIds((prev) =>
-                      computeRangeSelection(
-                        displayedIds,
-                        prev,
-                        mediaId,
-                        lastSelectedIdRef.current,
-                        Boolean(options?.shiftKey)
-                      )
-                    );
-                    lastSelectedIdRef.current = mediaId;
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                      }}
+                    >
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                          width: '40px',
+                        }}
+                      >
+                        Select
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.sm}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                          width: '56px',
+                        }}
+                      >
+                        Preview
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                        }}
+                      >
+                        File
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                        }}
+                      >
+                        Caption
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                        }}
+                      >
+                        Ratio
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                        }}
+                      >
+                        Duration
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                        }}
+                      >
+                        Size
+                      </th>
+                      <th
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.md}`,
+                          fontSize: '0.6875rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                          textAlign: 'right',
+                        }}
+                      >
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedMediaItems.map((item) => (
+                      <MediaTableRow
+                        key={item.id}
+                        item={item}
+                        selected={selectedIds.includes(item.id)}
+                        folderPathLabel={
+                          isGlobalSearch
+                            ? formatFolderAncestryPath(item.folderId, folders)
+                            : null
+                        }
+                        onNavigateFolder={(targetFolderId) => {
+                          setSearchQuery('');
+                          handleNavigateFolder(targetFolderId);
+                        }}
+                        onToggleSelect={(mediaId, options) => {
+                          const displayedIds = displayedMediaItems.map((m) => m.id);
+                          setSelectedIds((prev) =>
+                            computeRangeSelection(
+                              displayedIds,
+                              prev,
+                              mediaId,
+                              lastSelectedIdRef.current,
+                              Boolean(options?.shiftKey)
+                            )
+                          );
+                          lastSelectedIdRef.current = mediaId;
+                        }}
+                        onPreview={(target) => setPreviewItem(target)}
+                        onUpdateCaption={(mediaId, captionText) =>
+                          handleUpdateMediaItem(mediaId, { captionText })
+                        }
+                        onMoveRequest={(target) => {
+                          setSelectedMoveDestinationId(target.folderId ?? null);
+                          setMoveModalState({
+                            targetType: 'media',
+                            mediaItem: target,
+                          });
+                        }}
+                        onDeleteRequest={(target) =>
+                          void handleDeleteMediaItem(target.id)
+                        }
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div data-testid="media-grid">
+                <div
+                  data-testid="media-assets-grid"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                    gap: SPACING.lg,
                   }}
-                  onPreview={(target) => setPreviewItem(target)}
-                  onUpdateCaption={(mediaId, captionText) =>
-                    handleUpdateMediaItem(mediaId, { captionText })
-                  }
-                  onMoveRequest={(target) => {
-                    setSelectedMoveDestinationId(target.folderId ?? null);
-                    setMoveModalState({ targetType: 'media', mediaItem: target });
-                  }}
-                  onDeleteRequest={(target) => void handleDeleteMediaItem(target.id)}
-                />
-              ))}
-            </div>
+                >
+                  {displayedMediaItems.map((item) => (
+                    <MediaAssetCard
+                      key={item.id}
+                      item={item}
+                      selected={selectedIds.includes(item.id)}
+                      folderPathLabel={
+                        isGlobalSearch
+                          ? formatFolderAncestryPath(item.folderId, folders)
+                          : null
+                      }
+                      onNavigateFolder={(targetFolderId) => {
+                        setSearchQuery('');
+                        handleNavigateFolder(targetFolderId);
+                      }}
+                      onToggleSelect={(mediaId, options) => {
+                        const displayedIds = displayedMediaItems.map((m) => m.id);
+                        setSelectedIds((prev) =>
+                          computeRangeSelection(
+                            displayedIds,
+                            prev,
+                            mediaId,
+                            lastSelectedIdRef.current,
+                            Boolean(options?.shiftKey)
+                          )
+                        );
+                        lastSelectedIdRef.current = mediaId;
+                      }}
+                      onPreview={(target) => setPreviewItem(target)}
+                      onUpdateCaption={(mediaId, captionText) =>
+                        handleUpdateMediaItem(mediaId, { captionText })
+                      }
+                      onMoveRequest={(target) => {
+                        setSelectedMoveDestinationId(target.folderId ?? null);
+                        setMoveModalState({ targetType: 'media', mediaItem: target });
+                      }}
+                      onDeleteRequest={(target) =>
+                        void handleDeleteMediaItem(target.id)
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {hasMoreMedia && (
               <div
@@ -2017,6 +2557,9 @@ export function MediaLibraryExplorer({
               if (!open) setPreviewItem(null);
             }}
             onSave={(mediaId, updates) => handleUpdateMediaItem(mediaId, updates)}
+            onUpdateThumbnail={(mediaId, captured) =>
+              handleUpdateVideoThumbnail(mediaId, captured)
+            }
             onDelete={(mediaId) => handleDeleteMediaItem(mediaId)}
           />
         );

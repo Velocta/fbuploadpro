@@ -36,7 +36,7 @@ export interface QueuedFileEntry {
 }
 
 export interface UploadBatchState {
-  status: 'idle' | 'uploading' | 'completed' | 'cancelled' | 'error';
+  status: 'idle' | 'uploading' | 'paused' | 'completed' | 'cancelled' | 'error';
   totalFiles: number;
   completedFiles: number;
   failedFiles: number;
@@ -44,7 +44,8 @@ export interface UploadBatchState {
   totalBytes: number;
   transferredBytes: number;
   currentFileName: string | null;
-  errorMessage?: string | null;
+  errorMessage?: string | null | undefined;
+  failedEntries?: QueuedUploadEntry[] | undefined;
 }
 
 export function deriveDefaultCaption(fileName: string): string {
@@ -560,17 +561,82 @@ export function detectDuplicateUploadEntries(
   return { duplicates, uniqueEntries };
 }
 
+export interface RunBoundedUploadQueueOptions<T> {
+  items: T[];
+  concurrency?: number | undefined;
+  isCancelled?: (() => boolean) | undefined;
+  isPaused?: (() => boolean) | undefined;
+  waitIfPaused?: (() => Promise<void>) | undefined;
+  worker: (item: T, index: number) => Promise<void>;
+}
+
+/**
+ * Runs a bounded concurrency worker pool with cooperative pause/resume and cancellation.
+ * When paused, currently executing worker invocations complete cleanly while workers pause before starting the next item.
+ */
+export async function runBoundedUploadQueue<T>(
+  options: RunBoundedUploadQueueOptions<T>
+): Promise<void> {
+  const {
+    items,
+    concurrency = MAX_CONCURRENT_UPLOADS,
+    isCancelled = () => false,
+    isPaused = () => false,
+    waitIfPaused,
+    worker,
+  } = options;
+
+  if (items.length === 0) return;
+
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), items.length);
+
+  const waitWhilePaused = async () => {
+    if (waitIfPaused) {
+      await waitIfPaused();
+    }
+    while (isPaused() && !isCancelled()) {
+      await new Promise((resolve) => setTimeout(resolve, 15));
+    }
+  };
+
+  const runners = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < items.length && !isCancelled()) {
+      await waitWhilePaused();
+      if (isCancelled() || nextIndex >= items.length) break;
+      const idx = nextIndex;
+      nextIndex += 1;
+      const item = items[idx];
+      if (item !== undefined) {
+        await worker(item, idx);
+      }
+    }
+  });
+
+  await Promise.all(runners);
+}
+
 export interface ExecuteBoundedUploadBatchOptions {
   subdomain: string;
   baseFolderId: string | null;
-  rawEntries: QueuedFileEntry[];
+  rawEntries: QueuedUploadEntry[];
   existingFolders: MediaFolder[];
   onStateChange: (state: UploadBatchState) => void;
   onItemUploaded?: ((item: MediaItemResponse) => void) | undefined;
   onFoldersUpdated?: ((folders: MediaFolder[]) => void) | undefined;
   isCancelled?: (() => boolean) | undefined;
+  isPaused?: (() => boolean) | undefined;
+  waitIfPaused?: (() => Promise<void>) | undefined;
   fetchImpl?: typeof fetch | undefined;
   initialSkippedCount?: number | undefined;
+}
+
+export interface ExecuteBoundedUploadBatchResult {
+  uploadedItems: MediaItemResponse[];
+  updatedFolders: MediaFolder[];
+  failedCount: number;
+  skippedCount: number;
+  failedEntries: QueuedUploadEntry[];
 }
 
 /**
@@ -578,10 +644,7 @@ export interface ExecuteBoundedUploadBatchOptions {
  */
 export async function executeBoundedUploadBatch(
   params: ExecuteBoundedUploadBatchOptions
-): Promise<{
-  uploadedItems: MediaItemResponse[];
-  updatedFolders: MediaFolder[];
-}> {
+): Promise<ExecuteBoundedUploadBatchResult> {
   const {
     subdomain,
     baseFolderId,
@@ -591,6 +654,8 @@ export async function executeBoundedUploadBatch(
     onItemUploaded,
     onFoldersUpdated,
     isCancelled = () => false,
+    isPaused = () => false,
+    waitIfPaused,
     fetchImpl = fetch,
     initialSkippedCount = 0,
   } = params;
@@ -598,6 +663,7 @@ export async function executeBoundedUploadBatch(
   const validEntries: Array<{
     file: File;
     relativePath: string;
+    relativeSubfolderPath?: string[] | undefined;
     mimeType: (typeof AllowedMediaMimeTypes)[number];
   }> = [];
   let skippedFiles = initialSkippedCount;
@@ -628,21 +694,31 @@ export async function executeBoundedUploadBatch(
         skippedFiles > 0
           ? 'No supported video or image files were found in the selection.'
           : null,
+      failedEntries: [],
     });
-    return { uploadedItems: [], updatedFolders: existingFolders };
+    return {
+      uploadedItems: [],
+      updatedFolders: existingFolders,
+      failedCount: 0,
+      skippedCount: skippedFiles,
+      failedEntries: [],
+    };
   }
 
   let completedFiles = 0;
   let failedFiles = 0;
   let transferredBytes = 0;
   let currentFileName: string | null = validEntries[0]?.file.name ?? null;
+  const failedEntries: QueuedUploadEntry[] = [];
 
   const emitProgress = (
     status: UploadBatchState['status'] = 'uploading',
     errorMessage: string | null = null
   ) => {
+    const resolvedStatus =
+      status === 'uploading' && isPaused() ? 'paused' : status;
     onStateChange({
-      status,
+      status: resolvedStatus,
       totalFiles,
       completedFiles,
       failedFiles,
@@ -651,6 +727,7 @@ export async function executeBoundedUploadBatch(
       transferredBytes,
       currentFileName,
       errorMessage,
+      failedEntries: [...failedEntries],
     });
   };
 
@@ -670,11 +747,11 @@ export async function executeBoundedUploadBatch(
   }
 
   const uploadedItems: MediaItemResponse[] = [];
-  let nextIndex = 0;
 
   const uploadSingleFile = async (entry: {
     file: File;
     relativePath: string;
+    relativeSubfolderPath?: string[] | undefined;
     mimeType: (typeof AllowedMediaMimeTypes)[number];
   }) => {
     if (isCancelled()) return;
@@ -683,7 +760,8 @@ export async function executeBoundedUploadBatch(
     currentFileName = cleanFileName;
     emitProgress('uploading');
 
-    const segments = resolveFolderPathSegments(entry.relativePath);
+    const segments =
+      entry.relativeSubfolderPath ?? resolveFolderPathSegments(entry.relativePath);
     const chainKey = segments.join('/');
     const targetFolderId =
       segments.length > 0
@@ -770,25 +848,28 @@ export async function executeBoundedUploadBatch(
       emitProgress('uploading');
     } catch (_err) {
       failedFiles += 1;
+      failedEntries.push({
+        file: entry.file,
+        relativePath: entry.relativePath,
+        ...(entry.relativeSubfolderPath
+          ? { relativeSubfolderPath: entry.relativeSubfolderPath }
+          : {}),
+      });
       transferredBytes = Math.min(totalBytes, transferredBytes + entry.file.size);
       emitProgress('uploading');
     }
   };
 
-  // Worker pool with MAX_CONCURRENT_UPLOADS = 3
-  const workerCount = Math.min(MAX_CONCURRENT_UPLOADS, validEntries.length);
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (nextIndex < validEntries.length && !isCancelled()) {
-      const idx = nextIndex;
-      nextIndex += 1;
-      const item = validEntries[idx];
-      if (item) {
-        await uploadSingleFile(item);
-      }
-    }
+  await runBoundedUploadQueue({
+    items: validEntries,
+    concurrency: MAX_CONCURRENT_UPLOADS,
+    isCancelled,
+    isPaused,
+    waitIfPaused,
+    worker: async (item) => {
+      await uploadSingleFile(item);
+    },
   });
-
-  await Promise.all(workers);
 
   if (isCancelled()) {
     currentFileName = null;
@@ -801,13 +882,22 @@ export async function executeBoundedUploadBatch(
     emitProgress('completed');
   }
 
-  return { uploadedItems, updatedFolders };
+  return {
+    uploadedItems,
+    updatedFolders,
+    failedCount: failedFiles,
+    skippedCount: skippedFiles,
+    failedEntries,
+  };
 }
 
 export interface UploadQueueBannerProps {
   state: UploadBatchState;
-  onCancel?: () => void;
-  onDismiss?: () => void;
+  onPause?: (() => void) | undefined;
+  onResume?: (() => void) | undefined;
+  onRetryFailed?: ((failedEntries: QueuedUploadEntry[]) => void) | undefined;
+  onCancel?: (() => void) | undefined;
+  onDismiss?: (() => void) | undefined;
 }
 
 /**
@@ -816,6 +906,9 @@ export interface UploadQueueBannerProps {
  */
 export function UploadQueueBanner({
   state,
+  onPause,
+  onResume,
+  onRetryFailed,
   onCancel,
   onDismiss,
 }: Readonly<UploadQueueBannerProps>) {
@@ -831,13 +924,16 @@ export function UploadQueueBanner({
         : 0;
 
   const isUploading = state.status === 'uploading';
+  const isPaused = state.status === 'paused';
   const isCompleted = state.status === 'completed';
   const isError = state.status === 'error';
 
   let headlineText = `Uploading ${state.completedFiles} of ${state.totalFiles} ${
     state.totalFiles === 1 ? 'file' : 'files'
   }...`;
-  if (isCompleted) {
+  if (isPaused) {
+    headlineText = `Paused — ${state.completedFiles} of ${state.totalFiles} files uploaded`;
+  } else if (isCompleted) {
     headlineText = `Uploaded ${state.completedFiles} of ${state.totalFiles} ${
       state.totalFiles === 1 ? 'file' : 'files'
     }`;
@@ -869,7 +965,7 @@ export function UploadQueueBanner({
         gap: SPACING.sm,
       }}
     >
-      {/* Top Row: Status Headline + Percentage & Action Button */}
+      {/* Top Row: Status Headline + Percentage & Action Buttons */}
       <div
         style={{
           display: 'flex',
@@ -920,7 +1016,7 @@ export function UploadQueueBanner({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: SPACING.md,
+            gap: SPACING.sm,
           }}
         >
           <span
@@ -950,7 +1046,70 @@ export function UploadQueueBanner({
             {percent}%
           </span>
 
-          {isUploading && onCancel && (
+          {isUploading && (
+            <button
+              type="button"
+              data-testid="pause-upload-btn"
+              onClick={() => onPause?.()}
+              style={{
+                height: '28px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: 'pointer',
+              }}
+            >
+              Pause
+            </button>
+          )}
+
+          {isPaused && (
+            <button
+              type="button"
+              data-testid="resume-upload-btn"
+              onClick={() => onResume?.()}
+              style={{
+                height: '28px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor: PALETTE.primary,
+                color: PALETTE.text,
+                border: 'none',
+                borderRadius: RADII.xs,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                cursor: 'pointer',
+              }}
+            >
+              Resume
+            </button>
+          )}
+
+          {state.failedFiles > 0 && !isUploading && (
+            <button
+              type="button"
+              data-testid="retry-failed-uploads-btn"
+              onClick={() => onRetryFailed?.(state.failedEntries ?? [])}
+              style={{
+                height: '28px',
+                padding: `0 ${SPACING.sm}`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                cursor: 'pointer',
+              }}
+            >
+              Retry Failed ({state.failedFiles})
+            </button>
+          )}
+
+          {(isUploading || isPaused) && onCancel && (
             <button
               type="button"
               data-testid="upload-cancel-btn"
@@ -971,7 +1130,7 @@ export function UploadQueueBanner({
             </button>
           )}
 
-          {!isUploading && onDismiss && (
+          {!isUploading && !isPaused && onDismiss && (
             <button
               type="button"
               data-testid="upload-dismiss-btn"

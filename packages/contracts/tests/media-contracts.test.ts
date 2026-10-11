@@ -6,6 +6,7 @@ import {
   UpdateFolderRequestSchema,
   MediaFolderSchema,
   MediaListQuerySchema,
+  UpdateMediaItemRequestSchema,
   DeleteMediaItemResponseSchema,
   DeleteFolderResponseSchema,
   BatchMediaRequestSchema,
@@ -144,11 +145,13 @@ describe('Media Domain Contracts', () => {
   });
 
   describe('Media List Query & Batch Contracts', () => {
-    it('parses pagination and sortBy/sortOrder with defaults', () => {
+    it('parses pagination, sortBy/sortOrder, aspectRatio, and captionStatus with defaults', () => {
       const res = MediaListQuerySchema.safeParse({
         limit: '25',
         offset: '50',
         mediaType: 'video',
+        aspectRatio: '9:16',
+        captionStatus: 'empty_caption',
         sortBy: 'file_size',
         sortOrder: 'asc',
       });
@@ -157,9 +160,25 @@ describe('Media Domain Contracts', () => {
         expect(res.data.limit).toBe(25);
         expect(res.data.offset).toBe(50);
         expect(res.data.mediaType).toBe('video');
+        expect(res.data.aspectRatio).toBe('9:16');
+        expect(res.data.captionStatus).toBe('empty_caption');
         expect(res.data.sortBy).toBe('file_size');
         expect(res.data.sortOrder).toBe('asc');
       }
+    });
+
+    it('validates UpdateMediaItemRequestSchema with thumbnailKey and thumbnailUrl', () => {
+      const r2Res = UpdateMediaItemRequestSchema.safeParse({
+        thumbnailKey: 'tenants/u1/thumbnails/frame-1.webp',
+        thumbnailUrl: 'https://media.fbuploadpro.com/tenants/u1/thumbnails/frame-1.webp',
+      });
+      expect(r2Res.success).toBe(true);
+
+      const dataUrlRes = UpdateMediaItemRequestSchema.safeParse({
+        thumbnailKey: null,
+        thumbnailUrl: 'data:image/webp;base64,UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA=',
+      });
+      expect(dataUrlRes.success).toBe(true);
     });
 
     it('validates BatchMediaRequestSchema for move, delete, and caption actions', () => {

@@ -137,6 +137,15 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Hover Video Preview on Cards**: Hovering the pointer over a video card's thumbnail surface for 300ms MUST render an inline muted `<video>` preview playback loop directly inside the card surface, restoring the static thumbnail when the pointer leaves.
     - **Pre-Upload Duplicate Detection Modal**: Before initiating an upload batch (`Upload Files`, `Upload Folder`, or drag-and-drop), the explorer MUST check whether any queued files match an existing asset's `name` (case-insensitive) and `fileSize` within the resolved target folder. When duplicates are detected, a confirmation modal MUST prompt the user to either **Skip duplicates** (uploading only new files and reporting skipped duplicates) or **Upload all anyway**.
 
+23. **Media Library View Modes, Resumable Upload Controls, Aspect Ratio/Caption Filters & Custom Video Frame Thumbnail Picker (Spec 030)**:
+    - **Grid View (Default) & High-Density Compact Table View Toggle**: The Media Library toolbar MUST provide a view toggle switching between **Grid View** (default `'grid'`, rendering visual cards with `300ms` hover video preview) and **Compact Table View** (`'table'`, rendering high-density rows with mini thumbnail, filename, click-to-edit inline caption cell saving on `Enter` or `blur`, aspect ratio, duration, file size, and row actions), persisting the user's preference in `localStorage` (`fbuploadpro:media-view-mode`).
+    - **Resumable Upload Queue Controls (Pause, Resume, Retry Failed & Tab-Close Guard)**:
+      - **Pause & Resume**: Users can pause an active upload batch (`status: 'paused'`) and resume it (`status: 'uploading'`). Pausing allows currently transferring in-flight file(s) to finish cleanly before halting further worker dispatch, and resuming continues seamlessly from the next queued entry without re-uploading completed files.
+      - **Retry Failed Files**: Failed upload entries are tracked alongside their resolved target subfolder paths, exposing a **"Retry Failed (`X`)"** button in `UploadQueueBanner` to re-run only the failed files.
+      - **Tab-Close Protection (`beforeunload`)**: While an upload batch is actively transferring or paused (`status === 'uploading' || status === 'paused'`), a `window` `beforeunload` listener MUST warn the operator before closing or refreshing the browser tab.
+    - **Aspect Ratio & Caption Status Filtering**: `GET /api/tenant/[subdomain]/media` (`MediaListQuerySchema`) and the explorer toolbar MUST support filtering by `aspectRatio` (`'9:16'`, `'16:9'`, `'1:1'`) and `captionStatus` (`'has_caption'`, `'empty_caption'`).
+    - **Custom Video Frame Thumbnail Picker**: Inside `MediaPreviewModal` for video assets, a **"Set Current Frame as Thumbnail"** control MUST capture the current `<video>` playback frame onto a `<canvas>` (`640px` max dimension, WebP format), upload the new thumbnail via presigned URL (with data-URL fallback in offline/mock environments), and persist the updated `thumbnailKey` and `thumbnailUrl` via `PATCH /api/tenant/[subdomain]/media/[mediaId]` (cleaning up any superseded R2 thumbnail key).
+
 ## Development Workflow & Quality Gates
 
 1. **Ideation & Governance**: Broad proposals and milestone announcements begin in GitHub Discussions.
@@ -159,5 +168,5 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.18.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-10
+**Version**: 2.19.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-11
 

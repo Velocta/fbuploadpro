@@ -75,7 +75,7 @@ export const MediaItemResponseSchema = z.object({
   storageKey: z.string(),
   url: z.string().url(),
   thumbnailKey: z.string().nullable(),
-  thumbnailUrl: z.string().url().nullable(),
+  thumbnailUrl: z.string().min(1).nullable(),
   durationSeconds: z.number().nullable(),
   aspectRatio: z.string(),
   captionText: z.string().nullable(),
@@ -88,6 +88,8 @@ export type MediaItemResponse = z.infer<typeof MediaItemResponseSchema>;
 export const MediaListQuerySchema = z.object({
   folderId: z.string().uuid().or(z.literal('unorganized')).optional(),
   mediaType: z.enum(['video', 'image']).optional(),
+  aspectRatio: z.enum(['9:16', '16:9', '1:1']).optional(),
+  captionStatus: z.enum(['has_caption', 'empty_caption']).optional(),
   search: z.string().optional(),
   sortBy: z.enum(['created_at', 'name', 'file_size']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
@@ -110,6 +112,8 @@ export const UpdateMediaItemRequestSchema = z.object({
   name: z.string().trim().min(1).max(255).optional(),
   folderId: z.string().uuid().nullable().optional(),
   captionText: z.string().max(5000).nullable().optional(),
+  thumbnailKey: z.string().min(1).max(500).nullable().optional(),
+  thumbnailUrl: z.string().min(1).nullable().optional(),
 });
 
 export type UpdateMediaItemRequest = z.infer<typeof UpdateMediaItemRequestSchema>;
