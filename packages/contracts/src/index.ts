@@ -10,7 +10,9 @@ export * from './crypto/token.js';
 export * from './domain/media.js';
 export * from './domain/folder.js';
 export * from './domain/storage.js';
+export * from './domain/downloader.js';
 export * from './domain/queue.js';
 export * from './domain/dispatcher.js';
 export * from './domain/insights.js';
 export * from './domain/auth.js';
+

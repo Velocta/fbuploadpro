@@ -47,7 +47,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
     expect(headers[0]?.outerHtml).not.toContain('m7 9 5-5 5 5');
   });
 
-  it('renders Home and Media Library in the primary top group above SidebarSeparator, followed by Collapsible Facebook section', () => {
+  it('renders Home, Media Library, and Downloader in the primary top group above SidebarSeparator, followed by Collapsible Facebook section', () => {
     mockPathname = '/tenant/acme';
     const { hasText, hasAttribute, html } = render(
       <SidebarProvider>
@@ -61,18 +61,21 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
     // Primary items per user directive
     expect(hasText('Home')).toBe(true);
     expect(hasText('Media Library')).toBe(true);
+    expect(hasText('Downloader')).toBe(true);
     expect(hasText('Platform')).toBe(true);
     expect(hasText('Facebook')).toBe(true);
     expect(hasText('Accounts')).toBe(true);
 
-    // Verify ordering: Home -> Media Library -> Separator -> Platform
+    // Verify ordering: Home -> Media Library -> Downloader -> Separator -> Platform
     const homeIndex = html.indexOf('Home');
     const mediaIndex = html.indexOf('Media Library');
+    const downloaderIndex = html.indexOf('Downloader');
     const separatorIndex = html.indexOf('data-sidebar="separator"');
     const platformIndex = html.indexOf('Platform');
     expect(homeIndex).toBeGreaterThan(-1);
     expect(mediaIndex).toBeGreaterThan(homeIndex);
-    expect(separatorIndex).toBeGreaterThan(mediaIndex);
+    expect(downloaderIndex).toBeGreaterThan(mediaIndex);
+    expect(separatorIndex).toBeGreaterThan(downloaderIndex);
     expect(platformIndex).toBeGreaterThan(separatorIndex);
 
     // Separator line present
@@ -122,6 +125,25 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
       (b) => b.innerHTML.includes('Media Library') && b.attributes['data-active'] === 'true'
     );
     expect(activeMediaBtn).toBeDefined();
+  });
+
+  it('marks Downloader as active when pathname starts with /tenant/acme/downloader', () => {
+    mockPathname = '/tenant/acme/downloader';
+    const { html, findTags } = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    expect(html).toContain('aria-current="page"');
+    const buttons = findTags('button');
+    const activeDownloaderBtn = buttons.find(
+      (b) => b.innerHTML.includes('Downloader') && b.attributes['data-active'] === 'true'
+    );
+    expect(activeDownloaderBtn).toBeDefined();
   });
 
   it('renders user details and avatar initials in footer using NavUser pattern', () => {

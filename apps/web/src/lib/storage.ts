@@ -5,6 +5,8 @@ import type {
   IStorageService,
   PresignedUploadParams,
   PresignedUploadResult,
+  PutObjectParams,
+  PutObjectResult,
 } from '@fbuploadpro/contracts';
 
 export const R2ConfigSchema = z.object({
@@ -61,6 +63,7 @@ function trimTrailingSlashes(str: string): string {
 export class MockStorageProvider implements IStorageService {
   public deletedKeys: Set<string> = new Set();
   public requestedUploadKeys: Set<string> = new Set();
+  public uploadedObjects: Map<string, { contentType: string; byteLength: number }> = new Map();
   public publicUrlBase: string = 'https://media.fbuploadpro.com';
 
   getPresignedUploadUrl(params: PresignedUploadParams): Promise<PresignedUploadResult> {
@@ -73,9 +76,23 @@ export class MockStorageProvider implements IStorageService {
     });
   }
 
+  putObject(params: PutObjectParams): Promise<PutObjectResult> {
+    this.uploadedObjects.set(params.key, {
+      contentType: params.contentType,
+      byteLength: params.body.byteLength,
+    });
+    this.deletedKeys.delete(params.key);
+    return Promise.resolve({
+      key: params.key,
+      publicUrl: this.getPublicUrl(params.key),
+      byteLength: params.body.byteLength,
+    });
+  }
+
   deleteObject(key: string): Promise<void> {
     this.deletedKeys.add(key);
     this.requestedUploadKeys.delete(key);
+    this.uploadedObjects.delete(key);
     return Promise.resolve();
   }
 
@@ -88,6 +105,7 @@ export class MockStorageProvider implements IStorageService {
   reset(): void {
     this.deletedKeys.clear();
     this.requestedUploadKeys.clear();
+    this.uploadedObjects.clear();
   }
 }
 
@@ -113,6 +131,22 @@ export class R2StorageProvider implements IStorageService {
       uploadUrl,
       publicUrl: this.getPublicUrl(params.key),
       expiresInSeconds: expiresIn,
+    };
+  }
+
+  async putObject(params: PutObjectParams): Promise<PutObjectResult> {
+    const command = new PutObjectCommand({
+      Bucket: this.config.bucketName,
+      Key: params.key,
+      Body: params.body,
+      ContentType: params.contentType,
+      ContentLength: params.body.byteLength,
+    });
+    await this.client.send(command);
+    return {
+      key: params.key,
+      publicUrl: this.getPublicUrl(params.key),
+      byteLength: params.body.byteLength,
     };
   }
 

@@ -34,6 +34,29 @@ describe('Storage Service Providers', () => {
       expect(mock.requestedUploadKeys.has('users/123/media/abc/video.mp4')).toBe(true);
     });
 
+    it('uploads objects via putObject and tracks uploadedObjects', async () => {
+      const mock = new MockStorageProvider();
+      const key = 'users/123/media/abc/downloaded.mp4';
+      const payload = new Uint8Array([1, 2, 3, 4, 5]);
+
+      const result = await mock.putObject({
+        key,
+        body: payload,
+        contentType: 'video/mp4',
+      });
+
+      expect(result.key).toBe(key);
+      expect(result.publicUrl).toBe('https://media.fbuploadpro.com/users/123/media/abc/downloaded.mp4');
+      expect(result.byteLength).toBe(5);
+      expect(mock.uploadedObjects.get(key)).toEqual({
+        contentType: 'video/mp4',
+        byteLength: 5,
+      });
+
+      await mock.deleteObject(key);
+      expect(mock.uploadedObjects.has(key)).toBe(false);
+    });
+
     it('deletes objects and updates tracked keys', async () => {
       const mock = new MockStorageProvider();
       const key = 'users/123/media/abc/image.png';
@@ -63,6 +86,26 @@ describe('Storage Service Providers', () => {
       const provider = new R2StorageProvider(fakeConfig);
       const url = provider.getPublicUrl('users/tenant-1/media/file.mp4');
       expect(url).toBe('https://media.customdomain.com/users/tenant-1/media/file.mp4');
+    });
+
+    it('invokes client PutObjectCommand upon putObject', async () => {
+      const mockSend = vi.fn().mockResolvedValue({});
+      const fakeS3Client = { send: mockSend } as any;
+      const body = new Uint8Array([10, 20, 30, 40]);
+
+      const provider = new R2StorageProvider(fakeConfig, fakeS3Client);
+      const res = await provider.putObject({
+        key: 'users/tenant-1/media/file.mp4',
+        body,
+        contentType: 'video/mp4',
+      });
+
+      expect(mockSend).toHaveBeenCalledTimes(1);
+      expect(res).toEqual({
+        key: 'users/tenant-1/media/file.mp4',
+        publicUrl: 'https://media.customdomain.com/users/tenant-1/media/file.mp4',
+        byteLength: 4,
+      });
     });
 
     it('invokes client delete command upon deleteObject', async () => {
