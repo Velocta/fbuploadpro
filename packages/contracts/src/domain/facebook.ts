@@ -25,6 +25,16 @@ export const FacebookAccountSchema = z.object({
 
 export type FacebookAccount = z.infer<typeof FacebookAccountSchema>;
 
+export const FacebookAccountLinkedPageSchema = z.object({
+  id: z.string().uuid(),
+  pageName: z.string().min(1),
+  profilePictureUrl: z.string().nullable().optional(),
+});
+
+export type FacebookAccountLinkedPage = z.infer<
+  typeof FacebookAccountLinkedPageSchema
+>;
+
 // Sanitized view model for UI presentation (zero token exposure)
 export const FacebookAccountViewSchema = z.object({
   id: z.string().uuid(),
@@ -36,11 +46,14 @@ export const FacebookAccountViewSchema = z.object({
   status: FacebookAccountStatusSchema,
   tokenExpiresAt: z.coerce.date().nullable().optional(),
   connectedPagesCount: z.number().int().nonnegative().default(0),
+  connectedPages: z.array(FacebookAccountLinkedPageSchema).optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 });
 
 export type FacebookAccountView = z.infer<typeof FacebookAccountViewSchema>;
+export const FacebookAccountSummarySchema = FacebookAccountViewSchema;
+export type FacebookAccountSummary = FacebookAccountView;
 
 export const ListFacebookAccountsResponseSchema = z.object({
   accounts: z.array(FacebookAccountViewSchema),

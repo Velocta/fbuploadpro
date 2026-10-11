@@ -143,7 +143,7 @@ interface FeedbackBannerProps {
   onDismiss: () => void;
 }
 
-function FeedbackBanner({ notice, onDismiss }: Readonly<FeedbackBannerProps>) {
+export function FeedbackBanner({ notice, onDismiss }: Readonly<FeedbackBannerProps>) {
   const isSuccess = notice.type === 'success';
   return (
     <div
@@ -206,6 +206,65 @@ function FeedbackBanner({ notice, onDismiss }: Readonly<FeedbackBannerProps>) {
   );
 }
 
+export function resolveOAuthRedirectNotice(searchParams: {
+  get: (key: string) => string | null;
+}): {
+  notice: { type: 'success' | 'error'; message: string };
+  keysToRemove: string[];
+} | null {
+  const reconnectedMismatch = searchParams.get('reconnected_mismatch');
+  if (reconnectedMismatch === '1') {
+    const newAccountName = searchParams.get('newAccountName') || 'another account';
+    const expectedAccountName = searchParams.get('expectedAccountName') || 'the expired account';
+    return {
+      notice: {
+        type: 'error',
+        message: `You signed into ${newAccountName} instead of ${expectedAccountName}. ${expectedAccountName} still needs to be reconnected.`,
+      },
+      keysToRemove: ['reconnected_mismatch', 'newAccountName', 'expectedAccountName'],
+    };
+  }
+
+  const connected = searchParams.get('connected');
+  if (connected === 'already') {
+    const accountName = searchParams.get('accountName') || 'Account';
+    return {
+      notice: {
+        type: 'success',
+        message: `This Facebook account (${accountName}) is already connected — its session was refreshed.`,
+      },
+      keysToRemove: ['connected', 'accountName'],
+    };
+  }
+
+  if (connected === '1') {
+    return {
+      notice: {
+        type: 'success',
+        message: 'Facebook account connected successfully.',
+      },
+      keysToRemove: ['connected'],
+    };
+  }
+
+  const error = searchParams.get('error');
+  if (error) {
+    const isCancelled = error === 'access_denied' || error === 'user_cancelled';
+    const message = isCancelled
+      ? 'Connection canceled. No changes were made.'
+      : "Couldn't connect to Facebook. Check your permissions and try again.";
+    return {
+      notice: {
+        type: 'error',
+        message,
+      },
+      keysToRemove: ['error'],
+    };
+  }
+
+  return null;
+}
+
 export default function TenantAccountsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -250,33 +309,16 @@ export default function TenantAccountsPage() {
 
   // Handle URL query parameters from OAuth returns
   useEffect(() => {
-    const connected = searchParams.get('connected');
-    const error = searchParams.get('error');
+    const resolved = resolveOAuthRedirectNotice(searchParams);
+    if (!resolved) return;
 
-    if (connected === '1') {
-      setBannerNotice({
-        type: 'success',
-        message: 'Facebook account connected successfully.',
-      });
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('connected');
-        window.history.replaceState({}, '', url.pathname);
+    setBannerNotice(resolved.notice);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      for (const key of resolved.keysToRemove) {
+        url.searchParams.delete(key);
       }
-    } else if (error) {
-      const isCancelled = error === 'access_denied' || error === 'user_cancelled';
-      const message = isCancelled
-        ? 'Connection canceled. No changes were made.'
-        : "Couldn't connect to Facebook. Check your permissions and try again.";
-      setBannerNotice({
-        type: 'error',
-        message,
-      });
-      if (typeof window !== 'undefined') {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('error');
-        window.history.replaceState({}, '', url.pathname);
-      }
+      window.history.replaceState({}, '', url.pathname);
     }
   }, [searchParams]);
 
@@ -537,6 +579,7 @@ export default function TenantAccountsPage() {
         open={isConnectOpen}
         onOpenChange={handleConnectOpenChange}
         onAccountConnected={fetchAccounts}
+        onConnectionNotice={setBannerNotice}
         existingAccountIds={existingAccountIds}
         reconnectingAccount={reconnectingAccount}
         initialAccounts={accounts}
