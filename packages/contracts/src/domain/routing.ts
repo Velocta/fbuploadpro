@@ -101,3 +101,45 @@ export function getTenantRewriteUrl(
 
   return url;
 }
+
+export function buildTenantUrl(
+  subdomain: string,
+  pathname: string,
+  requestUrl: string | URL,
+  rootDomain?: string | null
+): URL {
+  const url =
+    typeof requestUrl === 'string'
+      ? new URL(requestUrl)
+      : new URL(requestUrl.toString());
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const cleanHost = url.hostname.toLowerCase();
+  const cleanRoot = (rootDomain || '').trim().toLowerCase().split(':')[0] || '';
+
+  const isLocalHost =
+    cleanHost === 'localhost' ||
+    cleanHost === '127.0.0.1' ||
+    cleanHost.endsWith('.localhost');
+  const isVercelPreview = cleanHost.endsWith('.vercel.app');
+  const isLocalRoot =
+    !cleanRoot ||
+    cleanRoot.includes('localhost') ||
+    cleanRoot.includes('127.0.0.1');
+
+  if (isLocalHost || isVercelPreview || isLocalRoot) {
+    url.pathname =
+      normalizedPath === '/'
+        ? `/tenant/${subdomain}`
+        : `/tenant/${subdomain}${normalizedPath}`;
+    url.search = '';
+    url.hash = '';
+    return url;
+  }
+
+  url.host = `${subdomain}.${cleanRoot}`;
+  url.pathname = normalizedPath;
+  url.search = '';
+  url.hash = '';
+  return url;
+}
+

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  buildTenantUrl,
   encryptToken,
   FacebookTokenExchangeResponseSchema,
   FacebookUserProfileResponseSchema,
@@ -7,6 +8,35 @@ import {
 } from '@fbuploadpro/contracts';
 import { getDbClient } from '../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
+
+async function resolveOAuthErrorTarget(
+  requestUrl: string,
+  state: string | null,
+  sessionSecret: string,
+  rootDomain: string,
+  error: string,
+  errorDescription: string | null
+): Promise<URL> {
+  let target = new URL('/accounts', requestUrl);
+  if (state) {
+    try {
+      const statePayload = await verifyOAuthState(state, sessionSecret);
+      target = buildTenantUrl(
+        statePayload.tenantSubdomain,
+        '/accounts',
+        requestUrl,
+        rootDomain
+      );
+    } catch (_e) {
+      // Fallback to /accounts if state cannot be verified
+    }
+  }
+  target.searchParams.set('error', error);
+  if (errorDescription) {
+    target.searchParams.set('error_description', errorDescription);
+  }
+  return target;
+}
 
 export async function handleFacebookCallback(
   request: NextRequest,
@@ -20,6 +50,7 @@ export async function handleFacebookCallback(
   const appSecret = process.env.FACEBOOK_APP_SECRET || '';
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';
   const redirectUri = `${appUrl}/api/auth/facebook/callback`;
 
   const searchParams = request.nextUrl.searchParams;
@@ -30,11 +61,14 @@ export async function handleFacebookCallback(
 
   // Handle upstream OAuth cancellation or error
   if (error) {
-    const target = new URL('/accounts', request.url);
-    target.searchParams.set('error', error);
-    if (errorDescription) {
-      target.searchParams.set('error_description', errorDescription);
-    }
+    const target = await resolveOAuthErrorTarget(
+      request.url,
+      state,
+      sessionSecret,
+      rootDomain,
+      error,
+      errorDescription
+    );
     return NextResponse.redirect(target);
   }
 
@@ -55,9 +89,11 @@ export async function handleFacebookCallback(
   }
 
   const { tenantSubdomain, userId } = statePayload;
-  const destinationUrl = new URL(
-    `/tenant/${tenantSubdomain}/accounts`,
-    request.url
+  const destinationUrl = buildTenantUrl(
+    tenantSubdomain,
+    '/accounts',
+    request.url,
+    rootDomain
   );
 
   try {

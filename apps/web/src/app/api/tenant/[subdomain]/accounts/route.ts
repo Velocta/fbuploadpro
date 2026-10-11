@@ -84,6 +84,15 @@ export async function handleListAccounts(
     };
   });
 
+  accounts.sort((a, b) => {
+    const aExpired = a.status === 'expired' ? 1 : 0;
+    const bExpired = b.status === 'expired' ? 1 : 0;
+    if (aExpired !== bExpired) {
+      return bExpired - aExpired;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
   const responsePayload = ListFacebookAccountsResponseSchema.parse({
     accounts,
     total: accounts.length,
