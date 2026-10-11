@@ -266,22 +266,73 @@ function decodeHtmlEntities(input: string): string {
     .trim();
 }
 
-function normalizeTagEqualsSpacing(tag: string): string {
-  return tag.replaceAll(/\s+/g, ' ').replaceAll(' = ', '=').replaceAll(' =', '=').replaceAll('= ', '=');
+function isAttributeNameChar(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) || // 0-9
+    (code >= 65 && code <= 90) || // A-Z
+    (code >= 97 && code <= 122) || // a-z
+    code === 95 || // _
+    code === 58 || // :
+    code === 45 // -
+  );
+}
+
+function readAttrNameBeforeEquals(text: string, eqIdx: number): string {
+  let pos = eqIdx - 1;
+  while (pos >= 0 && text.codePointAt(pos) === 32) {
+    pos -= 1;
+  }
+  const nameEnd = pos + 1;
+  while (pos >= 0 && isAttributeNameChar(text.codePointAt(pos) ?? 0)) {
+    pos -= 1;
+  }
+  return text.slice(pos + 1, nameEnd).toLowerCase();
+}
+
+function readQuotedAttrValueAfterEquals(
+  text: string,
+  eqIdx: number
+): { value: string; nextIndex: number } | null {
+  let pos = eqIdx + 1;
+  while (pos < text.length && text.codePointAt(pos) === 32) {
+    pos += 1;
+  }
+  const quoteChar = text[pos];
+  if (quoteChar !== '"' && quoteChar !== "'") {
+    return null;
+  }
+  const closeIdx = text.indexOf(quoteChar, pos + 1);
+  if (closeIdx === -1) {
+    return null;
+  }
+  return {
+    value: text.slice(pos + 1, closeIdx),
+    nextIndex: closeIdx + 1,
+  };
 }
 
 function parseMetaTagAttributes(tag: string): Record<string, string> {
-  const normalized = normalizeTagEqualsSpacing(tag);
+  const normalized = tag.replaceAll(/\s+/g, ' ');
   const attrs: Record<string, string> = {};
-  const attrRegex = /([a-zA-Z0-9_:-]+)=(?:"([^"]*)"|'([^']*)')/g;
-  let attrMatch: RegExpExecArray | null;
-  while ((attrMatch = attrRegex.exec(normalized)) !== null) {
-    const attrName = attrMatch[1]?.toLowerCase();
-    const attrVal = attrMatch[2] ?? attrMatch[3] ?? '';
-    if (attrName) {
-      attrs[attrName] = attrVal;
+  let searchFrom = 0;
+
+  while (searchFrom < normalized.length) {
+    const eqIdx = normalized.indexOf('=', searchFrom);
+    if (eqIdx === -1) {
+      break;
     }
+    const attrName = readAttrNameBeforeEquals(normalized, eqIdx);
+    const quoted = readQuotedAttrValueAfterEquals(normalized, eqIdx);
+    if (!quoted) {
+      searchFrom = eqIdx + 1;
+      continue;
+    }
+    if (attrName) {
+      attrs[attrName] = quoted.value;
+    }
+    searchFrom = quoted.nextIndex;
   }
+
   return attrs;
 }
 
@@ -727,10 +778,10 @@ async function readResponseBytesWithLimit(
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
 
-  while (true) {
+  const readNextChunk = async (): Promise<void> => {
     const { done, value } = await reader.read();
     if (done) {
-      break;
+      return;
     }
     if (value) {
       totalBytes += value.byteLength;
@@ -744,8 +795,10 @@ async function readResponseBytesWithLimit(
       }
       chunks.push(value);
     }
-  }
+    await readNextChunk();
+  };
 
+  await readNextChunk();
   return concatUint8Chunks(chunks, totalBytes);
 }
 
