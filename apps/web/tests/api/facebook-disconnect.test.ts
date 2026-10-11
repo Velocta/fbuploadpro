@@ -30,13 +30,18 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
   });
 
   describe('Disconnect Page (DELETE /api/tenant/[subdomain]/pages/[pageId])', () => {
-    it('deletes specific page under (user_id, pageId) without affecting parent account or sibling pages', async () => {
-      let deletedParams: any[] = [];
+    it('soft-deletes specific page under (user_id, pageId) by setting status = disconnected, wiping encrypted_access_token, and cancelling queued posts', async () => {
+      let updatedParams: any[] = [];
+      let cancelledQueueParams: any[] = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
-          if (sql.includes('DELETE FROM facebook_pages')) {
-            deletedParams = params;
-            return Promise.resolve([{ id: pageId }]);
+          if (sql.includes('UPDATE facebook_pages')) {
+            updatedParams = params;
+            return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
+          }
+          if (sql.includes('UPDATE queue_items')) {
+            cancelledQueueParams = params;
+            return Promise.resolve([]);
           }
           return Promise.resolve([]);
         }),
@@ -57,9 +62,10 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       expect(json.success).toBe(true);
       expect(json.pageId).toBe(pageId);
 
-      // Verify deletion parameters include compound user_id check
-      expect(deletedParams[0]).toBe(pageId);
-      expect(deletedParams[1]).toBe(userId);
+      // Verify soft-delete parameters include compound user_id check and queue cancellation
+      expect(updatedParams[0]).toBe(pageId);
+      expect(updatedParams[1]).toBe(userId);
+      expect(cancelledQueueParams).toEqual([userId, 'page_1001']);
     });
 
     it('returns 404 when page does not exist or belongs to another user', async () => {

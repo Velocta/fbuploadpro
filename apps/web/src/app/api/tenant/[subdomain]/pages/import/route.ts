@@ -122,14 +122,18 @@ export async function handleImportPages(
 
     const result = (await db.query(
       `INSERT INTO facebook_pages (
-        user_id, facebook_account_id, fb_page_id, page_name, category, tasks, followers_count, encrypted_access_token, profile_picture_url
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        user_id, facebook_account_id, fb_page_id, page_name, category, tasks, starting_followers, current_followers, encrypted_access_token, profile_picture_url
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
       ON CONFLICT (user_id, fb_page_id) DO UPDATE SET
         facebook_account_id = EXCLUDED.facebook_account_id,
         page_name = EXCLUDED.page_name,
         category = EXCLUDED.category,
         tasks = EXCLUDED.tasks,
-        followers_count = EXCLUDED.followers_count,
+        current_followers = EXCLUDED.current_followers,
+        starting_followers = CASE
+          WHEN facebook_pages.status = 'disconnected' THEN EXCLUDED.starting_followers
+          ELSE facebook_pages.starting_followers
+        END,
         encrypted_access_token = EXCLUDED.encrypted_access_token,
         profile_picture_url = EXCLUDED.profile_picture_url,
         status = 'active',

@@ -7,10 +7,18 @@ import {
 import { getDbClient } from '../../../../../lib/db';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
-function extractFollowersCount(row: any): number {
+function extractCurrentFollowers(row: any): number {
+  if (typeof row.current_followers === 'number') return row.current_followers;
+  if (typeof row.currentFollowers === 'number') return row.currentFollowers;
   if (typeof row.followers_count === 'number') return row.followers_count;
   if (typeof row.followersCount === 'number') return row.followersCount;
   return 0;
+}
+
+function extractStartingFollowers(row: any, currentFollowers: number): number {
+  if (typeof row.starting_followers === 'number') return row.starting_followers;
+  if (typeof row.startingFollowers === 'number') return row.startingFollowers;
+  return currentFollowers;
 }
 
 function extractPagePictureUrl(row: any): string | null {
@@ -48,7 +56,7 @@ export async function handleListPages(
 
   const db = dbClient ?? getDbClient();
 
-  // 3. Query imported pages with parent account display name
+  // 3. Query imported pages with parent account display name (excluding soft-deleted disconnected pages)
   const rows = (await db.query(
     `SELECT 
       p.id,
@@ -58,7 +66,8 @@ export async function handleListPages(
       p.page_name,
       p.profile_picture_url,
       p.category,
-      p.followers_count,
+      p.starting_followers,
+      p.current_followers,
       p.status,
       p.tasks,
       p.created_at,
@@ -66,6 +75,7 @@ export async function handleListPages(
     FROM facebook_pages p
     LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
     WHERE p.user_id = $1
+      AND p.status != 'disconnected'
     ORDER BY p.created_at DESC`,
     [session.userId]
   )) as any[];
@@ -88,6 +98,10 @@ export async function handleListPages(
       updatedAt,
     });
 
+    const currentFollowers = extractCurrentFollowers(row);
+    const startingFollowers = extractStartingFollowers(row, currentFollowers);
+    const followersGained = currentFollowers - startingFollowers;
+
     return {
       id: row.id,
       facebookAccountId: row.facebook_account_id || row.facebookAccountId,
@@ -97,7 +111,10 @@ export async function handleListPages(
       pageName: row.page_name || row.pageName,
       profilePictureUrl: extractPagePictureUrl(row),
       category: row.category ?? null,
-      followersCount: extractFollowersCount(row),
+      startingFollowers,
+      currentFollowers,
+      followersGained,
+      followersCount: currentFollowers,
       status: effectiveStatus,
       tasks: parsedTasks,
       createdAt: row.created_at || row.createdAt,

@@ -146,6 +146,104 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
     expect(activeDownloaderBtn).toBeDefined();
   });
 
+  it('renders Pages directly below Accounts inside the collapsible Facebook sidebar menu and navigates to /tenant/{subdomain}/pages when clicked', () => {
+    mockPathname = '/tenant/acme';
+    mockPush.mockClear();
+
+    let capturedTree: React.ReactElement | null = null;
+    function CaptureSidebar() {
+      capturedTree = WorkspaceSidebar({
+        subdomain: 'acme',
+        user: { name: 'Jane Doe', email: 'jane@example.com' },
+      });
+      return capturedTree;
+    }
+
+    const { hasText, html } = render(
+      <SidebarProvider>
+        <CaptureSidebar />
+      </SidebarProvider>
+    );
+
+    expect(hasText('Facebook')).toBe(true);
+    expect(hasText('Accounts')).toBe(true);
+    expect(hasText('Pages')).toBe(true);
+
+    const facebookIdx = html.indexOf('Facebook');
+    const accountsIdx = html.indexOf('Accounts');
+    const pagesIdx = html.indexOf('Pages');
+    expect(facebookIdx).toBeGreaterThan(-1);
+    expect(accountsIdx).toBeGreaterThan(facebookIdx);
+    expect(pagesIdx).toBeGreaterThan(accountsIdx);
+
+    // Locate the Pages sub-button in the captured tree and invoke its onClick handler
+    function findButtonByText(node: React.ReactNode, text: string): any {
+      if (!node || typeof node !== 'object') return null;
+      if (Array.isArray(node)) {
+        for (const item of node) {
+          const found = findButtonByText(item, text);
+          if (found) return found;
+        }
+        return null;
+      }
+      if (React.isValidElement(node)) {
+        const props = node.props as Record<string, any>;
+        if (props.children === text && typeof props.onClick === 'function') {
+          return node;
+        }
+        if (props.children) {
+          return findButtonByText(props.children, text);
+        }
+      }
+      return null;
+    }
+
+    const pagesSubBtn = findButtonByText(capturedTree, 'Pages');
+    expect(pagesSubBtn).not.toBeNull();
+    pagesSubBtn.props.onClick();
+    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/pages');
+  });
+
+  it('marks Pages as active when pathname is /tenant/acme/pages or /tenant/acme/pages/[pageId]', () => {
+    mockPathname = '/tenant/acme/pages';
+    const listRender = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    const listButtons = listRender.findTags('button');
+    const activePagesBtnOnList = listButtons.find(
+      (b) => b.innerHTML.includes('Pages') && b.attributes['data-active'] === 'true'
+    );
+    expect(activePagesBtnOnList).toBeDefined();
+    expect(activePagesBtnOnList?.attributes['aria-current']).toBe('page');
+
+    mockPathname = '/tenant/acme/pages/page-uuid-123';
+    const detailRender = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    const detailButtons = detailRender.findTags('button');
+    const activePagesBtnOnDetail = detailButtons.find(
+      (b) => b.innerHTML.includes('Pages') && b.attributes['data-active'] === 'true'
+    );
+    const activeAccountsBtnOnDetail = detailButtons.find(
+      (b) => b.innerHTML.includes('Accounts') && b.attributes['data-active'] === 'true'
+    );
+    expect(activePagesBtnOnDetail).toBeDefined();
+    expect(activePagesBtnOnDetail?.attributes['aria-current']).toBe('page');
+    expect(activeAccountsBtnOnDetail).toBeUndefined();
+  });
+
   it('renders user details and avatar initials in footer using NavUser pattern', () => {
     mockPathname = '/tenant/acme';
     const { hasText, hasAttribute } = render(
@@ -163,5 +261,6 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
     expect(hasText('JD')).toBe(true);
   });
 });
+
 
 

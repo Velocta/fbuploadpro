@@ -46,11 +46,13 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const mediaHref = `/tenant/${subdomain}/media`;
   const downloaderHref = `/tenant/${subdomain}/downloader`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
+  const pagesHref = `/tenant/${subdomain}/pages`;
 
   const isHomeActive = pathname === homeHref;
   const isMediaActive = pathname ? pathname.startsWith(mediaHref) : false;
   const isDownloaderActive = pathname ? pathname.startsWith(downloaderHref) : false;
   const isAccountsActive = pathname ? pathname.startsWith(accountsHref) : false;
+  const isPagesActive = pathname ? pathname.startsWith(pagesHref) : false;
 
   const handleNavigate = (href: string) => {
     if (isMobile) {
@@ -233,8 +235,8 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      tooltip="Facebook — Accounts"
-                      isActive={isCollapsed && isAccountsActive}
+                      tooltip="Facebook — Accounts & Pages"
+                      isActive={isCollapsed && (isAccountsActive || isPagesActive)}
                       onClick={() => {
                         if (isCollapsed) {
                           handleNavigate(accountsHref);
@@ -296,6 +298,14 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                           onClick={() => handleNavigate(accountsHref)}
                         >
                           Accounts
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton
+                          isActive={isPagesActive}
+                          onClick={() => handleNavigate(pagesHref)}
+                        >
+                          Pages
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     </SidebarMenuSub>

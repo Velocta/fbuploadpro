@@ -85,9 +85,9 @@ export async function handleDiscoverPages(
   const graphData = await graphRes.json();
   const rawItems: any[] = Array.isArray(graphData.data) ? graphData.data : [];
 
-  // 5. Query already imported pages for this user to compute isImported
+  // 5. Query already imported active/linked pages for this user to compute isImported
   const importedRows = (await db.query(
-    'SELECT fb_page_id FROM facebook_pages WHERE user_id = $1',
+    "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND status != 'disconnected'",
     [session.userId]
   )) as any[];
   const importedPageIds = new Set(
@@ -97,18 +97,22 @@ export async function handleDiscoverPages(
   // 6. Strictly filter for authentic Facebook Pages (ignore groups or malformed nodes)
   const discoveredPages = rawItems
     .filter((item) => item.id && item.name && (item.category || item.tasks))
-    .map((item) => ({
-      fbPageId: String(item.id),
-      pageName: String(item.name),
-      profilePictureUrl: item.picture?.data?.url ?? null,
-      category: item.category ?? null,
-      followersCount:
+    .map((item) => {
+      const followers =
         typeof item.followers_count === 'number'
           ? Math.max(0, item.followers_count)
-          : 0,
-      tasks: Array.isArray(item.tasks) ? item.tasks : [],
-      isImported: importedPageIds.has(String(item.id)),
-    }));
+          : 0;
+      return {
+        fbPageId: String(item.id),
+        pageName: String(item.name),
+        profilePictureUrl: item.picture?.data?.url ?? null,
+        category: item.category ?? null,
+        currentFollowers: followers,
+        followersCount: followers,
+        tasks: Array.isArray(item.tasks) ? item.tasks : [],
+        isImported: importedPageIds.has(String(item.id)),
+      };
+    });
 
   const responsePayload = DiscoverPagesResponseSchema.parse({
     accountId,

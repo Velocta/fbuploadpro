@@ -38,6 +38,7 @@ describe('Supabase Migrations Convention Suite', () => {
       'facebook_profile_picture_url',
       'purge_media_library_bloat',
       'nested_media_folders',
+      'facebook_pages_followers_tracking',
     ];
 
     for (const slug of expectedSlugs) {
@@ -81,5 +82,16 @@ describe('Supabase Migrations Convention Suite', () => {
     expect(content).toContain('ALTER COLUMN status TYPE user_status');
     expect(content).toContain('ALTER COLUMN status TYPE facebook_account_status');
     expect(content).toContain('ALTER COLUMN status TYPE facebook_page_status');
+  });
+
+  it('validates facebook_pages_followers_tracking migration renames followers_count to current_followers and adds starting_followers', () => {
+    const files = fs.readdirSync(supabaseMigrationsDir);
+    const followersMigration = files.find(f => f.includes('facebook_pages_followers_tracking.sql'));
+    expect(followersMigration).toBeDefined();
+
+    const content = fs.readFileSync(path.join(supabaseMigrationsDir, followersMigration!), 'utf8');
+    expect(content).toContain('RENAME COLUMN followers_count TO current_followers');
+    expect(content).toContain('ADD COLUMN IF NOT EXISTS starting_followers INT NOT NULL DEFAULT 0 CHECK (starting_followers >= 0)');
+    expect(content).toContain('SET starting_followers = current_followers');
   });
 });

@@ -160,6 +160,12 @@ describe('User Story 5 - Worker Daily Page Insights Snapshot Sync', () => {
     expect(snapshot.videoCompleteViews30s).toBe(890);
     expect(snapshot.reactionsSummary).toBeDefined();
     expect(snapshot.demographicsSummary).toBeDefined();
+
+    const updateFollowersQuery = queryLog.find(
+      (q) => q.text.includes('UPDATE facebook_pages') && q.text.includes('SET current_followers = $1')
+    );
+    expect(updateFollowersQuery).toBeDefined();
+    expect(updateFollowersQuery?.params).toEqual([15200, 'page-uuid-1']);
   });
 
   it('gracefully handles Graph API rate limits or 5xx errors without crashing (T175)', async () => {
