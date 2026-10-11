@@ -54,7 +54,7 @@ export function hasCompletedAccountConnection(
     if (!initialIds.has(acc.id)) {
       return true;
     }
-    if (reconnectingAccount && acc.id === reconnectingAccount.id) {
+    if (acc.id === reconnectingAccount?.id) {
       if (acc.status === 'active') return true;
       if (acc.updatedAt && acc.updatedAt !== reconnectingAccount.updatedAt) return true;
     }

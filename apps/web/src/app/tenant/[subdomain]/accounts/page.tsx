@@ -88,10 +88,10 @@ export function AccountsFilterBar({
         }}
       />
 
-      <div
-        role="group"
+      <fieldset
         aria-label="Filter accounts by status"
         style={{
+          margin: 0,
           display: 'inline-flex',
           alignItems: 'center',
           gap: SPACING.xs,
@@ -133,7 +133,7 @@ export function AccountsFilterBar({
             </button>
           );
         })}
-      </div>
+      </fieldset>
     </div>
   );
 }
