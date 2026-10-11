@@ -44,10 +44,12 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
 
   const homeHref = `/tenant/${subdomain}`;
   const mediaHref = `/tenant/${subdomain}/media`;
+  const downloaderHref = `/tenant/${subdomain}/downloader`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
 
   const isHomeActive = pathname === homeHref;
   const isMediaActive = pathname ? pathname.startsWith(mediaHref) : false;
+  const isDownloaderActive = pathname ? pathname.startsWith(downloaderHref) : false;
   const isAccountsActive = pathname ? pathname.startsWith(accountsHref) : false;
 
   const handleNavigate = (href: string) => {
@@ -129,7 +131,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
 
       {/* Primary Navigation Content */}
       <SidebarContent>
-        {/* Top Primary Navigation Group (Home & Media Library) */}
+        {/* Top Primary Navigation Group (Home, Media Library & Downloader) */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -182,6 +184,33 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   }
                 >
                   Media Library
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isDownloaderActive}
+                  tooltip="Downloader"
+                  onClick={() => handleNavigate(downloaderHref)}
+                  leftIcon={
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" x2="12" y1="15" y2="3" />
+                    </svg>
+                  }
+                >
+                  Downloader
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
