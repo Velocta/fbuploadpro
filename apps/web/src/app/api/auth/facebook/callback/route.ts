@@ -128,23 +128,25 @@ export async function refreshConnectedPageTokens(
       return;
     }
 
-    for (const linkedPage of validPages) {
-      const fbPageId = linkedPage.fb_page_id ?? linkedPage.fbPageId ?? '';
-      const rawPageToken = tokenMap.get(fbPageId);
-      if (!rawPageToken) {
-        continue;
-      }
-      const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
-      await db.query(
-        `UPDATE facebook_pages
-         SET encrypted_page_token = $1,
-             token_expires_at = $2,
-             status = CASE WHEN status = 'invalid_token' THEN 'active'::facebook_page_status ELSE status END,
-             updated_at = now()
-         WHERE id = $3 AND user_id = $4`,
-        [encryptedPageToken, expiresAt, linkedPage.id, userId]
-      );
-    }
+    await Promise.all(
+      validPages.map(async (linkedPage) => {
+        const fbPageId = linkedPage.fb_page_id ?? linkedPage.fbPageId ?? '';
+        const rawPageToken = tokenMap.get(fbPageId);
+        if (!rawPageToken) {
+          return;
+        }
+        const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
+        await db.query(
+          `UPDATE facebook_pages
+           SET encrypted_page_token = $1,
+               token_expires_at = $2,
+               status = CASE WHEN status = 'invalid_token' THEN 'active'::facebook_page_status ELSE status END,
+               updated_at = now()
+           WHERE id = $3 AND user_id = $4`,
+          [encryptedPageToken, expiresAt, linkedPage.id, userId]
+        );
+      })
+    );
   } catch (err) {
     console.warn(
       '[FacebookOAuth] Page token sync skipped:',

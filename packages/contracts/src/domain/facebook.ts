@@ -53,7 +53,6 @@ export const FacebookAccountViewSchema = z.object({
 
 export type FacebookAccountView = z.infer<typeof FacebookAccountViewSchema>;
 export const FacebookAccountSummarySchema = FacebookAccountViewSchema;
-export type FacebookAccountSummary = FacebookAccountView;
 
 export const ListFacebookAccountsResponseSchema = z.object({
   accounts: z.array(FacebookAccountViewSchema),
