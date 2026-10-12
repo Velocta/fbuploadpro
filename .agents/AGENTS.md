@@ -72,9 +72,11 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 | Task Type & Package Scope | Target Subagent | Enforced Standard |
 | :--- | :--- | :--- |
 | **`apps/web`** (UI, Pages, Layouts, Components, CSS) | `frontend-engineer` | Anti-slop craft (*Taste Skill* dials + *Impeccable* craft floor), Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference from `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; zero capsule pill badges; NEVER modify `DESIGN.md`). |
+| **`apps/desktop`** (Tauri v2 + Rust Native Backend & Desktop UI) | `backend-engineer` (Rust / IPC) & `frontend-engineer` (Desktop UI) | Thin Client / Fat Server IP Isolation (Principle 26), Cargo release profile symbol stripping (`strip = true`, `opt-level = 3`), typed IPC commands via `@fbuploadpro/contracts`, zero client-side storage of raw tokens or publishing secrets. |
+| **`apps/extension`** (WXT Manifest V3 Browser Companion) | `frontend-engineer` (Popup/Options/Content) & `backend-engineer` (Service Worker) | Manifest V3 compliance, scoped permissions (`activeTab`, `storage`), zero inline script injection, typed contracts via `@fbuploadpro/contracts`, edge API integration via `apps/worker`. |
 | **`apps/worker`**, **`packages/contracts`**, **`packages/database`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
-| **E2E & Integration Tests**, Contracts, Scenarios | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation. |
-| **Turborepo**, **CI/CD**, **Cloudflare Wrangler**, Docker | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, atomic PR hygiene. |
+| **E2E & Integration Tests**, Contracts, Scenarios | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation, desktop IPC smoke & extension MV3 schema tests. |
+| **Turborepo**, **CI/CD**, **Cloudflare Wrangler**, Docker, Cargo | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, native Cargo toolchain caching, atomic PR hygiene. |
 
 ---
 
@@ -116,6 +118,8 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 ### FBUploadPro Monorepo Substrate
 - **Web App**: Next.js 16 (App Router) + React 19 (`apps/web`). Event-driven state transitions only.
 - **Edge Worker**: Cloudflare Workers edge runtime (`apps/worker`). V8 isolate execution; import database via `@fbuploadpro/database/edge`.
+- **Desktop App Shell**: Tauri v2 + Rust (`apps/desktop`). Thin Client / Fat Server IP Isolation (Principle 26). Cargo profile `strip = true`, `opt-level = 3`. No raw OAuth storage or private publishing algorithms client-side. Local folder watching & native OS file system access via typed IPC.
+- **Browser Companion Shell**: Manifest V3 via WXT (`apps/extension`). Minimal scoped permissions (`activeTab`, `storage`). Zero client-side scraping secrets; communicates securely via Edge Worker API and `@fbuploadpro/contracts`.
 - **Contracts**: Shared schemas and validations in `@fbuploadpro/contracts` with strict Zod types.
 - **Database**: PostgreSQL substrate in `@fbuploadpro/database` with compound tenant constraints (`user_id`).
 - **Publishing & APIs**: Facebook Graph API v26.0, Cloudflare R2 media storage.
@@ -123,7 +127,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 ### Quality & Governance
 - Follow coding standards in `.agents/rules/coding-standards.md`.
 - Follow Git guidelines in `.agents/rules/git-workflow.md` (Atomic PRs <150–200 LoC).
-- Quality Gate: `pnpm turbo run build lint typecheck test` must pass with 100% success and 0 errors before PR creation.
+- Quality Gate: `pnpm turbo run build lint typecheck test` and `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml` must pass with 100% success and 0 errors before PR creation.
 - **Deployment Failure Transparency & Diagnosis**: Whenever a deployment, release pipeline, or CI/CD workflow fails, the agent MUST immediately inspect the execution logs (e.g., via `gh run view --log-failed` or deployment service logs), clearly explain to the user the exact root cause of why it failed (e.g., missing secret, schema migration error, API quota, timeout, or build failure), and outline concrete remediation steps or autonomously apply the fix.
 - **Continuous Constitution & Documentation Synchronization**:
   - **On User Directives & Project Insights**: Whenever the user shares new details, business logic, constraints, architectural choices, or domain rules about the project, the agent MUST immediately update `.specify/memory/constitution.md` (for principles & governance) and corresponding documentation under `docs/` (e.g., `docs/foundational-knowledge.md`). Never leave project knowledge isolated in chat history.
@@ -132,13 +136,13 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
   - The agent MUST NEVER merge any Pull Request into `main` without explicitly asking the user and receiving their direct, unambiguous approval first.
   - This rule is non-negotiable and applies to ALL PRs without exception—whether frontend, backend, database migrations, devops, or documentation.
 - **Strict Theme & Design System Authority (`apps/web/src/lib/theme.ts`)**:
-  - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is [`apps/web/src/lib/theme.ts`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/apps/web/src/lib/theme.ts) and [`DESIGN.md`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/DESIGN.md).
+  - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) and [`DESIGN.md`](DESIGN.md).
   - All components MUST import and reference styling properties from `@web/lib/theme` or CSS variables (`globals.css`).
   - NEVER declare, invent, or hardcode ad-hoc hex codes, custom borders, arbitrary shadows, or capsule pill badges anywhere in frontend components.
   - Status indicators must strictly use unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS` or `COMPONENT_STYLES.statusDot`).
   - Enforced by `.agents/rules/theme-standards.md`.
 - **Absolute Immutability of `DESIGN.md` (Never Modify `DESIGN.md`)**:
-  - AI agents and automated tools MUST NEVER make any changes, edits, reformatting, overwrites, or truncations to [`DESIGN.md`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/DESIGN.md).
+  - AI agents and automated tools MUST NEVER make any changes, edits, reformatting, overwrites, or truncations to [`DESIGN.md`](DESIGN.md).
   - `DESIGN.md` is permanently frozen and locked as the repository's immutable design system specification.
   - All frontend code and theme configurations in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` must strictly conform to `DESIGN.md` without modifying the root design specification document itself.
   - Only the human project lead may directly alter or update `DESIGN.md`.

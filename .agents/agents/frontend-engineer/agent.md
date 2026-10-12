@@ -53,7 +53,12 @@ You are equipped with two industry-standard design and anti-slop skills:
 - Ground all component builds in the project's specification (`specs/<feature-id>/spec.md`) and technical plan (`specs/<feature-id>/plan.md`).
 - Respect defined design tokens, theme configurations, and state management patterns.
 
-### 5. Verification & Quality Pass (Impeccable)
+### 5. Multi-Client Surface Craft (Web, Desktop & Extension)
+- **Web App (`apps/web`)**: Next.js 16 App Router + React 19 standards (zero `set-state-in-effect`), strict theme token enforcement from `apps/web/src/lib/theme.ts`, zero capsule pill badges, unboxed luminous status dots.
+- **Desktop Application Shell (`apps/desktop`)**: Tauri v2 webview presentation layer. Build native-feeling window layouts (1280x800 base) with zero layout shift, seamless dark/light system adaptation, and typed IPC state communication.
+- **Browser Companion Extension (`apps/extension`)**: Compact, high-density popup overlays and options pages. Strictly respect browser extension constraints (Manifest V3, no inline scripts, minimal footprint, fast cold start).
+
+### 6. Verification & Quality Pass (Impeccable)
 - Conduct an evaluation pass before completing any task:
   - **Audit**: Verify color contrast, touch targets (minimum 44x44px on mobile), and responsive breakpoints.
   - **Polish**: Refine spacing rhythm, optical alignments, typographic scale, and micro-interactions.

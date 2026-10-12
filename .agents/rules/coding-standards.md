@@ -86,9 +86,11 @@ AI-generated code frequently suffers from "slop"—unnecessary bloat, speculativ
 
 ### B. Non-Negotiable Quality Gates
 - **Automated Verification**: Before marking any implementation task complete:
-  1. All new and existing automated tests must pass with zero failures.
-  2. Code must pass linters, formatters, and static type checks without suppressing warnings (`# noqa`, `@ts-ignore`) unless strictly justified.
-  3. No temporary debug prints (`console.log`, `print()`) or commented-out code may be committed.
+  1. All new and existing automated tests must pass with zero failures (`pnpm turbo run test`).
+  2. Code must pass linters, formatters, and static type checks without suppressing warnings (`# noqa`, `@ts-ignore`) unless strictly justified (`pnpm turbo run lint typecheck`).
+  3. Native desktop Rust code must pass compilation and static checks (`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml`).
+  4. Full production build must pass without errors (`pnpm turbo run build`).
+  5. No temporary debug prints (`console.log`, `println!`, `print()`) or commented-out code may be committed.
 
 ---
 
@@ -118,4 +120,30 @@ AI-generated code frequently suffers from "slop"—unnecessary bloat, speculativ
 - **Never Declare, Always Reference**: AI agents are strictly prohibited from declaring ad-hoc hex color literals, RGB/HSL strings, or arbitrary border/shadow definitions inside component files.
 - **Permanent Ban on Capsule Pill Badges**: Never wrap status tags or text inside rounded capsule bubbles (`rounded-full bg-* border`). Status must be signaled exclusively via unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS` or `COMPONENT_STYLES.statusDot`).
 - **Full Specification & Immutability**: Detailed compliance and code patterns are governed by `.agents/rules/theme-standards.md` and `DESIGN.md`. Agents must NEVER modify `DESIGN.md` (permanently frozen).
+
+### F. Desktop Application Shell & Native Rust Backend (`apps/desktop`)
+- **Thin Client / Fat Server IP Isolation (Principle 26)**:
+  - The desktop client is strictly a presentation and local hardware/filesystem gateway.
+  - NEVER store raw long-lived third-party OAuth access tokens or app secrets inside the desktop app.
+  - NEVER implement proprietary publishing decision algorithms, rate limiting bypasses, or core scheduling engines in desktop client code.
+- **Tauri v2 Architecture & IPC Purity**:
+  - Tauri commands exposed to the frontend webview must validate all inbound arguments and return strongly typed `Result<T, E>` structures serialized via `serde`.
+  - Zero `unwrap()` calls in production Rust command paths; use idiomatic error propagation (`?`) with descriptive error types.
+- **Release Profile Symbol Stripping**:
+  - Cargo release profile MUST maintain `strip = true`, `opt-level = 3`, `lto = true`, `codegen-units = 1`, and `panic = "abort"` to prevent binary decompilation and symbol leakage.
+- **Local File System Ergonomics**:
+  - Local directory/folder watchers must be non-blocking and stream change events efficiently through Tauri's event bus without saturating CPU.
+
+### G. Browser Companion Shell (`apps/extension`)
+- **Manifest V3 Specification**:
+  - Strictly adhere to Chrome and Firefox Manifest V3 architecture.
+  - Background processes must run as transient service workers; never rely on persistent background page memory.
+- **Zero Client-Side Secret Leakage**:
+  - Extensions execute in untrusted user-controlled runtime environments. No master client secrets or unencrypted tenant tokens may be packaged in extension bundles.
+  - Extension communicates with `@fbuploadpro/worker` edge endpoints using authenticated ephemeral session tokens.
+- **Scoped Permissions & Content Security Policy (CSP)**:
+  - Request minimal required permissions (`activeTab`, `storage`).
+  - Zero eval, WebAssembly compilation, or inline script injection.
+- **Contract Synchronization**:
+  - Data transfer schemas between content scripts, popup UI, and background workers must be validated against `@fbuploadpro/contracts`.
 

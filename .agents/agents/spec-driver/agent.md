@@ -47,10 +47,10 @@ flowchart TD
     T --> A["Phase 7: Analyze\n(speckit-analyze subagent)"]
     A --> Dispatch{"Phase 8: Multi-Agent Implement\nTask Router"}
     
-    Dispatch -->|"UI/Components/CSS"| FE["frontend-engineer\n(Taste & Impeccable)"]
-    Dispatch -->|"API/DB/Logic/Models"| BE["backend-engineer\n(Clean Architecture)"]
-    Dispatch -->|"Integration & E2E Tests"| QA["qa-engineer\n(Zero Mock Theater)"]
-    Dispatch -->|"CI/Docker/Infra"| DO["devops-engineer\n(Platform & Workflows)"]
+    Dispatch -->|"Web UI / Desktop UI / Extension Popup"| FE["frontend-engineer\n(Taste & Impeccable)"]
+    Dispatch -->|"Worker API / DB / Rust Tauri Backend / MV3 Service Worker"| BE["backend-engineer\n(Clean Architecture & Rust)"]
+    Dispatch -->|"Integration, E2E, IPC & Schema Tests"| QA["qa-engineer\n(Zero Mock Theater)"]
+    Dispatch -->|"CI/CD / Cargo / Docker / Bundles"| DO["devops-engineer\n(Platform & Workflows)"]
     
     FE --> Sync["Sync & Check off Task in tasks.md"]
     BE --> Sync
@@ -106,12 +106,15 @@ Invoke each specialized subagent in strict sequential order:
 ### Phase 8: Multi-Agent Implementation Conductor
 Do not attempt to execute all heterogeneous tasks in a single context. Parse `specs/<feature-id>/tasks.md` and route tasks to specialized subagents using the **Task Dispatch Matrix**:
 
-| Task Domain | File Patterns & Keywords | Target Subagent | Enforced Standard |
+| Task Domain & Package Scope | File Patterns & Keywords | Target Subagent | Enforced Standard |
 | :--- | :--- | :--- | :--- |
-| **Frontend & UI** | Components, pages, styles, `.tsx`, `.vue`, `.svelte`, `.css`, Tailwind, templates | **`frontend-engineer`** | Taste Skill (variance/motion/density dials) & Impeccable craft floor |
-| **Backend & Core** | APIs, routes, controllers, DB models, migrations, auth, services, business logic | **`backend-engineer`** | Clean architecture, schema validation, zero-slop error handling |
-| **Testing & QA** | E2E journeys, integration tests, `tests/`, test fixtures, boundary cases | **`qa-engineer`** | Zero mock theater, real user story test validation |
-| **DevOps & Infra** | `.github/workflows`, `Dockerfile`, `docker-compose`, shell scripts, env configs | **`devops-engineer`** | Multi-stage builds, CI caching, security scanning |
+| **Frontend & Web UI (`apps/web`)** | Web pages, layouts, components, styles, `.tsx`, `.css` | **`frontend-engineer`** | Taste Skill (variance/motion/density dials), Impeccable craft floor, strict `apps/web/src/lib/theme.ts` token authority |
+| **Desktop UI & Extension Views (`apps/desktop/src`, `apps/extension/src`)** | Desktop views, extension popup/options/overlay, `.tsx`, `.css` | **`frontend-engineer`** | Native desktop ergonomics, compact companion layout, design token consistency |
+| **Edge API, Database & Contracts (`apps/worker`, `packages/database`, `packages/contracts`)** | Edge routes, DB models, migrations, auth, Zod contracts | **`backend-engineer`** | Clean architecture, V8 edge isolate purity, multi-tenant compound isolation (`user_id`), Zod contract validation |
+| **Desktop Native Rust & IPC (`apps/desktop/src-tauri`)** | Rust commands, `src-tauri/**/*.rs`, `Cargo.toml`, local folder watcher, IPC handlers | **`backend-engineer`** | Thin Client / Fat Server IP Isolation (Principle 26), Cargo release symbol stripping (`strip = true`), serde serialization, zero unwrap in production |
+| **Extension Service Worker & Messaging (`apps/extension/src`)** | MV3 background service worker, message passing, edge API bridge | **`backend-engineer`** | Manifest V3 compliance, zero client secrets, typed contracts via `@fbuploadpro/contracts` |
+| **Testing & Multi-Client QA** | E2E journeys, web tests, contracts tests, desktop smoke, MV3 schema tests | **`qa-engineer`** | Zero mock theater, real user story test validation, leak prevention tests |
+| **Platform, CI/CD & Toolchains** | `.github/workflows`, `turbo.json`, `Cargo.toml`, Docker, WXT extension bundles | **`devops-engineer`** | Turborepo pipeline caching, native Cargo toolchain caching, atomic PR hygiene |
 
 #### Execution Discipline:
 1. Dispatch tasks respecting phase dependencies (Phase 1 Setup $\rightarrow$ Phase 2 Foundational $\rightarrow$ Phase 3 P1 User Story...).
