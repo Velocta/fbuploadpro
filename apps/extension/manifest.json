@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "FBUploadPro Companion",
+  "version": "0.1.0",
+  "description": "Browser companion for FBUploadPro multi-account publishing workflows and content capture.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.facebook.com/*"
+  ],
+  "action": {
+    "default_title": "FBUploadPro"
+  }
+}

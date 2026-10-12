@@ -21,6 +21,32 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  apps/desktop:
+    dependencies:
+      '@fbuploadpro/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@26.6.4)
+
+  apps/extension:
+    dependencies:
+      '@fbuploadpro/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.5
+        version: 3.2.7(@types/node@26.6.4)
+
   apps/web:
     dependencies:
       '@aws-sdk/client-s3':
