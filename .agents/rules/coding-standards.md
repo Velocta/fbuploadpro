@@ -109,7 +109,7 @@ AI-generated code frequently suffers from "slop"—unnecessary bloat, speculativ
 ### C. Multi-Tenant Data Isolation (`packages/database`)
 - **Tenant Scope Enforcement**: Every tenant-owned database table must enforce isolation strictly via `user_id`. There are no agency containers in the platform.
 - **Compound Constraints**: Enforce foreign keys and unique constraints using compound keys (e.g., `(user_id, facebook_account_id)`).
-- **Concurrency & Ledgers**: Token ledgers must use atomic balance debits and non-negative check constraints (`balance >= 0`).
+- **Abolition of Token Economy**: The legacy prepaid token system, credit balances, and transaction ledgers are formally abolished. Publishing is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages, with zero token deduction or balance gating.
 
 ### D. Shared Contracts & Boundary Validation (`packages/contracts`)
 - **Zod Runtime Validation**: All payloads crossing API routes, webhook handlers, and worker messages must parse against strict Zod schemas.
