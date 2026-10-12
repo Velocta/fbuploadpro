@@ -12,39 +12,49 @@
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer ["Client Devices & Browsers"]
-        UserBrowser["User / Creator Browser\n(Web Application / Mobile Web)"]
+    subgraph ClientLayer ["Client Ingestion & User Surfaces"]
+        UserBrowser["Web Application\n(apps/web - Next.js 16 App Router)"]
+        DesktopApp["Desktop Application\n(apps/desktop - Tauri v2 Rust + React 19)"]
+        BrowserExtension["Browser Extensions\n(apps/extension - WXT Manifest V3)"]
     end
 
     subgraph EdgeEntry ["Edge Ingress & Routing (Cloudflare & Vercel)"]
         Apex["Marketing Apex Domain\n(fbuploadpro.com / www)"]
         Gateway["Application Central Gateway\n(app.fbuploadpro.com)"]
         TenantWorkspace["Tenant Subdomains\n({username}.fbuploadpro.com)"]
+        IntegrationsHub["Integrations Hub\n({username}.fbuploadpro.com/integrations)"]
     end
 
     subgraph AppPlane ["Application Control Plane (Next.js 16 App Router)"]
-        Web["apps/web\nNext.js 16 App Router + React 19\n(Tenant Subdomain Routing)"]
+        Web["apps/web\nNext.js 16 App Router + React 19\n(Tenant Subdomain Routing & API Gateway)"]
     end
 
     subgraph SupabaseCloud ["Supabase (Data Substrate & Identity)"]
-        Auth["Supabase Auth\n(Identity & Session Management)"]
+        Auth["Supabase Auth (Native SMTP OTP)\n(Identity & Session Management)"]
         PG[("PostgreSQL Substrate\n(Multi-tenant Compound Schemas)")]
         Pooler["Connection Pooler (PgBouncer)\n(Port 6543 / 5432 Direct DDL)"]
     end
 
     subgraph CloudflareEdge ["Cloudflare (Edge Compute & Object Storage)"]
         Worker["apps/worker\nCloudflare Workers Edge Cron (1-min)\n(SKIP LOCKED Dispatcher)"]
-        R2[("Cloudflare R2 Storage\n(Videos / Images Direct Uploads)")]
+        R2[("Cloudflare R2 Storage\n(Zero Egress Direct Media Ingestion)")]
     end
 
     subgraph ExternalServices ["External API Gateways"]
         FB["Facebook Graph API v26.0\n(Reels, Feed, Comments, Insights)"]
     end
 
+    UserBrowser --> TenantWorkspace
+    TenantWorkspace --> Web
+    DesktopApp -->|API Handshake & Presigned Upload Request| Web
+    BrowserExtension -->|1-Click Media Ingestion Request| Web
+    DesktopApp -.->|Direct Video Upload via Presigned URL| R2
+    BrowserExtension -.->|Direct Media Upload via Presigned URL| R2
+
     Web -->|Auth & User Identity| Auth
     Web -->|App Queries via PgBouncer| Pooler
     Pooler --> PG
-    Web -->|Generate Presigned URLs| R2
+    Web -->|Generate Presigned S3 URLs| R2
     Worker -->|Claim due posts via SKIP LOCKED| PG
     Worker -->|Stream media assets| R2
     Worker -->|Publish posts & first comments| FB
@@ -54,10 +64,13 @@ flowchart TD
 |---|---|---|---|
 | **Marketing Site** | **Independent Host** | Landing Page, Terms, Privacy | High-converting marketing landing pages, Terms of Service (`/terms`), Privacy Policy (`/privacy`), SEO content, deployed independently. |
 | **Web App Gateway** | **Vercel** | `app.fbuploadpro.com` (`apps/web`) | Central authentication gateway, serving `/login`, `/signup`, and cross-subdomain auth handoffs. |
-| **Tenant Workspaces** | **Vercel** | `{username}.fbuploadpro.com` (`apps/web`) | User workspace root and dedicated tenant tools. |
-| **Database & Identity** | **Supabase** | Managed PostgreSQL & Supabase Auth | User identity/sessions, multi-tenant tables (`user_id`), transaction pooling, and automated schema migrations via `/supabase/migrations` and GitHub integration. |
+| **Tenant Workspaces** | **Vercel** | `{username}.fbuploadpro.com` (`apps/web`) | User workspace root, publishing queue, accounts, and dedicated tenant tools. |
+| **Integrations Hub** | **Vercel** | `{username}.fbuploadpro.com/integrations` (`apps/web`) | Dedicated workspace portal for pairing browser extensions, generating pairing PINs, and downloading desktop installers. |
+| **Desktop Application** | **macOS / Windows Native** | `apps/desktop` (Tauri v2: Rust + React 19) | Native stripped binary client; background local folder auto-watching for rendered videos, system tray uploader, and direct R2 presigned ingestion without source code exposure. |
+| **Browser Extensions** | **Chrome & Firefox Stores** | `apps/extension` (WXT: Manifest V3) | Single cross-browser extension codebase; 1-click social media clipping directly to Cloudflare R2 Media Library, quick queue status popup, and Facebook session assistant. |
+| **Database & Identity** | **Supabase** | Managed PostgreSQL & Supabase Auth | User identity/sessions, native 6-digit SMTP OTP delivery, multi-tenant tables (`user_id`), transaction pooling, and automated schema migrations via `/supabase/migrations`. |
 | **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks (`SKIP LOCKED`), direct media streaming to Meta APIs. |
-| **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage, presigned direct PC-to-bucket uploads, thumbnail cache. |
+| **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage with $0 egress fees, presigned direct PC-to-bucket uploads, thumbnail cache. |
 | **Social Publishing** | **Meta** | Facebook Graph API v26.0 | Reels and photo publishing, automatic first comment submission, page insights sync. |
 
 ### C. Automated Database Schema Migrations (Supabase GitHub Integration)
@@ -310,3 +323,52 @@ All development follows autonomous multi-agent orchestration codified in [`.agen
    - The official palette is codified in `DESIGN.md`: Gold (`#fad734`), Peru (`#b29527`), Bronze (`#766018`), Rose (`#f6465d`), Emerald (`#2ebd85`), Pitch Black (`#000000`), Pure White (`#ffffff`), and Pitch Slate (`#1f242d`).
    - `DESIGN.md` is permanently frozen and locked as an immutable specification; agents must NEVER modify it.
    - `apps/web/src/lib/theme.ts` is the single centralized authority for all frontend styling. All components must import and reference tokens from `@web/lib/theme` or CSS variables (`globals.css`); declaring ad-hoc hex values, arbitrary borders, or capsule pill badges is permanently prohibited. Status signaling must strictly use unboxed 6px luminous dots with micro-halos.
+
+---
+
+## 11. Multi-Client Ecosystem & Cross-Surface Architecture Blueprint
+
+To expand FBUploadPro beyond the browser while guaranteeing intellectual property protection, zero source code exposure, and high multi-platform code reuse, the platform architecture establishes a unified multi-client topology:
+
+### 11.1 The Thin Client / Fat Server IP Protection Model
+* **The Brain in the Cloud**: 100% of proprietary business logic, scheduling queue algorithms (`FOR UPDATE SKIP LOCKED`), Meta Graph API v26.0 mutations, OAuth token symmetric encryption (AES-256-GCM), and database persistence reside exclusively within `apps/web` (Server Actions / API routes) and `apps/worker` (Cloudflare Workers).
+* **The Hands on the Device**: Desktop applications and browser extensions operate as lightweight input/output shells. They handle device-specific interactions (local folder monitoring, OS system tray, 1-click social page clipping) and perform zero offline business logic or database queries. All operations require short-lived, cryptographically verified session handshakes (`fbup_session`).
+
+### 11.2 Desktop Architecture: Tauri v2 (Rust + React 19) (`apps/desktop`)
+* **Framework**: [Tauri v2](https://tauri.app/) pairing a compiled Rust native backend with a React 19 client frontend.
+* **Source Code Protection**: The desktop core compiles into stripped, native machine code binaries (`.dmg`, `.exe`), permanently eliminating the intellectual property exposure of plain Electron `.asar` bundles.
+* **Native Capabilities**:
+  * **Background Local Folder Watcher**: Leverages Rust's native `notify` crate to monitor local creator render directories (e.g. `~/Videos/Rendered`) and automatically push newly completed video files directly to Cloudflare R2 via presigned S3 URLs.
+  * **System Tray & Minimized Ingestion**: Allows long-running bulk uploads to proceed smoothly in the background without keeping browser tabs open.
+* **Code Reuse**: Reuses 100% of `@fbuploadpro/contracts` (Zod schemas, types, and error models) and imports shared React UI components styled with the canonical Binance Precision design tokens (`apps/web/src/lib/theme.ts`).
+
+### 11.3 Browser Extension Architecture: WXT Manifest V3 (`apps/extension`)
+* **Framework**: [WXT](https://wxt.dev/) (Web Extension Tools) compiling a unified Manifest V3 codebase for both Chrome Web Store and Firefox Add-ons.
+* **Core Capabilities**:
+  * **1-Click Media Ingestion**: Enables creators browsing supported social platforms to clip source media directly into their FBUploadPro Media Library in Cloudflare R2.
+  * **Quick Publishing Queue Popup**: Displays upcoming schedule slots, next post countdown, and queue item statuses directly from the browser toolbar.
+  * **Session Verification Assistant**: Validates Facebook login sessions and token health in the creator's active browser.
+* **Type Safety**: Directly imports `@fbuploadpro/contracts` for API payloads, eliminating divergence between the extension and web control plane.
+
+### 11.4 Workspace Integrations Hub (`/tenant/[subdomain]/integrations`)
+* **Dedicated Workspace Route**: Hosted within `apps/web` under `/tenant/[subdomain]/integrations` (accessible via the workspace sidebar).
+* **Pairing & Download Cards**:
+  * Direct installer download links for macOS (Apple Silicon & Intel) and Windows.
+  * 1-click installation links for the Chrome Web Store and Firefox Add-ons.
+  * Secure pairing token generator for 1-click desktop and extension authentication handshakes.
+  * Real-time connection signals rendered with unboxed 6px luminous status dots (`STATUS_SIGNALS`).
+
+### 11.5 Target Monorepo Layout Evolution
+```text
+fbuploadpro/
+├── apps/
+│   ├── web/                          # Next.js 16 App Router (Web Portal & Integrations Hub)
+│   ├── worker/                       # Cloudflare Workers (Edge Cron Dispatcher)
+│   ├── desktop/                      # Tauri v2 Desktop App (Rust + React 19)
+│   └── extension/                    # WXT Browser Extension (Chrome & Firefox MV3)
+├── packages/
+│   ├── contracts/                    # Shared Zod schemas, API types, crypto (Web, Worker, Desktop, Extension)
+│   └── database/                     # PostgreSQL substrate & edge client
+├── pnpm-workspace.yaml
+└── turbo.json
+```
