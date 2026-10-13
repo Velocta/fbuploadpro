@@ -30,8 +30,7 @@ export function isDesktopApp(): boolean {
   const hasTauriInternals = Boolean(win.__TAURI_INTERNALS__ || win.__TAURI__);
   const hasDesktopUserAgent = Boolean(
     typeof navigator !== 'undefined' &&
-    navigator.userAgent &&
-    navigator.userAgent.includes('FBUploadProDesktop')
+    navigator?.userAgent?.includes('FBUploadProDesktop')
   );
   return hasTauriInternals || hasDesktopUserAgent;
 }

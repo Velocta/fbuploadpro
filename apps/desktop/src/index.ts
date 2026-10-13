@@ -3,13 +3,7 @@
  * @description Desktop application shell configuration & window geometry (Tauri v2).
  */
 
-import {
-  type DesktopShellConfig,
-  isDesktopApp,
-  isMacDesktop,
-  openExternalUrl,
-  sendDesktopWindowAction,
-} from '@fbuploadpro/contracts';
+import { type DesktopShellConfig } from '@fbuploadpro/contracts';
 
 export {
   isDesktopApp,
@@ -17,7 +11,7 @@ export {
   openExternalUrl,
   sendDesktopWindowAction,
   type DesktopShellConfig,
-};
+} from '@fbuploadpro/contracts';
 
 export const DESKTOP_SHELL_CONFIG: DesktopShellConfig = {
   appName: 'FBUploadPro Desktop',

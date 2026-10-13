@@ -16,7 +16,7 @@ export interface DesktopTitleBarProps {
   platformOverride?: 'mac' | 'windows' | 'linux';
 }
 
-export function DesktopTitleBar({ forceVisible = false, platformOverride }: DesktopTitleBarProps) {
+export function DesktopTitleBar({ forceVisible = false, platformOverride }: Readonly<DesktopTitleBarProps>) {
   const [mounted, setMounted] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [isMac, setIsMac] = useState(false);
@@ -30,7 +30,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Desk
 
     if (desktop) {
       document.documentElement.style.setProperty('--desktop-titlebar-height', '36px');
-      document.documentElement.setAttribute('data-desktop', 'true');
+      document.documentElement.dataset.desktop = 'true';
     }
 
     // Intercept target="_blank" external links inside desktop shell to prevent navigating the embedded webview
@@ -61,7 +61,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Desk
 
     return () => {
       document.documentElement.style.removeProperty('--desktop-titlebar-height');
-      document.documentElement.removeAttribute('data-desktop');
+      delete document.documentElement.dataset.desktop;
       document.removeEventListener('click', handleDocumentClick, true);
     };
   }, [forceVisible, platformOverride]);
