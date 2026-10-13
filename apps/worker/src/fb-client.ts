@@ -20,6 +20,7 @@ export class FacebookGraphError extends Error {
   public readonly isRateLimit: boolean;
   public readonly isAuthError: boolean;
   public readonly isPermanentPolicyError: boolean;
+  public readonly isPermanentClientError: boolean;
 
   constructor(message: string, errorData?: FacebookGraphErrorData) {
     super(message);
@@ -32,6 +33,12 @@ export class FacebookGraphError extends Error {
     this.isPermanentPolicyError =
       this.code === 368 &&
       (this.errorSubcode === 4854002 || this.errorSubcode === 1404082);
+    this.isPermanentClientError =
+      this.code === 100 ||
+      (typeof this.code === 'number' &&
+        this.code >= 400 &&
+        this.code < 500 &&
+        !this.isAuthError);
     this.isRateLimit =
       this.code === 4 ||
       this.code === 17 ||
