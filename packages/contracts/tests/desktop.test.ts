@@ -10,24 +10,17 @@ import {
 
 describe('desktop contracts domain', () => {
   const originalWindow = (globalThis as any).window;
-  const originalUserAgent = globalThis.navigator?.userAgent;
-  const originalPlatform = (globalThis.navigator as any)?.platform;
+  const originalNavigator = globalThis.navigator;
 
   function setNavigator(props: { userAgent?: string; platform?: string }) {
-    if (props.userAgent !== undefined) {
-      Object.defineProperty(globalThis.navigator, 'userAgent', {
-        value: props.userAgent,
-        configurable: true,
-        writable: true,
-      });
-    }
-    if (props.platform !== undefined) {
-      Object.defineProperty(globalThis.navigator, 'platform', {
-        value: props.platform,
-        configurable: true,
-        writable: true,
-      });
-    }
+    Object.defineProperty(globalThis, 'navigator', {
+      value: {
+        userAgent: props.userAgent ?? '',
+        platform: props.platform ?? '',
+      },
+      configurable: true,
+      writable: true,
+    });
   }
 
   beforeEach(() => {
@@ -36,10 +29,15 @@ describe('desktop contracts domain', () => {
 
   afterEach(() => {
     (globalThis as any).window = originalWindow;
-    setNavigator({
-      userAgent: originalUserAgent,
-      platform: originalPlatform,
-    });
+    if (originalNavigator !== undefined) {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true,
+        writable: true,
+      });
+    } else {
+      delete (globalThis as any).navigator;
+    }
   });
 
   it('validates window actions with DesktopWindowActionEnum', () => {
