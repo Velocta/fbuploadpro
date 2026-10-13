@@ -344,4 +344,64 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
     expect(loggedIn.user.subdomain).toBe('returning-ws');
     expect(insertSpy).not.toHaveBeenCalled();
   });
+
+  it('handles database errors gracefully and stops retrying when non-conflict error occurs in ensureWorkspaceForUser', async () => {
+    const mockSupabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            order: vi.fn(() => ({
+              limit: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              })),
+            })),
+          })),
+        })),
+        insert: vi.fn().mockResolvedValue({
+          data: null,
+          error: { code: '50000', message: 'Internal server error' },
+        }),
+      })),
+    };
+
+    const result = await authModule.ensureWorkspaceForUser(
+      mockSupabase as any,
+      VALID_UUID,
+      'Test User',
+      'test-subdomain'
+    );
+
+    expect(result).toBe('test-subdomain');
+  });
+
+  it('handles exceptions in select and insert gracefully in ensureWorkspaceForUser', async () => {
+    let callCount = 0;
+    const mockSupabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => {
+            throw new Error('Network failure during lookup');
+          }),
+        })),
+        insert: vi.fn(() => {
+          callCount++;
+          if (callCount === 1) {
+            throw new Error('PostgREST connection reset');
+          }
+          return Promise.resolve({ data: { id: 'ws-ok' }, error: null });
+        }),
+      })),
+    };
+
+    const result = await authModule.ensureWorkspaceForUser(
+      mockSupabase as any,
+      VALID_UUID,
+      'Test User',
+      'test-subdomain'
+    );
+
+    expect(callCount).toBe(2);
+    expect(result).toContain('test-subdomain-');
+  });
 });
+
