@@ -53,6 +53,16 @@ pub fn open_external_url(url: &str) -> Result<String, String> {
     if !url.starts_with("https://") && !url.starts_with("http://") {
         return Err("Invalid URL scheme: only http and https are permitted".to_string());
     }
+
+    // Reject URLs with embedded credentials (e.g. https://user:pass@example.com)
+    // to prevent credential exposure or SSRF/open-redirect bypasses.
+    let scheme_end = if url.starts_with("https://") { 8 } else { 7 };
+    let after_scheme = &url[scheme_end..];
+    let authority = after_scheme.split('/').next().unwrap_or("");
+    if authority.contains('@') {
+        return Err("Invalid URL: embedded userinfo credentials are not permitted".to_string());
+    }
+
     Ok("external_url_opened".to_string())
 }
 
@@ -93,5 +103,8 @@ mod tests {
         assert_eq!(open_external_url("http://localhost:3000").unwrap(), "external_url_opened");
         assert!(open_external_url("file:///etc/passwd").is_err());
         assert!(open_external_url("javascript:alert(1)").is_err());
+        assert!(open_external_url("data:text/html,test").is_err());
+        assert!(open_external_url("https://user:password@example.com").is_err());
+        assert!(open_external_url("http://admin@localhost:3000").is_err());
     }
 }
