@@ -6,7 +6,6 @@ import {
   ForbiddenError,
   NotFoundError,
   ConflictStateError,
-  InsufficientFundsError,
   InternalError,
   ERROR_HTTP_MAPPINGS,
 } from '../src/index.js';
@@ -18,7 +17,6 @@ describe('Domain Error Taxonomy', () => {
     expect(ERROR_HTTP_MAPPINGS.FORBIDDEN).toBe(403);
     expect(ERROR_HTTP_MAPPINGS.NOT_FOUND).toBe(404);
     expect(ERROR_HTTP_MAPPINGS.CONFLICT_STATE).toBe(409);
-    expect(ERROR_HTTP_MAPPINGS.INSUFFICIENT_FUNDS).toBe(402);
     expect(ERROR_HTTP_MAPPINGS.INTERNAL_ERROR).toBe(500);
   });
 
@@ -45,10 +43,6 @@ describe('Domain Error Taxonomy', () => {
     const conflictErr = new ConflictStateError();
     expect(conflictErr.code).toBe('CONFLICT_STATE');
     expect(conflictErr.statusCode).toBe(409);
-
-    const fundsErr = new InsufficientFundsError();
-    expect(fundsErr.code).toBe('INSUFFICIENT_FUNDS');
-    expect(fundsErr.statusCode).toBe(402);
 
     const internalErr = new InternalError();
     expect(internalErr.code).toBe('INTERNAL_ERROR');

@@ -4,7 +4,6 @@ export const DomainErrorCode = {
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT_STATE: 'CONFLICT_STATE',
-  INSUFFICIENT_FUNDS: 'INSUFFICIENT_FUNDS',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -16,7 +15,6 @@ export const ERROR_HTTP_MAPPINGS: Record<DomainErrorCode, number> = {
   FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT_STATE: 409,
-  INSUFFICIENT_FUNDS: 402,
   INTERNAL_ERROR: 500,
 };
 
@@ -70,12 +68,6 @@ export class ConflictStateError extends DomainError {
   }
 }
 
-export class InsufficientFundsError extends DomainError {
-  constructor(message = 'Insufficient token balance to perform this operation.', details?: unknown) {
-    super('INSUFFICIENT_FUNDS', message, details);
-    this.name = 'InsufficientFundsError';
-  }
-}
 
 export class InternalError extends DomainError {
   constructor(message = 'An unexpected internal error occurred.', details?: unknown) {
