@@ -146,6 +146,95 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
       expect(statePayload.userId).toBe(userId);
       expect(statePayload.isMagic).toBe(true);
     });
+
+    it('resolves workspace BYOC app_id if configured in workspace_byoc_credentials', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const magicToken = await signMagicLinkToken(
+        {
+          tenantSubdomain: 'custom-agency',
+          userId,
+          nonce: 'test_nonce_byoc_123',
+          iat: now,
+          exp: now + 900,
+        },
+        TEST_SECRET
+      );
+
+      const authModule = await import('../../src/lib/supabase-auth');
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'workspace-custom-agency-id' },
+                error: null,
+              }),
+            };
+          }
+          if (table === 'workspace_byoc_credentials') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { fb_app_id: 'byoc_custom_fb_app_999' },
+                error: null,
+              }),
+            };
+          }
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          };
+        }),
+      };
+      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+
+      const req = new NextRequest(
+        `http://localhost:3000/connect/facebook?token=${magicToken}`
+      );
+      const res = await forwardMagicLink(req);
+
+      expect(res.status).toBe(307);
+      const location = res.headers.get('location');
+      expect(location).toBeDefined();
+
+      const url = new URL(location!);
+      expect(url.searchParams.get('client_id')).toBe('byoc_custom_fb_app_999');
+
+      vi.restoreAllMocks();
+    });
+
+    it('redirects to error page if neither BYOC nor process.env.FACEBOOK_APP_ID is configured', async () => {
+      const savedEnv = process.env.FACEBOOK_APP_ID;
+      delete process.env.FACEBOOK_APP_ID;
+
+      const now = Math.floor(Date.now() / 1000);
+      const magicToken = await signMagicLinkToken(
+        {
+          tenantSubdomain: 'no-creds',
+          userId,
+          nonce: 'test_nonce_no_creds_123',
+          iat: now,
+          exp: now + 900,
+        },
+        TEST_SECRET
+      );
+
+      const req = new NextRequest(
+        `http://localhost:3000/connect/facebook?token=${magicToken}`
+      );
+      const res = await forwardMagicLink(req);
+
+      expect(res.status).toBe(307);
+      expect(res.headers.get('location')).toBe(
+        'http://localhost:3000/connect/facebook/error?reason=app_not_configured'
+      );
+
+      process.env.FACEBOOK_APP_ID = savedEnv;
+    });
   });
 
   describe('OAuth Callback with isMagic Flag', () => {

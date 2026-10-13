@@ -4,10 +4,10 @@ import {
   signOAuthState,
   verifyMagicLinkToken,
 } from '@fbuploadpro/contracts';
+import { getSupabaseClient } from '@/lib/supabase-auth';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
-  const appId = process.env.FACEBOOK_APP_ID || '';
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const redirectUri = `${appUrl}/api/auth/facebook/callback`;
@@ -29,7 +29,41 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(errorUrl);
   }
 
-  // 2. Generate signed OAuth state flagged with isMagic: true
+  // 2. Resolve App ID: check workspace BYOC credentials first, fallback to env
+  let byocAppId: string | undefined;
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('id')
+        .eq('subdomain', payload.tenantSubdomain)
+        .maybeSingle();
+
+      if (ws?.id) {
+        const { data: creds } = await supabase
+          .from('workspace_byoc_credentials')
+          .select('fb_app_id')
+          .eq('workspace_id', ws.id)
+          .maybeSingle();
+
+        if (creds?.fb_app_id) {
+          byocAppId = creds.fb_app_id;
+        }
+      }
+    } catch (_err) {
+      // Fallback to process.env
+    }
+  }
+
+  const effectiveAppId = byocAppId || process.env.FACEBOOK_APP_ID || '';
+  if (!effectiveAppId) {
+    const errorUrl = new URL('/connect/facebook/error', request.url);
+    errorUrl.searchParams.set('reason', 'app_not_configured');
+    return NextResponse.redirect(errorUrl);
+  }
+
+  // 3. Generate signed OAuth state flagged with isMagic: true
   const now = Math.floor(Date.now() / 1000);
   const nonce = crypto.randomUUID().replaceAll('-', '');
   const state = await signOAuthState(
@@ -50,11 +84,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     sessionSecret
   );
 
-  // 3. Construct Facebook OAuth Dialog URL (Graph API v26.0)
+  // 4. Construct Facebook OAuth Dialog URL (Graph API v26.0)
   const scopes =
     'pages_show_list,pages_read_engagement,pages_manage_posts,business_management';
   const oauthUrl = new URL('https://www.facebook.com/v26.0/dialog/oauth');
-  oauthUrl.searchParams.set('client_id', appId);
+  oauthUrl.searchParams.set('client_id', effectiveAppId);
   oauthUrl.searchParams.set('redirect_uri', redirectUri);
   oauthUrl.searchParams.set('state', state);
   oauthUrl.searchParams.set('scope', scopes);
