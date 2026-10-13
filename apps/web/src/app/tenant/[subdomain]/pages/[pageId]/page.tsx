@@ -90,7 +90,7 @@ export default function TenantDedicatedPageView({
       const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}`);
       if (res.ok) {
         const data = await res.json();
-        setPage(data);
+        setPage(data?.page ?? data);
         return;
       }
 
@@ -200,7 +200,8 @@ export default function TenantDedicatedPageView({
       });
       if (!res.ok) throw new Error('Failed to update automation status');
       const updated = await res.json();
-      setPage((prev) => (prev ? { ...prev, status: updated.status } : null));
+      const nextResolvedStatus = updated?.page?.status ?? updated?.status ?? nextStatus;
+      setPage((prev) => (prev ? { ...prev, status: nextResolvedStatus } : null));
       setNotification({
         type: 'success',
         message: nextStatus === 'paused' ? 'Automation has been paused.' : 'Automation has been resumed.',
