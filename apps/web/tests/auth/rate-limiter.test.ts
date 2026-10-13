@@ -112,6 +112,18 @@ describe('Rate Limiter & Abuse Shield (Spec 014)', () => {
       expect(() => validateRateLimiterConfig()).not.toThrow();
       process.env = originalEnv;
     });
+
+    it('does not crash checkRateLimit in production when Upstash Redis credentials are absent', () => {
+      process.env = { ...originalEnv, NODE_ENV: 'production' };
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      expect(() => checkRateLimit('prod-user:1.2.3.4', 5, 60000)).not.toThrow();
+      const res = checkRateLimit('prod-user:1.2.3.4', 5, 60000);
+      expect(res.allowed).toBe(true);
+
+      process.env = originalEnv;
+    });
   });
 });
 
