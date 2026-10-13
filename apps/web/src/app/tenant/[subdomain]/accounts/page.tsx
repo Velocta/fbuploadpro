@@ -1,12 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useParams } from 'next/navigation';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 import { AccountCard, type FacebookAccountItem } from '@/components/accounts/account-card';
 import { AccountsEmptyState } from '@/components/accounts/accounts-empty-state';
 import { ConnectAccountModal } from '@/components/accounts/connect-account-modal';
 import { DisconnectAccountDialog } from '@/components/accounts/disconnect-account-dialog';
+import {
+  MODAL_BACKDROP_STYLE,
+  MODAL_CONTAINER_STYLE,
+} from '@/components/pages/dedicated/modal-styles';
 
 type AccountStatusFilter = 'all' | 'active' | 'expired';
 
@@ -249,6 +254,16 @@ export function resolveOAuthRedirectNotice(searchParams: {
 
   const error = searchParams.get('error');
   if (error) {
+    if (error === 'credentials_required') {
+      return {
+        notice: {
+          type: 'error',
+          message:
+            'Facebook App credentials (BYOC) are required before connecting accounts. Please configure your App ID and Secret in Workspace Settings.',
+        },
+        keysToRemove: ['error', 'tab'],
+      };
+    }
     const isCancelled = error === 'access_denied' || error === 'user_cancelled';
     const message = isCancelled
       ? 'Connection canceled. No changes were made.'
@@ -265,6 +280,237 @@ export function resolveOAuthRedirectNotice(searchParams: {
   return null;
 }
 
+interface ByocRequiredBannerProps {
+  subdomain: string;
+}
+
+export function ByocRequiredBanner({ subdomain }: Readonly<ByocRequiredBannerProps>) {
+  return (
+    <div
+      data-testid="byoc-required-banner"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: `${SPACING.md} ${SPACING.lg}`,
+        marginBottom: SPACING.lg,
+        backgroundColor: 'rgba(250, 215, 52, 0.08)',
+        border: '1px solid rgba(250, 215, 52, 0.25)',
+        borderRadius: RADII.sm,
+        fontSize: '0.875rem',
+        color: `var(--text-main, ${THEME.default.text.primary})`,
+        gap: SPACING.md,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flex: '1 1 300px' }}>
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={PALETTE.primary}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>
+          Facebook App credentials (BYOC) are required before connecting accounts. Configure your App ID and Secret in Workspace Settings.
+        </span>
+      </div>
+      <Link
+        href={`/tenant/${subdomain}/settings?tab=byoc`}
+        data-testid="byoc-configure-link"
+        style={{
+          ...COMPONENT_STYLES.secondaryButton(),
+          textDecoration: 'none',
+          fontSize: '0.8125rem',
+          height: '32px',
+          padding: `0 ${SPACING.md}`,
+          display: 'inline-flex',
+          alignItems: 'center',
+          whiteSpace: 'nowrap',
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        }}
+      >
+        Configure in Settings
+      </Link>
+    </div>
+  );
+}
+
+interface ByocConfigPromptModalProps {
+  subdomain: string;
+  open: boolean;
+  onClose: () => void;
+}
+
+export function ByocConfigPromptModal({
+  subdomain,
+  open,
+  onClose,
+}: Readonly<ByocConfigPromptModalProps>) {
+  if (!open) return null;
+
+  return (
+    <div
+      role="presentation"
+      data-testid="byoc-config-prompt-modal"
+      style={MODAL_BACKDROP_STYLE}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Close dialog"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          cursor: 'default',
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="byoc-prompt-title"
+        style={{
+          ...MODAL_CONTAINER_STYLE,
+          maxWidth: '480px',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: RADII.sm,
+              backgroundColor: 'rgba(250, 215, 52, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={PALETTE.primary}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+          </div>
+          <div>
+            <h2
+              id="byoc-prompt-title"
+              data-testid="byoc-prompt-title"
+              style={{
+                margin: 0,
+                fontSize: '1.125rem',
+                fontWeight: TYPOGRAPHY.weights.bold,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
+            >
+              Facebook App Credentials Required
+            </h2>
+            <p
+              style={{
+                margin: `${SPACING.xs} 0 0 0`,
+                fontSize: '0.8125rem',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              Workspace configuration needed
+            </p>
+          </div>
+        </div>
+
+        <p
+          data-testid="byoc-prompt-description"
+          style={{
+            margin: `${SPACING.sm} 0 0 0`,
+            fontSize: '0.875rem',
+            lineHeight: 1.5,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          Before connecting Facebook accounts, your workspace must configure its Facebook App ID and App Secret. This ensures all account authorizations and publishing permissions run directly through your own Meta Developer App.
+        </p>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: SPACING.sm,
+            marginTop: SPACING.md,
+          }}
+        >
+          <button
+            type="button"
+            data-testid="byoc-prompt-cancel-btn"
+            onClick={onClose}
+            style={{
+              ...COMPONENT_STYLES.secondaryButton(),
+              height: '36px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: 'transparent',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.sm,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              cursor: 'pointer',
+            }}
+          >
+            Not Now
+          </button>
+          <Link
+            href={`/tenant/${subdomain}/settings?tab=byoc`}
+            data-testid="byoc-prompt-settings-link"
+            onClick={onClose}
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '36px',
+              padding: `0 ${SPACING.md}`,
+            }}
+          >
+            Configure in Settings
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TenantAccountsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -277,6 +523,13 @@ export default function TenantAccountsPage() {
     message: string;
   } | null>(null);
 
+  // BYOC credentials status & advisory modal
+  const [byocStatus, setByocStatus] = useState<{
+    isConfigured: boolean;
+    isLoading: boolean;
+  }>({ isConfigured: true, isLoading: true });
+  const [isByocPromptOpen, setIsByocPromptOpen] = useState(false);
+
   // Modal & filter states
   const [isConnectOpen, setIsConnectOpen] = useState(false);
   const [reconnectingAccount, setReconnectingAccount] =
@@ -286,6 +539,34 @@ export default function TenantAccountsPage() {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<AccountStatusFilter>('all');
+
+  // Check BYOC credentials status
+  useEffect(() => {
+    if (!subdomain) return;
+    let isMounted = true;
+    async function checkByoc() {
+      try {
+        const res = await fetch(`/api/tenant/${subdomain}/settings/byoc`);
+        if (res.ok) {
+          const data = await res.json();
+          const isConfigured = Boolean(data.fbAppId && data.hasSecret);
+          if (isMounted) {
+            setByocStatus({ isConfigured, isLoading: false });
+          }
+        } else if (isMounted) {
+          setByocStatus({ isConfigured: false, isLoading: false });
+        }
+      } catch {
+        if (isMounted) {
+          setByocStatus({ isConfigured: false, isLoading: false });
+        }
+      }
+    }
+    void checkByoc();
+    return () => {
+      isMounted = false;
+    };
+  }, [subdomain]);
 
   // Fetch accounts list
   const fetchAccounts = useCallback(async () => {
@@ -323,12 +604,20 @@ export default function TenantAccountsPage() {
   }, [searchParams]);
 
   const handleOpenNewConnect = () => {
+    if (!byocStatus.isLoading && !byocStatus.isConfigured) {
+      setIsByocPromptOpen(true);
+      return;
+    }
     setReconnectingAccount(null);
     setIsConnectOpen(true);
   };
 
   // Handle Reconnect (opens ConnectAccountModal with reconnectingAccount context)
   const handleReconnect = (account: FacebookAccountItem) => {
+    if (!byocStatus.isLoading && !byocStatus.isConfigured) {
+      setIsByocPromptOpen(true);
+      return;
+    }
     setReconnectingAccount(account);
     setIsConnectOpen(true);
   };
@@ -560,6 +849,11 @@ export default function TenantAccountsPage() {
         />
       )}
 
+      {/* BYOC Required Warning Banner */}
+      {!byocStatus.isLoading && !byocStatus.isConfigured && (
+        <ByocRequiredBanner subdomain={subdomain} />
+      )}
+
       {/* Search & Status Filter Bar (> 4 accounts) */}
       {!isLoading && accounts.length > 4 && (
         <AccountsFilterBar
@@ -592,6 +886,13 @@ export default function TenantAccountsPage() {
         onOpenChange={(open) => !open && setDisconnectingAccount(null)}
         onConfirm={handleConfirmDisconnect}
         isDisconnecting={isDisconnecting}
+      />
+
+      {/* BYOC Configuration Advisory Modal */}
+      <ByocConfigPromptModal
+        subdomain={subdomain}
+        open={isByocPromptOpen}
+        onClose={() => setIsByocPromptOpen(false)}
       />
     </div>
   );

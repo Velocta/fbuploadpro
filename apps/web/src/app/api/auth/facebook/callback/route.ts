@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   buildTenantUrl,
+  decryptToken,
   encryptToken,
   FacebookTokenExchangeResponseSchema,
   type FacebookUserProfileResponse,
@@ -224,6 +225,35 @@ function getCallbackEnvConfig() {
   };
 }
 
+async function resolveWorkspaceCredentials(
+  db: DatabaseClient,
+  tenantSubdomain: string,
+  encryptionKey: string,
+  defaultAppId: string,
+  defaultAppSecret: string
+): Promise<{ appId: string; appSecret: string }> {
+  try {
+    const rows = (await db.query(
+      `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
+       FROM workspace_byoc_credentials c
+       JOIN workspaces w ON w.id = c.workspace_id
+       WHERE w.subdomain = $1
+       LIMIT 1`,
+      [tenantSubdomain]
+    )) as Array<{ fbAppId: string; encryptedSecret: string }>;
+
+    const byoc = rows?.[0];
+    if (byoc?.fbAppId && byoc.encryptedSecret) {
+      const decryptedSecret = await decryptToken(byoc.encryptedSecret, encryptionKey);
+      return { appId: byoc.fbAppId, appSecret: decryptedSecret };
+    }
+  } catch (err) {
+    console.warn('[FacebookOAuth] BYOC resolution error in callback:', err);
+  }
+
+  return { appId: defaultAppId, appSecret: defaultAppSecret };
+}
+
 async function upsertConnectedFacebookAccount(
   db: DatabaseClient,
   userId: string,
@@ -331,12 +361,22 @@ export async function handleFacebookCallback(
   );
 
   try {
+    const db = dbClient ?? getDbClient();
+    const { appId: effectiveAppId, appSecret: effectiveAppSecret } =
+      await resolveWorkspaceCredentials(
+        db,
+        tenantSubdomain,
+        encryptionKey,
+        appId,
+        appSecret
+      );
+
     // 2. Exchange temporary code for short-lived token (Graph API v26.0)
     const codeExchangeUrl = new URL(
       'https://graph.facebook.com/v26.0/oauth/access_token'
     );
-    codeExchangeUrl.searchParams.set('client_id', appId);
-    codeExchangeUrl.searchParams.set('client_secret', appSecret);
+    codeExchangeUrl.searchParams.set('client_id', effectiveAppId);
+    codeExchangeUrl.searchParams.set('client_secret', effectiveAppSecret);
     codeExchangeUrl.searchParams.set('redirect_uri', redirectUri);
     codeExchangeUrl.searchParams.set('code', code);
 
@@ -360,8 +400,8 @@ export async function handleFacebookCallback(
       'https://graph.facebook.com/v26.0/oauth/access_token'
     );
     longTokenUrl.searchParams.set('grant_type', 'fb_exchange_token');
-    longTokenUrl.searchParams.set('client_id', appId);
-    longTokenUrl.searchParams.set('client_secret', appSecret);
+    longTokenUrl.searchParams.set('client_id', effectiveAppId);
+    longTokenUrl.searchParams.set('client_secret', effectiveAppSecret);
     longTokenUrl.searchParams.set(
       'fb_exchange_token',
       shortTokenData.access_token
@@ -411,7 +451,6 @@ export async function handleFacebookCallback(
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
     // 6. Check existing & upsert into database
-    const db = dbClient ?? getDbClient();
     const { accountRowId, alreadyExisted } =
       await upsertConnectedFacebookAccount(
         db,

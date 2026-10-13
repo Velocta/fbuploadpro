@@ -21,8 +21,8 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
-  it('renders workspace identity header using SidebarMenuButton size="lg" with brand monogram FB, subdomain, and FBUploadPro without switcher chevrons', () => {
+describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029 & Spec 037)', () => {
+  it('renders workspace identity header using shadcn TeamSwitcher pattern with monogram, subdomain, and ChevronsUpDown toggle', () => {
     mockPathname = '/tenant/acme';
     const { hasText, hasAttribute, html, findTags } = render(
       <SidebarProvider>
@@ -35,16 +35,31 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025 & Spec 029)', () => {
 
     expect(hasAttribute('data-slot', 'sidebar-header')).toBe(true);
     expect(hasAttribute('data-size', 'lg')).toBe(true);
+    expect(hasAttribute('data-testid', 'workspace-switcher-trigger')).toBe(true);
     expect(hasText('acme')).toBe(true);
-    expect(hasText('FBUploadPro')).toBe(true);
-    expect(hasText('FB')).toBe(true);
+    expect(hasText('AC')).toBe(true);
     expect(html).toContain(PALETTE.primary);
 
-    // Single workspace model: header has no switcher chevron arrows
+    // Multi-workspace switcher: header includes ChevronsUpDown toggle
     const headers = findTags('header');
     expect(headers.length).toBeGreaterThanOrEqual(1);
-    expect(headers[0]?.outerHtml).not.toContain('m7 15 5 5 5-5');
-    expect(headers[0]?.outerHtml).not.toContain('m7 9 5-5 5 5');
+    expect(headers[0]?.outerHtml).toContain('m7 15 5 5 5-5');
+    expect(headers[0]?.outerHtml).toContain('m7 9 5-5 5 5');
+  });
+
+  it('renders Settings in navigation content and marks it active on /tenant/acme/settings', () => {
+    mockPathname = '/tenant/acme/settings';
+    const { hasText, html } = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    expect(hasText('Settings')).toBe(true);
+    expect(html).toContain('aria-current="page"');
   });
 
   it('renders Home, Media Library, and Downloader in the primary top group above SidebarSeparator, followed by Collapsible Facebook section', () => {

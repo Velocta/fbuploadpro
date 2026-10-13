@@ -146,6 +146,26 @@ export interface AuthUser {
   passwordUpdatedAt?: number | undefined;
 }
 
+async function findWorkspaceSubdomainByOwner(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  ownerId: string,
+  fallbackSubdomain: string
+): Promise<string> {
+  if (!supabase) return fallbackSubdomain;
+  try {
+    const { data: wsData } = await supabase
+      .from('workspaces')
+      .select('subdomain')
+      .eq('owner_id', ownerId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return wsData?.subdomain || fallbackSubdomain;
+  } catch {
+    return fallbackSubdomain;
+  }
+}
+
 /**
  * Resilient multi-runtime user lookup:
  * 1. Checks Supabase PostgREST over HTTPS when Supabase client is available.
@@ -165,14 +185,16 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, email, name, phone, subdomain, role, status')
+        .select('id, email, name, phone, role, status')
         .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`)
         .maybeSingle();
 
       if (error) {
         console.error('[Supabase PostgREST] findUserByEmail error:', error.message);
       } else if (data) {
-        return data as AuthUser;
+        const fallback = deriveSubdomainFromEmail(canonicalEmail);
+        const subdomain = await findWorkspaceSubdomainByOwner(supabase, data.id, fallback);
+        return { ...(data as object), subdomain } as AuthUser;
       }
     } catch (err) {
       console.error('[Supabase PostgREST] findUserByEmail exception:', err);
@@ -183,7 +205,19 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
     try {
       const db = getDbClient();
       const user = await db.queryOne<AuthUser>(
-        'SELECT id, email, name, phone, subdomain, role, status FROM users WHERE normalized_email = $1 OR LOWER(email) = $1',
+        `SELECT 
+           u.id, 
+           u.email, 
+           u.name, 
+           u.phone, 
+           u.role, 
+           u.status,
+           COALESCE(
+             (SELECT w.subdomain FROM workspaces w WHERE w.owner_id = u.id ORDER BY w.created_at ASC LIMIT 1),
+             split_part(u.email, '@', 1)
+           ) AS subdomain
+         FROM users u 
+         WHERE u.normalized_email = $1 OR LOWER(u.email) = $1`,
         [canonicalEmail]
       );
       if (user) return user;
@@ -204,7 +238,7 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
     try {
       while (true) {
         const { data, error } = await supabase
-          .from('users')
+          .from('workspaces')
           .select('id')
           .eq('subdomain', candidate)
           .maybeSingle();
@@ -230,7 +264,7 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
       const db = getDbClient();
       while (true) {
         const existing = await db.queryOne<{ id: string }>(
-          'SELECT id FROM users WHERE subdomain = $1',
+          'SELECT id FROM workspaces WHERE subdomain = $1',
           [candidate]
         );
         if (!existing) {
@@ -416,18 +450,26 @@ export async function signUpTenantUser(params: {
             normalized_email: canonicalEmail,
             name: params.name,
             phone: formattedPhone,
-            subdomain,
             role: 'user',
             status: 'active',
           },
           { onConflict: 'id' }
         )
-        .select('id, email, name, phone, subdomain, role, status')
+        .select('id, email, name, phone, role, status')
         .single();
 
       if (!insertError && inserted) {
-        userRecord = inserted as AuthUser;
+        userRecord = { ...(inserted as object), subdomain } as AuthUser;
       }
+
+      await supabase.from('workspaces').upsert(
+        {
+          owner_id: userId,
+          name: params.name || canonicalEmail.split('@')[0],
+          subdomain,
+        },
+        { onConflict: 'subdomain' }
+      );
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
     }
@@ -676,17 +718,27 @@ export async function registerTenantUser(params: {
           normalized_email: canonicalEmail,
           name: params.name,
           phone: formattedPhone,
-          subdomain,
           role: 'user',
           status: 'active',
         })
-        .select('id, email, name, phone, subdomain, role, status')
+        .select('id, email, name, phone, role, status')
         .single();
 
       if (insertError) {
         console.error('[Supabase PostgREST] User insert error:', insertError.message);
       }
-      userRecord = (inserted as AuthUser) || {
+
+      await supabase.from('workspaces').upsert(
+        {
+          owner_id: userId,
+          name: params.name || canonicalEmail.split('@')[0],
+          subdomain,
+        },
+        { onConflict: 'subdomain' }
+      );
+
+      userRecord = {
+        ...(inserted as AuthUser | null),
         id: userId,
         email: canonicalEmail,
         name: params.name,
@@ -694,7 +746,7 @@ export async function registerTenantUser(params: {
         subdomain,
         role: 'user',
         status: 'active',
-      };
+      } as AuthUser;
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
       userRecord = {
@@ -729,10 +781,16 @@ export async function registerTenantUser(params: {
       try {
         const db = getDbClient();
         await db.query(
-          `INSERT INTO users (id, email, normalized_email, name, phone, subdomain, role, status, created_at, updated_at)
-           VALUES ($1, $2, $2, $3, $4, $5, 'user', 'active', NOW(), NOW())
+          `INSERT INTO users (id, email, normalized_email, name, phone, role, status, created_at, updated_at)
+           VALUES ($1, $2, $2, $3, $4, 'user', 'active', NOW(), NOW())
            ON CONFLICT (id) DO NOTHING`,
-          [userId, canonicalEmail, params.name, formattedPhone, subdomain]
+          [userId, canonicalEmail, params.name, formattedPhone]
+        );
+        await db.query(
+          `INSERT INTO workspaces (id, owner_id, name, subdomain, created_at, updated_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, NOW(), NOW())
+           ON CONFLICT (subdomain) DO NOTHING`,
+          [userId, params.name || canonicalEmail.split('@')[0], subdomain]
         );
       } catch (dbErr) {
         console.error('[Postgres DB] User insert error:', dbErr);
@@ -825,11 +883,18 @@ export async function loginTenantUser(params: {
             normalized_email: canonicalEmail,
             name: user.name,
             phone: user.phone,
-            subdomain: user.subdomain,
             role: 'user',
             status: 'active',
           },
           { onConflict: 'id' }
+        );
+        await supabase.from('workspaces').upsert(
+          {
+            owner_id: user.id,
+            name: user.name || canonicalEmail.split('@')[0],
+            subdomain: user.subdomain,
+          },
+          { onConflict: 'subdomain' }
         );
       } catch (upsertErr) {
         console.error('[Supabase PostgREST] User upsert on login error:', upsertErr);
@@ -1049,11 +1114,18 @@ export async function resetUserPasswordWithOtp(params: {
               normalized_email: canonicalEmail,
               name: metadata.name || null,
               phone: metadata.phone || null,
-              subdomain,
               role: 'user',
               status: 'active',
             },
             { onConflict: 'id' }
+          );
+          await supabase.from('workspaces').upsert(
+            {
+              owner_id: u.id,
+              name: metadata.name || canonicalEmail.split('@')[0],
+              subdomain,
+            },
+            { onConflict: 'subdomain' }
           );
         }
       }
