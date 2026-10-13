@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   decryptToken,
   getSessionSecret,
+  getTokenEncryptionKey,
   PageInsightsQuerySchema,
   verifySessionToken,
   type DatabaseClient,
@@ -28,9 +29,7 @@ export async function handleGetInsights(
   options?: HandleGetInsightsOptions
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
-  const encryptionKey =
-    process.env.TOKEN_ENCRYPTION_KEY ||
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+  const encryptionKey = getTokenEncryptionKey();
 
   const sessionCookie = request.cookies.get('fbup_session')?.value;
   if (!sessionCookie) {

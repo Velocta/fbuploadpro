@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   getSessionSecret,
+  getTokenEncryptionKey,
   SaveBYOCCredentialsRequestSchema,
   verifySessionToken,
   canAccessTenant,
@@ -8,14 +9,6 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-
-function getEncryptionKey(): string {
-  return (
-    process.env.FB_ENCRYPTION_MASTER_KEY ||
-    process.env.TOKEN_ENCRYPTION_KEY ||
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-  );
-}
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -147,7 +140,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    const encryptionKey = getEncryptionKey();
+    const encryptionKey = getTokenEncryptionKey();
 
     if (fbAppSecret && fbAppSecret.length > 0) {
       const encryptedSecret = await encryptToken(fbAppSecret, encryptionKey);

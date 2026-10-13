@@ -131,15 +131,13 @@ Do not attempt to execute all heterogeneous tasks in a single context. Parse `sp
 
 ---
 
-### Phase 9.5: Pre-Merge Review, Vercel Preview Testing & Mandatory Human Approval
+### Phase 9.5: Pre-Merge Review, Quality & SonarQube Verification
 1. Once convergence is verified and all tests pass cleanly, open the Pull Request via `gh pr create`.
-2. **If UI Components are modified**:
-   - Inspect the PR deployment status and obtain the live Vercel Preview Deployment URL.
-   - Provide the live Vercel preview link in chat for the user to interactively inspect and test all component states.
-3. **Mandatory Human Approval Gate**:
-   - Explicitly ask the user for approval: *"PR #X is tested and ready. May I proceed with merging into main?"*
-   - **Non-negotiable**: Even if no frontend code is present (backend, database, devops, docs), NEVER merge to `main` without waiting for and receiving explicit approval from the user.
-4. Execute `gh pr merge` only after the user gives explicit confirmation.
+2. **GitHub Issues Autonomous Exemption**: When resolving GitHub issues (e.g. audit-fix, bug fixes, or backlog issues), the agent is explicitly authorized to create commits, open PRs, and merge PRs autonomously without asking for permission, PROVIDED THAT all local quality checks (`pnpm turbo run build lint typecheck test` and `cargo check`) and SonarQube Cloud CI checks pass cleanly before merging.
+3. **Standard Features & UI Review**:
+   - If UI Components are modified, obtain the live Vercel Preview Deployment URL and provide it in chat for interactive review.
+   - For standard feature requests outside GitHub issues, request user merge approval prior to executing `gh pr merge`.
+4. Execute `gh pr merge --squash --delete-branch` once all criteria and checks are satisfied.
 
 ---
 

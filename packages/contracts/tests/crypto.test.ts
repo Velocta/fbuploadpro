@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { decryptToken, encryptToken } from '../src/crypto/token';
+import { decryptToken, encryptToken, getTokenEncryptionKey } from '../src/crypto/token';
+import { DomainError } from '../src/errors/domain-error';
 
 describe('Web Crypto AES-256-GCM Token Encryption', () => {
   const validKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -66,5 +67,53 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
       const message = err instanceof Error ? err.message : String(err);
       expect(message).not.toContain(sensitiveSecret);
     }
+  });
+
+  describe('getTokenEncryptionKey', () => {
+    it('returns TOKEN_ENCRYPTION_KEY when provided in env', () => {
+      const key = getTokenEncryptionKey({
+        TOKEN_ENCRYPTION_KEY: 'token-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab',
+      });
+      expect(key).toBe('token-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab');
+    });
+
+    it('returns FB_ENCRYPTION_MASTER_KEY when TOKEN_ENCRYPTION_KEY is absent', () => {
+      const key = getTokenEncryptionKey({
+        FB_ENCRYPTION_MASTER_KEY: 'master-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+      });
+      expect(key).toBe('master-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890');
+    });
+
+    it('prefers TOKEN_ENCRYPTION_KEY over FB_ENCRYPTION_MASTER_KEY', () => {
+      const key = getTokenEncryptionKey({
+        TOKEN_ENCRYPTION_KEY: 'preferred-token-key-1234567890abcdef1234567890abcdef1234567890abcdef12',
+        FB_ENCRYPTION_MASTER_KEY: 'fallback-master-key-1234567890abcdef1234567890abcdef1234567890abcdef12',
+      });
+      expect(key).toBe('preferred-token-key-1234567890abcdef1234567890abcdef1234567890abcdef12');
+    });
+
+    it('falls back to dev key in development/test environments when key is absent', () => {
+      const key = getTokenEncryptionKey({ NODE_ENV: 'test' });
+      expect(key).toBe('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    });
+
+    it('throws DomainError in production environment when key is absent', () => {
+      expect(() => {
+        getTokenEncryptionKey({ NODE_ENV: 'production' });
+      }).toThrow(DomainError);
+
+      expect(() => {
+        getTokenEncryptionKey({ NODE_ENV: 'production' });
+      }).toThrow(/TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required in production environment/i);
+    });
+
+    it('allows valid key in production environment', () => {
+      const prodKey = 'prod-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab';
+      const key = getTokenEncryptionKey({
+        NODE_ENV: 'production',
+        TOKEN_ENCRYPTION_KEY: prodKey,
+      });
+      expect(key).toBe(prodKey);
+    });
   });
 });
