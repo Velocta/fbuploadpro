@@ -47,7 +47,12 @@ async function fetchPageOverview(
   fetchFn: typeof fetch
 ): Promise<{ fanCount: number; followersCount: number }> {
   const overviewRes = await fetchFn(
-    `${fbApiUrl}/${fbPageId}?fields=fan_count,followers_count&access_token=${encodeURIComponent(token)}`
+    `${fbApiUrl}/${fbPageId}?fields=fan_count,followers_count`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
   );
 
   if (!overviewRes.ok) {
@@ -72,7 +77,8 @@ async function fetchDailyMetrics(
   fbPageId: string,
   token: string,
   fbApiUrl: string,
-  fetchFn: typeof fetch
+  fetchFn: typeof fetch,
+  targetDate?: string
 ) {
   const metricsList = [
     'page_daily_follows_unique',
@@ -83,39 +89,55 @@ async function fetchDailyMetrics(
     'page_video_view_time',
   ].join(',');
 
+  const queryParams = new URLSearchParams({
+    metric: metricsList,
+    period: 'day',
+  });
+
+  if (targetDate) {
+    const sinceDate = new Date(`${targetDate}T00:00:00Z`);
+    const untilDate = new Date(`${targetDate}T23:59:59Z`);
+    queryParams.set('since', String(Math.floor(sinceDate.getTime() / 1000)));
+    queryParams.set('until', String(Math.floor(untilDate.getTime() / 1000)));
+  }
+
   const metricsRes = await fetchFn(
-    `${fbApiUrl}/${fbPageId}/insights?metric=${metricsList}&period=day&access_token=${encodeURIComponent(token)}`
+    `${fbApiUrl}/${fbPageId}/insights?${queryParams.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
   );
 
-  let dailyFollows = 0;
-  let dailyUnfollows = 0;
-  let mediaViews = 0;
-  let videoViews = 0;
-  let videoCompleteViews30s = 0;
-  let videoViewTimeSeconds = 0;
-
-  if (metricsRes.ok) {
-    const metricsJson = (await metricsRes.json()) as {
-      data?: Array<{
-        name: string;
-        values?: Array<{ value: number; end_time?: string }>;
-      }>;
-    };
-
-    const metricMap = new Map<string, number>();
-    for (const item of metricsJson.data || []) {
-      const val = item.values?.[0]?.value ?? 0;
-      metricMap.set(item.name, Number(val) || 0);
-    }
-
-    dailyFollows = metricMap.get('page_daily_follows_unique') || 0;
-    dailyUnfollows = metricMap.get('page_daily_unfollows_unique') || 0;
-    mediaViews = metricMap.get('page_views_total') || 0;
-    videoViews = metricMap.get('page_video_views') || 0;
-    videoCompleteViews30s = metricMap.get('page_video_complete_views_30s') || 0;
-    const rawWatchTime = metricMap.get('page_video_view_time') || 0;
-    videoViewTimeSeconds = rawWatchTime > 10000 ? Math.round(rawWatchTime / 1000) : rawWatchTime;
+  if (!metricsRes.ok) {
+    const errJson = await metricsRes.json().catch(() => ({}));
+    const msg =
+      (errJson as { error?: { message?: string } })?.error?.message ||
+      `Daily metrics API responded with ${metricsRes.status}`;
+    throw new Error(msg);
   }
+
+  const metricsJson = (await metricsRes.json()) as {
+    data?: Array<{
+      name: string;
+      values?: Array<{ value: number; end_time?: string }>;
+    }>;
+  };
+
+  const metricMap = new Map<string, number>();
+  for (const item of metricsJson.data || []) {
+    const val = item.values?.[0]?.value ?? 0;
+    metricMap.set(item.name, Number(val) || 0);
+  }
+
+  const dailyFollows = metricMap.get('page_daily_follows_unique') || 0;
+  const dailyUnfollows = metricMap.get('page_daily_unfollows_unique') || 0;
+  const mediaViews = metricMap.get('page_views_total') || 0;
+  const videoViews = metricMap.get('page_video_views') || 0;
+  const videoCompleteViews30s = metricMap.get('page_video_complete_views_30s') || 0;
+  const rawWatchTime = metricMap.get('page_video_view_time') || 0;
+  const videoViewTimeSeconds = Math.round(rawWatchTime / 1000);
 
   return {
     dailyFollows,
@@ -131,33 +153,58 @@ async function fetchReactionsAndDemographics(
   fbPageId: string,
   token: string,
   fbApiUrl: string,
-  fetchFn: typeof fetch
+  fetchFn: typeof fetch,
+  targetDate?: string
 ) {
+  const queryParams = new URLSearchParams({
+    metric:
+      'page_actions_post_reactions_like_total,page_actions_post_reactions_love_total,page_fans_country,page_fans_city',
+    period: 'day',
+  });
+
+  if (targetDate) {
+    const sinceDate = new Date(`${targetDate}T00:00:00Z`);
+    const untilDate = new Date(`${targetDate}T23:59:59Z`);
+    queryParams.set('since', String(Math.floor(sinceDate.getTime() / 1000)));
+    queryParams.set('until', String(Math.floor(untilDate.getTime() / 1000)));
+  }
+
   const reactionsAndDemoRes = await fetchFn(
-    `${fbApiUrl}/${fbPageId}/insights?metric=page_actions_post_reactions_like_total,page_actions_post_reactions_love_total,page_fans_country,page_fans_city&period=day&access_token=${encodeURIComponent(token)}`
+    `${fbApiUrl}/${fbPageId}/insights?${queryParams.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
   );
+
+  if (!reactionsAndDemoRes.ok) {
+    const errJson = await reactionsAndDemoRes.json().catch(() => ({}));
+    const msg =
+      (errJson as { error?: { message?: string } })?.error?.message ||
+      `Reactions and demographics API responded with ${reactionsAndDemoRes.status}`;
+    throw new Error(msg);
+  }
 
   const reactionsSummary: Record<string, number> = {};
   const demographicsSummary: Record<string, unknown> = {};
 
-  if (reactionsAndDemoRes.ok) {
-    const rdJson = (await reactionsAndDemoRes.json()) as {
-      data?: Array<{
-        name: string;
-        values?: Array<{ value: unknown }>;
-      }>;
-    };
+  const rdJson = (await reactionsAndDemoRes.json()) as {
+    data?: Array<{
+      name: string;
+      values?: Array<{ value: unknown }>;
+    }>;
+  };
 
-    for (const item of rdJson.data || []) {
-      if (item.name.startsWith('page_actions_post_reactions_')) {
-        const reactionName = item.name.replace('page_actions_post_reactions_', '').replace('_total', '');
-        const count = Number(item.values?.[0]?.value) || 0;
-        reactionsSummary[reactionName] = count;
-      } else if (item.name === 'page_fans_country') {
-        demographicsSummary.countries = item.values?.[0]?.value || {};
-      } else if (item.name === 'page_fans_city') {
-        demographicsSummary.cities = item.values?.[0]?.value || {};
-      }
+  for (const item of rdJson.data || []) {
+    if (item.name.startsWith('page_actions_post_reactions_')) {
+      const reactionName = item.name.replace('page_actions_post_reactions_', '').replace('_total', '');
+      const count = Number(item.values?.[0]?.value) || 0;
+      reactionsSummary[reactionName] = count;
+    } else if (item.name === 'page_fans_country') {
+      demographicsSummary.countries = item.values?.[0]?.value || {};
+    } else if (item.name === 'page_fans_city') {
+      demographicsSummary.cities = item.values?.[0]?.value || {};
     }
   }
 
@@ -273,8 +320,8 @@ async function syncSinglePage(
   // 2. Fetch Overview, Metrics, and Reactions in parallel
   const [overview, metrics, reactions] = await Promise.all([
     fetchPageOverview(page.fb_page_id, token, fbApiUrl, fetchFn),
-    fetchDailyMetrics(page.fb_page_id, token, fbApiUrl, fetchFn),
-    fetchReactionsAndDemographics(page.fb_page_id, token, fbApiUrl, fetchFn),
+    fetchDailyMetrics(page.fb_page_id, token, fbApiUrl, fetchFn, targetDate),
+    fetchReactionsAndDemographics(page.fb_page_id, token, fbApiUrl, fetchFn, targetDate),
   ]);
 
   // 3. Upsert Daily Snapshot into Database

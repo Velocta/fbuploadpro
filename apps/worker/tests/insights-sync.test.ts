@@ -168,6 +168,119 @@ describe('User Story 5 - Worker Daily Page Insights Snapshot Sync', () => {
     expect(updateFollowersQuery?.params).toEqual([15200, 'page-uuid-1']);
   });
 
+  it('verifies 4 security and data-corruption fixes in insights sync (Audit Issue 18)', async () => {
+    const fetchCalls: Array<{ url: string; options?: any }> = [];
+
+    const mockFetch = vi.fn().mockImplementation(async (url: string, options?: any) => {
+      const urlStr = url.toString();
+      fetchCalls.push({ url: urlStr, options });
+
+      if (urlStr.includes('fields=fan_count,followers_count')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'fb-page-12345',
+            name: 'Tech World',
+            fan_count: 5000,
+            followers_count: 5200,
+          }),
+        };
+      }
+
+      if (urlStr.includes('metric=page_daily_follows_unique')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [
+              {
+                name: 'page_video_view_time',
+                period: 'day',
+                values: [{ value: 3500 }], // 3500 ms -> should convert to 4 seconds (Math.round(3500/1000))
+              },
+            ],
+          }),
+        };
+      }
+
+      if (urlStr.includes('metric=page_actions_post_reactions_like_total')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [],
+          }),
+        };
+      }
+
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    const result = await syncDailyPageInsights({
+      db: mockDb,
+      masterKey: TEST_MASTER_KEY,
+      fetchImpl: mockFetch as any,
+      targetDate: '2026-03-01',
+    });
+
+    expect(result.synced).toBe(1);
+    expect(result.failed).toBe(0);
+
+    // 1. Token passed in Authorization: Bearer header, never in URL
+    for (const call of fetchCalls) {
+      expect(call.url).not.toContain('access_token=');
+      expect(call.options?.headers?.Authorization).toBe('Bearer EAA_TEST_PAGE_TOKEN_VALID');
+    }
+
+    // 2. targetDate passed as since/until timestamps
+    const metricsCall = fetchCalls.find((c) => c.url.includes('metric=page_daily_follows_unique'));
+    expect(metricsCall).toBeDefined();
+    const metricsUrl = new URL(metricsCall!.url);
+    const expectedSince = String(Math.floor(new Date('2026-03-01T00:00:00Z').getTime() / 1000));
+    const expectedUntil = String(Math.floor(new Date('2026-03-01T23:59:59Z').getTime() / 1000));
+    expect(metricsUrl.searchParams.get('since')).toBe(expectedSince);
+    expect(metricsUrl.searchParams.get('until')).toBe(expectedUntil);
+
+    // 3. Math.round(ms / 1000) for watch time (3500 ms -> 4 seconds)
+    expect(upsertedSnapshots[0].videoViewTimeSeconds).toBe(4);
+  });
+
+  it('throws on non-OK Graph API response and marks page sync failed without corrupting database snapshot (Audit Issue 18)', async () => {
+    const mockFetch = vi.fn().mockImplementation(async (url: string) => {
+      const urlStr = url.toString();
+      if (urlStr.includes('fields=fan_count,followers_count')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ fan_count: 5000, followers_count: 5200 }),
+        };
+      }
+      if (urlStr.includes('metric=page_daily_follows_unique')) {
+        // Daily metrics fails with 500
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ error: { message: 'Internal Facebook error' } }),
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+
+    const result = await syncDailyPageInsights({
+      db: mockDb,
+      masterKey: TEST_MASTER_KEY,
+      fetchImpl: mockFetch as any,
+      targetDate: '2026-03-01',
+    });
+
+    expect(result.synced).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.errors[0].error).toContain('Internal Facebook error');
+    // Ensure zero corrupted snapshots were upserted
+    expect(upsertedSnapshots).toHaveLength(0);
+  });
+
   it('gracefully handles Graph API rate limits or 5xx errors without crashing (T175)', async () => {
     const errorFetch = vi.fn().mockImplementation(async () => {
       return {
