@@ -9,7 +9,7 @@ import {
 import { POST as generateMagicLink } from '../../src/app/api/tenant/[subdomain]/accounts/magic-link/route';
 import { GET as forwardMagicLink } from '../../src/app/connect/facebook/route';
 import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY =

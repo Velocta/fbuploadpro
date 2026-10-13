@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { handleBatchMedia } from '../../src/app/api/tenant/[subdomain]/media/batch/route';
 import { MockStorageProvider } from '../../src/lib/storage';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

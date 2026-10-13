@@ -17,4 +17,5 @@ export * from './domain/insights.js';
 export * from './domain/auth.js';
 export * from './domain/desktop.js';
 export * from './domain/workspace.js';
+export * from './domain/database.js';
 

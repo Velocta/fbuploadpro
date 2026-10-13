@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { signMagicLinkToken, verifySessionToken } from '@fbuploadpro/contracts';
+import { getSessionSecret, signMagicLinkToken, verifySessionToken } from '@fbuploadpro/contracts';
 
 async function extractExpectedAccountFromBody(request: NextRequest): Promise<{
   expectedFbAccountId?: string | undefined;
@@ -30,9 +30,7 @@ export async function POST(
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
 
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 

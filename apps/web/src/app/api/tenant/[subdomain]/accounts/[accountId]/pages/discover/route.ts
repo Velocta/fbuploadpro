@@ -2,20 +2,20 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   decryptToken,
   DiscoverPagesResponseSchema,
+  getSessionSecret,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../../../lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleDiscoverPages(
   request: NextRequest,
   subdomain: string,
   accountId: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<Database>
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const encryptionKey = process.env.TOKEN_ENCRYPTION_KEY || '';
 
   // 1. Session auth guard
@@ -36,22 +36,58 @@ export async function handleDiscoverPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const db = dbClient ?? getDbClient();
-
   // 3. Fetch account and composite ownership (user_id, accountId)
-  const accounts = (await db.query(
-    'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
-    [accountId, session.userId]
-  )) as any[];
+  let account: any = null;
+  let importedRows: any[] = [];
 
-  if (!accounts || accounts.length === 0 || !accounts[0]) {
-    return NextResponse.json(
-      { error: 'Facebook account not found' },
-      { status: 404 }
-    );
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const accounts = (await dbClient.query(
+      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
+      [accountId, session.userId]
+    )) as any[];
+
+    if (!accounts || accounts.length === 0 || !accounts[0]) {
+      return NextResponse.json(
+        { error: 'Facebook account not found' },
+        { status: 404 }
+      );
+    }
+    account = accounts[0];
+
+    importedRows = (await dbClient.query(
+      "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND status != 'disconnected'",
+      [session.userId]
+    )) as any[];
+  } else {
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { data: accData, error: accErr } = await supabase
+      .from('facebook_accounts')
+      .select('*')
+      .eq('id', accountId)
+      .eq('user_id', session.userId)
+      .maybeSingle();
+
+    if (accErr || !accData) {
+      return NextResponse.json(
+        { error: 'Facebook account not found' },
+        { status: 404 }
+      );
+    }
+    account = accData;
+
+    const { data: pageRows } = await supabase
+      .from('facebook_pages')
+      .select('fb_page_id')
+      .eq('user_id', session.userId)
+      .neq('status', 'disconnected');
+
+    importedRows = pageRows || [];
   }
 
-  const account = accounts[0];
   const encryptedToken =
     account.encrypted_access_token || account.encryptedAccessToken;
 
@@ -86,10 +122,6 @@ export async function handleDiscoverPages(
   const rawItems: any[] = Array.isArray(graphData.data) ? graphData.data : [];
 
   // 5. Query already imported active/linked pages for this user to compute isImported
-  const importedRows = (await db.query(
-    "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND status != 'disconnected'",
-    [session.userId]
-  )) as any[];
   const importedPageIds = new Set(
     importedRows.map((r) => r.fb_page_id || r.fbPageId)
   );

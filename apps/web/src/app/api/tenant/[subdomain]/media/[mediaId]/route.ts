@@ -1,22 +1,41 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   DeleteMediaItemResponseSchema,
+  getSessionSecret,
   type IStorageService,
   MediaItemResponseSchema,
   UpdateMediaItemRequestSchema,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../lib/db';
+import { getSupabaseClient } from '@/lib/supabase-auth';
 import { getStorageService } from '../../../../../../lib/storage';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isLegacyClient(
+  client?: DatabaseClient | SupabaseClient<any>
+): client is DatabaseClient {
+  return (
+    !!client &&
+    (('query' in client && typeof (client as any).query === 'function') ||
+      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
+  );
+}
+
+function getSupabase(
+  client?: DatabaseClient | SupabaseClient<any>
+): SupabaseClient<any> | null {
+  if (client && 'from' in client) {
+    return client as SupabaseClient<any>;
+  }
+  return getSupabaseClient() as SupabaseClient<any> | null;
+}
+
 async function authenticateUser(request: NextRequest, subdomain: string) {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   const sessionCookie = request.cookies.get('fbup_session')?.value;
   if (!sessionCookie) {
@@ -57,7 +76,9 @@ function formatMediaRow(row: any) {
     thumbnailKey: row.thumbnail_key,
     thumbnailUrl: row.thumbnail_url,
     durationSeconds:
-      row.duration_seconds !== null ? Number(row.duration_seconds) : null,
+      row.duration_seconds !== null && row.duration_seconds !== undefined
+        ? Number(row.duration_seconds)
+        : null,
     aspectRatio: row.aspect_ratio,
     captionText: row.caption_text,
     createdAt: new Date(row.created_at).toISOString(),
@@ -69,7 +90,7 @@ export async function handleGetMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
   if (auth.error || !auth.session) return auth.error!;
@@ -81,29 +102,50 @@ export async function handleGetMedia(
     );
   }
 
-  const db = dbClient ?? getDbClient();
-  const rows = (await db.query(
-    `SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
-            storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-            aspect_ratio, caption_text,
-            created_at, updated_at
-     FROM media_items
-     WHERE id = $1 AND user_id = $2`,
-    [mediaId, auth.session.userId]
-  )) as any[];
+  if (isLegacyClient(dbClient)) {
+    const rows = (await dbClient.query(
+      `SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
+              storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
+              aspect_ratio, caption_text,
+              created_at, updated_at
+       FROM media_items
+       WHERE id = $1 AND user_id = $2`,
+      [mediaId, auth.session.userId]
+    )) as any[];
 
-  if (!rows || rows.length === 0) {
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(formatMediaRow(rows[0]));
+  }
+
+  const supabase = getSupabase(dbClient);
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
+
+  const { data, error } = await supabase
+    .from('media_items')
+    .select(
+      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, created_at, updated_at'
+    )
+    .eq('id', mediaId)
+    .eq('user_id', auth.session.userId)
+    .maybeSingle();
+
+  if (error || !data) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
-  return NextResponse.json(formatMediaRow(rows[0]));
+  return NextResponse.json(formatMediaRow(data));
 }
 
 export async function handleUpdateMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient,
+  dbClient?: DatabaseClient | SupabaseClient<any>,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
@@ -134,26 +176,115 @@ export async function handleUpdateMedia(
     );
   }
 
-  const db = dbClient ?? getDbClient();
+  if (isLegacyClient(dbClient)) {
+    const existingMedia = (await dbClient.query(
+      `SELECT id, folder_id, caption_text, thumbnail_key
+       FROM media_items
+       WHERE id = $1 AND user_id = $2`,
+      [mediaId, auth.session.userId]
+    )) as any[];
 
-  const existingMedia = (await db.query(
-    `SELECT id, folder_id, caption_text, thumbnail_key
-     FROM media_items
-     WHERE id = $1 AND user_id = $2`,
-    [mediaId, auth.session.userId]
-  )) as any[];
+    if (!existingMedia || existingMedia.length === 0) {
+      return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+    }
 
-  if (!existingMedia || existingMedia.length === 0) {
+    if (parsed.data.folderId !== undefined && parsed.data.folderId !== null) {
+      const folderRows = (await dbClient.query(
+        `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
+        [parsed.data.folderId, auth.session.userId]
+      )) as any[];
+
+      if (!folderRows || folderRows.length === 0) {
+        return NextResponse.json(
+          { error: 'FOLDER_NOT_FOUND', message: 'Specified folder was not found' },
+          { status: 404 }
+        );
+      }
+    }
+
+    const updates: string[] = ['updated_at = now()'];
+    const values: any[] = [];
+    let paramIdx = 1;
+
+    if (parsed.data.name !== undefined) {
+      updates.push(`name = $${paramIdx++}`);
+      values.push(parsed.data.name);
+    }
+    if (parsed.data.folderId !== undefined) {
+      updates.push(`folder_id = $${paramIdx++}`);
+      values.push(parsed.data.folderId);
+    }
+    if (parsed.data.captionText !== undefined) {
+      updates.push(`caption_text = $${paramIdx++}`);
+      values.push(parsed.data.captionText);
+    }
+    if (parsed.data.thumbnailKey !== undefined) {
+      updates.push(`thumbnail_key = $${paramIdx++}`);
+      values.push(parsed.data.thumbnailKey);
+    }
+    if (parsed.data.thumbnailUrl !== undefined) {
+      updates.push(`thumbnail_url = $${paramIdx++}`);
+      values.push(parsed.data.thumbnailUrl);
+    }
+
+    values.push(mediaId, auth.session.userId);
+    const updateQuery = `
+      UPDATE media_items
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
+      RETURNING id, user_id, folder_id, name, file_size, mime_type, media_type,
+                storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
+                aspect_ratio, caption_text,
+                created_at, updated_at
+    `;
+
+    const updatedRows = (await dbClient.query(updateQuery, values)) as any[];
+    if (!updatedRows || updatedRows.length === 0) {
+      return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+    }
+
+    const previousThumbnailKey = existingMedia[0]?.thumbnail_key as string | null | undefined;
+    if (
+      parsed.data.thumbnailKey !== undefined &&
+      previousThumbnailKey &&
+      previousThumbnailKey !== parsed.data.thumbnailKey
+    ) {
+      const storage = storageService ?? getStorageService();
+      try {
+        await storage.deleteObject(previousThumbnailKey);
+      } catch (_e) {
+        // Continue even if old R2 thumbnail cleanup fails
+      }
+    }
+
+    return NextResponse.json(formatMediaRow(updatedRows[0]));
+  }
+
+  const supabase = getSupabase(dbClient);
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
+
+  const { data: existingMedia, error: existErr } = await supabase
+    .from('media_items')
+    .select('id, folder_id, caption_text, thumbnail_key')
+    .eq('id', mediaId)
+    .eq('user_id', auth.session.userId)
+    .maybeSingle();
+
+  if (existErr || !existingMedia) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
   if (parsed.data.folderId !== undefined && parsed.data.folderId !== null) {
-    const folderRows = (await db.query(
-      `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
-      [parsed.data.folderId, auth.session.userId]
-    )) as any[];
+    const { data: folderRows } = await supabase
+      .from('media_folders')
+      .select('id')
+      .eq('id', parsed.data.folderId)
+      .eq('user_id', auth.session.userId)
+      .maybeSingle();
 
-    if (!folderRows || folderRows.length === 0) {
+    if (!folderRows) {
       return NextResponse.json(
         { error: 'FOLDER_NOT_FOUND', message: 'Specified folder was not found' },
         { status: 404 }
@@ -161,48 +292,31 @@ export async function handleUpdateMedia(
     }
   }
 
-  const updates: string[] = ['updated_at = now()'];
-  const values: any[] = [];
-  let paramIdx = 1;
+  const updatePayload: Record<string, any> = {
+    updated_at: new Date().toISOString(),
+  };
 
-  if (parsed.data.name !== undefined) {
-    updates.push(`name = $${paramIdx++}`);
-    values.push(parsed.data.name);
-  }
-  if (parsed.data.folderId !== undefined) {
-    updates.push(`folder_id = $${paramIdx++}`);
-    values.push(parsed.data.folderId);
-  }
-  if (parsed.data.captionText !== undefined) {
-    updates.push(`caption_text = $${paramIdx++}`);
-    values.push(parsed.data.captionText);
-  }
-  if (parsed.data.thumbnailKey !== undefined) {
-    updates.push(`thumbnail_key = $${paramIdx++}`);
-    values.push(parsed.data.thumbnailKey);
-  }
-  if (parsed.data.thumbnailUrl !== undefined) {
-    updates.push(`thumbnail_url = $${paramIdx++}`);
-    values.push(parsed.data.thumbnailUrl);
-  }
+  if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
+  if (parsed.data.folderId !== undefined) updatePayload.folder_id = parsed.data.folderId;
+  if (parsed.data.captionText !== undefined) updatePayload.caption_text = parsed.data.captionText;
+  if (parsed.data.thumbnailKey !== undefined) updatePayload.thumbnail_key = parsed.data.thumbnailKey;
+  if (parsed.data.thumbnailUrl !== undefined) updatePayload.thumbnail_url = parsed.data.thumbnailUrl;
 
-  values.push(mediaId, auth.session.userId);
-  const updateQuery = `
-    UPDATE media_items
-    SET ${updates.join(', ')}
-    WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
-    RETURNING id, user_id, folder_id, name, file_size, mime_type, media_type,
-              storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-              aspect_ratio, caption_text,
-              created_at, updated_at
-  `;
+  const { data: updatedRow, error: updateErr } = await supabase
+    .from('media_items')
+    .update(updatePayload)
+    .eq('id', mediaId)
+    .eq('user_id', auth.session.userId)
+    .select(
+      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, created_at, updated_at'
+    )
+    .single();
 
-  const updatedRows = (await db.query(updateQuery, values)) as any[];
-  if (!updatedRows || updatedRows.length === 0) {
+  if (updateErr || !updatedRow) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
-  const previousThumbnailKey = existingMedia[0]?.thumbnail_key as string | null | undefined;
+  const previousThumbnailKey = (existingMedia as any).thumbnail_key as string | null | undefined;
   if (
     parsed.data.thumbnailKey !== undefined &&
     previousThumbnailKey &&
@@ -216,14 +330,14 @@ export async function handleUpdateMedia(
     }
   }
 
-  return NextResponse.json(formatMediaRow(updatedRows[0]));
+  return NextResponse.json(formatMediaRow(updatedRow));
 }
 
 export async function handleDeleteMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient,
+  dbClient?: DatabaseClient | SupabaseClient<any>,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
@@ -236,40 +350,85 @@ export async function handleDeleteMedia(
     );
   }
 
-  const db = dbClient ?? getDbClient();
-  const rows = (await db.query(
-    `SELECT id, user_id, storage_key, thumbnail_key
-     FROM media_items
-     WHERE id = $1 AND user_id = $2`,
-    [mediaId, auth.session.userId]
-  )) as any[];
+  if (isLegacyClient(dbClient)) {
+    const rows = (await dbClient.query(
+      `SELECT id, user_id, storage_key, thumbnail_key
+       FROM media_items
+       WHERE id = $1 AND user_id = $2`,
+      [mediaId, auth.session.userId]
+    )) as any[];
 
-  if (!rows || rows.length === 0) {
+    if (!rows || rows.length === 0) {
+      return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
+    }
+
+    const item = rows[0];
+    const storage = storageService ?? getStorageService();
+    if (item.storage_key) {
+      try {
+        await storage.deleteObject(item.storage_key);
+      } catch (_e) {
+        // Continue with DB deletion even if storage deletion fails
+      }
+    }
+    if (item.thumbnail_key) {
+      try {
+        await storage.deleteObject(item.thumbnail_key);
+      } catch (_e) {
+        // Continue
+      }
+    }
+
+    await dbClient.query(
+      `DELETE FROM media_items WHERE id = $1 AND user_id = $2`,
+      [mediaId, auth.session.userId]
+    );
+
+    const payload = DeleteMediaItemResponseSchema.parse({
+      success: true,
+      mediaId,
+    });
+
+    return NextResponse.json(payload);
+  }
+
+  const supabase = getSupabase(dbClient);
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
+
+  const { data: item, error: itemErr } = await supabase
+    .from('media_items')
+    .select('id, user_id, storage_key, thumbnail_key')
+    .eq('id', mediaId)
+    .eq('user_id', auth.session.userId)
+    .maybeSingle();
+
+  if (itemErr || !item) {
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
-  const item = rows[0];
-
   const storage = storageService ?? getStorageService();
-  if (item.storage_key) {
+  if ((item as any).storage_key) {
     try {
-      await storage.deleteObject(item.storage_key);
+      await storage.deleteObject((item as any).storage_key);
     } catch (_e) {
-      // Continue with DB deletion even if storage deletion fails
+      // Continue
     }
   }
-  if (item.thumbnail_key) {
+  if ((item as any).thumbnail_key) {
     try {
-      await storage.deleteObject(item.thumbnail_key);
+      await storage.deleteObject((item as any).thumbnail_key);
     } catch (_e) {
       // Continue
     }
   }
 
-  await db.query(
-    `DELETE FROM media_items WHERE id = $1 AND user_id = $2`,
-    [mediaId, auth.session.userId]
-  );
+  await supabase
+    .from('media_items')
+    .delete()
+    .eq('id', mediaId)
+    .eq('user_id', auth.session.userId);
 
   const payload = DeleteMediaItemResponseSchema.parse({
     success: true,

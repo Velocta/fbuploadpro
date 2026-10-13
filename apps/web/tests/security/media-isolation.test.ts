@@ -12,7 +12,7 @@ import {
   handleDeleteFolder,
 } from '../../src/app/api/tenant/[subdomain]/media/folders/[folderId]/route';
 import { MockStorageProvider } from '../../src/lib/storage';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

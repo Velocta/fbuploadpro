@@ -19,7 +19,7 @@ import {
 } from '../../src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route';
 import { handlePublishNow } from '../../src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route';
 import { handleListPublishLogs } from '../../src/app/api/tenant/[subdomain]/publishing/logs/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

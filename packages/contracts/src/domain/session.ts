@@ -163,3 +163,30 @@ export async function verifySessionToken(
 
   return sessionData;
 }
+
+export function getSessionSecret(env?: Record<string, string | undefined>): string {
+  const globalEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const envSource = env ?? globalEnv;
+  const secret = envSource?.SESSION_SECRET;
+  const isProduction = envSource?.NODE_ENV === 'production';
+
+  if (!secret) {
+    if (isProduction) {
+      throw new DomainError(
+        DomainErrorCode.INTERNAL_ERROR,
+        'SESSION_SECRET environment variable is strictly required in production'
+      );
+    }
+    return 'super-secret-session-signing-key-minimum-32-chars-long';
+  }
+
+  if (secret.length < 32) {
+    throw new DomainError(
+      DomainErrorCode.VALIDATION_FAILED,
+      'SESSION_SECRET must be at least 32 characters long'
+    );
+  }
+
+  return secret;
+}
+

@@ -8,7 +8,7 @@ import {
   signSessionToken,
 } from '@fbuploadpro/contracts';
 import { handleListAccounts } from '../../src/app/api/tenant/[subdomain]/accounts/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

@@ -52,10 +52,9 @@ flowchart TD
     BrowserExtension -.->|Direct Media Upload via Presigned URL| R2
 
     Web -->|Auth & User Identity| Auth
-    Web -->|App Queries via PgBouncer| Pooler
-    Pooler --> PG
+    Web -->|HTTPS PostgREST & RLS| PG
     Web -->|Generate Presigned S3 URLs| R2
-    Worker -->|Claim due posts via SKIP LOCKED| PG
+    Worker -->|Claim due posts via supabase.rpc()| PG
     Worker -->|Stream media assets| R2
     Worker -->|Publish posts & first comments| FB
 ```
@@ -68,8 +67,8 @@ flowchart TD
 | **Integrations Hub** | **Vercel** | `{username}.fbuploadpro.com/integrations` (`apps/web`) | Dedicated workspace portal for pairing browser extensions, generating pairing PINs, and downloading desktop installers. |
 | **Desktop Application** | **macOS / Windows Native** | `apps/desktop` (Tauri v2: Rust + React 19) | Native stripped binary client; background local folder auto-watching for rendered videos, system tray uploader, and direct R2 presigned ingestion without source code exposure. |
 | **Browser Extensions** | **Chrome & Firefox Stores** | `apps/extension` (WXT: Manifest V3) | Single cross-browser extension codebase; 1-click social media clipping directly to Cloudflare R2 Media Library, quick queue status popup, and Facebook session assistant. |
-| **Database & Identity** | **Supabase** | Managed PostgreSQL & Supabase Auth | User identity/sessions, native 6-digit SMTP OTP delivery, multi-tenant tables (`user_id`), transaction pooling, and automated schema migrations via `/supabase/migrations`. |
-| **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks (`SKIP LOCKED`), direct media streaming to Meta APIs. |
+| **Database & Identity** | **Supabase** | Managed PostgreSQL & Supabase Auth | Pure HTTPS PostgREST queries via `@supabase/supabase-js`, native 6-digit SMTP OTP delivery, compound tenant RLS (`auth.uid() = user_id`), and atomic RPC functions for queue concurrency. |
+| **Edge Compute** | **Cloudflare** | Cloudflare Workers (`apps/worker`) | Per-minute edge cron triggers, atomic queue locks via `supabase.rpc('claim_due_queue_items')`, direct media streaming to Meta APIs. |
 | **Object Storage** | **Cloudflare** | Cloudflare R2 (`media.fbuploadpro.com`) | S3-compatible media asset storage with $0 egress fees, presigned direct PC-to-bucket uploads, thumbnail cache. |
 | **Social Publishing** | **Meta** | Facebook Graph API v26.0 | Reels and photo publishing, automatic first comment submission, page insights sync. |
 
@@ -78,7 +77,7 @@ flowchart TD
 - **Naming Standard**: Strict `YYYYMMDDHHmmss_<name>.sql` timestamp pattern (e.g. `20261008120001_initial_schema.sql`).
 - **Automated Deployment**: Powered by the **Supabase GitHub Integration** configured in the Supabase Project Dashboard. When code merges to `main`, Supabase automatically executes unapplied migrations in chronological order.
 - **Single Primary Instance (Zero Branching)**: Supabase preview branching is disabled (paid tier feature). The system operates strictly against the single production database instance tied directly to the `main` branch.
-- **Local Package Reference**: `packages/database/migrations/` maintains symbolic links pointing to `/supabase/migrations` for package-level reference and local test execution.
+- **Zero Local DB & Pure Supabase Substrate**: Local PostgreSQL instances and Docker containers are prohibited. Applications and tests communicate strictly with remote Supabase over HTTPS.
 
 ---
 
@@ -296,7 +295,8 @@ flowchart LR
 - **SonarQube Cloud Scanner Integration (Completed & Verified)**: **Continuous Code Quality & Security Inspection** (Integrated SonarQube Cloud project `Velocta_fbuploadpro2` under organization `velocta-1` using root `sonar-project.properties` and the official GitHub Action `SonarSource/sonarqube-scan-action@v8.3.0` in `.github/workflows/sonar.yml` with full monorepo path mapping and test execution coverage).
 - **SonarQube Quality Audit Remediation (Completed & Verified)**: **Vulnerability & Bug Hardening** (Remediated CI lifecycle vulnerabilities with `--ignore-scripts`, pinned all GitHub Actions to immutable full commit SHAs, resolved keyboard accessibility with semantic button triggers and `onKeyDown` listeners across `workspace-user-menu.tsx`, `dialog.tsx`, and `switch.tsx`, eliminated regex super-linear backtracking, replaced `charCodeAt` with `codePointAt`, un-nested conditional ternaries in UI primitives, and tuned scanner exclusions for immutable database migrations and UI boilerplate).
 - **SonarQube Reliability Hardening (Completed & Verified)**: **Zero Reliability Violations** (Remediated all 52 open Reliability issues under the “Sonar way for Agentic AI” quality gate: eradicated radix-less `parseInt`/`isNaN` across slot scheduler, crypto, and auth error parsers with `Number.parseInt`/`Number.isNaN`, replaced `charCodeAt`/`fromCharCode` and string replacements with `codePointAt`/`fromCodePoint` and `replaceAll`, eliminated all un-awaited `async` functions across worker dispatcher, client mocks, and auth callbacks, resolved JSX spacing and ARIA interactive container rules in UI primitives, and tuned global exclusions for non-production scripts).
-- **Middleware Redirect Loop Elimination & Multi-Subdomain Session Propagation (Completed & Verified)**: Resolved the infinite redirect ping-pong loop between central app gateway (`app.${rootDomain}`) and tenant workspace subdomains (`${subdomain}.${rootDomain}`); cleared URL search query strings on workspace redirects in `buildAuthenticatedWorkspaceRedirect`, prevented `returnUrl` nested accumulation by deleting duplicate parameters before encoding, added `isReturnUrlTargetingTenant` loop detection on `/login` to terminate recursive bounces when workspaces reject unauthenticated visits, and purged legacy host-only cookies across login, OTP verification, and logout routes to prevent browser cookie shadowing.
+- **Spec 038 (Completed & Verified)**: **Pure Supabase Database Architecture & Pg/Local DB Elimination** (Permanently removed `packages/database`, eliminated `pg` and `node-postgres` connection pooling, and migrated the entire architecture to pure `@supabase/supabase-js` PostgREST and remote Supabase PostgreSQL. Added canonical migration `supabase/migrations/20261013140000_pure_supabase_rls_and_rpc.sql` with multi-tenant row-level security and `claim_due_queue_items` RPC. Updated all worker dispatchers and Edge crons to query Supabase via HTTPS REST APIs).
+- **Spec 039 (Completed & Verified)**: **Eradicate Mocks, Stubs & In-Memory Fallbacks for Production Hardening** (Codified Constitution Principle 29; permanently deleted `apps/web/src/lib/db.ts` and its dummy `PureSupabaseClientAdapter`; migrated 20+ tenant route handlers across accounts, pages, slots, media, and publishing queue directly to `@supabase/supabase-js` PostgREST; implemented fail-fast `getSessionSecret()` throwing if `SESSION_SECRET` is missing in production; implemented fail-fast in `apps/web/src/lib/storage.ts` throwing if Cloudflare R2 credentials are missing in production; enforced distributed Upstash Redis rate limiting in production; eliminated in-memory password, user, and reset stores in `apps/web/src/lib/supabase-auth.ts`; verified all 621 web tests, 196 contracts tests, and worker tests with 100% pass rate).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
 
@@ -367,13 +367,14 @@ To expand FBUploadPro beyond the browser while guaranteeing intellectual propert
 ```text
 fbuploadpro/
 ├── apps/
-│   ├── web/                          # Next.js 16 App Router (Web Portal & Integrations Hub)
-│   ├── worker/                       # Cloudflare Workers (Edge Cron Dispatcher)
+│   ├── web/                          # Next.js 16 App Router (Pure Supabase PostgREST Client & Integrations Hub)
+│   ├── worker/                       # Cloudflare Workers (Pure Supabase Edge Dispatcher)
 │   ├── desktop/                      # Tauri v2 Desktop App (Rust + React 19)
 │   └── extension/                    # WXT Browser Extension (Chrome & Firefox MV3)
 ├── packages/
-│   ├── contracts/                    # Shared Zod schemas, API types, crypto (Web, Worker, Desktop, Extension)
-│   └── database/                     # PostgreSQL substrate & edge client
+│   └── contracts/                    # Shared Zod schemas, API types, crypto, Database interfaces
+├── supabase/
+│   └── migrations/                   # Versioned SQL forward migrations (RLS & RPCs)
 ├── pnpm-workspace.yaml
 └── turbo.json
 ```

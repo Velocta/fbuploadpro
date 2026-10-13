@@ -177,5 +177,10 @@ export function getStorageService(): IStorageService {
   if (config) {
     return new R2StorageProvider(config);
   }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Cloudflare R2 storage credentials (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) are strictly required in production'
+    );
+  }
   return getMockStorageProvider();
 }

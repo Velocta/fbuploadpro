@@ -1,8 +1,8 @@
-import { decryptToken } from '@fbuploadpro/contracts';
-import type { PageInsightsDailySnapshot } from '@fbuploadpro/database';
+import { decryptToken, type PageInsightsDailySnapshot } from '@fbuploadpro/contracts';
 
 export interface InsightsSyncDbClient {
-  query<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
+  query?<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
+  from?(table: string): any;
   upsertPageInsightsSnapshot?(snapshot: PageInsightsDailySnapshot): Promise<void>;
 }
 
@@ -63,12 +63,19 @@ export async function syncDailyPageInsights(
   };
 
   // 1. Query active connected Facebook Pages
-  const rawPages = await db.query(
-    `SELECT id, user_id, fb_page_id, page_name, encrypted_access_token, status
-     FROM facebook_pages
-     WHERE status = 'active'`
-  );
-  const eligiblePages = extractRows<FacebookPageRow>(rawPages);
+  let eligiblePages: FacebookPageRow[] = [];
+  if (typeof db.from === 'function') {
+    const { data, error } = await db.from('facebook_pages').select('id, user_id, fb_page_id, page_name, encrypted_access_token, status').eq('status', 'active');
+    if (error) throw error;
+    eligiblePages = (data || []) as FacebookPageRow[];
+  } else if (typeof db.query === 'function') {
+    const rawPages = await db.query(
+      `SELECT id, user_id, fb_page_id, page_name, encrypted_access_token, status
+       FROM facebook_pages
+       WHERE status = 'active'`
+    );
+    eligiblePages = extractRows<FacebookPageRow>(rawPages);
+  }
   result.totalEligible = eligiblePages.length;
 
   for (const page of eligiblePages) {
@@ -202,9 +209,40 @@ export async function syncDailyPageInsights(
         demographicsSummary,
       };
 
-      if (typeof db.upsertPageInsightsSnapshot === 'function') {
+      if (typeof db.from === 'function') {
+        const { error: upsertErr } = await db.from('page_insights_daily_snapshots').upsert({
+          user_id: snapshot.userId,
+          fb_page_id: snapshot.fbPageId,
+          snapshot_date: snapshot.snapshotDate,
+          fan_count: snapshot.fanCount,
+          followers_count: snapshot.followersCount,
+          daily_follows: snapshot.dailyFollows ?? 0,
+          daily_unfollows: snapshot.dailyUnfollows ?? 0,
+          media_views: snapshot.mediaViews ?? 0,
+          video_views: snapshot.videoViews ?? 0,
+          video_complete_views_30s: snapshot.videoCompleteViews30s ?? 0,
+          video_view_time_seconds: snapshot.videoViewTimeSeconds ?? 0,
+          reactions_summary: snapshot.reactionsSummary ?? {},
+          demographics_summary: snapshot.demographicsSummary ?? {},
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id,fb_page_id,snapshot_date' });
+        if (upsertErr) throw upsertErr;
+
+        await db.from('facebook_pages').update({
+          current_followers: followersCount,
+          updated_at: new Date().toISOString(),
+        }).eq('id', page.id);
+      } else if (typeof db.upsertPageInsightsSnapshot === 'function') {
         await db.upsertPageInsightsSnapshot(snapshot);
-      } else {
+        if (typeof db.query === 'function') {
+          await db.query(
+            `UPDATE facebook_pages
+             SET current_followers = $1, updated_at = now()
+             WHERE id = $2`,
+            [followersCount, page.id]
+          );
+        }
+      } else if (typeof db.query === 'function') {
         await db.query(
           `INSERT INTO page_insights_daily_snapshots (
              user_id, fb_page_id, snapshot_date, fan_count, followers_count,
@@ -241,15 +279,14 @@ export async function syncDailyPageInsights(
             JSON.stringify(snapshot.demographicsSummary || {}),
           ]
         );
-      }
 
-      // 7. Update current_followers in facebook_pages table (preserving starting_followers baseline)
-      await db.query(
-        `UPDATE facebook_pages
-         SET current_followers = $1, updated_at = now()
-         WHERE id = $2`,
-        [followersCount, page.id]
-      );
+        await db.query(
+          `UPDATE facebook_pages
+           SET current_followers = $1, updated_at = now()
+           WHERE id = $2`,
+          [followersCount, page.id]
+        );
+      }
 
       result.synced += 1;
     } catch (err) {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { probeHealth } from '../src/app/api/health/route.js';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 describe('Web Application Health Probe (/api/health)', () => {
   it('returns 200 OK with connected database status on healthy probe', async () => {

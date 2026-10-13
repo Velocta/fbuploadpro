@@ -5,7 +5,7 @@ import {
   handleEnqueueMedia,
   handleListQueueItems,
 } from '../../src/app/api/tenant/[subdomain]/publishing/queue/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

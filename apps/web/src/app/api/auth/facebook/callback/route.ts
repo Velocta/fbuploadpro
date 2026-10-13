@@ -6,12 +6,12 @@ import {
   FacebookTokenExchangeResponseSchema,
   type FacebookUserProfileResponse,
   FacebookUserProfileResponseSchema,
+  getSessionSecret,
   type OAuthStatePayload,
   verifyOAuthState,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../lib/db';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 async function resolveOAuthErrorTarget(
   requestUrl: string,
@@ -236,9 +236,7 @@ function buildPostConnectRedirect(
 }
 
 function getCallbackEnvConfig() {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const encryptionKey = process.env.TOKEN_ENCRYPTION_KEY || '';
   const appId = process.env.FACEBOOK_APP_ID || '';
   const appSecret = process.env.FACEBOOK_APP_SECRET || '';
@@ -356,7 +354,10 @@ async function upsertConnectedFacebookAccount(
     return { accountRowId, alreadyExisted };
   }
 
-  const effectiveDb = db ?? getDbClient();
+  if (!db) {
+    return { accountRowId: undefined, alreadyExisted: false };
+  }
+  const effectiveDb = db;
   const existingRows = (await effectiveDb.query(
     'SELECT id, status FROM facebook_accounts WHERE user_id = $1 AND fb_account_id = $2',
     [userId, meProfile.id]
@@ -458,7 +459,7 @@ export async function handleFacebookCallback(
 
   try {
     const supabase = getSupabaseClient();
-    const db = dbClient ?? (supabase ? null : getDbClient());
+    const db = dbClient ?? null;
     const { appId: effectiveAppId, appSecret: effectiveAppSecret } =
       await resolveWorkspaceCredentials(
         db,

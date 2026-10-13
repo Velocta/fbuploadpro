@@ -5,8 +5,8 @@ describe('Cloudflare Worker Scheduled Cron Handler', () => {
   const dummyEnv: Env = {
     ENVIRONMENT: 'test',
     FB_ENCRYPTION_MASTER_KEY: 'test-master-key',
-    FB_GRAPH_API_URL: 'https://graph.facebook.com/v21.0',
-    DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/fbuploadpro_test',
+    SUPABASE_URL: 'https://test-project.supabase.co',
+    SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
   };
 
   const dummyController: ScheduledController = {

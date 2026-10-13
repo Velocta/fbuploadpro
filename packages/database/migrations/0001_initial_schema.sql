@@ -1,1 +1,0 @@
-../../../supabase/migrations/20261008120001_initial_schema.sql

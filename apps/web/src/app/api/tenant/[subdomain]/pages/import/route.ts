@@ -2,21 +2,21 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   decryptToken,
   encryptToken,
+  getSessionSecret,
   ImportPagesRequestSchema,
   ImportPagesResponseSchema,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleImportPages(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const encryptionKey = process.env.TOKEN_ENCRYPTION_KEY || '';
 
   // 1. Session auth guard
@@ -54,22 +54,45 @@ export async function handleImportPages(
   }
 
   const { accountId, selectedPageIds } = parseResult.data;
-  const db = dbClient ?? getDbClient();
 
   // 4. Verify account ownership
-  const accounts = (await db.query(
-    'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
-    [accountId, session.userId]
-  )) as any[];
+  let account: any = null;
 
-  if (!accounts || accounts.length === 0 || !accounts[0]) {
-    return NextResponse.json(
-      { error: 'Facebook account not found' },
-      { status: 404 }
-    );
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const accounts = (await dbClient.query(
+      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
+      [accountId, session.userId]
+    )) as any[];
+
+    if (!accounts || accounts.length === 0 || !accounts[0]) {
+      return NextResponse.json(
+        { error: 'Facebook account not found' },
+        { status: 404 }
+      );
+    }
+    account = accounts[0];
+  } else {
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { data: accData, error: accErr } = await supabase
+      .from('facebook_accounts')
+      .select('*')
+      .eq('id', accountId)
+      .eq('user_id', session.userId)
+      .maybeSingle();
+
+    if (accErr || !accData) {
+      return NextResponse.json(
+        { error: 'Facebook account not found' },
+        { status: 404 }
+      );
+    }
+    account = accData;
   }
 
-  const account = accounts[0];
   const encryptedToken =
     account.encrypted_access_token || account.encryptedAccessToken;
 
@@ -120,47 +143,81 @@ export async function handleImportPages(
     const tasksJson = JSON.stringify(Array.isArray(pageItem.tasks) ? pageItem.tasks : []);
     const profilePictureUrl = pageItem.picture?.data?.url ?? null;
 
-    const result = (await db.query(
-      `INSERT INTO facebook_pages (
-        user_id, facebook_account_id, fb_page_id, page_name, category, tasks, starting_followers, current_followers, encrypted_access_token, profile_picture_url
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
-      ON CONFLICT (user_id, fb_page_id) DO UPDATE SET
-        facebook_account_id = EXCLUDED.facebook_account_id,
-        page_name = EXCLUDED.page_name,
-        category = EXCLUDED.category,
-        tasks = EXCLUDED.tasks,
-        current_followers = EXCLUDED.current_followers,
-        starting_followers = CASE
-          WHEN facebook_pages.status = 'disconnected' THEN EXCLUDED.starting_followers
-          ELSE facebook_pages.starting_followers
-        END,
-        encrypted_access_token = EXCLUDED.encrypted_access_token,
-        profile_picture_url = EXCLUDED.profile_picture_url,
-        status = 'active',
-        updated_at = now()
-      RETURNING id, fb_page_id, page_name`,
-      [
-        session.userId,
-        accountId,
-        String(pageItem.id),
-        String(pageItem.name),
-        pageItem.category ?? null,
-        tasksJson,
-        followers,
-        encryptedPageToken,
-        profilePictureUrl,
-      ]
-    )) as any[];
+    if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+      const result = (await dbClient.query(
+        `INSERT INTO facebook_pages (
+          user_id, facebook_account_id, fb_page_id, page_name, category, tasks, starting_followers, current_followers, encrypted_access_token, profile_picture_url
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
+        ON CONFLICT (user_id, fb_page_id) DO UPDATE SET
+          facebook_account_id = EXCLUDED.facebook_account_id,
+          page_name = EXCLUDED.page_name,
+          category = EXCLUDED.category,
+          tasks = EXCLUDED.tasks,
+          current_followers = EXCLUDED.current_followers,
+          starting_followers = CASE
+            WHEN facebook_pages.status = 'disconnected' THEN EXCLUDED.starting_followers
+            ELSE facebook_pages.starting_followers
+          END,
+          encrypted_access_token = EXCLUDED.encrypted_access_token,
+          profile_picture_url = EXCLUDED.profile_picture_url,
+          status = 'active',
+          updated_at = now()
+        RETURNING id, fb_page_id, page_name`,
+        [
+          session.userId,
+          accountId,
+          String(pageItem.id),
+          String(pageItem.name),
+          pageItem.category ?? null,
+          tasksJson,
+          followers,
+          encryptedPageToken,
+          profilePictureUrl,
+        ]
+      )) as any[];
 
-    if (result && result.length > 0 && result[0]) {
-      const row = result[0];
+      if (result && result.length > 0 && result[0]) {
+        const row = result[0];
+        return {
+          id: row.id,
+          fbPageId: row.fb_page_id || row.fbPageId,
+          pageName: row.page_name || row.pageName,
+        };
+      }
+      return null;
+    } else {
+      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+      if (!supabase) return null;
+
+      const { data: upserted, error: upsertErr } = await supabase
+        .from('facebook_pages')
+        .upsert(
+          {
+            user_id: session.userId,
+            facebook_account_id: accountId,
+            fb_page_id: String(pageItem.id),
+            page_name: String(pageItem.name),
+            category: pageItem.category ?? null,
+            tasks: Array.isArray(pageItem.tasks) ? pageItem.tasks : [],
+            starting_followers: followers,
+            current_followers: followers,
+            encrypted_access_token: encryptedPageToken,
+            profile_picture_url: profilePictureUrl,
+            status: 'active',
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id,fb_page_id' }
+        )
+        .select('id, fb_page_id, page_name')
+        .single();
+
+      if (upsertErr || !upserted) return null;
       return {
-        id: row.id,
-        fbPageId: row.fb_page_id || row.fbPageId,
-        pageName: row.page_name || row.pageName,
+        id: upserted.id,
+        fbPageId: upserted.fb_page_id,
+        pageName: upserted.page_name,
       };
     }
-    return null;
   });
 
   const resolved = await Promise.all(importPromises);

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  getSessionSecret,
   CreateWorkspaceRequestSchema,
   generateWorkspaceSubdomain,
   verifySessionToken,
@@ -7,13 +8,6 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient, setSessionCookie } from '@/lib/supabase-auth';
-
-function getSessionSecret(): string {
-  return (
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long'
-  );
-}
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;

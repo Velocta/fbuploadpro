@@ -8,7 +8,7 @@ import { handleListAccounts } from '../../src/app/api/tenant/[subdomain]/account
 import { handleListPages } from '../../src/app/api/tenant/[subdomain]/pages/route';
 import { handleDiscoverPages } from '../../src/app/api/tenant/[subdomain]/accounts/[accountId]/pages/discover/route';
 import { handleImportPages } from '../../src/app/api/tenant/[subdomain]/pages/import/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_KEY =

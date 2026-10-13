@@ -1,20 +1,20 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   DisconnectAccountResponseSchema,
+  getSessionSecret,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleDisconnectAccount(
   request: NextRequest,
   subdomain: string,
   accountId: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<Database>
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;
@@ -34,26 +34,54 @@ export async function handleDisconnectAccount(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const db = dbClient ?? getDbClient();
+  let disconnectedPagesCount = 0;
 
-  // 3. Count connected pages prior to cascade deletion
-  const countRows = (await db.query(
-    'SELECT COUNT(*)::int AS count FROM facebook_pages WHERE facebook_account_id = $1 AND user_id = $2',
-    [accountId, session.userId]
-  )) as any[];
-  const disconnectedPagesCount = Number(countRows?.[0]?.count ?? 0);
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    // 3. Count connected pages prior to cascade deletion
+    const countRows = (await dbClient.query(
+      'SELECT COUNT(*)::int AS count FROM facebook_pages WHERE facebook_account_id = $1 AND user_id = $2',
+      [accountId, session.userId]
+    )) as any[];
+    disconnectedPagesCount = Number(countRows?.[0]?.count ?? 0);
 
-  // 4. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
-  const result = (await db.query(
-    'DELETE FROM facebook_accounts WHERE id = $1 AND user_id = $2 RETURNING id',
-    [accountId, session.userId]
-  )) as any[];
+    // 4. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
+    const result = (await dbClient.query(
+      'DELETE FROM facebook_accounts WHERE id = $1 AND user_id = $2 RETURNING id',
+      [accountId, session.userId]
+    )) as any[];
 
-  if (!result || result.length === 0) {
-    return NextResponse.json(
-      { error: 'Facebook account not found' },
-      { status: 404 }
-    );
+    if (!result || result.length === 0) {
+      return NextResponse.json(
+        { error: 'Facebook account not found' },
+        { status: 404 }
+      );
+    }
+  } else {
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { count } = await supabase
+      .from('facebook_pages')
+      .select('id', { count: 'exact', head: true })
+      .eq('facebook_account_id', accountId)
+      .eq('user_id', session.userId);
+    disconnectedPagesCount = count ?? 0;
+
+    const { data: deleted, error: deleteErr } = await supabase
+      .from('facebook_accounts')
+      .delete()
+      .eq('id', accountId)
+      .eq('user_id', session.userId)
+      .select('id');
+
+    if (deleteErr || !deleted || deleted.length === 0) {
+      return NextResponse.json(
+        { error: 'Facebook account not found' },
+        { status: 404 }
+      );
+    }
   }
 
   const responsePayload = DisconnectAccountResponseSchema.parse({

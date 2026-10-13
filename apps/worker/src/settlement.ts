@@ -61,7 +61,101 @@ export async function settleOutcome(
   item: ClaimedQueueItem,
   outcome: DispatchOutcome
 ): Promise<void> {
+  // 1. Supabase PostgREST client support
+  if ('from' in db && typeof (db as any).from === 'function') {
+    const attemptNumber = (item.retryCount || 0) + 1;
+    if (outcome.status === 'published') {
+      await (db as any).from('queue_items').update({
+        status: 'published',
+        fb_post_id: outcome.fbPostId ?? null,
+        fb_comment_id: outcome.fbCommentId ?? null,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', item.id);
+
+      await (db as any).from('publish_logs').insert({
+        user_id: item.userId,
+        queue_item_id: item.id,
+        fb_page_id: item.pageId,
+        status: 'success',
+        attempt_number: attemptNumber,
+        fb_response_code: null,
+        error_message: null,
+        error_details: null,
+      });
+    } else if (outcome.status === 'retry') {
+      const scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      await (db as any).from('queue_items').update({
+        status: 'queued',
+        retry_count: (item.retryCount || 0) + 1,
+        scheduled_time: scheduledTime,
+        updated_at: new Date().toISOString(),
+      }).eq('id', item.id);
+
+      const errorDetails =
+        outcome.errorCode !== undefined
+          ? {
+              errorCode: outcome.errorCode,
+              ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+            }
+          : null;
+
+      await (db as any).from('publish_logs').insert({
+        user_id: item.userId,
+        queue_item_id: item.id,
+        fb_page_id: item.pageId,
+        status: 'retry',
+        attempt_number: attemptNumber,
+        fb_response_code: outcome.errorCode ?? null,
+        error_message: outcome.errorMessage ?? null,
+        error_details: errorDetails,
+      });
+
+      if (outcome.targetPageStatus) {
+        await (db as any).from('facebook_pages').update({
+          status: outcome.targetPageStatus,
+          updated_at: new Date().toISOString(),
+        }).eq('id', item.pageId).eq('user_id', item.userId);
+      }
+    } else {
+      await (db as any).from('queue_items').update({
+        status: 'failed',
+        retry_count: (item.retryCount || 0) + 1,
+        updated_at: new Date().toISOString(),
+      }).eq('id', item.id);
+
+      const errorDetails =
+        outcome.errorCode !== undefined
+          ? {
+              errorCode: outcome.errorCode,
+              ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+            }
+          : null;
+
+      await (db as any).from('publish_logs').insert({
+        user_id: item.userId,
+        queue_item_id: item.id,
+        fb_page_id: item.pageId,
+        status: 'failure',
+        attempt_number: attemptNumber,
+        fb_response_code: outcome.errorCode ?? null,
+        error_message: outcome.errorMessage ?? null,
+        error_details: errorDetails,
+      });
+
+      if (outcome.targetPageStatus) {
+        await (db as any).from('facebook_pages').update({
+          status: outcome.targetPageStatus,
+          updated_at: new Date().toISOString(),
+        }).eq('id', item.pageId).eq('user_id', item.userId);
+      }
+    }
+    return;
+  }
+
+  // 2. Queryable fallback for testing/mock clients
   const executeSettlement = async (tx: Queryable): Promise<void> => {
+    if (typeof tx.query !== 'function') return;
     const attemptNumber = (item.retryCount || 0) + 1;
 
     if (outcome.status === 'published') {

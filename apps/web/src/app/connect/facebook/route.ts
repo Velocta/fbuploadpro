@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  getSessionSecret,
   signOAuthState,
   verifyMagicLinkToken,
 } from '@fbuploadpro/contracts';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const appId = process.env.FACEBOOK_APP_ID || '';
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
