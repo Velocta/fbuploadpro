@@ -198,7 +198,7 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, email, name, phone, role, status')
+        .select('id, email, name, phone, role, status, password_updated_at')
         .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`)
         .maybeSingle();
 
@@ -207,7 +207,11 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
       } else if (data) {
         const fallback = deriveSubdomainFromEmail(canonicalEmail);
         const subdomain = await findWorkspaceSubdomainByOwner(supabase, data.id, fallback);
-        return { ...(data as object), subdomain } as AuthUser;
+        const rawPasswordUpdatedAt = (data as { password_updated_at?: string | null }).password_updated_at;
+        const passwordUpdatedAt = rawPasswordUpdatedAt
+          ? Math.floor(new Date(rawPasswordUpdatedAt).getTime() / 1000)
+          : undefined;
+        return { ...(data as object), subdomain, passwordUpdatedAt } as AuthUser;
       }
     } catch (err) {
       console.error('[Supabase PostgREST] findUserByEmail exception:', err);
@@ -1103,13 +1107,18 @@ export async function resetUserPasswordWithOtp(params: {
       }
     }
 
-    // Ensure public.users profile exists and is active
+    // Ensure public.users profile exists, is active, and records password_updated_at
+    const nowIso = new Date().toISOString();
     try {
       const existingUser = await findUserByEmail(canonicalEmail);
       if (existingUser?.id) {
         await supabase
           .from('users')
-          .update({ status: 'active', updated_at: new Date().toISOString() })
+          .update({
+            status: 'active',
+            password_updated_at: nowIso,
+            updated_at: nowIso,
+          })
           .eq('id', existingUser.id);
       } else {
         const { data: authUserData } = await supabase.auth.getUser();
@@ -1126,6 +1135,8 @@ export async function resetUserPasswordWithOtp(params: {
               phone: metadata.phone || null,
               role: 'user',
               status: 'active',
+              password_updated_at: nowIso,
+              updated_at: nowIso,
             },
             { onConflict: 'id' }
           );
@@ -1245,6 +1256,38 @@ export async function resetUserPassword(params: {
       if (error) {
         throw new Error(error.message);
       }
+    }
+
+    // Invalidate existing sessions in production by updating password_updated_at in public.users
+    try {
+      const nowIso = new Date().toISOString();
+      const { data: authUserData } = await supabase.auth.getUser();
+      const targetUserId = authUserData?.user?.id;
+      if (targetUserId) {
+        await supabase
+          .from('users')
+          .update({
+            password_updated_at: nowIso,
+            updated_at: nowIso,
+          })
+          .eq('id', targetUserId);
+      } else if (params.email) {
+        let canonicalEmail: string;
+        try {
+          canonicalEmail = canonicalizeGmailAddress(params.email);
+        } catch {
+          canonicalEmail = params.email.trim().toLowerCase();
+        }
+        await supabase
+          .from('users')
+          .update({
+            password_updated_at: nowIso,
+            updated_at: nowIso,
+          })
+          .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`);
+      }
+    } catch (invalErr) {
+      console.error('[Supabase PostgREST] Failed to persist password_updated_at on resetUserPassword:', invalErr);
     }
   } else {
     // Local / test fallback store
