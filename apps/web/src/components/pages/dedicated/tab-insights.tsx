@@ -16,8 +16,6 @@ import {
   RADII,
   SPACING,
   TYPOGRAPHY,
-  COMPONENT_STYLES,
-  STATUS_SIGNALS,
 } from '@/lib/theme';
 import type { FacebookPageItem } from '../page-card';
 import type { PageInsightsResponse, PageInsightsRange } from '@fbuploadpro/contracts';

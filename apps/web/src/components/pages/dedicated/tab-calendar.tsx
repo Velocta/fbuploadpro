@@ -10,6 +10,7 @@ import {
   COMPONENT_STYLES,
   STATUS_SIGNALS,
 } from '@/lib/theme';
+import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import type { FacebookPageItem } from '../page-card';
 import type { PageSlotSummary } from './tab-dashboard';
 
@@ -38,6 +39,11 @@ const COMMON_TIMEZONES = [
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+function getSlotToggleLabel(isToggling: boolean, isActive: boolean): string {
+  if (isToggling) return '...';
+  return isActive ? 'Pause' : 'Activate';
+}
+
 export function PageTabCalendar({
   page: _page,
   slots,
@@ -65,7 +71,7 @@ export function PageTabCalendar({
     setIsAddModalOpen(true);
   };
 
-  const handleCreateSlot = async (e: React.FormEvent) => {
+  const handleCreateSlot = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormError(null);
 
@@ -340,7 +346,7 @@ export function PageTabCalendar({
                       cursor: isToggling ? 'not-allowed' : 'pointer',
                     }}
                   >
-                    {isToggling ? '...' : slot.isActive ? 'Pause' : 'Activate'}
+                    {getSlotToggleLabel(isToggling, slot.isActive)}
                   </button>
 
                   <button
@@ -477,32 +483,13 @@ export function PageTabCalendar({
       {isAddModalOpen && (
         <div
           data-testid="add-slot-modal-backdrop"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: SPACING.md,
-            boxSizing: 'border-box',
-          }}
+          style={MODAL_BACKDROP_STYLE}
         >
           <div
             data-testid="add-slot-modal"
             style={{
-              width: '100%',
+              ...MODAL_CONTAINER_STYLE,
               maxWidth: '460px',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              boxShadow: `var(--shadow-modal, ${THEME.default.shadows.modal})`,
-              padding: SPACING.xl,
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
               gap: SPACING.lg,
             }}
           >
@@ -666,33 +653,13 @@ export function PageTabCalendar({
       {slotToDelete && (
         <div
           data-testid="delete-slot-backdrop"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: SPACING.md,
-            boxSizing: 'border-box',
-          }}
+          style={MODAL_BACKDROP_STYLE}
         >
           <div
             data-testid="delete-slot-dialog"
             style={{
-              width: '100%',
+              ...MODAL_CONTAINER_STYLE,
               maxWidth: '440px',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              boxShadow: `var(--shadow-modal, ${THEME.default.shadows.modal})`,
-              padding: SPACING.xl,
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.md,
             }}
           >
             <h3

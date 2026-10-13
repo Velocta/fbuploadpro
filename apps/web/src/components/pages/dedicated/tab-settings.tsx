@@ -9,6 +9,7 @@ import {
   TYPOGRAPHY,
   STATUS_SIGNALS,
 } from '@/lib/theme';
+import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import type { FacebookPageItem } from '../page-card';
 
 export interface PageTabSettingsProps {
@@ -16,6 +17,32 @@ export interface PageTabSettingsProps {
   subdomain: string;
   onStatusToggle: (nextStatus: 'active' | 'paused') => Promise<void>;
   onDisconnectPage: () => Promise<void>;
+}
+
+function getSettingsStatusDetails(status: string) {
+  const isPaused = status === 'paused';
+  const isNeedsAttention =
+    status === 'invalid_token' ||
+    status === 'page_checkpoint' ||
+    status === 'fb_rate_limited';
+
+  let signal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS] = STATUS_SIGNALS.operational;
+  let label = 'Active & Operational';
+
+  if (isNeedsAttention) {
+    signal = STATUS_SIGNALS.critical;
+    label = 'Re-Authentication Required';
+  } else if (isPaused) {
+    signal = STATUS_SIGNALS.queued;
+    label = 'Automation Paused';
+  }
+
+  return { isPaused, isNeedsAttention, statusSignal: signal, statusLabel: label };
+}
+
+function getAutomationButtonLabel(isUpdating: boolean, isPaused: boolean): string {
+  if (isUpdating) return 'Updating...';
+  return isPaused ? 'Resume Automation' : 'Pause Automation';
 }
 
 export function PageTabSettings({
@@ -28,23 +55,7 @@ export function PageTabSettings({
   const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
-  const isPaused = page.status === 'paused';
-  const isNeedsAttention =
-    page.status === 'invalid_token' ||
-    page.status === 'page_checkpoint' ||
-    page.status === 'fb_rate_limited';
-
-  const statusSignal = isNeedsAttention
-    ? STATUS_SIGNALS.critical
-    : isPaused
-    ? STATUS_SIGNALS.queued
-    : STATUS_SIGNALS.operational;
-
-  const statusLabel = isNeedsAttention
-    ? 'Re-Authentication Required'
-    : isPaused
-    ? 'Automation Paused'
-    : 'Active & Operational';
+  const { isPaused, isNeedsAttention, statusSignal, statusLabel } = getSettingsStatusDetails(page.status);
 
   const handleToggleAutomation = async () => {
     setIsUpdatingStatus(true);
@@ -145,7 +156,7 @@ export function PageTabSettings({
               opacity: isUpdatingStatus ? 0.7 : 1,
             }}
           >
-            {isUpdatingStatus ? 'Updating...' : isPaused ? 'Resume Automation' : 'Pause Automation'}
+            {getAutomationButtonLabel(isUpdatingStatus, isPaused)}
           </button>
         </div>
       </div>
@@ -375,101 +386,106 @@ export function PageTabSettings({
         </button>
       </div>
 
-      {/* Disconnect Confirmation Dialog */}
-      {isDisconnectDialogOpen && (
-        <div
-          data-testid="disconnect-modal-backdrop"
+      <DisconnectConfirmationDialog
+        isOpen={isDisconnectDialogOpen}
+        pageName={page.pageName}
+        isDisconnecting={isDisconnecting}
+        onCancel={() => setIsDisconnectDialogOpen(false)}
+        onConfirm={handleConfirmDisconnect}
+      />
+    </div>
+  );
+}
+
+interface DisconnectConfirmationDialogProps {
+  isOpen: boolean;
+  pageName: string;
+  isDisconnecting: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+function DisconnectConfirmationDialog({
+  isOpen,
+  pageName,
+  isDisconnecting,
+  onCancel,
+  onConfirm,
+}: Readonly<DisconnectConfirmationDialogProps>) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      data-testid="disconnect-modal-backdrop"
+      style={MODAL_BACKDROP_STYLE}
+    >
+      <div
+        data-testid="disconnect-modal"
+        style={{
+          ...MODAL_CONTAINER_STYLE,
+          maxWidth: '460px',
+        }}
+      >
+        <h3
           style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: SPACING.md,
-            boxSizing: 'border-box',
+            margin: 0,
+            fontSize: '1.125rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
           }}
         >
-          <div
-            data-testid="disconnect-modal"
+          Disconnect {pageName}?
+        </h3>
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.875rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            lineHeight: 1.5,
+          }}
+        >
+          This will detach the Facebook Page from your workspace. Queued publications will be cancelled and access tokens will be securely removed.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.sm }}>
+          <button
+            type="button"
+            data-testid="cancel-disconnect-btn"
+            onClick={onCancel}
             style={{
-              width: '100%',
-              maxWidth: '460px',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              padding: `${SPACING.xs} ${SPACING.md}`,
+              borderRadius: RADII.sm,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              backgroundColor: 'transparent',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              boxShadow: `var(--shadow-modal, ${THEME.default.shadows.modal})`,
-              padding: SPACING.xl,
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.md,
+              cursor: 'pointer',
             }}
           >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '1.125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              Disconnect {page.pageName}?
-            </h3>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '0.875rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                lineHeight: 1.5,
-              }}
-            >
-              This will detach the Facebook Page from your workspace. Queued publications will be cancelled and access tokens will be securely removed.
-            </p>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.sm }}>
-              <button
-                type="button"
-                data-testid="cancel-disconnect-btn"
-                onClick={() => setIsDisconnectDialogOpen(false)}
-                style={{
-                  padding: `${SPACING.xs} ${SPACING.md}`,
-                  borderRadius: RADII.sm,
-                  fontSize: '0.875rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  backgroundColor: 'transparent',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                data-testid="confirm-disconnect-btn"
-                disabled={isDisconnecting}
-                onClick={handleConfirmDisconnect}
-                style={{
-                  padding: `${SPACING.xs} ${SPACING.lg}`,
-                  borderRadius: RADII.sm,
-                  fontSize: '0.875rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  backgroundColor: PALETTE.accent3,
-                  color: '#ffffff',
-                  border: 'none',
-                  cursor: isDisconnecting ? 'not-allowed' : 'pointer',
-                  opacity: isDisconnecting ? 0.7 : 1,
-                }}
-              >
-                {isDisconnecting ? 'Disconnecting...' : 'Yes, Disconnect Page'}
-              </button>
-            </div>
-          </div>
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-testid="confirm-disconnect-btn"
+            disabled={isDisconnecting}
+            onClick={onConfirm}
+            style={{
+              padding: `${SPACING.xs} ${SPACING.lg}`,
+              borderRadius: RADII.sm,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              backgroundColor: PALETTE.accent3,
+              color: '#ffffff',
+              border: 'none',
+              cursor: isDisconnecting ? 'not-allowed' : 'pointer',
+              opacity: isDisconnecting ? 0.7 : 1,
+            }}
+          >
+            {isDisconnecting ? 'Disconnecting...' : 'Yes, Disconnect Page'}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

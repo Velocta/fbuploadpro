@@ -10,7 +10,20 @@ import {
   COMPONENT_STYLES,
   STATUS_SIGNALS,
 } from '@/lib/theme';
+import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import type { FacebookPageItem } from '../page-card';
+
+const QUEUE_EDIT_TEXTAREA_STYLE: React.CSSProperties = {
+  width: '100%',
+  padding: SPACING.sm,
+  borderRadius: RADII.sm,
+  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+  color: `var(--text-main, ${THEME.default.text.primary})`,
+  fontSize: '0.875rem',
+  resize: 'vertical',
+  boxSizing: 'border-box',
+};
 
 export interface DedicatedQueueItem {
   id: string;
@@ -625,32 +638,13 @@ export function PageTabQueue({
       {editingItem && (
         <div
           data-testid="edit-queue-modal-backdrop"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: SPACING.md,
-            boxSizing: 'border-box',
-          }}
+          style={MODAL_BACKDROP_STYLE}
         >
           <div
             data-testid="edit-queue-modal"
             style={{
-              width: '100%',
+              ...MODAL_CONTAINER_STYLE,
               maxWidth: '540px',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              boxShadow: `var(--shadow-modal, ${THEME.default.shadows.modal})`,
-              padding: SPACING.xl,
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
               gap: SPACING.lg,
             }}
           >
@@ -704,17 +698,7 @@ export function PageTabQueue({
                 maxLength={5000}
                 onChange={(e) => setEditCaption(e.target.value)}
                 placeholder="Write a caption for this post..."
-                style={{
-                  width: '100%',
-                  padding: SPACING.sm,
-                  borderRadius: RADII.sm,
-                  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  fontSize: '0.875rem',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
+                style={QUEUE_EDIT_TEXTAREA_STYLE}
               />
               <span
                 style={{
@@ -747,17 +731,7 @@ export function PageTabQueue({
                 maxLength={2000}
                 onChange={(e) => setEditFirstComment(e.target.value)}
                 placeholder="Links, hashtags, or supplementary notes..."
-                style={{
-                  width: '100%',
-                  padding: SPACING.sm,
-                  borderRadius: RADII.sm,
-                  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  fontSize: '0.875rem',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                }}
+                style={QUEUE_EDIT_TEXTAREA_STYLE}
               />
               <span
                 style={{
@@ -814,33 +788,13 @@ export function PageTabQueue({
       {itemToDelete && (
         <div
           data-testid="delete-confirm-backdrop"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: SPACING.md,
-            boxSizing: 'border-box',
-          }}
+          style={MODAL_BACKDROP_STYLE}
         >
           <div
             data-testid="delete-confirm-dialog"
             style={{
-              width: '100%',
+              ...MODAL_CONTAINER_STYLE,
               maxWidth: '440px',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              boxShadow: `var(--shadow-modal, ${THEME.default.shadows.modal})`,
-              padding: SPACING.xl,
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.md,
             }}
           >
             <h3

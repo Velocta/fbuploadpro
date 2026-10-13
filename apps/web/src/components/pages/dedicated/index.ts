@@ -5,3 +5,4 @@ export { PageTabCalendar, type PageTabCalendarProps } from './tab-calendar';
 export { PageTabInsights, type PageTabInsightsProps } from './tab-insights';
 export { PageTabSettings, type PageTabSettingsProps } from './tab-settings';
 export { EnqueueModal, type EnqueueModalProps, type EnqueueMediaItemOption } from './enqueue-modal';
+export { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';

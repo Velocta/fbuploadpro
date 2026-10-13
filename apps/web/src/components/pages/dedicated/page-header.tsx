@@ -39,17 +39,19 @@ export function DedicatedPageHeader({
     page.status === 'page_checkpoint' ||
     page.status === 'fb_rate_limited';
 
-  const statusSignal = isNeedsAttention
-    ? STATUS_SIGNALS.critical
-    : isPaused
-    ? STATUS_SIGNALS.queued
-    : STATUS_SIGNALS.operational;
+  let statusSignal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS] = STATUS_SIGNALS.operational;
+  if (isNeedsAttention) {
+    statusSignal = STATUS_SIGNALS.critical;
+  } else if (isPaused) {
+    statusSignal = STATUS_SIGNALS.queued;
+  }
 
-  const statusLabel = isNeedsAttention
-    ? 'Needs Attention'
-    : isPaused
-    ? 'Automation Paused'
-    : 'Active';
+  let statusLabel = 'Active';
+  if (isNeedsAttention) {
+    statusLabel = 'Needs Attention';
+  } else if (isPaused) {
+    statusLabel = 'Automation Paused';
+  }
 
   const fbPageUrl = `https://facebook.com/${page.fbPageId}`;
 

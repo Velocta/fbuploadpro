@@ -46,34 +46,31 @@ function formatPageRow(row: any) {
   });
 }
 
-export async function handleGetPage(
+async function authenticateTenantRequest(
   request: NextRequest,
-  subdomain: string,
-  pageId: string,
-  dbClient?: DatabaseClient
-): Promise<NextResponse> {
-  const sessionSecret =
+  subdomain: string
+): Promise<{ errorResponse?: NextResponse; session?: any }> {
+  const secretKey =
     process.env.SESSION_SECRET ||
     'super-secret-session-signing-key-minimum-32-chars-long';
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const token = request.cookies.get('fbup_session')?.value;
+  if (!token) {
+    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  let session;
   try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
+    const verified = await verifySessionToken(token, secretKey);
+    if (verified.subdomain !== subdomain && verified.role !== 'admin') {
+      return { errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { session: verified };
   } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
+}
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const db = dbClient ?? getDbClient();
-
+async function fetchActivePageById(db: DatabaseClient, pageId: string, userId: string) {
   const rows = (await db.query(
     `SELECT 
       p.id,
@@ -93,14 +90,31 @@ export async function handleGetPage(
     LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
     WHERE p.id = $1 AND p.user_id = $2
       AND p.status != 'disconnected'`,
-    [pageId, session.userId]
+    [pageId, userId]
   )) as any[];
 
   if (!rows || rows.length === 0 || !rows[0]) {
+    return null;
+  }
+  return formatPageRow(rows[0]);
+}
+
+export async function handleGetPage(
+  request: NextRequest,
+  subdomain: string,
+  pageId: string,
+  dbClient?: DatabaseClient
+): Promise<NextResponse> {
+  const auth = await authenticateTenantRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
+
+  const db = dbClient ?? getDbClient();
+  const page = await fetchActivePageById(db, pageId, session.userId);
+  if (!page) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
 
-  const page = formatPageRow(rows[0]);
   return NextResponse.json({ page });
 }
 
@@ -110,25 +124,9 @@ export async function handleUpdatePage(
   pageId: string,
   dbClient?: DatabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
-
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await authenticateTenantRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
 
   let rawBody: unknown;
   try {
@@ -159,33 +157,11 @@ export async function handleUpdatePage(
     );
   }
 
-  const rows = (await db.query(
-    `SELECT 
-      p.id,
-      p.facebook_account_id,
-      a.display_name AS account_display_name,
-      p.fb_page_id,
-      p.page_name,
-      p.profile_picture_url,
-      p.category,
-      p.starting_followers,
-      p.current_followers,
-      p.status,
-      p.tasks,
-      p.created_at,
-      p.updated_at
-    FROM facebook_pages p
-    LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
-    WHERE p.id = $1 AND p.user_id = $2
-      AND p.status != 'disconnected'`,
-    [pageId, session.userId]
-  )) as any[];
-
-  if (!rows || rows.length === 0 || !rows[0]) {
+  const page = await fetchActivePageById(db, pageId, session.userId);
+  if (!page) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
 
-  const page = formatPageRow(rows[0]);
   return NextResponse.json({ success: true, page });
 }
 
@@ -195,31 +171,12 @@ export async function handleDisconnectPage(
   pageId: string,
   dbClient?: DatabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
-
-  // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await authenticateTenantRequest(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session!;
 
   const db = dbClient ?? getDbClient();
 
-  // 3. Soft-delete page record scoped to user_id (status = 'disconnected', wipe encrypted token)
   const result = (await db.query(
     `UPDATE facebook_pages
      SET status = 'disconnected',

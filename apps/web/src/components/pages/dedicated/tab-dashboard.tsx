@@ -68,6 +68,13 @@ export function PageTabDashboard({
   const isPositiveGrowth = delta > 0;
   const isNegativeGrowth = delta < 0;
 
+  let growthColor = 'inherit';
+  if (isPositiveGrowth) {
+    growthColor = PALETTE.accent4;
+  } else if (isNegativeGrowth) {
+    growthColor = PALETTE.accent3;
+  }
+
   return (
     <div data-testid="page-tab-dashboard" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}>
       {/* 4 Overview Metric Cards */}
@@ -108,7 +115,7 @@ export function PageTabDashboard({
                 style={{
                   fontSize: '0.8125rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: isPositiveGrowth ? PALETTE.accent4 : isNegativeGrowth ? PALETTE.accent3 : 'inherit',
+                  color: growthColor,
                 }}
               >
                 {isPositiveGrowth ? `+${delta}` : delta}

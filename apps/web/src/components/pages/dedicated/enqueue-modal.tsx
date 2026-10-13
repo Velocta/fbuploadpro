@@ -9,6 +9,7 @@ import {
   TYPOGRAPHY,
   COMPONENT_STYLES,
 } from '@/lib/theme';
+import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import type { PageSlotSummary } from './tab-dashboard';
 
 export interface EnqueueMediaItemOption {
@@ -100,7 +101,7 @@ export function EnqueueModal({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedMediaId) {
       setError('Please select a media item to enqueue');
@@ -144,37 +145,138 @@ export function EnqueueModal({
 
   const activeSlots = slots.filter((s) => s.isActive);
 
+  const renderMediaList = () => {
+    if (isLoadingMedia) {
+      return (
+        <div
+          style={{
+            padding: SPACING.lg,
+            textAlign: 'center',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            fontSize: '0.8125rem',
+          }}
+        >
+          Loading media assets...
+        </div>
+      );
+    }
+
+    if (mediaList.length === 0) {
+      return (
+        <div
+          style={{
+            padding: SPACING.lg,
+            textAlign: 'center',
+            backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+            borderRadius: RADII.sm,
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            fontSize: '0.8125rem',
+          }}
+        >
+          No media assets found in library. Upload media first in the Media Library tab.
+        </div>
+      );
+    }
+
+    return (
+      <div
+        data-testid="enqueue-media-picker-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+          gap: SPACING.xs,
+          maxHeight: '160px',
+          overflowY: 'auto',
+          padding: '4px',
+          backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+          borderRadius: RADII.sm,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        }}
+      >
+        {mediaList.map((media) => {
+          const isSelected = selectedMediaId === media.id;
+          const thumb = media.thumbnailUrl || media.url;
+
+          return (
+            <button
+              key={media.id}
+              type="button"
+              data-testid={`media-pick-btn-${media.id}`}
+              onClick={() => handleSelectMedia(media)}
+              style={{
+                position: 'relative',
+                aspectRatio: '1',
+                borderRadius: RADII.xs,
+                overflow: 'hidden',
+                border: isSelected
+                  ? `2px solid ${PALETTE.primary}`
+                  : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            >
+              {thumb ? (
+                <img
+                  src={thumb}
+                  alt={media.name}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.6875rem',
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  }}
+                >
+                  {media.mediaType}
+                </div>
+              )}
+              {isSelected && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '4px',
+                    right: '4px',
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    backgroundColor: PALETTE.primary,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '10px',
+                    color: '#000',
+                    fontWeight: 'bold',
+                  }}
+                >
+                  ✓
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div
       data-testid="enqueue-modal-backdrop"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(4px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: SPACING.md,
-        boxSizing: 'border-box',
-      }}
+      style={MODAL_BACKDROP_STYLE}
     >
       <div
         data-testid="enqueue-modal"
         style={{
-          width: '100%',
+          ...MODAL_CONTAINER_STYLE,
           maxWidth: '620px',
           maxHeight: '90vh',
           overflowY: 'auto',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-          boxShadow: `var(--shadow-modal, ${THEME.default.shadows.modal})`,
-          padding: SPACING.xl,
-          boxSizing: 'border-box',
-          display: 'flex',
-          flexDirection: 'column',
           gap: SPACING.lg,
         }}
       >
@@ -248,114 +350,7 @@ export function EnqueueModal({
               Select Asset
             </span>
 
-            {isLoadingMedia ? (
-              <div
-                style={{
-                  padding: SPACING.lg,
-                  textAlign: 'center',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  fontSize: '0.8125rem',
-                }}
-              >
-                Loading media assets...
-              </div>
-            ) : mediaList.length === 0 ? (
-              <div
-                style={{
-                  padding: SPACING.lg,
-                  textAlign: 'center',
-                  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                  borderRadius: RADII.sm,
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  fontSize: '0.8125rem',
-                }}
-              >
-                No media assets found in library. Upload media first in the Media Library tab.
-              </div>
-            ) : (
-              <div
-                data-testid="enqueue-media-picker-grid"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-                  gap: SPACING.xs,
-                  maxHeight: '160px',
-                  overflowY: 'auto',
-                  padding: '4px',
-                  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                  borderRadius: RADII.sm,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                }}
-              >
-                {mediaList.map((media) => {
-                  const isSelected = selectedMediaId === media.id;
-                  const thumb = media.thumbnailUrl || media.url;
-
-                  return (
-                    <button
-                      key={media.id}
-                      type="button"
-                      data-testid={`media-pick-btn-${media.id}`}
-                      onClick={() => handleSelectMedia(media)}
-                      style={{
-                        position: 'relative',
-                        aspectRatio: '1',
-                        borderRadius: RADII.xs,
-                        overflow: 'hidden',
-                        border: isSelected
-                          ? `2px solid ${PALETTE.primary}`
-                          : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                        padding: 0,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {thumb ? (
-                        <img
-                          src={thumb}
-                          alt={media.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.6875rem',
-                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          }}
-                        >
-                          {media.mediaType}
-                        </div>
-                      )}
-                      {isSelected && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: '4px',
-                            right: '4px',
-                            width: '16px',
-                            height: '16px',
-                            borderRadius: '50%',
-                            backgroundColor: PALETTE.primary,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {renderMediaList()}
           </div>
 
           {/* Slot Target Selector */}

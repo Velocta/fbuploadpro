@@ -123,7 +123,8 @@ export default function TenantDedicatedPageView({
       } else {
         setPageError('Unable to locate the requested Facebook Page.');
       }
-    } catch (_err) {
+    } catch (err: unknown) {
+      // Gracefully fallback to minimal display if pageNameProp was supplied for test or demo rendering
       if (pageNameProp) {
         setPage({
           id: pageId,
@@ -139,7 +140,8 @@ export default function TenantDedicatedPageView({
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
-        setPageError('Failed to load page information.');
+        const errorMsg = err instanceof Error ? err.message : 'Failed to load page information.';
+        setPageError(errorMsg);
       }
     } finally {
       setIsLoadingPage(false);
