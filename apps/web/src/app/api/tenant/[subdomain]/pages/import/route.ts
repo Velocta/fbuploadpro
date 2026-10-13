@@ -134,6 +134,42 @@ export async function handleImportPages(
   const selectedSet = new Set(selectedPageIds);
   const matchedPages = rawItems.filter((item) => selectedSet.has(String(item.id)));
 
+  // Query existing pages before upserting via Supabase to preserve starting_followers for active pages
+  const isSupabaseMode =
+    !dbClient || !('query' in dbClient) || typeof dbClient.query !== 'function';
+  const existingPagesMap = new Map<
+    string,
+    { status: string; starting_followers: number | null }
+  >();
+
+  if (isSupabaseMode && matchedPages.length > 0) {
+    const supabase = (
+      dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()
+    ) as SupabaseClient<any> | null;
+    if (supabase) {
+      const pageFbIds = matchedPages.map((item) => String(item.id));
+      const { data: existingRows } = await supabase
+        .from('facebook_pages')
+        .select('fb_page_id, status, starting_followers')
+        .eq('user_id', session.userId)
+        .in('fb_page_id', pageFbIds);
+
+      if (Array.isArray(existingRows)) {
+        for (const row of existingRows) {
+          if (row?.fb_page_id) {
+            existingPagesMap.set(String(row.fb_page_id), {
+              status: row.status,
+              starting_followers:
+                typeof row.starting_followers === 'number'
+                  ? row.starting_followers
+                  : null,
+            });
+          }
+        }
+      }
+    }
+  }
+
   const importPromises = matchedPages.map(async (pageItem) => {
     const rawPageToken = pageItem.access_token || rawToken;
     const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
@@ -191,6 +227,16 @@ export async function handleImportPages(
       const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
       if (!supabase) return null;
 
+      const existingPage = existingPagesMap.get(String(pageItem.id));
+      const preserveBaseline =
+        existingPage &&
+        existingPage.status !== 'disconnected' &&
+        existingPage.starting_followers !== null &&
+        existingPage.starting_followers !== undefined;
+      const startingFollowersToSave = preserveBaseline
+        ? existingPage.starting_followers
+        : followers;
+
       const { data: upserted, error: upsertErr } = await supabase
         .from('facebook_pages')
         .upsert(
@@ -201,7 +247,7 @@ export async function handleImportPages(
             page_name: String(pageItem.name),
             category: pageItem.category ?? null,
             tasks: Array.isArray(pageItem.tasks) ? pageItem.tasks : [],
-            starting_followers: followers,
+            starting_followers: startingFollowersToSave,
             current_followers: followers,
             encrypted_access_token: encryptedPageToken,
             profile_picture_url: profilePictureUrl,

@@ -274,6 +274,216 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const decrypted = await decryptToken(encryptedToken, TEST_ENCRYPTION_KEY);
       expect(decrypted).toBe('page_token_1002_raw_secret_value');
     });
+
+    it('preserves starting_followers baseline when re-importing an active page via Supabase (Audit Issue 12)', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'page_active_1',
+                name: 'Active Page',
+                category: 'Media',
+                tasks: ['MODERATE'],
+                access_token: 'token_active_1',
+                followers_count: 25000,
+                picture: { data: { url: 'https://example.com/pic.jpg' } },
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+
+      let upsertedPayload: any = null;
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'facebook_accounts') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: accountId,
+                  encrypted_access_token: sampleEncryptedAccountToken,
+                },
+                error: null,
+              }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            return {
+              select: vi.fn((fields: string) => {
+                if (fields.includes('starting_followers')) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    in: vi.fn().mockResolvedValue({
+                      data: [
+                        {
+                          fb_page_id: 'page_active_1',
+                          status: 'active',
+                          starting_followers: 10000,
+                        },
+                      ],
+                      error: null,
+                    }),
+                  };
+                }
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                };
+              }),
+              upsert: vi.fn((payload: any) => {
+                upsertedPayload = payload;
+                return {
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: {
+                        id: pageId,
+                        fb_page_id: 'page_active_1',
+                        page_name: 'Active Page',
+                      },
+                      error: null,
+                    }),
+                  }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/tenant/acme/pages/import',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            cookie: validSessionCookie,
+          },
+          body: JSON.stringify({
+            accountId,
+            selectedPageIds: ['page_active_1'],
+          }),
+        }
+      );
+
+      const res = await handleImportPages(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+
+      expect(upsertedPayload).toBeDefined();
+      expect(upsertedPayload.starting_followers).toBe(10000);
+      expect(upsertedPayload.current_followers).toBe(25000);
+      expect(upsertedPayload.status).toBe('active');
+    });
+
+    it('resets starting_followers baseline when re-importing a disconnected page via Supabase', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'page_disc_1',
+                name: 'Disconnected Page',
+                category: 'Media',
+                tasks: ['MODERATE'],
+                access_token: 'token_disc_1',
+                followers_count: 30000,
+                picture: { data: { url: 'https://example.com/pic.jpg' } },
+              },
+            ],
+          }),
+          { status: 200 }
+        )
+      );
+
+      let upsertedPayload: any = null;
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'facebook_accounts') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  id: accountId,
+                  encrypted_access_token: sampleEncryptedAccountToken,
+                },
+                error: null,
+              }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            return {
+              select: vi.fn((fields: string) => {
+                if (fields.includes('starting_followers')) {
+                  return {
+                    eq: vi.fn().mockReturnThis(),
+                    in: vi.fn().mockResolvedValue({
+                      data: [
+                        {
+                          fb_page_id: 'page_disc_1',
+                          status: 'disconnected',
+                          starting_followers: 5000,
+                        },
+                      ],
+                      error: null,
+                    }),
+                  };
+                }
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                };
+              }),
+              upsert: vi.fn((payload: any) => {
+                upsertedPayload = payload;
+                return {
+                  select: vi.fn().mockReturnValue({
+                    single: vi.fn().mockResolvedValue({
+                      data: {
+                        id: pageId,
+                        fb_page_id: 'page_disc_1',
+                        page_name: 'Disconnected Page',
+                      },
+                      error: null,
+                    }),
+                  }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest(
+        'http://localhost:3000/api/tenant/acme/pages/import',
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            cookie: validSessionCookie,
+          },
+          body: JSON.stringify({
+            accountId,
+            selectedPageIds: ['page_disc_1'],
+          }),
+        }
+      );
+
+      const res = await handleImportPages(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+
+      expect(upsertedPayload).toBeDefined();
+      expect(upsertedPayload.starting_followers).toBe(30000);
+      expect(upsertedPayload.current_followers).toBe(30000);
+      expect(upsertedPayload.status).toBe('active');
+    });
   });
 
   describe('List Imported Pages (GET /api/tenant/[subdomain]/pages)', () => {
