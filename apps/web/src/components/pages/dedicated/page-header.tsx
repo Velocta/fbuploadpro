@@ -279,7 +279,7 @@ export function DedicatedPageHeader({
             disabled={isUpdatingStatus || isNeedsAttention}
             onClick={handleToggle}
             style={{
-              ...COMPONENT_STYLES.secondaryButton,
+              ...COMPONENT_STYLES.secondaryButton(THEME.default),
               display: 'inline-flex',
               alignItems: 'center',
               gap: SPACING.xs,
@@ -354,7 +354,7 @@ export function DedicatedPageHeader({
               aria-expanded={isDropdownOpen}
               onClick={() => setIsDropdownOpen((prev) => !prev)}
               style={{
-                ...COMPONENT_STYLES.secondaryButton,
+                ...COMPONENT_STYLES.secondaryButton(THEME.default),
                 width: '36px',
                 height: '36px',
                 padding: 0,
