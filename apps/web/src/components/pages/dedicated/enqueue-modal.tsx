@@ -44,12 +44,20 @@ export function EnqueueModal({
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string>('');
   const [caption, setCaption] = useState('');
+  const [isCaptionDirty, setIsCaptionDirty] = useState(false);
   const [firstComment, setFirstComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      setSelectedMediaId(null);
+      setCaption('');
+      setIsCaptionDirty(false);
+      setFirstComment('');
+      setError(null);
+      return;
+    }
 
     let active = true;
     const fetchMedia = async () => {
@@ -66,14 +74,17 @@ export function EnqueueModal({
             mediaType: m.mediaType,
             thumbnailUrl: m.thumbnailUrl,
             url: m.url,
-            caption: m.caption,
+            caption: m.captionText ?? m.caption ?? null,
             firstComment: m.firstComment,
           }));
           setMediaList(items);
-          if (items.length > 0 && !selectedMediaId) {
-            setSelectedMediaId(items[0].id);
-            setCaption(items[0].caption || '');
-            setFirstComment(items[0].firstComment || '');
+          if (items.length > 0) {
+            setSelectedMediaId((prevId) => {
+              if (prevId) return prevId;
+              setCaption((prevCap) => (prevCap ? prevCap : items[0].caption || ''));
+              setFirstComment((prevComm) => (prevComm ? prevComm : items[0].firstComment || ''));
+              return items[0].id;
+            });
           }
         }
       } catch (err: any) {
@@ -87,14 +98,14 @@ export function EnqueueModal({
     return () => {
       active = false;
     };
-  }, [isOpen, subdomain, selectedMediaId]);
+  }, [isOpen, subdomain]);
 
   if (!isOpen) return null;
 
   const handleSelectMedia = (m: EnqueueMediaItemOption) => {
     setSelectedMediaId(m.id);
-    if (!caption && m.caption) {
-      setCaption(m.caption);
+    if (!isCaptionDirty) {
+      setCaption(m.caption || '');
     }
     if (!firstComment && m.firstComment) {
       setFirstComment(m.firstComment);
@@ -405,7 +416,10 @@ export function EnqueueModal({
               data-testid="enqueue-caption-field"
               rows={3}
               value={caption}
-              onChange={(e) => setCaption(e.target.value)}
+              onChange={(e) => {
+                setCaption(e.target.value);
+                setIsCaptionDirty(true);
+              }}
               placeholder="Write a caption for this post..."
               style={{
                 width: '100%',
