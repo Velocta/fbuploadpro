@@ -341,4 +341,62 @@ describe('User Story 5 - Worker Daily Page Insights Snapshot Sync', () => {
 
     expect(mockDb.query).toHaveBeenCalled();
   });
+
+  it('bounds concurrency and processes pages in chunks (Audit Issue 19)', async () => {
+    const encrypted = await encryptToken('EAA_TEST_PAGE_TOKEN_VALID', TEST_MASTER_KEY);
+    const mockPages = Array.from({ length: 12 }, (_, i) => ({
+      id: `page-uuid-${i}`,
+      user_id: `user-uuid-${i}`,
+      fb_page_id: `fb-page-${i}`,
+      page_name: `Page ${i}`,
+      encrypted_access_token: encrypted,
+      status: 'active',
+    }));
+
+    const batchDb: InsightsSyncDbClient = {
+      query: vi.fn().mockImplementation(async (text: string) => {
+        if (text.includes('FROM facebook_pages') && text.includes("status = 'active'")) {
+          return mockPages;
+        }
+        return [];
+      }),
+      upsertPageInsightsSnapshot: vi.fn().mockResolvedValue(undefined),
+    };
+
+    let activeRequests = 0;
+    let maxConcurrentRequests = 0;
+
+    const mockFetch = vi.fn().mockImplementation(async () => {
+      activeRequests += 1;
+      maxConcurrentRequests = Math.max(maxConcurrentRequests, activeRequests);
+      // Simulate asynchronous delay
+      await new Promise((resolve) => setTimeout(resolve, 15));
+      activeRequests -= 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          fan_count: 500,
+          followers_count: 600,
+          data: [],
+        }),
+      };
+    });
+
+    // Test with concurrency = 3
+    // Each page makes 3 parallel subrequests (overview, metrics, reactions), so at concurrency 3, max active should be <= 3 * 3 = 9
+    const result = await syncDailyPageInsights({
+      db: batchDb,
+      masterKey: TEST_MASTER_KEY,
+      fetchImpl: mockFetch as any,
+      targetDate: '2026-03-01',
+      concurrency: 3,
+    });
+
+    expect(result.totalEligible).toBe(12);
+    expect(result.synced).toBe(12);
+    expect(result.failed).toBe(0);
+    // Ensure concurrency was bounded to at most 3 pages (each doing 3 subrequests = 9 max)
+    expect(maxConcurrentRequests).toBeLessThanOrEqual(9);
+  });
 });

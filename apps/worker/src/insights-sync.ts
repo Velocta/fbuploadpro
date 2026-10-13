@@ -12,6 +12,7 @@ export interface SyncDailyPageInsightsOptions {
   fbApiUrl?: string | undefined;
   fetchImpl?: typeof fetch | undefined;
   targetDate?: string | undefined;
+  concurrency?: number | undefined;
 }
 
 export interface InsightsSyncResult {
@@ -347,8 +348,9 @@ async function syncSinglePage(
 export async function syncDailyPageInsights(
   options: SyncDailyPageInsightsOptions
 ): Promise<InsightsSyncResult> {
-  const { db, masterKey, fbApiUrl = 'https://graph.facebook.com/v26.0' } = options;
+  const { db, masterKey, fbApiUrl = 'https://graph.facebook.com/v26.0', concurrency = 5 } = options;
   const fetchFn = options.fetchImpl || globalThis.fetch;
+  const poolLimit = Math.max(1, concurrency);
 
   // Default target date to yesterday (YYYY-MM-DD)
   const targetDate =
@@ -384,22 +386,26 @@ export async function syncDailyPageInsights(
   }
   result.totalEligible = eligiblePages.length;
 
-  await Promise.all(
-    eligiblePages.map(async (page) => {
-      try {
-        await syncSinglePage(page, db, masterKey, fbApiUrl, fetchFn, targetDate);
-        result.synced += 1;
-      } catch (err) {
-        result.failed += 1;
-        const errorMsg = err instanceof Error ? err.message : String(err);
-        result.errors.push({
-          pageId: page.fb_page_id,
-          error: errorMsg,
-        });
-        console.warn(`[InsightsSync] Failed for page ${page.fb_page_id}: ${errorMsg}`);
-      }
-    })
-  );
+  // Process eligible pages in bounded concurrency chunks
+  for (let i = 0; i < eligiblePages.length; i += poolLimit) {
+    const chunk = eligiblePages.slice(i, i + poolLimit);
+    await Promise.all(
+      chunk.map(async (page) => {
+        try {
+          await syncSinglePage(page, db, masterKey, fbApiUrl, fetchFn, targetDate);
+          result.synced += 1;
+        } catch (err) {
+          result.failed += 1;
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          result.errors.push({
+            pageId: page.fb_page_id,
+            error: errorMsg,
+          });
+          console.warn(`[InsightsSync] Failed for page ${page.fb_page_id}: ${errorMsg}`);
+        }
+      })
+    );
+  }
 
   return result;
 }
