@@ -74,22 +74,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   }
 
   return (
-    <>
-      <style>{`
-        .fbu-select-field:focus {
-          border-color: var(--primary) !important;
-          box-shadow: 0 0 0 3px var(--ring-focus) !important;
-        }
-        .fbu-select-field.has-error:focus {
-          border-color: var(--accent-3) !important;
-          box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
-        }
-        .fbu-select-field:hover:not(:disabled):not(:focus) {
-          border-color: var(--border-strong);
-        }
-      `}</style>
-      <div
-        className={containerClassName}
+    <div
+      className={containerClassName}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -199,8 +185,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           </span>
         )}
       </div>
-    </>
-  );
-});
+    );
+  });
 
 Select.displayName = 'Select';
