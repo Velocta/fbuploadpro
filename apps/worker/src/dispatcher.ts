@@ -21,6 +21,12 @@ export interface DispatcherDbClient extends Queryable {
   withTransaction?<T>(callback: (client: Queryable) => Promise<T>): Promise<T>;
 }
 
+export const RECOVER_STUCK_ITEMS_SQL = `
+UPDATE queue_items
+SET status = 'queued', updated_at = now()
+WHERE status = 'publishing' AND updated_at <= now() - INTERVAL '10 minutes';
+`.trim();
+
 export const CLAIM_DUE_ITEMS_SQL = `
 SELECT qi.id, qi.user_id, qi.fb_page_id, qi.media_id, qi.caption, qi.first_comment, qi.retry_count, qi.max_retries,
        m.media_type, m.url as media_url, m.storage_key,
@@ -28,7 +34,12 @@ SELECT qi.id, qi.user_id, qi.fb_page_id, qi.media_id, qi.caption, qi.first_comme
 FROM queue_items qi
 JOIN media_items m ON m.id = qi.media_id AND m.user_id = qi.user_id
 JOIN facebook_pages fp ON fp.id = qi.fb_page_id AND fp.user_id = qi.user_id
-WHERE qi.status = 'queued' AND qi.scheduled_time <= now()
+WHERE qi.status = 'queued'
+  AND qi.scheduled_time <= now()
+  AND (
+    fp.status = 'active'
+    OR (fp.status = 'fb_rate_limited' AND fp.updated_at <= now() - INTERVAL '3 days')
+  )
 ORDER BY qi.scheduled_time ASC
 LIMIT $1
 FOR UPDATE SKIP LOCKED;
