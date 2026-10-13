@@ -252,4 +252,135 @@ body {
   background-color: var(--primary);
 }
 
+/* ====================================================================
+ * UI Primitive Component Styles & Animations (.fbu-*)
+ * ==================================================================== */
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fbu-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Button */
+.fbu-btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-focus) !important;
+}
+.fbu-btn-primary:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+.fbu-btn-primary:not(:disabled):active {
+  filter: brightness(0.94);
+}
+.fbu-btn-secondary:not(:disabled):hover {
+  background-color: var(--bg-hover) !important;
+  border-color: var(--border-strong) !important;
+}
+.fbu-btn-secondary:not(:disabled):active {
+  background-color: var(--bg-active) !important;
+}
+.fbu-btn-ghost:not(:disabled):hover {
+  background-color: var(--bg-hover) !important;
+}
+.fbu-btn-ghost:not(:disabled):active {
+  background-color: var(--bg-active) !important;
+}
+.fbu-btn-danger:not(:disabled):hover {
+  filter: brightness(1.10);
+}
+.fbu-btn-danger:not(:disabled):active {
+  filter: brightness(0.90);
+}
+.fbu-btn-link:not(:disabled):hover {
+  text-decoration: underline !important;
+}
+
+/* Checkbox */
+.fbu-checkbox-wrapper:focus-visible .fbu-checkbox-box {
+  box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
+}
+.fbu-checkbox-wrapper:hover:not(.is-disabled) .fbu-checkbox-box {
+  border-color: var(--border-strong, #b29527);
+}
+
+/* Input */
+.fbu-input-field:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--ring-focus) !important;
+}
+.fbu-input-field.has-error:focus {
+  border-color: var(--accent-3) !important;
+  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
+}
+.fbu-input-field::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.fbu-input-field:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}
+.fbu-password-toggle:focus-visible {
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px !important;
+}
+
+/* Select */
+.fbu-select-field:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--ring-focus) !important;
+}
+.fbu-select-field.has-error:focus {
+  border-color: var(--accent-3) !important;
+  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
+}
+.fbu-select-field:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}
+
+/* Skeleton */
+.fbu-skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-subtle) 25%,
+    var(--bg-hover) 37%,
+    var(--bg-subtle) 63%
+  );
+  background-size: 200% 100%;
+  animation: fbu-shimmer 1.4s ease infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fbu-skeleton-shimmer {
+    animation: none !important;
+    background: var(--bg-subtle) !important;
+  }
+}
+
+/* Switch */
+.fbu-switch-button:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
+}
+
+/* Textarea */
+.fbu-textarea-field:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--ring-focus) !important;
+}
+.fbu-textarea-field.has-error:focus {
+  border-color: var(--accent-3) !important;
+  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
+}
+.fbu-textarea-field::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.fbu-textarea-field:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}

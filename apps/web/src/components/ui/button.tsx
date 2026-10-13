@@ -135,72 +135,33 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   };
 
   return (
-    <>
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .fbu-btn:focus-visible {
-          box-shadow: 0 0 0 3px var(--ring-focus) !important;
-        }
-        .fbu-btn-primary:not(:disabled):hover {
-          filter: brightness(1.08);
-        }
-        .fbu-btn-primary:not(:disabled):active {
-          filter: brightness(0.94);
-        }
-        .fbu-btn-secondary:not(:disabled):hover {
-          background-color: var(--bg-hover) !important;
-          border-color: var(--border-strong) !important;
-        }
-        .fbu-btn-secondary:not(:disabled):active {
-          background-color: var(--bg-active) !important;
-        }
-        .fbu-btn-ghost:not(:disabled):hover {
-          background-color: var(--bg-hover) !important;
-        }
-        .fbu-btn-ghost:not(:disabled):active {
-          background-color: var(--bg-active) !important;
-        }
-        .fbu-btn-danger:not(:disabled):hover {
-          filter: brightness(1.10);
-        }
-        .fbu-btn-danger:not(:disabled):active {
-          filter: brightness(0.90);
-        }
-        .fbu-btn-link:not(:disabled):hover {
-          text-decoration: underline !important;
-        }
-      `}</style>
-      <button
-        ref={ref}
-        type={type}
-        disabled={isDisabled}
-        aria-busy={isLoading ? 'true' : undefined}
-        aria-disabled={isDisabled ? 'true' : undefined}
-        className={`fbu-btn fbu-btn-${variant} ${className}`}
-        style={{
-          ...baseStyle,
-          ...variantStyles[variant],
-          ...style,
-        }}
-        {...props}
-      >
-        {isLoading && <Spinner size={size} />}
-        {!isLoading && leftIcon && (
-          <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-hidden="true">
-            {leftIcon}
-          </span>
-        )}
-        {children && <span>{children}</span>}
-        {!isLoading && rightIcon && (
-          <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-hidden="true">
-            {rightIcon}
-          </span>
-        )}
-      </button>
-    </>
+    <button
+      ref={ref}
+      type={type}
+      disabled={isDisabled}
+      aria-busy={isLoading ? 'true' : undefined}
+      aria-disabled={isDisabled ? 'true' : undefined}
+      className={`fbu-btn fbu-btn-${variant} ${className}`}
+      style={{
+        ...baseStyle,
+        ...variantStyles[variant],
+        ...style,
+      }}
+      {...props}
+    >
+      {isLoading && <Spinner size={size} />}
+      {!isLoading && leftIcon && (
+        <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-hidden="true">
+          {leftIcon}
+        </span>
+      )}
+      {children && <span>{children}</span>}
+      {!isLoading && rightIcon && (
+        <span style={{ display: 'inline-flex', alignItems: 'center' }} aria-hidden="true">
+          {rightIcon}
+        </span>
+      )}
+    </button>
   );
 });
 

@@ -47,17 +47,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   };
 
   return (
-    <>
-      <style>{`
-        .fbu-checkbox-wrapper:focus-visible .fbu-checkbox-box {
-          box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
-        }
-        .fbu-checkbox-wrapper:hover:not(.is-disabled) .fbu-checkbox-box {
-          border-color: var(--border-strong, #b29527);
-        }
-      `}</style>
-      <div
-        id={checkboxId}
+    <div
+      id={checkboxId}
         role="checkbox"
         tabIndex={disabled ? -1 : 0}
         aria-checked={isChecked}
@@ -158,8 +149,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           </div>
         )}
       </div>
-    </>
-  );
-});
+    );
+  });
 
 Checkbox.displayName = 'Checkbox';

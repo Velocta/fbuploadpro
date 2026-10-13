@@ -55,14 +55,8 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
   };
 
   return (
-    <>
-      <style>{`
-        .fbu-switch-button:focus-visible {
-          box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
-        }
-      `}</style>
-      <div
-        className={`fbu-switch-wrapper ${className}`}
+    <div
+      className={`fbu-switch-wrapper ${className}`}
         style={{
           display: 'inline-flex',
           alignItems: 'flex-start',
@@ -154,8 +148,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
           </div>
         )}
       </div>
-    </>
-  );
-});
+    );
+  });
 
 Switch.displayName = 'Switch';
