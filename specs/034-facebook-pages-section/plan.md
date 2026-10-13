@@ -1,6 +1,6 @@
-# Implementation Plan: Spec 032 — Dedicated Facebook Pages Management Section
+# Implementation Plan: Spec 034 — Dedicated Facebook Pages Management Section
 
-**Branch**: `feat/032-facebook-pages-section` | **Date**: 2026-10-11 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/034-facebook-pages-section` | **Date**: 2026-10-11 | **Spec**: [spec.md](spec.md)
 
 ---
 
@@ -24,7 +24,7 @@ Deliver the dedicated **Facebook Pages** section under **Facebook -> Pages** in 
 - **Principle I (SDD & TDD)**: Full specification, data model, contracts, and task breakdown created before code changes.
 - **Principle II & III (Modular Isolation & Multi-Tenancy)**: All SQL queries scoped strictly by `user_id`.
 - **Principle VIII & IX (Theme Authority & Professional UX Writing)**: Uses `THEME`, `PALETTE`, `RADII`, `SPACING`, `TYPOGRAPHY` from `@/lib/theme`; customer-centric copy free of technical jargon.
-- **Principle XXV (Spec 032 Governance)**: Complies 100% with sidebar placement, `current_followers` / `starting_followers` tracking, negative `followersGained` display, two-step `AddPageModal`, clickable `PageCard` with red attention standout, and `/pages/[pageId]` placeholder view.
+- **Principle XXV (Spec 034 Governance)**: Complies 100% with sidebar placement, `current_followers` / `starting_followers` tracking, negative `followersGained` display, two-step `AddPageModal`, clickable `PageCard` with red attention standout, and `/pages/[pageId]` placeholder view.
 
 ---
 

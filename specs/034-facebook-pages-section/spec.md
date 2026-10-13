@@ -1,6 +1,6 @@
-# Feature Specification: Spec 032 — Dedicated Facebook Pages Management Section, Follower Growth Tracking & Two-Step Page Import
+# Feature Specification: Spec 034 — Dedicated Facebook Pages Management Section, Follower Growth Tracking & Two-Step Page Import
 
-**Feature ID**: `032-facebook-pages-section`  
+**Feature ID**: `034-facebook-pages-section`  
 **Status**: Approved  
 **Created**: 2026-10-11  
 **Constitution Authority**: Principle 25 (Dedicated Facebook Pages Management Section, Follower Growth Tracking (`current_followers` & `starting_followers`), Two-Step Account-to-Page Import & Dedicated Page Route)
@@ -11,7 +11,7 @@
 
 Operators managing social media publishing need a dedicated **Facebook Pages** section positioned directly below **Accounts** in the collapsible **Facebook** sidebar menu (`/pages` $\rightarrow$ `/tenant/[subdomain]/pages`). Currently, only the Facebook Accounts view is wired in the sidebar, and `facebook_pages` stores only a single `followers_count` column without tracking the baseline starting followers when a Page was added to the workspace.
 
-Spec 032 delivers:
+Spec 034 delivers:
 1. **Sidebar Navigation & Tenant Subdomain Routing**: Adds **Pages** directly below **Accounts** inside the collapsible **Facebook** menu in `WorkspaceSidebar`, with full middleware support for `/pages` and `/pages/[pageId]`.
 2. **Follower Growth Schema (`current_followers` & `starting_followers`)**: Renames `facebook_pages.followers_count` to `current_followers`, adds `starting_followers`, and computes signed `followersGained = currentFollowers - startingFollowers` (handling positive, zero, and negative growth when `currentFollowers < startingFollowers`).
 3. **Clean, Clickable Page Cards with Attention Standout (`PageCard`)**: Displays Page avatar (with monogram fallback), Page name, category, **Current Followers**, **Followers Gained** (showing negative values in rose red when current followers drop below starting followers), **Parent Facebook Account** name, and **Status**. Pages needing attention (`invalid_token`, `page_checkpoint`, `fb_rate_limited`) are pinned to the top of the grid and highlighted with a red/rose border and callout banner. All page-level management actions are reserved for the dedicated Page view opened when clicking a card.

@@ -1,4 +1,4 @@
-# Requirements & Quality Checklist: Spec 039 Eradicate Mocks & Production Hardening
+# Requirements & Quality Checklist: Spec 040 Eradicate Mocks & Production Hardening
 
 ## 1. Pure PostgREST Route Execution
 - [ ] All tenant route handlers in `apps/web/src/app/api/tenant/[subdomain]/` query Supabase via `@supabase/supabase-js`.

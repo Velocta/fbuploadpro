@@ -1,6 +1,6 @@
-# Tasks: Spec 032 — Dedicated Facebook Pages Management Section, Follower Growth Tracking & Two-Step Page Import
+# Tasks: Spec 034 — Dedicated Facebook Pages Management Section, Follower Growth Tracking & Two-Step Page Import
 
-**Branch**: `feat/032-facebook-pages-section` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
+**Branch**: `feat/034-facebook-pages-section` | **Spec**: [spec.md](spec.md) | **Plan**: [plan.md](plan.md)
 
 ---
 
