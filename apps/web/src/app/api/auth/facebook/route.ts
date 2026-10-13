@@ -3,12 +3,16 @@ import {
   signOAuthState,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
+import { getDbClient } from '@/lib/db';
+import type { DatabaseClient } from '@fbuploadpro/database';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function handleInitiateFacebookOAuth(
+  request: NextRequest,
+  dbClient?: DatabaseClient
+): Promise<NextResponse> {
   const sessionSecret =
     process.env.SESSION_SECRET ||
     'super-secret-session-signing-key-minimum-32-chars-long';
-  const appId = process.env.FACEBOOK_APP_ID || '';
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const redirectUri = `${appUrl}/api/auth/facebook/callback`;
@@ -28,7 +32,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 2. Generate signed OAuth state
+  // 2. Resolve workspace BYOC Facebook credentials
+  let byoc: { fbAppId: string; encryptedSecret: string } | undefined;
+  try {
+    const db = dbClient ?? getDbClient();
+    const byocRows = (await db.query(
+      `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
+       FROM workspace_byoc_credentials c
+       JOIN workspaces w ON w.id = c.workspace_id
+       WHERE w.subdomain = $1
+       LIMIT 1`,
+      [session.subdomain]
+    )) as Array<{ fbAppId: string; encryptedSecret: string }>;
+    byoc = byocRows?.[0];
+  } catch (_err) {
+    // If DB is unavailable or during isolated unit tests, fallback to process.env
+  }
+
+  const effectiveAppId = byoc?.fbAppId || process.env.FACEBOOK_APP_ID || '';
+  const hasValidSecret = Boolean(byoc?.encryptedSecret || process.env.FACEBOOK_APP_SECRET);
+
+  if (!effectiveAppId || !hasValidSecret) {
+    const settingsUrl = new URL(`/tenant/${session.subdomain}/settings`, request.url);
+    settingsUrl.searchParams.set('tab', 'byoc');
+    settingsUrl.searchParams.set('error', 'credentials_required');
+    return NextResponse.redirect(settingsUrl);
+  }
+
+  // 3. Generate signed OAuth state
   const expectedFbAccountId =
     request.nextUrl.searchParams.get('expectedFbAccountId')?.trim() || undefined;
   const expectedDisplayName =
@@ -48,15 +79,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     sessionSecret
   );
 
-  // 3. Construct Facebook OAuth Dialog URL (Graph API v26.0)
+  // 4. Construct Facebook OAuth Dialog URL (Graph API v26.0)
   const scopes =
     'pages_show_list,pages_read_engagement,pages_manage_posts,business_management';
   const oauthUrl = new URL('https://www.facebook.com/v26.0/dialog/oauth');
-  oauthUrl.searchParams.set('client_id', appId);
+  oauthUrl.searchParams.set('client_id', effectiveAppId);
   oauthUrl.searchParams.set('redirect_uri', redirectUri);
   oauthUrl.searchParams.set('state', state);
   oauthUrl.searchParams.set('scope', scopes);
   oauthUrl.searchParams.set('response_type', 'code');
 
   return NextResponse.redirect(oauthUrl.toString());
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handleInitiateFacebookOAuth(request);
 }

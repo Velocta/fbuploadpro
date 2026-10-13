@@ -15,6 +15,7 @@ export interface WorkspaceUserMenuProps {
     email: string;
     avatarUrl?: string | undefined;
   } | undefined;
+  subdomain?: string | undefined;
 }
 
 function clearClientSessionCookies(): void {
@@ -72,8 +73,8 @@ function redirectToLogout(): void {
   window.location.href = targetLoginUrl;
 }
 
-export function WorkspaceUserMenu({ user }: Readonly<WorkspaceUserMenuProps>) {
-  const { isMobile } = useSidebar();
+export function WorkspaceUserMenu({ user, subdomain }: Readonly<WorkspaceUserMenuProps>) {
+  const { isMobile, setOpenMobile } = useSidebar();
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isThemeDark, setIsThemeDark] = useState(true);
@@ -265,6 +266,59 @@ export function WorkspaceUserMenu({ user }: Readonly<WorkspaceUserMenuProps>) {
               }}
               aria-hidden="true"
             />
+
+            {/* Workspace Settings Action */}
+            {subdomain && (
+              <button
+                type="button"
+                role="menuitem"
+                className="sidebar-dropdown-item"
+                data-testid="workspace-settings-user-link"
+                onClick={() => {
+                  setIsOpen(false);
+                  if (typeof window !== 'undefined') {
+                    window.location.href = `/tenant/${subdomain}/settings`;
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: SPACING.sm,
+                  width: '100%',
+                  padding: `6px ${SPACING.sm}`,
+                  borderRadius: RADII.xs,
+                  border: 'none',
+                  backgroundColor: 'transparent',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'background-color 0.12s ease, color 0.12s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = PALETTE.primary;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
+                }}
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                <span>Settings</span>
+              </button>
+            )}
 
             {/* Theme Toggle Action */}
             <button

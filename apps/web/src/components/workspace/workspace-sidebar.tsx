@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/sidebar';
 import { THEME, PALETTE, RADII, TYPOGRAPHY } from '@/lib/theme';
 import { WorkspaceUserMenu } from './workspace-user-menu';
+import { WorkspaceSwitcher } from './workspace-switcher';
 
 export interface WorkspaceSidebarProps {
   subdomain: string;
@@ -47,12 +48,14 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const downloaderHref = `/tenant/${subdomain}/downloader`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
   const pagesHref = `/tenant/${subdomain}/pages`;
+  const settingsHref = `/tenant/${subdomain}/settings`;
 
   const isHomeActive = pathname === homeHref;
   const isMediaActive = pathname ? pathname.startsWith(mediaHref) : false;
   const isDownloaderActive = pathname ? pathname.startsWith(downloaderHref) : false;
   const isAccountsActive = pathname ? pathname.startsWith(accountsHref) : false;
   const isPagesActive = pathname ? pathname.startsWith(pagesHref) : false;
+  const isSettingsActive = pathname ? pathname.startsWith(settingsHref) : false;
 
   const handleNavigate = (href: string) => {
     if (isMobile) {
@@ -65,70 +68,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
     <Sidebar collapsible="icon" variant="sidebar">
       {/* Workspace Identity Header (Shadcn TeamSwitcher Pattern) */}
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              size="lg"
-              tooltip={`${subdomain} — FBUploadPro`}
-              onClick={() => handleNavigate(homeHref)}
-            >
-              <div
-                data-sidebar-icon="true"
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: RADII.md,
-                  backgroundColor: PALETTE.primary,
-                  color: PALETTE.background,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  fontSize: '0.8125rem',
-                  flexShrink: 0,
-                  userSelect: 'none',
-                }}
-              >
-                FB
-              </div>
-
-              <div
-                style={{
-                  display: 'grid',
-                  flex: 1,
-                  textAlign: 'left',
-                  fontSize: '0.875rem',
-                  lineHeight: 1.25,
-                  minWidth: 0,
-                }}
-              >
-                <span
-                  style={{
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    textTransform: 'capitalize',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {subdomain}
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  FBUploadPro
-                </span>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <WorkspaceSwitcher currentSubdomain={subdomain} />
       </SidebarHeader>
 
       {/* Primary Navigation Content */}
@@ -315,11 +255,47 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Separator Line */}
+        <SidebarSeparator />
+
+        {/* Configuration Group (Settings) */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isSettingsActive}
+                  tooltip="Settings"
+                  onClick={() => handleNavigate(settingsHref)}
+                  leftIcon={
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                  }
+                >
+                  Settings
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       {/* User Menu Footer (Shadcn NavUser Pattern) */}
       <SidebarFooter>
-        <WorkspaceUserMenu user={user} />
+        <WorkspaceUserMenu user={user} subdomain={subdomain} />
       </SidebarFooter>
 
       {/* Interactive Edge Rail */}
