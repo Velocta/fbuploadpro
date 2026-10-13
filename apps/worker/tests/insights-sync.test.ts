@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { encryptToken, decryptToken } from '@fbuploadpro/contracts';
+import { encryptToken } from '@fbuploadpro/contracts';
 import { syncDailyPageInsights, type InsightsSyncDbClient } from '../src/insights-sync.js';
 import { handleScheduled, type Env } from '../src/index.js';
 

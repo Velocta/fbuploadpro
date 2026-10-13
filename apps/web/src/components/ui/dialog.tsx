@@ -41,8 +41,8 @@ export function Dialog({
   open: controlledOpen,
   defaultOpen = false,
   onOpenChange,
-  title,
-  description,
+  title: _title,
+  description: _description,
   children,
 }: Readonly<DialogProps>) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);

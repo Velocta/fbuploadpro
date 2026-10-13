@@ -195,7 +195,6 @@ export async function dispatchItem(
         ? err.isPermanentClientError
         : errorCode === 100 ||
           (typeof errorCode === 'number' && errorCode >= 400 && errorCode < 500 && !isAuthError);
-    const isRateLimit = err instanceof FacebookGraphError ? err.isRateLimit : false;
     const rawMessage = err instanceof Error ? err.message : String(err);
 
     const evaluation =
