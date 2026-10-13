@@ -254,6 +254,67 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
   return candidate;
 }
 
+export async function ensureWorkspaceForUser(
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  userId: string,
+  userNameOrFallback: string,
+  preferredSubdomain: string
+): Promise<string> {
+  // 1. Check if the user already owns an existing workspace
+  try {
+    const { data: existingWorkspace } = await supabase
+      .from('workspaces')
+      .select('id, subdomain')
+      .eq('owner_id', userId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingWorkspace?.subdomain) {
+      return existingWorkspace.subdomain;
+    }
+  } catch (err) {
+    console.error('[Supabase PostgREST] ensureWorkspaceForUser check existing error:', err);
+  }
+
+  // 2. Resolve unique subdomain candidate
+  let candidate = await resolveUniqueSubdomain(preferredSubdomain);
+
+  // 3. Insert explicitly with retry on unique constraint violation (SQLSTATE 23505)
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const { error: insertError } = await supabase.from('workspaces').insert({
+        owner_id: userId,
+        name: userNameOrFallback,
+        subdomain: candidate,
+      });
+
+      if (!insertError) {
+        return candidate;
+      }
+
+      const isConflict =
+        insertError.code === '23505' ||
+        insertError.message?.toLowerCase().includes('duplicate key') ||
+        insertError.message?.toLowerCase().includes('unique constraint');
+
+      if (isConflict) {
+        const randomSuffix = crypto.randomUUID().slice(0, 6);
+        candidate = `${preferredSubdomain}-${randomSuffix}`;
+      } else {
+        console.error('[Supabase PostgREST] Workspace insert error:', insertError.message);
+        break;
+      }
+    } catch (insertEx) {
+      console.error('[Supabase PostgREST] Workspace insert exception:', insertEx);
+      const randomSuffix = crypto.randomUUID().slice(0, 6);
+      candidate = `${preferredSubdomain}-${randomSuffix}`;
+    }
+  }
+
+  return candidate;
+}
+
 export async function signUpTenantUser(params: {
   name: string;
   phone: string;
@@ -430,18 +491,18 @@ export async function signUpTenantUser(params: {
         .select('id, email, name, phone, role, status')
         .single();
 
-      if (!insertError && inserted) {
-        userRecord = { ...(inserted as object), subdomain } as AuthUser;
-      }
-
-      await supabase.from('workspaces').upsert(
-        {
-          owner_id: userId,
-          name: params.name || canonicalEmail.split('@')[0],
-          subdomain,
-        },
-        { onConflict: 'subdomain' }
+      const wsSubdomain = await ensureWorkspaceForUser(
+        supabase,
+        userId,
+        params.name || canonicalEmail.split('@')[0],
+        subdomain
       );
+
+      if (!insertError && inserted) {
+        userRecord = { ...(inserted as object), subdomain: wsSubdomain } as AuthUser;
+      } else {
+        userRecord.subdomain = wsSubdomain;
+      }
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
     }
@@ -700,13 +761,11 @@ export async function registerTenantUser(params: {
         console.error('[Supabase PostgREST] User insert error:', insertError.message);
       }
 
-      await supabase.from('workspaces').upsert(
-        {
-          owner_id: userId,
-          name: params.name || canonicalEmail.split('@')[0],
-          subdomain,
-        },
-        { onConflict: 'subdomain' }
+      const wsSubdomain = await ensureWorkspaceForUser(
+        supabase,
+        userId,
+        params.name || canonicalEmail.split('@')[0],
+        subdomain
       );
 
       userRecord = {
@@ -715,7 +774,7 @@ export async function registerTenantUser(params: {
         email: canonicalEmail,
         name: params.name,
         phone: formattedPhone,
-        subdomain,
+        subdomain: wsSubdomain,
         role: 'user',
         status: 'active',
       } as AuthUser;
@@ -840,14 +899,13 @@ export async function loginTenantUser(params: {
           },
           { onConflict: 'id' }
         );
-        await supabase.from('workspaces').upsert(
-          {
-            owner_id: user.id,
-            name: user.name || canonicalEmail.split('@')[0],
-            subdomain: user.subdomain,
-          },
-          { onConflict: 'subdomain' }
+        const wsSubdomain = await ensureWorkspaceForUser(
+          supabase,
+          user.id,
+          user.name || canonicalEmail.split('@')[0],
+          subdomain
         );
+        user.subdomain = wsSubdomain;
       } catch (upsertErr) {
         console.error('[Supabase PostgREST] User upsert on login error:', upsertErr);
       }
@@ -1071,13 +1129,11 @@ export async function resetUserPasswordWithOtp(params: {
             },
             { onConflict: 'id' }
           );
-          await supabase.from('workspaces').upsert(
-            {
-              owner_id: u.id,
-              name: metadata.name || canonicalEmail.split('@')[0],
-              subdomain,
-            },
-            { onConflict: 'subdomain' }
+          await ensureWorkspaceForUser(
+            supabase,
+            u.id,
+            metadata.name || canonicalEmail.split('@')[0],
+            subdomain
           );
         }
       }

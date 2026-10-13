@@ -37,8 +37,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Run Tests
-        run: pnpm turbo run test
+      - name: Run Tests with Coverage
+        run: pnpm turbo run test -- --coverage
 
       - name: Official SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0

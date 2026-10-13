@@ -7,7 +7,7 @@ import {
   signSessionToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient, setSessionCookie } from '@/lib/supabase-auth';
+import { getSupabaseClient, setSessionCookie, ensureWorkspaceForUser } from '@/lib/supabase-auth';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -54,18 +54,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Backfill if empty
     if (rows.length === 0) {
       const initialName = session.name || session.subdomain;
+      const targetSubdomain = await ensureWorkspaceForUser(
+        supabase,
+        session.userId,
+        initialName,
+        session.subdomain
+      );
+
       const { data: inserted, error: insertError } = await supabase
         .from('workspaces')
-        .upsert(
-          {
-            owner_id: session.userId,
-            name: initialName,
-            subdomain: session.subdomain,
-          },
-          { onConflict: 'subdomain' }
-        )
         .select('id, owner_id, name, subdomain, created_at, updated_at')
-        .single();
+        .eq('subdomain', targetSubdomain)
+        .maybeSingle();
 
       if (insertError) {
         console.error('[Workspaces API] Failed to provision default workspace:', insertError);
