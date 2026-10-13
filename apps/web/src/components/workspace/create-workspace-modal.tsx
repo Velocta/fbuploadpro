@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 import {
   MODAL_BACKDROP_STYLE,
   MODAL_CONTAINER_STYLE,
@@ -257,13 +257,9 @@ export function CreateWorkspaceModal({
               data-testid="create-workspace-submit"
               disabled={isSubmitting || !name.trim()}
               style={{
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: `var(--btn-primary-bg, ${THEME.default.text.primary})`,
-                border: 'none',
-                borderRadius: RADII.sm,
-                color: `var(--btn-primary-fg, ${THEME.default.surfaces.panel})`,
+                ...COMPONENT_STYLES.primaryButton,
+                height: '36px',
                 fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
                 cursor: isSubmitting || !name.trim() ? 'not-allowed' : 'pointer',
                 opacity: isSubmitting || !name.trim() ? 0.6 : 1,
               }}
