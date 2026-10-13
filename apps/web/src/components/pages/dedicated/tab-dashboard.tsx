@@ -366,7 +366,7 @@ export function PageTabDashboard({
                     disabled={publishingId === item.id}
                     onClick={() => handlePublishClick(item.id)}
                     style={{
-                      ...COMPONENT_STYLES.secondaryButton,
+                      ...COMPONENT_STYLES.secondaryButton(THEME.default),
                       height: '30px',
                       padding: `0 ${SPACING.sm}`,
                       fontSize: '0.75rem',
@@ -444,7 +444,7 @@ export function PageTabDashboard({
                 data-testid="dashboard-setup-schedule-btn"
                 onClick={() => onSwitchTab('calendar')}
                 style={{
-                  ...COMPONENT_STYLES.secondaryButton,
+                  ...COMPONENT_STYLES.secondaryButton(THEME.default),
                   height: '32px',
                   padding: `0 ${SPACING.md}`,
                   fontSize: '0.8125rem',
