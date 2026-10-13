@@ -341,6 +341,62 @@ describe('Spec 029: UploadQueueBanner & Bounded Ingestion Helpers (US3)', () => 
     expect(finalState?.totalFiles).toBe(7);
     expect(finalState?.skippedFiles).toBe(1);
   });
+
+  it('fails and records failedEntries when R2 PUT upload fails, never calling /media/confirm (Audit Issue 23)', async () => {
+    let confirmCalled = false;
+
+    const mockFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+
+      if (url.endsWith('/media/upload-url')) {
+        return new Response(
+          JSON.stringify({
+            mediaId: 'test-media-1',
+            mediaKey: 'users/u1/media/test.mp4',
+            mediaUploadUrl: 'https://r2.cloudflare.com/upload/test.mp4',
+            thumbnailKey: 'users/u1/thumbnails/test.webp',
+            thumbnailUploadUrl: 'https://r2.cloudflare.com/thumb/test.webp',
+            publicMediaUrl: 'https://media.fbuploadpro.com/test.mp4',
+            publicThumbnailUrl: 'https://media.fbuploadpro.com/test.webp',
+          }),
+          { status: 200 }
+        );
+      }
+
+      if (init?.method === 'PUT') {
+        // Simulate R2 presigned PUT upload failure (e.g. 403 Forbidden / Expired URL)
+        return new Response('Access Denied', { status: 403 });
+      }
+
+      if (url.endsWith('/media/confirm')) {
+        confirmCalled = true;
+        return new Response('{}', { status: 201 });
+      }
+
+      return new Response('{}', { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const files = [
+      {
+        file: new File(['failed_content'], 'failed_video.mp4', { type: 'video/mp4' }),
+        relativePath: 'failed_video.mp4',
+      },
+    ];
+
+    const result = await executeBoundedUploadBatch({
+      subdomain: 'acme',
+      baseFolderId: '11111111-1111-4111-8111-111111111111',
+      rawEntries: files,
+      existingFolders: SAMPLE_FOLDERS,
+      fetchImpl: mockFetch,
+      onStateChange: vi.fn(),
+    });
+
+    expect(confirmCalled).toBe(false);
+    expect(result.uploadedItems).toHaveLength(0);
+    expect(result.failedEntries).toHaveLength(1);
+    expect(result.failedEntries[0].relativePath).toBe('failed_video.mp4');
+  });
 });
 
 describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2, US6)', () => {

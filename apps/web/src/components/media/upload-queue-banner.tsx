@@ -803,14 +803,13 @@ export async function executeBoundedUploadBatch(
         'mock-r2.fbuploadpro.com'
       );
       if (!isMockStorageUrl) {
-        try {
-          await fetchImpl(presigned.mediaUploadUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': entry.mimeType },
-            body: entry.file,
-          });
-        } catch (_putErr) {
-          // If direct PUT fails in local environment without R2 CORS, continue to confirm if mock
+        const putRes = await fetchImpl(presigned.mediaUploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': entry.mimeType },
+          body: entry.file,
+        });
+        if (!putRes.ok) {
+          throw new Error(`Failed to upload media to storage: HTTP ${putRes.status}`);
         }
       }
 
