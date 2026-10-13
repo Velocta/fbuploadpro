@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   getSessionSecret,
   verifySessionToken,
+  type DatabaseClient,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function isLegacyClient(

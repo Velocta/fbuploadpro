@@ -9,9 +9,9 @@ import {
   getSessionSecret,
   type OAuthStatePayload,
   verifyOAuthState,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 async function resolveOAuthErrorTarget(
   requestUrl: string,
@@ -458,7 +458,6 @@ export async function handleFacebookCallback(
   );
 
   try {
-    const supabase = getSupabaseClient();
     const db = dbClient ?? null;
     const { appId: effectiveAppId, appSecret: effectiveAppSecret } =
       await resolveWorkspaceCredentials(

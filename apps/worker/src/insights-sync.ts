@@ -40,31 +40,14 @@ function extractRows<T>(result: unknown): T[] {
   return [];
 }
 
-async function syncSinglePage(
-  page: FacebookPageRow,
-  db: InsightsSyncDbClient,
-  masterKey: string,
+async function fetchPageOverview(
+  fbPageId: string,
+  token: string,
   fbApiUrl: string,
-  fetchFn: typeof fetch,
-  targetDate: string
-): Promise<void> {
-  // 1. Decrypt access token server-side
-  let token: string;
-  try {
-    token = await decryptToken(page.encrypted_access_token, masterKey);
-  } catch (decryptErr) {
-    throw new Error(
-      `Decryption failed for page ${page.fb_page_id}: ${
-        decryptErr instanceof Error ? decryptErr.message : String(decryptErr)
-      }`
-    );
-  }
-
-  // 2. Fetch Overview (Fan count, Followers count)
+  fetchFn: typeof fetch
+): Promise<{ fanCount: number; followersCount: number }> {
   const overviewRes = await fetchFn(
-    `${fbApiUrl}/${page.fb_page_id}?fields=fan_count,followers_count&access_token=${encodeURIComponent(
-      token
-    )}`
+    `${fbApiUrl}/${fbPageId}?fields=fan_count,followers_count&access_token=${encodeURIComponent(token)}`
   );
 
   if (!overviewRes.ok) {
@@ -79,10 +62,18 @@ async function syncSinglePage(
     fan_count?: number;
     followers_count?: number;
   };
-  const fanCount = overviewData.fan_count || 0;
-  const followersCount = overviewData.followers_count || 0;
+  return {
+    fanCount: overviewData.fan_count || 0,
+    followersCount: overviewData.followers_count || 0,
+  };
+}
 
-  // 3. Fetch Daily Time-Series Metrics
+async function fetchDailyMetrics(
+  fbPageId: string,
+  token: string,
+  fbApiUrl: string,
+  fetchFn: typeof fetch
+) {
   const metricsList = [
     'page_daily_follows_unique',
     'page_daily_unfollows_unique',
@@ -93,9 +84,7 @@ async function syncSinglePage(
   ].join(',');
 
   const metricsRes = await fetchFn(
-    `${fbApiUrl}/${page.fb_page_id}/insights?metric=${metricsList}&period=day&access_token=${encodeURIComponent(
-      token
-    )}`
+    `${fbApiUrl}/${fbPageId}/insights?metric=${metricsList}&period=day&access_token=${encodeURIComponent(token)}`
   );
 
   let dailyFollows = 0;
@@ -128,11 +117,24 @@ async function syncSinglePage(
     videoViewTimeSeconds = rawWatchTime > 10000 ? Math.round(rawWatchTime / 1000) : rawWatchTime;
   }
 
-  // 4. Fetch Reactions and Demographics
+  return {
+    dailyFollows,
+    dailyUnfollows,
+    mediaViews,
+    videoViews,
+    videoCompleteViews30s,
+    videoViewTimeSeconds,
+  };
+}
+
+async function fetchReactionsAndDemographics(
+  fbPageId: string,
+  token: string,
+  fbApiUrl: string,
+  fetchFn: typeof fetch
+) {
   const reactionsAndDemoRes = await fetchFn(
-    `${fbApiUrl}/${page.fb_page_id}/insights?metric=page_actions_post_reactions_like_total,page_actions_post_reactions_love_total,page_fans_country,page_fans_city&period=day&access_token=${encodeURIComponent(
-      token
-    )}`
+    `${fbApiUrl}/${fbPageId}/insights?metric=page_actions_post_reactions_like_total,page_actions_post_reactions_love_total,page_fans_country,page_fans_city&period=day&access_token=${encodeURIComponent(token)}`
   );
 
   const reactionsSummary: Record<string, number> = {};
@@ -159,23 +161,15 @@ async function syncSinglePage(
     }
   }
 
-  // 5. Upsert Daily Snapshot into Database
-  const snapshot: PageInsightsDailySnapshot = {
-    userId: page.user_id,
-    fbPageId: page.fb_page_id,
-    snapshotDate: targetDate,
-    fanCount,
-    followersCount,
-    dailyFollows,
-    dailyUnfollows,
-    mediaViews,
-    videoViews,
-    videoCompleteViews30s,
-    videoViewTimeSeconds,
-    reactionsSummary,
-    demographicsSummary,
-  };
+  return { reactionsSummary, demographicsSummary };
+}
 
+async function savePageSnapshot(
+  page: FacebookPageRow,
+  snapshot: PageInsightsDailySnapshot,
+  followersCount: number,
+  db: InsightsSyncDbClient
+): Promise<void> {
   if (typeof db.from === 'function') {
     const { error: upsertErr } = await db.from('page_insights_daily_snapshots').upsert({
       user_id: snapshot.userId,
@@ -254,6 +248,53 @@ async function syncSinglePage(
       [followersCount, page.id]
     );
   }
+}
+
+async function syncSinglePage(
+  page: FacebookPageRow,
+  db: InsightsSyncDbClient,
+  masterKey: string,
+  fbApiUrl: string,
+  fetchFn: typeof fetch,
+  targetDate: string
+): Promise<void> {
+  // 1. Decrypt access token server-side
+  let token: string;
+  try {
+    token = await decryptToken(page.encrypted_access_token, masterKey);
+  } catch (decryptErr) {
+    throw new Error(
+      `Decryption failed for page ${page.fb_page_id}: ${
+        decryptErr instanceof Error ? decryptErr.message : String(decryptErr)
+      }`
+    );
+  }
+
+  // 2. Fetch Overview, Metrics, and Reactions in parallel
+  const [overview, metrics, reactions] = await Promise.all([
+    fetchPageOverview(page.fb_page_id, token, fbApiUrl, fetchFn),
+    fetchDailyMetrics(page.fb_page_id, token, fbApiUrl, fetchFn),
+    fetchReactionsAndDemographics(page.fb_page_id, token, fbApiUrl, fetchFn),
+  ]);
+
+  // 3. Upsert Daily Snapshot into Database
+  const snapshot: PageInsightsDailySnapshot = {
+    userId: page.user_id,
+    fbPageId: page.fb_page_id,
+    snapshotDate: targetDate,
+    fanCount: overview.fanCount,
+    followersCount: overview.followersCount,
+    dailyFollows: metrics.dailyFollows,
+    dailyUnfollows: metrics.dailyUnfollows,
+    mediaViews: metrics.mediaViews,
+    videoViews: metrics.videoViews,
+    videoCompleteViews30s: metrics.videoCompleteViews30s,
+    videoViewTimeSeconds: metrics.videoViewTimeSeconds,
+    reactionsSummary: reactions.reactionsSummary,
+    demographicsSummary: reactions.demographicsSummary,
+  };
+
+  await savePageSnapshot(page, snapshot, overview.followersCount, db);
 }
 
 export async function syncDailyPageInsights(
