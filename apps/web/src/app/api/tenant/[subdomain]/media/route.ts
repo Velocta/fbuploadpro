@@ -10,6 +10,25 @@ import {
 import { getSupabaseClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Sanitizes and escapes user search input for safe interpolation into PostgREST `.or()` filter strings.
+ *
+ * PostgREST syntax uses `,` and `()` as query delimiters. Quoting patterns with `"` protects commas
+ * and parentheses from breaking PostgREST query parsing.
+ * Inside double quotes:
+ * - `\` is escaped to prevent escape injection.
+ * - `"` is escaped to prevent quote breakout.
+ * - `%` and `_` are escaped to treat them as literals in LIKE / ILIKE pattern matching.
+ */
+export function sanitizePostgrestSearchPattern(input: string): string {
+  const escaped = input
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"')
+    .replaceAll('%', '\\%')
+    .replaceAll('_', '\\_');
+  return `"%${escaped}%"`;
+}
+
 export async function handleListMedia(
   request: NextRequest,
   subdomain: string,
@@ -152,7 +171,8 @@ export async function handleListMedia(
     }
 
     if (search) {
-      queryBuilder = queryBuilder.or(`name.ilike.%${search}%,caption_text.ilike.%${search}%`);
+      const pattern = sanitizePostgrestSearchPattern(search);
+      queryBuilder = queryBuilder.or(`name.ilike.${pattern},caption_text.ilike.${pattern}`);
     }
 
     let sortCol = 'created_at';
