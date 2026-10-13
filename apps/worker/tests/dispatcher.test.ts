@@ -9,6 +9,8 @@ import {
   recordDispatchOutcome,
   runDispatchCycle,
   PublishDispatcher,
+  CLAIM_DUE_ITEMS_SQL,
+  RECOVER_STUCK_ITEMS_SQL,
 } from '../src/dispatcher.js';
 import {
   MockFacebookPublishClient,
@@ -530,6 +532,19 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       const env: Env = { ENVIRONMENT: 'test' };
       const res = await worker.scheduled(dummyController, env, dummyCtx);
       expect(res).toBeUndefined();
+    });
+
+    it('verifies CLAIM_DUE_ITEMS_SQL filters out paused/unhealthy pages', () => {
+      expect(CLAIM_DUE_ITEMS_SQL).toContain("fp.status = 'active'");
+      expect(CLAIM_DUE_ITEMS_SQL).toContain("fp.status = 'fb_rate_limited'");
+      expect(CLAIM_DUE_ITEMS_SQL).toContain("INTERVAL '3 days'");
+      expect(CLAIM_DUE_ITEMS_SQL).not.toContain("fp.status = 'paused'");
+    });
+
+    it('verifies RECOVER_STUCK_ITEMS_SQL resets publishing items older than 10 minutes', () => {
+      expect(RECOVER_STUCK_ITEMS_SQL).toContain("status = 'publishing'");
+      expect(RECOVER_STUCK_ITEMS_SQL).toContain("INTERVAL '10 minutes'");
+      expect(RECOVER_STUCK_ITEMS_SQL).toContain("status = 'queued'");
     });
   });
 });
