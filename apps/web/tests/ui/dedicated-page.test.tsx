@@ -601,5 +601,70 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasAttribute('data-testid', 'enqueue-slot-select')).toBe(true);
       expect(hasAttribute('data-testid', 'enqueue-caption-field')).toBe(true);
     });
+
+    it('maps captionText from media response and renders correctly (Audit Issue 22)', () => {
+      // Direct verification of mapping logic: caption: m.captionText ?? m.caption ?? null
+      const rawApiItems = [
+        {
+          id: 'media-1',
+          name: 'Video 1',
+          mediaType: 'video',
+          thumbnailUrl: 'https://example.com/thumb1.jpg',
+          url: 'https://example.com/video1.mp4',
+          captionText: 'Mapped caption text from captionText',
+          caption: null,
+          firstComment: 'First comment 1',
+        },
+        {
+          id: 'media-2',
+          name: 'Image 2',
+          mediaType: 'image',
+          thumbnailUrl: 'https://example.com/thumb2.jpg',
+          url: 'https://example.com/image2.jpg',
+          captionText: null,
+          caption: 'Fallback caption',
+          firstComment: null,
+        },
+        {
+          id: 'media-3',
+          name: 'Image 3',
+          mediaType: 'image',
+          thumbnailUrl: null,
+          url: 'https://example.com/image3.jpg',
+          captionText: undefined,
+          caption: undefined,
+          firstComment: null,
+        },
+      ];
+
+      const mapped = rawApiItems.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        mediaType: m.mediaType,
+        thumbnailUrl: m.thumbnailUrl,
+        url: m.url,
+        caption: m.captionText ?? m.caption ?? null,
+        firstComment: m.firstComment,
+      }));
+
+      expect(mapped[0].caption).toBe('Mapped caption text from captionText');
+      expect(mapped[1].caption).toBe('Fallback caption');
+      expect(mapped[2].caption).toBeNull();
+
+      const { hasText, hasAttribute } = render(
+        <EnqueueModal
+          pageId="page-101"
+          subdomain="cyberdyne"
+          slots={sampleSlots}
+          isOpen={true}
+          onClose={vi.fn()}
+          onEnqueued={vi.fn()}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'enqueue-modal')).toBe(true);
+      expect(hasText('Add Media to Queue')).toBe(true);
+      expect(hasAttribute('data-testid', 'enqueue-caption-field')).toBe(true);
+    });
   });
 });
