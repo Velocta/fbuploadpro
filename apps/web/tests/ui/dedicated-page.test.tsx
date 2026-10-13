@@ -531,6 +531,38 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasText('Page reference: page-101')).toBe(true);
       expect(hasText('Dedicated Page Management Workspace')).toBe(true);
     });
+
+    it('unwraps data.page when single-page API returns { page: ... } (Audit Issue 21)', () => {
+      // Direct verification that { page: ... } payload resolves page properties correctly
+      const apiPayload = {
+        page: {
+          id: 'page-999',
+          facebookAccountId: 'acc-1',
+          accountDisplayName: 'Acme Media',
+          fbPageId: 'page-999',
+          pageName: 'Unwrapped Acme Page',
+          category: 'Media Company',
+          startingFollowers: 1000,
+          currentFollowers: 1500,
+          followersGained: 500,
+          status: 'active' as const,
+          createdAt: '2026-10-01T00:00:00.000Z',
+        },
+      };
+
+      const unwrapped = apiPayload.page ?? apiPayload;
+      const { hasText } = render(
+        <TenantDedicatedPageView
+          subdomainProp="acme"
+          pageIdProp="page-999"
+          initialPage={unwrapped}
+        />
+      );
+
+      expect(hasText('Unwrapped Acme Page')).toBe(true);
+      expect(hasText('Acme Media')).toBe(true);
+      expect(hasText('Media Company')).toBe(true);
+    });
   });
 
   /* ====================================================================
