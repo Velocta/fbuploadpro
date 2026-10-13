@@ -95,6 +95,67 @@ describe('Nested Media Folders CRUD, Reparenting & Cascading Deletion', () => {
       expect(data.folders[1].parentId).toBe(folderId);
       expect(data.unorganizedCount).toBe(3);
     });
+
+    it('uses database-level { count: "exact", head: true } in Supabase client without fetching full media row lists', async () => {
+      const selectCalls: Array<{ table: string; options?: any }> = [];
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'media_folders') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: folderId,
+                        user_id: userId,
+                        parent_id: null,
+                        name: 'Campaigns',
+                        created_at: new Date('2026-10-07T10:00:00Z'),
+                        updated_at: new Date('2026-10-07T10:00:00Z'),
+                      },
+                    ],
+                    error: null,
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'media_items') {
+            return {
+              select: vi.fn((_columns: string, options?: any) => {
+                selectCalls.push({ table: 'media_items', options });
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    is: vi.fn().mockResolvedValue({ count: 5, data: null, error: null }),
+                    eq: vi.fn().mockResolvedValue({ count: 12, data: null, error: null }),
+                  }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/folders', {
+        headers: { cookie: validSessionCookie },
+      });
+      const res = await handleListFolders(req, 'acme', mockSupabase as any);
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.folders).toHaveLength(1);
+      expect(data.folders[0].itemCount).toBe(12);
+      expect(data.unorganizedCount).toBe(5);
+
+      // Verify that media_items selects always passed count: exact and head: true
+      expect(selectCalls.length).toBeGreaterThanOrEqual(2);
+      for (const call of selectCalls) {
+        expect(call.options).toEqual({ count: 'exact', head: true });
+      }
+    });
   });
 
   describe('Create Folder (POST /api/tenant/[subdomain]/media/folders)', () => {

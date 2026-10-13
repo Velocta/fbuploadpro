@@ -86,34 +86,39 @@ export async function handleListFolders(
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
 
-  const [foldersRes, itemsRes] = await Promise.all([
-    supabase
-      .from('media_folders')
-      .select('id, user_id, parent_id, name, created_at, updated_at')
-      .eq('user_id', session.userId)
-      .order('name', { ascending: true }),
-    supabase
-      .from('media_items')
-      .select('id, folder_id')
-      .eq('user_id', session.userId),
-  ]);
+  const foldersRes = await supabase
+    .from('media_folders')
+    .select('id, user_id, parent_id, name, created_at, updated_at')
+    .eq('user_id', session.userId)
+    .order('name', { ascending: true });
 
   if (foldersRes.error) {
     return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Failed to list folders' }, { status: 500 });
   }
 
   const folderRows = foldersRes.data || [];
-  const itemsRows = itemsRes.data || [];
 
+  // Query unorganized count and per-folder item counts via database-level count ({ count: 'exact', head: true })
+  const [unorganizedCountRes, ...folderItemCountResList] = await Promise.all([
+    supabase
+      .from('media_items')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', session.userId)
+      .is('folder_id', null),
+    ...folderRows.map((folder) =>
+      supabase
+        .from('media_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', session.userId)
+        .eq('folder_id', folder.id)
+    ),
+  ]);
+
+  const unorganizedCount = unorganizedCountRes.count ?? 0;
   const itemCounts = new Map<string, number>();
-  let unorganizedCount = 0;
-  for (const item of itemsRows) {
-    if (item.folder_id) {
-      itemCounts.set(item.folder_id, (itemCounts.get(item.folder_id) || 0) + 1);
-    } else {
-      unorganizedCount++;
-    }
-  }
+  folderRows.forEach((folder, idx) => {
+    itemCounts.set(folder.id, folderItemCountResList[idx]?.count ?? 0);
+  });
 
   const subfolderCounts = new Map<string, number>();
   for (const folder of folderRows) {
