@@ -3,9 +3,10 @@ import {
   DisconnectAccountResponseSchema,
   getSessionSecret,
   verifySessionToken,
+  type DatabaseClient,
+  type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleDisconnectAccount(

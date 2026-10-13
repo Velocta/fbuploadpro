@@ -1,0 +1,68 @@
+import { type NextRequest, NextResponse } from 'next/server';
+import {
+  getSessionSecret,
+  verifySessionToken,
+  type SessionPayload,
+} from '@fbuploadpro/contracts';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+export function isLegacyClient(
+  client?: DatabaseClient | SupabaseClient<any>
+): client is DatabaseClient {
+  return (
+    !!client &&
+    (('query' in client && typeof (client as any).query === 'function') ||
+      ('withTransaction' in client &&
+        typeof (client as any).withTransaction === 'function'))
+  );
+}
+
+export function getRouteSupabase(
+  client?: DatabaseClient | SupabaseClient<any>
+): SupabaseClient<any> | null {
+  if (client && 'from' in client) {
+    return client as SupabaseClient<any>;
+  }
+  return getSupabaseClient() as SupabaseClient<any> | null;
+}
+
+export async function authenticateTenantRoute(
+  request: NextRequest,
+  subdomain: string
+): Promise<
+  | { session: SessionPayload; errorResponse?: never }
+  | { session?: never; errorResponse: NextResponse }
+> {
+  const sessionSecret = getSessionSecret();
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      ),
+    };
+  }
+
+  let session: SessionPayload;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      ),
+    };
+  }
+
+  if (session.subdomain !== subdomain && session.role !== 'admin') {
+    return {
+      errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
+    };
+  }
+
+  return { session };
+}

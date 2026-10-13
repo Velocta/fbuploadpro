@@ -4,9 +4,10 @@ import {
   MediaListQuerySchema,
   MediaListResponseSchema,
   verifySessionToken,
+  type DatabaseClient,
+  type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleListMedia(
@@ -154,7 +155,12 @@ export async function handleListMedia(
       queryBuilder = queryBuilder.or(`name.ilike.%${search}%,caption_text.ilike.%${search}%`);
     }
 
-    const sortCol = sortBy === 'name' ? 'name' : sortBy === 'file_size' ? 'file_size' : 'created_at';
+    let sortCol = 'created_at';
+    if (sortBy === 'name') {
+      sortCol = 'name';
+    } else if (sortBy === 'file_size') {
+      sortCol = 'file_size';
+    }
     queryBuilder = queryBuilder.order(sortCol as any, { ascending: sortOrder === 'asc' });
     queryBuilder = queryBuilder.range(offset, offset + limit - 1);
 

@@ -6,12 +6,12 @@ import {
   MediaItemResponseSchema,
   validateSafeRemoteUrl,
   verifySessionToken,
+  type DatabaseClient,
   type IStorageService,
   type MediaItemResponse,
 } from '@fbuploadpro/contracts';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../lib/storage';
 import {
   MediaDownloaderError,
@@ -35,25 +35,6 @@ interface MediaItemDbRow {
   caption_text: string | null;
   created_at: Date | string;
   updated_at: Date | string;
-}
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
-  }
-  return getSupabaseClient() as SupabaseClient<any> | null;
 }
 
 function normalizeQueryRows<T>(result: unknown): T[] {
@@ -292,7 +273,7 @@ export async function handleDownloadMediaFromUrl(
       return NextResponse.json(responsePayload, { status: 201 });
     }
 
-    const supabase = getSupabase(dbClient);
+    const supabase = getRouteSupabase(dbClient);
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

@@ -1,27 +1,11 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { getSessionSecret, verifySessionToken } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import {
+  authenticateTenantRoute,
+  getRouteSupabase,
+  isLegacyClient,
+} from '@/lib/route-auth';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
-  }
-  return getSupabaseClient() as SupabaseClient<any> | null;
-}
 
 export async function handlePublishNow(
   request: NextRequest,
@@ -29,25 +13,9 @@ export async function handlePublishNow(
   itemId: string,
   dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
-
-  // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const auth = await authenticateTenantRoute(request, subdomain);
+  if (auth.errorResponse) return auth.errorResponse;
+  const session = auth.session;
 
   if (isLegacyClient(dbClient)) {
     // 3. Check existing item
@@ -87,7 +55,7 @@ export async function handlePublishNow(
     );
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }

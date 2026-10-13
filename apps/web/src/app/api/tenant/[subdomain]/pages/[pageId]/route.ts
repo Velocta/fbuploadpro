@@ -4,9 +4,9 @@ import {
   FacebookPageViewSchema,
   getSessionSecret,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 

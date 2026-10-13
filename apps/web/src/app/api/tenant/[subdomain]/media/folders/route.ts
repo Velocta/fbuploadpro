@@ -5,29 +5,10 @@ import {
   FolderResponseSchema,
   getSessionSecret,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
-  }
-  return getSupabaseClient() as SupabaseClient<any> | null;
-}
 
 export async function handleListFolders(
   request: NextRequest,
@@ -100,7 +81,7 @@ export async function handleListFolders(
     return NextResponse.json(responsePayload);
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -259,7 +240,7 @@ export async function handleCreateFolder(
     }
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -322,7 +303,8 @@ export async function handleCreateFolder(
     });
 
     return NextResponse.json(responsePayload, { status: 201 });
-  } catch (_err) {
+  } catch (err) {
+    console.error('Failed to create folder in Supabase:', err);
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to create folder' },
       { status: 500 }

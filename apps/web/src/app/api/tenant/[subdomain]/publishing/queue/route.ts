@@ -6,30 +6,11 @@ import {
   ListQueueItemsResponseSchema,
   QueueItemSchema,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { calculateNextVacantSlot } from '../../../../../../lib/slot-scheduler';
-import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
-  }
-  return getSupabaseClient() as SupabaseClient<any> | null;
-}
 
 export async function handleEnqueueMedia(
   request: NextRequest,
@@ -296,7 +277,7 @@ export async function handleEnqueueMedia(
     return NextResponse.json(validated, { status: 201 });
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -646,7 +627,7 @@ export async function handleListQueueItems(
     return NextResponse.json(responsePayload, { status: 200 });
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }

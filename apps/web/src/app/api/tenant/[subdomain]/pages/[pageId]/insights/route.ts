@@ -4,10 +4,10 @@ import {
   getSessionSecret,
   PageInsightsQuerySchema,
   verifySessionToken,
+  type DatabaseClient,
   type PageInsightsResponse,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { globalInsightsCache } from '../../../../../../../lib/insights/insights-cache';
 import {

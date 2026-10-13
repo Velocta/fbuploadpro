@@ -4,30 +4,11 @@ import {
   ListPublishLogsQuerySchema,
   PublishLogSchema,
   verifySessionToken,
+  type DatabaseClient,
   type PublishLog,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<Database>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<Database>
-): SupabaseClient<Database> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<Database>;
-  }
-  return getSupabaseClient();
-}
 
 function formatErrorMessage(value: unknown): string | null {
   if (value === null || value === undefined) return null;
@@ -48,7 +29,7 @@ function formatErrorMessage(value: unknown): string | null {
 export async function handleListPublishLogs(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<Database>
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -156,7 +137,7 @@ export async function handleListPublishLogs(
     return NextResponse.json({ logs, total }, { status: 200 });
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }

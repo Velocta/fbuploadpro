@@ -6,30 +6,11 @@ import {
   type IStorageService,
   UpdateFolderRequestSchema,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../../lib/storage';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
-  }
-  return getSupabaseClient() as SupabaseClient<any> | null;
-}
 
 export async function handleUpdateFolder(
   request: NextRequest,
@@ -226,7 +207,7 @@ export async function handleUpdateFolder(
     }
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -346,7 +327,8 @@ export async function handleUpdateFolder(
     });
 
     return NextResponse.json(responsePayload);
-  } catch (_err) {
+  } catch (err) {
+    console.error('Failed to update folder in Supabase:', err);
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
       { status: 500 }
@@ -420,22 +402,17 @@ export async function handleDeleteFolder(
     )) as any[]) ?? [];
 
     // 4. Purge R2 objects for all contained media items
-    for (const item of mediaRows) {
-      if (item.storage_key) {
-        try {
-          await storage.deleteObject(item.storage_key);
-        } catch (_e) {
-          // Continue with cleanup even if individual R2 key deletion fails
-        }
-      }
-      if (item.thumbnail_key) {
-        try {
-          await storage.deleteObject(item.thumbnail_key);
-        } catch (_e) {
-          // Continue with cleanup
-        }
-      }
-    }
+    const keysToDelete = mediaRows
+      .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+      .filter((k): k is string => Boolean(k));
+
+    await Promise.all(
+      keysToDelete.map((key) =>
+        storage.deleteObject(key).catch((err) => {
+          console.error(`Failed to delete storage key ${key}:`, err);
+        })
+      )
+    );
 
     // 5. Delete media items and folder subtree in PostgreSQL
     await dbClient.query(
@@ -458,7 +435,7 @@ export async function handleDeleteFolder(
     return NextResponse.json(responsePayload);
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -504,22 +481,17 @@ export async function handleDeleteFolder(
     .in('folder_id', folderIds);
 
   const mediaRows = mediaItems || [];
-  for (const item of mediaRows) {
-    if ((item as any).storage_key) {
-      try {
-        await storage.deleteObject((item as any).storage_key);
-      } catch (_e) {
-        // Continue
-      }
-    }
-    if ((item as any).thumbnail_key) {
-      try {
-        await storage.deleteObject((item as any).thumbnail_key);
-      } catch (_e) {
-        // Continue
-      }
-    }
-  }
+  const keysToDelete = mediaRows
+    .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+    .filter((k): k is string => Boolean(k));
+
+  await Promise.all(
+    keysToDelete.map((key) =>
+      storage.deleteObject(key).catch((err) => {
+        console.error(`Failed to delete storage key ${key}:`, err);
+      })
+    )
+  );
 
   await supabase
     .from('media_items')

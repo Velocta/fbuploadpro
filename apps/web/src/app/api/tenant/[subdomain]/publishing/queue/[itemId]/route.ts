@@ -4,28 +4,22 @@ import {
   QueueItemSchema,
   UpdateQueueItemRequestSchema,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
+function resolveScheduledTime(
+  requestedTime?: string | null,
+  existingTime?: string | null
+): string {
+  if (requestedTime !== undefined && requestedTime !== null) {
+    return new Date(requestedTime).toISOString();
   }
-  return getSupabaseClient() as SupabaseClient<any> | null;
+  if (existingTime) {
+    return new Date(existingTime).toISOString();
+  }
+  return new Date().toISOString();
 }
 
 export async function handleUpdateQueueItem(
@@ -96,19 +90,9 @@ export async function handleUpdateQueueItem(
     }
 
     // 5. Compute updated values
-    const resolveScheduledTime = (): string => {
-      if (parsed.data.scheduledTime !== undefined) {
-        return new Date(parsed.data.scheduledTime).toISOString();
-      }
-      if (existing.scheduled_time) {
-        return new Date(existing.scheduled_time).toISOString();
-      }
-      return new Date().toISOString();
-    };
-
     const newCaption = parsed.data.caption ?? existing.caption ?? '';
     const newFirstComment = parsed.data.firstComment ?? existing.first_comment ?? null;
-    const newScheduledTime = resolveScheduledTime();
+    const newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
     const newStatus = parsed.data.status ?? existing.status;
 
     const updateRows = (await dbClient.query(
@@ -171,7 +155,7 @@ export async function handleUpdateQueueItem(
     return NextResponse.json(validated, { status: 200 });
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -194,19 +178,9 @@ export async function handleUpdateQueueItem(
     );
   }
 
-  const resolveScheduledTime = (): string => {
-    if (parsed.data.scheduledTime !== undefined) {
-      return new Date(parsed.data.scheduledTime).toISOString();
-    }
-    if (existing.scheduled_time) {
-      return new Date(existing.scheduled_time).toISOString();
-    }
-    return new Date().toISOString();
-  };
-
   const newCaption = parsed.data.caption ?? existing.caption ?? '';
   const newFirstComment = parsed.data.firstComment ?? existing.first_comment ?? null;
-  const newScheduledTime = resolveScheduledTime();
+  const newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
   const newStatus = parsed.data.status ?? existing.status;
 
   const { data: updated, error: updateErr } = await supabase
@@ -324,7 +298,7 @@ export async function handleDeleteQueueItem(
     return NextResponse.json({ success: true, itemId }, { status: 200 });
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }

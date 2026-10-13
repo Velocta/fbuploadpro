@@ -5,30 +5,11 @@ import {
   getSessionSecret,
   type IStorageService,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../lib/storage';
-import type { DatabaseClient, Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-
-function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
-): client is DatabaseClient {
-  return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client && typeof (client as any).withTransaction === 'function'))
-  );
-}
-
-function getSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
-  if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
-  }
-  return getSupabaseClient() as SupabaseClient<any> | null;
-}
 
 export async function handleBatchMedia(
   request: NextRequest,
@@ -134,22 +115,17 @@ export async function handleBatchMedia(
       [session.userId, payload.mediaIds]
     )) as any[]) ?? [];
 
-    for (const item of mediaRows) {
-      if (item.storage_key) {
-        try {
-          await storage.deleteObject(item.storage_key);
-        } catch (_e) {
-          // Continue cleanup even if individual storage key fails
-        }
-      }
-      if (item.thumbnail_key) {
-        try {
-          await storage.deleteObject(item.thumbnail_key);
-        } catch (_e) {
-          // Continue cleanup
-        }
-      }
-    }
+    const keysToDelete = mediaRows
+      .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+      .filter((k): k is string => Boolean(k));
+
+    await Promise.all(
+      keysToDelete.map((key) =>
+        storage.deleteObject(key).catch((err) => {
+          console.error(`Failed to delete storage key ${key}:`, err);
+        })
+      )
+    );
 
     await dbClient.query(
       `DELETE FROM media_items WHERE user_id = $1 AND id = ANY($2::uuid[])`,
@@ -165,7 +141,7 @@ export async function handleBatchMedia(
     return NextResponse.json(response);
   }
 
-  const supabase = getSupabase(dbClient);
+  const supabase = getRouteSupabase(dbClient);
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
@@ -256,22 +232,17 @@ export async function handleBatchMedia(
   }
 
   const items = mediaRows ?? [];
-  for (const item of items) {
-    if ((item as any).storage_key) {
-      try {
-        await storage.deleteObject((item as any).storage_key);
-      } catch (_e) {
-        // Continue cleanup even if individual storage key fails
-      }
-    }
-    if ((item as any).thumbnail_key) {
-      try {
-        await storage.deleteObject((item as any).thumbnail_key);
-      } catch (_e) {
-        // Continue cleanup
-      }
-    }
-  }
+  const keysToDelete = items
+    .flatMap((item: any) => [(item as any).storage_key, (item as any).thumbnail_key])
+    .filter((k): k is string => Boolean(k));
+
+  await Promise.all(
+    keysToDelete.map((key) =>
+      storage.deleteObject(key).catch((err) => {
+        console.error(`Failed to delete storage key ${key}:`, err);
+      })
+    )
+  );
 
   const { error: deleteErr } = await supabase
     .from('media_items')
