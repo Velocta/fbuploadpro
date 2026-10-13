@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getR2Config, createR2S3Client, R2ConfigSchema } from '../src/lib/storage';
+import { getR2Config, createR2S3Client, R2ConfigSchema } from '../../src/lib/storage';
 
 describe('Cloudflare R2 Storage Configuration', () => {
   const originalEnv = process.env;

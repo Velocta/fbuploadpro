@@ -5,7 +5,7 @@ import {
   getMockStorageProvider,
   getStorageService,
   type R2Config,
-} from '../src/lib/storage';
+} from '../../src/lib/storage';
 
 describe('Storage Service Providers', () => {
   const originalEnv = process.env;
