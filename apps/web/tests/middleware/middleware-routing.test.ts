@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
-import { middleware } from '../src/middleware';
+import { middleware } from '../../src/middleware';
 
 describe('Next.js Edge Middleware Subdomain Routing (User Story 1)', () => {
   it.each([

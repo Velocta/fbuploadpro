@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import TenantLayout from '../src/app/tenant/[subdomain]/layout';
-import TenantIndexPage from '../src/app/tenant/[subdomain]/page';
+import TenantLayout from '../../src/app/tenant/[subdomain]/layout';
+import TenantIndexPage from '../../src/app/tenant/[subdomain]/page';
 import React from 'react';
 
 describe('Tenant Workspace Shell', () => {

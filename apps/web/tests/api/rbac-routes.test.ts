@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assertRole, checkRouteAccess } from '../src/lib/rbac';
+import { assertRole, checkRouteAccess } from '../../src/lib/rbac';
 import { DomainError, DomainErrorCode } from '@fbuploadpro/contracts';
 
 describe('RBAC Route Guard Contracts (User Story 3)', () => {

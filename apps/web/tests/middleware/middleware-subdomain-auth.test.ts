@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { NextRequest } from 'next/server';
-import { middleware } from '../src/middleware';
+import { middleware } from '../../src/middleware';
 
 describe('Middleware Subdomain Auth Redirection (Spec 013 - Eliminate 404s)', () => {
   beforeAll(() => {
