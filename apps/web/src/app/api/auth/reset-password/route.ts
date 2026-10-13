@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { password, email, otp, token, code } = body || {};
+    const { password, email, otp, token, token_hash, code } = body || {};
 
     if (!password || typeof password !== 'string' || password.length < 8) {
       return NextResponse.json(
@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanOtp = typeof otp === 'string' ? otp.replace(/\D/g, '').trim() : undefined;
-    const recoveryToken = extractRecoveryToken(token, code);
+    const rawToken = token || token_hash;
+    const recoveryToken = extractRecoveryToken(rawToken, code);
 
     if (!cleanOtp && !recoveryToken) {
       return NextResponse.json(
@@ -87,11 +88,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const isCode = typeof code === 'string' && Boolean(code.trim());
+    const isToken = typeof rawToken === 'string' && Boolean(rawToken.trim());
+
     const result = await resetUserPassword({
       password,
       email: typeof email === 'string' ? email.trim() : undefined,
-      token: recoveryToken,
-      code: typeof code === 'string' ? code.trim() : undefined,
+      token: isToken ? String(rawToken).trim() : (!isCode ? recoveryToken : undefined),
+      code: isCode ? String(code).trim() : undefined,
     });
 
     return NextResponse.json({

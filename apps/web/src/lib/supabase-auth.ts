@@ -16,8 +16,16 @@ import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 const localPasswordStore = new Map<string, string>();
 const localUserStore = new Map<string, AuthUser>();
 const localResetTokenStore = new Map<string, { email: string; expiresAt: number }>();
+let mockSupabaseClientForTesting: SupabaseClient | null = null;
+
+export function _setMockSupabaseClient(client: SupabaseClient | null): void {
+  mockSupabaseClientForTesting = client;
+}
 
 export function getSupabaseClient(): SupabaseClient | null {
+  if (mockSupabaseClientForTesting) {
+    return mockSupabaseClientForTesting;
+  }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -1160,6 +1168,20 @@ export async function resetUserPassword(params: {
       if (updateError) {
         throw new Error(updateError.message);
       }
+    } else if (params.token) {
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: params.token,
+        type: 'recovery',
+      });
+      if (verifyError || !data?.session) {
+        throw new Error('Invalid or expired password reset link.');
+      }
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: params.password,
+      });
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
     } else {
       const { error } = await supabase.auth.updateUser({
         password: params.password,
@@ -1209,6 +1231,7 @@ export function _resetAuthStores(): void {
   localPasswordStore.clear();
   localUserStore.clear();
   localResetTokenStore.clear();
+  mockSupabaseClientForTesting = null;
 }
 
 export async function _seedTestUser(user: AuthUser, password?: string): Promise<void> {
