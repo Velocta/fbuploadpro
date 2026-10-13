@@ -12,7 +12,9 @@ import { FacebookGraphError, FacebookPublishClient } from './fb-client.js';
 import { settleOutcome } from './settlement.js';
 
 export interface Queryable {
-  query<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
+  query?<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
+  rpc?(fn: string, args?: Record<string, unknown>): Promise<{ data: unknown; error: unknown }>;
+  from?(table: string): any;
 }
 
 export interface DispatcherDbClient extends Queryable {
@@ -83,14 +85,27 @@ function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueIte
 }
 
 /**
- * Claims due queue items atomically using PostgreSQL FOR UPDATE SKIP LOCKED.
+ * Claims due queue items atomically using PostgreSQL stored procedure or FOR UPDATE SKIP LOCKED.
  * Transitions claimed items to status 'publishing'.
  */
 export async function claimDueItems(
   db: DispatcherDbClient,
   limit: number = 10
 ): Promise<ClaimedQueueItem[]> {
+  // 1. Supabase RPC claim_due_queue_items stored procedure
+  if (typeof db.rpc === 'function') {
+    const { data, error } = await db.rpc('claim_due_queue_items', { p_limit: limit });
+    if (error) {
+      console.error('[claimDueItems] Supabase RPC error:', error);
+      throw error;
+    }
+    const rows = (data || []) as Record<string, unknown>[];
+    return rows.map(mapRowToClaimedQueueItem);
+  }
+
+  // 2. Queryable fallback for testing/mock clients
   const executeClaim = async (client: Queryable): Promise<ClaimedQueueItem[]> => {
+    if (typeof client.query !== 'function') return [];
     const rawResult = await client.query(CLAIM_DUE_ITEMS_SQL, [limit]);
     const rows = extractRows<Record<string, unknown>>(rawResult);
     if (rows.length === 0) {
@@ -233,36 +248,63 @@ export async function recordDispatchOutcome(
   db: Queryable,
   outcome: DispatchOutcome
 ): Promise<void> {
-  if (outcome.status === 'published') {
-    await db.query(
-      `UPDATE queue_items
+  if (typeof db.from === 'function') {
+    if (outcome.status === 'published') {
+      await db.from('queue_items').update({
+        status: 'published',
+        fb_post_id: outcome.fbPostId ?? null,
+        fb_comment_id: outcome.fbCommentId ?? null,
+        published_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', outcome.queueItemId);
+    } else if (outcome.status === 'retry') {
+      const scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      await db.from('queue_items').update({
+        status: 'queued',
+        scheduled_time: scheduledTime,
+        updated_at: new Date().toISOString(),
+      }).eq('id', outcome.queueItemId);
+    } else {
+      await db.from('queue_items').update({
+        status: 'failed',
+        updated_at: new Date().toISOString(),
+      }).eq('id', outcome.queueItemId);
+    }
+    return;
+  }
+
+  if (typeof db.query === 'function') {
+    if (outcome.status === 'published') {
+      await db.query(
+        `UPDATE queue_items
        SET status = 'published',
            fb_post_id = $2,
            fb_comment_id = $3,
            published_at = now(),
            updated_at = now()
        WHERE id = $1`,
-      [outcome.queueItemId, outcome.fbPostId ?? null, outcome.fbCommentId ?? null]
-    );
-  } else if (outcome.status === 'retry') {
-    await db.query(
-      `UPDATE queue_items
+        [outcome.queueItemId, outcome.fbPostId ?? null, outcome.fbCommentId ?? null]
+      );
+    } else if (outcome.status === 'retry') {
+      await db.query(
+        `UPDATE queue_items
        SET status = 'queued',
            retry_count = retry_count + 1,
            scheduled_time = now() + interval '5 minutes',
            updated_at = now()
        WHERE id = $1`,
-      [outcome.queueItemId]
-    );
-  } else {
-    await db.query(
-      `UPDATE queue_items
+        [outcome.queueItemId]
+      );
+    } else {
+      await db.query(
+        `UPDATE queue_items
        SET status = 'failed',
            retry_count = retry_count + 1,
            updated_at = now()
        WHERE id = $1`,
-      [outcome.queueItemId]
-    );
+        [outcome.queueItemId]
+      );
+    }
   }
 }
 

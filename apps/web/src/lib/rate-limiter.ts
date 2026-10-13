@@ -23,6 +23,16 @@ interface LockoutEntry {
 const rateLimitStore = new Map<string, WindowEntry>();
 const lockoutStore = new Map<string, LockoutEntry>();
 
+export function validateRateLimiterConfig(): void {
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+      throw new Error(
+        'Upstash Redis credentials (UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN) are strictly required for distributed rate limiting in production.'
+      );
+    }
+  }
+}
+
 const CLEANUP_INTERVAL_MS = 60 * 1000;
 let lastCleanup = Date.now();
 
@@ -56,6 +66,7 @@ export function checkRateLimit(
   maxRequests: number,
   windowMs: number
 ): RateLimitResult {
+  validateRateLimiterConfig();
   cleanupStores();
   const now = Date.now();
 

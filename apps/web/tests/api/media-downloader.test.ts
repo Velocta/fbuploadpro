@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 import { handleDownloadMediaFromUrl } from '../../src/app/api/tenant/[subdomain]/media/downloader/route';
 import { MockStorageProvider } from '../../src/lib/storage';
 import { normalizeCloudDriveUrl } from '../../src/lib/media-downloader';

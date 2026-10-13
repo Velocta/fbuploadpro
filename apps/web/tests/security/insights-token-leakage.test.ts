@@ -5,7 +5,7 @@ import {
   signSessionToken,
 } from '@fbuploadpro/contracts';
 import { handleGetInsights } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 import { globalInsightsCache } from '../../src/lib/insights/insights-cache';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';

@@ -2,14 +2,16 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   DownloaderIngestRequestSchema,
   DownloaderIngestResponseSchema,
+  getSessionSecret,
   MediaItemResponseSchema,
   validateSafeRemoteUrl,
   verifySessionToken,
+  type DatabaseClient,
   type IStorageService,
   type MediaItemResponse,
 } from '@fbuploadpro/contracts';
-import type { DatabaseClient } from '@fbuploadpro/database';
-import { getDbClient } from '../../../../../../lib/db';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../lib/storage';
 import {
   MediaDownloaderError,
@@ -158,21 +160,19 @@ async function persistResolvedMediaItems(
     return db.withTransaction(executeInserts);
   }
   return executeInserts({
-    query: (sql, params) => db.query(sql, params),
+    query: (sql, params) => (db as any).query(sql, params),
   });
 }
 
 export async function handleDownloadMediaFromUrl(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient,
+  dbClient?: DatabaseClient | SupabaseClient<any>,
   storageService?: IStorageService,
   fetchImpl?: typeof fetch,
   extractorApiUrl?: string | null
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;
@@ -227,15 +227,66 @@ export async function handleDownloadMediaFromUrl(
     );
   }
 
-  const db = dbClient ?? getDbClient();
   const storage = storageService ?? getStorageService();
   const targetFolderId = body.folderId ?? null;
 
   try {
-    // 4. Verify destination folder ownership if folderId is specified
+    if (isLegacyClient(dbClient)) {
+      // 4. Verify destination folder ownership if folderId is specified
+      if (targetFolderId !== null) {
+        const folderExists = await verifyFolderOwnership(dbClient, targetFolderId, session.userId);
+        if (!folderExists) {
+          return NextResponse.json(
+            {
+              error: 'FOLDER_NOT_FOUND',
+              message: 'Selected destination folder was not found.',
+            },
+            { status: 404 }
+          );
+        }
+      }
+
+      // 5. Resolve remote media link & stream directly to R2
+      const resolved = await resolveAndUploadMediaFromUrl({
+        sourceUrl: body.url,
+        userId: session.userId,
+        storage,
+        fetchImpl,
+        extractorApiUrl,
+      });
+
+      // 6. Persist all resolved media items inside a transaction
+      const insertedRows = await persistResolvedMediaItems(
+        dbClient,
+        session.userId,
+        targetFolderId,
+        resolved.items
+      );
+
+      const responseItems = insertedRows.map(mapRowToMediaItemResponse);
+      const responsePayload = DownloaderIngestResponseSchema.parse({
+        sourceUrl: resolved.sourceUrl,
+        platform: resolved.platform,
+        items: responseItems,
+      });
+
+      return NextResponse.json(responsePayload, { status: 201 });
+    }
+
+    const supabase = getRouteSupabase(dbClient);
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
     if (targetFolderId !== null) {
-      const folderExists = await verifyFolderOwnership(db, targetFolderId, session.userId);
-      if (!folderExists) {
+      const { data: folder } = await supabase
+        .from('media_folders')
+        .select('id')
+        .eq('id', targetFolderId)
+        .eq('user_id', session.userId)
+        .maybeSingle();
+
+      if (!folder) {
         return NextResponse.json(
           {
             error: 'FOLDER_NOT_FOUND',
@@ -246,7 +297,6 @@ export async function handleDownloadMediaFromUrl(
       }
     }
 
-    // 5. Resolve remote media link & stream directly to R2
     const resolved = await resolveAndUploadMediaFromUrl({
       sourceUrl: body.url,
       userId: session.userId,
@@ -255,15 +305,39 @@ export async function handleDownloadMediaFromUrl(
       extractorApiUrl,
     });
 
-    // 6. Persist all resolved media items inside a transaction
-    const insertedRows = await persistResolvedMediaItems(
-      db,
-      session.userId,
-      targetFolderId,
-      resolved.items
-    );
+    const insertRecords = resolved.items.map((item) => ({
+      id: item.mediaId,
+      user_id: session.userId,
+      folder_id: targetFolderId,
+      name: item.name,
+      file_size: item.fileSize,
+      mime_type: item.mimeType,
+      media_type: item.mediaType,
+      storage_key: item.storageKey,
+      url: item.url,
+      thumbnail_key: item.thumbnailKey,
+      thumbnail_url: item.thumbnailUrl,
+      duration_seconds: item.durationSeconds,
+      aspect_ratio: item.aspectRatio,
+      caption_text: item.captionText,
+    }));
 
-    const responseItems = insertedRows.map(mapRowToMediaItemResponse);
+    const { data: insertedRows, error: insertErr } = await supabase
+      .from('media_items')
+      .insert(insertRecords)
+      .select();
+
+    if (insertErr || !insertedRows) {
+      return NextResponse.json(
+        {
+          error: 'INTERNAL_ERROR',
+          message: 'Could not save media from this link right now. Please try again.',
+        },
+        { status: 500 }
+      );
+    }
+
+    const responseItems = (insertedRows as MediaItemDbRow[]).map(mapRowToMediaItemResponse);
     const responsePayload = DownloaderIngestResponseSchema.parse({
       sourceUrl: resolved.sourceUrl,
       platform: resolved.platform,

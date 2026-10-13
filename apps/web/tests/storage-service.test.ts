@@ -120,15 +120,27 @@ describe('Storage Service Providers', () => {
   });
 
   describe('getStorageService Factory', () => {
-    it('returns MockStorageProvider when R2 environment is unconfigured', () => {
+    it('returns MockStorageProvider when R2 environment is unconfigured in development/test', () => {
       delete process.env.R2_ACCOUNT_ID;
       delete process.env.R2_ACCESS_KEY_ID;
+      (process.env as any).NODE_ENV = 'test';
 
       const service = getStorageService();
       expect(service).toBeInstanceOf(MockStorageProvider);
     });
 
+    it('throws in production when R2 environment is unconfigured', () => {
+      delete process.env.R2_ACCOUNT_ID;
+      delete process.env.R2_ACCESS_KEY_ID;
+      (process.env as any).NODE_ENV = 'production';
+
+      expect(() => getStorageService()).toThrow(
+        /Cloudflare R2 storage credentials .* are strictly required in production/
+      );
+    });
+
     it('returns R2StorageProvider when valid R2 environment is configured', () => {
+      (process.env as any).NODE_ENV = 'production';
       process.env.R2_ACCOUNT_ID = 'prod_acc';
       process.env.R2_ACCESS_KEY_ID = 'prod_key';
       process.env.R2_SECRET_ACCESS_KEY = 'prod_secret';

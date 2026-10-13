@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  getSessionSecret,
   ListFacebookPagesResponseSchema,
   evaluatePageHealth,
   verifySessionToken,
+  type DatabaseClient,
+  type Database,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 function extractCurrentFollowers(row: any): number {
   if (typeof row.current_followers === 'number') return row.current_followers;
@@ -30,11 +33,9 @@ function extractPagePictureUrl(row: any): string | null {
 export async function handleListPages(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<Database>
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;
@@ -54,31 +55,54 @@ export async function handleListPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const db = dbClient ?? getDbClient();
-
   // 3. Query imported pages with parent account display name (excluding soft-deleted disconnected pages)
-  const rows = (await db.query(
-    `SELECT 
-      p.id,
-      p.facebook_account_id,
-      a.display_name AS account_display_name,
-      p.fb_page_id,
-      p.page_name,
-      p.profile_picture_url,
-      p.category,
-      p.starting_followers,
-      p.current_followers,
-      p.status,
-      p.tasks,
-      p.created_at,
-      p.updated_at
-    FROM facebook_pages p
-    LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
-    WHERE p.user_id = $1
-      AND p.status != 'disconnected'
-    ORDER BY p.created_at DESC`,
-    [session.userId]
-  )) as any[];
+  let rows: any[] = [];
+
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    rows = (await dbClient.query(
+      `SELECT 
+        p.id,
+        p.facebook_account_id,
+        a.display_name AS account_display_name,
+        p.fb_page_id,
+        p.page_name,
+        p.profile_picture_url,
+        p.category,
+        p.starting_followers,
+        p.current_followers,
+        p.status,
+        p.tasks,
+        p.created_at,
+        p.updated_at
+      FROM facebook_pages p
+      LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
+      WHERE p.user_id = $1
+        AND p.status != 'disconnected'
+      ORDER BY p.created_at DESC`,
+      [session.userId]
+    )) as any[];
+  } else {
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { data: pageData, error } = await supabase
+      .from('facebook_pages')
+      .select('*, facebook_accounts(display_name)')
+      .eq('user_id', session.userId)
+      .neq('status', 'disconnected')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    rows = (pageData || []).map((p: any) => ({
+      ...p,
+      account_display_name: p.facebook_accounts?.display_name || '',
+    }));
+  }
 
   const pages = (rows || []).map((row) => {
     let parsedTasks: string[] = [];
@@ -118,7 +142,7 @@ export async function handleListPages(
       status: effectiveStatus,
       tasks: parsedTasks,
       createdAt: row.created_at || row.createdAt,
-      updatedAt,
+      updatedAt: row.updated_at || row.updatedAt,
     };
   });
 

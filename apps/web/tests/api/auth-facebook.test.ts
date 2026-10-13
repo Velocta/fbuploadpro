@@ -8,7 +8,7 @@ import {
 import { GET as initiateFacebookOAuth } from '../../src/app/api/auth/facebook/route';
 import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
 import { handleListAccounts } from '../../src/app/api/tenant/[subdomain]/accounts/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY =

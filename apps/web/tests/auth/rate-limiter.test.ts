@@ -84,4 +84,34 @@ describe('Rate Limiter & Abuse Shield (Spec 014)', () => {
       expect(extractClientIp(new Headers())).toBe('127.0.0.1');
     });
   });
+
+  describe('validateRateLimiterConfig in production', () => {
+    const originalEnv = process.env;
+
+    it('throws in production when Upstash Redis credentials are missing', async () => {
+      process.env = { ...originalEnv, NODE_ENV: 'production' };
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      const { validateRateLimiterConfig } = await import('../../src/lib/rate-limiter');
+      expect(() => validateRateLimiterConfig()).toThrow(
+        /Upstash Redis credentials .* are strictly required/
+      );
+      process.env = originalEnv;
+    });
+
+    it('passes in production when Upstash Redis credentials are present', async () => {
+      process.env = {
+        ...originalEnv,
+        NODE_ENV: 'production',
+        UPSTASH_REDIS_REST_URL: 'https://upstash.io',
+        UPSTASH_REDIS_REST_TOKEN: 'valid_token',
+      };
+
+      const { validateRateLimiterConfig } = await import('../../src/lib/rate-limiter');
+      expect(() => validateRateLimiterConfig()).not.toThrow();
+      process.env = originalEnv;
+    });
+  });
 });
+

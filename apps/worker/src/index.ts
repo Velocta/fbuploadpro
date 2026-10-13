@@ -1,4 +1,4 @@
-import { createDatabaseClient } from '@fbuploadpro/database';
+import { createClient } from '@supabase/supabase-js';
 import { FacebookPublishClient, type IFacebookPublishClient } from './fb-client.js';
 import { runDispatchCycle, type DispatcherDbClient } from './dispatcher.js';
 
@@ -6,7 +6,9 @@ export interface Env {
   ENVIRONMENT?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
   FB_GRAPH_API_URL?: string;
-  DATABASE_URL?: string;
+  SUPABASE_URL?: string;
+  NEXT_PUBLIC_SUPABASE_URL?: string;
+  SUPABASE_SERVICE_ROLE_KEY?: string;
 }
 
 export * from './fb-client.js';
@@ -36,14 +38,20 @@ export async function handleScheduled(
   }
 
   let db = options?.db;
-  let shouldCloseDb = false;
 
   if (!db) {
-    if (!env.DATABASE_URL || env.ENVIRONMENT === 'test') {
+    const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey || env.ENVIRONMENT === 'test') {
       return;
     }
-    db = createDatabaseClient({ connectionString: env.DATABASE_URL });
-    shouldCloseDb = true;
+    db = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }) as any;
+  }
+
+  if (!db) {
+    return;
   }
 
   const fbClient =
@@ -71,14 +79,7 @@ export async function handleScheduled(
       });
     }
   } finally {
-    if (
-      shouldCloseDb &&
-      db &&
-      'close' in db &&
-      typeof (db as { close?: () => Promise<void> }).close === 'function'
-    ) {
-      await (db as { close: () => Promise<void> }).close().catch(() => {});
-    }
+    // No-op cleanup for stateless HTTPS Supabase client
   }
 }
 

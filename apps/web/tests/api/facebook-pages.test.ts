@@ -9,7 +9,7 @@ import { handleDiscoverPages } from '../../src/app/api/tenant/[subdomain]/accoun
 import { handleImportPages } from '../../src/app/api/tenant/[subdomain]/pages/import/route';
 import { handleListPages } from '../../src/app/api/tenant/[subdomain]/pages/route';
 import { handleDisconnectPage } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY =

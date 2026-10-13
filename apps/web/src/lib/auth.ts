@@ -1,5 +1,5 @@
 import { headers, cookies } from 'next/headers';
-import { verifySessionToken, type SessionPayload, type UserRole } from '@fbuploadpro/contracts';
+import { getSessionSecret, verifySessionToken, type SessionPayload, type UserRole } from '@fbuploadpro/contracts';
 
 export interface AuthenticatedUserContext {
   userId: string;
@@ -42,7 +42,7 @@ export async function getServerSessionContext(): Promise<AuthenticatedUserContex
   const token = cookieStore?.get('fbup_session')?.value;
   if (!token) return null;
 
-  const secret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
+  const secret = getSessionSecret();
   try {
     const session: SessionPayload = await verifySessionToken(token, secret);
     return {

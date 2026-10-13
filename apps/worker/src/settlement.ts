@@ -56,101 +56,153 @@ WHERE id = $1 AND user_id = $3;
  * - When targetPageStatus is present (e.g. 'fb_rate_limited' on 368/1390008 or 'page_checkpoint' on 368/4854002),
  *   updates facebook_pages.status accordingly.
  */
+async function settleSupabaseOutcome(
+  supabase: any,
+  item: ClaimedQueueItem,
+  outcome: DispatchOutcome
+): Promise<void> {
+  const attemptNumber = (item.retryCount || 0) + 1;
+  const errorDetails =
+    outcome.errorCode !== undefined
+      ? {
+          errorCode: outcome.errorCode,
+          ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+        }
+      : null;
+
+  if (outcome.status === 'published') {
+    await supabase.from('queue_items').update({
+      status: 'published',
+      fb_post_id: outcome.fbPostId ?? null,
+      fb_comment_id: outcome.fbCommentId ?? null,
+      published_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq('id', item.id);
+
+    await supabase.from('publish_logs').insert({
+      user_id: item.userId,
+      queue_item_id: item.id,
+      fb_page_id: item.pageId,
+      status: 'success',
+      attempt_number: attemptNumber,
+      fb_response_code: null,
+      error_message: null,
+      error_details: null,
+    });
+    return;
+  }
+
+  const isRetry = outcome.status === 'retry';
+  const itemUpdate = isRetry
+    ? {
+        status: 'queued',
+        retry_count: attemptNumber,
+        scheduled_time: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        status: 'failed',
+        retry_count: attemptNumber,
+        updated_at: new Date().toISOString(),
+      };
+
+  await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
+
+  await supabase.from('publish_logs').insert({
+    user_id: item.userId,
+    queue_item_id: item.id,
+    fb_page_id: item.pageId,
+    status: isRetry ? 'retry' : 'failure',
+    attempt_number: attemptNumber,
+    fb_response_code: outcome.errorCode ?? null,
+    error_message: outcome.errorMessage ?? null,
+    error_details: errorDetails,
+  });
+
+  if (outcome.targetPageStatus) {
+    await supabase.from('facebook_pages').update({
+      status: outcome.targetPageStatus,
+      updated_at: new Date().toISOString(),
+    }).eq('id', item.pageId).eq('user_id', item.userId);
+  }
+}
+
+async function settleLegacyOutcome(
+  tx: Queryable,
+  item: ClaimedQueueItem,
+  outcome: DispatchOutcome
+): Promise<void> {
+  if (typeof tx.query !== 'function') return;
+  const attemptNumber = (item.retryCount || 0) + 1;
+
+  if (outcome.status === 'published') {
+    await tx.query(UPDATE_QUEUE_ITEM_PUBLISHED_SQL, [
+      item.id,
+      outcome.fbPostId ?? null,
+      outcome.fbCommentId ?? null,
+    ]);
+    await tx.query(INSERT_PUBLISH_LOG_SQL, [
+      item.userId,
+      item.id,
+      item.pageId,
+      'success',
+      attemptNumber,
+      null,
+      null,
+      null,
+    ]);
+    return;
+  }
+
+  const isRetry = outcome.status === 'retry';
+  const updateSql = isRetry ? UPDATE_QUEUE_ITEM_RETRY_SQL : UPDATE_QUEUE_ITEM_FAILED_SQL;
+  await tx.query(updateSql, [item.id]);
+
+  const errorDetails =
+    outcome.errorCode !== undefined
+      ? JSON.stringify({
+          errorCode: outcome.errorCode,
+          ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+        })
+      : null;
+
+  await tx.query(INSERT_PUBLISH_LOG_SQL, [
+    item.userId,
+    item.id,
+    item.pageId,
+    isRetry ? 'retry' : 'failure',
+    attemptNumber,
+    outcome.errorCode ?? null,
+    outcome.errorMessage ?? null,
+    errorDetails,
+  ]);
+
+  if (outcome.targetPageStatus) {
+    await tx.query(UPDATE_PAGE_STATUS_SQL, [
+      item.pageId,
+      outcome.targetPageStatus,
+      item.userId,
+    ]);
+  }
+}
+
+/**
+ * Atomically settles outcome of a queue item publication.
+ */
 export async function settleOutcome(
   db: DispatcherDbClient | Queryable,
   item: ClaimedQueueItem,
   outcome: DispatchOutcome
 ): Promise<void> {
-  const executeSettlement = async (tx: Queryable): Promise<void> => {
-    const attemptNumber = (item.retryCount || 0) + 1;
-
-    if (outcome.status === 'published') {
-      // 1. Mark queue item published with external post ID and comment ID
-      await tx.query(UPDATE_QUEUE_ITEM_PUBLISHED_SQL, [
-        item.id,
-        outcome.fbPostId ?? null,
-        outcome.fbCommentId ?? null,
-      ]);
-
-      // 2. Record success publish log
-      await tx.query(INSERT_PUBLISH_LOG_SQL, [
-        item.userId,
-        item.id,
-        item.pageId,
-        'success',
-        attemptNumber,
-        null,
-        null,
-        null,
-      ]);
-    } else if (outcome.status === 'retry') {
-      // 1. Reschedule queue item for retry
-      await tx.query(UPDATE_QUEUE_ITEM_RETRY_SQL, [item.id]);
-
-      // 2. Record retry publish log
-      const errorDetails =
-        outcome.errorCode !== undefined
-          ? JSON.stringify({
-              errorCode: outcome.errorCode,
-              ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
-            })
-          : null;
-
-      await tx.query(INSERT_PUBLISH_LOG_SQL, [
-        item.userId,
-        item.id,
-        item.pageId,
-        'retry',
-        attemptNumber,
-        outcome.errorCode ?? null,
-        outcome.errorMessage ?? null,
-        errorDetails,
-      ]);
-
-      if (outcome.targetPageStatus) {
-        await tx.query(UPDATE_PAGE_STATUS_SQL, [
-          item.pageId,
-          outcome.targetPageStatus,
-          item.userId,
-        ]);
-      }
-    } else {
-      // 1. Mark queue item as failed
-      await tx.query(UPDATE_QUEUE_ITEM_FAILED_SQL, [item.id]);
-
-      // 2. Record failure publish log
-      const errorDetails =
-        outcome.errorCode !== undefined
-          ? JSON.stringify({
-              errorCode: outcome.errorCode,
-              ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
-            })
-          : null;
-
-      await tx.query(INSERT_PUBLISH_LOG_SQL, [
-        item.userId,
-        item.id,
-        item.pageId,
-        'failure',
-        attemptNumber,
-        outcome.errorCode ?? null,
-        outcome.errorMessage ?? null,
-        errorDetails,
-      ]);
-
-      if (outcome.targetPageStatus) {
-        await tx.query(UPDATE_PAGE_STATUS_SQL, [
-          item.pageId,
-          outcome.targetPageStatus,
-          item.userId,
-        ]);
-      }
-    }
-  };
+  if ('from' in db && typeof (db as any).from === 'function') {
+    return settleSupabaseOutcome(db, item, outcome);
+  }
 
   if ('withTransaction' in db && typeof (db as DispatcherDbClient).withTransaction === 'function') {
-    return await (db as DispatcherDbClient).withTransaction!(executeSettlement);
-  } else {
-    return await executeSettlement(db);
+    return await (db as DispatcherDbClient).withTransaction!((tx) =>
+      settleLegacyOutcome(tx, item, outcome)
+    );
   }
+
+  return await settleLegacyOutcome(db, item, outcome);
 }

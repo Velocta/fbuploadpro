@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import {
+  getSessionSecret,
   extractSubdomain,
   getTenantRewriteUrl,
   verifySessionToken,
@@ -167,7 +168,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   // System API routes and public static bypass tenant rewriting
   if (pathname.startsWith('/api') || pathname === '/account-suspended') {

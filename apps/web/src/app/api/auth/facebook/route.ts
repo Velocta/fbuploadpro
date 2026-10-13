@@ -1,19 +1,17 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  getSessionSecret,
   signOAuthState,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '@/lib/db';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 export async function handleInitiateFacebookOAuth(
   request: NextRequest,
   dbClient?: DatabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const redirectUri = `${appUrl}/api/auth/facebook/callback`;
@@ -62,10 +60,9 @@ export async function handleInitiateFacebookOAuth(
     } catch (_err) {
       // Fallback
     }
-  } else {
+  } else if (dbClient) {
     try {
-      const db = dbClient ?? getDbClient();
-      const byocRows = (await db.query(
+      const byocRows = (await dbClient.query(
         `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
          FROM workspace_byoc_credentials c
          JOIN workspaces w ON w.id = c.workspace_id

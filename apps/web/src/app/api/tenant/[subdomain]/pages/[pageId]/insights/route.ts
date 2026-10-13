@@ -1,12 +1,14 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   decryptToken,
+  getSessionSecret,
   PageInsightsQuerySchema,
   verifySessionToken,
+  type DatabaseClient,
   type PageInsightsResponse,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../../lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { globalInsightsCache } from '../../../../../../../lib/insights/insights-cache';
 import {
   getPageOverview,
@@ -15,7 +17,7 @@ import {
 } from '../../../../../../../lib/insights/facebook-insights-client';
 
 export interface HandleGetInsightsOptions {
-  dbClient?: DatabaseClient;
+  dbClient?: DatabaseClient | SupabaseClient<any>;
   fetchImpl?: typeof fetch;
 }
 
@@ -25,9 +27,7 @@ export async function handleGetInsights(
   pageId: string,
   options?: HandleGetInsightsOptions
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const encryptionKey =
     process.env.TOKEN_ENCRYPTION_KEY ||
     '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -57,27 +57,59 @@ export async function handleGetInsights(
 
   const query = parsedQuery.success ? parsedQuery.data : { range: '28d' as const, refresh: false };
 
-  const db = options?.dbClient ?? getDbClient();
-
-  // 1. Verify page exists and belongs to user
-  const pageRows = (await db.query(
-    `SELECT id, fb_page_id, page_name, fb_page_access_token, status
-     FROM facebook_pages
-     WHERE (id = $1 OR fb_page_id = $1) AND user_id = $2`,
-    [pageId, session.userId]
-  )) as Array<{
+  const client = options?.dbClient;
+  let page: {
     id: string;
     fb_page_id: string;
     page_name: string;
     fb_page_access_token: string;
     status: string;
-  }>;
+  } | null = null;
 
-  if (!pageRows || pageRows.length === 0) {
-    return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+  if (client && 'query' in client && typeof client.query === 'function') {
+    const pageRows = (await client.query(
+      `SELECT id, fb_page_id, page_name, fb_page_access_token, status
+       FROM facebook_pages
+       WHERE (id = $1 OR fb_page_id = $1) AND user_id = $2`,
+      [pageId, session.userId]
+    )) as Array<{
+      id: string;
+      fb_page_id: string;
+      page_name: string;
+      fb_page_access_token: string;
+      status: string;
+    }>;
+
+    if (!pageRows || pageRows.length === 0) {
+      return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+    }
+    page = pageRows[0];
+  } else {
+    const supabase = (client && 'from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { data: pageData, error } = await supabase
+      .from('facebook_pages')
+      .select('id, fb_page_id, page_name, encrypted_access_token, status')
+      .eq('user_id', session.userId)
+      .or(`id.eq.${pageId},fb_page_id.eq.${pageId}`)
+      .maybeSingle();
+
+    if (error || !pageData) {
+      return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+    }
+
+    page = {
+      id: pageData.id,
+      fb_page_id: pageData.fb_page_id,
+      page_name: pageData.page_name,
+      fb_page_access_token: pageData.encrypted_access_token,
+      status: pageData.status,
+    };
   }
 
-  const page = pageRows[0];
   const cacheKey = `insights:${session.userId}:${page.fb_page_id}:${query.range}`;
 
   // 2. Check cache if refresh flag is false

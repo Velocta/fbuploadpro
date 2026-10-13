@@ -1,9 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { NextResponse } from 'next/server';
-import { getDbClient } from '@/lib/db';
 import {
   deriveSubdomainFromEmail,
   signSessionToken,
+  getSessionSecret,
   canonicalizeGmailAddress,
   validateAndFormatE164Phone,
   type UserRole,
@@ -32,6 +32,11 @@ export function getSupabaseClient(): SupabaseClient | null {
     } catch {
       return null;
     }
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) are strictly required in production.'
+    );
   }
   return null;
 }
@@ -201,29 +206,8 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
     }
   }
 
-  if (process.env.DATABASE_URL) {
-    try {
-      const db = getDbClient();
-      const user = await db.queryOne<AuthUser>(
-        `SELECT 
-           u.id, 
-           u.email, 
-           u.name, 
-           u.phone, 
-           u.role, 
-           u.status,
-           COALESCE(
-             (SELECT w.subdomain FROM workspaces w WHERE w.owner_id = u.id ORDER BY w.created_at ASC LIMIT 1),
-             split_part(u.email, '@', 1)
-           ) AS subdomain
-         FROM users u 
-         WHERE u.normalized_email = $1 OR LOWER(u.email) = $1`,
-        [canonicalEmail]
-      );
-      if (user) return user;
-    } catch (err) {
-      console.error('[Postgres DB] findUserByEmail error:', err);
-    }
+  if (process.env.NODE_ENV === 'production') {
+    return null;
   }
 
   return localUserStore.get(canonicalEmail) || localUserStore.get(emailInput.trim().toLowerCase()) || null;
@@ -255,26 +239,6 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
       }
     } catch (err) {
       console.error('[Supabase PostgREST] resolveUniqueSubdomain exception:', err);
-      return candidate;
-    }
-  }
-
-  if (process.env.DATABASE_URL) {
-    try {
-      const db = getDbClient();
-      while (true) {
-        const existing = await db.queryOne<{ id: string }>(
-          'SELECT id FROM workspaces WHERE subdomain = $1',
-          [candidate]
-        );
-        if (!existing) {
-          return candidate;
-        }
-        candidate = `${baseSubdomain}${counter}`;
-        counter++;
-      }
-    } catch (err) {
-      console.error('[Postgres DB] resolveUniqueSubdomain error:', err);
       return candidate;
     }
   }
@@ -590,7 +554,7 @@ export async function verifySignupOtpViaSupabase(params: {
     throw new Error('Unable to find user account after verification.');
   }
 
-  const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const token = await signSessionToken(
     {
       userId: userRecord.id,
@@ -776,29 +740,9 @@ export async function registerTenantUser(params: {
       status: 'active',
     };
     localUserStore.set(canonicalEmail, userRecord);
-
-    if (process.env.DATABASE_URL) {
-      try {
-        const db = getDbClient();
-        await db.query(
-          `INSERT INTO users (id, email, normalized_email, name, phone, role, status, created_at, updated_at)
-           VALUES ($1, $2, $2, $3, $4, 'user', 'active', NOW(), NOW())
-           ON CONFLICT (id) DO NOTHING`,
-          [userId, canonicalEmail, params.name, formattedPhone]
-        );
-        await db.query(
-          `INSERT INTO workspaces (id, owner_id, name, subdomain, created_at, updated_at)
-           VALUES (gen_random_uuid(), $1, $2, $3, NOW(), NOW())
-           ON CONFLICT (subdomain) DO NOTHING`,
-          [userId, params.name || canonicalEmail.split('@')[0], subdomain]
-        );
-      } catch (dbErr) {
-        console.error('[Postgres DB] User insert error:', dbErr);
-      }
-    }
   }
 
-  const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const token = await signSessionToken(
     {
       userId: userRecord.id,
@@ -922,7 +866,7 @@ export async function loginTenantUser(params: {
     throw error;
   }
 
-  const sessionSecret = process.env.SESSION_SECRET || 'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
   const token = await signSessionToken(
     {
       userId: user.id,
@@ -1169,18 +1113,6 @@ export async function resetUserPasswordWithOtp(params: {
     user.passwordUpdatedAt = nowSeconds;
   }
 
-  if (process.env.DATABASE_URL) {
-    try {
-      const db = getDbClient();
-      await db.query(
-        'UPDATE users SET updated_at = NOW() WHERE normalized_email = $1 OR email = $1',
-        [canonicalEmail]
-      );
-    } catch (err) {
-      console.error('[Postgres DB] resetUserPasswordWithOtp error:', err);
-    }
-  }
-
   return {
     message: 'Your password has been successfully updated.',
   };
@@ -1277,6 +1209,22 @@ export function _resetAuthStores(): void {
   localPasswordStore.clear();
   localUserStore.clear();
   localResetTokenStore.clear();
+}
+
+export async function _seedTestUser(user: AuthUser, password?: string): Promise<void> {
+  let canonical: string;
+  try {
+    canonical = canonicalizeGmailAddress(user.email);
+  } catch {
+    canonical = user.email.trim().toLowerCase();
+  }
+  localUserStore.set(canonical, user);
+  localUserStore.set(user.email.trim().toLowerCase(), user);
+  if (password) {
+    const hash = await hashPassword(password);
+    localPasswordStore.set(canonical, hash);
+    localPasswordStore.set(user.email.trim().toLowerCase(), hash);
+  }
 }
 
 export function _setResetTokenForTesting(

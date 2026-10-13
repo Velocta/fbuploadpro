@@ -2,23 +2,23 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   DeleteFolderResponseSchema,
   FolderResponseSchema,
+  getSessionSecret,
   type IStorageService,
   UpdateFolderRequestSchema,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../../lib/db';
+import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../../lib/storage';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleUpdateFolder(
   request: NextRequest,
   subdomain: string,
   folderId: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   const sessionCookie = request.cookies.get('fbup_session')?.value;
   if (!sessionCookie) {
@@ -64,17 +64,163 @@ export async function handleUpdateFolder(
     );
   }
 
-  const db = dbClient ?? getDbClient();
+  if (isLegacyClient(dbClient)) {
+    try {
+      const existingRows = (await dbClient.query(
+        `SELECT id, user_id, parent_id, name, created_at, updated_at
+         FROM media_folders
+         WHERE id = $1 AND user_id = $2`,
+        [folderId, session.userId]
+      )) as any[];
+
+      if (!existingRows || existingRows.length === 0) {
+        return NextResponse.json(
+          { error: 'NOT_FOUND', message: 'Folder not found' },
+          { status: 404 }
+        );
+      }
+
+      if (parsed.data.parentId !== undefined) {
+        if (parsed.data.parentId === folderId) {
+          return NextResponse.json(
+            {
+              error: 'INVALID_FOLDER_HIERARCHY',
+              message: 'A folder cannot be moved into itself',
+            },
+            { status: 400 }
+          );
+        }
+
+        if (parsed.data.parentId !== null) {
+          const parentRows = (await dbClient.query(
+            `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
+            [parsed.data.parentId, session.userId]
+          )) as any[];
+
+          if (!parentRows || parentRows.length === 0) {
+            return NextResponse.json(
+              {
+                error: 'PARENT_FOLDER_NOT_FOUND',
+                message: 'Target parent folder not found',
+              },
+              { status: 404 }
+            );
+          }
+
+          const cycleRows = (await dbClient.query(
+            `WITH RECURSIVE descendants AS (
+               SELECT id FROM media_folders WHERE parent_id = $1 AND user_id = $2
+               UNION ALL
+               SELECT f.id FROM media_folders f INNER JOIN descendants d ON f.parent_id = d.id WHERE f.user_id = $2
+             )
+             SELECT id FROM descendants WHERE id = $3`,
+            [folderId, session.userId, parsed.data.parentId]
+          )) as any[];
+
+          if (cycleRows && cycleRows.length > 0) {
+            return NextResponse.json(
+              {
+                error: 'INVALID_FOLDER_HIERARCHY',
+                message: 'A folder cannot be moved into one of its own subfolders',
+              },
+              { status: 400 }
+            );
+          }
+        }
+      }
+
+      const updates: string[] = ['updated_at = now()'];
+      const values: any[] = [];
+      let paramIdx = 1;
+
+      if (parsed.data.name !== undefined) {
+        updates.push(`name = $${paramIdx++}`);
+        values.push(parsed.data.name);
+      }
+      if (parsed.data.parentId !== undefined) {
+        updates.push(`parent_id = $${paramIdx++}`);
+        values.push(parsed.data.parentId);
+      }
+
+      values.push(folderId, session.userId);
+
+      const updateRows = (await dbClient.query(
+        `UPDATE media_folders
+         SET ${updates.join(', ')}
+         WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
+         RETURNING id, user_id, parent_id, name, created_at, updated_at`,
+        values
+      )) as any[];
+
+      if (!updateRows || updateRows.length === 0) {
+        return NextResponse.json(
+          { error: 'NOT_FOUND', message: 'Folder not found' },
+          { status: 404 }
+        );
+      }
+
+      const row = updateRows[0];
+
+      const countRows = (await dbClient.query(
+        `SELECT COUNT(*)::int AS item_count
+         FROM media_items
+         WHERE folder_id = $1 AND user_id = $2`,
+        [folderId, session.userId]
+      )) as any[];
+
+      const subfolderRows = (await dbClient.query(
+        `SELECT COUNT(*)::int AS subfolder_count
+         FROM media_folders
+         WHERE parent_id = $1 AND user_id = $2`,
+        [folderId, session.userId]
+      )) as any[];
+
+      const itemCount = Number(countRows[0]?.item_count ?? 0);
+      const subfolderCount = Number(subfolderRows[0]?.subfolder_count ?? 0);
+
+      const responsePayload = FolderResponseSchema.parse({
+        id: row.id,
+        userId: row.user_id,
+        parentId: row.parent_id ?? null,
+        name: row.name,
+        itemCount,
+        subfolderCount,
+        createdAt: new Date(row.created_at).toISOString(),
+        updatedAt: new Date(row.updated_at).toISOString(),
+      });
+
+      return NextResponse.json(responsePayload);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        return NextResponse.json(
+          {
+            error: 'FOLDER_NAME_ALREADY_EXISTS',
+            message: 'A folder with this name already exists in this location',
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
+        { status: 500 }
+      );
+    }
+  }
+
+  const supabase = getRouteSupabase(dbClient);
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
 
   try {
-    const existingRows = (await db.query(
-      `SELECT id, user_id, parent_id, name, created_at, updated_at
-       FROM media_folders
-       WHERE id = $1 AND user_id = $2`,
-      [folderId, session.userId]
-    )) as any[];
+    const { data: existingFolder, error: existErr } = await supabase
+      .from('media_folders')
+      .select('id, user_id, parent_id, name, created_at, updated_at')
+      .eq('id', folderId)
+      .eq('user_id', session.userId)
+      .maybeSingle();
 
-    if (!existingRows || existingRows.length === 0) {
+    if (existErr || !existingFolder) {
       return NextResponse.json(
         { error: 'NOT_FOUND', message: 'Folder not found' },
         { status: 404 }
@@ -93,12 +239,13 @@ export async function handleUpdateFolder(
       }
 
       if (parsed.data.parentId !== null) {
-        const parentRows = (await db.query(
-          `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
-          [parsed.data.parentId, session.userId]
-        )) as any[];
+        const { data: allFolders } = await supabase
+          .from('media_folders')
+          .select('id, parent_id')
+          .eq('user_id', session.userId);
 
-        if (!parentRows || parentRows.length === 0) {
+        const folderMap = new Map((allFolders || []).map((f) => [f.id, f.parent_id]));
+        if (!folderMap.has(parsed.data.parentId)) {
           return NextResponse.json(
             {
               error: 'PARENT_FOLDER_NOT_FOUND',
@@ -108,99 +255,80 @@ export async function handleUpdateFolder(
           );
         }
 
-        const cycleRows = (await db.query(
-          `WITH RECURSIVE descendants AS (
-             SELECT id FROM media_folders WHERE parent_id = $1 AND user_id = $2
-             UNION ALL
-             SELECT f.id FROM media_folders f INNER JOIN descendants d ON f.parent_id = d.id WHERE f.user_id = $2
-           )
-           SELECT id FROM descendants WHERE id = $3`,
-          [folderId, session.userId, parsed.data.parentId]
-        )) as any[];
-
-        if (cycleRows && cycleRows.length > 0) {
-          return NextResponse.json(
-            {
-              error: 'INVALID_FOLDER_HIERARCHY',
-              message: 'A folder cannot be moved into one of its own subfolders',
-            },
-            { status: 400 }
-          );
+        // Cycle check: verify parsed.data.parentId is not a descendant of folderId
+        let curr: string | null | undefined = parsed.data.parentId;
+        while (curr) {
+          if (curr === folderId) {
+            return NextResponse.json(
+              {
+                error: 'INVALID_FOLDER_HIERARCHY',
+                message: 'A folder cannot be moved into one of its own subfolders',
+              },
+              { status: 400 }
+            );
+          }
+          curr = folderMap.get(curr);
         }
       }
     }
 
-    const updates: string[] = ['updated_at = now()'];
-    const values: any[] = [];
-    let paramIdx = 1;
+    const updates: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+    if (parsed.data.parentId !== undefined) updates.parent_id = parsed.data.parentId;
 
-    if (parsed.data.name !== undefined) {
-      updates.push(`name = $${paramIdx++}`);
-      values.push(parsed.data.name);
-    }
-    if (parsed.data.parentId !== undefined) {
-      updates.push(`parent_id = $${paramIdx++}`);
-      values.push(parsed.data.parentId);
-    }
+    const { data: updatedFolder, error: updateErr } = await supabase
+      .from('media_folders')
+      .update(updates)
+      .eq('id', folderId)
+      .eq('user_id', session.userId)
+      .select('id, user_id, parent_id, name, created_at, updated_at')
+      .single();
 
-    values.push(folderId, session.userId);
-
-    const updateRows = (await db.query(
-      `UPDATE media_folders
-       SET ${updates.join(', ')}
-       WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
-       RETURNING id, user_id, parent_id, name, created_at, updated_at`,
-      values
-    )) as any[];
-
-    if (!updateRows || updateRows.length === 0) {
+    if (updateErr) {
+      if (updateErr.code === '23505') {
+        return NextResponse.json(
+          {
+            error: 'FOLDER_NAME_ALREADY_EXISTS',
+            message: 'A folder with this name already exists in this location',
+          },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
-        { error: 'NOT_FOUND', message: 'Folder not found' },
-        { status: 404 }
+        { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
+        { status: 500 }
       );
     }
 
-    const row = updateRows[0];
-
-    const countRows = (await db.query(
-      `SELECT COUNT(*)::int AS item_count
-       FROM media_items
-       WHERE folder_id = $1 AND user_id = $2`,
-      [folderId, session.userId]
-    )) as any[];
-
-    const subfolderRows = (await db.query(
-      `SELECT COUNT(*)::int AS subfolder_count
-       FROM media_folders
-       WHERE parent_id = $1 AND user_id = $2`,
-      [folderId, session.userId]
-    )) as any[];
-
-    const itemCount = Number(countRows[0]?.item_count ?? 0);
-    const subfolderCount = Number(subfolderRows[0]?.subfolder_count ?? 0);
+    const [itemsCountRes, subfoldersCountRes] = await Promise.all([
+      supabase
+        .from('media_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('folder_id', folderId)
+        .eq('user_id', session.userId),
+      supabase
+        .from('media_folders')
+        .select('*', { count: 'exact', head: true })
+        .eq('parent_id', folderId)
+        .eq('user_id', session.userId),
+    ]);
 
     const responsePayload = FolderResponseSchema.parse({
-      id: row.id,
-      userId: row.user_id,
-      parentId: row.parent_id ?? null,
-      name: row.name,
-      itemCount,
-      subfolderCount,
-      createdAt: new Date(row.created_at).toISOString(),
-      updatedAt: new Date(row.updated_at).toISOString(),
+      id: updatedFolder.id,
+      userId: updatedFolder.user_id,
+      parentId: updatedFolder.parent_id ?? null,
+      name: updatedFolder.name,
+      itemCount: itemsCountRes.count ?? 0,
+      subfolderCount: subfoldersCountRes.count ?? 0,
+      createdAt: new Date(updatedFolder.created_at).toISOString(),
+      updatedAt: new Date(updatedFolder.updated_at).toISOString(),
     });
 
     return NextResponse.json(responsePayload);
-  } catch (err: any) {
-    if (err?.code === '23505') {
-      return NextResponse.json(
-        {
-          error: 'FOLDER_NAME_ALREADY_EXISTS',
-          message: 'A folder with this name already exists in this location',
-        },
-        { status: 409 }
-      );
-    }
+  } catch (err) {
+    console.error('Failed to update folder in Supabase:', err);
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
       { status: 500 }
@@ -212,12 +340,10 @@ export async function handleDeleteFolder(
   request: NextRequest,
   subdomain: string,
   folderId: string,
-  dbClient?: DatabaseClient,
+  dbClient?: DatabaseClient | SupabaseClient<any>,
   storageService?: IStorageService
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   const sessionCookie = request.cookies.get('fbup_session')?.value;
   if (!sessionCookie) {
@@ -235,74 +361,149 @@ export async function handleDeleteFolder(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const db = dbClient ?? getDbClient();
+  if (isLegacyClient(dbClient)) {
+    const storage = storageService ?? getStorageService();
+
+    // 1. Verify target folder belongs to user
+    const existingRows = (await dbClient.query(
+      `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
+      [folderId, session.userId]
+    )) as any[];
+
+    if (!existingRows || existingRows.length === 0) {
+      return NextResponse.json(
+        { error: 'NOT_FOUND', message: 'Folder not found' },
+        { status: 404 }
+      );
+    }
+
+    // 2. Collect target folder and all descendant subfolders recursively
+    const treeRows = (await dbClient.query(
+      `WITH RECURSIVE folder_tree AS (
+         SELECT id FROM media_folders WHERE id = $1 AND user_id = $2
+         UNION ALL
+         SELECT f.id FROM media_folders f INNER JOIN folder_tree ft ON f.parent_id = ft.id WHERE f.user_id = $2
+       )
+       SELECT id FROM folder_tree`,
+      [folderId, session.userId]
+    )) as any[];
+
+    const folderIds: string[] =
+      treeRows && treeRows.length > 0
+        ? treeRows.map((r) => r.id)
+        : [folderId];
+
+    // 3. Collect all media items inside the folder subtree
+    const mediaRows = ((await dbClient.query(
+      `SELECT id, storage_key, thumbnail_key
+       FROM media_items
+       WHERE user_id = $1 AND folder_id = ANY($2::uuid[])`,
+      [session.userId, folderIds]
+    )) as any[]) ?? [];
+
+    // 4. Purge R2 objects for all contained media items
+    const keysToDelete = mediaRows
+      .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+      .filter((k): k is string => Boolean(k));
+
+    await Promise.all(
+      keysToDelete.map((key) =>
+        storage.deleteObject(key).catch((err) => {
+          console.error(`Failed to delete storage key ${key}:`, err);
+        })
+      )
+    );
+
+    // 5. Delete media items and folder subtree in PostgreSQL
+    await dbClient.query(
+      `DELETE FROM media_items WHERE user_id = $1 AND folder_id = ANY($2::uuid[])`,
+      [session.userId, folderIds]
+    );
+
+    await dbClient.query(
+      `DELETE FROM media_folders WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+      [session.userId, folderIds]
+    );
+
+    const responsePayload = DeleteFolderResponseSchema.parse({
+      success: true,
+      deletedFolderId: folderId,
+      deletedSubfoldersCount: Math.max(0, folderIds.length - 1),
+      deletedItemsCount: mediaRows.length,
+    });
+
+    return NextResponse.json(responsePayload);
+  }
+
+  const supabase = getRouteSupabase(dbClient);
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
+
   const storage = storageService ?? getStorageService();
 
-  // 1. Verify target folder belongs to user
-  const existingRows = (await db.query(
-    `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
-    [folderId, session.userId]
-  )) as any[];
+  const { data: existingFolder, error: existErr } = await supabase
+    .from('media_folders')
+    .select('id')
+    .eq('id', folderId)
+    .eq('user_id', session.userId)
+    .maybeSingle();
 
-  if (!existingRows || existingRows.length === 0) {
+  if (existErr || !existingFolder) {
     return NextResponse.json(
       { error: 'NOT_FOUND', message: 'Folder not found' },
       { status: 404 }
     );
   }
 
-  // 2. Collect target folder and all descendant subfolders recursively
-  const treeRows = (await db.query(
-    `WITH RECURSIVE folder_tree AS (
-       SELECT id FROM media_folders WHERE id = $1 AND user_id = $2
-       UNION ALL
-       SELECT f.id FROM media_folders f INNER JOIN folder_tree ft ON f.parent_id = ft.id WHERE f.user_id = $2
-     )
-     SELECT id FROM folder_tree`,
-    [folderId, session.userId]
-  )) as any[];
+  const { data: allFolders } = await supabase
+    .from('media_folders')
+    .select('id, parent_id')
+    .eq('user_id', session.userId);
 
-  const folderIds: string[] =
-    treeRows && treeRows.length > 0
-      ? treeRows.map((r) => r.id)
-      : [folderId];
-
-  // 3. Collect all media items inside the folder subtree
-  const mediaRows = ((await db.query(
-    `SELECT id, storage_key, thumbnail_key
-     FROM media_items
-     WHERE user_id = $1 AND folder_id = ANY($2::uuid[])`,
-    [session.userId, folderIds]
-  )) as any[]) ?? [];
-
-  // 4. Purge R2 objects for all contained media items
-  for (const item of mediaRows) {
-    if (item.storage_key) {
-      try {
-        await storage.deleteObject(item.storage_key);
-      } catch (_e) {
-        // Continue with cleanup even if individual R2 key deletion fails
-      }
-    }
-    if (item.thumbnail_key) {
-      try {
-        await storage.deleteObject(item.thumbnail_key);
-      } catch (_e) {
-        // Continue with cleanup
-      }
+  // Compute all descendant folder IDs in memory
+  const folderIds = [folderId];
+  const queue = [folderId];
+  const folderList = allFolders || [];
+  while (queue.length > 0) {
+    const parent = queue.shift()!;
+    const children = folderList.filter((f) => f.parent_id === parent);
+    for (const child of children) {
+      folderIds.push(child.id);
+      queue.push(child.id);
     }
   }
 
-  // 5. Delete media items and folder subtree in PostgreSQL
-  await db.query(
-    `DELETE FROM media_items WHERE user_id = $1 AND folder_id = ANY($2::uuid[])`,
-    [session.userId, folderIds]
+  const { data: mediaItems } = await supabase
+    .from('media_items')
+    .select('id, storage_key, thumbnail_key')
+    .eq('user_id', session.userId)
+    .in('folder_id', folderIds);
+
+  const mediaRows = mediaItems || [];
+  const keysToDelete = mediaRows
+    .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+    .filter((k): k is string => Boolean(k));
+
+  await Promise.all(
+    keysToDelete.map((key) =>
+      storage.deleteObject(key).catch((err) => {
+        console.error(`Failed to delete storage key ${key}:`, err);
+      })
+    )
   );
 
-  await db.query(
-    `DELETE FROM media_folders WHERE user_id = $1 AND id = ANY($2::uuid[])`,
-    [session.userId, folderIds]
-  );
+  await supabase
+    .from('media_items')
+    .delete()
+    .eq('user_id', session.userId)
+    .in('folder_id', folderIds);
+
+  await supabase
+    .from('media_folders')
+    .delete()
+    .eq('user_id', session.userId)
+    .in('id', folderIds);
 
   const responsePayload = DeleteFolderResponseSchema.parse({
     success: true,

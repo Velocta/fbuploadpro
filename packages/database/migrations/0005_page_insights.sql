@@ -1,1 +1,0 @@
-../../../supabase/migrations/20261008120005_page_insights.sql

@@ -2,20 +2,20 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   ConfirmUploadRequestSchema,
   deriveDefaultCaptionFromFilename,
+  getSessionSecret,
   MediaItemResponseSchema,
   verifySessionToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '../../../../../../lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleConfirmUpload(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;
@@ -55,7 +55,6 @@ export async function handleConfirmUpload(
   }
 
   const body = parsed.data;
-  const db = dbClient ?? getDbClient();
 
   const resolvedCaptionText =
     body.captionText !== undefined
@@ -63,51 +62,93 @@ export async function handleConfirmUpload(
       : deriveDefaultCaptionFromFilename(body.name);
 
   try {
-    const executeInsert = async (tx: {
-      query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>;
-    }) => {
-      const insertRes = await tx.query(
-        `INSERT INTO media_items (
-           id, user_id, folder_id, name, file_size, mime_type, media_type,
-           storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-           aspect_ratio, caption_text, created_at, updated_at
-         ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7,
-           $8, $9, $10, $11, $12,
-           $13, $14, now(), now()
-         )
-         RETURNING *`,
-        [
-          body.mediaId,
-          session.userId,
-          body.folderId ?? null,
-          body.name,
-          body.fileSize,
-          body.mimeType,
-          body.mediaType,
-          body.storageKey,
-          body.url,
-          body.thumbnailKey ?? null,
-          body.thumbnailUrl ?? null,
-          body.durationSeconds ?? null,
-          body.aspectRatio ?? 'unknown',
-          resolvedCaptionText,
-        ]
-      );
-
-      return insertRes.rows[0];
-    };
-
     let insertedRow: any;
-    if (typeof db.withTransaction === 'function') {
-      insertedRow = await db.withTransaction(executeInsert);
+
+    if (
+      dbClient &&
+      (('query' in dbClient && typeof (dbClient as any).query === 'function') ||
+        ('withTransaction' in dbClient && typeof (dbClient as any).withTransaction === 'function'))
+    ) {
+      const executeInsert = async (tx: {
+        query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>;
+      }) => {
+        const insertRes = await tx.query(
+          `INSERT INTO media_items (
+             id, user_id, folder_id, name, file_size, mime_type, media_type,
+             storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
+             aspect_ratio, caption_text, created_at, updated_at
+           ) VALUES (
+             $1, $2, $3, $4, $5, $6, $7,
+             $8, $9, $10, $11, $12,
+             $13, $14, now(), now()
+           )
+           RETURNING *`,
+          [
+            body.mediaId,
+            session.userId,
+            body.folderId ?? null,
+            body.name,
+            body.fileSize,
+            body.mimeType,
+            body.mediaType,
+            body.storageKey,
+            body.url,
+            body.thumbnailKey ?? null,
+            body.thumbnailUrl ?? null,
+            body.durationSeconds ?? null,
+            body.aspectRatio ?? 'unknown',
+            resolvedCaptionText,
+          ]
+        );
+
+        return insertRes.rows[0];
+      };
+
+      if (typeof dbClient.withTransaction === 'function') {
+        insertedRow = await dbClient.withTransaction(executeInsert);
+      } else {
+        insertedRow = await executeInsert({
+          query: async (sql, params) => {
+            const rows = await dbClient.query(sql, params);
+            return { rows, rowCount: rows.length };
+          },
+        });
+      }
     } else {
-      insertedRow = await executeInsert({
-        query: async (sql, params) => {
-          const rows = await db.query(sql, params);
-          return { rows, rowCount: rows.length };
-        },
-      });
+      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+      if (!supabase) {
+        return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+      }
+
+      const { data, error } = await supabase
+        .from('media_items')
+        .insert({
+          id: body.mediaId,
+          user_id: session.userId,
+          folder_id: body.folderId ?? null,
+          name: body.name,
+          file_size: body.fileSize,
+          mime_type: body.mimeType,
+          media_type: body.mediaType,
+          storage_key: body.storageKey,
+          url: body.url,
+          thumbnail_key: body.thumbnailKey ?? null,
+          thumbnail_url: body.thumbnailUrl ?? null,
+          duration_seconds: body.durationSeconds ?? null,
+          aspect_ratio: body.aspectRatio ?? 'unknown',
+          caption_text: resolvedCaptionText,
+        })
+        .select()
+        .single();
+
+      if (error || !data) {
+        return NextResponse.json(
+          { error: 'INTERNAL_ERROR', message: 'Failed to confirm media upload' },
+          { status: 500 }
+        );
+      }
+
+      insertedRow = data;
     }
 
     const responsePayload = MediaItemResponseSchema.parse({

@@ -3,8 +3,6 @@ import { NextRequest } from 'next/server';
 import { POST as handleLogin } from '../../src/app/api/auth/login/route';
 import { createPendingSignup, _resetOtpStore, getPendingSignup } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
-import * as dbModule from '../../src/lib/db';
-import type { DatabaseClient } from '@fbuploadpro/database';
 
 describe('Login Unverified Registration Recovery (Spec 021 US1)', () => {
   beforeEach(() => {

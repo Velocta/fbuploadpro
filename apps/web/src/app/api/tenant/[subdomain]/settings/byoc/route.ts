@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  getSessionSecret,
   SaveBYOCCredentialsRequestSchema,
   verifySessionToken,
   canAccessTenant,
@@ -7,13 +8,6 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-
-function getSessionSecret(): string {
-  return (
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long'
-  );
-}
 
 function getEncryptionKey(): string {
   return (

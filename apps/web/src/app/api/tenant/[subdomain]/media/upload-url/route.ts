@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import {
+  getSessionSecret,
   UploadUrlRequestSchema,
   UploadUrlResponseSchema,
   verifySessionToken,
@@ -13,9 +14,7 @@ export async function handleCreateUploadUrl(
   subdomain: string,
   storageService?: IStorageService
 ): Promise<NextResponse> {
-  const sessionSecret =
-    process.env.SESSION_SECRET ||
-    'super-secret-session-signing-key-minimum-32-chars-long';
+  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;

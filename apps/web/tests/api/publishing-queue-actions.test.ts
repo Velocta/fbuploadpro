@@ -11,7 +11,7 @@ import {
   handlePublishNow,
   POST as POSTPublishNow,
 } from '../../src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route';
-import type { DatabaseClient } from '@fbuploadpro/database';
+import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

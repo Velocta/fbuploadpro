@@ -90,4 +90,35 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
       expect(error.message).toContain('expired');
     }
   });
+
+  describe('getSessionSecret', () => {
+    it('throws DomainError in production when SESSION_SECRET is missing', async () => {
+      const { getSessionSecret } = await import('../src/domain/session');
+      expect(() =>
+        getSessionSecret({ NODE_ENV: 'production' })
+      ).toThrowError(/strictly required in production/);
+    });
+
+    it('throws DomainError when SESSION_SECRET is shorter than 32 chars', async () => {
+      const { getSessionSecret } = await import('../src/domain/session');
+      expect(() =>
+        getSessionSecret({ SESSION_SECRET: 'short-key' })
+      ).toThrowError(/at least 32 characters long/);
+    });
+
+    it('returns development fallback secret when not in production', async () => {
+      const { getSessionSecret } = await import('../src/domain/session');
+      const secret = getSessionSecret({ NODE_ENV: 'development' });
+      expect(secret).toBe('super-secret-session-signing-key-minimum-32-chars-long');
+    });
+
+    it('returns configured SESSION_SECRET when valid', async () => {
+      const { getSessionSecret } = await import('../src/domain/session');
+      const secret = getSessionSecret({
+        SESSION_SECRET: 'valid-custom-secret-key-that-is-at-least-32-chars',
+      });
+      expect(secret).toBe('valid-custom-secret-key-that-is-at-least-32-chars');
+    });
+  });
 });
+

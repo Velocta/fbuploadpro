@@ -1,12 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createDatabaseClient, type DatabaseClient } from '@fbuploadpro/database';
-
-let defaultDbClient: DatabaseClient | null = null;
-
-function getDbClient(): DatabaseClient {
-  defaultDbClient ??= createDatabaseClient();
-  return defaultDbClient;
-}
+import type { DatabaseClient } from '@fbuploadpro/contracts';
+import { getSupabaseClient } from '@/lib/supabase-auth';
 
 export async function probeHealth(
   client?: DatabaseClient,
@@ -20,19 +14,21 @@ export async function probeHealth(
   };
 }> {
   const timestamp = new Date().toISOString();
-  const db = client ?? getDbClient();
 
-  try {
-    const probePromise = db.query('SELECT 1');
+  // If mock client is provided (e.g. in tests)
+  if (client) {
     let timerId: NodeJS.Timeout;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timerId = setTimeout(() => {
-        reject(new Error('Health probe timeout exceeded budget'));
-      }, timeoutMs);
-    });
-
     try {
+      const probePromise = client.query('SELECT 1');
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timerId = setTimeout(() => {
+          reject(new Error('Health probe timeout exceeded budget'));
+        }, timeoutMs);
+      });
+
       await Promise.race([probePromise, timeoutPromise]);
+      clearTimeout(timerId!);
+
       return {
         statusCode: 200,
         payload: {
@@ -41,25 +37,50 @@ export async function probeHealth(
           database: 'connected',
         },
       };
-    } catch (pgError) {
-      const { getSupabaseClient } = await import('@/lib/supabase-auth');
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        const { error: sbError } = await supabase.from('workspaces').select('id').limit(1);
-        if (!sbError) {
-          return {
-            statusCode: 200,
-            payload: {
-              status: 'ok',
-              timestamp,
-              database: 'connected',
-            },
-          };
-        }
-      }
-      throw pgError;
+    } catch {
+      clearTimeout(timerId!);
+      return {
+        statusCode: 503,
+        payload: {
+          status: 'unhealthy',
+          timestamp,
+          database: 'disconnected',
+        },
+      };
     }
+  }
+
+  let timerId: NodeJS.Timeout;
+  try {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      throw new Error('Supabase client is not configured');
+    }
+
+    const probePromise = supabase.from('workspaces').select('id', { head: true, count: 'exact' });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(() => {
+        reject(new Error('Health probe timeout exceeded budget'));
+      }, timeoutMs);
+    });
+
+    const { error } = await Promise.race([probePromise, timeoutPromise]);
+    clearTimeout(timerId!);
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      statusCode: 200,
+      payload: {
+        status: 'ok',
+        timestamp,
+        database: 'connected',
+      },
+    };
   } catch (error) {
+    clearTimeout(timerId!);
     // Stripped of internal connection credentials and stack traces for external clients
     console.error('Diagnostic probe failure:', error instanceof Error ? error.message : error);
 
