@@ -63,11 +63,14 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
       }),
     } as unknown as DatabaseClient;
 
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
+    const mockFetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       expect(url).toContain('graph.facebook.com/v26.0');
       expect(url).toContain(fbPageId);
       expect(url).toContain('fields=name,fan_count,followers_count,picture.type(large)');
-      expect(url).toContain('access_token=mock_raw_fb_page_access_token_secret');
+      expect(url).not.toContain('access_token=');
+      expect((init?.headers as Record<string, string>)?.Authorization).toBe(
+        'Bearer mock_raw_fb_page_access_token_secret'
+      );
 
       return Promise.resolve({
         ok: true,

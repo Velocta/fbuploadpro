@@ -126,6 +126,16 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
       expect(val).not.toContain(rawToken);
       expect(val).not.toContain(sampleCiphertext);
     }
+
+    // Verify Graph API calls passed Authorization: Bearer and never put token in URL
+    const fetchCalls = mockFetch.mock.calls;
+    expect(fetchCalls.length).toBeGreaterThan(0);
+    for (const [calledUrl, init] of fetchCalls) {
+      expect(calledUrl.toString()).not.toContain('access_token=');
+      expect((init?.headers as Record<string, string>)?.Authorization).toBe(
+        `Bearer ${rawToken}`
+      );
+    }
   });
 
   it('prevents cross-user insights enumeration by strictly scoping to authenticated user', async () => {

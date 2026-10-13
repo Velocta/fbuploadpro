@@ -22,12 +22,14 @@ export async function getPageOverview(
 ): Promise<PageOverviewResult> {
   const url = `https://graph.facebook.com/v26.0/${encodeURIComponent(
     fbPageId
-  )}?fields=name,fan_count,followers_count,picture.type(large)&access_token=${encodeURIComponent(
-    accessToken
-  )}`;
+  )}?fields=name,fan_count,followers_count,picture.type(large)`;
 
   try {
-    const res = await fetchImpl(url);
+    const res = await fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
     const data = await res.json();
 
     if (!res.ok || data.error) {
@@ -165,16 +167,18 @@ export async function getPageTimeSeriesInsights(
 
   const url = `https://graph.facebook.com/v26.0/${encodeURIComponent(
     fbPageId
-  )}/insights?metric=${metrics}&period=day&since=${sinceEpoch}&until=${untilEpoch}&access_token=${encodeURIComponent(
-    accessToken
-  )}`;
+  )}/insights?metric=${metrics}&period=day&since=${sinceEpoch}&until=${untilEpoch}`;
 
   let totalMediaViews = 0;
   let totalVideoViews = 0;
   let totalVideoViewTimeMinutes = 0;
 
   try {
-    const res = await fetchImpl(url);
+    const res = await fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
     const payload = await res.json();
 
     if (res.ok && Array.isArray(payload.data)) {
@@ -212,10 +216,8 @@ export async function getPageTimeSeriesInsights(
               point.videoCompleteViews30s = rawVal;
               break;
             case 'page_video_view_time': {
-              const minutes =
-                rawVal > 1000
-                  ? Math.round((rawVal / 60000) * 10) / 10
-                  : Math.round((rawVal / 60) * 10) / 10;
+              // Standardize watch time conversions: Facebook Graph API returns milliseconds for page_video_view_time
+              const minutes = Math.round((rawVal / 60000) * 10) / 10;
               point.videoViewTimeMinutes = minutes;
               totalVideoViewTimeMinutes += minutes;
               break;
@@ -300,12 +302,14 @@ export async function getPageReactionsAndDemographics(
 
   const url = `https://graph.facebook.com/v26.0/${encodeURIComponent(
     fbPageId
-  )}/insights?metric=${metrics}&period=days_28&access_token=${encodeURIComponent(
-    accessToken
-  )}`;
+  )}/insights?metric=${metrics}&period=days_28`;
 
   try {
-    const res = await fetchImpl(url);
+    const res = await fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
     const payload = await res.json();
 
     if (res.ok && Array.isArray(payload.data)) {
