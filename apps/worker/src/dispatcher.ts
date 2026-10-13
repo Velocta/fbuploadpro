@@ -167,10 +167,6 @@ export async function dispatchItem(
       });
     }
   } catch (err: unknown) {
-    const isAuthError = err instanceof FacebookGraphError ? err.isAuthError : false;
-    const isPermanentPolicyError =
-      err instanceof FacebookGraphError ? err.isPermanentPolicyError : false;
-    const isRateLimit = err instanceof FacebookGraphError ? err.isRateLimit : false;
     let errorCode: number | undefined;
     let errorSubcode: number | undefined;
     if (err instanceof FacebookGraphError) {
@@ -179,6 +175,16 @@ export async function dispatchItem(
     } else if (typeof (err as { code?: number })?.code === 'number') {
       errorCode = (err as { code: number }).code;
     }
+
+    const isAuthError = err instanceof FacebookGraphError ? err.isAuthError : false;
+    const isPermanentPolicyError =
+      err instanceof FacebookGraphError ? err.isPermanentPolicyError : false;
+    const isPermanentClientError =
+      err instanceof FacebookGraphError
+        ? err.isPermanentClientError
+        : errorCode === 100 ||
+          (typeof errorCode === 'number' && errorCode >= 400 && errorCode < 500 && !isAuthError);
+    const isRateLimit = err instanceof FacebookGraphError ? err.isRateLimit : false;
     const rawMessage = err instanceof Error ? err.message : String(err);
 
     const evaluation =
@@ -195,11 +201,12 @@ export async function dispatchItem(
         : rawMessage;
 
     // Rate limits or transient errors can be retried if retryCount < maxRetries;
-    // auth errors (190/102) and permanent 368 subcodes (4854002 checkpoint, 1404082 duplicate post) fail immediately.
+    // auth errors (190/102), permanent policy errors (4854002 checkpoint, 1404082 duplicate),
+    // and permanent client errors (code 100, 4xx) fail immediately.
     const canRetry =
       !isAuthError &&
       !isPermanentPolicyError &&
-      (isRateLimit || !isAuthError) &&
+      !isPermanentClientError &&
       item.retryCount < item.maxRetries;
 
     const outcome: DispatchOutcome = {

@@ -213,6 +213,25 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       expect(outcome.errorCode).toBe(190);
     });
 
+    it('confirms code 100 (permanent client error) fails immediately with status failed without retry', async () => {
+      const mockFbClient = new MockFacebookPublishClient();
+      mockFbClient.errorToThrow = new FacebookGraphError('Invalid parameter supplied', {
+        message: 'Invalid parameter supplied',
+        code: 100,
+        type: 'GraphMethodException',
+      });
+
+      const outcome = await dispatchItem(
+        { ...sampleClaimedVideoItem, retryCount: 0, maxRetries: 3 },
+        mockFbClient,
+        TEST_MASTER_KEY
+      );
+
+      expect(outcome.status).toBe('failed');
+      expect(outcome.errorCode).toBe(100);
+      expect(outcome.errorMessage).toContain('Invalid parameter supplied');
+    });
+
     it('returns retry status on transient/rate-limit error when retryCount < maxRetries', async () => {
       const mockFbClient = new MockFacebookPublishClient();
       mockFbClient.errorToThrow = new FacebookGraphError('User request limit reached', {

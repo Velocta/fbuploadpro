@@ -337,6 +337,35 @@ describe('FacebookPublishClient', () => {
       }
     });
 
+    it('identifies permanent client errors (code 100 and 4xx client errors)', () => {
+      const err100 = new FacebookGraphError('Invalid parameter', {
+        message: 'Invalid parameter',
+        code: 100,
+      });
+      expect(err100.isPermanentClientError).toBe(true);
+      expect(err100.isAuthError).toBe(false);
+      expect(err100.isRateLimit).toBe(false);
+
+      const err400 = new FacebookGraphError('Bad request', {
+        message: 'Bad request',
+        code: 400,
+      });
+      expect(err400.isPermanentClientError).toBe(true);
+
+      const err404 = new FacebookGraphError('Object not found', {
+        message: 'Object not found',
+        code: 404,
+      });
+      expect(err404.isPermanentClientError).toBe(true);
+
+      const authErr = new FacebookGraphError('Session expired', {
+        message: 'Session expired',
+        code: 190,
+      });
+      expect(authErr.isPermanentClientError).toBe(false);
+      expect(authErr.isAuthError).toBe(true);
+    });
+
     it('throws error when start session response is missing video_id or upload_url', async () => {
       const mockFetch = vi.fn();
       mockFetch.mockResolvedValueOnce(
