@@ -384,11 +384,11 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
         data-side={side}
         style={{
           position: 'fixed',
-          top: 0,
+          top: 'var(--desktop-titlebar-height, 0px)',
           bottom: 0,
           [side]: collapsible === 'offcanvas' && isCollapsed ? `calc(${SIDEBAR_WIDTH} * -1)` : 0,
           width: desktopWidth,
-          height: '100svh',
+          height: 'calc(100svh - var(--desktop-titlebar-height, 0px))',
           zIndex: 30,
           display: 'flex',
           transition: 'left 200ms linear, right 200ms linear, width 200ms linear',

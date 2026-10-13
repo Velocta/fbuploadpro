@@ -4,16 +4,22 @@
   "version": "0.1.0",
   "identifier": "com.fbuploadpro.desktop",
   "build": {
-    "frontendDist": "../dist"
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../public"
   },
   "app": {
     "windows": [
       {
         "title": "FBUploadPro",
-        "width": 1280,
-        "height": 800,
+        "width": 1240,
+        "height": 740,
+        "minWidth": 960,
+        "minHeight": 580,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "decorations": false,
+        "center": true,
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 FBUploadProDesktop/0.1.0"
       }
     ]
   }
