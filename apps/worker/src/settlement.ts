@@ -71,15 +71,18 @@ async function settleSupabaseOutcome(
       : null;
 
   if (outcome.status === 'published') {
-    await supabase.from('queue_items').update({
+    const { error: updateError } = await supabase.from('queue_items').update({
       status: 'published',
       fb_post_id: outcome.fbPostId ?? null,
       fb_comment_id: outcome.fbCommentId ?? null,
       published_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', item.id);
+    if (updateError) {
+      throw new Error(`Failed to update queue_item status to published: ${updateError.message || JSON.stringify(updateError)}`);
+    }
 
-    await supabase.from('publish_logs').insert({
+    const { error: logError } = await supabase.from('publish_logs').insert({
       user_id: item.userId,
       queue_item_id: item.id,
       fb_page_id: item.pageId,
@@ -89,6 +92,9 @@ async function settleSupabaseOutcome(
       error_message: null,
       error_details: null,
     });
+    if (logError) {
+      throw new Error(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
+    }
     return;
   }
 
@@ -106,9 +112,12 @@ async function settleSupabaseOutcome(
         updated_at: new Date().toISOString(),
       };
 
-  await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
+  const { error: itemUpdateError } = await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
+  if (itemUpdateError) {
+    throw new Error(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
+  }
 
-  await supabase.from('publish_logs').insert({
+  const { error: logInsertError } = await supabase.from('publish_logs').insert({
     user_id: item.userId,
     queue_item_id: item.id,
     fb_page_id: item.pageId,
@@ -118,12 +127,18 @@ async function settleSupabaseOutcome(
     error_message: outcome.errorMessage ?? null,
     error_details: errorDetails,
   });
+  if (logInsertError) {
+    throw new Error(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
+  }
 
   if (outcome.targetPageStatus) {
-    await supabase.from('facebook_pages').update({
+    const { error: pageUpdateError } = await supabase.from('facebook_pages').update({
       status: outcome.targetPageStatus,
       updated_at: new Date().toISOString(),
     }).eq('id', item.pageId).eq('user_id', item.userId);
+    if (pageUpdateError) {
+      throw new Error(`Failed to update facebook_pages status: ${pageUpdateError.message || JSON.stringify(pageUpdateError)}`);
+    }
   }
 }
 

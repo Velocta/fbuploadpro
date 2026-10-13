@@ -238,5 +238,134 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
       expect(queriesExecuted.some((q) => q.includes('INSERT INTO token_transactions'))).toBe(false);
       expect(queriesExecuted.some((q) => q.includes('INSERT INTO publish_logs'))).toBe(true);
     });
+
+    it('settleOutcome throws when Supabase update or insert encounters an error', async () => {
+      const mockSupabaseError = {
+        from: vi.fn(() => ({
+          update: vi.fn().mockReturnValue({
+            eq: vi.fn().mockResolvedValue({ error: { message: 'Database connection failed' } }),
+          }),
+        })),
+      };
+
+      const outcome: DispatchOutcome = {
+        queueItemId: sampleItem.id,
+        status: 'published',
+        fbPostId: 'fb_post_123',
+      };
+
+      await expect(settleOutcome(mockSupabaseError as any, sampleItem, outcome)).rejects.toThrow(
+        'Failed to update queue_item status to published: Database connection failed'
+      );
+    });
+
+    it('settleOutcome throws when Supabase publish_logs insert fails', async () => {
+      const mockSupabaseInsertError = {
+        from: vi.fn((table: string) => {
+          if (table === 'queue_items') {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              }),
+            };
+          }
+          if (table === 'publish_logs') {
+            return {
+              insert: vi.fn().mockResolvedValue({ error: { message: 'Rogue constraint violation' } }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const outcome: DispatchOutcome = {
+        queueItemId: sampleItem.id,
+        status: 'published',
+        fbPostId: 'fb_post_123',
+      };
+
+      await expect(settleOutcome(mockSupabaseInsertError as any, sampleItem, outcome)).rejects.toThrow(
+        'Failed to insert success publish_log: Rogue constraint violation'
+      );
+    });
+  });
+
+  describe('recordDispatchOutcome Supabase Branch', () => {
+    it('increments retry_count and checks errors on retry and fail', async () => {
+      const { recordDispatchOutcome } = await import('../src/dispatcher.js');
+
+      let updatedData: any = null;
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'queue_items') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { retry_count: 2 },
+                    error: null,
+                  }),
+                }),
+              }),
+              update: vi.fn().mockImplementation((data: any) => {
+                updatedData = data;
+                return {
+                  eq: vi.fn().mockResolvedValue({ error: null }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      // Test retry outcome
+      await recordDispatchOutcome(mockSupabase as any, {
+        queueItemId: sampleItem.id,
+        status: 'retry',
+        errorMessage: 'Transient error',
+      });
+
+      expect(updatedData).toBeDefined();
+      expect(updatedData.retry_count).toBe(3);
+      expect(updatedData.status).toBe('queued');
+
+      // Test failed outcome
+      updatedData = null;
+      await recordDispatchOutcome(mockSupabase as any, {
+        queueItemId: sampleItem.id,
+        status: 'failed',
+        errorMessage: 'Fatal error',
+      });
+
+      expect(updatedData).toBeDefined();
+      expect(updatedData.retry_count).toBe(3);
+      expect(updatedData.status).toBe('failed');
+    });
+
+    it('throws when Supabase query fails during recordDispatchOutcome', async () => {
+      const { recordDispatchOutcome } = await import('../src/dispatcher.js');
+
+      const mockSupabaseError = {
+        from: vi.fn(() => ({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: null,
+                error: { message: 'Fetch error' },
+              }),
+            }),
+          }),
+        })),
+      };
+
+      await expect(
+        recordDispatchOutcome(mockSupabaseError as any, {
+          queueItemId: sampleItem.id,
+          status: 'retry',
+          errorMessage: 'Transient error',
+        })
+      ).rejects.toThrow('Failed to fetch current queue_item retry_count: Fetch error');
+    });
   });
 });

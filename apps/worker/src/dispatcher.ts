@@ -268,25 +268,51 @@ export async function recordDispatchOutcome(
 ): Promise<void> {
   if (typeof db.from === 'function') {
     if (outcome.status === 'published') {
-      await db.from('queue_items').update({
+      const { error } = await db.from('queue_items').update({
         status: 'published',
         fb_post_id: outcome.fbPostId ?? null,
         fb_comment_id: outcome.fbCommentId ?? null,
         published_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq('id', outcome.queueItemId);
-    } else if (outcome.status === 'retry') {
-      const scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-      await db.from('queue_items').update({
-        status: 'queued',
-        scheduled_time: scheduledTime,
-        updated_at: new Date().toISOString(),
-      }).eq('id', outcome.queueItemId);
+      if (error) {
+        throw new Error(`Failed to record published dispatch outcome: ${error.message || JSON.stringify(error)}`);
+      }
     } else {
-      await db.from('queue_items').update({
-        status: 'failed',
-        updated_at: new Date().toISOString(),
-      }).eq('id', outcome.queueItemId);
+      // Fetch current retry_count to increment it in Supabase branch
+      const { data: currentItem, error: fetchErr } = await db
+        .from('queue_items')
+        .select('retry_count')
+        .eq('id', outcome.queueItemId)
+        .maybeSingle();
+
+      if (fetchErr) {
+        throw new Error(`Failed to fetch current queue_item retry_count: ${fetchErr.message || JSON.stringify(fetchErr)}`);
+      }
+
+      const nextRetryCount = ((currentItem as any)?.retry_count ?? 0) + 1;
+
+      if (outcome.status === 'retry') {
+        const scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        const { error: updateErr } = await db.from('queue_items').update({
+          status: 'queued',
+          retry_count: nextRetryCount,
+          scheduled_time: scheduledTime,
+          updated_at: new Date().toISOString(),
+        }).eq('id', outcome.queueItemId);
+        if (updateErr) {
+          throw new Error(`Failed to record retry dispatch outcome: ${updateErr.message || JSON.stringify(updateErr)}`);
+        }
+      } else {
+        const { error: updateErr } = await db.from('queue_items').update({
+          status: 'failed',
+          retry_count: nextRetryCount,
+          updated_at: new Date().toISOString(),
+        }).eq('id', outcome.queueItemId);
+        if (updateErr) {
+          throw new Error(`Failed to record failed dispatch outcome: ${updateErr.message || JSON.stringify(updateErr)}`);
+        }
+      }
     }
     return;
   }
