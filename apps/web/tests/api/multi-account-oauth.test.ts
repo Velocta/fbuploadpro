@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { decryptToken, signOAuthState, signSessionToken } from '@fbuploadpro/contracts';
-import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
+import { handleFacebookCallback, refreshConnectedPageTokens } from '../../src/app/api/auth/facebook/callback/route';
+import * as authModule from '@/lib/supabase-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -116,12 +117,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
           return Promise.resolve(matching);
         }
         if (typeof sql === 'string' && sql.includes('UPDATE facebook_pages')) {
-          const [encryptedPageToken, _expiresAt, pageId] = params as [
-            string,
-            Date,
-            string,
-            string,
-          ];
+          const encryptedPageToken = params[0] as string;
+          const pageId = (params.length >= 4 ? params[2] : params[1]) as string;
           const existingPage = storedPages.get(pageId);
           if (existingPage) {
             existingPage.encryptedPageToken = encryptedPageToken;
@@ -438,6 +435,74 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     expect(storedAccounts.get(`${userId}:fb-jane`)?.displayName).toBe('Jane Smith');
     expect(storedAccounts.get(`${userId}:fb-jane`)?.status).toBe('active');
     expect(storedAccounts.get(`${userId}:fb-john`)?.status).toBe('expired');
+  });
+
+  it('updates facebook_pages with encrypted_access_token and no token_expires_at via Supabase, logging errors if any occur', async () => {
+    const updateSpy = vi.fn();
+    const selectEqMock = {
+      eq: vi.fn().mockReturnThis(),
+      neq: vi.fn().mockResolvedValue({
+        data: [{ id: 'page_123', fb_page_id: 'fb_p_1', status: 'invalid_token' }],
+        error: null,
+      }),
+    };
+    const updateEqMock = {
+      eq: vi.fn().mockImplementation((col: string) => {
+        if (col === 'user_id') {
+          return Promise.resolve({ error: { message: 'database permission denied' } });
+        }
+        return updateEqMock;
+      }),
+    };
+
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'facebook_pages') {
+          return {
+            select: vi.fn().mockReturnValue(selectEqMock),
+            update: updateSpy.mockReturnValue(updateEqMock),
+          };
+        }
+        return {};
+      }),
+    };
+
+    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    global.fetch = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: [{ id: 'fb_p_1', access_token: 'fresh_page_secret' }],
+        })
+      )
+    );
+
+    await refreshConnectedPageTokens(
+      null,
+      userId,
+      'acc_123',
+      'long_access_token_123',
+      new Date(),
+      TEST_ENCRYPTION_KEY
+    );
+
+    expect(updateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        encrypted_access_token: expect.any(String),
+        status: 'active',
+      })
+    );
+    expect(updateSpy.mock.calls[0][0]).not.toHaveProperty('token_expires_at');
+    expect(updateSpy.mock.calls[0][0]).not.toHaveProperty('encrypted_page_token');
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[FacebookOAuth] Failed to update facebook_page token:',
+      'database permission denied'
+    );
+
+    warnSpy.mockRestore();
+    vi.restoreAllMocks();
   });
 });
 

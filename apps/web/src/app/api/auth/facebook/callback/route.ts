@@ -114,12 +114,19 @@ export async function refreshConnectedPageTokens(
     let validPages: Array<{ id: string; fb_page_id?: string; fbPageId?: string; status?: string }> = [];
 
     if (supabase && !db) {
-      const { data: linkedPages } = await supabase
+      const { data: linkedPages, error: fetchPagesError } = await supabase
         .from('facebook_pages')
         .select('id, fb_page_id, status')
         .eq('facebook_account_id', accountRowId)
         .eq('user_id', userId)
         .neq('status', 'disconnected');
+
+      if (fetchPagesError) {
+        console.warn(
+          '[FacebookOAuth] Failed to fetch linked pages:',
+          fetchPagesError.message
+        );
+      }
 
       validPages = Array.isArray(linkedPages)
         ? (linkedPages.filter((p) => Boolean(p?.fb_page_id)) as any[])
@@ -157,25 +164,30 @@ export async function refreshConnectedPageTokens(
         }
         const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
         if (supabase && !db) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('facebook_pages')
             .update({
-              encrypted_page_token: encryptedPageToken,
-              token_expires_at: expiresAt.toISOString(),
+              encrypted_access_token: encryptedPageToken,
               status: linkedPage.status === 'invalid_token' ? 'active' : linkedPage.status,
               updated_at: new Date().toISOString(),
             })
             .eq('id', linkedPage.id)
             .eq('user_id', userId);
+
+          if (updateError) {
+            console.warn(
+              '[FacebookOAuth] Failed to update facebook_page token:',
+              updateError.message
+            );
+          }
         } else if (db) {
           await db.query(
             `UPDATE facebook_pages
-             SET encrypted_page_token = $1,
-                 token_expires_at = $2,
+             SET encrypted_access_token = $1,
                  status = CASE WHEN status = 'invalid_token' THEN 'active'::facebook_page_status ELSE status END,
                  updated_at = now()
-             WHERE id = $3 AND user_id = $4`,
-            [encryptedPageToken, expiresAt, linkedPage.id, userId]
+             WHERE id = $2 AND user_id = $3`,
+            [encryptedPageToken, linkedPage.id, userId]
           );
         }
       })
