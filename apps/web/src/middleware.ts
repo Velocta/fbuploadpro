@@ -97,13 +97,27 @@ function isReturnUrlTargetingTenant(
   return false;
 }
 
+function stripUserHeaders(request: NextRequest): Headers {
+  const requestHeaders = new Headers(request.headers);
+  const keysToRemove: string[] = [];
+  requestHeaders.forEach((_, key) => {
+    if (key.toLowerCase().startsWith('x-user-')) {
+      keysToRemove.push(key);
+    }
+  });
+  for (const key of keysToRemove) {
+    requestHeaders.delete(key);
+  }
+  return requestHeaders;
+}
+
 function buildTenantHeaders(
   request: NextRequest,
   subdomain: string,
   pathname: string,
   session: SessionPayload
 ): Headers {
-  const requestHeaders = new Headers(request.headers);
+  const requestHeaders = stripUserHeaders(request);
   requestHeaders.set('x-tenant-subdomain', subdomain);
   requestHeaders.set('x-pathname', pathname);
   requestHeaders.set('x-user-id', session.userId);
@@ -172,7 +186,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   // System API routes and public static bypass tenant rewriting
   if (pathname.startsWith('/api') || pathname === '/account-suspended') {
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: stripUserHeaders(request),
+      },
+    });
   }
 
   // Extract subdomain and determine routing target
@@ -203,7 +221,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         );
 
         if (isBouncedFromWorkspace) {
-          const response = NextResponse.next();
+          const response = NextResponse.next({
+            request: {
+              headers: stripUserHeaders(request),
+            },
+          });
           response.cookies.set('fbup_session', '', {
             path: '/',
             maxAge: 0,
@@ -227,7 +249,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: stripUserHeaders(request),
+      },
+    });
   }
 
   // Customer tenant subdomains only host private workspace routes (/, /accounts, etc.).
