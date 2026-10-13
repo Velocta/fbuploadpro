@@ -56,6 +56,13 @@ export async function handleGetInsights(
 
   const query = parsedQuery.success ? parsedQuery.data : { range: '28d' as const, refresh: false };
 
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(pageId);
+  const isNumericFbId = /^[0-9]+$/.test(pageId);
+
+  if (!isUuid && !isNumericFbId) {
+    return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+  }
+
   const client = options?.dbClient;
   let page: {
     id: string;
@@ -66,35 +73,51 @@ export async function handleGetInsights(
   } | null = null;
 
   if (client && 'query' in client && typeof client.query === 'function') {
+    const whereClause = isUuid ? 'p.id = $1' : 'p.fb_page_id = $1';
     const pageRows = (await client.query(
-      `SELECT id, fb_page_id, page_name, fb_page_access_token, status
-       FROM facebook_pages
-       WHERE (id = $1 OR fb_page_id = $1) AND user_id = $2`,
+      `SELECT p.id, p.fb_page_id, p.page_name, 
+              COALESCE(p.encrypted_access_token, p.fb_page_access_token) AS encrypted_access_token, 
+              p.status
+       FROM facebook_pages p
+       WHERE ${whereClause} AND p.user_id = $2`,
       [pageId, session.userId]
     )) as Array<{
       id: string;
       fb_page_id: string;
       page_name: string;
-      fb_page_access_token: string;
+      encrypted_access_token: string;
       status: string;
     }>;
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
-    page = pageRows[0];
+    const found = pageRows[0] as any;
+    page = {
+      id: found.id,
+      fb_page_id: found.fb_page_id,
+      page_name: found.page_name,
+      fb_page_access_token: found.encrypted_access_token || found.fb_page_access_token,
+      status: found.status,
+    };
   } else {
     const supabase = (client && 'from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
-    const { data: pageData, error } = await supabase
+    let queryBuilder = supabase
       .from('facebook_pages')
       .select('id, fb_page_id, page_name, encrypted_access_token, status')
-      .eq('user_id', session.userId)
-      .or(`id.eq.${pageId},fb_page_id.eq.${pageId}`)
-      .maybeSingle();
+      .eq('user_id', session.userId);
+
+    if (isUuid) {
+      queryBuilder = queryBuilder.eq('id', pageId);
+    } else {
+      queryBuilder = queryBuilder.eq('fb_page_id', pageId);
+    }
+
+    const { data: pageData, error } = await queryBuilder.maybeSingle();
 
     if (error || !pageData) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });

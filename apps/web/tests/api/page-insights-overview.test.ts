@@ -250,6 +250,121 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     expect(res.status).toBe(404);
   });
 
+  it('rejects invalid pageId formats that are neither UUID nor numeric with 404', async () => {
+    const request = new NextRequest(
+      'https://acme.fbuploadpro.com/api/tenant/acme/pages/invalid;drop_table/insights',
+      { headers: { cookie: validSessionCookie } }
+    );
+    const res = await handleGetInsights(request, 'acme', 'invalid;drop_table');
+    expect(res.status).toBe(404);
+  });
+
+  it('queries by fb_page_id when pageId is a numeric Meta ID', async () => {
+    let capturedSql = '';
+    let capturedParams: any[] = [];
+    const mockDb = {
+      query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+        capturedSql = sql;
+        capturedParams = params;
+        return Promise.resolve([
+          {
+            id: '33333333-3333-4333-a333-333333333333',
+            user_id: userId,
+            fb_page_id: fbPageId,
+            page_name: 'Viral Cooking Daily',
+            encrypted_access_token: sampleEncryptedPageToken,
+            status: 'active',
+          },
+        ]);
+      }),
+    } as unknown as DatabaseClient;
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: 'Viral Cooking Daily',
+          fan_count: 24500,
+          followers_count: 28900,
+          picture: { data: { url: 'https://cdn.facebook.com/pages/cooking.jpg' } },
+        }),
+    });
+
+    const request = new NextRequest(
+      `https://acme.fbuploadpro.com/api/tenant/acme/pages/${fbPageId}/insights?range=28d`,
+      { headers: { cookie: validSessionCookie } }
+    );
+    const res = await handleGetInsights(request, 'acme', fbPageId, {
+      dbClient: mockDb,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+
+    expect(res.status).toBe(200);
+    expect(capturedSql).toContain('p.fb_page_id = $1');
+    expect(capturedParams[0]).toBe(fbPageId);
+  });
+
+  it('queries Supabase by id for UUID and fb_page_id for numeric Meta ID without .or() injection', async () => {
+    const selectMock = vi.fn();
+    const eqUserMock = vi.fn();
+    const eqTargetMock = vi.fn();
+    const maybeSingleMock = vi.fn().mockResolvedValue({
+      data: {
+        id: pageId,
+        fb_page_id: fbPageId,
+        page_name: 'Viral Cooking Daily',
+        encrypted_access_token: sampleEncryptedPageToken,
+        status: 'active',
+      },
+      error: null,
+    });
+
+    const mockSupabase = {
+      from: vi.fn(() => ({
+        select: selectMock.mockReturnValue({
+          eq: eqUserMock.mockReturnValue({
+            eq: eqTargetMock.mockReturnValue({
+              maybeSingle: maybeSingleMock,
+            }),
+          }),
+        }),
+      })),
+    };
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          name: 'Viral Cooking Daily',
+          fan_count: 24500,
+          followers_count: 28900,
+          picture: { data: { url: 'https://cdn.facebook.com/pages/cooking.jpg' } },
+        }),
+    });
+
+    // Case 1: UUID pageId
+    const reqUuid = new NextRequest(
+      `https://acme.fbuploadpro.com/api/tenant/acme/pages/${pageId}/insights`,
+      { headers: { cookie: validSessionCookie } }
+    );
+    await handleGetInsights(reqUuid, 'acme', pageId, {
+      dbClient: mockSupabase as any,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+    expect(eqTargetMock).toHaveBeenCalledWith('id', pageId);
+
+    // Case 2: Numeric Meta ID
+    const reqNumeric = new NextRequest(
+      `https://acme.fbuploadpro.com/api/tenant/acme/pages/${fbPageId}/insights`,
+      { headers: { cookie: validSessionCookie } }
+    );
+    await handleGetInsights(reqNumeric, 'acme', fbPageId, {
+      dbClient: mockSupabase as any,
+      fetchImpl: mockFetch as unknown as typeof fetch,
+    });
+    expect(eqTargetMock).toHaveBeenCalledWith('fb_page_id', fbPageId);
+  });
+
   it('maps Facebook OAuth invalid_token error code to healthStatus="invalid_token"', async () => {
     const mockDb = {
       query: vi.fn().mockResolvedValue([
