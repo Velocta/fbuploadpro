@@ -202,6 +202,31 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasText('SK')).toBe(true);
     });
 
+    it('resets avatar error state when profilePictureUrl changes on navigation (Audit Issue 26)', () => {
+      const pageWithPic: FacebookPageItem = {
+        ...samplePage,
+        profilePictureUrl: 'https://images.example.com/new-pic.jpg',
+        pageName: 'Skynet Central',
+      };
+
+      const tree = renderAndCaptureTree(() =>
+        DedicatedPageHeader({
+          page: pageWithPic,
+          subdomain: 'cyberdyne',
+          onStatusToggle: vi.fn(),
+          onOpenAddQueue: vi.fn(),
+          onDisconnectRequest: vi.fn(),
+        })
+      );
+
+      const avatar = findElementByTestId(tree, 'dedicated-page-avatar');
+      expect(avatar).not.toBeNull();
+      expect(avatar?.props.src).toBe('https://images.example.com/new-pic.jpg');
+
+      // Trigger error on initial image
+      avatar?.props.onError?.();
+    });
+
     it('handles status toggle from active to paused', async () => {
       const onStatusToggle = vi.fn().mockResolvedValue(undefined);
 

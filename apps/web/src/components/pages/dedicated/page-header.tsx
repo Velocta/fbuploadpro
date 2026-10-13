@@ -31,7 +31,7 @@ export function DedicatedPageHeader({
   const router = useRouter();
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
 
   const isPaused = page.status === 'paused';
   const isNeedsAttention =
@@ -131,12 +131,12 @@ export function DedicatedPageHeader({
             minWidth: 0,
           }}
         >
-          {page.profilePictureUrl && !imageError ? (
+          {page.profilePictureUrl && failedAvatarUrl !== page.profilePictureUrl ? (
             <img
               src={page.profilePictureUrl}
               alt={page.pageName}
               data-testid="dedicated-page-avatar"
-              onError={() => setImageError(true)}
+              onError={() => setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')}
               style={{
                 width: '56px',
                 height: '56px',
