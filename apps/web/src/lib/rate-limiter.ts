@@ -66,7 +66,16 @@ export function checkRateLimit(
   maxRequests: number,
   windowMs: number
 ): RateLimitResult {
-  validateRateLimiterConfig();
+  try {
+    validateRateLimiterConfig();
+  } catch (err) {
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(
+        '[RateLimiter] Upstash Redis credentials not configured. Falling back to in-memory rate limiting.',
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  }
   cleanupStores();
   const now = Date.now();
 

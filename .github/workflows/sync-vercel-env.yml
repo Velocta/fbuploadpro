@@ -45,4 +45,6 @@ jobs:
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || vars.R2_BUCKET_NAME }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL || vars.R2_PUBLIC_URL }}
           DEFAULT_STORAGE_QUOTA_BYTES: ${{ vars.DEFAULT_STORAGE_QUOTA_BYTES || secrets.DEFAULT_STORAGE_QUOTA_BYTES }}
+          UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+          UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
         run: node .github/scripts/sync-vercel-env.mjs

@@ -31,6 +31,8 @@ const SYNC_KEYS = [
   'R2_BUCKET_NAME',
   'R2_PUBLIC_URL',
   'DEFAULT_STORAGE_QUOTA_BYTES',
+  'UPSTASH_REDIS_REST_URL',
+  'UPSTASH_REDIS_REST_TOKEN',
 ];
 
 async function run() {
