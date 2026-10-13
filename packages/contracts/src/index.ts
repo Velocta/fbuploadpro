@@ -15,4 +15,5 @@ export * from './domain/queue.js';
 export * from './domain/dispatcher.js';
 export * from './domain/insights.js';
 export * from './domain/auth.js';
+export * from './domain/desktop.js';
 

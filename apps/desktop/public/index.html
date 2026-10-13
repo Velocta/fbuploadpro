@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FBUploadPro</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background-color: #000000;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    .titlebar {
+      height: 36px;
+      background-color: #000000;
+      border-bottom: 1px solid #1f242d;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 0 0 12px;
+      -webkit-app-region: drag;
+    }
+    .titlebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #d1d5db;
+      letter-spacing: 0.02em;
+    }
+    .titlebar-monogram {
+      width: 16px;
+      height: 16px;
+      background-color: #fad734;
+      color: #000000;
+      font-size: 10px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 3px;
+    }
+    .titlebar-controls {
+      display: flex;
+      align-items: center;
+      -webkit-app-region: no-drag;
+      height: 100%;
+    }
+    .window-btn {
+      background: none;
+      border: none;
+      color: #d1d5db;
+      width: 42px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .window-btn:hover {
+      background-color: #1f242d;
+      color: #ffffff;
+    }
+    .window-btn.close:hover {
+      background-color: #d92d20;
+      color: #ffffff;
+    }
+    .content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background-color: #0c0d10;
+      border: 1px solid #1f242d;
+      border-radius: 8px;
+      padding: 32px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.85);
+    }
+    .status-icon {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 16px;
+      background-color: #1f242d;
+      border: 1px solid #766018;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fad734;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #ffffff;
+      letter-spacing: -0.015em;
+    }
+    p {
+      font-size: 14px;
+      color: #d1d5db;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .btn-retry {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #fad734;
+      color: #000000;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+      width: 100%;
+    }
+    .btn-retry:hover {
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <header class="titlebar" data-tauri-drag-region>
+    <div class="titlebar-brand" data-tauri-drag-region>
+      <div class="titlebar-monogram">FB</div>
+      <span>FBUploadPro</span>
+    </div>
+    <div class="titlebar-controls" data-tauri-drag-region="false">
+      <button type="button" class="window-btn" id="btn-minimize" aria-label="Minimize window">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect y="4.5" width="10" height="1"></rect></svg>
+      </button>
+      <button type="button" class="window-btn" id="btn-maximize" aria-label="Maximize or restore window">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="1.5" y="1.5" width="7" height="7"></rect></svg>
+      </button>
+      <button type="button" class="window-btn close" id="btn-close" aria-label="Close window">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"></path></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="content">
+    <div class="card">
+      <div class="status-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      </div>
+      <h1>Unable to Connect</h1>
+      <p>We could not establish a connection to the FBUploadPro workspace. Please verify your network connection and try again.</p>
+      <button type="button" class="btn-retry" id="btn-retry">Retry Connection</button>
+    </div>
+  </main>
+
+  <script>
+    async function invokeAction(action) {
+      try {
+        if (window.__TAURI_INTERNALS__?.invoke) {
+          await window.__TAURI_INTERNALS__.invoke('handle_window_action', { action });
+        } else if (window.__TAURI__?.core?.invoke) {
+          await window.__TAURI__.core.invoke('handle_window_action', { action });
+        }
+      } catch (err) {
+        console.warn('Action failed', err);
+      }
+    }
+    document.getElementById('btn-minimize').addEventListener('click', () => invokeAction('minimize'));
+    document.getElementById('btn-maximize').addEventListener('click', () => invokeAction('toggle_maximize'));
+    document.getElementById('btn-close').addEventListener('click', () => invokeAction('close'));
+    document.getElementById('btn-retry').addEventListener('click', () => window.location.reload());
+  </script>
+</body>
+</html>

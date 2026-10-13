@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import { DesktopTitleBar } from '@/components/desktop';
 
 export const metadata: Metadata = {
   title: 'FBUploadPro',
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <DesktopTitleBar />
         <main>{children}</main>
       </body>
     </html>
