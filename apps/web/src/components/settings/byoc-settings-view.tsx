@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, STATUS_SIGNALS } from '@/lib/theme';
+import { StatusDot } from '@/components/ui';
 import {
   MODAL_BACKDROP_STYLE,
   MODAL_CONTAINER_STYLE,
@@ -25,17 +26,20 @@ function getStatusDetails(status: BYOCStatus) {
   if (status === 'valid') {
     return {
       label: 'Verified & Connected',
+      statusType: 'operational' as const,
       signal: STATUS_SIGNALS.operational,
     };
   }
   if (status === 'invalid') {
     return {
       label: 'Verification Failed',
+      statusType: 'critical' as const,
       signal: STATUS_SIGNALS.critical,
     };
   }
   return {
     label: 'Unverified Credentials',
+    statusType: 'queued' as const,
     signal: STATUS_SIGNALS.queued,
   };
 }
@@ -581,36 +585,11 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
             </p>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              padding: `4px ${SPACING.sm}`,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.full,
-              flexShrink: 0,
-            }}
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: statusInfo.signal.color,
-                boxShadow: statusInfo.signal.halo,
-              }}
+          <div data-testid="byoc-status-indicator" style={{ flexShrink: 0 }}>
+            <StatusDot
+              status={statusInfo.statusType}
+              label={statusInfo.label}
             />
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              {statusInfo.label}
-            </span>
           </div>
         </div>
 

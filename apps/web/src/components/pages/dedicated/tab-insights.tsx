@@ -405,7 +405,7 @@ export function PageTabInsights({
                         <stop offset="95%" stopColor={PALETTE.primary} stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={`var(--border-subtle, ${THEME.default.borders.hairline})`} />
                     <XAxis
                       dataKey="date"
                       tickFormatter={formatChartDate}
@@ -513,7 +513,7 @@ export function PageTabInsights({
                           width: '100%',
                           height: '4px',
                           backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                          borderRadius: RADII.full,
+                          borderRadius: RADII.xs,
                           overflow: 'hidden',
                         }}
                       >
@@ -522,7 +522,7 @@ export function PageTabInsights({
                             width: `${pct}%`,
                             height: '100%',
                             backgroundColor: PALETTE.primary,
-                            borderRadius: RADII.full,
+                            borderRadius: RADII.xs,
                           }}
                         />
                       </div>
@@ -587,7 +587,7 @@ export function PageTabInsights({
                           width: '100%',
                           height: '4px',
                           backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                          borderRadius: RADII.full,
+                          borderRadius: RADII.xs,
                           overflow: 'hidden',
                         }}
                       >
@@ -596,7 +596,7 @@ export function PageTabInsights({
                             width: `${geo.percentage}%`,
                             height: '100%',
                             backgroundColor: PALETTE.accent4,
-                            borderRadius: RADII.full,
+                            borderRadius: RADII.xs,
                           }}
                         />
                       </div>
