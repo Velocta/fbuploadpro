@@ -6,7 +6,10 @@ import {
   OAuthStatePayloadSchema,
   signOAuthState,
   verifyOAuthState,
+  signMagicLinkToken,
+  verifyMagicLinkToken,
 } from '../src/domain/oauth';
+import { UnauthorizedError } from '../src/errors/domain-error';
 
 describe('Facebook OAuth Contracts & State Signing', () => {
   const secret = 'test-secret-key-for-oauth-state-signing-32chars';
@@ -41,6 +44,42 @@ describe('Facebook OAuth Contracts & State Signing', () => {
 
     await expect(verifyOAuthState(tampered, secret)).rejects.toThrow(
       /signature/i
+    );
+  });
+
+  it('should reject invalid hex formats with UnauthorizedError', async () => {
+    const signedToken = await signOAuthState(validStatePayload, secret);
+    const [payload] = signedToken.split('.');
+
+    // Odd-length hex signature
+    await expect(verifyOAuthState(`${payload}.abc`, secret)).rejects.toThrow(
+      UnauthorizedError
+    );
+
+    // Non-hex characters in signature
+    await expect(
+      verifyOAuthState(`${payload}.zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz`, secret)
+    ).rejects.toThrow(UnauthorizedError);
+  });
+
+  it('should sign and verify MagicLinkToken successfully', async () => {
+    const magicPayload = {
+      tenantSubdomain: 'agency',
+      userId: '123e4567-e89b-12d3-a456-426614174000',
+      nonce: 'magic_nonce_12345678',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 900,
+    };
+    const signedMagic = await signMagicLinkToken(magicPayload, secret);
+    const verifiedMagic = await verifyMagicLinkToken(signedMagic, secret);
+    expect(verifiedMagic.tenantSubdomain).toBe('agency');
+    expect(verifiedMagic.userId).toBe(magicPayload.userId);
+
+    // Tampered magic link
+    const [payload, sig] = signedMagic.split('.');
+    const tampered = `${payload}.${sig.slice(0, -1)}${sig.endsWith('0') ? '1' : '0'}`;
+    await expect(verifyMagicLinkToken(tampered, secret)).rejects.toThrow(
+      UnauthorizedError
     );
   });
 

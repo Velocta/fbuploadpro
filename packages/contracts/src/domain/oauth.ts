@@ -128,6 +128,21 @@ async function signSignedEnvelope(
   return `${encodedPayload}.${signatureHex}`;
 }
 
+function hexToBytes(hex: string, tokenType: string): Uint8Array {
+  if (hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) {
+    throw new UnauthorizedError(`Invalid ${tokenType} signature format`);
+  }
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = Number.parseInt(hex.slice(i, i + 2), 16);
+    if (Number.isNaN(byte)) {
+      throw new UnauthorizedError(`Invalid ${tokenType} signature format`);
+    }
+    bytes[i / 2] = byte;
+  }
+  return bytes;
+}
+
 async function verifySignedEnvelope(
   token: string,
   secret: string,
@@ -142,6 +157,8 @@ async function verifySignedEnvelope(
     throw new ValidationError(`Invalid ${tokenType} format`);
   }
 
+  const signatureBytes = hexToBytes(providedSignature, tokenType);
+
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
 
@@ -150,17 +167,22 @@ async function verifySignedEnvelope(
     keyData,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
-    ['sign']
+    ['verify']
   );
 
-  const expectedSignatureBuffer = await crypto.subtle.sign(
-    'HMAC',
-    cryptoKey,
-    encoder.encode(encodedPayload)
-  );
-  const expectedSignatureHex = bufferToHex(expectedSignatureBuffer);
+  let isValid = false;
+  try {
+    isValid = await crypto.subtle.verify(
+      'HMAC',
+      cryptoKey,
+      signatureBytes as unknown as BufferSource,
+      encoder.encode(encodedPayload)
+    );
+  } catch {
+    isValid = false;
+  }
 
-  if (expectedSignatureHex !== providedSignature) {
+  if (!isValid) {
     throw new UnauthorizedError(`${tokenType} signature verification failed`);
   }
 
