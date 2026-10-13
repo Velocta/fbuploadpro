@@ -1,20 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   getSessionSecret,
+  getTokenEncryptionKey,
   verifySessionToken,
   canAccessTenant,
   decryptToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
-
-function getEncryptionKey(): string {
-  return (
-    process.env.FB_ENCRYPTION_MASTER_KEY ||
-    process.env.TOKEN_ENCRYPTION_KEY ||
-    '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'
-  );
-}
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -85,7 +78,7 @@ export async function POST(
 
   let decryptedSecret: string;
   try {
-    decryptedSecret = await decryptToken(credentials.encrypted_fb_app_secret, getEncryptionKey());
+    decryptedSecret = await decryptToken(credentials.encrypted_fb_app_secret, getTokenEncryptionKey());
   } catch (_e) {
     return NextResponse.json(
       {

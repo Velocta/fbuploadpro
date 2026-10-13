@@ -126,18 +126,19 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 
 ### Quality & Governance
 - Follow coding standards in `.agents/rules/coding-standards.md`.
-- Follow Git guidelines in `.agents/rules/git-workflow.md` (Atomic PRs <150–200 LoC).
-- **Mandatory User Approval Gate Before Committing**: The agent MUST NEVER create a git commit without explicitly presenting the planned commit and receiving direct, unambiguous user approval first.
-- **Mandatory User Approval Gate Before Creating a Pull Request**: The agent MUST NEVER create or open a Pull Request (`gh pr create`) without explicitly asking the user and receiving their direct, unambiguous confirmation first.
+- **User Approval Gates & GitHub Issues Autonomous Workflow**:
+  - **Standard Feature Development**: Requires explicit user approval before committing, creating PRs, or merging.
+  - **GitHub Issues Resolution Exemption**: When resolving GitHub issues (e.g. audit-fix, bug fixes, or backlog issues), the agent is explicitly authorized to autonomously create commits, open Pull Requests, and merge PRs without asking for permission.
+  - **Non-Negotiable Quality & SonarQube Gate**: Before merging any PR, the agent MUST verify that all local quality gates (`pnpm turbo run build lint typecheck test` and `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml` with 100% success and 0 errors) and all remote CI checks, including SonarQube Cloud analysis, pass completely.
 - **Deferred Test Verification Until Commit**: Automated tests do NOT need to be run on intermediate message turns or conversational edits. Tests are only run when preparing to commit code changes, or when explicitly requested by the user.
 - Quality Gate: `pnpm turbo run build lint typecheck test` and `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml` must pass with 100% success and 0 errors before PR creation.
 - **Deployment Failure Transparency & Diagnosis**: Whenever a deployment, release pipeline, or CI/CD workflow fails, the agent MUST immediately inspect the execution logs (e.g., via `gh run view --log-failed` or deployment service logs), clearly explain to the user the exact root cause of why it failed (e.g., missing secret, schema migration error, API quota, timeout, or build failure), and outline concrete remediation steps or autonomously apply the fix.
 - **Continuous Constitution & Documentation Synchronization**:
   - **On User Directives & Project Insights**: Whenever the user shares new details, business logic, constraints, architectural choices, or domain rules about the project, the agent MUST immediately update `.specify/memory/constitution.md` (for principles & governance) and corresponding documentation under `docs/` (e.g., `docs/foundational-knowledge.md`). Never leave project knowledge isolated in chat history.
   - **Single Combined PR Protocol (Never Separate Docs PRs)**: All documentation updates under `docs/` (e.g., updating roadmap milestone statuses in `docs/foundational-knowledge.md`, architectural knowledge, API contracts, database schemas, or deployment guides) MUST ALWAYS be included and committed directly in the SAME Pull Request as the feature, fix, or code modifications. AI agents and engineers MUST NEVER create separate, standalone Pull Requests solely for documentation synchronization. Code and documentation must always ship together atomically in one PR.
-- **Mandatory Human Approval Gate Before Merging**:
-  - The agent MUST NEVER merge any Pull Request into `main` without explicitly asking the user and receiving their direct, unambiguous approval first.
-  - This rule is non-negotiable and applies to ALL PRs without exception—whether frontend, backend, database migrations, devops, or documentation.
+- **Merging Protocol**:
+  - For standard feature workflows, explicit user confirmation is required prior to merging into `main`.
+  - For GitHub issues, autonomous merging (`gh pr merge --squash --delete-branch`) is permitted once all quality and SonarQube checks pass cleanly.
 - **Strict Theme & Design System Authority (`apps/web/src/lib/theme.ts`)**:
   - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) and [`DESIGN.md`](DESIGN.md).
   - All components MUST import and reference styling properties from `@web/lib/theme` or CSS variables (`globals.css`).

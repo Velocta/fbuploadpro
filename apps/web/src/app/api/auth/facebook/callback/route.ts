@@ -7,6 +7,7 @@ import {
   type FacebookUserProfileResponse,
   FacebookUserProfileResponseSchema,
   getSessionSecret,
+  getTokenEncryptionKey,
   type OAuthStatePayload,
   verifyOAuthState,
   type DatabaseClient,
@@ -237,7 +238,7 @@ function buildPostConnectRedirect(
 
 function getCallbackEnvConfig() {
   const sessionSecret = getSessionSecret();
-  const encryptionKey = process.env.TOKEN_ENCRYPTION_KEY || '';
+  const encryptionKey = getTokenEncryptionKey();
   const appId = process.env.FACEBOOK_APP_ID || '';
   const appSecret = process.env.FACEBOOK_APP_SECRET || '';
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';

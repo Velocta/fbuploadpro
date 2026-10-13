@@ -3,6 +3,7 @@ import {
   decryptToken,
   encryptToken,
   getSessionSecret,
+  getTokenEncryptionKey,
   ImportPagesRequestSchema,
   ImportPagesResponseSchema,
   verifySessionToken,
@@ -18,7 +19,7 @@ export async function handleImportPages(
   dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
-  const encryptionKey = process.env.TOKEN_ENCRYPTION_KEY || '';
+  const encryptionKey = getTokenEncryptionKey();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;

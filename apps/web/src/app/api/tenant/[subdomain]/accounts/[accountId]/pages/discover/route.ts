@@ -3,6 +3,7 @@ import {
   decryptToken,
   DiscoverPagesResponseSchema,
   getSessionSecret,
+  getTokenEncryptionKey,
   verifySessionToken,
   type DatabaseClient,
   type Database,
@@ -17,7 +18,7 @@ export async function handleDiscoverPages(
   dbClient?: DatabaseClient | SupabaseClient<Database>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
-  const encryptionKey = process.env.TOKEN_ENCRYPTION_KEY || '';
+  const encryptionKey = getTokenEncryptionKey();
 
   // 1. Session auth guard
   const sessionCookie = request.cookies.get('fbup_session')?.value;

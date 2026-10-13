@@ -1,4 +1,40 @@
-import { UnauthorizedError, ValidationError } from '../errors/domain-error.js';
+import {
+  DomainError,
+  DomainErrorCode,
+  UnauthorizedError,
+  ValidationError,
+} from '../errors/domain-error.js';
+
+const DEV_FALLBACK_ENCRYPTION_KEY =
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+/**
+ * Resolves the 256-bit symmetric encryption key used for securing tokens and secrets at rest.
+ * Checks TOKEN_ENCRYPTION_KEY first, then FB_ENCRYPTION_MASTER_KEY.
+ *
+ * @param env - Optional environment dictionary; defaults to process.env if available.
+ * @returns 256-bit encryption key string (64 hex characters or 32 bytes).
+ * @throws DomainError if key is missing in production (NODE_ENV === 'production').
+ */
+export function getTokenEncryptionKey(env?: Record<string, string | undefined>): string {
+  const globalEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const envObj = env ?? globalEnv ?? {};
+  const nodeEnv = envObj.NODE_ENV;
+  const key = envObj.TOKEN_ENCRYPTION_KEY || envObj.FB_ENCRYPTION_MASTER_KEY;
+
+  if (key && key.trim().length > 0) {
+    return key.trim();
+  }
+
+  if (nodeEnv === 'production') {
+    throw new DomainError(
+      DomainErrorCode.INTERNAL_ERROR,
+      'TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required in production environment'
+    );
+  }
+
+  return DEV_FALLBACK_ENCRYPTION_KEY;
+}
 
 function hexToBytes(hex: string): Uint8Array {
   if (hex.length % 2 !== 0) {
