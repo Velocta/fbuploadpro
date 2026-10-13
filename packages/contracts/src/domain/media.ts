@@ -138,7 +138,7 @@ export const BatchMediaRequestSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('caption'),
     mediaIds: z.array(z.string().uuid()).min(1).max(500),
-    captionText: z.string().max(2200).nullable(),
+    captionText: z.string().max(5000).nullable(),
   }),
 ]);
 

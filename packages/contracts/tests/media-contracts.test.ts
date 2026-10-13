@@ -202,6 +202,20 @@ describe('Media Domain Contracts', () => {
       });
       expect(captionRes.success).toBe(true);
 
+      const longCaption5000 = BatchMediaRequestSchema.safeParse({
+        action: 'caption',
+        mediaIds: ['11111111-1111-4111-a111-111111111111'],
+        captionText: 'a'.repeat(5000),
+      });
+      expect(longCaption5000.success).toBe(true);
+
+      const tooLongCaption5001 = BatchMediaRequestSchema.safeParse({
+        action: 'caption',
+        mediaIds: ['11111111-1111-4111-a111-111111111111'],
+        captionText: 'a'.repeat(5001),
+      });
+      expect(tooLongCaption5001.success).toBe(false);
+
       const batchResp = BatchMediaResponseSchema.safeParse({
         success: true,
         action: 'move',
