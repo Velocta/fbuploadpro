@@ -53,10 +53,21 @@ export function CreateWorkspaceModal({
         body: JSON.stringify({ name: name.trim() }),
       });
 
-      const data = await response.json();
+      let data: { error?: string; workspace?: { id: string; name: string; subdomain: string } } = {};
+      try {
+        data = await response.json();
+      } catch {
+        // Response was not JSON
+      }
 
       if (!response.ok) {
-        setError(data.error || 'Failed to create workspace.');
+        setError(data.error || 'Server error while creating workspace. Please try again.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!data.workspace?.subdomain) {
+        setError('Server returned an invalid workspace response.');
         setIsSubmitting(false);
         return;
       }

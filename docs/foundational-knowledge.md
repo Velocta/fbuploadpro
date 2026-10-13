@@ -394,10 +394,9 @@ fbuploadpro/
   * Switching workspaces invokes `POST /api/workspaces/switch`, securely re-signing the `fbup_session` cookie to point to the selected workspace subdomain.
 
 ### 12.2 Dedicated Settings Hub (`/tenant/[subdomain]/settings`)
-* Dedicated layout and sub-navigation with three core sections:
+* Dedicated layout and sub-navigation with two core sections:
   1. `General`: Workspace name, subdomain display, created timestamp, owner details.
   2. `BYOC Facebook App`: Bring Your Own Credentials control center.
-  3. `Audit Logs`: Security and configuration audit trail.
 * Accessible via the workspace sidebar navigation, workspace switcher menu, and user menu.
 
 ### 12.3 Strict BYOC (Bring Your Own Credentials) Facebook Architecture
@@ -408,10 +407,11 @@ fbuploadpro/
   * Raw secret is NEVER returned over client-facing APIs (`hasSecret: boolean`).
   * Secret field in settings UI is masked (`••••••••`) with a show/hide toggle.
 * **Developer Setup Assistance**:
-  * Webhook Verify Token configuration.
   * 1-click copy helpers for authorized OAuth Redirect URIs (`https://app.fbuploadpro.com/api/auth/facebook/callback`) and Webhook Callback URLs.
   * Clear, user-friendly guidance for configuring Meta Developer App settings.
-* **Connection Diagnostics**:
-  * Direct "Test App Connection" button verifying App ID and Secret validity against `https://graph.facebook.com/v26.0/{app_id}?access_token={app_id}|{app_secret}`.
+* **Connection Diagnostics & Automated Verification**:
+  * Automatically tests App ID and Secret validity on save against Meta Graph API `https://graph.facebook.com/v26.0/{app_id}?access_token={app_id}|{app_secret}`.
+  * Prompts operator with a failure advisory dialog (`ByocTestFailedModal`) if Graph API validation fails, highlighting credential issues immediately.
+  * Direct manual "Test Connection" button for on-demand verification.
   * Live status indicator dot (`valid`, `invalid`, `unverified`) with micro-halos.
 

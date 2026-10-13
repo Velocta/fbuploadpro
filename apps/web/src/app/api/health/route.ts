@@ -33,18 +33,32 @@ export async function probeHealth(
 
     try {
       await Promise.race([probePromise, timeoutPromise]);
-    } finally {
-      clearTimeout(timerId!);
+      return {
+        statusCode: 200,
+        payload: {
+          status: 'ok',
+          timestamp,
+          database: 'connected',
+        },
+      };
+    } catch (pgError) {
+      const { getSupabaseClient } = await import('@/lib/supabase-auth');
+      const supabase = getSupabaseClient();
+      if (supabase) {
+        const { error: sbError } = await supabase.from('workspaces').select('id').limit(1);
+        if (!sbError) {
+          return {
+            statusCode: 200,
+            payload: {
+              status: 'ok',
+              timestamp,
+              database: 'connected',
+            },
+          };
+        }
+      }
+      throw pgError;
     }
-
-    return {
-      statusCode: 200,
-      payload: {
-        status: 'ok',
-        timestamp,
-        database: 'connected',
-      },
-    };
   } catch (error) {
     // Stripped of internal connection credentials and stack traces for external clients
     console.error('Diagnostic probe failure:', error instanceof Error ? error.message : error);

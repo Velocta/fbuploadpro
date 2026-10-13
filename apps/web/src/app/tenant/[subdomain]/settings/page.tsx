@@ -5,9 +5,8 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { THEME, PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
-import { AuditLogsView } from '@/components/settings/audit-logs-view';
 
-type SettingsTab = 'general' | 'byoc' | 'audit';
+type SettingsTab = 'general' | 'byoc';
 
 export default function WorkspaceSettingsPage() {
   const params = useParams();
@@ -17,12 +16,12 @@ export default function WorkspaceSettingsPage() {
   const subdomain = (params?.subdomain as string) || '';
   const initialTab = (searchParams.get('tab') as SettingsTab) || 'general';
   const [activeTab, setActiveTab] = useState<SettingsTab>(
-    initialTab === 'byoc' || initialTab === 'audit' ? initialTab : 'general'
+    initialTab === 'byoc' ? 'byoc' : 'general'
   );
 
   useEffect(() => {
     const tabParam = searchParams.get('tab') as SettingsTab | null;
-    if (tabParam === 'byoc' || tabParam === 'audit' || tabParam === 'general') {
+    if (tabParam === 'byoc' || tabParam === 'general') {
       setActiveTab(tabParam);
     }
   }, [searchParams]);
@@ -35,7 +34,6 @@ export default function WorkspaceSettingsPage() {
   const tabs: Array<{ id: SettingsTab; label: string }> = [
     { id: 'general', label: 'General' },
     { id: 'byoc', label: 'BYOC Facebook App' },
-    { id: 'audit', label: 'Audit Logs' },
   ];
 
   return (
@@ -70,7 +68,7 @@ export default function WorkspaceSettingsPage() {
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          Configure environment preferences, Bring Your Own Credentials (BYOC), and access logs.
+          Configure environment preferences and Bring Your Own Credentials (BYOC).
         </p>
       </div>
 
@@ -130,9 +128,6 @@ export default function WorkspaceSettingsPage() {
         )}
         {activeTab === 'byoc' && (
           <BYOCSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'audit' && (
-          <AuditLogsView />
         )}
       </div>
     </div>
