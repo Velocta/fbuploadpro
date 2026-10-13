@@ -94,4 +94,21 @@ describe('Supabase Migrations Convention Suite', () => {
     expect(content).toContain('ADD COLUMN IF NOT EXISTS starting_followers INT NOT NULL DEFAULT 0 CHECK (starting_followers >= 0)');
     expect(content).toContain('SET starting_followers = current_followers');
   });
+
+  it('validates workspace_byoc_credentials and removal of users.subdomain migrations', () => {
+    const files = fs.readdirSync(supabaseMigrationsDir);
+    const byocMigration = files.find(f => f.includes('workspace_byoc_credentials.sql'));
+    expect(byocMigration).toBeDefined();
+
+    const byocContent = fs.readFileSync(path.join(supabaseMigrationsDir, byocMigration!), 'utf8');
+    expect(byocContent).toContain('CREATE TABLE IF NOT EXISTS workspaces');
+    expect(byocContent).toContain('CREATE TABLE IF NOT EXISTS workspace_byoc_credentials');
+
+    const removeSubdomainMigration = files.find(f => f.includes('remove_users_subdomain_and_auto_workspaces.sql'));
+    expect(removeSubdomainMigration).toBeDefined();
+
+    const removeContent = fs.readFileSync(path.join(supabaseMigrationsDir, removeSubdomainMigration!), 'utf8');
+    expect(removeContent).toContain('ALTER TABLE users DROP COLUMN IF EXISTS subdomain');
+    expect(removeContent).toContain('CREATE INDEX IF NOT EXISTS idx_workspaces_owner_created');
+  });
 });

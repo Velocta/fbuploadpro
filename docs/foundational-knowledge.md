@@ -383,11 +383,13 @@ fbuploadpro/
 ## 12. Multi-Workspace Architecture, Settings Hub & Strict BYOC Facebook Credentials (Spec 037)
 
 ### 12.1 Multi-Workspace Model & Switcher
-* **One-to-Many Workspace Ownership**: Users (`users.id`) can own multiple discrete workspaces (`workspaces.owner_id = users.id`). Each workspace possesses a unique subdomain slug (`subdomain`), human-readable name, and isolated resources (connected accounts, pages, media, queues).
+* **One-to-Many Workspace Ownership & Subdomain Authority**: Users (`users.id`) can own multiple discrete workspaces (`workspaces.owner_id = users.id`). The `workspaces` table is the single source of truth for all subdomain routing; `users.subdomain` has been dropped. Each workspace possesses a unique subdomain slug (`subdomain`), human-readable name, and isolated resources (connected accounts, pages, media, queues).
+* **Automatic Signup Workspace Provisioning**: When a user registers, their initial default workspace is automatically provisioned using their display name and unique email-derived subdomain slug (`name = user.name || email_prefix`, `subdomain = derived unique slug`).
+* **Auto-Generated Workspace Subdomains (Zero Manual Slug Fatigue)**: When creating additional workspaces, the user is only prompted for the workspace name. The workspace subdomain is automatically generated server-side by directly concatenating the user's primary/initial base subdomain with a 4-letter random lowercase alphabetical string (`[main-subdomain][4-random-letters]`, e.g. `acmexyza`). Uniqueness against the `workspaces` table is guaranteed via collision-detection retry loops.
 * **Shadcn Sidebar Switcher (`WorkspaceSwitcher`)**: Located in `SidebarHeader` of the workspace shell, implementing the canonical shadcn `TeamSwitcher` pattern:
   * Displays the active workspace monogram avatar, name, subdomain slug, and `ChevronsUpDown` toggle icon.
   * Clicking opens an unclipped floating dropdown popover listing the user's workspaces with active checkmark indicator.
-  * Includes a "+ Create Workspace" action triggering a creation modal (validating name and unique subdomain slug).
+  * Includes a "+ Create Workspace" action triggering a creation modal (requesting only the workspace name).
   * Includes a direct "Workspace Settings" action link.
   * Switching workspaces invokes `POST /api/workspaces/switch`, securely re-signing the `fbup_session` cookie to point to the selected workspace subdomain.
 

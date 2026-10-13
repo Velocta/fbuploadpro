@@ -39,12 +39,12 @@ So that I can keep assets, publishing queues, and credentials completely isolate
   - **When** the user clicks an inactive workspace in the dropdown,
   - **Then** the client invokes `POST /api/workspaces/switch` with the selected `subdomain`, which updates the user's `fbup_session` cookie to the new workspace subdomain and redirects the user to the target workspace root.
 
-- **Scenario 1.4: Create Workspace Modal**
+- **Scenario 1.4: Create Workspace Modal & Auto-Generated Subdomain**
   - **Given** the user clicks "Create Workspace",
   - **When** the modal opens,
-  - **Then** the user can enter a Workspace Name and a unique Subdomain slug (with live slug sanitization and preview).
+  - **Then** the user is prompted only for the **Workspace Name** (subdomain input is omitted to eliminate manual slug fatigue).
   - **When** the form is submitted,
-  - **Then** the backend creates the record in `workspaces`, provisions initial default settings, issues an updated session cookie, and navigates to the new workspace.
+  - **Then** the backend automatically creates a unique workspace subdomain by directly concatenating the user's primary/main workspace base subdomain with a 4-letter random lowercase alphabetical string (`[main-subdomain][4-random-letters]`, e.g. `acmexyza`), creates the record in `workspaces`, issues an updated session cookie, and navigates to the new workspace.
 
 ---
 

@@ -49,7 +49,7 @@ describe('WorkspaceSwitcher & CreateWorkspaceModal (Spec 037)', () => {
     expect(html).toContain('m7 9 5-5 5 5');
   });
 
-  it('renders CreateWorkspaceModal dialog with input fields, slug preview, and action buttons', () => {
+  it('renders CreateWorkspaceModal dialog with workspace name input, auto-creation notice, and action buttons', () => {
     const handleClose = vi.fn();
     const { hasAttribute, hasText, html } = render(
       <CreateWorkspaceModal isOpen={true} onClose={handleClose} />
@@ -59,8 +59,7 @@ describe('WorkspaceSwitcher & CreateWorkspaceModal (Spec 037)', () => {
     expect(hasAttribute('aria-modal', 'true')).toBe(true);
     expect(hasText('Create Workspace')).toBe(true);
     expect(hasText('Workspace Name')).toBe(true);
-    expect(hasText('Workspace Subdomain')).toBe(true);
-    expect(hasText('.fbuploadpro.com')).toBe(true);
+    expect(hasText('A unique subdomain will be automatically created')).toBe(true);
     expect(hasAttribute('data-testid', 'create-workspace-submit')).toBe(true);
     expect(html).toContain('Cancel');
   });

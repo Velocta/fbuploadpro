@@ -44,7 +44,7 @@ export const UserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email().max(255),
   name: z.string().max(100).nullable().optional(),
-  subdomain: SubdomainSchema,
+  subdomain: SubdomainSchema.optional(),
   role: UserRoleSchema.default('user'),
   status: UserStatusSchema.default('active'),
   createdAt: z.coerce.date(),

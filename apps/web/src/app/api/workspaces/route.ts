@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   CreateWorkspaceRequestSchema,
+  generateWorkspaceSubdomain,
   verifySessionToken,
   signSessionToken,
   type SessionPayload,
@@ -95,20 +96,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { name, subdomain } = parseResult.data;
   const db = getDbClient();
 
-  // Check if subdomain is already taken across workspaces or users
-  const conflictCheck = (await db.query(
-    `SELECT id FROM workspaces WHERE subdomain = $1
-     UNION
-     SELECT id FROM users WHERE subdomain = $1
-     LIMIT 1`,
-    [subdomain]
-  )) as Array<{ id: string }>;
+  let targetSubdomain = subdomain;
+  if (!targetSubdomain) {
+    // Resolve user's primary/first workspace
+    const primaryWsRows = (await db.query(
+      `SELECT subdomain FROM workspaces WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
+      [session.userId]
+    )) as Array<{ subdomain: string }>;
+    const mainSubdomain = primaryWsRows?.[0]?.subdomain || session.subdomain || 'ws';
 
-  if (conflictCheck && conflictCheck.length > 0) {
-    return NextResponse.json(
-      { error: 'Subdomain already in use. Please select a different subdomain.' },
-      { status: 409 }
-    );
+    // Auto-generate unique subdomain using direct concatenation: [main-subdomain][4-random-letters]
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = generateWorkspaceSubdomain(mainSubdomain);
+      const existing = (await db.query(
+        `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
+        [candidate]
+      )) as Array<{ id: string }>;
+      if (!existing || existing.length === 0) {
+        targetSubdomain = candidate;
+        break;
+      }
+    }
+
+    if (!targetSubdomain) {
+      return NextResponse.json(
+        { error: 'Unable to auto-generate a unique workspace subdomain. Please try again.' },
+        { status: 500 }
+      );
+    }
+  } else {
+    // Check if explicitly provided subdomain is already taken
+    const conflictCheck = (await db.query(
+      `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
+      [targetSubdomain]
+    )) as Array<{ id: string }>;
+
+    if (conflictCheck && conflictCheck.length > 0) {
+      return NextResponse.json(
+        { error: 'Subdomain already in use. Please select a different subdomain.' },
+        { status: 409 }
+      );
+    }
   }
 
   // Insert workspace
@@ -116,7 +144,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     `INSERT INTO workspaces (owner_id, name, subdomain)
      VALUES ($1, $2, $3)
      RETURNING id, owner_id AS "ownerId", name, subdomain, created_at AS "createdAt", updated_at AS "updatedAt"`,
-    [session.userId, name, subdomain]
+    [session.userId, name, targetSubdomain]
   )) as Array<{
     id: string;
     ownerId: string;

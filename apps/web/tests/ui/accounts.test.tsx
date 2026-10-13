@@ -17,6 +17,8 @@ import {
 } from '@/components/accounts/connect-account-modal';
 import {
   AccountsFilterBar,
+  ByocConfigPromptModal,
+  ByocRequiredBanner,
   filterAccountsList,
   resolveOAuthRedirectNotice,
   sortAccountsExpiredFirst,
@@ -518,6 +520,70 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(hasText('All')).toBe(true);
       expect(hasText('Active')).toBe(true);
       expect(hasText('Expired')).toBe(true);
+    });
+  });
+
+  describe('BYOC Check & Configuration Flow (Spec 037)', () => {
+    it('ByocRequiredBanner renders unboxed warning banner with direct link to Workspace Settings BYOC tab', () => {
+      const { hasAttribute, hasText, getAttribute } = render(
+        <ByocRequiredBanner subdomain="acme" />
+      );
+
+      expect(hasAttribute('data-testid', 'byoc-required-banner')).toBe(true);
+      expect(
+        hasText('Facebook App credentials (BYOC) are required before connecting accounts')
+      ).toBe(true);
+      expect(hasAttribute('data-testid', 'byoc-configure-link')).toBe(true);
+      expect(getAttribute('href')).toBe('/tenant/acme/settings?tab=byoc');
+    });
+
+    it('ByocConfigPromptModal renders advisory modal when open is true with link to settings', () => {
+      const onClose = vi.fn();
+      const openModal = render(
+        <ByocConfigPromptModal
+          subdomain="acme"
+          open={true}
+          onClose={onClose}
+        />
+      );
+
+      expect(openModal.hasAttribute('data-testid', 'byoc-config-prompt-modal')).toBe(true);
+      expect(openModal.hasAttribute('data-testid', 'byoc-prompt-title')).toBe(true);
+      expect(openModal.hasText('Facebook App Credentials Required')).toBe(true);
+      expect(
+        openModal.hasText(
+          'Before connecting Facebook accounts, your workspace must configure its Facebook App ID and App Secret.'
+        )
+      ).toBe(true);
+      expect(openModal.hasAttribute('data-testid', 'byoc-prompt-cancel-btn')).toBe(true);
+      expect(openModal.hasAttribute('data-testid', 'byoc-prompt-settings-link')).toBe(true);
+      expect(openModal.getAttribute('href')).toBe('/tenant/acme/settings?tab=byoc');
+
+      const closedModal = render(
+        <ByocConfigPromptModal
+          subdomain="acme"
+          open={false}
+          onClose={onClose}
+        />
+      );
+      expect(closedModal.hasAttribute('data-testid', 'byoc-config-prompt-modal')).toBe(false);
+      expect(closedModal.html).toBe('');
+    });
+
+    it('resolveOAuthRedirectNotice resolves credentials_required error into descriptive user warning', () => {
+      const notice = resolveOAuthRedirectNotice(
+        new URLSearchParams({
+          error: 'credentials_required',
+          tab: 'byoc',
+        })
+      );
+
+      expect(notice).not.toBeNull();
+      expect(notice?.notice.type).toBe('error');
+      expect(notice?.notice.message).toBe(
+        'Facebook App credentials (BYOC) are required before connecting accounts. Please configure your App ID and Secret in Workspace Settings.'
+      );
+      expect(notice?.keysToRemove).toEqual(['error', 'tab']);
     });
   });
 });

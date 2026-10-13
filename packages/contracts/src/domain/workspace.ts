@@ -17,9 +17,30 @@ export const CreateWorkspaceRequestSchema = z.object({
     .trim()
     .min(2, 'Workspace name must be at least 2 characters')
     .max(100, 'Workspace name cannot exceed 100 characters'),
-  subdomain: SubdomainSchema,
+  subdomain: SubdomainSchema.optional(),
 });
 export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema>;
+
+const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
+
+export function generateRandomAlphabetString(length = 4): string {
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    const randomIndex = Math.floor(Math.random() * ALPHABET.length);
+    result += ALPHABET[randomIndex];
+  }
+  return result;
+}
+
+export function generateWorkspaceSubdomain(
+  mainSubdomain: string,
+  randomSuffix?: string
+): string {
+  const cleanMain = mainSubdomain.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const suffix = (randomSuffix || generateRandomAlphabetString(4)).toLowerCase().replace(/[^a-z]/g, '');
+  const trimmedBase = cleanMain.slice(0, 50 - suffix.length);
+  return `${trimmedBase}${suffix}`;
+}
 
 export const SwitchWorkspaceRequestSchema = z.object({
   subdomain: SubdomainSchema,

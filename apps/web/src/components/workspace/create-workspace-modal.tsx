@@ -13,31 +13,18 @@ export interface CreateWorkspaceModalProps {
   onSuccess?: ((workspace: { id: string; name: string; subdomain: string }) => void) | undefined;
 }
 
-function sanitizeSubdomainSlug(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 48);
-}
-
 export function CreateWorkspaceModal({
   isOpen,
   onClose,
   onSuccess,
 }: Readonly<CreateWorkspaceModalProps>) {
   const [name, setName] = useState('');
-  const [subdomain, setSubdomain] = useState('');
-  const [isManualSlug, setIsManualSlug] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setName('');
-      setSubdomain('');
-      setIsManualSlug(false);
       setIsSubmitting(false);
       setError(null);
     }
@@ -45,27 +32,14 @@ export function CreateWorkspaceModal({
 
   if (!isOpen) return null;
 
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setName(val);
-    if (!isManualSlug) {
-      setSubdomain(sanitizeSubdomainSlug(val));
-    }
-  };
-
-  const handleSubdomainChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setIsManualSlug(true);
-    setSubdomain(sanitizeSubdomainSlug(e.target.value));
-  };
-
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!name.trim()) {
       setError('Please provide a workspace name.');
       return;
     }
-    if (!subdomain.trim() || subdomain.length < 2) {
-      setError('Subdomain must be at least 2 characters long.');
+    if (name.trim().length < 2) {
+      setError('Workspace name must be at least 2 characters long.');
       return;
     }
 
@@ -76,7 +50,7 @@ export function CreateWorkspaceModal({
       const response = await fetch('/api/workspaces', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), subdomain: subdomain.trim() }),
+        body: JSON.stringify({ name: name.trim() }),
       });
 
       const data = await response.json();
@@ -196,9 +170,10 @@ export function CreateWorkspaceModal({
               type="text"
               placeholder="e.g. Acme Media"
               value={name}
-              onChange={handleNameChange}
+              onChange={(e) => setName(e.target.value)}
               disabled={isSubmitting}
               required
+              autoFocus
               style={{
                 width: '100%',
                 padding: `${SPACING.sm} ${SPACING.md}`,
@@ -211,60 +186,15 @@ export function CreateWorkspaceModal({
                 boxSizing: 'border-box',
               }}
             />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <label
-              htmlFor="ws-subdomain-input"
+            <p
               style={{
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
+                margin: `${SPACING.xs} 0 0 0`,
+                fontSize: '0.75rem',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
               }}
             >
-              Workspace Subdomain
-            </label>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                overflow: 'hidden',
-              }}
-            >
-              <input
-                id="ws-subdomain-input"
-                type="text"
-                placeholder="acme-media"
-                value={subdomain}
-                onChange={handleSubdomainChange}
-                disabled={isSubmitting}
-                required
-                style={{
-                  flex: 1,
-                  padding: `${SPACING.sm} ${SPACING.md}`,
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  fontSize: '0.875rem',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-              <span
-                style={{
-                  padding: `0 ${SPACING.md}`,
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  fontSize: '0.8125rem',
-                  userSelect: 'none',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                .fbuploadpro.com
-              </span>
-            </div>
+              A unique subdomain will be automatically created under your workspace group.
+            </p>
           </div>
 
           <div
@@ -286,7 +216,6 @@ export function CreateWorkspaceModal({
                 borderRadius: RADII.sm,
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
                 cursor: isSubmitting ? 'not-allowed' : 'pointer',
               }}
             >
@@ -294,20 +223,18 @@ export function CreateWorkspaceModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
               data-testid="create-workspace-submit"
+              disabled={isSubmitting || !name.trim()}
               style={{
                 padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: PALETTE.primary,
+                backgroundColor: `var(--btn-primary-bg, ${THEME.default.text.primary})`,
                 border: 'none',
                 borderRadius: RADII.sm,
-                color: PALETTE.background,
+                color: `var(--btn-primary-fg, ${THEME.default.surfaces.panel})`,
                 fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: isSubmitting || !name.trim() ? 'not-allowed' : 'pointer',
+                opacity: isSubmitting || !name.trim() ? 0.6 : 1,
               }}
             >
               {isSubmitting ? 'Creating...' : 'Create Workspace'}

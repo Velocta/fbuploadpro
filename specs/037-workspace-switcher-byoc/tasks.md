@@ -1,23 +1,24 @@
 # Tasks: Spec 037 - Workspace Switcher, Dedicated Settings Hub & Strict BYOC Facebook Credentials
 
 ## Status Summary
-- **Total Tasks**: 16
-- **Completed**: 16
+- **Total Tasks**: 17
+- **Completed**: 17
 - **Pending**: 0
 
 ---
 
 ## Phase 1: Substrate & Domain Contracts (Foundation)
 
-- [x] **Task 1.1: Database Migration for Workspaces & BYOC Credentials**
-  - Create `supabase/migrations/20261013110000_workspace_byoc_credentials.sql`.
+- [x] **Task 1.1: Database Migration for Workspaces, Single-Source Subdomain & BYOC Credentials**
+  - Create `supabase/migrations/20261013110000_workspace_byoc_credentials.sql` & `20261013120000_remove_users_subdomain_and_auto_workspaces.sql`.
   - Create `workspaces` table (`id`, `owner_id`, `name`, `subdomain`, `created_at`, `updated_at`).
-  - Add automatic backfill from `users` table (`INSERT INTO workspaces ... SELECT ... FROM users`).
+  - Add automatic backfill from `users` table into `workspaces`.
+  - Drop `users.subdomain` column, designating `workspaces` as the sole source of truth for subdomain routing.
   - Create `workspace_byoc_credentials` table with AES-encrypted secret column and uniqueness constraints.
   - Verification: `pnpm --filter @fbuploadpro/database test tests/supabase-migrations.test.ts`.
 
 - [x] **Task 1.2: Domain Contracts & Zod Schemas**
-  - Create `packages/contracts/src/domain/workspace.ts` with `WorkspaceItemSchema`, `CreateWorkspaceRequestSchema`, `SwitchWorkspaceRequestSchema`, `BYOCCredentialsViewSchema`, `SaveBYOCCredentialsRequestSchema`, `TestBYOCResponseSchema`.
+  - Create `packages/contracts/src/domain/workspace.ts` with `WorkspaceItemSchema`, `CreateWorkspaceRequestSchema` (optional subdomain for auto-generation), `generateWorkspaceSubdomain` (direct 4-letter concatenation), `SwitchWorkspaceRequestSchema`, `BYOCCredentialsViewSchema`, `SaveBYOCCredentialsRequestSchema`, `TestBYOCResponseSchema`.
   - Export from `packages/contracts/src/index.ts`.
   - Add unit tests in `packages/contracts/tests/workspace.test.ts`.
   - Verification: `pnpm --filter @fbuploadpro/contracts test tests/workspace.test.ts`.
@@ -27,13 +28,13 @@
 ## Phase 2: User Story 1 (P1) - Workspace Switcher & Multi-Workspace Lifecycle
 
 - [x] **Task 2.1: Workspaces List & Create API Endpoints**
-  - Create `apps/web/src/app/api/workspaces/route.ts` supporting `GET` (list owned workspaces) and `POST` (create workspace with unique subdomain validation).
+  - Create `apps/web/src/app/api/workspaces/route.ts` supporting `GET` (list owned workspaces) and `POST` (create workspace with auto-generated `[main-subdomain][4-random-letters]` unique subdomain).
   - Create `apps/web/src/app/api/workspaces/switch/route.ts` supporting `POST` (verify ownership, re-issue `fbup_session` cookie for chosen workspace).
   - Add error handling and audit logging.
 
 - [x] **Task 2.2: Create Workspace Modal Component**
   - Create `apps/web/src/components/workspace/create-workspace-modal.tsx`.
-  - Fields: Workspace Name, Subdomain slug with live sanitization and URL preview.
+  - Fields: Workspace Name only (subdomain input omitted; auto-generated server-side).
   - Follow theme standards from `apps/web/src/lib/theme.ts`.
 
 - [x] **Task 2.3: Workspace Switcher Header Component**
@@ -114,3 +115,11 @@
 - [x] **Task 6.3: Full Monorepo Quality Gate**
   - Run `pnpm turbo run build lint typecheck test`.
   - Verify 0 lint warnings, 0 type errors, 100% test pass rate.
+
+- [x] **Task 6.4: BYOC Accounts Intercept & Advisory Flow**
+  - Update `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx`:
+    - Fetch `/api/tenant/[subdomain]/settings/byoc` on mount to check workspace credentials status.
+    - Render `ByocRequiredBanner` warning banner when credentials are not configured.
+    - Render `ByocConfigPromptModal` advisory dialog intercepting connect/reconnect clicks.
+    - Support `credentials_required` OAuth error notices via `resolveOAuthRedirectNotice`.
+  - Add tests in `apps/web/tests/ui/accounts.test.tsx`.
