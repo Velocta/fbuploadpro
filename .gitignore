@@ -38,3 +38,11 @@ Thumbs.db
 *.tmp
 .vscode/
 .idea/
+
+# Rust & Native builds
+target/
+**/src-tauri/target/
+
+# Browser extension builds
+.output/
+.wxt/

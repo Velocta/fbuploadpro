@@ -1,12 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 2.22.0 -> 2.23.0 (MINOR: Added Principle 25 governing the Dedicated Facebook Pages Management Section, current_followers & starting_followers Growth Tracking, Two-Step Account-to-Page Import Modal, Clickable Page Cards with Attention Standout, Soft-Delete Page Disconnection, and Dedicated Page Detail Route)
+- Version change: 2.23.0 -> 2.24.0 (MINOR: Added Principle 26 governing the Multi-Client Ecosystem Architecture, Desktop Intellectual Property Protection via Tauri v2 Rust native compilation, Cross-Browser Extension Standards via WXT Manifest V3, and Workspace Integrations Hub Governance)
 - List of modified principles:
-  - Section 13: Updated Collapsible Facebook navigation hierarchy to include "Accounts" and "Pages" below it.
-  - Section 25: Added Dedicated Facebook Pages Management Section, Follower Growth Tracking, Two-Step Account-to-Page Import & Dedicated Page Route (Spec 032).
+  - Section 26: Added Multi-Client Ecosystem, Desktop IP Protection (Tauri v2 Rust), Cross-Browser Extension Standards (WXT MV3), and Workspace Integrations Hub Governance.
 - Added/Modified sections:
-  - Section 25: Dedicated Facebook Pages Management Section (Spec 032).
-- Follow-up TODOs: Implement Spec 032 across database migration, contracts, API routes, worker sync, and workspace UI.
+  - Section 26: Multi-Client Ecosystem, Desktop IP Protection (Tauri v2 Rust), Cross-Browser Extension Standards (WXT MV3), and Workspace Integrations Hub Governance.
+- Follow-up TODOs: Implement Multi-Client integrations hub, browser extensions, and Tauri desktop apps in dedicated future specifications.
 -->
 
 # FBUploadPro Constitution
@@ -180,6 +179,12 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
       - When a workspace has more than 4 pages (`pages.length > 4`), the view surfaces a search bar (matching Page name or category), status filter tabs (`All`, `Active`, `Needs Attention`, `Paused`), and a parent Facebook Account filter dropdown.
     - **Soft-Delete Page Disconnection**: `DELETE /api/tenant/[subdomain]/pages/[pageId]` MUST soft-delete the Page (`status = 'disconnected'`, `encrypted_access_token = ''`, canceling pending `'queued'` items in `queue_items` while preserving historical `publishing_logs` and `page_insights_daily`), and `GET /api/tenant/[subdomain]/pages` and `GET .../pages/discover` MUST exclude `'disconnected'` rows from active linked pages so they can be cleanly re-added later.
     - **Dedicated Page Placeholder View (`/tenant/[subdomain]/pages/[pageId]`)**: Clicking a Page card navigates to `/tenant/[subdomain]/pages/[pageId]`, which currently renders a clean placeholder page header and **"Back to Pages"** navigation link ready for dedicated Page management features in subsequent milestones.
+26. **Multi-Client Ecosystem, Desktop IP Protection (Tauri v2 Rust), Cross-Browser Extension Standards (WXT MV3), and Workspace Integrations Hub Governance**:
+    - **The Thin Client / Fat Server IP Protection Model**: To permanently protect platform intellectual property, algorithms, and secrets from theft or reverse engineering, core business logic, automated scheduling queues (`FOR UPDATE SKIP LOCKED`), Meta Graph API v26.0 mutations, OAuth token symmetric encryption (AES-256-GCM), and database operations MUST live exclusively within the cloud boundary (`apps/web` and `apps/worker`). Client applications (desktop and browser extensions) MUST operate as thin input/output terminals and never bundle offline scheduling logic or master credentials.
+    - **Desktop Native Security via Tauri v2 (Rust)**: Desktop clients MUST be architected using Tauri v2, pairing a native Rust core with a React frontend. The desktop backend MUST compile into stripped native machine code binaries (`.dmg`, `.exe`), eliminating the source code exposure of plain Electron `.asar` bundles. Desktop capabilities are focused on local OS integration (system tray, local render folder auto-watching via the `notify` crate) and direct-to-R2 presigned media uploads.
+    - **Cross-Browser Extension Standards via WXT (Manifest V3)**: Browser extensions MUST use WXT (Web Extension Tools) targeting Manifest V3 to compile a single unified codebase for both the Chrome Web Store and Firefox Add-ons. The extension focuses on 1-click media ingestion into Cloudflare R2 and quick publishing queue status.
+    - **Shared Contract Consumption**: All client surfaces (desktop, extension) MUST consume types, validation schemas, and error models directly from `@fbuploadpro/contracts`.
+    - **Workspace Integrations Hub Governance**: Workspace integration, pairing, and download surfaces MUST reside under `/tenant/[subdomain]/integrations` in `apps/web`. Connection signals MUST strictly use unboxed 6px luminous status dots (`STATUS_SIGNALS`) and adhere to the Binance Precision dual-theme palette.
 
 ## Development Workflow & Quality Gates
 
@@ -195,6 +200,8 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
 4. **Post-PR Vercel Preview Deployments**: UI previews are validated directly via automated Vercel Preview Deployments generated on each Pull Request. If and only if the PR includes UI changes, the live Vercel preview link must be presented to the user for interactive visual inspection before requesting merge approval. Non-UI PRs do not surface a preview link.
 5. **Mandatory Human Approval Gate**: Autonomous or unapproved merges to `main` are strictly forbidden. The agent must explicitly ask for and receive user approval prior to executing any merge, regardless of whether the PR contains frontend, backend, database, or infrastructure changes.
 6. **Single Combined PR Documentation Protocol (Never Separate Docs PRs)**: All documentation updates under `docs/` (including milestone roadmaps, architectural knowledge, API contracts, or schemas) MUST ALWAYS be included and committed directly in the SAME Pull Request as the implementation or architectural changes. Creating separate standalone PRs solely for documentation updates is strictly prohibited.
+7. **Mandatory User Approval Gate Before Committing & PR Creation**: Autonomous commits and autonomous PR creations are strictly prohibited. The agent MUST ask the user and receive explicit, unambiguous approval before executing `git commit` and before opening any Pull Request (`gh pr create`).
+8. **Deferred Test Verification Until Commit**: Automated tests do NOT need to be run on intermediate turns or conversational edits. Tests are only run when preparing to commit code changes, or when explicitly requested by the user.
 
 ## Governance
 
@@ -203,6 +210,6 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.23.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-11
+**Version**: 2.25.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-12
 
 
