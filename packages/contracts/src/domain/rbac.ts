@@ -34,8 +34,16 @@ export function canAccessTenant(
     };
   }
 
-  // Standard users and sellers can only access their assigned tenant subdomain
-  if (session.subdomain.toLowerCase() === targetSubdomain.toLowerCase()) {
+  const normalizedTarget = targetSubdomain.toLowerCase();
+
+  // Standard users and sellers can access their assigned tenant subdomain or any allowedSubdomains
+  if (
+    session.subdomain.toLowerCase() === normalizedTarget ||
+    (Array.isArray(session.allowedSubdomains) &&
+      session.allowedSubdomains.some(
+        (sub) => sub.toLowerCase() === normalizedTarget
+      ))
+  ) {
     return {
       allowed: true,
     };

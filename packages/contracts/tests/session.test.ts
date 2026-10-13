@@ -49,6 +49,16 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
     expect(decoded.status).toBe(mockUserSession.status);
   });
 
+  it('signs and verifies session token preserving allowedSubdomains', async () => {
+    const sessionWithAllowed = {
+      ...mockUserSession,
+      allowedSubdomains: ['acme', 'acme-two', 'acme-three'],
+    };
+    const token = await signSessionToken(sessionWithAllowed, TEST_SESSION_SECRET);
+    const decoded = await verifySessionToken(token, TEST_SESSION_SECRET);
+    expect(decoded.allowedSubdomains).toEqual(['acme', 'acme-two', 'acme-three']);
+  });
+
   it('rejects session token verified with wrong secret', async () => {
     const token = await signSessionToken(mockUserSession, TEST_SESSION_SECRET);
     await expect(

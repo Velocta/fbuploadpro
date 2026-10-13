@@ -66,6 +66,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Populate allowedSubdomains with all workspaces owned by the user
+    const { data: userWorkspaces } = await supabase
+      .from('workspaces')
+      .select('subdomain')
+      .eq('owner_id', session.userId);
+
+    const allowedSubdomains = Array.from(
+      new Set(
+        (userWorkspaces || [])
+          .map((w) => w.subdomain)
+          .concat(subdomain)
+          .filter((sub): sub is string => typeof sub === 'string' && Boolean(sub))
+      )
+    );
+
     // Issue updated session token pointing to the switched workspace subdomain
     const secret = getSessionSecret();
     const newToken = await signSessionToken(
@@ -74,6 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         email: session.email,
         name: session.name,
         subdomain,
+        allowedSubdomains,
         role: session.role,
         status: session.status,
       },

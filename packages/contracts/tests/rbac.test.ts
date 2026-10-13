@@ -66,5 +66,27 @@ describe('Role-Based Access Control (RBAC) & Tenant Guard Contracts', () => {
       expect(access.allowed).toBe(false);
       expect(access.reason).toBe('suspended');
     });
+
+    it('grants access when targetSubdomain is in session allowedSubdomains', () => {
+      const multiWorkspaceSession = {
+        ...mockUserSession,
+        subdomain: 'acme',
+        allowedSubdomains: ['acme', 'acme-beta', 'acme-gamma'],
+      };
+      const access = canAccessTenant(multiWorkspaceSession, 'acme-beta');
+      expect(access.allowed).toBe(true);
+      expect(access.reason).toBeUndefined();
+    });
+
+    it('blocks access when targetSubdomain is not in allowedSubdomains or session.subdomain', () => {
+      const multiWorkspaceSession = {
+        ...mockUserSession,
+        subdomain: 'acme',
+        allowedSubdomains: ['acme', 'acme-beta'],
+      };
+      const access = canAccessTenant(multiWorkspaceSession, 'acme-unknown');
+      expect(access.allowed).toBe(false);
+      expect(access.reason).toBe('mismatch');
+    });
   });
 });
