@@ -1,4 +1,4 @@
-# Spec 039: Eradicate Mocks & Production Hardening
+# Spec 040: Eradicate Mocks & Production Hardening
 
 ## Overview
 Harden the FBUploadPro production codebase by systematically eradicating silent mock fallbacks, dummy adapters, and in-memory stores that cause data loss, broken routes, or security vulnerabilities in serverless production environments (Vercel & Cloudflare).

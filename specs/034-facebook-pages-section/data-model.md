@@ -1,4 +1,4 @@
-# Data Model: Spec 032 — Dedicated Facebook Pages Management Section
+# Data Model: Spec 034 — Dedicated Facebook Pages Management Section
 
 ## 1. PostgreSQL Schema Evolution (`facebook_pages`)
 

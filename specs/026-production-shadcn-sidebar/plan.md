@@ -1,6 +1,6 @@
 # Implementation Plan: 025 Production Shadcn Sidebar Rebuild
 
-**Branch**: `feat/025-production-shadcn-sidebar` | **Date**: 2026-10-10 | **Spec**: [spec.md](./spec.md)
+**Branch**: `feat/026-production-shadcn-sidebar` | **Date**: 2026-10-10 | **Spec**: [spec.md](./spec.md)
 
 ---
 
@@ -43,7 +43,7 @@
 
 ## 2. Constitution Check
 
-- **Principle I (SDD & TDD)**: Spec 025 artifacts (`spec.md`, `plan.md`, `checklists/`, `tasks.md`) created before code changes; unit tests updated/expanded in `apps/web/tests/ui/`.
+- **Principle I (SDD & TDD)**: Spec 026 artifacts (`spec.md`, `plan.md`, `checklists/`, `tasks.md`) created before code changes; unit tests updated/expanded in `apps/web/tests/ui/`.
 - **Principle V (Atomic PRs)**: Focused frontend changes in `apps/web` with `constitution.md` and `docs/foundational-knowledge.md` included in the same PR.
 - **Principle 8 (Theme Token Authority & `DESIGN.md` Immutability)**: `DESIGN.md` is untouched. All colors, borders, radii, spacing, and shadows reference `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`.
 - **Principle 13 (Production Shadcn Sidebar Architecture)**: 100% compliance with two-layer fixed+gap layout, `Collapsible` `SidebarMenuSub`, `TeamSwitcher`/`NavUser` `size="lg"` pattern, and desktop+mobile `SidebarTrigger`.

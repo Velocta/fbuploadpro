@@ -1,6 +1,6 @@
 # Tasks: 025 Production Shadcn Sidebar Rebuild
 
-**Input**: Design documents from `/specs/025-production-shadcn-sidebar/`
+**Input**: Design documents from `/specs/026-production-shadcn-sidebar/`
 
 ---
 

@@ -1,4 +1,4 @@
-# Tasks: Spec 039 - Eradicate Mocks & Production Hardening
+# Tasks: Spec 040 - Eradicate Mocks & Production Hardening
 
 ## Status Summary
 - **Total Tasks**: 10

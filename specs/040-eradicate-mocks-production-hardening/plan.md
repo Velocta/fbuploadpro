@@ -1,4 +1,4 @@
-# Implementation Plan: Spec 039 - Eradicate Mocks & Production Hardening
+# Implementation Plan: Spec 040 - Eradicate Mocks & Production Hardening
 
 ## Architecture & Design
 

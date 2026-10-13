@@ -1,6 +1,6 @@
 # Feature Specification: 025 Production Shadcn Sidebar Rebuild
 
-**Feature Branch**: `feat/025-production-shadcn-sidebar`  
+**Feature Branch**: `feat/026-production-shadcn-sidebar`  
 **Created**: 2026-10-10  
 **Status**: Approved  
 **Input**: User request: "https://ui.shadcn.com/docs/components/base/sidebar i wanted a proper production grade sidebar and AI built me a slop please check and build properly i want this shadcn sidebar build using SDD and read your agents.md file for rules"
