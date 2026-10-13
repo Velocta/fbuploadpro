@@ -6,8 +6,7 @@ import {
   buildTenantUrl,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '@/lib/db';
-import { setSessionCookie } from '@/lib/supabase-auth';
+import { getSupabaseClient, setSessionCookie } from '@/lib/supabase-auth';
 
 function getSessionSecret(): string {
   return (
@@ -48,44 +47,61 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { subdomain } = parseResult.data;
-  const db = getDbClient();
-
-  // Validate ownership
-  const rows = (await db.query(
-    `SELECT id, name, subdomain FROM workspaces WHERE owner_id = $1 AND subdomain = $2`,
-    [session.userId, subdomain]
-  )) as Array<{ id: string; name: string; subdomain: string }>;
-
-  if ((!rows || rows.length === 0) && session.role !== 'admin') {
-    return NextResponse.json(
-      { error: 'You do not have access to this workspace' },
-      { status: 403 }
-    );
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
 
-  // Issue updated session token pointing to the switched workspace subdomain
-  const secret = getSessionSecret();
-  const newToken = await signSessionToken(
-    {
-      userId: session.userId,
-      email: session.email,
-      name: session.name,
-      subdomain,
-      role: session.role,
-      status: session.status,
-    },
-    secret
-  );
+  try {
+    // Validate ownership via Supabase PostgREST
+    const { data: rows, error } = await supabase
+      .from('workspaces')
+      .select('id, name, subdomain')
+      .eq('owner_id', session.userId)
+      .eq('subdomain', subdomain);
 
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  const redirectUrl = buildTenantUrl(subdomain, '/', request.url, rootDomain).toString();
+    if (error) {
+      console.error('[Switch Workspace API] Query failed:', error);
+      return NextResponse.json({ error: 'Failed to verify workspace access' }, { status: 500 });
+    }
 
-  const response = NextResponse.json({
-    success: true,
-    targetSubdomain: subdomain,
-    redirectUrl,
-  });
+    if ((!rows || rows.length === 0) && session.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'You do not have access to this workspace' },
+        { status: 403 }
+      );
+    }
 
-  setSessionCookie(response, newToken, request.headers.get('host'));
-  return response;
+    // Issue updated session token pointing to the switched workspace subdomain
+    const secret = getSessionSecret();
+    const newToken = await signSessionToken(
+      {
+        userId: session.userId,
+        email: session.email,
+        name: session.name,
+        subdomain,
+        role: session.role,
+        status: session.status,
+      },
+      secret
+    );
+
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
+    const redirectUrl = buildTenantUrl(subdomain, '/', request.url, rootDomain).toString();
+
+    const response = NextResponse.json({
+      success: true,
+      targetSubdomain: subdomain,
+      redirectUrl,
+    });
+
+    setSessionCookie(response, newToken, request.headers.get('host'));
+    return response;
+  } catch (err) {
+    console.error('[Switch Workspace API] Unhandled exception:', err);
+    return NextResponse.json(
+      { error: 'An unexpected server error occurred while switching workspace' },
+      { status: 500 }
+    );
+  }
 }

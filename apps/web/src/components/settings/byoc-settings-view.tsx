@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, STATUS_SIGNALS } from '@/lib/theme';
+import {
+  MODAL_BACKDROP_STYLE,
+  MODAL_CONTAINER_STYLE,
+} from '@/components/pages/dedicated/modal-styles';
 import type { BYOCStatus } from '@fbuploadpro/contracts';
 
 export interface BYOCSettingsViewProps {
@@ -13,7 +17,6 @@ interface CredentialsState {
   subdomain: string;
   fbAppId: string;
   hasSecret: boolean;
-  webhookVerifyToken: string | null;
   status: BYOCStatus;
   lastTestedAt: string | null;
 }
@@ -200,17 +203,218 @@ function MetaAppSetupSection({
   );
 }
 
+interface ByocTestFailedModalProps {
+  open: boolean;
+  message: string;
+  onClose: () => void;
+}
+
+export function ByocTestFailedModal({
+  open,
+  message,
+  onClose,
+}: Readonly<ByocTestFailedModalProps>) {
+  if (!open) return null;
+
+  return (
+    <div
+      role="presentation"
+      data-testid="byoc-test-failed-modal"
+      style={MODAL_BACKDROP_STYLE}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') onClose();
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Close dialog"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          cursor: 'default',
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="byoc-test-failed-title"
+        style={{
+          ...MODAL_CONTAINER_STYLE,
+          maxWidth: '480px',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: RADII.sm,
+              backgroundColor: 'rgba(246, 70, 93, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={PALETTE.accent3}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <div>
+            <h2
+              id="byoc-test-failed-title"
+              data-testid="byoc-test-failed-title"
+              style={{
+                margin: 0,
+                fontSize: '1.125rem',
+                fontWeight: TYPOGRAPHY.weights.bold,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
+            >
+              Meta Connection Test Failed
+            </h2>
+            <p
+              style={{
+                margin: `${SPACING.xs} 0 0 0`,
+                fontSize: '0.8125rem',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              Meta Graph API rejected your credentials
+            </p>
+          </div>
+        </div>
+
+        <div
+          data-testid="byoc-test-failed-message"
+          style={{
+            padding: `${SPACING.sm} ${SPACING.md}`,
+            backgroundColor: 'rgba(246, 70, 93, 0.08)',
+            border: '1px solid rgba(246, 70, 93, 0.25)',
+            borderRadius: RADII.sm,
+            fontSize: '0.875rem',
+            lineHeight: 1.4,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          {message}
+        </div>
+
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.8125rem',
+            lineHeight: 1.5,
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          Your credentials were saved, but account connections and publishing will remain blocked until Meta credentials are verified. Please check your App ID and App Secret in your Meta Developer portal.
+        </p>
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: SPACING.sm,
+            marginTop: SPACING.xs,
+          }}
+        >
+          <button
+            type="button"
+            data-testid="byoc-test-failed-dismiss-btn"
+            onClick={onClose}
+            style={{
+              padding: `${SPACING.sm} ${SPACING.lg}`,
+              backgroundColor: PALETTE.primary,
+              border: 'none',
+              borderRadius: RADII.sm,
+              color: PALETTE.background,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: 'pointer',
+            }}
+          >
+            Review Credentials
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export interface SaveAndTestResult {
+  saveError?: string;
+  testSuccess?: boolean;
+  testMessage?: string;
+  testedAt?: string;
+}
+
+export async function saveAndTestBYOC(
+  subdomain: string,
+  appId: string,
+  appSecret: string
+): Promise<SaveAndTestResult> {
+  const saveRes = await fetch(`/api/tenant/${subdomain}/settings/byoc`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fbAppId: appId.trim(),
+      fbAppSecret: appSecret.trim() || undefined,
+    }),
+  });
+
+  const saveData = await saveRes.json();
+  if (!saveRes.ok) {
+    return { saveError: saveData.error || 'Failed to save credentials.' };
+  }
+
+  const testRes = await fetch(`/api/tenant/${subdomain}/settings/byoc/test`, {
+    method: 'POST',
+  });
+  const testData = await testRes.json();
+
+  return {
+    testSuccess: Boolean(testRes.ok && testData.success),
+    testMessage: testData.message,
+    testedAt: testData.testedAt,
+  };
+}
+
 export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>) {
   const [credentials, setCredentials] = useState<CredentialsState | null>(null);
   const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
-  const [webhookToken, setWebhookToken] = useState('');
   const [showSecret, setShowSecret] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [testFailurePrompt, setTestFailurePrompt] = useState<{
+    open: boolean;
+    message: string;
+  }>({ open: false, message: '' });
 
   const rootDomain =
     typeof window !== 'undefined' && window.location.host
@@ -230,7 +434,6 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
           if (isMounted) {
             setCredentials(data);
             setAppId(data.fbAppId || '');
-            setWebhookToken(data.webhookVerifyToken || '');
           }
         }
       } catch {
@@ -266,35 +469,39 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
     setMessage(null);
 
     try {
-      const res = await fetch(`/api/tenant/${subdomain}/settings/byoc`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fbAppId: appId.trim(),
-          fbAppSecret: appSecret.trim() || undefined,
-          webhookVerifyToken: webhookToken.trim() || undefined,
-        }),
-      });
+      const outcome = await saveAndTestBYOC(subdomain, appId, appSecret);
 
-      const data = await res.json();
-      if (!res.ok) {
-        setMessage({ text: data.error || 'Failed to save credentials.', type: 'error' });
+      if (outcome.saveError) {
+        setMessage({ text: outcome.saveError, type: 'error' });
         setIsSaving(false);
         return;
       }
 
-      setMessage({ text: 'Facebook App credentials saved successfully.', type: 'success' });
       setCredentials((prev) =>
         prev
           ? {
               ...prev,
               fbAppId: appId.trim(),
               hasSecret: prev.hasSecret || Boolean(appSecret.trim()),
-              status: 'unverified',
+              status: outcome.testSuccess ? 'valid' : 'invalid',
+              lastTestedAt: outcome.testedAt || prev.lastTestedAt,
             }
           : null
       );
       setAppSecret('');
+
+      if (outcome.testSuccess) {
+        setMessage({ text: 'Credentials saved and verified with Meta Graph API.', type: 'success' });
+      } else {
+        const failMsg =
+          outcome.testMessage ||
+          'Meta Graph API rejected your credentials. Please verify your App ID and Secret.';
+        setMessage({ text: failMsg, type: 'error' });
+        setTestFailurePrompt({
+          open: true,
+          message: failMsg,
+        });
+      }
     } catch {
       setMessage({ text: 'Network request failed. Please try again.', type: 'error' });
     } finally {
@@ -545,40 +752,6 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
             </span>
           </div>
 
-          {/* Webhook Verify Token */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <label
-              htmlFor="byoc-webhook-token"
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              Webhook Verify Token (Optional)
-            </label>
-            <input
-              id="byoc-webhook-token"
-              type="text"
-              data-testid="byoc-webhook-token-input"
-              placeholder="e.g. fbup_verify_token_custom"
-              value={webhookToken}
-              onChange={(e) => setWebhookToken(e.target.value)}
-              disabled={isSaving}
-              style={{
-                width: '100%',
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.875rem',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
           {/* Form Actions */}
           <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>
             <button
@@ -596,7 +769,7 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
                 cursor: isSaving || isTesting ? 'not-allowed' : 'pointer',
               }}
             >
-              {isSaving ? 'Saving...' : 'Save Credentials'}
+              {isSaving ? 'Saving & Verifying...' : 'Save Credentials'}
             </button>
 
             <button
@@ -627,6 +800,13 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
         webhookUrl={webhookUrl}
         copiedKey={copiedKey}
         onCopy={handleCopy}
+      />
+
+      {/* Meta Connection Test Failure Prompt Modal */}
+      <ByocTestFailedModal
+        open={testFailurePrompt.open}
+        message={testFailurePrompt.message}
+        onClose={() => setTestFailurePrompt({ open: false, message: '' })}
       />
     </div>
   );

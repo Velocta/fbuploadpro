@@ -6,8 +6,7 @@ import {
   signSessionToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '@/lib/db';
-import { setSessionCookie } from '@/lib/supabase-auth';
+import { getSupabaseClient, setSessionCookie } from '@/lib/supabase-auth';
 
 function getSessionSecret(): string {
   return (
@@ -32,59 +31,92 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const db = getDbClient();
-
-  // Query all workspaces owned by the user
-  let rows = (await db.query(
-    `SELECT id, owner_id AS "ownerId", name, subdomain, created_at AS "createdAt", updated_at AS "updatedAt"
-     FROM workspaces
-     WHERE owner_id = $1
-     ORDER BY created_at ASC`,
-    [session.userId]
-  )) as Array<{
-    id: string;
-    ownerId: string;
-    name: string;
-    subdomain: string;
-    createdAt?: string;
-    updatedAt?: string;
-  }>;
-
-  // Backfill if empty
-  if (!rows || rows.length === 0) {
-    const initialName = session.name || session.subdomain;
-    rows = (await db.query(
-      `INSERT INTO workspaces (id, owner_id, name, subdomain)
-       VALUES (gen_random_uuid(), $1, $2, $3)
-       ON CONFLICT (subdomain) DO UPDATE SET owner_id = EXCLUDED.owner_id
-       RETURNING id, owner_id AS "ownerId", name, subdomain, created_at AS "createdAt", updated_at AS "updatedAt"`,
-      [session.userId, initialName, session.subdomain]
-    )) as Array<{
-      id: string;
-      ownerId: string;
-      name: string;
-      subdomain: string;
-      createdAt?: string;
-      updatedAt?: string;
-    }>;
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
 
-  return NextResponse.json({ workspaces: rows });
+  try {
+    const { data: workspaces, error } = await supabase
+      .from('workspaces')
+      .select('id, owner_id, name, subdomain, created_at, updated_at')
+      .eq('owner_id', session.userId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[Workspaces API] Failed to fetch workspaces:', error);
+      return NextResponse.json({ error: error.message || 'Failed to fetch workspaces' }, { status: 500 });
+    }
+
+    let rows = (workspaces || []).map((w) => ({
+      id: w.id as string,
+      ownerId: w.owner_id as string,
+      name: w.name as string,
+      subdomain: w.subdomain as string,
+      createdAt: w.created_at as string | undefined,
+      updatedAt: w.updated_at as string | undefined,
+    }));
+
+    // Backfill if empty
+    if (rows.length === 0) {
+      const initialName = session.name || session.subdomain;
+      const { data: inserted, error: insertError } = await supabase
+        .from('workspaces')
+        .upsert(
+          {
+            owner_id: session.userId,
+            name: initialName,
+            subdomain: session.subdomain,
+          },
+          { onConflict: 'subdomain' }
+        )
+        .select('id, owner_id, name, subdomain, created_at, updated_at')
+        .single();
+
+      if (insertError) {
+        console.error('[Workspaces API] Failed to provision default workspace:', insertError);
+        return NextResponse.json({ error: insertError.message || 'Failed to provision default workspace' }, { status: 500 });
+      }
+
+      if (inserted) {
+        rows = [
+          {
+            id: inserted.id as string,
+            ownerId: inserted.owner_id as string,
+            name: inserted.name as string,
+            subdomain: inserted.subdomain as string,
+            createdAt: inserted.created_at as string | undefined,
+            updatedAt: inserted.updated_at as string | undefined,
+          },
+        ];
+      }
+    }
+
+    return NextResponse.json({ workspaces: rows });
+  } catch (err) {
+    console.error('[Workspaces API] Unhandled GET exception:', err);
+    return NextResponse.json({ error: 'Failed to retrieve workspaces' }, { status: 500 });
+  }
 }
 
 async function resolveUniqueSubdomain(
-  db: ReturnType<typeof getDbClient>,
+  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
   userId: string,
   userSubdomain: string | undefined,
   requestedSubdomain?: string
 ): Promise<{ subdomain?: string; error?: string; status?: number }> {
   if (requestedSubdomain) {
-    const conflictCheck = (await db.query(
-      `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
-      [requestedSubdomain]
-    )) as Array<{ id: string }>;
+    const { data: conflictCheck, error } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', requestedSubdomain)
+      .maybeSingle();
 
-    if (conflictCheck && conflictCheck.length > 0) {
+    if (error) {
+      return { error: 'Database query failed checking subdomain availability', status: 500 };
+    }
+
+    if (conflictCheck) {
       return {
         error: 'Subdomain already in use. Please select a different subdomain.',
         status: 409,
@@ -93,19 +125,24 @@ async function resolveUniqueSubdomain(
     return { subdomain: requestedSubdomain };
   }
 
-  const primaryWsRows = (await db.query(
-    `SELECT subdomain FROM workspaces WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
-    [userId]
-  )) as Array<{ subdomain: string }>;
+  const { data: primaryWsRows } = await supabase
+    .from('workspaces')
+    .select('subdomain')
+    .eq('owner_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1);
+
   const mainSubdomain = primaryWsRows?.[0]?.subdomain || userSubdomain || 'ws';
 
   for (let attempt = 0; attempt < 10; attempt++) {
     const candidate = generateWorkspaceSubdomain(mainSubdomain);
-    const existing = (await db.query(
-      `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
-      [candidate]
-    )) as Array<{ id: string }>;
-    if (!existing || existing.length === 0) {
+    const { data: existing, error } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', candidate)
+      .maybeSingle();
+
+    if (!error && !existing) {
       return { subdomain: candidate };
     }
   }
@@ -138,53 +175,72 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { name, subdomain } = parseResult.data;
-  const db = getDbClient();
-
-  const resolution = await resolveUniqueSubdomain(db, session.userId, session.subdomain, subdomain);
-  if (resolution.error || !resolution.subdomain) {
-    return NextResponse.json({ error: resolution.error }, { status: resolution.status || 500 });
-  }
-  const targetSubdomain = resolution.subdomain;
-
-  // Insert workspace
-  const insertRows = (await db.query(
-    `INSERT INTO workspaces (owner_id, name, subdomain)
-     VALUES ($1, $2, $3)
-     RETURNING id, owner_id AS "ownerId", name, subdomain, created_at AS "createdAt", updated_at AS "updatedAt"`,
-    [session.userId, name, targetSubdomain]
-  )) as Array<{
-    id: string;
-    ownerId: string;
-    name: string;
-    subdomain: string;
-    createdAt?: string;
-    updatedAt?: string;
-  }>;
-
-  const newWorkspace = insertRows[0];
-  if (!newWorkspace) {
-    return NextResponse.json({ error: 'Failed to create workspace' }, { status: 500 });
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
 
-  // Generate new session token pointing to the newly created workspace
-  const secret = getSessionSecret();
-  const newToken = await signSessionToken(
-    {
-      userId: session.userId,
-      email: session.email,
-      name: session.name,
-      subdomain: newWorkspace.subdomain,
-      role: session.role,
-      status: session.status,
-    },
-    secret
-  );
+  try {
+    const resolution = await resolveUniqueSubdomain(supabase, session.userId, session.subdomain, subdomain);
+    if (resolution.error || !resolution.subdomain) {
+      return NextResponse.json({ error: resolution.error }, { status: resolution.status || 500 });
+    }
+    const targetSubdomain = resolution.subdomain;
 
-  const response = NextResponse.json({
-    success: true,
-    workspace: newWorkspace,
-  });
+    // Insert workspace via Supabase PostgREST
+    const { data: inserted, error: insertError } = await supabase
+      .from('workspaces')
+      .insert({
+        owner_id: session.userId,
+        name,
+        subdomain: targetSubdomain,
+      })
+      .select('id, owner_id, name, subdomain, created_at, updated_at')
+      .single();
 
-  setSessionCookie(response, newToken, request.headers.get('host'));
-  return response;
+    if (insertError || !inserted) {
+      console.error('[Workspaces API] Failed to insert workspace:', insertError);
+      return NextResponse.json(
+        { error: insertError?.message || 'Failed to create workspace' },
+        { status: 500 }
+      );
+    }
+
+    const newWorkspace = {
+      id: inserted.id as string,
+      ownerId: inserted.owner_id as string,
+      name: inserted.name as string,
+      subdomain: inserted.subdomain as string,
+      createdAt: inserted.created_at as string | undefined,
+      updatedAt: inserted.updated_at as string | undefined,
+    };
+
+    // Generate new session token pointing to the newly created workspace
+    const secret = getSessionSecret();
+    const newToken = await signSessionToken(
+      {
+        userId: session.userId,
+        email: session.email,
+        name: session.name,
+        subdomain: newWorkspace.subdomain,
+        role: session.role,
+        status: session.status,
+      },
+      secret
+    );
+
+    const response = NextResponse.json({
+      success: true,
+      workspace: newWorkspace,
+    });
+
+    setSessionCookie(response, newToken, request.headers.get('host'));
+    return response;
+  } catch (err) {
+    console.error('[Workspaces API] Unhandled POST exception:', err);
+    return NextResponse.json(
+      { error: 'An unexpected server error occurred while creating workspace' },
+      { status: 500 }
+    );
+  }
 }

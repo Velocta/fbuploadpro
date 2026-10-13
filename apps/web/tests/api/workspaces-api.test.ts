@@ -1,6 +1,6 @@
 /**
  * @file workspaces-api.test.ts
- * @description Unit tests for Workspaces API routes and auto-generated subdomains (Spec 037).
+ * @description Unit tests for Workspaces API routes and auto-generated subdomains via Supabase PostgREST (Spec 037).
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -8,15 +8,16 @@ import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { GET as listWorkspaces, POST as createWorkspace } from '../../src/app/api/workspaces/route';
 import { POST as switchWorkspace } from '../../src/app/api/workspaces/switch/route';
-import { getDbClient } from '@/lib/db';
+import * as authModule from '@/lib/supabase-auth';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
-describe('Workspaces API Routes (Spec 037)', () => {
+describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   let validSessionCookie: string;
 
   beforeEach(async () => {
+    vi.restoreAllMocks();
     process.env.SESSION_SECRET = TEST_SECRET;
     const token = await signSessionToken(
       {
@@ -46,36 +47,63 @@ describe('Workspaces API Routes (Spec 037)', () => {
   });
 
   it('auto-generates unique subdomain using main subdomain and 4 random alphabets when creating workspace', async () => {
-    const mockDb = {
-      query: vi.fn(),
+    const mockSupabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn((col: string) => {
+                if (col === 'owner_id') {
+                  return {
+                    order: vi.fn(() => ({
+                      limit: vi.fn(() =>
+                        Promise.resolve({
+                          data: [{ subdomain: 'acme' }],
+                          error: null,
+                        })
+                      ),
+                    })),
+                  };
+                }
+                if (col === 'subdomain') {
+                  return {
+                    maybeSingle: vi.fn(() =>
+                      Promise.resolve({
+                        data: null,
+                        error: null,
+                      })
+                    ),
+                  };
+                }
+                return {
+                  maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+                };
+              }),
+            })),
+            insert: vi.fn((values: { name: string; subdomain: string }) => ({
+              select: vi.fn(() => ({
+                single: vi.fn(() =>
+                  Promise.resolve({
+                    data: {
+                      id: 'ws-new-123',
+                      owner_id: userId,
+                      name: values.name,
+                      subdomain: values.subdomain,
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    },
+                    error: null,
+                  })
+                ),
+              })),
+            })),
+          };
+        }
+        return {};
+      }),
     };
-    vi.spyOn(mockDb, 'query').mockImplementation(async (sql: string, params?: unknown[]) => {
-      // 1. Resolve primary workspace
-      if (sql.includes('SELECT subdomain FROM workspaces WHERE owner_id = $1')) {
-        return [{ subdomain: 'acme' }];
-      }
-      // 2. Uniqueness check
-      if (sql.includes('SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1')) {
-        return [];
-      }
-      // 3. Insert workspace
-      if (sql.includes('INSERT INTO workspaces')) {
-        return [
-          {
-            id: 'ws-new-123',
-            ownerId: userId,
-            name: params?.[1] || 'Alpha Agency',
-            subdomain: params?.[2] || 'acmexyza',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-      }
-      return [];
-    });
 
-    const dbModule = await import('@/lib/db');
-    vi.spyOn(dbModule, 'getDbClient').mockReturnValue(mockDb as unknown as ReturnType<typeof getDbClient>);
+    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
 
     const req = new NextRequest('http://localhost:3000/api/workspaces', {
       method: 'POST',
@@ -102,11 +130,17 @@ describe('Workspaces API Routes (Spec 037)', () => {
   });
 
   it('rejects switching to a workspace not owned by the user', async () => {
-    const mockDb = {
-      query: vi.fn().mockResolvedValue([]),
+    const mockSupabase = {
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            eq: vi.fn(() => Promise.resolve({ data: [], error: null })),
+          })),
+        })),
+      })),
     };
-    const dbModule = await import('@/lib/db');
-    vi.spyOn(dbModule, 'getDbClient').mockReturnValue(mockDb as unknown as ReturnType<typeof getDbClient>);
+
+    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
 
     const req = new NextRequest('http://localhost:3000/api/workspaces/switch', {
       method: 'POST',

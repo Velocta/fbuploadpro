@@ -5,7 +5,7 @@ import {
   decryptToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '@/lib/db';
+import { getSupabaseClient } from '@/lib/supabase-auth';
 
 function getSessionSecret(): string {
   return (
@@ -47,24 +47,37 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const db = getDbClient();
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
+  }
 
-  // Find workspace BYOC credentials
-  const byocRows = (await db.query(
-    `SELECT c.workspace_id, c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
-     FROM workspace_byoc_credentials c
-     JOIN workspaces w ON w.id = c.workspace_id
-     WHERE w.subdomain = $1
-     LIMIT 1`,
-    [subdomain]
-  )) as Array<{
-    workspace_id: string;
-    fbAppId: string;
-    encryptedSecret: string;
-  }>;
+  // Find workspace via Supabase PostgREST
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('subdomain', subdomain)
+    .maybeSingle();
 
-  const credentials = byocRows?.[0];
-  if (!credentials?.fbAppId || !credentials.encryptedSecret) {
+  if (!ws?.id) {
+    return NextResponse.json(
+      {
+        success: false,
+        status: 'unverified',
+        message: 'Workspace not found.',
+        testedAt: new Date().toISOString(),
+      },
+      { status: 404 }
+    );
+  }
+
+  const { data: credentials } = await supabase
+    .from('workspace_byoc_credentials')
+    .select('workspace_id, fb_app_id, encrypted_fb_app_secret')
+    .eq('workspace_id', ws.id)
+    .maybeSingle();
+
+  if (!credentials?.fb_app_id || !credentials.encrypted_fb_app_secret) {
     return NextResponse.json(
       {
         success: false,
@@ -78,7 +91,7 @@ export async function POST(
 
   let decryptedSecret: string;
   try {
-    decryptedSecret = await decryptToken(credentials.encryptedSecret, getEncryptionKey());
+    decryptedSecret = await decryptToken(credentials.encrypted_fb_app_secret, getEncryptionKey());
   } catch (_e) {
     return NextResponse.json(
       {
@@ -92,8 +105,8 @@ export async function POST(
   }
 
   // Test against Meta Graph API v26.0: verify App Access Token
-  const metaUrl = new URL(`https://graph.facebook.com/v26.0/${credentials.fbAppId}`);
-  metaUrl.searchParams.set('access_token', `${credentials.fbAppId}|${decryptedSecret}`);
+  const metaUrl = new URL(`https://graph.facebook.com/v26.0/${credentials.fb_app_id}`);
+  metaUrl.searchParams.set('access_token', `${credentials.fb_app_id}|${decryptedSecret}`);
   metaUrl.searchParams.set('fields', 'id,name,category');
 
   const nowIso = new Date().toISOString();
@@ -106,12 +119,10 @@ export async function POST(
       } | null;
       const msg = errJson?.error?.message || 'Meta Graph API rejected App ID or App Secret.';
 
-      await db.query(
-        `UPDATE workspace_byoc_credentials
-         SET status = 'invalid', last_tested_at = now(), updated_at = now()
-         WHERE workspace_id = $1`,
-        [credentials.workspace_id]
-      );
+      await supabase
+        .from('workspace_byoc_credentials')
+        .update({ status: 'invalid', last_tested_at: nowIso, updated_at: nowIso })
+        .eq('workspace_id', ws.id);
 
       return NextResponse.json({
         success: false,
@@ -122,14 +133,12 @@ export async function POST(
     }
 
     const appData = (await metaRes.json()) as { id?: string; name?: string };
-    const appName = appData?.name || `App ${credentials.fbAppId}`;
+    const appName = appData?.name || `App ${credentials.fb_app_id}`;
 
-    await db.query(
-      `UPDATE workspace_byoc_credentials
-       SET status = 'valid', last_tested_at = now(), updated_at = now()
-       WHERE workspace_id = $1`,
-      [credentials.workspace_id]
-    );
+    await supabase
+      .from('workspace_byoc_credentials')
+      .update({ status: 'valid', last_tested_at: nowIso, updated_at: nowIso })
+      .eq('workspace_id', ws.id);
 
     return NextResponse.json({
       success: true,

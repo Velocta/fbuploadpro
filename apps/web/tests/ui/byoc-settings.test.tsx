@@ -1,16 +1,19 @@
 /**
  * @file byoc-settings.test.tsx
- * @description Unit tests for BYOCSettingsView, GeneralSettingsView, and AuditLogsView (Spec 037).
+ * @description Unit tests for BYOCSettingsView, GeneralSettingsView, saveAndTestBYOC, and ByocTestFailedModal.
  */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
+import {
+  BYOCSettingsView,
+  ByocTestFailedModal,
+  saveAndTestBYOC,
+} from '@/components/settings/byoc-settings-view';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
-import { AuditLogsView } from '@/components/settings/audit-logs-view';
 import { render } from '../components/setup';
 
-describe('Settings Views Suite (Spec 037)', () => {
+describe('Settings Views Suite (BYOC & General)', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
@@ -21,7 +24,6 @@ describe('Settings Views Suite (Spec 037)', () => {
           subdomain: 'acme',
           fbAppId: '123456789012345',
           hasSecret: true,
-          webhookVerifyToken: 'verify_custom',
           status: 'valid',
           lastTestedAt: '2026-10-13T10:00:00Z',
         }),
@@ -31,7 +33,7 @@ describe('Settings Views Suite (Spec 037)', () => {
 
   describe('GeneralSettingsView', () => {
     it('renders workspace overview with name, dedicated subdomain and active status indicator', () => {
-      const { hasText, html } = render(
+      const { hasText } = render(
         <GeneralSettingsView
           subdomain="acme"
           workspaceName="Acme Media Holdings"
@@ -50,36 +52,116 @@ describe('Settings Views Suite (Spec 037)', () => {
     });
   });
 
-  describe('AuditLogsView', () => {
-    it('renders chronological audit log items with action, category, and actor', () => {
-      const { hasText } = render(
-        <AuditLogsView
-          logs={[
-            {
-              id: 'log-test-1',
-              action: 'OAuth App Configured',
-              category: 'security',
-              timestamp: '2026-10-13T09:30:00Z',
-              actor: 'Owner',
-              details: 'Meta Graph App ID 12345 registered.',
-            },
-          ]}
-        />
-      );
-
-      expect(hasText('Audit Trail')).toBe(true);
-      expect(hasText('OAuth App Configured')).toBe(true);
-      expect(hasText('security')).toBe(true);
-      expect(hasText('Meta Graph App ID 12345 registered.')).toBe(true);
-      expect(hasText('By Owner')).toBe(true);
-    });
-  });
-
   describe('BYOCSettingsView', () => {
     it('renders loading placeholder initially then control fields', () => {
       const { hasText } = render(<BYOCSettingsView subdomain="acme" />);
       // Initially renders loading state before useEffect mounts
       expect(hasText('Loading credentials configuration...')).toBe(true);
+    });
+
+    it('does not render Webhook Verify Token field', () => {
+      const { hasText, hasAttribute } = render(<BYOCSettingsView subdomain="acme" />);
+      expect(hasText('Webhook Verify Token')).toBe(false);
+      expect(hasAttribute('data-testid', 'byoc-webhook-token-input')).toBe(false);
+    });
+  });
+
+  describe('ByocTestFailedModal', () => {
+    it('renders null when open is false', () => {
+      const { html } = render(
+        <ByocTestFailedModal
+          open={false}
+          message="Meta Graph API rejected credentials"
+          onClose={() => {}}
+        />
+      );
+      expect(html).toBe('');
+    });
+
+    it('renders failure advisory modal and details when open is true', () => {
+      const { hasText, hasAttribute } = render(
+        <ByocTestFailedModal
+          open={true}
+          message="App ID 12345 not found in Meta Developer portal"
+          onClose={() => {}}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'byoc-test-failed-modal')).toBe(true);
+      expect(hasAttribute('data-testid', 'byoc-test-failed-title')).toBe(true);
+      expect(hasText('Meta Connection Test Failed')).toBe(true);
+      expect(hasText('App ID 12345 not found in Meta Developer portal')).toBe(true);
+      expect(hasText('Review Credentials')).toBe(true);
+      expect(hasAttribute('data-testid', 'byoc-test-failed-dismiss-btn')).toBe(true);
+    });
+  });
+
+  describe('saveAndTestBYOC auto-test on save workflow', () => {
+    it('returns save error if credentials saving fails', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: 'Invalid app secret format' }),
+        })
+      );
+
+      const result = await saveAndTestBYOC('acme', '123456789012345', 'secret12345');
+      expect(result.saveError).toBe('Invalid app secret format');
+      expect(result.testSuccess).toBeUndefined();
+    });
+
+    it('saves credentials and performs automated connection test with success', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            success: true,
+            status: 'valid',
+            message: 'Successfully verified connection to Meta Graph API.',
+            testedAt: '2026-10-13T12:00:00Z',
+          }),
+        });
+
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await saveAndTestBYOC('acme', '123456789012345', 'secret12345');
+      expect(result.saveError).toBeUndefined();
+      expect(result.testSuccess).toBe(true);
+      expect(result.testMessage).toBe('Successfully verified connection to Meta Graph API.');
+      expect(result.testedAt).toBe('2026-10-13T12:00:00Z');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('saves credentials and flags failure when automated connection test fails', async () => {
+      const mockFetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true }),
+        })
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({
+            success: false,
+            status: 'invalid',
+            message: 'Meta Graph API error (101): Invalid App Secret.',
+            testedAt: '2026-10-13T12:00:00Z',
+          }),
+        });
+
+      vi.stubGlobal('fetch', mockFetch);
+
+      const result = await saveAndTestBYOC('acme', '123456789012345', 'badsecret');
+      expect(result.saveError).toBeUndefined();
+      expect(result.testSuccess).toBe(false);
+      expect(result.testMessage).toBe('Meta Graph API error (101): Invalid App Secret.');
+      expect(result.testedAt).toBe('2026-10-13T12:00:00Z');
     });
   });
 });

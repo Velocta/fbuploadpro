@@ -4,6 +4,7 @@ import {
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { getDbClient } from '@/lib/db';
+import { getSupabaseClient } from '@/lib/supabase-auth';
 import type { DatabaseClient } from '@fbuploadpro/database';
 
 export async function handleInitiateFacebookOAuth(
@@ -34,19 +35,48 @@ export async function handleInitiateFacebookOAuth(
 
   // 2. Resolve workspace BYOC Facebook credentials
   let byoc: { fbAppId: string; encryptedSecret: string } | undefined;
-  try {
-    const db = dbClient ?? getDbClient();
-    const byocRows = (await db.query(
-      `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
-       FROM workspace_byoc_credentials c
-       JOIN workspaces w ON w.id = c.workspace_id
-       WHERE w.subdomain = $1
-       LIMIT 1`,
-      [session.subdomain]
-    )) as Array<{ fbAppId: string; encryptedSecret: string }>;
-    byoc = byocRows?.[0];
-  } catch (_err) {
-    // If DB is unavailable or during isolated unit tests, fallback to process.env
+  const supabase = getSupabaseClient();
+
+  if (supabase && !dbClient) {
+    try {
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('id')
+        .eq('subdomain', session.subdomain)
+        .maybeSingle();
+
+      if (ws?.id) {
+        const { data: creds } = await supabase
+          .from('workspace_byoc_credentials')
+          .select('fb_app_id, encrypted_fb_app_secret')
+          .eq('workspace_id', ws.id)
+          .maybeSingle();
+
+        if (creds?.fb_app_id) {
+          byoc = {
+            fbAppId: creds.fb_app_id,
+            encryptedSecret: creds.encrypted_fb_app_secret,
+          };
+        }
+      }
+    } catch (_err) {
+      // Fallback
+    }
+  } else {
+    try {
+      const db = dbClient ?? getDbClient();
+      const byocRows = (await db.query(
+        `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
+         FROM workspace_byoc_credentials c
+         JOIN workspaces w ON w.id = c.workspace_id
+         WHERE w.subdomain = $1
+         LIMIT 1`,
+        [session.subdomain]
+      )) as Array<{ fbAppId: string; encryptedSecret: string }>;
+      byoc = byocRows?.[0];
+    } catch (_err) {
+      // If DB is unavailable or during isolated unit tests, fallback to process.env
+    }
   }
 
   const effectiveAppId = byoc?.fbAppId || process.env.FACEBOOK_APP_ID || '';

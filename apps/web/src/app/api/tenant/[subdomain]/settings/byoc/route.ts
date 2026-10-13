@@ -6,7 +6,7 @@ import {
   encryptToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getDbClient } from '@/lib/db';
+import { getSupabaseClient } from '@/lib/supabase-auth';
 
 function getSessionSecret(): string {
   return (
@@ -48,60 +48,61 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const db = getDbClient();
-
-  // Find workspace
-  const workspaceRows = (await db.query(
-    `SELECT id, name, subdomain FROM workspaces WHERE subdomain = $1 LIMIT 1`,
-    [subdomain]
-  )) as Array<{ id: string; name: string; subdomain: string }>;
-
-  let workspaceId = workspaceRows?.[0]?.id;
-  if (!workspaceId) {
-    // Attempt backfill
-    const inserted = (await db.query(
-      `INSERT INTO workspaces (id, owner_id, name, subdomain)
-       VALUES (gen_random_uuid(), $1, $2, $3)
-       ON CONFLICT (subdomain) DO UPDATE SET owner_id = EXCLUDED.owner_id
-       RETURNING id`,
-      [session.userId, subdomain, subdomain]
-    )) as Array<{ id: string }>;
-    workspaceId = inserted?.[0]?.id;
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
 
-  if (!workspaceId) {
-    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  try {
+    // Find workspace via Supabase PostgREST
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id, name, subdomain')
+      .eq('subdomain', subdomain)
+      .maybeSingle();
+
+    let workspaceId = workspace?.id as string | undefined;
+    if (!workspaceId) {
+      // Attempt backfill
+      const { data: inserted } = await supabase
+        .from('workspaces')
+        .upsert(
+          {
+            owner_id: session.userId,
+            name: subdomain,
+            subdomain,
+          },
+          { onConflict: 'subdomain' }
+        )
+        .select('id')
+        .single();
+      workspaceId = inserted?.id as string | undefined;
+    }
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // Find BYOC credentials via Supabase PostgREST
+    const { data: byoc } = await supabase
+      .from('workspace_byoc_credentials')
+      .select('workspace_id, fb_app_id, encrypted_fb_app_secret, webhook_verify_token, status, last_tested_at')
+      .eq('workspace_id', workspaceId)
+      .maybeSingle();
+
+    return NextResponse.json({
+      workspaceId,
+      subdomain,
+      fbAppId: byoc?.fb_app_id || '',
+      hasSecret: Boolean(byoc?.encrypted_fb_app_secret),
+      webhookVerifyToken: byoc?.webhook_verify_token || null,
+      status: byoc?.status || 'unverified',
+      lastTestedAt: byoc?.last_tested_at || null,
+    });
+  } catch (err) {
+    console.error('[BYOC Settings API] Unhandled GET exception:', err);
+    return NextResponse.json({ error: 'Failed to retrieve BYOC settings' }, { status: 500 });
   }
-
-  // Find BYOC credentials
-  const byocRows = (await db.query(
-    `SELECT workspace_id AS "workspaceId", fb_app_id AS "fbAppId",
-            encrypted_fb_app_secret AS "encryptedSecret",
-            webhook_verify_token AS "webhookVerifyToken",
-            status, last_tested_at AS "lastTestedAt"
-     FROM workspace_byoc_credentials
-     WHERE workspace_id = $1 LIMIT 1`,
-    [workspaceId]
-  )) as Array<{
-    workspaceId: string;
-    fbAppId: string;
-    encryptedSecret?: string;
-    webhookVerifyToken?: string | null;
-    status: 'unverified' | 'valid' | 'invalid';
-    lastTestedAt?: string | null;
-  }>;
-
-  const byoc = byocRows?.[0];
-
-  return NextResponse.json({
-    workspaceId,
-    subdomain,
-    fbAppId: byoc?.fbAppId || '',
-    hasSecret: Boolean(byoc?.encryptedSecret),
-    webhookVerifyToken: byoc?.webhookVerifyToken || null,
-    status: byoc?.status || 'unverified',
-    lastTestedAt: byoc?.lastTestedAt || null,
-  });
 }
 
 export async function PUT(
@@ -135,53 +136,69 @@ export async function PUT(
   }
 
   const { fbAppId, fbAppSecret, webhookVerifyToken } = parseResult.data;
-  const db = getDbClient();
-
-  // Find workspace
-  const workspaceRows = (await db.query(
-    `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
-    [subdomain]
-  )) as Array<{ id: string }>;
-
-  const workspaceId = workspaceRows?.[0]?.id;
-  if (!workspaceId) {
-    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
 
-  const encryptionKey = getEncryptionKey();
+  try {
+    const { data: workspace } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .maybeSingle();
 
-  if (fbAppSecret && fbAppSecret.length > 0) {
-    const encryptedSecret = await encryptToken(fbAppSecret, encryptionKey);
+    const workspaceId = workspace?.id as string | undefined;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
 
-    await db.query(
-      `INSERT INTO workspace_byoc_credentials (
-        workspace_id, user_id, fb_app_id, encrypted_fb_app_secret, webhook_verify_token, status, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, 'unverified', now())
-      ON CONFLICT (workspace_id)
-      DO UPDATE SET
-        fb_app_id = EXCLUDED.fb_app_id,
-        encrypted_fb_app_secret = EXCLUDED.encrypted_fb_app_secret,
-        webhook_verify_token = EXCLUDED.webhook_verify_token,
-        status = 'unverified',
-        updated_at = now()`,
-      [workspaceId, session.userId, fbAppId, encryptedSecret, webhookVerifyToken || null]
-    );
-  } else {
-    // Only update app ID and webhook verify token without overwriting existing secret
-    await db.query(
-      `UPDATE workspace_byoc_credentials
-       SET fb_app_id = $1,
-           webhook_verify_token = $2,
-           status = 'unverified',
-           updated_at = now()
-       WHERE workspace_id = $3`,
-      [fbAppId, webhookVerifyToken || null, workspaceId]
-    );
+    const encryptionKey = getEncryptionKey();
+
+    if (fbAppSecret && fbAppSecret.length > 0) {
+      const encryptedSecret = await encryptToken(fbAppSecret, encryptionKey);
+
+      const { error: upsertErr } = await supabase.from('workspace_byoc_credentials').upsert(
+        {
+          workspace_id: workspaceId,
+          user_id: session.userId,
+          fb_app_id: fbAppId,
+          encrypted_fb_app_secret: encryptedSecret,
+          webhook_verify_token: webhookVerifyToken || null,
+          status: 'unverified',
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'workspace_id' }
+      );
+
+      if (upsertErr) {
+        console.error('[BYOC Settings API] Upsert credentials error:', upsertErr);
+        return NextResponse.json({ error: 'Failed to save credentials' }, { status: 500 });
+      }
+    } else {
+      const { error: updateErr } = await supabase
+        .from('workspace_byoc_credentials')
+        .update({
+          fb_app_id: fbAppId,
+          webhook_verify_token: webhookVerifyToken || null,
+          status: 'unverified',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('workspace_id', workspaceId);
+
+      if (updateErr) {
+        console.error('[BYOC Settings API] Update credentials error:', updateErr);
+        return NextResponse.json({ error: 'Failed to update credentials' }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      hasSecret: true,
+      status: 'unverified',
+    });
+  } catch (err) {
+    console.error('[BYOC Settings API] Unhandled PUT exception:', err);
+    return NextResponse.json({ error: 'Failed to save BYOC credentials' }, { status: 500 });
   }
-
-  return NextResponse.json({
-    success: true,
-    hasSecret: true,
-    status: 'unverified',
-  });
 }
