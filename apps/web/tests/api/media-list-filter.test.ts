@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
-import { handleListMedia } from '../../src/app/api/tenant/[subdomain]/media/route';
+import { handleListMedia, sanitizePostgrestSearchPattern } from '../../src/app/api/tenant/[subdomain]/media/route';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -205,5 +205,83 @@ describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', 
 
     expect(resEmptyCaption.status).toBe(200);
     expect(capturedSql).toContain("(caption_text IS NULL OR BTRIM(caption_text) = '')");
+  });
+
+  describe('PostgREST Search Input Sanitization (Issue 11)', () => {
+    it('escapes PostgREST delimiters (\\, ", %, _) and wraps search pattern in quotes', () => {
+      // Normal term with commas and parentheses
+      expect(sanitizePostgrestSearchPattern('reel, test (1).mp4')).toBe(
+        '"%reel, test (1).mp4%"'
+      );
+
+      // Backslash and quotes
+      expect(sanitizePostgrestSearchPattern('test "quote" \\ slash')).toBe(
+        '"%test \\"quote\\" \\\\ slash%"'
+      );
+
+      // Wildcards % and _
+      expect(sanitizePostgrestSearchPattern('100%_done')).toBe(
+        '"%100\\%\\_done%"'
+      );
+    });
+
+    it('verifies searching for terms with commas and parentheses succeeds against Supabase PostgREST', async () => {
+      let capturedOrFilter = '';
+      const mockQueryBuilder: any = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        or: vi.fn().mockImplementation((filter: string) => {
+          capturedOrFilter = filter;
+          return mockQueryBuilder;
+        }),
+        order: vi.fn().mockReturnThis(),
+        range: vi.fn().mockResolvedValue({
+          data: [
+            {
+              id: '44444444-4444-4444-a444-444444444444',
+              user_id: userId,
+              folder_id: null,
+              name: 'reel, test (1).mp4',
+              file_size: '5242880',
+              mime_type: 'video/mp4',
+              media_type: 'video',
+              storage_key: `users/${userId}/media/44444444/reel.mp4`,
+              url: 'https://example.com/reel.mp4',
+              thumbnail_key: null,
+              thumbnail_url: null,
+              duration_seconds: '15.0',
+              aspect_ratio: '9:16',
+              caption_text: 'Test caption',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+          count: 1,
+          error: null,
+        }),
+      };
+
+      const mockSupabase = {
+        from: vi.fn().mockReturnValue(mockQueryBuilder),
+      };
+
+      const searchTerm = 'reel, test (1).mp4';
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/media?search=${encodeURIComponent(searchTerm)}`,
+        { headers: { cookie: validSessionCookie } }
+      );
+
+      const res = await handleListMedia(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.total).toBe(1);
+      expect(data.items[0].name).toBe('reel, test (1).mp4');
+
+      // Verify PostgREST .or() filter safely quoted the search pattern
+      expect(capturedOrFilter).toBe(
+        'name.ilike."%reel, test (1).mp4%",caption_text.ilike."%reel, test (1).mp4%"'
+      );
+    });
   });
 });
