@@ -146,6 +146,26 @@ export interface AuthUser {
   passwordUpdatedAt?: number | undefined;
 }
 
+async function findWorkspaceSubdomainByOwner(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  ownerId: string,
+  fallbackSubdomain: string
+): Promise<string> {
+  if (!supabase) return fallbackSubdomain;
+  try {
+    const { data: wsData } = await supabase
+      .from('workspaces')
+      .select('subdomain')
+      .eq('owner_id', ownerId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return wsData?.subdomain || fallbackSubdomain;
+  } catch {
+    return fallbackSubdomain;
+  }
+}
+
 /**
  * Resilient multi-runtime user lookup:
  * 1. Checks Supabase PostgREST over HTTPS when Supabase client is available.
@@ -172,21 +192,8 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
       if (error) {
         console.error('[Supabase PostgREST] findUserByEmail error:', error.message);
       } else if (data) {
-        let subdomain: string = deriveSubdomainFromEmail(canonicalEmail);
-        try {
-          const { data: wsData } = await supabase
-            .from('workspaces')
-            .select('subdomain')
-            .eq('owner_id', data.id)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          if (wsData?.subdomain) {
-            subdomain = wsData.subdomain;
-          }
-        } catch (_wsErr) {
-          // fallback to derived
-        }
+        const fallback = deriveSubdomainFromEmail(canonicalEmail);
+        const subdomain = await findWorkspaceSubdomainByOwner(supabase, data.id, fallback);
         return { ...(data as object), subdomain } as AuthUser;
       }
     } catch (err) {
@@ -731,7 +738,7 @@ export async function registerTenantUser(params: {
       );
 
       userRecord = {
-        ...((inserted as object) || {}),
+        ...(inserted as AuthUser | null),
         id: userId,
         email: canonicalEmail,
         name: params.name,

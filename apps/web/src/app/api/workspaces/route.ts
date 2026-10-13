@@ -72,6 +72,50 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json({ workspaces: rows });
 }
 
+async function resolveUniqueSubdomain(
+  db: ReturnType<typeof getDbClient>,
+  userId: string,
+  userSubdomain: string | undefined,
+  requestedSubdomain?: string
+): Promise<{ subdomain?: string; error?: string; status?: number }> {
+  if (requestedSubdomain) {
+    const conflictCheck = (await db.query(
+      `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
+      [requestedSubdomain]
+    )) as Array<{ id: string }>;
+
+    if (conflictCheck && conflictCheck.length > 0) {
+      return {
+        error: 'Subdomain already in use. Please select a different subdomain.',
+        status: 409,
+      };
+    }
+    return { subdomain: requestedSubdomain };
+  }
+
+  const primaryWsRows = (await db.query(
+    `SELECT subdomain FROM workspaces WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
+    [userId]
+  )) as Array<{ subdomain: string }>;
+  const mainSubdomain = primaryWsRows?.[0]?.subdomain || userSubdomain || 'ws';
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = generateWorkspaceSubdomain(mainSubdomain);
+    const existing = (await db.query(
+      `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
+      [candidate]
+    )) as Array<{ id: string }>;
+    if (!existing || existing.length === 0) {
+      return { subdomain: candidate };
+    }
+  }
+
+  return {
+    error: 'Unable to auto-generate a unique workspace subdomain. Please try again.',
+    status: 500,
+  };
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const session = await extractSession(request);
   if (!session) {
@@ -96,48 +140,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const { name, subdomain } = parseResult.data;
   const db = getDbClient();
 
-  let targetSubdomain = subdomain;
-  if (!targetSubdomain) {
-    // Resolve user's primary/first workspace
-    const primaryWsRows = (await db.query(
-      `SELECT subdomain FROM workspaces WHERE owner_id = $1 ORDER BY created_at ASC LIMIT 1`,
-      [session.userId]
-    )) as Array<{ subdomain: string }>;
-    const mainSubdomain = primaryWsRows?.[0]?.subdomain || session.subdomain || 'ws';
-
-    // Auto-generate unique subdomain using direct concatenation: [main-subdomain][4-random-letters]
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const candidate = generateWorkspaceSubdomain(mainSubdomain);
-      const existing = (await db.query(
-        `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
-        [candidate]
-      )) as Array<{ id: string }>;
-      if (!existing || existing.length === 0) {
-        targetSubdomain = candidate;
-        break;
-      }
-    }
-
-    if (!targetSubdomain) {
-      return NextResponse.json(
-        { error: 'Unable to auto-generate a unique workspace subdomain. Please try again.' },
-        { status: 500 }
-      );
-    }
-  } else {
-    // Check if explicitly provided subdomain is already taken
-    const conflictCheck = (await db.query(
-      `SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1`,
-      [targetSubdomain]
-    )) as Array<{ id: string }>;
-
-    if (conflictCheck && conflictCheck.length > 0) {
-      return NextResponse.json(
-        { error: 'Subdomain already in use. Please select a different subdomain.' },
-        { status: 409 }
-      );
-    }
+  const resolution = await resolveUniqueSubdomain(db, session.userId, session.subdomain, subdomain);
+  if (resolution.error || !resolution.subdomain) {
+    return NextResponse.json({ error: resolution.error }, { status: resolution.status || 500 });
   }
+  const targetSubdomain = resolution.subdomain;
 
   // Insert workspace
   const insertRows = (await db.query(

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
 import { AuditLogsView } from '@/components/settings/audit-logs-view';

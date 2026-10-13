@@ -64,7 +64,7 @@ export async function POST(
   }>;
 
   const credentials = byocRows?.[0];
-  if (!credentials || !credentials.fbAppId || !credentials.encryptedSecret) {
+  if (!credentials?.fbAppId || !credentials.encryptedSecret) {
     return NextResponse.json(
       {
         success: false,

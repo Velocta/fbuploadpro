@@ -360,21 +360,39 @@ export function ByocConfigPromptModal({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="byoc-prompt-title"
+      role="presentation"
       data-testid="byoc-config-prompt-modal"
       style={MODAL_BACKDROP_STYLE}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
           onClose();
         }
       }}
     >
+      <button
+        type="button"
+        aria-label="Close dialog"
+        tabIndex={-1}
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          cursor: 'default',
+        }}
+      />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="byoc-prompt-title"
         style={{
           ...MODAL_CONTAINER_STYLE,
           maxWidth: '480px',
+          position: 'relative',
+          zIndex: 1,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
@@ -535,10 +553,8 @@ export default function TenantAccountsPage() {
           if (isMounted) {
             setByocStatus({ isConfigured, isLoading: false });
           }
-        } else {
-          if (isMounted) {
-            setByocStatus({ isConfigured: false, isLoading: false });
-          }
+        } else if (isMounted) {
+          setByocStatus({ isConfigured: false, isLoading: false });
         }
       } catch {
         if (isMounted) {

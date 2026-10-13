@@ -74,7 +74,7 @@ function redirectToLogout(): void {
 }
 
 export function WorkspaceUserMenu({ user, subdomain }: Readonly<WorkspaceUserMenuProps>) {
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile } = useSidebar();
   const [isOpen, setIsOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isThemeDark, setIsThemeDark] = useState(true);

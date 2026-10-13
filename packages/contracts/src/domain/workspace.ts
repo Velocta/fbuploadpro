@@ -24,10 +24,11 @@ export type CreateWorkspaceRequest = z.infer<typeof CreateWorkspaceRequestSchema
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 
 export function generateRandomAlphabetString(length = 4): string {
+  const randomBytes = new Uint8Array(length);
+  globalThis.crypto.getRandomValues(randomBytes);
   let result = '';
   for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * ALPHABET.length);
-    result += ALPHABET[randomIndex];
+    result += ALPHABET[randomBytes[i] % ALPHABET.length];
   }
   return result;
 }

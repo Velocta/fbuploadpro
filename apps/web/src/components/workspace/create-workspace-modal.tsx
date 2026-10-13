@@ -74,14 +74,34 @@ export function CreateWorkspaceModal({
   return (
     <div
       style={MODAL_BACKDROP_STYLE}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
+      role="presentation"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !isSubmitting) onClose();
       }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-workspace-title"
     >
-      <div style={{ ...MODAL_CONTAINER_STYLE, maxWidth: '440px' }}>
+      <button
+        type="button"
+        aria-label="Close dialog"
+        tabIndex={-1}
+        onClick={() => {
+          if (!isSubmitting) onClose();
+        }}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          margin: 0,
+          cursor: 'default',
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-workspace-title"
+        style={{ ...MODAL_CONTAINER_STYLE, maxWidth: '440px', position: 'relative', zIndex: 1 }}
+      >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h2
             id="create-workspace-title"

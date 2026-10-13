@@ -37,6 +37,169 @@ function getStatusDetails(status: BYOCStatus) {
   };
 }
 
+interface MetaAppSetupSectionProps {
+  redirectUri: string;
+  webhookUrl: string;
+  copiedKey: string | null;
+  onCopy: (key: string, value: string) => void;
+}
+
+function MetaAppSetupSection({
+  redirectUri,
+  webhookUrl,
+  copiedKey,
+  onCopy,
+}: Readonly<MetaAppSetupSectionProps>) {
+  return (
+    <div
+      style={{
+        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderRadius: RADII.md,
+        padding: SPACING.xl,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SPACING.lg,
+      }}
+    >
+      <div>
+        <h4
+          style={{
+            margin: 0,
+            fontSize: '0.9375rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          Meta Developer App Setup
+        </h4>
+        <p
+          style={{
+            margin: `${SPACING.xs} 0 0 0`,
+            fontSize: '0.8125rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          Copy these configuration parameters into your Meta Developer App Dashboard (`developers.facebook.com`).
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        {/* Valid OAuth Redirect URI */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
+            Valid OAuth Redirect URI
+          </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `${SPACING.sm} ${SPACING.md}`,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              borderRadius: RADII.sm,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {redirectUri}
+            </span>
+            <button
+              type="button"
+              onClick={() => onCopy('redirect', redirectUri)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+              }}
+            >
+              {copiedKey === 'redirect' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+
+        {/* Webhook Callback URL */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
+            Webhook Callback URL
+          </span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `${SPACING.sm} ${SPACING.md}`,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              borderRadius: RADII.sm,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '0.75rem',
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {webhookUrl}
+            </span>
+            <button
+              type="button"
+              onClick={() => onCopy('webhook', webhookUrl)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+              }}
+            >
+              {copiedKey === 'webhook' ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </div>
+
+        {/* Required Permissions Checklist */}
+        <div style={{ marginTop: SPACING.xs }}>
+          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
+            Required Meta App Permissions
+          </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs, marginTop: SPACING.xs }}>
+            {['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'business_management'].map((perm) => (
+              <span
+                key={perm}
+                style={{
+                  padding: `2px ${SPACING.sm}`,
+                  borderRadius: RADII.xs,
+                  backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  fontFamily: 'monospace',
+                  fontSize: '0.6875rem',
+                  color: PALETTE.primary,
+                }}
+              >
+                {perm}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>) {
   const [credentials, setCredentials] = useState<CredentialsState | null>(null);
   const [appId, setAppId] = useState('');
@@ -76,7 +239,7 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
         if (isMounted) setIsLoading(false);
       }
     }
-    fetchCredentials();
+    void fetchCredentials();
     return () => {
       isMounted = false;
     };
@@ -459,152 +622,12 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
       </div>
 
       {/* Meta Developer Configuration Helpers */}
-      <div
-        style={{
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-          padding: SPACING.xl,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: SPACING.lg,
-        }}
-      >
-        <div>
-          <h4
-            style={{
-              margin: 0,
-              fontSize: '0.9375rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Meta Developer App Setup
-          </h4>
-          <p
-            style={{
-              margin: `${SPACING.xs} 0 0 0`,
-              fontSize: '0.8125rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
-            Copy these configuration parameters into your Meta Developer App Dashboard (`developers.facebook.com`).
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          {/* Valid OAuth Redirect URI */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-              Valid OAuth Redirect URI
-            </span>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                borderRadius: RADII.sm,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.75rem',
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {redirectUri}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleCopy('redirect', redirectUri)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  cursor: 'pointer',
-                  fontSize: '0.75rem',
-                }}
-              >
-                {copiedKey === 'redirect' ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-          </div>
-
-          {/* Webhook Callback URL */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-              Webhook Callback URL
-            </span>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                borderRadius: RADII.sm,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: 'monospace',
-                  fontSize: '0.75rem',
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                }}
-              >
-                {webhookUrl}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleCopy('webhook', webhookUrl)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  cursor: 'pointer',
-                  fontSize: '0.75rem',
-                }}
-              >
-                {copiedKey === 'webhook' ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-          </div>
-
-          {/* Required Permissions Checklist */}
-          <div style={{ marginTop: SPACING.xs }}>
-            <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-              Required Meta App Permissions
-            </span>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs, marginTop: SPACING.xs }}>
-              {['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'business_management'].map((perm) => (
-                <span
-                  key={perm}
-                  style={{
-                    padding: `2px ${SPACING.sm}`,
-                    borderRadius: RADII.xs,
-                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    fontFamily: 'monospace',
-                    fontSize: '0.6875rem',
-                    color: PALETTE.primary,
-                  }}
-                >
-                  {perm}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <MetaAppSetupSection
+        redirectUri={redirectUri}
+        webhookUrl={webhookUrl}
+        copiedKey={copiedKey}
+        onCopy={handleCopy}
+      />
     </div>
   );
 }

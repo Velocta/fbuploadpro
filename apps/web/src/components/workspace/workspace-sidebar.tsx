@@ -23,7 +23,7 @@ import {
   CollapsibleContent,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { THEME, PALETTE, RADII, TYPOGRAPHY } from '@/lib/theme';
+import { THEME } from '@/lib/theme';
 import { WorkspaceUserMenu } from './workspace-user-menu';
 import { WorkspaceSwitcher } from './workspace-switcher';
 

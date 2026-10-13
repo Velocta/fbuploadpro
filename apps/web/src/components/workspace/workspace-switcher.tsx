@@ -60,7 +60,7 @@ export function WorkspaceSwitcher({ currentSubdomain }: Readonly<WorkspaceSwitch
         // Fallback to active workspace
       }
     }
-    loadWorkspaces();
+    void loadWorkspaces();
     return () => {
       isMounted = false;
     };
