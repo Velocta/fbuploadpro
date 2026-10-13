@@ -5,9 +5,10 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { signSessionToken } from '@fbuploadpro/contracts';
+import { signSessionToken, verifySessionToken } from '@fbuploadpro/contracts';
 import { GET as listWorkspaces, POST as createWorkspace } from '../../src/app/api/workspaces/route';
 import { POST as switchWorkspace } from '../../src/app/api/workspaces/switch/route';
+import { authenticateTenantRoute } from '../../src/lib/route-auth';
 import * as authModule from '@/lib/supabase-auth';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -153,5 +154,96 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
 
     const res = await switchWorkspace(req);
     expect(res.status).toBe(403);
+  });
+
+  it('populates allowedSubdomains with all owned workspaces when switching workspaces', async () => {
+    const mockSupabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn((col1: string, val1: string) => {
+                if (col1 === 'owner_id') {
+                  return {
+                    eq: vi.fn((col2: string, val2: string) => {
+                      if (col2 === 'subdomain' && val2 === 'acme-two') {
+                        return Promise.resolve({
+                          data: [{ id: 'ws-2', name: 'Acme Two', subdomain: 'acme-two' }],
+                          error: null,
+                        });
+                      }
+                      return Promise.resolve({ data: [], error: null });
+                    }),
+                    // When selecting all workspaces for owner_id
+                    then: (resolve: any) =>
+                      Promise.resolve({
+                        data: [
+                          { subdomain: 'acme' },
+                          { subdomain: 'acme-two' },
+                          { subdomain: 'acme-three' },
+                        ],
+                        error: null,
+                      }).then(resolve),
+                  };
+                }
+                return Promise.resolve({ data: [], error: null });
+              }),
+            })),
+          };
+        }
+        return {};
+      }),
+    };
+
+    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+
+    const req = new NextRequest('http://localhost:3000/api/workspaces/switch', {
+      method: 'POST',
+      headers: {
+        cookie: validSessionCookie,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ subdomain: 'acme-two' }),
+    });
+
+    const res = await switchWorkspace(req);
+    expect(res.status).toBe(200);
+
+    const setCookie = res.headers.get('set-cookie');
+    expect(setCookie).toBeDefined();
+    const tokenMatch = setCookie?.match(/fbup_session=([^;]+)/);
+    expect(tokenMatch).toBeTruthy();
+
+    const decoded = await verifySessionToken(tokenMatch![1], TEST_SECRET);
+    expect(decoded.subdomain).toBe('acme-two');
+    expect(decoded.allowedSubdomains).toEqual(
+      expect.arrayContaining(['acme', 'acme-two', 'acme-three'])
+    );
+  });
+
+  it('allows access via authenticateTenantRoute when target subdomain is in allowedSubdomains', async () => {
+    const multiSessionToken = await signSessionToken(
+      {
+        userId,
+        email: 'alex@acme.com',
+        name: 'Alex Acme',
+        subdomain: 'acme',
+        allowedSubdomains: ['acme', 'acme-two'],
+        role: 'user',
+        status: 'active',
+      },
+      TEST_SECRET
+    );
+
+    // Request to Tab A's workspace ('acme-two') while session.subdomain is 'acme'
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme-two/accounts', {
+      headers: {
+        cookie: `fbup_session=${multiSessionToken}`,
+      },
+    });
+
+    const authResult = await authenticateTenantRoute(req, 'acme-two');
+    expect(authResult.errorResponse).toBeUndefined();
+    expect(authResult.session?.userId).toBe(userId);
   });
 });

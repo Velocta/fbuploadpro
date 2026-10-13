@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   getSessionSecret,
   verifySessionToken,
+  canAccessTenant,
   type DatabaseClient,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
@@ -58,7 +59,8 @@ export async function authenticateTenantRoute(
     };
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return {
       errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
     };

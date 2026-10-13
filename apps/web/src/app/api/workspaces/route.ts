@@ -209,6 +209,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       updatedAt: inserted.updated_at as string | undefined,
     };
 
+    // Query all workspaces owned by the user to populate allowedSubdomains
+    const { data: userWorkspaces } = await supabase
+      .from('workspaces')
+      .select('subdomain')
+      .eq('owner_id', session.userId);
+
+    const allowedSubdomains = Array.from(
+      new Set(
+        (userWorkspaces || [])
+          .map((w) => w.subdomain)
+          .concat(newWorkspace.subdomain)
+          .filter((sub): sub is string => typeof sub === 'string' && Boolean(sub))
+      )
+    );
+
     // Generate new session token pointing to the newly created workspace
     const secret = getSessionSecret();
     const newToken = await signSessionToken(
@@ -217,6 +232,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         email: session.email,
         name: session.name,
         subdomain: newWorkspace.subdomain,
+        allowedSubdomains,
         role: session.role,
         status: session.status,
       },
