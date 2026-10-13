@@ -412,8 +412,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(executedStatements[0]!.params).toEqual([pageId, userId]);
 
       expect(executedStatements[1]!.sql).toContain('UPDATE queue_items');
-      expect(executedStatements[1]!.sql).toContain("SET status = 'cancelled'");
-      expect(executedStatements[1]!.params).toEqual([userId, 'page_1001']);
+      expect(executedStatements[1]!.sql).toContain("SET status = 'skipped'");
+      expect(executedStatements[1]!.params).toEqual([userId, pageId]);
     });
   });
 });
