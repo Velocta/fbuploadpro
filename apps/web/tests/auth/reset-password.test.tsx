@@ -7,6 +7,8 @@ import { POST as resetPasswordHandler } from '../../src/app/api/auth/reset-passw
 import {
   _setResetTokenForTesting,
   _resetAuthStores,
+  _setMockSupabaseClient,
+  resetUserPassword,
 } from '../../src/lib/supabase-auth';
 import {
   createPasswordResetOtp,
@@ -216,6 +218,124 @@ describe('Password Recovery - Reset Password (US2)', () => {
       expect(res6.status).toBe(429);
       const body6 = await res6.json();
       expect(body6.error).toContain('Too many password reset attempts');
+    });
+
+    describe('Supabase Client Token Recovery (Issue 04)', () => {
+      it('confirms password reset with token parameter succeeds against mocked Supabase', async () => {
+        const verifyOtpMock = vi.fn().mockResolvedValue({
+          data: { session: { access_token: 'fake-session-token' }, user: { id: 'user-abc' } },
+          error: null,
+        });
+        const updateUserMock = vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-abc' } },
+          error: null,
+        });
+
+        const mockSupabase = {
+          auth: {
+            verifyOtp: verifyOtpMock,
+            updateUser: updateUserMock,
+          },
+        };
+
+        _setMockSupabaseClient(mockSupabase as any);
+
+        const result = await resetUserPassword({
+          token: 'recovery-token-xyz-789',
+          password: 'new-valid-secure-pass-123',
+        });
+
+        expect(verifyOtpMock).toHaveBeenCalledWith({
+          token_hash: 'recovery-token-xyz-789',
+          type: 'recovery',
+        });
+        expect(updateUserMock).toHaveBeenCalledWith({
+          password: 'new-valid-secure-pass-123',
+        });
+        expect(result.message).toBe('Your password has been successfully updated.');
+
+        _setMockSupabaseClient(null);
+      });
+
+      it('throws clear user-safe error if token verification fails against mocked Supabase', async () => {
+        const verifyOtpMock = vi.fn().mockResolvedValue({
+          data: null,
+          error: { message: 'Token has expired or is invalid' },
+        });
+        const updateUserMock = vi.fn();
+
+        const mockSupabase = {
+          auth: {
+            verifyOtp: verifyOtpMock,
+            updateUser: updateUserMock,
+          },
+        };
+
+        _setMockSupabaseClient(mockSupabase as any);
+
+        await expect(
+          resetUserPassword({
+            token: 'expired-token-xyz',
+            password: 'new-valid-secure-pass-123',
+          })
+        ).rejects.toThrow('Invalid or expired password reset link.');
+
+        expect(verifyOtpMock).toHaveBeenCalledWith({
+          token_hash: 'expired-token-xyz',
+          type: 'recovery',
+        });
+        expect(updateUserMock).not.toHaveBeenCalled();
+
+        _setMockSupabaseClient(null);
+      });
+
+      it('handles API route POST /api/auth/reset-password with token parameter against mocked Supabase', async () => {
+        const verifyOtpMock = vi.fn().mockResolvedValue({
+          data: { session: { access_token: 'valid-session' }, user: { id: 'user-123' } },
+          error: null,
+        });
+        const updateUserMock = vi.fn().mockResolvedValue({
+          data: { user: { id: 'user-123' } },
+          error: null,
+        });
+
+        const mockSupabase = {
+          auth: {
+            verifyOtp: verifyOtpMock,
+            updateUser: updateUserMock,
+          },
+        };
+
+        _setMockSupabaseClient(mockSupabase as any);
+
+        const req = new NextRequest('http://localhost:3000/api/auth/reset-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-forwarded-for': '198.51.100.42',
+          },
+          body: JSON.stringify({
+            token: 'recovery-token-api-hash',
+            password: 'valid-super-secret-password-456',
+          }),
+        });
+
+        const res = await resetPasswordHandler(req);
+        expect(res.status).toBe(200);
+
+        const body = await res.json();
+        expect(body.success).toBe(true);
+        expect(body.message).toContain('successfully updated');
+        expect(verifyOtpMock).toHaveBeenCalledWith({
+          token_hash: 'recovery-token-api-hash',
+          type: 'recovery',
+        });
+        expect(updateUserMock).toHaveBeenCalledWith({
+          password: 'valid-super-secret-password-456',
+        });
+
+        _setMockSupabaseClient(null);
+      });
     });
   });
 });
