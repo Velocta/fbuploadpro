@@ -30,9 +30,10 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
   });
 
   describe('Disconnect Page (DELETE /api/tenant/[subdomain]/pages/[pageId])', () => {
-    it('soft-deletes specific page under (user_id, pageId) by setting status = disconnected, wiping encrypted_access_token, and cancelling queued posts', async () => {
+    it('soft-deletes specific page under (user_id, pageId) by setting status = disconnected, wiping encrypted_access_token, and transitioning queued posts to skipped', async () => {
       let updatedParams: any[] = [];
-      let cancelledQueueParams: any[] = [];
+      let skippedQueueParams: any[] = [];
+      let skippedSql = '';
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
           if (sql.includes('UPDATE facebook_pages')) {
@@ -40,7 +41,8 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
             return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
           }
           if (sql.includes('UPDATE queue_items')) {
-            cancelledQueueParams = params;
+            skippedSql = sql;
+            skippedQueueParams = params;
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -65,7 +67,60 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       // Verify soft-delete parameters include compound user_id check and queue cancellation
       expect(updatedParams[0]).toBe(pageId);
       expect(updatedParams[1]).toBe(userId);
-      expect(cancelledQueueParams).toEqual([userId, 'page_1001']);
+      expect(skippedSql).toContain("SET status = 'skipped'");
+      expect(skippedQueueParams).toEqual([userId, pageId]);
+    });
+
+    it('transitions queued items to skipped via Supabase client on page disconnect', async () => {
+      const queueUpdateMock = vi.fn().mockReturnThis();
+      const queueEqMock = vi.fn().mockReturnThis();
+
+      const mockSupabase = {
+        from: vi.fn().mockImplementation((table: string) => {
+          if (table === 'facebook_pages') {
+            return {
+              update: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  eq: vi.fn().mockReturnValue({
+                    select: vi.fn().mockResolvedValue({
+                      data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'queue_items') {
+            return {
+              update: queueUpdateMock.mockReturnValue({
+                eq: queueEqMock.mockReturnValue({
+                  eq: queueEqMock.mockReturnValue({
+                    eq: vi.fn().mockResolvedValue({ data: [], error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/pages/${pageId}`,
+        {
+          method: 'DELETE',
+          headers: { cookie: validSessionCookie },
+        }
+      );
+
+      const res = await handleDisconnectPage(req, 'acme', pageId, mockSupabase as any);
+      expect(res.status).toBe(200);
+
+      expect(queueUpdateMock).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'skipped' })
+      );
+      expect(queueEqMock).toHaveBeenCalledWith('fb_page_id', pageId);
     });
 
     it('returns 404 when page does not exist or belongs to another user', async () => {

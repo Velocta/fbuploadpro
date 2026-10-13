@@ -207,7 +207,6 @@ export async function handleDisconnectPage(
   if (auth.errorResponse) return auth.errorResponse;
   const session = auth.session!;
 
-  let fbPageId: string | null = null;
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     const result = (await dbClient.query(
@@ -226,17 +225,14 @@ export async function handleDisconnectPage(
         { status: 404 }
       );
     }
-    fbPageId = result[0].fb_page_id || result[0].fbPageId;
 
-    if (fbPageId) {
-      await dbClient.query(
-        `UPDATE queue_items
-         SET status = 'cancelled',
-             updated_at = now()
-         WHERE user_id = $1 AND fb_page_id = $2 AND status = 'queued'`,
-        [session.userId, String(fbPageId)]
-      );
-    }
+    await dbClient.query(
+      `UPDATE queue_items
+       SET status = 'skipped',
+           updated_at = now()
+       WHERE user_id = $1 AND fb_page_id = $2 AND status = 'queued'`,
+      [session.userId, pageId]
+    );
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
     if (!supabase) {
@@ -260,16 +256,13 @@ export async function handleDisconnectPage(
         { status: 404 }
       );
     }
-    fbPageId = updated[0].fb_page_id;
 
-    if (fbPageId) {
-      await supabase
-        .from('queue_items')
-        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
-        .eq('user_id', session.userId)
-        .eq('fb_page_id', String(fbPageId))
-        .eq('status', 'queued');
-    }
+    await supabase
+      .from('queue_items')
+      .update({ status: 'skipped', updated_at: new Date().toISOString() })
+      .eq('user_id', session.userId)
+      .eq('fb_page_id', pageId)
+      .eq('status', 'queued');
   }
 
   const responsePayload = DisconnectPageResponseSchema.parse({
