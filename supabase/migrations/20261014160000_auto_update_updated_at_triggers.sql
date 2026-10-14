@@ -33,12 +33,17 @@ CREATE TRIGGER trg_facebook_pages_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION public.set_updated_at();
 
--- user_storage_quotas
-DROP TRIGGER IF EXISTS trg_user_storage_quotas_updated_at ON public.user_storage_quotas;
-CREATE TRIGGER trg_user_storage_quotas_updated_at
-    BEFORE UPDATE ON public.user_storage_quotas
-    FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at();
+-- user_storage_quotas (guarded if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_storage_quotas') THEN
+        DROP TRIGGER IF EXISTS trg_user_storage_quotas_updated_at ON public.user_storage_quotas;
+        CREATE TRIGGER trg_user_storage_quotas_updated_at
+            BEFORE UPDATE ON public.user_storage_quotas
+            FOR EACH ROW
+            EXECUTE FUNCTION public.set_updated_at();
+    END IF;
+END $$;
 
 -- media_folders
 DROP TRIGGER IF EXISTS trg_media_folders_updated_at ON public.media_folders;
@@ -47,12 +52,17 @@ CREATE TRIGGER trg_media_folders_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION public.set_updated_at();
 
--- caption_templates
-DROP TRIGGER IF EXISTS trg_caption_templates_updated_at ON public.caption_templates;
-CREATE TRIGGER trg_caption_templates_updated_at
-    BEFORE UPDATE ON public.caption_templates
-    FOR EACH ROW
-    EXECUTE FUNCTION public.set_updated_at();
+-- caption_templates (guarded if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'caption_templates') THEN
+        DROP TRIGGER IF EXISTS trg_caption_templates_updated_at ON public.caption_templates;
+        CREATE TRIGGER trg_caption_templates_updated_at
+            BEFORE UPDATE ON public.caption_templates
+            FOR EACH ROW
+            EXECUTE FUNCTION public.set_updated_at();
+    END IF;
+END $$;
 
 -- media_items
 DROP TRIGGER IF EXISTS trg_media_items_updated_at ON public.media_items;
