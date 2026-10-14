@@ -92,9 +92,28 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
       expect(key).toBe('preferred-token-key-1234567890abcdef1234567890abcdef1234567890abcdef12');
     });
 
-    it('falls back to dev key in development/test environments when key is absent', () => {
-      const key = getTokenEncryptionKey({ NODE_ENV: 'test' });
-      expect(key).toBe('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    it('falls back to dev key only in development/test environments when key is absent', () => {
+      const testKey = getTokenEncryptionKey({ NODE_ENV: 'test' });
+      expect(testKey).toBe('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+
+      const devKey = getTokenEncryptionKey({ NODE_ENV: 'development' });
+      expect(devKey).toBe('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+    });
+
+    it('throws DomainError when NODE_ENV is undefined and key is absent (ISSUE-39)', () => {
+      expect(() => {
+        getTokenEncryptionKey({});
+      }).toThrow(DomainError);
+
+      expect(() => {
+        getTokenEncryptionKey({});
+      }).toThrow(/required/i);
+    });
+
+    it('throws DomainError in staging environment when key is absent (ISSUE-39)', () => {
+      expect(() => {
+        getTokenEncryptionKey({ NODE_ENV: 'staging' });
+      }).toThrow(DomainError);
     });
 
     it('throws DomainError in production environment when key is absent', () => {
@@ -104,7 +123,7 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
 
       expect(() => {
         getTokenEncryptionKey({ NODE_ENV: 'production' });
-      }).toThrow(/TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required in production environment/i);
+      }).toThrow(/TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required/i);
     });
 
     it('allows valid key in production environment', () => {
