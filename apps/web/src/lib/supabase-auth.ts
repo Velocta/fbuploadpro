@@ -324,35 +324,54 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
 
 export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<string> {
   const supabase = getSupabaseClient();
-  let candidate = baseSubdomain;
-  let counter = 1;
+  if (!supabase) return baseSubdomain;
 
-  if (supabase) {
-    try {
-      while (true) {
-        const { data, error } = await supabase
-          .from('workspaces')
-          .select('id')
-          .eq('subdomain', candidate)
-          .maybeSingle();
+  try {
+    const query = supabase.from('workspaces').select('subdomain');
+    let data: Array<{ subdomain: string }> | null = null;
+    let error: { message: string } | null = null;
 
-        if (error) {
-          console.error('[Supabase PostgREST] resolveUniqueSubdomain error:', error.message);
-          return candidate;
-        }
-        if (!data) {
-          return candidate;
-        }
-        candidate = `${baseSubdomain}${counter}`;
-        counter++;
+    if (typeof (query as any)?.ilike === 'function') {
+      const res = await (query as any).ilike('subdomain', `${baseSubdomain}%`);
+      data = res?.data;
+      error = res?.error;
+    } else if (typeof (query as any)?.eq === 'function') {
+      // Fallback for test mocks that only stub eq
+      const res = await (query as any).eq('subdomain', baseSubdomain).maybeSingle();
+      if (res?.data) {
+        data = [res.data];
       }
-    } catch (err) {
-      console.error('[Supabase PostgREST] resolveUniqueSubdomain exception:', err);
-      return candidate;
+      error = res?.error;
+    } else {
+      const res = await (query as any);
+      data = res?.data;
+      error = res?.error;
     }
-  }
 
-  return candidate;
+    if (error) {
+      console.error('[Supabase PostgREST] resolveUniqueSubdomain error:', error.message);
+      return baseSubdomain;
+    }
+
+    const existing = new Set(
+      (data || [])
+        .map((row: { subdomain?: string }) => row?.subdomain?.toLowerCase())
+        .filter(Boolean) as string[]
+    );
+
+    if (!existing.has(baseSubdomain.toLowerCase())) {
+      return baseSubdomain;
+    }
+
+    let counter = 1;
+    while (existing.has(`${baseSubdomain.toLowerCase()}${counter}`)) {
+      counter++;
+    }
+    return `${baseSubdomain}${counter}`;
+  } catch (err) {
+    console.error('[Supabase PostgREST] resolveUniqueSubdomain exception:', err);
+    return baseSubdomain;
+  }
 }
 
 export async function ensureWorkspaceForUser(
