@@ -32,7 +32,7 @@ function clearClientSessionCookies(): void {
   document.cookie = 'fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
 }
 
-function broadcastLogout(): void {
+export function broadcastLogout(): void {
   broadcastAuthEvent({ type: 'LOGOUT' });
 }
 

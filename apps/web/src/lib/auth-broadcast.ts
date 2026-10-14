@@ -5,6 +5,8 @@
  * via BroadcastChannel('fbup_auth') and localStorage storage events (Spec 020/021/022).
  */
 
+import { sanitizeAuthRedirectUrl } from './auth-redirect';
+
 export type AuthBroadcastType = 'LOGIN' | 'LOGOUT' | 'USER_SWITCH' | 'SESSION_CHANGE';
 
 export interface AuthBroadcastPayload {
@@ -51,5 +53,23 @@ export function broadcastAuthEvent(
     }
   } catch {
     // Ignore localStorage errors
+  }
+}
+
+/**
+ * Dispatches a cross-tab LOGIN broadcast and navigates the window to the sanitized post-auth destination.
+ */
+export function completeAuthRedirect(
+  redirectUrl: string,
+  user?: { id?: string; email?: string; subdomain?: string } | undefined
+): void {
+  broadcastAuthEvent({
+    type: 'LOGIN',
+    userId: user?.id,
+    email: user?.email,
+  });
+
+  if (typeof window !== 'undefined') {
+    window.location.href = sanitizeAuthRedirectUrl(redirectUrl, user?.subdomain);
   }
 }

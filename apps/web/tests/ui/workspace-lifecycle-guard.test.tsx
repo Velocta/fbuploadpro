@@ -1,6 +1,6 @@
 /**
  * @file workspace-lifecycle-guard.test.tsx
- * @description Unit tests for WorkspaceLifecycleGuard & cross-tab auth synchronization (Spec 020/021/022).
+ * @description Unit tests for WorkspaceLifecycleGuard, cross-tab auth synchronization, and redirect helpers (Spec 020/021/022).
  */
 
 import React from 'react';
@@ -9,7 +9,7 @@ import {
   WorkspaceLifecycleGuard,
   setupWorkspaceLifecycleGuard,
 } from '@/components/workspace/workspace-lifecycle-guard';
-import { broadcastAuthEvent } from '@/lib/auth-broadcast';
+import { broadcastAuthEvent, completeAuthRedirect } from '@/lib/auth-broadcast';
 import { render } from '../components/setup';
 
 describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
@@ -46,6 +46,30 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
 
       expect(mockLocalStorage.setItem).toHaveBeenCalledWith('fbup_active_user', 'usr_init_123');
       cleanup();
+    });
+
+    it('gracefully handles localStorage exception on initialization', () => {
+      const mockLocalStorage = {
+        setItem: vi.fn(() => {
+          throw new Error('Storage disabled');
+        }),
+        getItem: vi.fn(),
+        removeItem: vi.fn(),
+      };
+      vi.stubGlobal('localStorage', mockLocalStorage);
+      vi.stubGlobal('window', {
+        location: { href: '', reload: vi.fn() },
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        fetch: vi.fn().mockResolvedValue(new Response()),
+      });
+
+      expect(() => {
+        const cleanup = setupWorkspaceLifecycleGuard({
+          userId: 'usr_init_123',
+        });
+        cleanup();
+      }).not.toThrow();
     });
 
     it('redirects to /login?logout=success on LOGOUT BroadcastChannel event', () => {
@@ -167,7 +191,7 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
       cleanup();
     });
 
-    it('triggers reload on explicit USER_SWITCH or SESSION_CHANGE BroadcastChannel events', () => {
+    it('triggers reload on explicit USER_SWITCH, SESSION_CHANGE, and SESSION_CHANGED BroadcastChannel events', () => {
       let messageHandler: ((e: { data: unknown }) => void) | null = null;
 
       class MockBroadcastChannel {
@@ -195,15 +219,113 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
         userEmail: 'owner@gmail.com',
       });
 
+      // 1. USER_SWITCH
       messageHandler!({
         data: {
           type: 'USER_SWITCH',
           userId: 'user_active_1',
         },
       });
-
       expect(mockLocation.reload).toHaveBeenCalledTimes(1);
+
+      // 2. SESSION_CHANGE
+      messageHandler!({
+        data: {
+          type: 'SESSION_CHANGE',
+          userId: 'user_diff_3',
+        },
+      });
+      expect(mockLocation.reload).toHaveBeenCalledTimes(2);
+
+      // 3. SESSION_CHANGED
+      messageHandler!({
+        data: {
+          type: 'SESSION_CHANGED',
+          userId: 'user_diff_4',
+        },
+      });
+      expect(mockLocation.reload).toHaveBeenCalledTimes(3);
+
+      // 4. Unrecognized event type (no-op)
+      messageHandler!({
+        data: {
+          type: 'OTHER_EVENT',
+        },
+      });
+      expect(mockLocation.reload).toHaveBeenCalledTimes(3);
+
       cleanup();
+    });
+
+    it('falls back to localStorage active user when userId prop is omitted', () => {
+      let messageHandler: ((e: { data: unknown }) => void) | null = null;
+
+      class MockBroadcastChannel {
+        name: string;
+        close = vi.fn();
+        set onmessage(fn: (e: { data: unknown }) => void) {
+          messageHandler = fn;
+        }
+        constructor(name: string) {
+          this.name = name;
+        }
+      }
+
+      const mockLocation = { href: '', reload: vi.fn() };
+      vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
+      vi.stubGlobal('localStorage', {
+        getItem: vi.fn((key: string) => (key === 'fbup_active_user' ? 'cached_usr_1' : null)),
+        setItem: vi.fn(),
+        removeItem: vi.fn(),
+      });
+      vi.stubGlobal('window', {
+        location: mockLocation,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        fetch: vi.fn().mockResolvedValue(new Response()),
+      });
+
+      const cleanup = setupWorkspaceLifecycleGuard();
+
+      // Same user from localStorage: no reload
+      messageHandler!({
+        data: {
+          type: 'LOGIN',
+          userId: 'cached_usr_1',
+        },
+      });
+      expect(mockLocation.reload).not.toHaveBeenCalled();
+
+      // Different user: reload
+      messageHandler!({
+        data: {
+          type: 'LOGIN',
+          userId: 'cached_usr_2',
+        },
+      });
+      expect(mockLocation.reload).toHaveBeenCalledTimes(1);
+
+      cleanup();
+    });
+
+    it('handles environments where BroadcastChannel constructor or close throws', () => {
+      class FailingBroadcastChannel {
+        constructor() {
+          throw new Error('Not supported');
+        }
+      }
+      vi.stubGlobal('BroadcastChannel', FailingBroadcastChannel);
+      vi.stubGlobal('window', {
+        location: { href: '', reload: vi.fn() },
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        fetch: vi.fn().mockResolvedValue(new Response()),
+      });
+
+      expect(() => {
+        const cleanup = setupWorkspaceLifecycleGuard();
+        cleanup();
+      }).not.toThrow();
     });
 
     it('handles storage events for cross-tab logout and user identity changes', () => {
@@ -252,11 +374,18 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
       });
       expect(mockLocation.reload).toHaveBeenCalledTimes(1);
 
-      // 4. Test pageshow with persisted: false (no-op)
+      // 4. Test unrelated storage key (no-op)
+      storageListener!({
+        key: 'unrelated_key',
+        newValue: 'val',
+      });
+      expect(mockLocation.reload).toHaveBeenCalledTimes(1);
+
+      // 5. Test pageshow with persisted: false (no-op)
       pageshowListener!({ persisted: false });
       expect(mockLocation.reload).toHaveBeenCalledTimes(1);
 
-      // 5. Test pageshow with persisted: true (bfcache hard reload)
+      // 6. Test pageshow with persisted: true (bfcache hard reload)
       pageshowListener!({ persisted: true });
       expect(mockLocation.reload).toHaveBeenCalledTimes(2);
 
@@ -287,15 +416,33 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
 
       expect(fakeWindow.fetch).not.toBe(originalNativeFetch);
 
-      // Call intercepted fetch
+      // 1. Intercepted fetch returning ACCOUNT_SUSPENDED code
       await fakeWindow.fetch('/api/some-endpoint');
       expect(mockLocation.href).toBe('/account-suspended');
 
-      // Test with non-JSON 403 (does not crash)
+      // 2. Intercepted fetch returning suspended in error string
+      originalNativeFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Your account is suspended by admin.' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      mockLocation.href = '';
+      await fakeWindow.fetch('/api/check');
+      expect(mockLocation.href).toBe('/account-suspended');
+
+      // 3. Test with non-JSON 403 (does not crash)
       originalNativeFetch.mockResolvedValueOnce(
         new Response('<html>Forbidden</html>', { status: 403 })
       );
       await fakeWindow.fetch('/api/non-json');
+
+      // 4. Test with 200 normal response
+      originalNativeFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      );
+      const res = await fakeWindow.fetch('/api/ok');
+      expect(res.status).toBe(200);
 
       cleanup();
       expect(fakeWindow.fetch).toBe(originalNativeFetch);
@@ -430,6 +577,55 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
       expect(() => {
         broadcastAuthEvent({ type: 'LOGIN', userId: 'usr_fail' });
       }).not.toThrow();
+    });
+  });
+
+  describe('completeAuthRedirect helper', () => {
+    it('broadcasts LOGIN and updates window.location.href to sanitized destination', () => {
+      const postMessage = vi.fn();
+      class MockBroadcastChannel {
+        postMessage = postMessage;
+        close = vi.fn();
+      }
+      const mockLocation = { href: '', hostname: 'localhost' };
+      vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
+      vi.stubGlobal('localStorage', { setItem: vi.fn() });
+      vi.stubGlobal('window', { location: mockLocation, BroadcastChannel: MockBroadcastChannel });
+
+      completeAuthRedirect('/tenant/acme', {
+        id: 'user_456',
+        email: 'user@gmail.com',
+        subdomain: 'acme',
+      });
+
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'LOGIN',
+          userId: 'user_456',
+          email: 'user@gmail.com',
+        })
+      );
+      expect(mockLocation.href).toBe('http://acme.localhost:3000');
+    });
+
+    it('works when user is omitted', () => {
+      const postMessage = vi.fn();
+      class MockBroadcastChannel {
+        postMessage = postMessage;
+        close = vi.fn();
+      }
+      const mockLocation = { href: '', hostname: 'localhost' };
+      vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
+      vi.stubGlobal('window', { location: mockLocation, BroadcastChannel: MockBroadcastChannel });
+
+      completeAuthRedirect('/login?reset=success');
+
+      expect(postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'LOGIN',
+        })
+      );
+      expect(mockLocation.href).toBe('/login?reset=success');
     });
   });
 });
