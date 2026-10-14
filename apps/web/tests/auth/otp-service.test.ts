@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import crypto from 'node:crypto';
 import {
   generateSecureOtp,
   constantTimeEquals,
@@ -305,7 +306,67 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       expect(verifyAfter.error).toMatch(/locked/i);
     });
   });
+
+  describe('Cryptographic Uniformity & Strict OTP Format Validation (ISSUE-38)', () => {
+    it('generates OTPs using crypto.randomInt without modulo bias', () => {
+      const spy = vi.spyOn(crypto, 'randomInt');
+      const otp = generateSecureOtp();
+      expect(spy).toHaveBeenCalledWith(100000, 1000000);
+      expect(otp).toHaveLength(6);
+      expect(/^\d{6}$/.test(otp)).toBe(true);
+      spy.mockRestore();
+    });
+
+    it('strictly rejects non-6-digit or malformed OTP inputs for signup verification without silent coercion', () => {
+      const email = 'strict.otp@gmail.com';
+      createPendingSignup({
+        name: 'Strict User',
+        phone: '+14155552671',
+        email,
+        password: 'Password123!',
+      });
+
+      // Characters interspersed, letters, spaces, wrong length
+      const malformedInputs = [
+        '12 34 56',
+        '12345a',
+        '12-34-56',
+        '12345',
+        '1234567',
+        'abc123',
+        '',
+      ];
+
+      for (const input of malformedInputs) {
+        const res = verifySignupOtp(email, input);
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/must be exactly 6 digits/i);
+      }
+    });
+
+    it('strictly rejects non-6-digit or malformed OTP inputs for password reset verification without silent coercion', () => {
+      const email = 'strict.reset@gmail.com';
+      createPasswordResetOtp(email);
+
+      const malformedInputs = [
+        '12 34 56',
+        '12345a',
+        '12-34-56',
+        '12345',
+        '1234567',
+        'abc123',
+        '',
+      ];
+
+      for (const input of malformedInputs) {
+        const res = verifyPasswordResetOtp(email, input);
+        expect(res.success).toBe(false);
+        expect(res.error).toMatch(/must be exactly 6 digits/i);
+      }
+    });
+  });
 });
+
 
 
 
