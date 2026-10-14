@@ -65,7 +65,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
                 id: pageId,
                 fb_page_id: 'fb_page_99999',
                 page_name: 'Acme Official',
-                fb_page_access_token: sampleCiphertext,
+                encrypted_access_token: sampleCiphertext,
                 status: 'active',
               },
             ];
@@ -118,6 +118,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
     expect(textBody).not.toContain(rawToken);
     expect(textBody).not.toContain(sampleCiphertext);
     expect(textBody).not.toContain('access_token');
+    expect(textBody).not.toContain('encrypted_access_token');
     expect(textBody).not.toContain('fb_page_access_token');
 
     // Headers check
@@ -151,7 +152,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
             id: pageId,
             fb_page_id: 'fb_page_99999',
             page_name: 'Acme Official',
-            fb_page_access_token: sampleCiphertext,
+            encrypted_access_token: sampleCiphertext,
             status: 'active',
           },
         ];
@@ -227,7 +228,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
               id: pageId,
               fb_page_id: 'fb_page_99999',
               page_name: 'Acme Official',
-              fb_page_access_token: sampleCiphertext,
+              encrypted_access_token: sampleCiphertext,
               status: 'active',
             },
           ];

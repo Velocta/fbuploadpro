@@ -39,4 +39,4 @@ Imports selected `selectedPageIds` for `accountId`. Sets both `starting_follower
 Soft-deletes a Facebook Page:
 - Sets `status = 'disconnected'` and `encrypted_access_token = ''` on `facebook_pages`.
 - Updates any `'queued'` items in `queue_items` for that Page to `'cancelled'`.
-- Preserves historical `publishing_logs` and `page_insights_daily`.
+- Preserves historical `publish_logs` and `page_insights_daily_snapshots`.

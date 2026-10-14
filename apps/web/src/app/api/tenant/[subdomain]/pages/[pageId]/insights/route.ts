@@ -68,7 +68,7 @@ export async function handleGetInsights(
     id: string;
     fb_page_id: string;
     page_name: string;
-    fb_page_access_token: string;
+    encrypted_access_token: string;
     status: string;
   } | null = null;
 
@@ -76,7 +76,7 @@ export async function handleGetInsights(
     const whereClause = isUuid ? 'p.id = $1' : 'p.fb_page_id = $1';
     const pageRows = (await client.query(
       `SELECT p.id, p.fb_page_id, p.page_name, 
-              COALESCE(p.encrypted_access_token, p.fb_page_access_token) AS encrypted_access_token, 
+              p.encrypted_access_token, 
               p.status
        FROM facebook_pages p
        WHERE ${whereClause} AND p.user_id = $2`,
@@ -97,7 +97,7 @@ export async function handleGetInsights(
       id: found.id,
       fb_page_id: found.fb_page_id,
       page_name: found.page_name,
-      fb_page_access_token: found.encrypted_access_token || found.fb_page_access_token,
+      encrypted_access_token: found.encrypted_access_token,
       status: found.status,
     };
   } else {
@@ -127,7 +127,7 @@ export async function handleGetInsights(
       id: pageData.id,
       fb_page_id: pageData.fb_page_id,
       page_name: pageData.page_name,
-      fb_page_access_token: pageData.encrypted_access_token,
+      encrypted_access_token: pageData.encrypted_access_token,
       status: pageData.status,
     };
   }
@@ -155,7 +155,7 @@ export async function handleGetInsights(
   // 3. Decrypt Facebook access token server-side
   let decryptedToken: string;
   try {
-    decryptedToken = await decryptToken(page.fb_page_access_token, encryptionKey);
+    decryptedToken = await decryptToken(page.encrypted_access_token, encryptionKey);
   } catch (_err) {
     return NextResponse.json(
       { error: 'Failed to decrypt Facebook access credentials' },
