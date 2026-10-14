@@ -192,6 +192,9 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
 
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_accounts')) {
             return Promise.resolve([
               {
@@ -272,6 +275,9 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
 
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('UPDATE facebook_accounts') && sql.includes("status = 'expired'")) {
             accountUpdateExecuted = true;
             return Promise.resolve([]);
@@ -312,27 +318,41 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'facebook_accounts') {
+          if (table === 'workspaces') {
             return {
               select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
-                  order: vi.fn().mockResolvedValue({
-                    data: [
-                      {
-                        id: '55555555-5555-5555-a555-555555555555',
-                        fb_account_id: 'fb_act_sb_expired',
-                        display_name: 'SB Expired Account',
-                        status: 'active',
-                        token_expires_at: pastDate,
-                        created_at: pastDate,
-                        updated_at: pastDate,
-                        facebook_pages: [],
-                      },
-                    ],
-                    error: null,
+                  eq: vi.fn().mockReturnValue({
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: { id: 'ws_123' },
+                      error: null,
+                    }),
                   }),
                 }),
               }),
+            };
+          }
+          if (table === 'facebook_accounts') {
+            const builder: any = {
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: '55555555-5555-5555-a555-555555555555',
+                    fb_account_id: 'fb_act_sb_expired',
+                    display_name: 'SB Expired Account',
+                    status: 'active',
+                    token_expires_at: pastDate,
+                    created_at: pastDate,
+                    updated_at: pastDate,
+                    facebook_pages: [],
+                  },
+                ],
+                error: null,
+              }),
+            };
+            builder.eq = vi.fn(() => builder);
+            return {
+              select: vi.fn().mockReturnValue(builder),
               update: vi.fn((payload: any) => {
                 if (payload.status === 'expired') {
                   supabaseAccountUpdated = true;
