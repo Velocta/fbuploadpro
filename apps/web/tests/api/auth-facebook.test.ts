@@ -5,7 +5,7 @@ import {
   signOAuthState,
   signSessionToken,
 } from '@fbuploadpro/contracts';
-import { GET as initiateFacebookOAuth } from '../../src/app/api/auth/facebook/route';
+import { handleInitiateFacebookOAuth as initiateFacebookOAuth } from '../../src/app/api/auth/facebook/route';
 import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
 import { handleListAccounts } from '../../src/app/api/tenant/[subdomain]/accounts/route';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
