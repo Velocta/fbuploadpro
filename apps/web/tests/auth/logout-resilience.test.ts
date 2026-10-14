@@ -100,6 +100,6 @@ describe('Logout Resilience & bfcache Mitigation (Spec 021 US2)', () => {
     const res = await middleware(req);
     expect(res.status).toBe(307);
     const location = res.headers.get('location');
-    expect(location).toBe('http://acme.localhost:3000/');
+    expect(location).toBe('http://acme.localhost:3000/?notice=tenant_redirect');
   });
 });
