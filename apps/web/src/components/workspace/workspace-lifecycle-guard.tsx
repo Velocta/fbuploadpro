@@ -102,9 +102,10 @@ export function setupWorkspaceLifecycleGuard({
   window.addEventListener('pageshow', handlePageShow);
 
   // 5. Intercept client-side fetch calls for 403 ACCOUNT_SUSPENDED
-  const originalFetch = window.fetch.bind(window);
+  const originalFetch = window.fetch;
+  const boundFetch = window.fetch.bind(window);
   window.fetch = async (...args) => {
-    const response = await originalFetch(...args);
+    const response = await boundFetch(...args);
     if (response.status === 403) {
       try {
         const clone = response.clone();

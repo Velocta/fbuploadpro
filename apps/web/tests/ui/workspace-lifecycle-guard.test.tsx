@@ -292,7 +292,6 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
       expect(mockLocation.href).toBe('/account-suspended');
 
       // Test with non-JSON 403 (does not crash)
-      fakeWindow.fetch = setupWorkspaceLifecycleGuard();
       originalNativeFetch.mockResolvedValueOnce(
         new Response('<html>Forbidden</html>', { status: 403 })
       );
