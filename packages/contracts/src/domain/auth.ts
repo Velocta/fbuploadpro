@@ -31,14 +31,14 @@ export function canonicalizeGmailAddress(rawEmail: string): string {
 
   // 1. Remove plus tags and everything following up to @: e.g. 'johndoe+xyz' -> 'johndoe'
   const withoutPlusTag = username.split('+')[0] ?? '';
-  // 2. Strip all dots from username: e.g. 'john.doe' -> 'johndoe'
-  const withoutDots = withoutPlusTag.replaceAll('.', '');
+  // 2. Strip all dots and non-alphanumeric characters: e.g. 'john.doe' -> 'johndoe', 'john_doe' -> 'johndoe'
+  const cleanUsername = withoutPlusTag.replace(/[^a-z0-9]/g, '');
 
-  if (!withoutDots) {
+  if (!cleanUsername) {
     throw new Error('Email username cannot be empty');
   }
 
-  return `${withoutDots}@gmail.com`;
+  return `${cleanUsername}@gmail.com`;
 }
 
 export interface ClientPhoneValidationResult {
