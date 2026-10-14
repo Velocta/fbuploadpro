@@ -28,7 +28,7 @@ describe('Facebook Page Insights Reactions & Demographics API (User Story 3 - T1
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

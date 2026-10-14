@@ -35,7 +35,7 @@ describe('ISSUE-06: Pre-Hashed Password Handling Lifecycle', () => {
                 single: vi.fn().mockResolvedValue({
                   data: {
                     id: '00000000-0000-4000-a000-000000000001',
-                    email: 'test@gmail.com',
+                    email: 'testuser@gmail.com',
                     name: 'Test',
                     phone: '+15555550199',
                     role: 'user',
@@ -79,7 +79,7 @@ describe('ISSUE-06: Pre-Hashed Password Handling Lifecycle', () => {
     // Call registerTenantUser with both password and hashedPassword
     await authModule.registerTenantUser({
       name: 'Test User',
-      email: 'test@gmail.com',
+      email: 'testuser@gmail.com',
       phone: '+15555550199',
       password: rawPassword,
       hashedPassword: pbkdf2Hash,

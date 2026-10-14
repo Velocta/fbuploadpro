@@ -19,7 +19,7 @@ describe('Media Item Patch & Direct Caption Editing (PATCH /api/tenant/[subdomai
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

@@ -28,7 +28,7 @@ describe('Nested Media Folders CRUD, Reparenting & Cascading Deletion', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

@@ -17,7 +17,7 @@ describe('Media Upload Confirmation (POST /api/tenant/[subdomain]/media/confirm)
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

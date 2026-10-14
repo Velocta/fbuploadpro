@@ -28,7 +28,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

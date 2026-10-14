@@ -201,7 +201,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
           data: {
             user: {
               id: VALID_UUID,
-              email: 'reset@gmail.com',
+              email: 'resettester@gmail.com',
               user_metadata: { name: 'Reset User', subdomain: 'reset-ws' },
             },
           },
@@ -212,7 +212,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
           data: {
             user: {
               id: VALID_UUID,
-              email: 'reset@gmail.com',
+              email: 'resettester@gmail.com',
               user_metadata: { name: 'Reset User', subdomain: 'reset-ws' },
             },
           },
@@ -257,7 +257,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
     authModule._setMockSupabaseClient(mockSupabase as any);
 
     await authModule.resetUserPasswordWithOtp({
-      email: 'reset@gmail.com',
+      email: 'resettester@gmail.com',
       otp: '123456',
       password: 'NewSecurePassword123!',
     });

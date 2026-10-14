@@ -23,7 +23,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',
@@ -225,7 +225,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
     const multiSessionToken = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         allowedSubdomains: ['acme', 'acme-two'],

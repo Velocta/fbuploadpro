@@ -46,7 +46,7 @@ describe('Rate Limiter & Abuse Shield (Spec 014)', () => {
 
   describe('recordFailedAttempt and lockout', () => {
     it('tracks attempts and triggers lockout after threshold', () => {
-      const key = 'user:test@gmail.com';
+      const key = 'user:testuser@gmail.com';
       expect(isLockedOut(key).locked).toBe(false);
 
       for (let i = 1; i <= 4; i++) {

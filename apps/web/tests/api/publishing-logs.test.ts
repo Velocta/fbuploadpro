@@ -19,7 +19,7 @@ describe('Publish Logs API Route Handler (T138)', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

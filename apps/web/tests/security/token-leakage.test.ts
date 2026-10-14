@@ -29,7 +29,7 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

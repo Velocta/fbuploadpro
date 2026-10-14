@@ -28,7 +28,7 @@ describe('Facebook Page Insights Time-Series API (User Story 2 - T159, T162)', (
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',
