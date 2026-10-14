@@ -58,12 +58,61 @@ export function escapePostgrestFilterValue(val: string): string {
 const localUserStore = new Map<string, AuthUser>();
 const localResetTokenStore = new Map<string, { email: string; expiresAt: number }>();
 let mockSupabaseClientForTesting: SupabaseClient | null = null;
+let mockSupabaseAnonClientForTesting: SupabaseClient | null = null;
+let mockSupabaseServiceClientForTesting: SupabaseClient | null = null;
 
 export function _setMockSupabaseClient(client: SupabaseClient | null): void {
   mockSupabaseClientForTesting = client;
 }
 
-export function getSupabaseClient(): SupabaseClient | null {
+export function _setMockSupabaseAnonClient(client: SupabaseClient | null): void {
+  mockSupabaseAnonClientForTesting = client;
+}
+
+export function _setMockSupabaseServiceClient(client: SupabaseClient | null): void {
+  mockSupabaseServiceClientForTesting = client;
+}
+
+/**
+ * Returns a Supabase client configured with the public anonymous key (NEXT_PUBLIC_SUPABASE_ANON_KEY).
+ * Intended for client-facing operations and GoTrue user authentication flows running under user RLS.
+ */
+export function getSupabaseAnonClient(): SupabaseClient | null {
+  if (mockSupabaseAnonClientForTesting) {
+    return mockSupabaseAnonClientForTesting;
+  }
+  if (mockSupabaseClientForTesting) {
+    return mockSupabaseClientForTesting;
+  }
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (url && key && !url.includes('placeholder') && !key.includes('placeholder')) {
+    try {
+      return createClient(url, key, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+        },
+      });
+    } catch {
+      return null;
+    }
+  }
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are strictly required in production.');
+  }
+  return null;
+}
+
+/**
+ * Returns a Supabase client configured with the service-role key (SUPABASE_SERVICE_ROLE_KEY).
+ * Exclusively for server-side administrative workflows and system jobs.
+ */
+export function getSupabaseServiceClient(): SupabaseClient | null {
+  if (mockSupabaseServiceClientForTesting) {
+    return mockSupabaseServiceClientForTesting;
+  }
   if (mockSupabaseClientForTesting) {
     return mockSupabaseClientForTesting;
   }
@@ -83,11 +132,17 @@ export function getSupabaseClient(): SupabaseClient | null {
     }
   }
   if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY) are strictly required in production.'
-    );
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are strictly required in production.');
   }
   return null;
+}
+
+/**
+ * Default Supabase client for backwards compatibility with existing backend routes.
+ * Defaults to service role client when available, falling back to anon key.
+ */
+export function getSupabaseClient(): SupabaseClient | null {
+  return getSupabaseServiceClient();
 }
 
 export function getCookieDomain(requestHost?: string | null): string | undefined {
@@ -1362,6 +1417,8 @@ export function _resetAuthStores(): void {
   localUserStore.clear();
   localResetTokenStore.clear();
   mockSupabaseClientForTesting = null;
+  mockSupabaseAnonClientForTesting = null;
+  mockSupabaseServiceClientForTesting = null;
 }
 
 export async function _seedTestUser(user: AuthUser, password?: string): Promise<void> {
