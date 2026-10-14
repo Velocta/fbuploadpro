@@ -44,9 +44,6 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
     const isValidInitially = await validateSessionActive(initialSession);
     expect(isValidInitially).toBe(true);
 
-    // Ensure at least 1 second elapses so passwordUpdatedAt > initialSession.iat
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-
     // 2. Perform password reset with OTP
     const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
     const { otp } = createPasswordResetOtp(email);
@@ -71,4 +68,46 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
     const isNewSessionValid = await validateSessionActive(newSession);
     expect(isNewSessionValid).toBe(true);
   });
+
+  it('immediately invalidates session issued in the exact same second as password reset without artificial delays', async () => {
+    const email = 'samesecond@gmail.com';
+    const password = 'Password123!';
+    const newPassword = 'NewPassword456!';
+
+    // Register user
+    const { token: initialToken } = await registerTenantUser({
+      name: 'Same Second User',
+      phone: '+14155552672',
+      email,
+      password,
+    });
+
+    const initialSession = await verifySessionToken(initialToken, SESSION_SECRET);
+    expect(await validateSessionActive(initialSession)).toBe(true);
+
+    // Reset password in the same second (NO artificial sleep/delay)
+    const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
+    const { otp } = createPasswordResetOtp(email);
+
+    await resetUserPasswordWithOtp({
+      email,
+      otp,
+      password: newPassword,
+    });
+
+    // Old session MUST be invalid even if session.iat === passwordUpdatedAt
+    const isOldValid = await validateSessionActive(initialSession);
+    expect(isOldValid).toBe(false);
+
+    // New login immediately in the same second MUST succeed and be active
+    const { token: newToken } = await loginTenantUser({
+      email,
+      password: newPassword,
+    });
+
+    const newSession = await verifySessionToken(newToken, SESSION_SECRET);
+    const isNewValid = await validateSessionActive(newSession);
+    expect(isNewValid).toBe(true);
+  });
 });
+

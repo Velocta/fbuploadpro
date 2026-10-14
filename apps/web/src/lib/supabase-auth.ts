@@ -1060,6 +1060,8 @@ export async function loginTenantUser(params: {
   }
 
   const sessionSecret = getSessionSecret();
+  const now = Math.floor(Date.now() / 1000);
+  const minIat = user.passwordUpdatedAt ? Math.max(now, user.passwordUpdatedAt + 1) : now;
   const token = await signSessionToken(
     {
       userId: user.id,
@@ -1068,6 +1070,7 @@ export async function loginTenantUser(params: {
       subdomain: user.subdomain,
       role: user.role,
       status: user.status,
+      iat: minIat,
     },
     sessionSecret,
     86400 * 30 // 30 days matching fbup_session cookie maxAge
@@ -1444,7 +1447,7 @@ export async function validateSessionActive(session: SessionPayload): Promise<bo
   const user = await findUserByEmail(session.email);
   if (!user) return false;
   if (user.status !== 'active') return false;
-  if (user.passwordUpdatedAt && session.iat < user.passwordUpdatedAt) {
+  if (user.passwordUpdatedAt && session.iat <= user.passwordUpdatedAt) {
     return false;
   }
   return true;

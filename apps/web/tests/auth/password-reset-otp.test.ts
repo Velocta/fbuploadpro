@@ -125,9 +125,6 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
       const { otp } = createPasswordResetOtp('target.user@gmail.com');
 
       // 3. Reset password with OTP
-      // Advance clock slightly so session.iat is strictly less than passwordUpdatedAt
-      await new Promise((r) => setTimeout(r, 1100));
-
       const resetResult = await resetUserPasswordWithOtp({
         email: 'targetuser@gmail.com',
         otp,
