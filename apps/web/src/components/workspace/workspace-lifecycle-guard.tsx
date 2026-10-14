@@ -2,16 +2,64 @@
 
 import { useEffect } from 'react';
 
-export function WorkspaceLifecycleGuard() {
+export interface WorkspaceLifecycleGuardProps {
+  userId?: string | null | undefined;
+  userEmail?: string | null | undefined;
+}
+
+export function WorkspaceLifecycleGuard({
+  userId,
+  userEmail,
+}: WorkspaceLifecycleGuardProps = {}) {
   useEffect(() => {
-    // 1. Cross-tab logout synchronization via BroadcastChannel
+    // 1. Sync active user ID to localStorage if available
+    if (userId && typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('fbup_active_user', userId);
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+
+    // 2. Cross-tab auth synchronization via BroadcastChannel ('fbup_auth')
     let channel: BroadcastChannel | null = null;
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         channel = new BroadcastChannel('fbup_auth');
         channel.onmessage = (event) => {
-          if (event.data?.type === 'LOGOUT') {
+          const data = event.data;
+          if (data?.type === 'LOGOUT') {
             window.location.href = '/login?logout=success';
+            return;
+          }
+
+          if (
+            data?.type === 'LOGIN' ||
+            data?.type === 'USER_SWITCH' ||
+            data?.type === 'SESSION_CHANGE' ||
+            data?.type === 'SESSION_CHANGED'
+          ) {
+            const incomingUserId = data?.userId;
+            const incomingUserEmail = data?.email;
+            const activeId =
+              userId ||
+              (typeof localStorage !== 'undefined'
+                ? localStorage.getItem('fbup_active_user')
+                : null);
+
+            const isSameUser = Boolean(
+              activeId &&
+                incomingUserId &&
+                activeId === incomingUserId &&
+                (!userEmail ||
+                  !incomingUserEmail ||
+                  userEmail.toLowerCase() === incomingUserEmail.toLowerCase())
+            );
+
+            // Reload when a different user logs in, user-switch is explicitly dispatched, or identity changed
+            if (!isSameUser || data?.type === 'USER_SWITCH') {
+              window.location.reload();
+            }
           }
         };
       }
@@ -19,23 +67,30 @@ export function WorkspaceLifecycleGuard() {
       // Ignore BroadcastChannel errors in environments where unsupported
     }
 
-    // 2. Storage event listener for cross-tab logout & identity synchronization
+    // 3. Storage event listener for cross-tab logout & identity synchronization
     const handleStorage = (event: StorageEvent) => {
       if (event.key === 'fbup_logout_event') {
         window.location.href = '/login?logout=success';
+        return;
       }
-      if (
-        event.key === 'fbup_active_user' &&
-        event.newValue &&
-        event.oldValue &&
-        event.newValue !== event.oldValue
-      ) {
-        window.location.reload();
+      if (event.key === 'fbup_active_user') {
+        const activeId =
+          userId ||
+          (typeof localStorage !== 'undefined'
+            ? localStorage.getItem('fbup_active_user')
+            : null);
+        if (
+          event.newValue &&
+          ((event.oldValue && event.newValue !== event.oldValue) ||
+            (activeId && event.newValue !== activeId))
+        ) {
+          window.location.reload();
+        }
       }
     };
     window.addEventListener('storage', handleStorage);
 
-    // 3. Back-forward cache (bfcache) mitigation: force reload if page restored from cache
+    // 4. Back-forward cache (bfcache) mitigation: force reload if page restored from cache
     const handlePageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         window.location.reload();
@@ -43,7 +98,7 @@ export function WorkspaceLifecycleGuard() {
     };
     window.addEventListener('pageshow', handlePageShow);
 
-    // 4. Intercept client-side fetch calls for 403 ACCOUNT_SUSPENDED
+    // 5. Intercept client-side fetch calls for 403 ACCOUNT_SUSPENDED
     const originalFetch = window.fetch.bind(window);
     window.fetch = async (...args) => {
       const response = await originalFetch(...args);
@@ -74,7 +129,7 @@ export function WorkspaceLifecycleGuard() {
       window.removeEventListener('pageshow', handlePageShow);
       window.fetch = originalFetch;
     };
-  }, []);
+  }, [userId, userEmail]);
 
   return null;
 }

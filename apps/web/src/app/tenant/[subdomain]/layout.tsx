@@ -27,7 +27,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
 
   return (
     <SidebarProvider>
-      <WorkspaceLifecycleGuard />
+      <WorkspaceLifecycleGuard userId={session?.userId} userEmail={session?.email} />
       <WorkspaceSidebar subdomain={subdomain} user={user} />
       <MobileNavTrigger />
       <SidebarInset className="workspace-mobile-gutter">

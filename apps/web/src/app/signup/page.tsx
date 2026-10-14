@@ -9,6 +9,7 @@ import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
+import { broadcastAuthEvent } from '@/lib/auth-broadcast';
 import { validateClientPhoneNumber } from '@fbuploadpro/contracts';
 
 interface FieldErrors {
@@ -212,6 +213,11 @@ export default function SignupPage() {
       }
 
       if (data.redirectUrl) {
+        broadcastAuthEvent({
+          type: 'LOGIN',
+          userId: data.user?.id,
+          email: data.user?.email,
+        });
         window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl, data.user?.subdomain);
       }
     } catch {
@@ -256,6 +262,11 @@ export default function SignupPage() {
       }
 
       if (data.redirectUrl) {
+        broadcastAuthEvent({
+          type: 'LOGIN',
+          userId: data.user?.id,
+          email: data.user?.email,
+        });
         window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl, data.user?.subdomain);
       }
     } catch {
