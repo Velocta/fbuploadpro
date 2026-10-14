@@ -17,6 +17,7 @@ const TEST_ENCRYPTION_KEY =
 describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   let validSessionCookie: string;
+  let validEncryptedFbAppSecret: string;
 
   beforeEach(async () => {
     process.env.SESSION_SECRET = TEST_SECRET;
@@ -25,6 +26,11 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     process.env.FACEBOOK_APP_SECRET = 'fb_app_secret_456';
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
+
+    validEncryptedFbAppSecret = await encryptToken(
+      'mock_fb_app_secret_value',
+      TEST_ENCRYPTION_KEY
+    );
 
     const token = await signSessionToken(
       {
@@ -58,7 +64,7 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
           return Promise.resolve([
             {
               fb_app_id: 'fb_app_id_byoc_workspace',
-              encrypted_fb_app_secret: 'enc_sec_123',
+              encrypted_fb_app_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
@@ -154,7 +160,7 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
           return Promise.resolve([
             {
               fb_app_id: 'fb_app_id_123',
-              encrypted_fb_app_secret: 'enc_secret_valid',
+              encrypted_fb_app_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
@@ -238,7 +244,7 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
           return Promise.resolve([
             {
               fb_app_id: 'fb_app_id_123',
-              encrypted_fb_app_secret: 'enc_secret_valid',
+              encrypted_fb_app_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
@@ -354,7 +360,22 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
       })
     );
 
-    const mockDb = { query: vi.fn() } as unknown as DatabaseClient;
+    const mockDb = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
+        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+          return Promise.resolve([
+            {
+              fb_app_id: 'fb_app_id_123',
+              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DatabaseClient;
     const req1 = new NextRequest(
       `http://localhost:3000/api/auth/facebook/callback?code=bad_code&state=${magicState}`
     );

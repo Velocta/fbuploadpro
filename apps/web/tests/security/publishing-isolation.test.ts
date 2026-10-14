@@ -181,6 +181,9 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from listing slots for User A page via tenant-b route with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             // Page ID check enforces WHERE id = $1 AND user_id = $2
             if (params && params[0] === userA.pageId && params[1] === userB.id) {
@@ -209,6 +212,9 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from creating slot under User A page with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             if (params && params[0] === userA.pageId && params[1] === userB.id) {
               return Promise.resolve([]);
@@ -323,6 +329,9 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from enqueuing media targeting User A page with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             // Page check: WHERE id = $1 AND user_id = $2
             if (params && params[0] === userA.pageId && params[1] === userB.id) {
@@ -351,6 +360,9 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from enqueuing User A media asset with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             if (params && params[0] === userB.pageId && params[1] === userB.id) {
               return Promise.resolve([{ id: userB.pageId }]);
@@ -384,6 +396,9 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from enqueuing media into User A queue slot with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: userB.pageId }]);
           }
@@ -530,9 +545,13 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('returns empty list when User B queries queue filtered by User A pageId (zero leakage)', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          // SQL query enforces qi.user_id = $1 AND qi.fb_page_id = $2
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
+          // SQL query enforces qi.user_id = $1, workspace_id = $2, AND qi.fb_page_id = $3
           expect(params?.[0]).toBe(userB.id);
-          expect(params?.[1]).toBe(userA.pageId);
+          expect(params?.[1]).toBe('ws_b');
+          expect(params?.[2]).toBe(userA.pageId);
           if (sql.includes('COUNT(*)')) {
             return Promise.resolve([{ total: 0 }]);
           }
@@ -554,8 +573,12 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('ensures User B queue list query is strictly parameterized by User B user_id', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          // Parameter 1 must be User B's user_id, never User A or wildcard
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
+          // Parameter 1 must be User B's user_id, parameter 2 is workspace_id
           expect(params?.[0]).toBe(userB.id);
+          expect(params?.[1]).toBe('ws_b');
 
           if (sql.includes('COUNT(*)')) {
             return Promise.resolve([{ total: 1 }]);
@@ -603,8 +626,12 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('returns empty logs when User B queries logs filtered by User A pageId', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           expect(params?.[0]).toBe(userB.id);
-          expect(params?.[1]).toBe(userA.pageId);
+          expect(params?.[1]).toBe('ws_b');
+          expect(params?.[2]).toBe(userA.pageId);
           if (sql.includes('COUNT(*)')) {
             return Promise.resolve([{ total: 0 }]);
           }
@@ -626,7 +653,11 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('ensures User B publish logs query is strictly parameterized with User B user_id', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_b' }]);
+          }
           expect(params?.[0]).toBe(userB.id);
+          expect(params?.[1]).toBe('ws_b');
 
           if (sql.includes('COUNT(*)')) {
             return Promise.resolve([{ total: 1 }]);

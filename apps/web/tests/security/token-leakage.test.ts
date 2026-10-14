@@ -44,6 +44,20 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   it('GET /accounts never leaks raw or encrypted access tokens in JSON body or headers', async () => {
     const mockSupabase = {
       from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: 'ws_123' },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
         if (table === 'facebook_accounts') {
           return {
             select: vi.fn().mockReturnValue({
@@ -100,6 +114,20 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   it('GET /pages never leaks raw or encrypted access tokens in JSON body', async () => {
     const mockSupabase = {
       from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: 'ws_123' },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
         if (table === 'facebook_pages') {
           return {
             select: vi.fn().mockReturnValue({
@@ -154,6 +182,20 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   it('GET /discover strips Graph API Page access tokens from client payload', async () => {
     const mockSupabase = {
       from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: 'ws_123' },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
         if (table === 'facebook_accounts') {
           return {
             select: vi.fn().mockReturnValue({
@@ -226,6 +268,20 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   it('POST /import returns sanitized confirmation without leaking tokens', async () => {
     const mockSupabase = {
       from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: 'ws_123' },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
         if (table === 'facebook_accounts') {
           return {
             select: vi.fn().mockReturnValue({

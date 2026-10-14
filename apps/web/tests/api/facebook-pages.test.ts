@@ -51,6 +51,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string) => {
           executedQueries.push(sql);
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_accounts')) {
             return Promise.resolve([
               {
@@ -163,6 +166,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const executedInsertSqls: string[] = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_accounts')) {
             return Promise.resolve([
               {
@@ -180,8 +186,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
             return Promise.resolve([
               {
                 id: pageId,
-                fbPageId: params[2],
-                pageName: params[3],
+                fbPageId: params[3],
+                pageName: params[4],
               },
             ]);
           }
@@ -238,7 +244,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(executedInsertSqls).toHaveLength(1);
       const insertSql = executedInsertSqls[0]!;
       expect(insertSql).toContain('starting_followers, current_followers');
-      expect(insertSql).toContain('VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)');
+      expect(insertSql).toContain('VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)');
       expect(insertSql).toContain('current_followers = EXCLUDED.current_followers');
       expect(insertSql).toContain(
         "WHEN facebook_pages.status = 'disconnected' THEN EXCLUDED.starting_followers"
@@ -248,6 +254,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(savedPages).toHaveLength(1);
       const [
         uId,
+        wsId,
         accId,
         fbPageId,
         pageName,
@@ -259,6 +266,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       ] = savedPages[0];
 
       expect(uId).toBe(userId);
+      expect(wsId).toBe('ws_123');
       expect(accId).toBe(accountId);
       expect(fbPageId).toBe('page_1002');
       expect(pageName).toBe('Creator Vlog Page');
@@ -299,6 +307,16 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'ws_123' },
+                error: null,
+              }),
+            };
+          }
           if (table === 'facebook_accounts') {
             return {
               select: vi.fn().mockReturnThis(),
@@ -404,6 +422,16 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'ws_123' },
+                error: null,
+              }),
+            };
+          }
           if (table === 'facebook_accounts') {
             return {
               select: vi.fn().mockReturnThis(),
@@ -491,6 +519,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       let capturedSql = '';
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           capturedSql = sql;
           return Promise.resolve([
             {
@@ -590,6 +621,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('UPDATE facebook_pages') && sql.includes("status = 'active'")) {
             updateExecuted = true;
             return Promise.resolve([]);
@@ -635,6 +669,16 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'ws_123' },
+                error: null,
+              }),
+            };
+          }
           if (table === 'facebook_pages') {
             return {
               select: vi.fn().mockReturnValue({
@@ -692,6 +736,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const executedStatements: Array<{ sql: string; params: any[] }> = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           executedStatements.push({ sql, params });
           if (sql.includes('UPDATE facebook_pages')) {
             return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
@@ -721,7 +768,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(executedStatements).toHaveLength(2);
       expect(executedStatements[0]!.sql).toContain("SET status = 'disconnected'");
       expect(executedStatements[0]!.sql).toContain("encrypted_access_token = ''");
-      expect(executedStatements[0]!.params).toEqual([pageId, userId]);
+      expect(executedStatements[0]!.params).toEqual([pageId, userId, 'ws_123']);
 
       expect(executedStatements[1]!.sql).toContain('UPDATE queue_items');
       expect(executedStatements[1]!.sql).toContain("SET status = 'skipped'");

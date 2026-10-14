@@ -413,12 +413,12 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
           if (table === 'workspaces') {
+            const builder: any = {
+              eq: vi.fn(() => builder),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            };
             return {
-              select: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                })),
-              })),
+              select: vi.fn(() => builder),
               upsert: upsertSpy,
             };
           }
@@ -461,15 +461,15 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
           if (table === 'workspaces') {
+            const builder: any = {
+              eq: vi.fn(() => builder),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: '00000000-0000-4000-a000-000000000099' },
+                error: null,
+              }),
+            };
             return {
-              select: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: { id: '00000000-0000-4000-a000-000000000099' },
-                    error: null,
-                  }),
-                })),
-              })),
+              select: vi.fn(() => builder),
               upsert: upsertSpy,
             };
           }

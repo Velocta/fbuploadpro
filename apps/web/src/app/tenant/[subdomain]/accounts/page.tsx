@@ -320,7 +320,7 @@ export function ByocRequiredBanner({ subdomain }: Readonly<ByocRequiredBannerPro
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
         <span>
-          Facebook BYOC credentials are required before connecting accounts. Configure your Facebook App ID and Secret in Workspace Settings.
+          Facebook App credentials (BYOC) are required before connecting accounts. Configure your Facebook App ID and Secret in Workspace Settings.
         </span>
       </div>
       <Link
@@ -435,7 +435,7 @@ export function ByocConfigPromptModal({
                 color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
-              Facebook BYOC Required
+              Facebook App Credentials Required
             </h2>
             <p
               style={{
