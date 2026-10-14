@@ -13,6 +13,7 @@ import {
   verifyHashedPassword,
   createPendingSignup,
   verifyPendingSignupPassword,
+  verifyPendingSignupPasswordSync,
   _resetOtpStore,
 } from '@/lib/otp-service';
 
@@ -82,5 +83,28 @@ describe('ISSUE-37: Non-Blocking Asynchronous PBKDF2 Password Hashing', () => {
 
     const isIncorrect = await verifyPendingSignupPassword(email, 'WrongPassword!');
     expect(isIncorrect).toBe(false);
+  });
+
+  it('handles malformed hashes and exception handling in verifyHashedPassword gracefully', async () => {
+    // Malformed regex
+    expect(await verifyHashedPassword('password', 'not-a-valid-hash')).toBe(false);
+    expect(await verifyHashedPassword('password', '')).toBe(false);
+    expect(await verifyHashedPassword('password', null as unknown as string)).toBe(false);
+
+    // Missing split parts or invalid hex length
+    expect(await verifyHashedPassword('password', '0123456789abcdef0123456789abcdef:1234')).toBe(false);
+
+    // Synchronous fallback verification test
+    const email = 'sync-user@gmail.com';
+    const password = 'SyncPassword123!';
+    createPendingSignup({
+      name: 'Sync User',
+      phone: '+15555550188',
+      email,
+      password,
+    });
+    expect(verifyPendingSignupPasswordSync(email, password)).toBe(true);
+    expect(verifyPendingSignupPasswordSync(email, 'WrongPassword!')).toBe(false);
+    expect(verifyPendingSignupPasswordSync('unknown@example.com', password)).toBe(false);
   });
 });
