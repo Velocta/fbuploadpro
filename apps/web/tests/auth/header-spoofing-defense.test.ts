@@ -79,7 +79,7 @@ describe('Header Spoofing Defense (Audit Issue 01)', () => {
       expect(session).toBeNull();
     });
 
-    it('allows header fallback in test environment when role validates against UserRoleSchema', async () => {
+    it('returns null when no cookie is present, rejecting header spoofing even in test environment', async () => {
       vi.mocked(cookies).mockResolvedValue({
         get: () => undefined,
       } as any);
@@ -88,26 +88,6 @@ describe('Header Spoofing Defense (Audit Issue 01)', () => {
         new Headers({
           'x-user-id': 'test-user-id',
           'x-user-role': 'admin',
-          'x-user-email': 'test@example.com',
-          'x-user-subdomain': 'test-sub',
-        })
-      );
-
-      const session = await getServerSessionContext();
-      expect(session).not.toBeNull();
-      expect(session?.userId).toBe('test-user-id');
-      expect(session?.role).toBe('admin');
-    });
-
-    it('rejects header fallback in test environment when role is not a valid UserRole', async () => {
-      vi.mocked(cookies).mockResolvedValue({
-        get: () => undefined,
-      } as any);
-
-      vi.mocked(headers).mockResolvedValue(
-        new Headers({
-          'x-user-id': 'test-user-id',
-          'x-user-role': 'super_admin_spoof',
           'x-user-email': 'test@example.com',
           'x-user-subdomain': 'test-sub',
         })
