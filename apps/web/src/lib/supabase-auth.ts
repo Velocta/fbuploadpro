@@ -14,6 +14,47 @@ import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 
 // In-memory credential store for test/CI fallback when Supabase external cluster is not configured
 const localPasswordStore = new Map<string, string>();
+
+/**
+ * Validates and canonicalizes email addresses, strictly rejecting characters that could be used
+ * for PostgREST filter delimiter injection (such as commas, parentheses, quotes, backslashes, semicolons, spaces).
+ */
+export function sanitizeEmailInput(emailInput: string): string {
+  if (!emailInput || typeof emailInput !== 'string') {
+    throw new Error('Valid email address is required');
+  }
+  const trimmed = emailInput.trim().toLowerCase();
+  // Reject characters used to craft PostgREST query injection or control flow
+  if (/[,()"'\\;\s]/.test(trimmed)) {
+    throw new Error('Email address contains invalid characters');
+  }
+  const atIndex = trimmed.indexOf('@');
+  if (atIndex <= 0 || atIndex !== trimmed.lastIndexOf('@') || atIndex === trimmed.length - 1) {
+    throw new Error('Valid email address is required');
+  }
+  return trimmed;
+}
+
+/**
+ * Resolves a canonical email address: attempts canonicalizeGmailAddress, and falls back to sanitizeEmailInput.
+ */
+export function resolveCanonicalEmail(emailInput: string): string {
+  try {
+    return canonicalizeGmailAddress(emailInput);
+  } catch {
+    return sanitizeEmailInput(emailInput);
+  }
+}
+
+/**
+ * Escapes and safely quotes a value for use in a PostgREST `.or()` filter.
+ */
+export function escapePostgrestFilterValue(val: string): string {
+  const escaped = val
+    .replaceAll('\\', '\\\\')
+    .replaceAll('"', '\\"');
+  return `"${escaped}"`;
+}
 const localUserStore = new Map<string, AuthUser>();
 const localResetTokenStore = new Map<string, { email: string; expiresAt: number }>();
 let mockSupabaseClientForTesting: SupabaseClient | null = null;
@@ -188,18 +229,19 @@ async function findWorkspaceSubdomainByOwner(
 export async function findUserByEmail(emailInput: string): Promise<AuthUser | null> {
   let canonicalEmail: string;
   try {
-    canonicalEmail = canonicalizeGmailAddress(emailInput);
+    canonicalEmail = resolveCanonicalEmail(emailInput);
   } catch {
-    canonicalEmail = emailInput.trim().toLowerCase();
+    return null;
   }
 
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
+      const quoted = escapePostgrestFilterValue(canonicalEmail);
       const { data, error } = await supabase
         .from('users')
         .select('id, email, name, phone, role, status, password_updated_at')
-        .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`)
+        .or(`normalized_email.eq.${quoted},email.ilike.${quoted}`)
         .maybeSingle();
 
       if (error) {
@@ -557,12 +599,7 @@ export async function verifySignupOtpViaSupabase(params: {
   returnUrl?: string | undefined;
   requestHost?: string | null | undefined;
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
-  let canonicalEmail: string;
-  try {
-    canonicalEmail = canonicalizeGmailAddress(params.email);
-  } catch {
-    canonicalEmail = params.email.trim().toLowerCase();
-  }
+  const canonicalEmail = resolveCanonicalEmail(params.email);
 
   const supabase = getSupabaseClient();
   let userRecord: AuthUser | null = await findUserByEmail(canonicalEmail);
@@ -586,10 +623,11 @@ export async function verifySignupOtpViaSupabase(params: {
     }
 
     try {
+      const quoted = escapePostgrestFilterValue(canonicalEmail);
       await supabase
         .from('users')
         .update({ status: 'active', updated_at: new Date().toISOString() })
-        .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`);
+        .or(`normalized_email.eq.${quoted},email.ilike.${quoted}`);
     } catch (updateErr) {
       console.error('[Supabase PostgREST] Status activation error:', updateErr);
     }
@@ -1272,19 +1310,15 @@ export async function resetUserPassword(params: {
           })
           .eq('id', targetUserId);
       } else if (params.email) {
-        let canonicalEmail: string;
-        try {
-          canonicalEmail = canonicalizeGmailAddress(params.email);
-        } catch {
-          canonicalEmail = params.email.trim().toLowerCase();
-        }
+        const canonicalEmail = resolveCanonicalEmail(params.email);
+        const quoted = escapePostgrestFilterValue(canonicalEmail);
         await supabase
           .from('users')
           .update({
             password_updated_at: nowIso,
             updated_at: nowIso,
           })
-          .or(`normalized_email.eq.${canonicalEmail},email.ilike.${canonicalEmail}`);
+          .or(`normalized_email.eq.${quoted},email.ilike.${quoted}`);
       }
     } catch (invalErr) {
       console.error('[Supabase PostgREST] Failed to persist password_updated_at on resetUserPassword:', invalErr);
