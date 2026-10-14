@@ -6,7 +6,10 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
+import { signSessionToken } from '@fbuploadpro/contracts';
 import * as authModule from '@/lib/supabase-auth';
+import { GET as getByocSettings } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
 
 const VALID_UUID = '00000000-0000-4000-a000-000000000001';
 const VICTIM_UUID = '00000000-0000-4000-a000-000000000002';
@@ -402,6 +405,130 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
 
     expect(callCount).toBe(2);
     expect(result).toContain('test-subdomain-');
+  });
+
+  describe('BYOC Settings API workspace lookup (ISSUE-01 regression)', () => {
+    it('never calls workspaces.upsert and returns 404 when workspace is not found', async () => {
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                })),
+              })),
+              upsert: upsertSpy,
+            };
+          }
+          return {};
+        }),
+      };
+
+      authModule._setMockSupabaseClient(mockSupabase as any);
+
+      const token = await signSessionToken(
+        {
+          userId: VALID_UUID,
+          email: 'test@example.com',
+          name: 'Test User',
+          subdomain: 'acme',
+          role: 'user',
+          status: 'active',
+        },
+        process.env.SESSION_SECRET!
+      );
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/settings/byoc', {
+        headers: {
+          cookie: `fbup_session=${token}`,
+        },
+      });
+
+      const res = await getByocSettings(req, {
+        params: Promise.resolve({ subdomain: 'acme' }),
+      });
+
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(json.error).toBe('Workspace not found');
+      expect(upsertSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns BYOC settings without calling workspaces.upsert when workspace exists', async () => {
+      const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: '00000000-0000-4000-a000-000000000099' },
+                    error: null,
+                  }),
+                })),
+              })),
+              upsert: upsertSpy,
+            };
+          }
+          if (table === 'workspace_byoc_credentials') {
+            return {
+              select: vi.fn(() => ({
+                eq: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      workspace_id: '00000000-0000-4000-a000-000000000099',
+                      fb_app_id: '123456789',
+                      encrypted_fb_app_secret: 'enc_secret',
+                      webhook_verify_token: 'wh_token',
+                      status: 'valid',
+                      last_tested_at: '2026-10-14T00:00:00Z',
+                    },
+                    error: null,
+                  }),
+                })),
+              })),
+            };
+          }
+          return {};
+        }),
+      };
+
+      authModule._setMockSupabaseClient(mockSupabase as any);
+
+      const token = await signSessionToken(
+        {
+          userId: VALID_UUID,
+          email: 'test@example.com',
+          name: 'Test User',
+          subdomain: 'acme',
+          role: 'user',
+          status: 'active',
+        },
+        process.env.SESSION_SECRET!
+      );
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/settings/byoc', {
+        headers: {
+          cookie: `fbup_session=${token}`,
+        },
+      });
+
+      const res = await getByocSettings(req, {
+        params: Promise.resolve({ subdomain: 'acme' }),
+      });
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.workspaceId).toBe('00000000-0000-4000-a000-000000000099');
+      expect(json.subdomain).toBe('acme');
+      expect(json.fbAppId).toBe('123456789');
+      expect(json.hasSecret).toBe(true);
+      expect(json.status).toBe('valid');
+      expect(upsertSpy).not.toHaveBeenCalled();
+    });
   });
 });
 
