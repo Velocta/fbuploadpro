@@ -181,20 +181,36 @@ export function clearLockout(key: string): void {
 
 /**
  * Helper to extract client IP from Next.js request headers.
+ * Prioritizes verified platform headers (x-vercel-forwarded-for, cf-connecting-ip, x-real-ip)
+ * and falls back to the rightmost IP in x-forwarded-for to prevent client-controlled leftmost spoofing.
  */
 export function extractClientIp(headers: Headers): string {
-  const forwardedFor = headers.get('x-forwarded-for');
-  if (forwardedFor) {
-    return forwardedFor.split(',')[0]?.trim() || 'unknown';
+  const vercelForwardedFor = headers.get('x-vercel-forwarded-for');
+  if (vercelForwardedFor) {
+    const ips = vercelForwardedFor.split(',').map((ip) => ip.trim()).filter(Boolean);
+    if (ips.length > 0) {
+      return ips[ips.length - 1] ?? 'unknown';
+    }
   }
-  const realIp = headers.get('x-real-ip');
-  if (realIp) {
-    return realIp.trim();
-  }
+
   const cfConnectingIp = headers.get('cf-connecting-ip');
-  if (cfConnectingIp) {
+  if (cfConnectingIp?.trim()) {
     return cfConnectingIp.trim();
   }
+
+  const realIp = headers.get('x-real-ip');
+  if (realIp?.trim()) {
+    return realIp.trim();
+  }
+
+  const forwardedFor = headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    const ips = forwardedFor.split(',').map((ip) => ip.trim()).filter(Boolean);
+    if (ips.length > 0) {
+      return ips[ips.length - 1] ?? 'unknown';
+    }
+  }
+
   return '127.0.0.1';
 }
 
