@@ -65,6 +65,24 @@ class InsightsCache {
     this.cache.delete(key);
   }
 
+  deleteMatching(predicate: (key: string) => boolean): void {
+    for (const key of Array.from(this.cache.keys())) {
+      if (predicate(key)) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
+  deletePageInsights(userId: string, ...pageIdentifiers: (string | undefined | null)[]): void {
+    const validIds = pageIdentifiers.filter(Boolean) as string[];
+    if (validIds.length === 0) return;
+
+    this.deleteMatching((key) => {
+      // Key format: insights:${userId}:${pageId}:${range}
+      return validIds.some((id) => key.startsWith(`insights:${userId}:${id}:`));
+    });
+  }
+
   clear(): void {
     this.cache.clear();
   }
