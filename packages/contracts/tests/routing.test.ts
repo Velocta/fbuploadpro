@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildCentralAppUrl,
   buildTenantUrl,
   extractSubdomain,
   getTenantRewriteUrl,
@@ -146,5 +147,70 @@ describe('Tenant Subdomain Routing Contracts', () => {
       );
     });
   });
+
+  describe('buildCentralAppUrl', () => {
+    it('constructs canonical absolute URL to app.{rootDomain}/login?logout=success on production domain', () => {
+      const url = buildCentralAppUrl(
+        '/login?logout=success',
+        'https://acme.fbuploadpro.com/api/auth/logout',
+        'fbuploadpro.com'
+      );
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login?logout=success');
+    });
+
+    it('constructs canonical absolute URL to app.{rootDomain}/login?logout=success on demo domain', () => {
+      const url = buildCentralAppUrl(
+        '/login?logout=success',
+        'https://client1.vinsmokemedia.online/api/auth/logout',
+        'vinsmokemedia.online'
+      );
+      expect(url.toString()).toBe('https://app.vinsmokemedia.online/login?logout=success');
+    });
+
+    it('constructs absolute URL to app.localhost:3000/login?logout=success in local development', () => {
+      const url = buildCentralAppUrl(
+        '/login?logout=success',
+        'http://tenant.localhost:3000/api/auth/logout',
+        'localhost:3000'
+      );
+      expect(url.toString()).toBe('http://app.localhost:3000/login?logout=success');
+    });
+
+    it('preserves preview deployment hostname on .vercel.app environments', () => {
+      const url = buildCentralAppUrl(
+        '/login?logout=success',
+        'https://preview-deploy-123.vercel.app/api/auth/logout',
+        'fbuploadpro.com'
+      );
+      expect(url.toString()).toBe('https://preview-deploy-123.vercel.app/login?logout=success');
+    });
+
+    it('defaults to https://app.fbuploadpro.com/login?logout=success when parameters are omitted', () => {
+      const url = buildCentralAppUrl();
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login?logout=success');
+    });
+
+    it('handles custom pathnames and query parameters', () => {
+      const url = buildCentralAppUrl('/login', undefined, 'fbuploadpro.com');
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login');
+    });
+
+    it('accepts URL instances as requestUrl and normalizes pathname', () => {
+      const inputUrl = new URL('https://acme.fbuploadpro.com/some/path');
+      const url = buildCentralAppUrl('login?logout=success', inputUrl, 'fbuploadpro.com');
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login?logout=success');
+    });
+
+    it('gracefully falls back when requestUrl is an invalid string', () => {
+      const url = buildCentralAppUrl('/login?logout=success', 'not-a-valid-url', 'fbuploadpro.com');
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login?logout=success');
+    });
+
+    it('handles localhost rootDomain without port', () => {
+      const url = buildCentralAppUrl('/login?logout=success', undefined, 'localhost');
+      expect(url.toString()).toBe('http://app.localhost/login?logout=success');
+    });
+  });
 });
+
 

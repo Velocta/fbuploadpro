@@ -143,3 +143,82 @@ export function buildTenantUrl(
   return url;
 }
 
+function isLocalHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname.endsWith('.localhost') ||
+    hostname.includes('localhost') ||
+    hostname.includes('127.0.0.1')
+  );
+}
+
+function resolveGatewayHost(cleanRoot: string, isLocal: boolean, port?: string): string {
+  if (isLocal && port) {
+    return `app.${cleanRoot}:${port}`;
+  }
+  return `app.${cleanRoot}`;
+}
+
+function resolveRequestGatewayBase(
+  parsedUrl: URL,
+  cleanRoot: string,
+  rootPort?: string
+): string | null {
+  const cleanHost = parsedUrl.hostname.toLowerCase();
+  if (cleanHost.endsWith('.vercel.app')) {
+    return parsedUrl.origin;
+  }
+
+  const isLocalHost = isLocalHostname(cleanHost);
+  const isLocalRoot = isLocalHostname(cleanRoot);
+  const isLocal = isLocalHost || isLocalRoot;
+  const protocol = isLocal ? 'http:' : 'https:';
+
+  let port = rootPort;
+  if (!port && parsedUrl.port) {
+    port = parsedUrl.port;
+  } else if (!port && isLocalHost) {
+    port = '3000';
+  }
+
+  const host = resolveGatewayHost(cleanRoot, isLocal, port);
+  return `${protocol}//${host}`;
+}
+
+/**
+ * Constructs the canonical absolute central application gateway URL (e.g. app.fbuploadpro.com)
+ * for authentication, landing, or sign-out redirection per Principle 6 & Principle 15.
+ */
+export function buildCentralAppUrl(
+  pathname: string = '/login?logout=success',
+  requestUrl?: string | URL | null,
+  rootDomain?: string | null
+): URL {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const cleanRoot = (rootDomain || '').trim().toLowerCase().split(':')[0] || 'fbuploadpro.com';
+  const rootPort = (rootDomain || '').trim().toLowerCase().split(':')[1];
+
+  if (requestUrl) {
+    try {
+      const parsedUrl =
+        typeof requestUrl === 'string'
+          ? new URL(requestUrl)
+          : new URL(requestUrl.toString());
+      const base = resolveRequestGatewayBase(parsedUrl, cleanRoot, rootPort);
+      if (base) {
+        return new URL(normalizedPath, base);
+      }
+    } catch {
+      // Fall through to default base construction
+    }
+  }
+
+  const isLocalRoot = isLocalHostname(cleanRoot);
+  const protocol = isLocalRoot ? 'http:' : 'https:';
+  const host = resolveGatewayHost(cleanRoot, isLocalRoot, rootPort);
+
+  return new URL(normalizedPath, `${protocol}//${host}`);
+}
+
+
