@@ -138,10 +138,17 @@ export async function handleGetInsights(
   if (!query.refresh) {
     const cached = globalInsightsCache.get<PageInsightsResponse>(cacheKey);
     if (cached) {
-      return NextResponse.json({
-        ...cached.data,
-        cacheHit: true,
-      });
+      return NextResponse.json(
+        {
+          ...cached.data,
+          cacheHit: true,
+        },
+        {
+          headers: {
+            'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=86400',
+          },
+        }
+      );
     }
   }
 
@@ -196,7 +203,11 @@ export async function handleGetInsights(
   // Cache response for 15 minutes (900 seconds)
   globalInsightsCache.set(cacheKey, responsePayload, 900);
 
-  return NextResponse.json(responsePayload);
+  return NextResponse.json(responsePayload, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=900, stale-while-revalidate=86400',
+    },
+  });
 }
 
 export async function GET(
