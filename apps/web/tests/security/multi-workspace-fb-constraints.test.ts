@@ -316,8 +316,8 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         ['workspace-a', 'workspace-b']
       );
 
-      // Falls back to user's primary workspace dashboard
-      expect(sanitized).toBe('https://workspace-a.velocta.com/dashboard');
+      // Falls back to user's primary workspace root
+      expect(sanitized).toBe('https://workspace-a.velocta.com/');
     });
   });
 });
