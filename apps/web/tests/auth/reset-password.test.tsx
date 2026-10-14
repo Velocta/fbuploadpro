@@ -91,10 +91,21 @@ describe('Password Recovery - Reset Password (US2)', () => {
 
     it('returns 200 when valid token and password are provided', async () => {
       const token = 'valid-token-abc-123';
-      _setResetTokenForTesting(token, {
-        email: 'user@gmail.com',
-        expiresAt: Date.now() + 3600000,
+      const verifyOtpMock = vi.fn().mockResolvedValue({
+        data: { session: { access_token: 'fake-session-token' }, user: { id: 'user-abc' } },
+        error: null,
       });
+      const updateUserMock = vi.fn().mockResolvedValue({
+        data: { user: { id: 'user-abc' } },
+        error: null,
+      });
+      const mockSupabase = {
+        auth: {
+          verifyOtp: verifyOtpMock,
+          updateUser: updateUserMock,
+        },
+      };
+      _setMockSupabaseClient(mockSupabase as any);
 
       const req = new NextRequest('http://localhost:3000/api/auth/reset-password', {
         method: 'POST',
@@ -114,6 +125,15 @@ describe('Password Recovery - Reset Password (US2)', () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.message).toContain('successfully updated');
+      expect(verifyOtpMock).toHaveBeenCalledWith({
+        token_hash: token,
+        type: 'recovery',
+      });
+      expect(updateUserMock).toHaveBeenCalledWith({
+        password: 'super-secure-password-123',
+      });
+
+      _setMockSupabaseClient(null);
     });
 
     it('returns 200 when valid 6-digit OTP, email, and password are provided', async () => {
@@ -143,10 +163,28 @@ describe('Password Recovery - Reset Password (US2)', () => {
 
     it('rejects reused reset tokens (single-use token enforcement)', async () => {
       const token = 'single-use-token-456';
-      _setResetTokenForTesting(token, {
-        email: 'user@gmail.com',
-        expiresAt: Date.now() + 3600000,
+      let consumed = false;
+      const verifyOtpMock = vi.fn().mockImplementation(async () => {
+        if (consumed) {
+          return { data: null, error: { message: 'Token has already been consumed or is invalid' } };
+        }
+        consumed = true;
+        return {
+          data: { session: { access_token: 'fake-session' }, user: { id: 'user-1' } },
+          error: null,
+        };
       });
+      const updateUserMock = vi.fn().mockResolvedValue({
+        data: { user: { id: 'user-1' } },
+        error: null,
+      });
+      const mockSupabase = {
+        auth: {
+          verifyOtp: verifyOtpMock,
+          updateUser: updateUserMock,
+        },
+      };
+      _setMockSupabaseClient(mockSupabase as any);
 
       // First use succeeds
       const req1 = new NextRequest('http://localhost:3000/api/auth/reset-password', {
@@ -181,6 +219,8 @@ describe('Password Recovery - Reset Password (US2)', () => {
       expect(res2.status).toBe(400);
       const body2 = await res2.json();
       expect(body2.error).toContain('Invalid or expired');
+
+      _setMockSupabaseClient(null);
     });
 
     it('enforces IP rate limiting after 5 attempts per minute', async () => {

@@ -3,10 +3,9 @@ import { verifySessionToken } from '@fbuploadpro/contracts';
 import {
   registerTenantUser,
   loginTenantUser,
-  resetUserPassword,
+  resetUserPasswordWithOtp,
   validateSessionActive,
   _resetAuthStores,
-  _setResetTokenForTesting,
 } from '../../src/lib/supabase-auth';
 
 const SESSION_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -48,15 +47,13 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
     // Ensure at least 1 second elapses so passwordUpdatedAt > initialSession.iat
     await new Promise((resolve) => setTimeout(resolve, 1100));
 
-    // 2. Perform password reset with valid recovery token
-    const recoveryToken = 'recovery-token-for-invalidation';
-    _setResetTokenForTesting(recoveryToken, {
-      email: 'johninvalidation@gmail.com',
-      expiresAt: Date.now() + 3600000,
-    });
+    // 2. Perform password reset with OTP
+    const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
+    const { otp } = createPasswordResetOtp(email);
 
-    await resetUserPassword({
-      token: recoveryToken,
+    await resetUserPasswordWithOtp({
+      email,
+      otp,
       password: newPassword,
     });
 
