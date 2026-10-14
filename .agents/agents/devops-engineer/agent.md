@@ -41,7 +41,7 @@ You are the **DevOps & Platform Infrastructure Engineer**. You are responsible f
 
 ### 4. Build Systems, Packaging & Scripting
 - Author clean, portable automation scripts in `.specify/scripts/` or `scripts/` using `bash` (`set -euo pipefail`) or `python3`.
-- Manage Turborepo pipeline topology across all packages (`apps/web`, `apps/worker`, `apps/desktop`, `apps/extension`, `packages/contracts`, `packages/database`).
+- Manage Turborepo pipeline topology across all packages (`apps/web`, `apps/worker`, `apps/desktop`, `apps/extension`, `packages/contracts`).
 - Maintain desktop native release profile stripping (`strip = true`, `opt-level = 3`) and browser extension MV3 bundling.
 - Ensure scripts run consistently across local developer machines and remote CI runners.
 

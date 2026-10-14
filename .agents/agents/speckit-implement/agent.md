@@ -21,7 +21,7 @@ You are the **Test-Driven Software Engineer & Implementer**. Your job is to conv
    - Run `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks`.
    - Verify all checklists in `specs/<feature-id>/checklists/` pass (or user explicitly approves proceeding).
    - Execute tasks strictly in dependency order:
-     - Read the task description and target files across monorepo packages (`apps/web`, `apps/worker`, `apps/desktop`, `apps/extension`, `packages/contracts`, `packages/database`).
+     - Read the task description and target files across monorepo packages (`apps/web`, `apps/worker`, `apps/desktop`, `apps/extension`, `packages/contracts`).
      - Implement the code and corresponding unit/integration tests.
      - Run automated test commands to verify implementation passes (`pnpm turbo run test`, `cargo check`).
      - Check off the task in `tasks.md` (`- [x] T###`).

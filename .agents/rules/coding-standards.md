@@ -103,10 +103,10 @@ AI-generated code frequently suffers from "slop"—unnecessary bloat, speculativ
 
 ### B. Cloudflare Worker Edge Isolate (`apps/worker`)
 - **V8 Isolate Purity**: Zero Node.js TCP socket or Node-specific standard library dependencies (`net`, `tls`, `fs`).
-- **Edge Database Client**: Must import from `@fbuploadpro/database/edge` rather than Node.js connection pool clients.
+- **Edge Database Client**: Must use `@supabase/supabase-js` communicating strictly over HTTPS / PostgREST. Legacy database packages and direct TCP poolers are permanently eradicated.
 - **Strict Execution Budgets**: External HTTP calls must carry explicit timeouts via `AbortController` (e.g. 2000ms max).
 
-### C. Multi-Tenant Data Isolation (`packages/database`)
+### C. Multi-Tenant Data Isolation & Supabase Substrate
 - **Tenant Scope Enforcement**: Every tenant-owned database table must enforce isolation strictly via `user_id`. There are no agency containers in the platform.
 - **Compound Constraints**: Enforce foreign keys and unique constraints using compound keys (e.g., `(user_id, facebook_account_id)`).
 - **Abolition of Token Economy**: The legacy prepaid token system, credit balances, and transaction ledgers are formally abolished. Publishing is unrestricted for all active users (`status = 'active'`) with connected Facebook Pages, with zero token deduction or balance gating.
