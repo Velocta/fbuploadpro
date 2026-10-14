@@ -108,11 +108,8 @@ export function verifyHashedPasswordSync(password: string, storedHash: string): 
 }
 
 export function generateSecureOtp(): string {
-  const array = new Uint32Array(1);
-  crypto.getRandomValues(array);
-  const randomValue = array[0] ?? 0;
-  // Produce exactly 6 digits between 100000 and 999999
-  const otpNumber = 100000 + (randomValue % 900000);
+  // Produce exactly 6 digits between 100000 and 999999 with uniform cryptographic distribution
+  const otpNumber = crypto.randomInt(100000, 1000000);
   return otpNumber.toString();
 }
 
@@ -323,7 +320,13 @@ export function verifySignupOtp(
     };
   }
 
-  const cleanProvided = providedOtp.replace(/\D/g, '').trim();
+  const cleanProvided = typeof providedOtp === 'string' ? providedOtp.trim() : '';
+  if (!/^\d{6}$/.test(cleanProvided)) {
+    return {
+      success: false,
+      error: 'Invalid verification code. Code must be exactly 6 digits.',
+    };
+  }
 
   // Use timingSafeEqual to compare OTPs
   if (!constantTimeEquals(cleanProvided, entry.otp)) {
@@ -490,7 +493,13 @@ export function verifyPasswordResetOtp(
     };
   }
 
-  const cleanProvided = providedOtp.replace(/\D/g, '').trim();
+  const cleanProvided = typeof providedOtp === 'string' ? providedOtp.trim() : '';
+  if (!/^\d{6}$/.test(cleanProvided)) {
+    return {
+      success: false,
+      error: 'Invalid verification code. Code must be exactly 6 digits.',
+    };
+  }
 
   // Timing-safe comparison to prevent timing side channels
   if (!constantTimeEquals(cleanProvided, entry.otp)) {
