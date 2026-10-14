@@ -21,7 +21,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

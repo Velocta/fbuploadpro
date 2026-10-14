@@ -25,7 +25,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

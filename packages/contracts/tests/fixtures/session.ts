@@ -26,7 +26,7 @@ export const mockSellerSession: SessionPayload = {
 
 export const mockAdminSession: SessionPayload = {
   userId: '33333333-3333-4333-a333-333333333333',
-  email: 'admin@gmail.com',
+  email: 'administrator@gmail.com',
   name: 'System Admin',
   subdomain: 'platform-admin',
   role: 'admin',

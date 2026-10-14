@@ -38,6 +38,14 @@ export function canonicalizeGmailAddress(rawEmail: string): string {
     throw new Error('Email username cannot be empty');
   }
 
+  if (cleanUsername.length < 6 || cleanUsername.length > 30) {
+    throw new Error('Gmail username must be between 6 and 30 characters');
+  }
+
+  if (RESERVED_SUBDOMAINS.includes(cleanUsername as ReservedSubdomain)) {
+    throw new Error(`Gmail username cannot use a reserved system keyword: ${cleanUsername}`);
+  }
+
   return `${cleanUsername}@gmail.com`;
 }
 

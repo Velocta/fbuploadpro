@@ -23,7 +23,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

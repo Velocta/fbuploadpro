@@ -18,7 +18,7 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     userToken = await signSessionToken(
       {
         userId: '11111111-1111-4111-a111-111111111111',
-        email: 'user@gmail.com',
+        email: 'regularuser@gmail.com',
         name: 'Acme User',
         subdomain: 'acme',
         role: 'user',
@@ -42,7 +42,7 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     adminToken = await signSessionToken(
       {
         userId: '33333333-3333-4333-a333-333333333333',
-        email: 'admin@gmail.com',
+        email: 'administrator@gmail.com',
         name: 'Admin User',
         subdomain: 'platform-admin',
         role: 'admin',

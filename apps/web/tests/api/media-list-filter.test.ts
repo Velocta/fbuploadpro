@@ -17,7 +17,7 @@ describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', 
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

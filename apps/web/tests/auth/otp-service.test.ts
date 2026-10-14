@@ -267,7 +267,7 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       },
       {
         type: 'reset',
-        email: 'locked.reset@gmail.com',
+        email: 'locked.resettester@gmail.com',
         init: (email: string) => createPasswordResetOtp(email),
         verifyBad: (email: string) => verifyPasswordResetOtp(email, '000000'),
         attemptRecreate: (email: string) => createPasswordResetOtp(email),

@@ -50,7 +50,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
       const invalid = {
         name: 'Jane Doe',
         phone: '+15551234567',
-        email: 'jane@gmail.com',
+        email: 'janedoe@gmail.com',
         password: 'short',
       };
       const result = SignupRequestSchema.safeParse(invalid);
@@ -61,7 +61,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
   describe('LoginRequestSchema', () => {
     it('validates a valid login request with returnUrl', () => {
       const valid = {
-        email: 'jane@gmail.com',
+        email: 'janedoe@gmail.com',
         password: 'Password123!',
         returnUrl: '/media',
       };
@@ -76,7 +76,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
         success: true,
         user: {
           id: '11111111-1111-4111-a111-111111111111',
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           name: 'Jane Doe',
           subdomain: 'janedoe',
           role: 'user',

@@ -18,7 +18,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

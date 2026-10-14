@@ -12,8 +12,8 @@ import {
 describe('Auth Hardening Contracts (Spec 014)', () => {
   describe('canonicalizeGmailAddress', () => {
     it('normalizes standard gmail address', () => {
-      expect(canonicalizeGmailAddress('john@gmail.com')).toBe('john@gmail.com');
-      expect(canonicalizeGmailAddress('  JOHN@GMAIL.COM  ')).toBe('john@gmail.com');
+      expect(canonicalizeGmailAddress('johndoe@gmail.com')).toBe('johndoe@gmail.com');
+      expect(canonicalizeGmailAddress('  JOHNDOE@GMAIL.COM  ')).toBe('johndoe@gmail.com');
     });
 
     it('strips all dots from username', () => {
@@ -50,6 +50,35 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       expect(() => canonicalizeGmailAddress('')).toThrow();
       expect(() => canonicalizeGmailAddress('not-an-email')).toThrow();
       expect(() => canonicalizeGmailAddress('@gmail.com')).toThrow();
+    });
+
+    it('rejects usernames shorter than 6 characters (1-5 characters)', () => {
+      expect(() => canonicalizeGmailAddress('a@gmail.com')).toThrow(/between 6 and 30 characters/i);
+      expect(() => canonicalizeGmailAddress('ab@gmail.com')).toThrow(/between 6 and 30 characters/i);
+      expect(() => canonicalizeGmailAddress('abc@gmail.com')).toThrow(/between 6 and 30 characters/i);
+      expect(() => canonicalizeGmailAddress('john@gmail.com')).toThrow(/between 6 and 30 characters/i);
+      expect(() => canonicalizeGmailAddress('admin@gmail.com')).toThrow();
+    });
+
+    it('rejects usernames longer than 30 characters', () => {
+      const thirtyOneChars = 'a1234567890123456789012345678901@gmail.com';
+      expect(() => canonicalizeGmailAddress(thirtyOneChars)).toThrow(/between 6 and 30 characters/i);
+    });
+
+    it('rejects reserved system keywords', () => {
+      expect(() => canonicalizeGmailAddress('admin@gmail.com')).toThrow();
+      expect(() => canonicalizeGmailAddress('billing@gmail.com')).toThrow(/reserved/i);
+      expect(() => canonicalizeGmailAddress('dashboard@gmail.com')).toThrow(/reserved/i);
+      expect(() => canonicalizeGmailAddress('internal@gmail.com')).toThrow(/reserved/i);
+      expect(() => canonicalizeGmailAddress('webhook@gmail.com')).toThrow(/reserved/i);
+      expect(() => canonicalizeGmailAddress('system@gmail.com')).toThrow(/reserved/i);
+      expect(() => canonicalizeGmailAddress('status@gmail.com')).toThrow(/reserved/i);
+    });
+
+    it('accepts usernames at exact 6 and 30 character boundaries', () => {
+      expect(canonicalizeGmailAddress('sixchr@gmail.com')).toBe('sixchr@gmail.com');
+      const thirtyChars = 'a12345678901234567890123456789';
+      expect(canonicalizeGmailAddress(`${thirtyChars}@gmail.com`)).toBe(`${thirtyChars}@gmail.com`);
     });
   });
 
@@ -184,7 +213,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       // Cross-tenant absolute returnUrl
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: 'https://jane.fbuploadpro.com/',
         }).success
@@ -193,7 +222,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       // Open-redirect external domain
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: 'https://evil.com/phish',
         }).success
@@ -202,7 +231,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       // Protocol-relative URL
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: '//evil.com/phish',
         }).success
@@ -211,7 +240,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       // Backslash evasion
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: '/\\evil.com',
         }).success
@@ -220,7 +249,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       // Javascript/data schemes
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: 'javascript:alert(1)',
         }).success
@@ -231,7 +260,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       const bannedRoute = ['/', 'dashboard'].join('');
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: bannedRoute,
         }).success
@@ -239,7 +268,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
 
       expect(
         LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: `${bannedRoute}/media`,
         }).success
@@ -250,7 +279,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       const validPaths = ['/media', '/accounts', '/pages', '/settings', '/publishing', '/'];
       for (const path of validPaths) {
         const result = LoginRequestSchema.safeParse({
-          email: 'jane@gmail.com',
+          email: 'janedoe@gmail.com',
           password: 'Password123!',
           returnUrl: path,
         });

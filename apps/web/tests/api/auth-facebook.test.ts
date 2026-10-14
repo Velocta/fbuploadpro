@@ -29,7 +29,7 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@gmail.com',
+        email: 'alexander@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

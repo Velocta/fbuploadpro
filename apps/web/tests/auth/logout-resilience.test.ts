@@ -14,7 +14,7 @@ describe('Logout Resilience & bfcache Mitigation (Spec 021 US2)', () => {
     validToken = await signSessionToken(
       {
         userId: '11111111-1111-4111-a111-111111111111',
-        email: 'user@gmail.com',
+        email: 'regularuser@gmail.com',
         subdomain: 'acme',
         role: 'user',
         status: 'active',
