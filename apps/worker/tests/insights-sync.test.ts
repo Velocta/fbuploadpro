@@ -450,4 +450,71 @@ describe('User Story 5 - Worker Daily Page Insights Snapshot Sync', () => {
     expect(result.totalEligible).toBe(1);
     expect(result.synced).toBe(1);
   });
+
+  it('includes rate limited pages with elapsed cooldown via PostgREST db.from client (ISSUE-24)', async () => {
+    const encrypted = await encryptToken('EAA_TEST_PAGE_TOKEN_VALID', TEST_MASTER_KEY);
+    let capturedOrFilter = '';
+
+    const testDb: InsightsSyncDbClient = {
+      from: vi.fn((table: string) => {
+        if (table === 'facebook_pages') {
+          return {
+            select: vi.fn().mockReturnValue({
+              or: vi.fn((filterStr: string) => {
+                capturedOrFilter = filterStr;
+                return Promise.resolve({
+                  data: [
+                    {
+                      id: 'page-rate-limited-sb',
+                      user_id: 'user-uuid-1',
+                      fb_page_id: 'fb-page-rate-limited-sb',
+                      page_name: 'Cooldown SB Page',
+                      encrypted_access_token: encrypted,
+                      status: 'fb_rate_limited',
+                    },
+                  ],
+                  error: null,
+                });
+              }),
+            }),
+            update: vi.fn().mockReturnValue({
+              eq: vi.fn().mockResolvedValue({ error: null }),
+            }),
+          };
+        }
+        if (table === 'page_insights_daily_snapshots') {
+          return {
+            upsert: vi.fn().mockResolvedValue({ error: null }),
+          };
+        }
+        return {};
+      }),
+      upsertPageInsightsSnapshot: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const mockFetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          fan_count: 500,
+          followers_count: 600,
+          data: [],
+        }),
+      };
+    });
+
+    const result = await syncDailyPageInsights({
+      db: testDb,
+      masterKey: TEST_MASTER_KEY,
+      fetchImpl: mockFetch as any,
+      targetDate: '2026-03-01',
+    });
+
+    expect(capturedOrFilter).toContain('status.eq.active');
+    expect(capturedOrFilter).toContain('status.eq.fb_rate_limited');
+    expect(capturedOrFilter).toContain('updated_at.lte.');
+    expect(result.totalEligible).toBe(1);
+    expect(result.synced).toBe(1);
+  });
 });

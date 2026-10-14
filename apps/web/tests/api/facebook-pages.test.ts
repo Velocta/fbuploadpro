@@ -628,6 +628,63 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(json.pages[0].status).toBe('active');
       expect(updateExecuted).toBe(true);
     });
+
+    it('persists active status via Supabase client when a page cooldown has expired (ISSUE-24)', async () => {
+      const pastDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+      let supabaseUpdated = false;
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'facebook_pages') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  neq: vi.fn().mockReturnValue({
+                    order: vi.fn().mockResolvedValue({
+                      data: [
+                        {
+                          id: pageId,
+                          facebook_account_id: accountId,
+                          fb_page_id: 'page_rate_limited_sb',
+                          page_name: 'Supabase Cooldown Page',
+                          status: 'fb_rate_limited',
+                          updated_at: pastDate,
+                          created_at: pastDate,
+                          facebook_accounts: { display_name: 'Alex Supabase' },
+                        },
+                      ],
+                      error: null,
+                    }),
+                  }),
+                }),
+              }),
+              update: vi.fn((payload: any) => {
+                if (payload.status === 'active') {
+                  supabaseUpdated = true;
+                }
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockResolvedValue({ error: null }),
+                  }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/pages', {
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleListPages(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.pages[0].status).toBe('active');
+      expect(supabaseUpdated).toBe(true);
+    });
   });
 
   describe('Disconnect Page (DELETE /api/tenant/[subdomain]/pages/[pageId])', () => {

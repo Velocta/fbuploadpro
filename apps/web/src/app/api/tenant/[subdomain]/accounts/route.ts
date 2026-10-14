@@ -39,6 +39,38 @@ function mapAccountRowToView(row: Record<string, any>) {
   };
 }
 
+function syncExpiredAccountStatus(
+  accountId: string,
+  userId: string,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): void {
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    dbClient.query(
+      `UPDATE facebook_accounts
+       SET status = 'expired', updated_at = now()
+       WHERE id = $1 AND user_id = $2`,
+      [accountId, userId]
+    ).catch((err: any) => {
+      console.error('[handleListAccounts] Failed to persist expired account status:', err);
+    });
+    return;
+  }
+
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+  if (!supabase) return;
+
+  supabase
+    .from('facebook_accounts')
+    .update({ status: 'expired', updated_at: new Date().toISOString() })
+    .eq('id', accountId)
+    .eq('user_id', userId)
+    .then(({ error }: { error: any }) => {
+      if (error) {
+        console.error('[handleListAccounts] Failed to persist expired account status via Supabase:', error);
+      }
+    });
+}
+
 export async function handleListAccounts(
   request: NextRequest,
   subdomain: string,
@@ -152,31 +184,7 @@ export async function handleListAccounts(
     const view = mapAccountRowToView(row);
 
     if (row.status === 'active' && view.status === 'expired') {
-      // Sync expired status back to DB so background workers and RPC functions honor it
-      if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-        dbClient.query(
-          `UPDATE facebook_accounts
-           SET status = 'expired', updated_at = now()
-           WHERE id = $1 AND user_id = $2`,
-          [view.id, session.userId]
-        ).catch((err: any) => {
-          console.error('[handleListAccounts] Failed to persist expired account status:', err);
-        });
-      } else {
-        const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
-        if (supabase) {
-          supabase
-            .from('facebook_accounts')
-            .update({ status: 'expired', updated_at: new Date().toISOString() })
-            .eq('id', view.id)
-            .eq('user_id', session.userId)
-            .then(({ error }: { error: any }) => {
-              if (error) {
-                console.error('[handleListAccounts] Failed to persist expired account status via Supabase:', error);
-              }
-            });
-        }
-      }
+      syncExpiredAccountStatus(view.id, session.userId, dbClient);
     }
 
     return view;

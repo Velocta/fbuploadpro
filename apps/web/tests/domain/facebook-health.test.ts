@@ -306,6 +306,61 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(accountUpdateExecuted).toBe(true);
     });
 
+    it('persists expired status via Supabase client when an account token expiration has passed (ISSUE-24)', async () => {
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      let supabaseAccountUpdated = false;
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'facebook_accounts') {
+            return {
+              select: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: '55555555-5555-5555-a555-555555555555',
+                        fb_account_id: 'fb_act_sb_expired',
+                        display_name: 'SB Expired Account',
+                        status: 'active',
+                        token_expires_at: pastDate,
+                        created_at: pastDate,
+                        updated_at: pastDate,
+                        facebook_pages: [],
+                      },
+                    ],
+                    error: null,
+                  }),
+                }),
+              }),
+              update: vi.fn((payload: any) => {
+                if (payload.status === 'expired') {
+                  supabaseAccountUpdated = true;
+                }
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    eq: vi.fn().mockResolvedValue({ error: null }),
+                  }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/accounts', {
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleListAccounts(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.accounts[0].status).toBe('expired');
+      expect(supabaseAccountUpdated).toBe(true);
+    });
+
     it('rejects cross-tenant access when user belongs to different subdomain', async () => {
       const mockDb = {
         query: vi.fn(),

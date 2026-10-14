@@ -31,6 +31,52 @@ function extractPagePictureUrl(row: any): string | null {
   return null;
 }
 
+function syncRecoveredPageStatus(
+  pageId: string,
+  userId: string,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): void {
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    dbClient.query(
+      `UPDATE facebook_pages
+       SET status = 'active', updated_at = now()
+       WHERE id = $1 AND user_id = $2`,
+      [pageId, userId]
+    ).catch((err: any) => {
+      console.error('[handleListPages] Failed to persist recovered page status:', err);
+    });
+    return;
+  }
+
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+  if (!supabase) return;
+
+  supabase
+    .from('facebook_pages')
+    .update({ status: 'active', updated_at: new Date().toISOString() })
+    .eq('id', pageId)
+    .eq('user_id', userId)
+    .then(({ error }: { error: any }) => {
+      if (error) {
+        console.error('[handleListPages] Failed to persist recovered page status via Supabase:', error);
+      }
+    });
+}
+
+function parsePageTasks(rawTasks: unknown): string[] {
+  if (Array.isArray(rawTasks)) {
+    return rawTasks;
+  }
+  if (typeof rawTasks === 'string') {
+    try {
+      return JSON.parse(rawTasks);
+    } catch (_e) {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function handleListPages(
   request: NextRequest,
   subdomain: string,
@@ -106,17 +152,6 @@ export async function handleListPages(
   }
 
   const pages = (rows || []).map((row) => {
-    let parsedTasks: string[] = [];
-    if (Array.isArray(row.tasks)) {
-      parsedTasks = row.tasks;
-    } else if (typeof row.tasks === 'string') {
-      try {
-        parsedTasks = JSON.parse(row.tasks);
-      } catch (_e) {
-        parsedTasks = [];
-      }
-    }
-
     const updatedAt = row.updated_at || row.updatedAt;
     const effectiveStatus = evaluatePageHealth({
       status: row.status ?? 'active',
@@ -128,31 +163,7 @@ export async function handleListPages(
     const followersGained = currentFollowers - startingFollowers;
 
     if (row.status === 'fb_rate_limited' && effectiveStatus === 'active') {
-      // Sync transitioned status back to DB so background workers and RPC functions honor it
-      if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-        dbClient.query(
-          `UPDATE facebook_pages
-           SET status = 'active', updated_at = now()
-           WHERE id = $1 AND user_id = $2`,
-          [row.id, session.userId]
-        ).catch((err: any) => {
-          console.error('[handleListPages] Failed to persist recovered page status:', err);
-        });
-      } else {
-        const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
-        if (supabase) {
-          supabase
-            .from('facebook_pages')
-            .update({ status: 'active', updated_at: new Date().toISOString() })
-            .eq('id', row.id)
-            .eq('user_id', session.userId)
-            .then(({ error }: { error: any }) => {
-              if (error) {
-                console.error('[handleListPages] Failed to persist recovered page status via Supabase:', error);
-              }
-            });
-        }
-      }
+      syncRecoveredPageStatus(row.id, session.userId, dbClient);
     }
 
     return {
@@ -169,7 +180,7 @@ export async function handleListPages(
       followersGained,
       followersCount: currentFollowers,
       status: effectiveStatus,
-      tasks: parsedTasks,
+      tasks: parsePageTasks(row.tasks),
       createdAt: row.created_at || row.createdAt,
       updatedAt: row.updated_at || row.updatedAt,
     };
