@@ -60,18 +60,18 @@ describe('ISSUE-46: Multi-Workspace Resource Isolation & Foreign Key Enforcement
     const mockFolder: DatabaseMediaFolderRow = {
       id: '00000000-0000-4000-a000-000000000003',
       user_id: '11111111-1111-4111-a111-111111111111',
-      workspace_id: '22222222-2222-4222-a222-222222222222',
+      workspace_id: null,
       name: 'Test Folder',
       parent_id: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    expect(mockFolder.workspace_id).toBe('22222222-2222-4222-a222-222222222222');
+    expect(mockFolder.workspace_id).toBeNull();
 
     const mockItem: DatabaseMediaItemRow = {
       id: '00000000-0000-4000-a000-000000000004',
       user_id: '11111111-1111-4111-a111-111111111111',
-      workspace_id: '22222222-2222-4222-a222-222222222222',
+      workspace_id: null,
       folder_id: mockFolder.id,
       name: 'video.mp4',
       file_size: 1024,
@@ -87,7 +87,7 @@ describe('ISSUE-46: Multi-Workspace Resource Isolation & Foreign Key Enforcement
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    expect(mockItem.workspace_id).toBe('22222222-2222-4222-a222-222222222222');
+    expect(mockItem.workspace_id).toBeNull();
   });
 
   it('contains forward database migration adding workspace_id foreign keys and RLS policies', () => {
@@ -111,6 +111,20 @@ describe('ISSUE-46: Multi-Workspace Resource Isolation & Foreign Key Enforcement
     expect(sqlContent).toMatch(/CREATE\s+POLICY\s+["']facebook_pages_user_access["']/i);
     expect(sqlContent).toMatch(/CREATE\s+POLICY\s+["']media_folders_user_access["']/i);
     expect(sqlContent).toMatch(/CREATE\s+POLICY\s+["']media_items_user_access["']/i);
+  });
+
+  it('contains forward database migration 20261014180000_global_user_media_library.sql resetting media RLS to global user', () => {
+    const migrationsDir = path.resolve(process.cwd(), '../../supabase/migrations');
+    const files = fs.readdirSync(migrationsDir);
+    const globalMediaMigration = files.find((f) => f.includes('global_user_media_library'));
+
+    expect(globalMediaMigration).toBeDefined();
+
+    const sqlContent = fs.readFileSync(path.join(migrationsDir, globalMediaMigration!), 'utf-8');
+    expect(sqlContent).toContain('ALTER TABLE "public"."media_folders" ALTER COLUMN "workspace_id" DROP NOT NULL');
+    expect(sqlContent).toContain('ALTER TABLE "public"."media_items" ALTER COLUMN "workspace_id" DROP NOT NULL');
+    expect(sqlContent).toMatch(/CREATE\s+POLICY\s+["']media_folders_user_access["']\s+ON\s+["']public["']\.["']media_folders["']/i);
+    expect(sqlContent).toMatch(/CREATE\s+POLICY\s+["']media_items_user_access["']\s+ON\s+["']public["']\.["']media_items["']/i);
   });
 
   it('filters tenant resources by workspace_id preventing multi-workspace bleed for same user', () => {
@@ -165,5 +179,56 @@ describe('ISSUE-46: Multi-Workspace Resource Isolation & Foreign Key Enforcement
     );
     expect(workspaceBAccounts).toHaveLength(1);
     expect(workspaceBAccounts[0]?.id).toBe('acc-2');
+  });
+
+  it('ensures media library is global across workspaces for the same user', () => {
+    const userId = '11111111-1111-4111-a111-111111111111';
+    const otherUserId = '22222222-2222-4222-a222-222222222222';
+
+    const userMediaItems: DatabaseMediaItemRow[] = [
+      {
+        id: 'item-1',
+        user_id: userId,
+        workspace_id: null,
+        folder_id: null,
+        name: 'reel1.mp4',
+        file_size: 5000,
+        mime_type: 'video/mp4',
+        media_type: 'video',
+        storage_key: 'keys/reel1.mp4',
+        url: 'https://cdn.example.com/reel1.mp4',
+        thumbnail_key: null,
+        thumbnail_url: null,
+        duration_seconds: 15,
+        aspect_ratio: '9:16',
+        caption_text: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 'item-2',
+        user_id: otherUserId,
+        workspace_id: null,
+        folder_id: null,
+        name: 'other.mp4',
+        file_size: 6000,
+        mime_type: 'video/mp4',
+        media_type: 'video',
+        storage_key: 'keys/other.mp4',
+        url: 'https://cdn.example.com/other.mp4',
+        thumbnail_key: null,
+        thumbnail_url: null,
+        duration_seconds: 20,
+        aspect_ratio: '9:16',
+        caption_text: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+
+    // Any workspace belonging to user sees all media of user
+    const accessibleItems = userMediaItems.filter((item) => item.user_id === userId);
+    expect(accessibleItems).toHaveLength(1);
+    expect(accessibleItems[0]?.id).toBe('item-1');
   });
 });

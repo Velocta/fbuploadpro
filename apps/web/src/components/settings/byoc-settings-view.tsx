@@ -571,7 +571,7 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
                 color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
-              Bring Your Own Credentials (BYOC)
+              Facebook BYOC
             </h3>
             <p
               style={{

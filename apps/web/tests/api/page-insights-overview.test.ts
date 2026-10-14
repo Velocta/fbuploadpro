@@ -47,6 +47,9 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
   it('fetches overview KPIs via Graph API v26.0, returns 200, and never leaks tokens', async () => {
     const mockDb = {
       query: vi.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
         if (sql.includes('FROM facebook_pages')) {
           return Promise.resolve([
             {
@@ -322,16 +325,33 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
       error: null,
     });
 
+    const wsQuery = {
+      eq: vi.fn().mockImplementation(() => wsQuery),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { id: 'ws_insights_123' },
+        error: null,
+      }),
+    };
+
     const mockSupabase = {
-      from: vi.fn(() => ({
-        select: selectMock.mockReturnValue({
-          eq: eqUserMock.mockReturnValue({
-            eq: eqTargetMock.mockReturnValue({
-              maybeSingle: maybeSingleMock,
+      from: vi.fn((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnValue(wsQuery),
+          };
+        }
+        return {
+          select: selectMock.mockReturnValue({
+            eq: eqUserMock.mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: eqTargetMock.mockReturnValue({
+                  maybeSingle: maybeSingleMock,
+                }),
+              }),
             }),
           }),
-        }),
-      })),
+        };
+      }),
     };
 
     const mockFetch = vi.fn().mockResolvedValue({

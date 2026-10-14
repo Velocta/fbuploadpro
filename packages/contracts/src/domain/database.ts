@@ -69,7 +69,7 @@ export interface DatabaseFacebookPageRow {
 export interface DatabaseMediaFolderRow {
   id: string;
   user_id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   name: string;
   parent_id: string | null;
   created_at: string;
@@ -79,7 +79,7 @@ export interface DatabaseMediaFolderRow {
 export interface DatabaseMediaItemRow {
   id: string;
   user_id: string;
-  workspace_id: string;
+  workspace_id: string | null;
   folder_id: string | null;
   name: string;
   file_size: number;

@@ -9,6 +9,7 @@ import {
   type PageInsightsResponse,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { globalInsightsCache } from '../../../../../../../lib/insights/insights-cache';
 import {
@@ -64,6 +65,11 @@ export async function handleGetInsights(
   }
 
   const client = options?.dbClient;
+  const workspaceId = await resolveTenantWorkspaceId(client, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   let page: {
     id: string;
     fb_page_id: string;
@@ -79,8 +85,8 @@ export async function handleGetInsights(
               p.encrypted_access_token, 
               p.status
        FROM facebook_pages p
-       WHERE ${whereClause} AND p.user_id = $2`,
-      [pageId, session.userId]
+       WHERE ${whereClause} AND p.user_id = $2 AND p.workspace_id = $3`,
+      [pageId, session.userId, workspaceId]
     )) as Array<{
       id: string;
       fb_page_id: string;
@@ -109,7 +115,8 @@ export async function handleGetInsights(
     let queryBuilder = supabase
       .from('facebook_pages')
       .select('id, fb_page_id, page_name, encrypted_access_token, status')
-      .eq('user_id', session.userId);
+      .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId);
 
     if (isUuid) {
       queryBuilder = queryBuilder.eq('id', pageId);

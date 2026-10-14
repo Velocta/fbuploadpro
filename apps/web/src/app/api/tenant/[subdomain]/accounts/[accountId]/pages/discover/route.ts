@@ -9,6 +9,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleDiscoverPages(
@@ -38,14 +39,20 @@ export async function handleDiscoverPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Fetch account and composite ownership (user_id, accountId)
+  // 3. Resolve workspace ID scoped to user
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  // 4. Fetch account and composite ownership (user_id, workspace_id, accountId)
   let account: any = null;
   let importedRows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     const accounts = (await dbClient.query(
-      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
-      [accountId, session.userId]
+      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [accountId, session.userId, workspaceId]
     )) as any[];
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
@@ -57,8 +64,8 @@ export async function handleDiscoverPages(
     account = accounts[0];
 
     importedRows = (await dbClient.query(
-      "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND status != 'disconnected'",
-      [session.userId]
+      "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND workspace_id = $2 AND status != 'disconnected'",
+      [session.userId, workspaceId]
     )) as any[];
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
@@ -71,6 +78,7 @@ export async function handleDiscoverPages(
       .select('*')
       .eq('id', accountId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
 
     if (accErr || !accData) {
@@ -85,6 +93,7 @@ export async function handleDiscoverPages(
       .from('facebook_pages')
       .select('fb_page_id')
       .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
       .neq('status', 'disconnected');
 
     importedRows = pageRows || [];

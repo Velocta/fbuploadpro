@@ -37,6 +37,9 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       let skippedSql = '';
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('UPDATE facebook_pages')) {
             updatedParams = params;
             return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
@@ -78,18 +81,30 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
 
       const mockSupabase = {
         from: vi.fn().mockImplementation((table: string) => {
-          if (table === 'facebook_pages') {
+          if (table === 'workspaces') {
             return {
-              update: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
                 eq: vi.fn().mockReturnValue({
                   eq: vi.fn().mockReturnValue({
-                    select: vi.fn().mockResolvedValue({
-                      data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                    maybeSingle: vi.fn().mockResolvedValue({
+                      data: { id: 'ws_123' },
                       error: null,
                     }),
                   }),
                 }),
               }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            const pageBuilder = {
+              eq: vi.fn().mockImplementation(() => pageBuilder),
+              select: vi.fn().mockResolvedValue({
+                data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                error: null,
+              }),
+            };
+            return {
+              update: vi.fn().mockReturnValue(pageBuilder),
             };
           }
           if (table === 'queue_items') {
@@ -133,6 +148,9 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
 
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('UPDATE facebook_pages')) {
             return Promise.resolve([{ id: pageId, fb_page_id: fbPageId }]);
           }
@@ -196,6 +214,9 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
       let deletedAccountParams: any[] = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('SELECT COUNT')) {
             return Promise.resolve([{ count: 2 }]);
           }

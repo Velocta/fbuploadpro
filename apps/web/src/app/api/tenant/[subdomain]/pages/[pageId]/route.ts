@@ -7,6 +7,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { globalInsightsCache } from '@/lib/insights/insights-cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -74,7 +75,8 @@ async function authenticateTenantRequest(
 async function fetchActivePageById(
   client: DatabaseClient | SupabaseClient<any> | null | undefined,
   pageId: string,
-  userId: string
+  userId: string,
+  workspaceId: string
 ) {
   if (client && 'query' in client && typeof client.query === 'function') {
     const rows = (await client.query(
@@ -94,9 +96,9 @@ async function fetchActivePageById(
         p.updated_at
       FROM facebook_pages p
       LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
-      WHERE p.id = $1 AND p.user_id = $2
+      WHERE p.id = $1 AND p.user_id = $2 AND p.workspace_id = $3
         AND p.status != 'disconnected'`,
-      [pageId, userId]
+      [pageId, userId, workspaceId]
     )) as any[];
 
     if (!rows || rows.length === 0 || !rows[0]) {
@@ -113,6 +115,7 @@ async function fetchActivePageById(
     .select('*, facebook_accounts(display_name)')
     .eq('id', pageId)
     .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
     .neq('status', 'disconnected')
     .maybeSingle();
 
@@ -130,7 +133,12 @@ export async function handleGetPage(
   if (auth.errorResponse) return auth.errorResponse;
   const session = auth.session!;
 
-  const page = await fetchActivePageById(dbClient, pageId, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  const page = await fetchActivePageById(dbClient, pageId, session.userId, workspaceId);
   if (!page) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
@@ -147,6 +155,11 @@ export async function handleUpdatePage(
   const auth = await authenticateTenantRequest(request, subdomain);
   if (auth.errorResponse) return auth.errorResponse;
   const session = auth.session!;
+
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
 
   let rawBody: unknown;
   try {
@@ -171,8 +184,8 @@ export async function handleUpdatePage(
       await dbClient.query(
         `UPDATE facebook_pages
          SET status = $1, updated_at = now()
-         WHERE id = $2 AND user_id = $3 AND status != 'disconnected'`,
-        [parsed.data.status, pageId, session.userId]
+         WHERE id = $2 AND user_id = $3 AND workspace_id = $4 AND status != 'disconnected'`,
+        [parsed.data.status, pageId, session.userId, workspaceId]
       );
     }
   } else {
@@ -186,11 +199,12 @@ export async function handleUpdatePage(
         .update({ status: parsed.data.status, updated_at: new Date().toISOString() })
         .eq('id', pageId)
         .eq('user_id', session.userId)
+        .eq('workspace_id', workspaceId)
         .neq('status', 'disconnected');
     }
   }
 
-  const page = await fetchActivePageById(dbClient, pageId, session.userId);
+  const page = await fetchActivePageById(dbClient, pageId, session.userId, workspaceId);
   if (!page) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
@@ -208,6 +222,10 @@ export async function handleDisconnectPage(
   if (auth.errorResponse) return auth.errorResponse;
   const session = auth.session!;
 
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     const result = (await dbClient.query(
@@ -215,9 +233,9 @@ export async function handleDisconnectPage(
        SET status = 'disconnected',
            encrypted_access_token = '',
            updated_at = now()
-       WHERE id = $1 AND user_id = $2
+       WHERE id = $1 AND user_id = $2 AND workspace_id = $3
        RETURNING id, fb_page_id`,
-      [pageId, session.userId]
+      [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!result || result.length === 0 || !result[0]) {
@@ -251,6 +269,7 @@ export async function handleDisconnectPage(
       })
       .eq('id', pageId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
       .select('id, fb_page_id');
 
     if (error || !updated || updated.length === 0) {
@@ -267,7 +286,6 @@ export async function handleDisconnectPage(
       .eq('fb_page_id', pageId)
       .eq('status', 'queued');
 
-    globalInsightsCache.deletePageInsights(session.userId, pageId, updated[0]?.fb_page_id);
   }
 
   const responsePayload = DisconnectPageResponseSchema.parse({

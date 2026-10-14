@@ -58,6 +58,9 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
   it('never leaks raw access tokens or encrypted ciphertexts in insights response JSON or headers', async () => {
     const mockDb = {
       query: vi.fn().mockImplementation(async (sql: string, params: any[]) => {
+        if (sql.includes('FROM workspaces')) {
+          return [{ id: 'ws_a' }];
+        }
         if (sql.includes('FROM facebook_pages')) {
           if (params[1] === userIdA) {
             return [
@@ -143,6 +146,9 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
     // User B attempts to access Page belonging to User A
     const mockDb = {
       query: vi.fn().mockImplementation(async (sql: string, params: any[]) => {
+        if (sql.includes('FROM workspaces')) {
+          return [{ id: 'ws_b' }];
+        }
         // Query strictly requires user_id = $2
         if (params[1] === userIdB) {
           return []; // Not found for User B!

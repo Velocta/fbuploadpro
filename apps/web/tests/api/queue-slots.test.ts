@@ -59,6 +59,9 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 404 when page does not exist or does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([]);
           }
@@ -86,6 +89,9 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 200 with list of slots for the page', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -175,6 +181,9 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 404 when page does not exist or does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([]);
           }
@@ -202,6 +211,9 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 201 Created on valid slot creation', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -249,6 +261,9 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
     it('returns 409 Conflict on duplicate slot_time for page', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }

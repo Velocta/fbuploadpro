@@ -9,6 +9,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 function extractCurrentFollowers(row: any): number {
@@ -77,6 +78,61 @@ function parsePageTasks(rawTasks: unknown): string[] {
   return [];
 }
 
+async function fetchLegacyPages(
+  dbClient: DatabaseClient,
+  workspaceId: string,
+  userId: string
+): Promise<any[]> {
+  return (await dbClient.query(
+    `SELECT 
+      p.id,
+      p.facebook_account_id,
+      a.display_name AS account_display_name,
+      p.fb_page_id,
+      p.page_name,
+      p.profile_picture_url,
+      p.category,
+      p.starting_followers,
+      p.current_followers,
+      p.status,
+      p.tasks,
+      p.created_at,
+      p.updated_at
+    FROM facebook_pages p
+    LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
+    WHERE p.user_id = $1
+      AND p.workspace_id = $2
+      AND p.status != 'disconnected'
+    ORDER BY p.created_at DESC`,
+    [userId, workspaceId]
+  )) as any[];
+}
+
+async function fetchSupabasePages(
+  supabase: SupabaseClient<Database>,
+  workspaceId: string,
+  userId: string
+): Promise<{ rows?: any[]; error?: string }> {
+  const { data: pageData, error } = await supabase
+    .from('facebook_pages')
+    .select('*, facebook_accounts(display_name)')
+    .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
+    .neq('status', 'disconnected')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  const rows = (pageData || []).map((p: any) => ({
+    ...p,
+    account_display_name: p.facebook_accounts?.display_name || '',
+  }));
+
+  return { rows };
+}
+
 export async function handleListPages(
   request: NextRequest,
   subdomain: string,
@@ -102,53 +158,28 @@ export async function handleListPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Query imported pages with parent account display name (excluding soft-deleted disconnected pages)
+  // 3. Resolve workspace ID scoped to user
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  // 4. Query imported pages with parent account display name scoped to workspace
   let rows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    rows = (await dbClient.query(
-      `SELECT 
-        p.id,
-        p.facebook_account_id,
-        a.display_name AS account_display_name,
-        p.fb_page_id,
-        p.page_name,
-        p.profile_picture_url,
-        p.category,
-        p.starting_followers,
-        p.current_followers,
-        p.status,
-        p.tasks,
-        p.created_at,
-        p.updated_at
-      FROM facebook_pages p
-      LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
-      WHERE p.user_id = $1
-        AND p.status != 'disconnected'
-      ORDER BY p.created_at DESC`,
-      [session.userId]
-    )) as any[];
+    rows = await fetchLegacyPages(dbClient as DatabaseClient, workspaceId, session.userId);
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
-    const { data: pageData, error } = await supabase
-      .from('facebook_pages')
-      .select('*, facebook_accounts(display_name)')
-      .eq('user_id', session.userId)
-      .neq('status', 'disconnected')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const res = await fetchSupabasePages(supabase, workspaceId, session.userId);
+    if (res.error) {
+      return NextResponse.json({ error: res.error }, { status: 500 });
     }
-
-    rows = (pageData || []).map((p: any) => ({
-      ...p,
-      account_display_name: p.facebook_accounts?.display_name || '',
-    }));
+    rows = res.rows || [];
   }
 
   const pages = (rows || []).map((row) => {

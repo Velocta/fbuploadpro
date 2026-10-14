@@ -8,7 +8,11 @@ import {
 import { handleDiscoverPages } from '../../src/app/api/tenant/[subdomain]/accounts/[accountId]/pages/discover/route';
 import { handleImportPages } from '../../src/app/api/tenant/[subdomain]/pages/import/route';
 import { handleListPages } from '../../src/app/api/tenant/[subdomain]/pages/route';
-import { handleDisconnectPage } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/route';
+import {
+  handleDisconnectPage,
+  handleGetPage,
+  handleUpdatePage,
+} from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/route';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -51,6 +55,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string) => {
           executedQueries.push(sql);
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_accounts')) {
             return Promise.resolve([
               {
@@ -163,6 +170,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const executedInsertSqls: string[] = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_accounts')) {
             return Promise.resolve([
               {
@@ -180,8 +190,8 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
             return Promise.resolve([
               {
                 id: pageId,
-                fbPageId: params[2],
-                pageName: params[3],
+                fbPageId: params[3],
+                pageName: params[4],
               },
             ]);
           }
@@ -238,7 +248,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(executedInsertSqls).toHaveLength(1);
       const insertSql = executedInsertSqls[0]!;
       expect(insertSql).toContain('starting_followers, current_followers');
-      expect(insertSql).toContain('VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)');
+      expect(insertSql).toContain('VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)');
       expect(insertSql).toContain('current_followers = EXCLUDED.current_followers');
       expect(insertSql).toContain(
         "WHEN facebook_pages.status = 'disconnected' THEN EXCLUDED.starting_followers"
@@ -248,6 +258,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(savedPages).toHaveLength(1);
       const [
         uId,
+        wsId,
         accId,
         fbPageId,
         pageName,
@@ -259,6 +270,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       ] = savedPages[0];
 
       expect(uId).toBe(userId);
+      expect(wsId).toBe('ws_123');
       expect(accId).toBe(accountId);
       expect(fbPageId).toBe('page_1002');
       expect(pageName).toBe('Creator Vlog Page');
@@ -299,6 +311,16 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'ws_123' },
+                error: null,
+              }),
+            };
+          }
           if (table === 'facebook_accounts') {
             return {
               select: vi.fn().mockReturnThis(),
@@ -404,6 +426,16 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'ws_123' },
+                error: null,
+              }),
+            };
+          }
           if (table === 'facebook_accounts') {
             return {
               select: vi.fn().mockReturnThis(),
@@ -491,6 +523,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       let capturedSql = '';
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           capturedSql = sql;
           return Promise.resolve([
             {
@@ -590,6 +625,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('UPDATE facebook_pages') && sql.includes("status = 'active'")) {
             updateExecuted = true;
             return Promise.resolve([]);
@@ -635,29 +673,38 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'facebook_pages') {
+          if (table === 'workspaces') {
             return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  neq: vi.fn().mockReturnValue({
-                    order: vi.fn().mockResolvedValue({
-                      data: [
-                        {
-                          id: pageId,
-                          facebook_account_id: accountId,
-                          fb_page_id: 'page_rate_limited_sb',
-                          page_name: 'Supabase Cooldown Page',
-                          status: 'fb_rate_limited',
-                          updated_at: pastDate,
-                          created_at: pastDate,
-                          facebook_accounts: { display_name: 'Alex Supabase' },
-                        },
-                      ],
-                      error: null,
-                    }),
-                  }),
-                }),
+              select: vi.fn().mockReturnThis(),
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { id: 'ws_123' },
+                error: null,
               }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            const pageQuery: any = {
+              eq: vi.fn().mockImplementation(() => pageQuery),
+              neq: vi.fn().mockImplementation(() => pageQuery),
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: pageId,
+                    facebook_account_id: accountId,
+                    fb_page_id: 'page_rate_limited_sb',
+                    page_name: 'Supabase Cooldown Page',
+                    status: 'fb_rate_limited',
+                    updated_at: pastDate,
+                    created_at: pastDate,
+                    facebook_accounts: { display_name: 'Alex Supabase' },
+                  },
+                ],
+                error: null,
+              }),
+            };
+            return {
+              select: vi.fn().mockReturnValue(pageQuery),
               update: vi.fn((payload: any) => {
                 if (payload.status === 'active') {
                   supabaseUpdated = true;
@@ -692,6 +739,9 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const executedStatements: Array<{ sql: string; params: any[] }> = [];
       const mockDb = {
         query: vi.fn().mockImplementation((sql: string, params: any[]) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           executedStatements.push({ sql, params });
           if (sql.includes('UPDATE facebook_pages')) {
             return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
@@ -721,11 +771,170 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(executedStatements).toHaveLength(2);
       expect(executedStatements[0]!.sql).toContain("SET status = 'disconnected'");
       expect(executedStatements[0]!.sql).toContain("encrypted_access_token = ''");
-      expect(executedStatements[0]!.params).toEqual([pageId, userId]);
+      expect(executedStatements[0]!.params).toEqual([pageId, userId, 'ws_123']);
 
       expect(executedStatements[1]!.sql).toContain('UPDATE queue_items');
       expect(executedStatements[1]!.sql).toContain("SET status = 'skipped'");
       expect(executedStatements[1]!.params).toEqual([userId, pageId]);
+    });
+
+    it('disconnects page and skips queued items via Supabase client', async () => {
+      let pageDisconnected = false;
+      let queueSkipped = false;
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'ws_123' }, error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            return {
+              update: vi.fn((payload: any) => {
+                if (payload.status === 'disconnected') {
+                  pageDisconnected = true;
+                }
+                return {
+                  eq: () => ({
+                    eq: () => ({
+                      eq: () => ({
+                        select: vi.fn().mockResolvedValue({
+                          data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                          error: null,
+                        }),
+                      }),
+                    }),
+                  }),
+                };
+              }),
+            };
+          }
+          if (table === 'queue_items') {
+            return {
+              update: vi.fn((payload: any) => {
+                if (payload.status === 'skipped') {
+                  queueSkipped = true;
+                }
+                return {
+                  eq: () => ({
+                    eq: () => ({
+                      eq: vi.fn().mockResolvedValue({ error: null }),
+                    }),
+                  }),
+                };
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest(`http://localhost:3000/api/tenant/acme/pages/${pageId}`, {
+        method: 'DELETE',
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleDisconnectPage(req, 'acme', pageId, mockSupabase as any);
+      expect(res.status).toBe(200);
+      expect(pageDisconnected).toBe(true);
+      expect(queueSkipped).toBe(true);
+    });
+  });
+
+  describe('Get Page (GET /api/tenant/[subdomain]/pages/[pageId])', () => {
+    it('returns page details for active page via Legacy and Supabase', async () => {
+      const mockPageRow = {
+        id: pageId,
+        facebook_account_id: accountId,
+        account_display_name: 'Alex Acme Account',
+        fb_page_id: 'fb_page_999',
+        page_name: 'Acme Brand',
+        profile_picture_url: null,
+        category: 'Brand',
+        starting_followers: 100,
+        current_followers: 150,
+        status: 'active',
+        tasks: ['CREATE_CONTENT'],
+        created_at: new Date('2026-10-01T12:00:00Z').toISOString(),
+        updated_at: new Date('2026-10-01T12:00:00Z').toISOString(),
+      };
+
+      const mockDb = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM facebook_pages')) {
+            return Promise.resolve([mockPageRow]);
+          }
+          return Promise.resolve([]);
+        }),
+      } as unknown as DatabaseClient;
+
+      const req = new NextRequest(`http://localhost:3000/api/tenant/acme/pages/${pageId}`, {
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleGetPage(req, 'acme', pageId, mockDb);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.page.id).toBe(pageId);
+      expect(json.page.pageName).toBe('Acme Brand');
+      expect(json.page.followersGained).toBe(50);
+    });
+  });
+
+  describe('Update Page (PATCH /api/tenant/[subdomain]/pages/[pageId])', () => {
+    it('updates page status to paused and returns updated page', async () => {
+      const mockPageRow = {
+        id: pageId,
+        facebook_account_id: accountId,
+        account_display_name: 'Alex Acme Account',
+        fb_page_id: 'fb_page_999',
+        page_name: 'Acme Brand',
+        profile_picture_url: null,
+        category: 'Brand',
+        starting_followers: 100,
+        current_followers: 150,
+        status: 'paused',
+        tasks: ['CREATE_CONTENT'],
+        created_at: new Date('2026-10-01T12:00:00Z').toISOString(),
+        updated_at: new Date('2026-10-01T12:00:00Z').toISOString(),
+      };
+
+      const mockDb = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('UPDATE facebook_pages')) {
+            return Promise.resolve([]);
+          }
+          if (sql.includes('FROM facebook_pages')) {
+            return Promise.resolve([mockPageRow]);
+          }
+          return Promise.resolve([]);
+        }),
+      } as unknown as DatabaseClient;
+
+      const req = new NextRequest(`http://localhost:3000/api/tenant/acme/pages/${pageId}`, {
+        method: 'PATCH',
+        headers: { cookie: validSessionCookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'paused' }),
+      });
+
+      const res = await handleUpdatePage(req, 'acme', pageId, mockDb);
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.success).toBe(true);
+      expect(json.page.status).toBe('paused');
     });
   });
 });

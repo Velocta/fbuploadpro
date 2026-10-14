@@ -64,6 +64,20 @@ describe('Settings Views Suite (BYOC & General)', () => {
       expect(hasText('Webhook Verify Token')).toBe(false);
       expect(hasAttribute('data-testid', 'byoc-webhook-token-input')).toBe(false);
     });
+
+    it('validates first-time save requires app secret', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce({
+          ok: false,
+          status: 400,
+          json: async () => ({ error: 'Enter your Facebook App Secret to complete setup.' }),
+        })
+      );
+
+      const outcome = await saveAndTestBYOC('acme', '123456789012345', '');
+      expect(outcome.saveError).toBe('Enter your Facebook App Secret to complete setup.');
+    });
   });
 
   describe('ByocTestFailedModal', () => {

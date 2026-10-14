@@ -88,6 +88,9 @@ describe('Publish Logs API Route Handler (T138)', () => {
 
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('SELECT COUNT(*)')) {
             return Promise.resolve([{ total: 1 }]);
           }
@@ -126,6 +129,9 @@ describe('Publish Logs API Route Handler (T138)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
           capturedQueries.push({ sql, params });
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('SELECT COUNT(*)')) {
             return Promise.resolve([{ total: 0 }]);
           }
@@ -150,9 +156,123 @@ describe('Publish Logs API Route Handler (T138)', () => {
       const listQuery = capturedQueries.find((q) => q.sql.includes('SELECT pl.id'));
       expect(listQuery).toBeDefined();
       expect(listQuery!.sql).toContain('pl.user_id = $1');
-      expect(listQuery!.sql).toContain('pl.fb_page_id = $2');
-      expect(listQuery!.sql).toContain('pl.status = $3');
-      expect(listQuery!.params).toEqual([userId, pageId, 'failure', 15, 30]);
+      expect(listQuery!.sql).toContain('pl.fb_page_id = $3');
+      expect(listQuery!.sql).toContain('pl.status = $4');
+      expect(listQuery!.params).toEqual([userId, 'ws_123', pageId, 'failure', 15, 30]);
+    });
+
+    it('returns empty logs when workspace has no connected pages via Supabase', async () => {
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'ws_123' }, error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({
+                    neq: vi.fn().mockResolvedValue({ data: [], error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/publishing/logs', {
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleListPublishLogs(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.logs).toEqual([]);
+      expect(data.total).toBe(0);
+    });
+
+    it('returns logs and total count when queried via Supabase', async () => {
+      const mockLogRow = {
+        id: logId,
+        user_id: userId,
+        queue_item_id: queueItemId,
+        fb_page_id: pageId,
+        status: 'success',
+        attempt_number: 1,
+        fb_response_code: null,
+        error_message: null,
+        error_details: null,
+        created_at: new Date('2026-10-07T12:00:00Z').toISOString(),
+      };
+
+      const mockSupabase = {
+        from: vi.fn((table: string) => {
+          if (table === 'workspaces') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({
+                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'ws_123' }, error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'facebook_pages') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  eq: () => ({
+                    neq: vi.fn().mockResolvedValue({ data: [{ id: pageId }], error: null }),
+                  }),
+                }),
+              }),
+            };
+          }
+          if (table === 'publish_logs') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  in: () => ({
+                    eq: () => ({
+                      eq: () => ({
+                        order: () => ({
+                          range: vi.fn().mockResolvedValue({ data: [mockLogRow], count: 1, error: null }),
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        }),
+      };
+
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/publishing/logs?pageId=${pageId}&status=success`,
+        {
+          headers: { cookie: validSessionCookie },
+        }
+      );
+
+      const res = await handleListPublishLogs(req, 'acme', mockSupabase as any);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.total).toBe(1);
+      expect(data.logs).toHaveLength(1);
+      expect(data.logs[0].id).toBe(logId);
     });
   });
 });

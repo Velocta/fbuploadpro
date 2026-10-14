@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { decryptToken, signOAuthState, signSessionToken } from '@fbuploadpro/contracts';
+import { decryptToken, encryptToken, signOAuthState, signSessionToken } from '@fbuploadpro/contracts';
 import { handleFacebookCallback, refreshConnectedPageTokens } from '../../src/app/api/auth/facebook/callback/route';
 import * as authModule from '@/lib/supabase-auth';
 import type { Database } from '@fbuploadpro/contracts';
@@ -13,6 +13,7 @@ const TEST_ENCRYPTION_KEY =
 describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 031)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   let validSessionCookie: string;
+  let validEncryptedFbAppSecret: string;
 
   beforeEach(async () => {
     process.env.SESSION_SECRET = TEST_SECRET;
@@ -21,6 +22,8 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     process.env.FACEBOOK_APP_SECRET = 'fb_app_secret_456';
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
+
+    validEncryptedFbAppSecret = await encryptToken('fb_app_secret_456', TEST_ENCRYPTION_KEY);
 
     const token = await signSessionToken(
       {
@@ -168,10 +171,29 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
         }
 
         if (table === 'workspaces') {
+          const wsQuery = {
+            eq: vi.fn().mockImplementation(() => wsQuery),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'ws_multi_123', subdomain: 'acme' },
+              error: null,
+            }),
+          };
+          return {
+            select: vi.fn().mockReturnValue(wsQuery),
+          };
+        }
+
+        if (table === 'workspace_byoc_credentials') {
           return {
             select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    fb_app_id: 'fb_app_id_123',
+                    encrypted_fb_app_secret: validEncryptedFbAppSecret,
+                  },
+                  error: null,
+                }),
               }),
             }),
           };
@@ -497,7 +519,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     };
     const updateEqMock = {
       eq: vi.fn().mockImplementation((col: string) => {
-        if (col === 'user_id') {
+        if (col === 'workspace_id') {
           return Promise.resolve({ error: { message: 'database permission denied' } });
         }
         return updateEqMock;
@@ -530,6 +552,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     await refreshConnectedPageTokens(
       null,
       userId,
+      'ws_123',
       'acc_123',
       'long_access_token_123',
       new Date(),

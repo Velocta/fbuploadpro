@@ -8,6 +8,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleListQueueSlots(
@@ -34,13 +35,18 @@ export async function handleListQueueSlots(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   let slotRows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user
+    // 1. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
@@ -66,6 +72,7 @@ export async function handleListQueueSlots(
       .select('id')
       .eq('id', pageId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
 
     if (pageErr || !pageData) {
@@ -151,11 +158,16 @@ export async function handleCreateQueueSlot(
     );
   }
 
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user
+    // 1. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
@@ -210,6 +222,7 @@ export async function handleCreateQueueSlot(
       .select('id')
       .eq('id', pageId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
 
     if (pageErr || !pageData) {
