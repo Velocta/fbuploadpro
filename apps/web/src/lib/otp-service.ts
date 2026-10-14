@@ -124,6 +124,16 @@ function resolveCanonicalEmail(email: string): string {
   }
 }
 
+function assertNotLockedOut(key: string): void {
+  const status = isLockedOut(key);
+  if (status.locked) {
+    const minutes = Math.ceil(status.retryAfterSeconds / 60);
+    throw new Error(
+      `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`
+    );
+  }
+}
+
 export function createPendingSignup(data: {
   name: string;
   phone: string;
@@ -142,6 +152,8 @@ export function createPendingSignup(data: {
   }
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(data.email);
+  assertNotLockedOut(canonicalEmail);
+
   const now = Date.now();
   const otp = generateSecureOtp();
 
@@ -194,6 +206,16 @@ export function verifyPendingSignupPassword(email: string, candidatePassword: st
   return verifyHashedPasswordSync(candidatePassword, entry.data.hashedPassword);
 }
 
+function updatePendingSignupOtpEntry(entry: PendingSignupEntry): string {
+  const now = Date.now();
+  const newOtp = generateSecureOtp();
+  entry.otp = newOtp;
+  entry.lastSentAt = now;
+  entry.expiresAt = now + OTP_TTL_MS;
+  entry.attempts = 0;
+  return newOtp;
+}
+
 export function refreshPendingSignupOtp(email: string): {
   success: boolean;
   otp?: string;
@@ -201,6 +223,16 @@ export function refreshPendingSignupOtp(email: string): {
 } {
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
+
+  const lockoutStatus = isLockedOut(canonicalEmail);
+  if (lockoutStatus.locked) {
+    const minutes = Math.ceil(lockoutStatus.retryAfterSeconds / 60);
+    return {
+      success: false,
+      error: `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    };
+  }
+
   const entry = pendingSignups.get(canonicalEmail);
   if (!entry) {
     return {
@@ -208,18 +240,14 @@ export function refreshPendingSignupOtp(email: string): {
       error: 'No pending registration found.',
     };
   }
-  const now = Date.now();
-  const newOtp = generateSecureOtp();
-  entry.otp = newOtp;
-  entry.lastSentAt = now;
-  entry.expiresAt = now + OTP_TTL_MS;
-  entry.attempts = 0;
-  clearLockout(canonicalEmail);
+
   return {
     success: true,
-    otp: newOtp,
+    otp: updatePendingSignupOtpEntry(entry),
   };
 }
+
+
 
 export function verifySignupOtp(
   email: string,
@@ -332,11 +360,7 @@ export function resendSignupOtp(email: string): {
     };
   }
 
-  const newOtp = generateSecureOtp();
-  entry.otp = newOtp;
-  entry.lastSentAt = now;
-  entry.expiresAt = now + OTP_TTL_MS;
-  entry.attempts = 0; // Reset attempts on fresh OTP
+  const newOtp = updatePendingSignupOtpEntry(entry);
 
   return {
     success: true,
@@ -362,8 +386,12 @@ export function createPasswordResetOtp(email: string): {
   }
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
+  assertNotLockedOut(`reset:${canonicalEmail}`);
+
   const now = Date.now();
   const otp = generateSecureOtp();
+
+
 
   const entry: PendingPasswordResetEntry = {
     email: canonicalEmail,

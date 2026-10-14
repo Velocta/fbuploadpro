@@ -8,6 +8,8 @@ import {
   findPendingSignup,
   verifyPendingSignupPassword,
   refreshPendingSignupOtp,
+  createPasswordResetOtp,
+  verifyPasswordResetOtp,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
@@ -171,4 +173,69 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(verifyResult.success).toBe(true);
     expect(verifyResult.signupData?.name).toBe('Nathan Drake');
   });
+
+  describe('Lockout Enforcement on Creation & Refresh (ISSUE-35)', () => {
+    it.each([
+      {
+        type: 'signup',
+        email: 'locked.signup@gmail.com',
+        init: (email: string) =>
+          createPendingSignup({
+            name: 'Locked User',
+            phone: '+14155552671',
+            email,
+            password: 'Password123!',
+          }),
+        verifyBad: (email: string) => verifySignupOtp(email, '000000'),
+        attemptRecreate: (email: string) =>
+          createPendingSignup({
+            name: 'Locked User',
+            phone: '+14155552671',
+            email,
+            password: 'Password123!',
+          }),
+      },
+      {
+        type: 'reset',
+        email: 'locked.reset@gmail.com',
+        init: (email: string) => createPasswordResetOtp(email),
+        verifyBad: (email: string) => verifyPasswordResetOtp(email, '000000'),
+        attemptRecreate: (email: string) => createPasswordResetOtp(email),
+      },
+    ])('blocks new OTP generation when $type email is locked out', ({ email, init, verifyBad, attemptRecreate }) => {
+      init(email);
+
+      for (let i = 0; i < 5; i++) {
+        verifyBad(email);
+      }
+
+      expect(() => attemptRecreate(email)).toThrow(/locked/i);
+    });
+
+    it('refuses to refreshPendingSignupOtp and does not clear lockout when locked out', () => {
+      const email = 'locked.refresh@gmail.com';
+      createPendingSignup({
+        name: 'Locked Refresh',
+        phone: '+14155552671',
+        email,
+        password: 'Password123!',
+      });
+
+      for (let i = 0; i < 5; i++) {
+        verifySignupOtp(email, '000000');
+      }
+
+      const res = refreshPendingSignupOtp(email);
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/locked/i);
+
+      // Verify lockout remains intact
+      const verifyAfter = verifySignupOtp(email, '123456');
+      expect(verifyAfter.success).toBe(false);
+      expect(verifyAfter.error).toMatch(/locked/i);
+    });
+  });
 });
+
+
+
