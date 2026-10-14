@@ -11,8 +11,10 @@ import {
   type OAuthStatePayload,
   verifyOAuthState,
   type DatabaseClient,
+  type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 async function resolveOAuthErrorTarget(
   requestUrl: string,
@@ -102,18 +104,24 @@ async function fetchGraphPageTokenMap(
 }
 
 export async function refreshConnectedPageTokens(
-  db: DatabaseClient | null | undefined,
+  db: DatabaseClient | SupabaseClient<any> | null | undefined,
   userId: string,
   accountRowId: string,
   longAccessToken: string,
   expiresAt: Date,
   encryptionKey: string
 ): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase =
+    db && 'from' in db
+      ? (db as SupabaseClient<any>)
+      : !db || !('query' in db)
+        ? getSupabaseClient()
+        : null;
+  const legacyDb = db && 'query' in db && typeof db.query === 'function' ? db : null;
   try {
     let validPages: Array<{ id: string; fb_page_id?: string; fbPageId?: string; status?: string }> = [];
 
-    if (supabase && !db) {
+    if (supabase) {
       const { data: linkedPages, error: fetchPagesError } = await supabase
         .from('facebook_pages')
         .select('id, fb_page_id, status')
@@ -131,8 +139,8 @@ export async function refreshConnectedPageTokens(
       validPages = Array.isArray(linkedPages)
         ? (linkedPages.filter((p) => Boolean(p?.fb_page_id)) as any[])
         : [];
-    } else if (db) {
-      const linkedPages = (await db.query(
+    } else if (legacyDb) {
+      const linkedPages = (await legacyDb.query(
         `SELECT id, fb_page_id, status
          FROM facebook_pages
          WHERE facebook_account_id = $1
@@ -163,7 +171,7 @@ export async function refreshConnectedPageTokens(
           return;
         }
         const encryptedPageToken = await encryptToken(rawPageToken, encryptionKey);
-        if (supabase && !db) {
+        if (supabase) {
           const { error: updateError } = await supabase
             .from('facebook_pages')
             .update({
@@ -180,8 +188,8 @@ export async function refreshConnectedPageTokens(
               updateError.message
             );
           }
-        } else if (db) {
-          await db.query(
+        } else if (legacyDb) {
+          await legacyDb.query(
             `UPDATE facebook_pages
              SET encrypted_access_token = $1,
                  status = CASE WHEN status = 'invalid_token' THEN 'active'::facebook_page_status ELSE status END,
@@ -268,14 +276,20 @@ function getCallbackEnvConfig() {
 }
 
 async function resolveWorkspaceCredentials(
-  db: DatabaseClient | null | undefined,
+  db: DatabaseClient | SupabaseClient<any> | null | undefined,
   tenantSubdomain: string,
   encryptionKey: string,
   defaultAppId: string,
   defaultAppSecret: string
 ): Promise<{ appId: string; appSecret: string }> {
-  const supabase = getSupabaseClient();
-  if (supabase && !db) {
+  const supabase =
+    db && 'from' in db
+      ? (db as SupabaseClient<any>)
+      : !db || !('query' in db)
+        ? getSupabaseClient()
+        : null;
+  const legacyDb = db && 'query' in db && typeof db.query === 'function' ? db : null;
+  if (supabase) {
     try {
       const { data: ws } = await supabase
         .from('workspaces')
@@ -298,9 +312,9 @@ async function resolveWorkspaceCredentials(
     } catch (err) {
       console.warn('[FacebookOAuth] BYOC resolution error via Supabase:', err);
     }
-  } else if (db) {
+  } else if (legacyDb) {
     try {
-      const rows = (await db.query(
+      const rows = (await legacyDb.query(
         `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
          FROM workspace_byoc_credentials c
          JOIN workspaces w ON w.id = c.workspace_id
@@ -323,14 +337,20 @@ async function resolveWorkspaceCredentials(
 }
 
 async function upsertConnectedFacebookAccount(
-  db: DatabaseClient | null | undefined,
+  db: DatabaseClient | SupabaseClient<any> | null | undefined,
   userId: string,
   meProfile: FacebookUserProfileResponse,
   encryptedToken: string,
   expiresAt: Date
 ): Promise<{ accountRowId: string | undefined; alreadyExisted: boolean }> {
-  const supabase = getSupabaseClient();
-  if (supabase && !db) {
+  const supabase =
+    db && 'from' in db
+      ? (db as SupabaseClient<any>)
+      : !db || !('query' in db)
+        ? getSupabaseClient()
+        : null;
+  const legacyDb = db && 'query' in db && typeof db.query === 'function' ? db : null;
+  if (supabase) {
     const { data: existing } = await supabase
       .from('facebook_accounts')
       .select('id, status')
@@ -367,10 +387,10 @@ async function upsertConnectedFacebookAccount(
     return { accountRowId, alreadyExisted };
   }
 
-  if (!db) {
+  if (!legacyDb) {
     return { accountRowId: undefined, alreadyExisted: false };
   }
-  const effectiveDb = db;
+  const effectiveDb = legacyDb;
   const existingRows = (await effectiveDb.query(
     'SELECT id, status FROM facebook_accounts WHERE user_id = $1 AND fb_account_id = $2',
     [userId, meProfile.id]
@@ -416,7 +436,7 @@ async function upsertConnectedFacebookAccount(
 
 export async function handleFacebookCallback(
   request: NextRequest,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<Database>
 ): Promise<NextResponse> {
   const {
     sessionSecret,

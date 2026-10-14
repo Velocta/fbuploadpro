@@ -3,7 +3,8 @@ import { NextRequest } from 'next/server';
 import { decryptToken, signOAuthState, signSessionToken } from '@fbuploadpro/contracts';
 import { handleFacebookCallback, refreshConnectedPageTokens } from '../../src/app/api/auth/facebook/callback/route';
 import * as authModule from '@/lib/supabase-auth';
-import type { DatabaseClient } from '@fbuploadpro/contracts';
+import type { Database } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY =
@@ -61,78 +62,126 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       }
     >();
 
-    const mockDb = {
-      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
-        if (typeof sql === 'string' && sql.includes('SELECT id, status FROM facebook_accounts')) {
-          const [uId, fbAccountId] = params as [string, string];
-          const existing = storedAccounts.get(`${uId}:${fbAccountId}`);
-          return Promise.resolve(existing ? [{ id: existing.id, status: existing.status }] : []);
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'facebook_accounts') {
+          return {
+            select: vi.fn().mockImplementation((_cols: string) => {
+              let selectedUserId = '';
+              let selectedFbAccountId = '';
+              const chain = {
+                eq: vi.fn().mockImplementation((col: string, val: string) => {
+                  if (col === 'user_id') selectedUserId = val;
+                  if (col === 'fb_account_id') selectedFbAccountId = val;
+                  return chain;
+                }),
+                maybeSingle: vi.fn().mockImplementation(() => {
+                  const existing = storedAccounts.get(`${selectedUserId}:${selectedFbAccountId}`);
+                  return Promise.resolve({
+                    data: existing ? { id: existing.id, status: existing.status } : null,
+                    error: null,
+                  });
+                }),
+              };
+              return chain;
+            }),
+            upsert: vi.fn().mockImplementation((record: Record<string, any>) => {
+              const uId = record.user_id as string;
+              const fbAccountId = record.fb_account_id as string;
+              const existing = storedAccounts.get(`${uId}:${fbAccountId}`);
+              const rowId = existing?.id ?? `acc_${fbAccountId}`;
+              storedAccounts.set(`${uId}:${fbAccountId}`, {
+                id: rowId,
+                fbAccountId,
+                displayName: record.display_name,
+                token: record.encrypted_access_token,
+                profilePictureUrl: record.profile_picture_url ?? null,
+                gender: record.gender ?? null,
+                accountLink: record.account_link ?? null,
+                status: 'active',
+              });
+              return {
+                select: vi.fn().mockReturnValue({
+                  single: vi.fn().mockResolvedValue({
+                    data: { id: rowId },
+                    error: null,
+                  }),
+                }),
+              };
+            }),
+          };
         }
-        if (typeof sql === 'string' && sql.includes('INSERT INTO facebook_accounts')) {
-          const [
-            uId,
-            fbAccountId,
-            displayName,
-            token,
-            _expiresAt,
-            profilePictureUrl,
-            gender,
-            accountLink,
-          ] = params as [
-            string,
-            string,
-            string,
-            string,
-            unknown,
-            string | null,
-            string | null,
-            string | null,
-          ];
-          const existing = storedAccounts.get(`${uId}:${fbAccountId}`);
-          const rowId = existing?.id ?? `acc_${fbAccountId}`;
-          storedAccounts.set(`${uId}:${fbAccountId}`, {
-            id: rowId,
-            fbAccountId,
-            displayName,
-            token,
-            profilePictureUrl,
-            gender,
-            accountLink,
-            status: 'active',
-          });
-          return Promise.resolve([{ id: rowId }]);
-        }
-        if (typeof sql === 'string' && sql.includes('FROM facebook_pages')) {
-          const [accountRowId] = params as [string, string];
-          const matching = Array.from(storedPages.values())
-            .filter(
-              (p) =>
-                p.facebookAccountId === accountRowId && p.status !== 'disconnected'
-            )
-            .map((p) => ({
-              id: p.id,
-              fb_page_id: p.fbPageId,
-              status: p.status,
-            }));
-          return Promise.resolve(matching);
-        }
-        if (typeof sql === 'string' && sql.includes('UPDATE facebook_pages')) {
-          const encryptedPageToken = params[0] as string;
-          const pageId = (params.length >= 4 ? params[2] : params[1]) as string;
-          const existingPage = storedPages.get(pageId);
-          if (existingPage) {
-            existingPage.encryptedPageToken = encryptedPageToken;
-            if (existingPage.status === 'invalid_token') {
-              existingPage.status = 'active';
-            }
-          }
-          return Promise.resolve([]);
-        }
-        return Promise.resolve([]);
-      }),
-    } as unknown as DatabaseClient;
 
-    return { storedAccounts, storedPages, mockDb };
+        if (table === 'facebook_pages') {
+          return {
+            select: vi.fn().mockImplementation((_cols: string) => {
+              let filterAccountId = '';
+              let filterUserId = '';
+              let excludedStatus = '';
+              const chain = {
+                eq: vi.fn().mockImplementation((col: string, val: string) => {
+                  if (col === 'facebook_account_id') filterAccountId = val;
+                  if (col === 'user_id') filterUserId = val;
+                  return chain;
+                }),
+                neq: vi.fn().mockImplementation((col: string, val: string) => {
+                  if (col === 'status') excludedStatus = val;
+                  const matching = Array.from(storedPages.values())
+                    .filter(
+                      (p) =>
+                        (!filterAccountId || p.facebookAccountId === filterAccountId) &&
+                        p.status !== excludedStatus
+                    )
+                    .map((p) => ({
+                      id: p.id,
+                      fb_page_id: p.fbPageId,
+                      status: p.status,
+                    }));
+                  return Promise.resolve({ data: matching, error: null });
+                }),
+              };
+              return chain;
+            }),
+            update: vi.fn().mockImplementation((updates: Record<string, any>) => {
+              let targetPageId = '';
+              const chain = {
+                eq: vi.fn().mockImplementation((col: string, val: string) => {
+                  if (col === 'id') targetPageId = val;
+                  if (col === 'user_id') {
+                    const existingPage = storedPages.get(targetPageId);
+                    if (existingPage) {
+                      if (updates.encrypted_access_token) {
+                        existingPage.encryptedPageToken = updates.encrypted_access_token;
+                      }
+                      if (updates.status) {
+                        existingPage.status = updates.status;
+                      }
+                    }
+                    return Promise.resolve({ error: null });
+                  }
+                  return chain;
+                }),
+              };
+              return chain;
+            }),
+          };
+        }
+
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+              }),
+            }),
+          };
+        }
+
+        return {};
+      }),
+    } as unknown as SupabaseClient<Database>;
+
+    return { storedAccounts, storedPages, mockSupabase };
   }
 
   it('allows connecting multiple distinct Facebook accounts under the same workspace without collisions', async () => {
@@ -144,7 +193,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       exp: Math.floor(Date.now() / 1000) + 600,
     };
     const validState = await signOAuthState(statePayload, TEST_SECRET);
-    const { storedAccounts, mockDb } = createMockAccountStore();
+    const { storedAccounts, mockSupabase } = createMockAccountStore();
 
     // Simulate Account 1 connection (with picture.data.url, gender, and link)
     global.fetch = vi
@@ -167,7 +216,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       `http://localhost:3000/api/auth/facebook/callback?code=code_alpha&state=${validState}`,
       { headers: { cookie: validSessionCookie } }
     );
-    await handleFacebookCallback(req1, mockDb);
+    await handleFacebookCallback(req1, mockSupabase);
 
     // Simulate Account 2 connection (without picture, gender, or link -> null fallback)
     global.fetch = vi
@@ -180,7 +229,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       `http://localhost:3000/api/auth/facebook/callback?code=code_beta&state=${validState}`,
       { headers: { cookie: validSessionCookie } }
     );
-    await handleFacebookCallback(req2, mockDb);
+    await handleFacebookCallback(req2, mockSupabase);
 
     // Verify both distinct accounts are preserved in the workspace with profile_picture_url, gender, and account_link
     expect(storedAccounts.size).toBe(2);
@@ -207,7 +256,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       exp: Math.floor(Date.now() / 1000) + 600,
     };
     const validState = await signOAuthState(statePayload, TEST_SECRET);
-    const { storedAccounts, mockDb } = createMockAccountStore();
+    const { storedAccounts, mockSupabase } = createMockAccountStore();
 
     // Initial connection
     global.fetch = vi
@@ -220,7 +269,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       `http://localhost:3000/api/auth/facebook/callback?code=code_1&state=${validState}`,
       { headers: { cookie: validSessionCookie } }
     );
-    await handleFacebookCallback(req1, mockDb);
+    await handleFacebookCallback(req1, mockSupabase);
 
     // Reconnection of same fbAccountId with updated avatar, gender, and link
     global.fetch = vi
@@ -243,7 +292,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       `http://localhost:3000/api/auth/facebook/callback?code=code_2&state=${validState}`,
       { headers: { cookie: validSessionCookie } }
     );
-    const res2 = await handleFacebookCallback(req2, mockDb);
+    const res2 = await handleFacebookCallback(req2, mockSupabase);
 
     // Standard connect flow for already-connected account redirects with ?connected=already&accountName=...
     expect(res2.status).toBe(307);
@@ -264,7 +313,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
   });
 
   it('auto-refreshes encrypted_page_token for all linked pages on reconnect and sets status = active ONLY for invalid_token pages without importing unlinked pages (Spec 031)', async () => {
-    const { storedAccounts, storedPages, mockDb } = createMockAccountStore();
+    const { storedAccounts, storedPages, mockSupabase } = createMockAccountStore();
     storedAccounts.set(`${userId}:fb-john`, {
       id: 'acc_fb-john',
       fbAccountId: 'fb-john',
@@ -349,7 +398,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       `http://localhost:3000/api/auth/facebook/callback?code=code_john&state=${reconnectState}`,
       { headers: { cookie: validSessionCookie } }
     );
-    const res = await handleFacebookCallback(req, mockDb);
+    const res = await handleFacebookCallback(req, mockSupabase);
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe(
@@ -377,7 +426,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
   });
 
   it('saves the newly authenticated account AND redirects with ?reconnected_mismatch=1 when Facebook returns a different account than expectedFbAccountId (Spec 031)', async () => {
-    const { storedAccounts, mockDb } = createMockAccountStore();
+    const { storedAccounts, mockSupabase } = createMockAccountStore();
     storedAccounts.set(`${userId}:fb-john`, {
       id: 'acc_fb-john',
       fbAccountId: 'fb-john',
@@ -424,7 +473,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       `http://localhost:3000/api/auth/facebook/callback?code=code_jane&state=${mismatchState}`,
       { headers: { cookie: validSessionCookie } }
     );
-    const res = await handleFacebookCallback(req, mockDb);
+    const res = await handleFacebookCallback(req, mockSupabase);
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe(

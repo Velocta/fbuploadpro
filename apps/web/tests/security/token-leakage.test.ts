@@ -8,7 +8,8 @@ import { handleListAccounts } from '../../src/app/api/tenant/[subdomain]/account
 import { handleListPages } from '../../src/app/api/tenant/[subdomain]/pages/route';
 import { handleDiscoverPages } from '../../src/app/api/tenant/[subdomain]/accounts/[accountId]/pages/discover/route';
 import { handleImportPages } from '../../src/app/api/tenant/[subdomain]/pages/import/route';
-import type { DatabaseClient } from '@fbuploadpro/contracts';
+import type { Database } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_KEY =
@@ -41,27 +42,51 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   });
 
   it('GET /accounts never leaks raw or encrypted access tokens in JSON body or headers', async () => {
-    const mockDb = {
-      query: vi.fn().mockResolvedValue([
-        {
-          id: accountId,
-          fbAccountId: 'fb_123',
-          displayName: 'Marketing Lead',
-          status: 'active',
-          tokenExpiresAt: new Date(Date.now() + 86400000).toISOString(),
-          encrypted_access_token: sampleCiphertext,
-          connected_pages_count: 1,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]),
-    } as unknown as DatabaseClient;
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'facebook_accounts') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                order: vi.fn().mockResolvedValue({
+                  data: [
+                    {
+                      id: accountId,
+                      fb_account_id: 'fb_123',
+                      display_name: 'Marketing Lead',
+                      profile_picture_url: null,
+                      gender: null,
+                      account_link: null,
+                      status: 'active',
+                      token_expires_at: new Date(Date.now() + 86400000).toISOString(),
+                      encrypted_access_token: sampleCiphertext,
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                      facebook_pages: [
+                        {
+                          id: pageId,
+                          page_name: 'Brand Main Page',
+                          profile_picture_url: null,
+                          status: 'active',
+                        },
+                      ],
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      }),
+    } as unknown as SupabaseClient<Database>;
 
     const req = new NextRequest('http://localhost:3000/api/tenant/acme/accounts', {
       headers: { cookie: validSessionCookie },
     });
 
-    const res = await handleListAccounts(req, 'acme', mockDb);
+    const res = await handleListAccounts(req, 'acme', mockSupabase);
     expect(res.status).toBe(200);
 
     const bodyText = await res.text();
@@ -73,30 +98,50 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   });
 
   it('GET /pages never leaks raw or encrypted access tokens in JSON body', async () => {
-    const mockDb = {
-      query: vi.fn().mockResolvedValue([
-        {
-          id: pageId,
-          facebookAccountId: accountId,
-          accountDisplayName: 'Marketing Lead',
-          fbPageId: 'page_987',
-          pageName: 'Brand Main Page',
-          category: 'Retail',
-          followersCount: 50000,
-          status: 'active',
-          tasks: ['CREATE_CONTENT'],
-          encrypted_access_token: sampleCiphertext,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]),
-    } as unknown as DatabaseClient;
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'facebook_pages') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockReturnValue({
+                  order: vi.fn().mockResolvedValue({
+                    data: [
+                      {
+                        id: pageId,
+                        facebook_account_id: accountId,
+                        user_id: userId,
+                        fb_page_id: 'page_987',
+                        page_name: 'Brand Main Page',
+                        category: 'Retail',
+                        starting_followers: 50000,
+                        current_followers: 50000,
+                        status: 'active',
+                        tasks: ['CREATE_CONTENT'],
+                        encrypted_access_token: sampleCiphertext,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                        facebook_accounts: {
+                          display_name: 'Marketing Lead',
+                        },
+                      },
+                    ],
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
+      }),
+    } as unknown as SupabaseClient<Database>;
 
     const req = new NextRequest('http://localhost:3000/api/tenant/acme/pages', {
       headers: { cookie: validSessionCookie },
     });
 
-    const res = await handleListPages(req, 'acme', mockDb);
+    const res = await handleListPages(req, 'acme', mockSupabase);
     expect(res.status).toBe(200);
 
     const bodyText = await res.text();
@@ -107,23 +152,44 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   });
 
   it('GET /discover strips Graph API Page access tokens from client payload', async () => {
-    const mockDb = {
-      query: vi.fn().mockImplementation((sql: string) => {
-        if (sql.includes('FROM facebook_accounts')) {
-          return Promise.resolve([
-            {
-              id: accountId,
-              userId,
-              fbAccountId: 'fb_123',
-              displayName: 'Marketing Lead',
-              encryptedAccessToken: sampleCiphertext,
-              status: 'active',
-            },
-          ]);
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'facebook_accounts') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      id: accountId,
+                      user_id: userId,
+                      fb_account_id: 'fb_123',
+                      display_name: 'Marketing Lead',
+                      encrypted_access_token: sampleCiphertext,
+                      status: 'active',
+                    },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
         }
-        return Promise.resolve([]);
+        if (table === 'facebook_pages') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                neq: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }
+        return {};
       }),
-    } as unknown as DatabaseClient;
+    } as unknown as SupabaseClient<Database>;
 
     global.fetch = vi.fn().mockResolvedValueOnce(
       new Response(
@@ -148,7 +214,7 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
       { headers: { cookie: validSessionCookie } }
     );
 
-    const res = await handleDiscoverPages(req, 'acme', accountId, mockDb);
+    const res = await handleDiscoverPages(req, 'acme', accountId, mockSupabase);
     expect(res.status).toBe(200);
 
     const bodyText = await res.text();
@@ -158,32 +224,56 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
   });
 
   it('POST /import returns sanitized confirmation without leaking tokens', async () => {
-    const mockDb = {
-      query: vi.fn().mockImplementation((sql: string) => {
-        if (sql.includes('FROM facebook_accounts')) {
-          return Promise.resolve([
-            {
-              id: accountId,
-              userId,
-              fbAccountId: 'fb_123',
-              displayName: 'Marketing Lead',
-              encryptedAccessToken: sampleCiphertext,
-              status: 'active',
-            },
-          ]);
+    const mockSupabase = {
+      from: vi.fn().mockImplementation((table: string) => {
+        if (table === 'facebook_accounts') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: {
+                      id: accountId,
+                      user_id: userId,
+                      fb_account_id: 'fb_123',
+                      display_name: 'Marketing Lead',
+                      encrypted_access_token: sampleCiphertext,
+                      status: 'active',
+                    },
+                    error: null,
+                  }),
+                }),
+              }),
+            }),
+          };
         }
-        if (sql.includes('INSERT INTO facebook_pages')) {
-          return Promise.resolve([
-            {
-              id: pageId,
-              fbPageId: 'page_12345',
-              pageName: 'Enterprise Page',
-            },
-          ]);
+        if (table === 'facebook_pages') {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                in: vi.fn().mockResolvedValue({
+                  data: [],
+                  error: null,
+                }),
+              }),
+            }),
+            upsert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: {
+                    id: pageId,
+                    fb_page_id: 'page_12345',
+                    page_name: 'Enterprise Page',
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          };
         }
-        return Promise.resolve([]);
+        return {};
       }),
-    } as unknown as DatabaseClient;
+    } as unknown as SupabaseClient<Database>;
 
     global.fetch = vi.fn().mockResolvedValueOnce(
       new Response(
@@ -218,7 +308,7 @@ describe('Security Audit: Zero Token & Credential Leakage (T075)', () => {
       }
     );
 
-    const res = await handleImportPages(req, 'acme', mockDb);
+    const res = await handleImportPages(req, 'acme', mockSupabase);
     expect(res.status).toBe(200);
 
     const bodyText = await res.text();
