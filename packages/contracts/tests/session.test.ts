@@ -85,9 +85,11 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
   });
 
   it('rejects expired session token', async () => {
+    const now = Math.floor(Date.now() / 1000);
     const expiredSession = {
       ...mockUserSession,
-      exp: Math.floor(Date.now() / 1000) - 100, // expired in past
+      iat: now - 3600, // issued 1 hour ago
+      exp: now - 100, // expired in past, but after iat
     };
     const token = await signSessionToken(expiredSession, TEST_SESSION_SECRET);
 
@@ -99,6 +101,60 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
       expect(error.code).toBe(DomainErrorCode.UNAUTHORIZED);
       expect(error.message).toContain('expired');
     }
+  });
+
+  describe('JWT header and timestamp sanity validation (ISSUE-40)', () => {
+    it.each([
+      ['alg is none', { alg: 'none', typ: 'JWT' }, 'Unsupported or missing algorithm in session token header'],
+      ['alg is HS512', { alg: 'HS512', typ: 'JWT' }, 'Unsupported or missing algorithm in session token header'],
+      ['typ is not JWT', { alg: 'HS256', typ: 'JOSE' }, 'Invalid session token header type'],
+      ['missing header claims', {}, 'Unsupported or missing algorithm in session token header'],
+    ])('rejects token when header %s', async (_, header, expectedMessage) => {
+      const encoder = new TextEncoder();
+      const b64 = (s: string) => Buffer.from(s).toString('base64url');
+      const headerPart = b64(JSON.stringify(header));
+      const payloadPart = b64(JSON.stringify(mockUserSession));
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(TEST_SESSION_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sigBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(`${headerPart}.${payloadPart}`));
+      const sigPart = b64(Buffer.from(sigBuffer).toString('binary'));
+      const forgedToken = `${headerPart}.${payloadPart}.${sigPart}`;
+
+      await expect(verifySessionToken(forgedToken, TEST_SESSION_SECRET)).rejects.toThrow(
+        expectedMessage
+      );
+    });
+
+    it('rejects token when exp is less than or equal to iat', async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const invalidTimeSession = {
+        ...mockUserSession,
+        iat: now,
+        exp: now, // exp <= iat
+      };
+      const token = await signSessionToken(invalidTimeSession, TEST_SESSION_SECRET);
+      await expect(verifySessionToken(token, TEST_SESSION_SECRET)).rejects.toThrow(
+        'Session token expiration must be strictly after issued-at time'
+      );
+    });
+
+    it('rejects token with futuristic iat exceeding clock skew allowance', async () => {
+      const farFuture = Math.floor(Date.now() / 1000) + 600; // 10 minutes in future
+      const futureSession = {
+        ...mockUserSession,
+        iat: farFuture,
+        exp: farFuture + 3600,
+      };
+      const token = await signSessionToken(futureSession, TEST_SESSION_SECRET);
+      await expect(verifySessionToken(token, TEST_SESSION_SECRET)).rejects.toThrow(
+        'Session token issued in the future'
+      );
+    });
   });
 
   describe('getSessionSecret', () => {
