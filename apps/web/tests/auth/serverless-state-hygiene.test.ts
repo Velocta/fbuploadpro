@@ -158,5 +158,66 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       expect(cacheControl).toContain('s-maxage=900');
       expect(cacheControl).toContain('stale-while-revalidate=86400');
     });
+
+    it('warns when get and set are called in production without Upstash credentials', () => {
+      process.env = { ...process.env, NODE_ENV: 'production' };
+      delete process.env.UPSTASH_REDIS_REST_URL;
+      delete process.env.UPSTASH_REDIS_REST_TOKEN;
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      globalInsightsCache.set('test-key', { sample: 123 }, 60);
+      const cached = globalInsightsCache.get('test-key');
+
+      expect(cached).not.toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[InsightsCache] Upstash Redis credentials not configured'),
+        expect.stringContaining('Upstash Redis credentials')
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('does not warn when get and set are called in production with Upstash credentials configured', () => {
+      process.env = {
+        ...process.env,
+        NODE_ENV: 'production',
+        UPSTASH_REDIS_REST_URL: 'https://upstash.io',
+        UPSTASH_REDIS_REST_TOKEN: 'token-ok',
+      };
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      globalInsightsCache.set('prod-key', { sample: 456 }, 60);
+      const cached = globalInsightsCache.get('prod-key');
+
+      expect(cached).not.toBeNull();
+      expect(warnSpy).not.toHaveBeenCalled();
+
+      warnSpy.mockRestore();
+    });
+  });
+
+  describe('Password Reset OTP Serverless Warning in Production', () => {
+    it('warns in production when createPasswordResetOtp fallback is invoked', async () => {
+      process.env = {
+        ...process.env,
+        NODE_ENV: 'production',
+        NEXT_PUBLIC_SUPABASE_URL: 'https://xyz.supabase.co',
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: 'valid-anon-key',
+      };
+
+      const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      createPasswordResetOtp('reset.agent@gmail.com');
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[OTP Service] Fallback in-memory pendingPasswordReset used in production')
+      );
+
+      warnSpy.mockRestore();
+    });
   });
 });
+
