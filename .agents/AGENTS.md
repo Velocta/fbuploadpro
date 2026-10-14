@@ -138,6 +138,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - **Merging Protocol**:
   - For standard feature workflows, explicit user confirmation is required prior to merging into `main`.
   - For GitHub issues, autonomous merging (`gh pr merge --squash --delete-branch`) is permitted once all quality and SonarQube checks pass cleanly.
+  - **Post-Merge Main Repo Checks (Supabase Migrations Gate)**: If a merged Pull Request includes any SQL migration files under `supabase/migrations/**`, the agent MUST check the status of post-merge deployment workflows on `main` (specifically `Deploy Supabase Migrations` via `gh run list --workflow "Deploy Supabase Migrations" --branch main --limit 1` or `gh run watch`) and verify that database migrations apply with 100% success and 0 errors. If the deployment fails, the agent must immediately inspect `gh run view --log-failed` and remediate any database migration or workflow failure. If a PR does NOT contain SQL migration files, post-merge migration checks on `main` may be skipped.
 - **Strict Theme & Design System Authority (`apps/web/src/lib/theme.ts`)**:
   - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) and [`DESIGN.md`](DESIGN.md).
   - All components MUST import and reference styling properties from `@web/lib/theme` or CSS variables (`globals.css`).
