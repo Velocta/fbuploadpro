@@ -143,3 +143,62 @@ export function buildTenantUrl(
   return url;
 }
 
+/**
+ * Constructs the canonical absolute central application gateway URL (e.g. app.fbuploadpro.com)
+ * for authentication, landing, or sign-out redirection per Principle 6 & Principle 15.
+ */
+export function buildCentralAppUrl(
+  pathname: string = '/login?logout=success',
+  requestUrl?: string | URL | null,
+  rootDomain?: string | null
+): URL {
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  const cleanRoot = (rootDomain || '').trim().toLowerCase().split(':')[0] || 'fbuploadpro.com';
+  const isLocalRoot =
+    cleanRoot === 'localhost' ||
+    cleanRoot === '127.0.0.1' ||
+    cleanRoot.includes('localhost') ||
+    cleanRoot.includes('127.0.0.1');
+
+  // Determine port if rootDomain contains one (e.g. localhost:3000)
+  const rootPort = (rootDomain || '').trim().toLowerCase().split(':')[1];
+
+  if (requestUrl) {
+    try {
+      const parsedUrl =
+        typeof requestUrl === 'string'
+          ? new URL(requestUrl)
+          : new URL(requestUrl.toString());
+      const cleanHost = parsedUrl.hostname.toLowerCase();
+
+      // Vercel Preview deployments host all routes under the same preview domain
+      if (cleanHost.endsWith('.vercel.app')) {
+        return new URL(normalizedPath, parsedUrl.origin);
+      }
+
+      const isLocalHost =
+        cleanHost === 'localhost' ||
+        cleanHost === '127.0.0.1' ||
+        cleanHost.endsWith('.localhost');
+
+      const protocol = isLocalHost || isLocalRoot ? 'http:' : 'https:';
+      const port = rootPort || (parsedUrl.port ? parsedUrl.port : isLocalHost ? '3000' : '');
+      const host = isLocalHost || isLocalRoot
+        ? `app.${cleanRoot}${port ? `:${port}` : ''}`
+        : `app.${cleanRoot}`;
+
+      return new URL(normalizedPath, `${protocol}//${host}`);
+    } catch {
+      // Fall through to default base construction
+    }
+  }
+
+  const protocol = isLocalRoot ? 'http:' : 'https:';
+  const host = isLocalRoot
+    ? `app.${cleanRoot}${rootPort ? `:${rootPort}` : ''}`
+    : `app.${cleanRoot}`;
+
+  return new URL(normalizedPath, `${protocol}//${host}`);
+}
+
+

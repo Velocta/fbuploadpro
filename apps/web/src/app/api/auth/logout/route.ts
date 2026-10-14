@@ -4,6 +4,7 @@ import {
   getCookieDomain,
   purgeHostOnlySessionCookie,
 } from '@/lib/supabase-auth';
+import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 
 export async function POST(request?: NextRequest) {
   try {
@@ -12,10 +13,20 @@ export async function POST(request?: NextRequest) {
       await supabase.auth.signOut().catch(() => {});
     }
 
+    const host = request?.headers.get('host');
+    const requestUrl = request?.url || (host ? `https://${host}` : undefined);
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'fbuploadpro.com';
+
+    const redirectUrl = buildCentralAppUrl(
+      '/login?logout=success',
+      requestUrl,
+      rootDomain
+    ).toString();
+
     const response = NextResponse.json(
       {
         success: true,
-        redirectUrl: '/login',
+        redirectUrl,
       },
       { status: 200 }
     );

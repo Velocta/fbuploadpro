@@ -273,13 +273,14 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
   });
 
   describe('POST /api/auth/logout', () => {
-    it('expires fbup_session cookie and redirects to /login', async () => {
+    it('expires fbup_session cookie and redirects to canonical central gateway', async () => {
       const res = await handleLogout();
       expect(res.status).toBe(200);
 
       const json = await res.json();
       expect(json.success).toBe(true);
-      expect(json.redirectUrl).toBe('/login');
+      expect(json.redirectUrl).toContain('/login?logout=success');
+      expect(json.redirectUrl).toMatch(/^https?:\/\/app\./);
 
       const setCookie = res.headers.get('set-cookie');
       expect(setCookie).toContain('Max-Age=0');

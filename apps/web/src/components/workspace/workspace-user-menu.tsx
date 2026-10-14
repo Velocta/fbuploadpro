@@ -8,6 +8,7 @@ import {
   SidebarMenuButton,
   useSidebar,
 } from '@/components/ui/sidebar';
+import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 
 export interface WorkspaceUserMenuProps {
   user?: {
@@ -53,22 +54,11 @@ function broadcastLogout(): void {
 
 function redirectToLogout(): void {
   if (typeof window === 'undefined') return;
-  const hostname = window.location.hostname;
-  const parts = hostname.split('.');
-  const rootDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
-  const protocol = window.location.protocol;
-  const port = window.location.port ? `:${window.location.port}` : '';
-  const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
-  const isVercelPreview = hostname.endsWith('.vercel.app');
-
-  let targetLoginUrl = '/login?logout=success';
-  if (
-    !isVercelPreview &&
-    ((!isLocal && !hostname.startsWith('app.')) ||
-      (isLocal && hostname.includes('.') && !hostname.startsWith('app.')))
-  ) {
-    targetLoginUrl = `${protocol}//app.${rootDomain}${port}/login?logout=success`;
-  }
+  const targetLoginUrl = buildCentralAppUrl(
+    '/login?logout=success',
+    window.location.href,
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  ).toString();
 
   window.location.href = targetLoginUrl;
 }
@@ -126,17 +116,28 @@ export function WorkspaceUserMenu({ user, subdomain }: Readonly<WorkspaceUserMen
   }, []);
 
   const handleSignOut = useCallback(async () => {
+    let targetRedirectUrl: string | null = null;
     try {
       setIsSigningOut(true);
       clearClientSessionCookies();
       broadcastLogout();
       try {
-        await fetch('/api/auth/logout', { method: 'POST', keepalive: true });
+        const res = await fetch('/api/auth/logout', { method: 'POST', keepalive: true });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.redirectUrl) {
+            targetRedirectUrl = data.redirectUrl;
+          }
+        }
       } catch {
         // Continue even if network is degraded or offline
       }
     } finally {
-      redirectToLogout();
+      if (targetRedirectUrl && typeof window !== 'undefined') {
+        window.location.href = targetRedirectUrl;
+      } else {
+        redirectToLogout();
+      }
     }
   }, []);
 
