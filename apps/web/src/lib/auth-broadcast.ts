@@ -21,7 +21,9 @@ export function broadcastAuthEvent(
     | { type: 'USER_SWITCH'; userId?: string; email?: string }
     | { type: 'SESSION_CHANGE'; userId?: string; email?: string }
 ): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' && typeof BroadcastChannel === 'undefined' && typeof localStorage === 'undefined') {
+    return;
+  }
 
   const payload: AuthBroadcastPayload = {
     ...event,

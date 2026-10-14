@@ -318,6 +318,7 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
         getItem: (key: string) => localStorageStore[key] ?? null,
       };
 
+      vi.stubGlobal('window', { BroadcastChannel: MockBroadcastChannel, localStorage: mockLocalStorage });
       vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
       vi.stubGlobal('localStorage', mockLocalStorage);
 
@@ -361,6 +362,7 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
         getItem: (key: string) => localStorageStore[key] ?? null,
       };
 
+      vi.stubGlobal('window', { BroadcastChannel: MockBroadcastChannel, localStorage: mockLocalStorage });
       vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
       vi.stubGlobal('localStorage', mockLocalStorage);
 
