@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
+import { promisify } from 'node:util';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { isLockedOut, recordFailedAttempt, clearLockout } from '@/lib/rate-limiter';
+
+const pbkdf2Async = promisify(crypto.pbkdf2);
 
 export interface StagedSignupData {
   name: string;
@@ -54,6 +57,30 @@ export const PRE_HASHED_PASSWORD_REGEX = /^[0-9a-f]{32}:[0-9a-f]{64}$/i;
 
 export function isPreHashedPassword(password: string): boolean {
   return typeof password === 'string' && PRE_HASHED_PASSWORD_REGEX.test(password);
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16);
+  const derivedKey = await pbkdf2Async(password, salt, 100000, 32, 'sha256');
+  return `${salt.toString('hex')}:${derivedKey.toString('hex')}`;
+}
+
+export async function verifyHashedPassword(password: string, storedHash: string): Promise<boolean> {
+  try {
+    if (!storedHash || typeof storedHash !== 'string' || !PRE_HASHED_PASSWORD_REGEX.test(storedHash)) {
+      return false;
+    }
+    const [saltHex, keyHex] = storedHash.split(':');
+    if (!saltHex || !keyHex) return false;
+    const salt = Buffer.from(saltHex, 'hex');
+    const expectedKey = Buffer.from(keyHex, 'hex');
+    if (salt.length !== 16 || expectedKey.length < 32) return false;
+    const actualKey = await pbkdf2Async(password, salt, 100000, expectedKey.length, 'sha256');
+    if (actualKey.length !== expectedKey.length || actualKey.length < 32) return false;
+    return crypto.timingSafeEqual(actualKey, expectedKey);
+  } catch {
+    return false;
+  }
 }
 
 export function hashPasswordSync(password: string): string {
@@ -199,7 +226,14 @@ export function isPendingSignup(email: string): boolean {
   return getPendingSignup(email) !== null;
 }
 
-export function verifyPendingSignupPassword(email: string, candidatePassword: string): boolean {
+export async function verifyPendingSignupPassword(email: string, candidatePassword: string): Promise<boolean> {
+  cleanupExpiredEntries();
+  const entry = getPendingSignup(email);
+  if (!entry?.data?.hashedPassword) return false;
+  return await verifyHashedPassword(candidatePassword, entry.data.hashedPassword);
+}
+
+export function verifyPendingSignupPasswordSync(email: string, candidatePassword: string): boolean {
   cleanupExpiredEntries();
   const entry = getPendingSignup(email);
   if (!entry?.data?.hashedPassword) return false;
