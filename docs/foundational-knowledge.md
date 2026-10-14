@@ -415,4 +415,7 @@ fbuploadpro/
   * Prompts operator with a failure advisory dialog (`ByocTestFailedModal`) if Graph API validation fails, highlighting credential issues immediately.
   * Direct manual "Test Connection" button for on-demand verification.
   * Live status indicator dot (`valid`, `invalid`, `unverified`) with micro-halos.
+* **Zero Upsert Fallbacks**:
+  * All BYOC endpoints (`GET`, `PUT`, `POST .../test`) query workspace records strictly by `subdomain` and return 404 when absent. They never execute blind upserts or backfills on `workspaces` (`workspaces.upsert({ ... }, { onConflict: 'subdomain' })`), completely eliminating cross-tenant workspace ownership hijacking vulnerabilities.
+
 

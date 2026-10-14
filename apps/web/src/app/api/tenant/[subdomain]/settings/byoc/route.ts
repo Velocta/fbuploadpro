@@ -44,28 +44,11 @@ export async function GET(
     // Find workspace via Supabase PostgREST
     const { data: workspace } = await supabase
       .from('workspaces')
-      .select('id, name, subdomain')
+      .select('id')
       .eq('subdomain', subdomain)
       .maybeSingle();
 
-    let workspaceId = workspace?.id as string | undefined;
-    if (!workspaceId) {
-      // Attempt backfill
-      const { data: inserted } = await supabase
-        .from('workspaces')
-        .upsert(
-          {
-            owner_id: session.userId,
-            name: subdomain,
-            subdomain,
-          },
-          { onConflict: 'subdomain' }
-        )
-        .select('id')
-        .single();
-      workspaceId = inserted?.id as string | undefined;
-    }
-
+    const workspaceId = workspace?.id as string | undefined;
     if (!workspaceId) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
