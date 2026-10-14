@@ -88,6 +88,9 @@ describe('Publish Logs API Route Handler (T138)', () => {
 
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('SELECT COUNT(*)')) {
             return Promise.resolve([{ total: 1 }]);
           }
@@ -126,6 +129,9 @@ describe('Publish Logs API Route Handler (T138)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
           capturedQueries.push({ sql, params });
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('SELECT COUNT(*)')) {
             return Promise.resolve([{ total: 0 }]);
           }
@@ -150,9 +156,9 @@ describe('Publish Logs API Route Handler (T138)', () => {
       const listQuery = capturedQueries.find((q) => q.sql.includes('SELECT pl.id'));
       expect(listQuery).toBeDefined();
       expect(listQuery!.sql).toContain('pl.user_id = $1');
-      expect(listQuery!.sql).toContain('pl.fb_page_id = $2');
-      expect(listQuery!.sql).toContain('pl.status = $3');
-      expect(listQuery!.params).toEqual([userId, pageId, 'failure', 15, 30]);
+      expect(listQuery!.sql).toContain('pl.fb_page_id = $3');
+      expect(listQuery!.sql).toContain('pl.status = $4');
+      expect(listQuery!.params).toEqual([userId, 'ws_123', pageId, 'failure', 15, 30]);
     });
   });
 });
