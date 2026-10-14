@@ -605,7 +605,7 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
           email: 'user@gmail.com',
         })
       );
-      expect(mockLocation.href).toBe('http://acme.localhost:3000');
+      expect(mockLocation.href).toBe('http://acme.localhost:3000/tenant/acme');
     });
 
     it('works when user is omitted', () => {
