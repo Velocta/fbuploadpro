@@ -8,24 +8,29 @@
  * - Deep link redirection preservation via allowedSubdomains (Issue 9)
  */
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, beforeEach } from 'vitest';
 import {
   canAccessTenant,
   evaluatePageHealth,
-  signSessionToken,
-  verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
-import { validateSessionActive } from '@/lib/supabase-auth';
+import {
+  validateSessionActive,
+  _setMockSupabaseClient,
+  _resetAuthStores,
+} from '@/lib/supabase-auth';
 
 const USER_ID = '11111111-1111-4111-a111-111111111111';
 const WORKSPACE_A = '22222222-2222-4222-a222-222222222222';
 const WORKSPACE_B = '33333333-3333-4333-a333-333333333333';
 const FB_ACCOUNT_ID = 'act_fb_12345';
 const FB_PAGE_ID = 'page_fb_67890';
-const SECRET = 'test-session-secret-must-be-32-chars-long-123456';
 
 describe('ISSUES.md Security & Architecture Regressions', () => {
+  beforeEach(() => {
+    _resetAuthStores();
+  });
+
   describe('Issue 1: Multi-Workspace Unique Constraints on FB Accounts & Pages', () => {
     it('allows identical fb_account_id to be stored in different workspaces', () => {
       const records = new Map<string, { id: string; workspaceId: string; fbAccountId: string }>();
@@ -82,6 +87,7 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
 
   describe('Issue 2: Multi-Tab Access via canAccessTenant & allowedSubdomains', () => {
     it('allows user with active session to access secondary workspace in allowedSubdomains', async () => {
+      const now = Math.floor(Date.now() / 1000);
       const session = {
         userId: USER_ID,
         email: 'user@gmail.com',
@@ -90,6 +96,8 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         role: 'user' as const,
         status: 'active' as const,
         allowedSubdomains: ['workspace-a', 'workspace-b'],
+        iat: now,
+        exp: now + 3600,
       };
 
       const accessA = canAccessTenant(session, 'workspace-a');
@@ -103,6 +111,7 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
     });
 
     it('allows admin to access any workspace regardless of allowedSubdomains', async () => {
+      const now = Math.floor(Date.now() / 1000);
       const adminSession = {
         userId: USER_ID,
         email: 'admin@gmail.com',
@@ -111,6 +120,8 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         role: 'admin' as const,
         status: 'active' as const,
         allowedSubdomains: ['system-admin'],
+        iat: now,
+        exp: now + 3600,
       };
 
       expect(canAccessTenant(adminSession, 'any-tenant-workspace').allowed).toBe(true);
@@ -149,7 +160,8 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         }),
       };
 
-      const active = await validateSessionActive(session, mockSupabase as any);
+      _setMockSupabaseClient(mockSupabase as any);
+      const active = await validateSessionActive(session);
       expect(active).toBe(false);
     });
 
@@ -181,7 +193,8 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         }),
       };
 
-      const active = await validateSessionActive(session, mockSupabase as any);
+      _setMockSupabaseClient(mockSupabase as any);
+      const active = await validateSessionActive(session);
       expect(active).toBe(false);
     });
   });
@@ -233,6 +246,7 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         returnUrl,
         'workspace-a',
         'velocta.com',
+        null,
         ['workspace-a', 'workspace-b']
       );
 
@@ -245,6 +259,7 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         returnUrl,
         'workspace-a',
         'velocta.com',
+        null,
         ['workspace-a', 'workspace-b']
       );
 

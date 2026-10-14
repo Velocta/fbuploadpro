@@ -376,7 +376,7 @@ describe('Facebook Account & Page Domain Schemas', () => {
 
       await expect(
         fetchAllFacebookPages('bad-token', 'id,name', 5, mockFetch as any)
-      ).rejects.toThrow('Graph API accounts request failed: 401 Unauthorized');
+      ).rejects.toThrow('Facebook Graph API returned 401');
     });
   });
 });
