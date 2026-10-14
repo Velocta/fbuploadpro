@@ -4,6 +4,7 @@ import {
   getSessionSecret,
   ListFacebookAccountsResponseSchema,
   verifySessionToken,
+  isSessionAuthorizedForSubdomain,
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
@@ -59,7 +60,7 @@ export async function handleListAccounts(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  if (!isSessionAuthorizedForSubdomain(session, subdomain)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

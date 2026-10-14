@@ -192,3 +192,14 @@ export function getSessionSecret(env?: Record<string, string | undefined>): stri
   return secret;
 }
 
+export function isSessionAuthorizedForSubdomain(
+  session: Pick<SessionPayload, 'subdomain' | 'role'> & { allowedSubdomains?: string[] | undefined },
+  requestedSubdomain: string
+): boolean {
+  if (session.role === 'admin') return true;
+  const normalized = requestedSubdomain.toLowerCase();
+  return (
+    session.subdomain.toLowerCase() === normalized ||
+    Boolean(session.allowedSubdomains?.some((sub) => sub.toLowerCase() === normalized))
+  );
+}
