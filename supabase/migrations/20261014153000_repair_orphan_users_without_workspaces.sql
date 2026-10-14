@@ -1,4 +1,4 @@
--- Migration: 20261014150000_repair_orphan_users_without_workspaces.sql
+-- Migration: 20261014153000_repair_orphan_users_without_workspaces.sql
 -- Description: Repair migration to detect and backfill default workspaces for users with 0 workspaces due to historical subdomain collisions.
 
 DO $$
