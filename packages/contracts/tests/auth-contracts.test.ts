@@ -76,7 +76,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
         success: true,
         user: {
           id: '11111111-1111-4111-a111-111111111111',
-          email: 'jane@example.com',
+          email: 'jane@gmail.com',
           name: 'Jane Doe',
           subdomain: 'janedoe',
           role: 'user',

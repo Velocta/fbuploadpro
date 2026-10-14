@@ -21,7 +21,7 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@acme.com',
+        email: 'alex@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

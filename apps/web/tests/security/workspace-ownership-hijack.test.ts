@@ -43,7 +43,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
             upsert: vi.fn(() => ({
               select: vi.fn(() => ({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: VALID_UUID, email: 'attacker@target.com', name: 'Attacker' },
+                  data: { id: VALID_UUID, email: 'attacker@gmail.com', name: 'Attacker' },
                   error: null,
                 }),
               })),
@@ -51,7 +51,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
             insert: vi.fn(() => ({
               select: vi.fn(() => ({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: VALID_UUID, email: 'attacker@target.com', name: 'Attacker' },
+                  data: { id: VALID_UUID, email: 'attacker@gmail.com', name: 'Attacker' },
                   error: null,
                 }),
               })),
@@ -91,7 +91,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
 
     await authModule.signUpTenantUser({
       name: 'Attacker',
-      email: 'attacker@target.com',
+      email: 'attacker@gmail.com',
       phone: '+15555550199',
       password: 'SecurePassword123!',
     });
@@ -129,7 +129,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
             insert: vi.fn(() => ({
               select: vi.fn(() => ({
                 single: vi.fn().mockResolvedValue({
-                  data: { id: VALID_UUID, email: 'attacker@target.com', name: 'Attacker' },
+                  data: { id: VALID_UUID, email: 'attacker@gmail.com', name: 'Attacker' },
                   error: null,
                 }),
               })),
@@ -180,7 +180,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
 
     const res = await authModule.registerTenantUser({
       name: 'Attacker',
-      email: 'attacker@target.com',
+      email: 'attacker@gmail.com',
       phone: '+15555550199',
       password: 'SecurePassword123!',
     });
@@ -201,7 +201,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
           data: {
             user: {
               id: VALID_UUID,
-              email: 'reset@example.com',
+              email: 'reset@gmail.com',
               user_metadata: { name: 'Reset User', subdomain: 'reset-ws' },
             },
           },
@@ -212,7 +212,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
           data: {
             user: {
               id: VALID_UUID,
-              email: 'reset@example.com',
+              email: 'reset@gmail.com',
               user_metadata: { name: 'Reset User', subdomain: 'reset-ws' },
             },
           },
@@ -257,7 +257,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
     authModule._setMockSupabaseClient(mockSupabase as any);
 
     await authModule.resetUserPasswordWithOtp({
-      email: 'reset@example.com',
+      email: 'reset@gmail.com',
       otp: '123456',
       password: 'NewSecurePassword123!',
     });
@@ -280,7 +280,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
           data: {
             user: {
               id: VALID_UUID,
-              email: 'returning@example.com',
+              email: 'returning@gmail.com',
               user_metadata: { name: 'Returning User', subdomain: 'victim-subdomain' },
             },
           },
@@ -329,7 +329,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
     authModule._setMockSupabaseClient(mockSupabase as any);
 
     const loggedIn = await authModule.loginTenantUser({
-      email: 'returning@example.com',
+      email: 'returning@gmail.com',
       password: 'Password123!',
     });
 

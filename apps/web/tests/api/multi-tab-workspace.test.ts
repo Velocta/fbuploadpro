@@ -12,7 +12,7 @@ describe('Multi-Workspace Multi-Tab Operations (ISSUE-23)', () => {
     const token = await signSessionToken(
       {
         userId: '11111111-1111-4111-a111-111111111111',
-        email: 'user@example.com',
+        email: 'user@gmail.com',
         name: 'Workspace Owner',
         subdomain: 'workspace-a',
         allowedSubdomains: ['workspace-a', 'workspace-b'],
@@ -36,7 +36,7 @@ describe('Multi-Workspace Multi-Tab Operations (ISSUE-23)', () => {
     const token = await signSessionToken(
       {
         userId: '11111111-1111-4111-a111-111111111111',
-        email: 'user@example.com',
+        email: 'user@gmail.com',
         name: 'Workspace Owner',
         subdomain: 'workspace-a',
         allowedSubdomains: ['workspace-a', 'workspace-b'],
@@ -68,7 +68,7 @@ describe('Multi-Workspace Multi-Tab Operations (ISSUE-23)', () => {
     const token = await signSessionToken(
       {
         userId: '11111111-1111-4111-a111-111111111111',
-        email: 'user@example.com',
+        email: 'user@gmail.com',
         name: 'Workspace Owner',
         subdomain: 'workspace-a',
         allowedSubdomains: ['workspace-a', 'workspace-b'],
@@ -99,7 +99,7 @@ describe('Multi-Workspace Multi-Tab Operations (ISSUE-23)', () => {
     const token = await signSessionToken(
       {
         userId: '11111111-1111-4111-a111-111111111111',
-        email: 'user@example.com',
+        email: 'user@gmail.com',
         name: 'Workspace Owner',
         subdomain: 'workspace-a',
         allowedSubdomains: ['workspace-a', 'workspace-b'],

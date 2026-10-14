@@ -29,7 +29,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@acme.com',
+        email: 'alex@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',

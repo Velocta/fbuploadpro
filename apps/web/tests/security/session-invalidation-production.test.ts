@@ -34,7 +34,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
                   maybeSingle: vi.fn().mockResolvedValue({
                     data: {
                       id: USER_ID,
-                      email: 'victim@example.com',
+                      email: 'victim@gmail.com',
                       name: 'Victim User',
                       role: 'user',
                       status: 'active',
@@ -69,7 +69,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
 
     authModule._setMockSupabaseClient(mockSupabase as any);
 
-    const user = await authModule.findUserByEmail('victim@example.com');
+    const user = await authModule.findUserByEmail('victim@gmail.com');
     expect(user).not.toBeNull();
     expect(user?.passwordUpdatedAt).toBe(updatedTimeSeconds);
   });
@@ -83,7 +83,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
           data: {
             user: {
               id: USER_ID,
-              email: 'victim@example.com',
+              email: 'victim@gmail.com',
             },
           },
           error: null,
@@ -98,7 +98,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
                 maybeSingle: vi.fn().mockResolvedValue({
                   data: {
                     id: USER_ID,
-                    email: 'victim@example.com',
+                    email: 'victim@gmail.com',
                     name: 'Victim User',
                     role: 'user',
                     status: 'active',
@@ -135,7 +135,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
     authModule._setMockSupabaseClient(mockSupabase as any);
 
     await authModule.resetUserPasswordWithOtp({
-      email: 'victim@example.com',
+      email: 'victim@gmail.com',
       otp: '654321',
       password: 'NewSecurePassword789!',
     });
@@ -150,7 +150,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
     const initialIat = Math.floor(Date.now() / 1000) - 60; // 60 seconds ago
     const initialSession: SessionPayload = {
       userId: USER_ID,
-      email: 'victim@example.com',
+      email: 'victim@gmail.com',
       subdomain: 'victim-ws',
       role: 'user',
       status: 'active',
@@ -164,7 +164,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
       auth: {
         verifyOtp: vi.fn().mockResolvedValue({
           data: {
-            user: { id: USER_ID, email: 'victim@example.com' },
+            user: { id: USER_ID, email: 'victim@gmail.com' },
           },
           error: null,
         }),
@@ -178,7 +178,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
                 maybeSingle: vi.fn().mockResolvedValue({
                   data: {
                     id: USER_ID,
-                    email: 'victim@example.com',
+                    email: 'victim@gmail.com',
                     name: 'Victim User',
                     role: 'user',
                     status: 'active',
@@ -226,7 +226,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
 
     // Perform password reset
     await authModule.resetUserPasswordWithOtp({
-      email: 'victim@example.com',
+      email: 'victim@gmail.com',
       otp: '654321',
       password: 'NewSecurePassword789!',
     });
@@ -251,11 +251,11 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
     const mockSupabase = {
       auth: {
         getUser: vi.fn().mockResolvedValue({
-          data: { user: { id: USER_ID, email: 'victim@example.com' } },
+          data: { user: { id: USER_ID, email: 'victim@gmail.com' } },
           error: null,
         }),
         exchangeCodeForSession: vi.fn().mockResolvedValue({
-          data: { session: { user: { id: USER_ID, email: 'victim@example.com' } } },
+          data: { session: { user: { id: USER_ID, email: 'victim@gmail.com' } } },
           error: null,
         }),
         updateUser: vi.fn().mockResolvedValue({ data: {}, error: null }),
@@ -268,7 +268,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
                 maybeSingle: vi.fn().mockResolvedValue({
                   data: {
                     id: USER_ID,
-                    email: 'victim@example.com',
+                    email: 'victim@gmail.com',
                     name: 'Victim User',
                     role: 'user',
                     status: 'active',
@@ -305,7 +305,7 @@ describe('ISSUE-02: Production Session Invalidation on Password Reset', () => {
     await authModule.resetUserPassword({
       code: 'valid-pkce-code',
       password: 'NewSecurePassword789!',
-      email: 'victim@example.com',
+      email: 'victim@gmail.com',
     });
 
     expect(userUpdateSpy).toHaveBeenCalled();

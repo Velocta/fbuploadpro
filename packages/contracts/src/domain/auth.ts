@@ -232,7 +232,7 @@ export const AuthSuccessResponseSchema = z.object({
   success: z.literal(true),
   user: z.object({
     id: z.string().uuid(),
-    email: z.string().email(),
+    email: GmailSchema,
     name: z.string().nullable().optional(),
     subdomain: SubdomainSchema,
     role: UserRoleSchema,

@@ -15,7 +15,7 @@ describe('ISSUE-04: Password Verification Bypass in Local/Fallback loginTenantUs
   });
 
   it('rejects login when user exists in localUserStore but has no stored password hash', async () => {
-    const testEmail = 'user-no-hash@example.com';
+    const testEmail = 'usertnohash@gmail.com';
     // Seed user in local store without setting a password hash in localPasswordStore
     await authModule._seedTestUser({
       id: '00000000-0000-4000-a000-000000000099',
@@ -37,7 +37,7 @@ describe('ISSUE-04: Password Verification Bypass in Local/Fallback loginTenantUs
   });
 
   it('verifies correct password when storedHash exists and rejects incorrect password', async () => {
-    const testEmail = 'valid-user@example.com';
+    const testEmail = 'validuser@gmail.com';
     const correctPassword = 'CorrectPassword123!';
 
     await authModule._seedTestUser(
