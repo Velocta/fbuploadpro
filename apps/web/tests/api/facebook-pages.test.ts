@@ -709,10 +709,13 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
                 if (payload.status === 'active') {
                   supabaseUpdated = true;
                 }
+                const result: any = {
+                  error: null,
+                  eq: vi.fn().mockImplementation(() => result),
+                  then: (resolve: any) => Promise.resolve({ error: null }).then(resolve),
+                };
                 return {
-                  eq: vi.fn().mockReturnValue({
-                    eq: vi.fn().mockResolvedValue({ error: null }),
-                  }),
+                  eq: vi.fn().mockImplementation(() => result),
                 };
               }),
             };

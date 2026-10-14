@@ -145,14 +145,13 @@ async function fetchSupabasePages(
     .from('facebook_pages')
     .select('*, facebook_accounts(display_name)')
     .eq('workspace_id', workspaceId)
-    .neq('status', 'disconnected')
-    .order('created_at', { ascending: false });
+    .neq('status', 'disconnected');
 
   if (role !== 'admin') {
     query = query.eq('user_id', userId);
   }
 
-  const { data: pageData, error } = await query;
+  const { data: pageData, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     return { error: error.message };

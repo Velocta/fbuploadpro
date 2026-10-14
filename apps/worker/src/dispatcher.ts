@@ -248,7 +248,7 @@ export async function dispatchItem(
     } catch (commentErr: unknown) {
       // If post succeeds but comment fails, post remains published.
       const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
-      commentWarning = `First comment failed: ${errMsg}`;
+      commentWarning = `Published post but first comment failed: ${errMsg}`;
       console.warn(
         `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
         commentErr
