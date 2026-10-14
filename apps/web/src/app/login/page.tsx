@@ -9,6 +9,7 @@ import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
+import { completeAuthRedirect } from '@/lib/auth-broadcast';
 
 interface FieldErrors {
   email?: string | undefined;
@@ -141,7 +142,7 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
       }
 
       if (data.redirectUrl) {
-        window.location.href = sanitizeAuthRedirectUrl(data.redirectUrl, data.user?.subdomain);
+        completeAuthRedirect(data.redirectUrl, data.user);
       }
     } catch {
       setGeneralError('Unable to sign in at this moment. Please check your connection and try again.');

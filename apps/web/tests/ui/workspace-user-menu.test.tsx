@@ -4,9 +4,9 @@
  */
 
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { SidebarProvider } from '@/components/ui';
-import { WorkspaceUserMenu } from '@/components/workspace/workspace-user-menu';
+import { WorkspaceUserMenu, broadcastLogout } from '@/components/workspace/workspace-user-menu';
 import { render } from '../components/setup';
 
 describe('WorkspaceUserMenu Component (Spec 019 & Spec 025)', () => {
@@ -67,6 +67,23 @@ describe('WorkspaceUserMenu Component (Spec 019 & Spec 025)', () => {
     expect(hasText('Workspace User')).toBe(true);
     expect(hasText('user@example.com')).toBe(true);
     expect(hasText('WU')).toBe(true);
+  });
+
+  it('dispatches cross-tab logout event when broadcastLogout is invoked', () => {
+    const postMessage = vi.fn();
+    const close = vi.fn();
+    class MockBroadcastChannel {
+      postMessage = postMessage;
+      close = close;
+    }
+    vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
+    vi.stubGlobal('localStorage', { setItem: vi.fn(), removeItem: vi.fn() });
+
+    broadcastLogout();
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'LOGOUT' })
+    );
   });
 });
 

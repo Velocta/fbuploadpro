@@ -9,6 +9,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { buildCentralAppUrl } from '@fbuploadpro/contracts';
+import { broadcastAuthEvent } from '@/lib/auth-broadcast';
 
 export interface WorkspaceUserMenuProps {
   user?: {
@@ -31,25 +32,8 @@ function clearClientSessionCookies(): void {
   document.cookie = 'fbup_session=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; SameSite=Lax';
 }
 
-function broadcastLogout(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      const channel = new BroadcastChannel('fbup_auth');
-      channel.postMessage({ type: 'LOGOUT', timestamp: Date.now() });
-      channel.close();
-    }
-  } catch {
-    // Ignore BroadcastChannel errors in unsupported environments
-  }
-
-  try {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('fbup_logout_event', String(Date.now()));
-    }
-  } catch {
-    // Ignore localStorage errors
-  }
+export function broadcastLogout(): void {
+  broadcastAuthEvent({ type: 'LOGOUT' });
 }
 
 function redirectToLogout(): void {
