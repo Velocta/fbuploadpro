@@ -76,8 +76,8 @@ export async function resolveWorkspaceFacebookCredentials(
         decryptedAppSecret,
         webhookVerifyToken: creds.webhook_verify_token ?? null,
       };
-    } catch (_err) {
-      // Secret decryption or database query error: treat as unconfigured BYOC credentials
+    } catch (err) {
+      console.warn('[BYOC Resolver] Failed to resolve legacy BYOC credentials:', err);
       return {
         ok: false,
         error: 'BYOC_NOT_CONFIGURED',
@@ -121,8 +121,8 @@ export async function resolveWorkspaceFacebookCredentials(
       decryptedAppSecret,
       webhookVerifyToken: creds.webhook_verify_token ?? null,
     };
-  } catch (_err) {
-    // Secret decryption or database query error: treat as unconfigured BYOC credentials
+  } catch (err) {
+    console.warn('[BYOC Resolver] Failed to resolve Supabase BYOC credentials:', err);
     return {
       ok: false,
       error: 'BYOC_NOT_CONFIGURED',
