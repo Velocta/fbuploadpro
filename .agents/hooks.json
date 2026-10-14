@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "./scripts/lint.sh",
+            "command": "pnpm run lint",
             "timeout": 30
           }
         ]
