@@ -266,6 +266,46 @@ describe('Facebook Multi-Account Health Monitoring & Expiration (User Story 3 - 
       expect(rawString).not.toContain('accessToken');
     });
 
+    it('persists expired status back to DB when an account token expiration has passed (ISSUE-24)', async () => {
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      let accountUpdateExecuted = false;
+
+      const mockDb = {
+        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('UPDATE facebook_accounts') && sql.includes("status = 'expired'")) {
+            accountUpdateExecuted = true;
+            return Promise.resolve([]);
+          }
+          if (sql.includes('FROM facebook_accounts')) {
+            return Promise.resolve([
+              {
+                id: '44444444-4444-4444-a444-444444444444',
+                fb_account_id: 'fb_act_expired_sync',
+                display_name: 'Sync Expired Account',
+                status: 'active', // In DB it is active
+                token_expires_at: pastDate,
+                connected_pages_count: 0,
+                created_at: pastDate,
+                updated_at: pastDate,
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+      } as unknown as DatabaseClient;
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/accounts', {
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleListAccounts(req, 'acme', mockDb);
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.accounts[0].status).toBe('expired');
+      expect(accountUpdateExecuted).toBe(true);
+    });
+
     it('rejects cross-tenant access when user belongs to different subdomain', async () => {
       const mockDb = {
         query: vi.fn(),

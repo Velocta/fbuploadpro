@@ -399,4 +399,55 @@ describe('User Story 5 - Worker Daily Page Insights Snapshot Sync', () => {
     // Ensure concurrency was bounded to at most 3 pages (each doing 3 subrequests = 9 max)
     expect(maxConcurrentRequests).toBeLessThanOrEqual(9);
   });
+
+  it('includes pages in fb_rate_limited status whose 3-day cooldown has elapsed (ISSUE-24)', async () => {
+    const encrypted = await encryptToken('EAA_TEST_PAGE_TOKEN_VALID', TEST_MASTER_KEY);
+
+    const allQueries: string[] = [];
+    const testDb: InsightsSyncDbClient = {
+      query: vi.fn().mockImplementation(async (text: string) => {
+        allQueries.push(text);
+        if (text.includes('FROM facebook_pages') && text.includes("status = 'fb_rate_limited'")) {
+          return [
+            {
+              id: 'page-rate-limited-1',
+              user_id: 'user-uuid-1',
+              fb_page_id: 'fb-page-rate-limited',
+              page_name: 'Cooldown Finished Page',
+              encrypted_access_token: encrypted,
+              status: 'fb_rate_limited',
+            },
+          ];
+        }
+        return [];
+      }),
+      upsertPageInsightsSnapshot: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const mockFetch = vi.fn().mockImplementation(async () => {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          fan_count: 500,
+          followers_count: 600,
+          data: [],
+        }),
+      };
+    });
+
+    const result = await syncDailyPageInsights({
+      db: testDb,
+      masterKey: TEST_MASTER_KEY,
+      fetchImpl: mockFetch as any,
+      targetDate: '2026-03-01',
+    });
+
+    const selectQuery = allQueries.find((q) => q.includes('FROM facebook_pages'));
+    expect(selectQuery).toBeDefined();
+    expect(selectQuery).toContain("status = 'fb_rate_limited'");
+    expect(selectQuery).toContain("INTERVAL '3 days'");
+    expect(result.totalEligible).toBe(1);
+    expect(result.synced).toBe(1);
+  });
 });

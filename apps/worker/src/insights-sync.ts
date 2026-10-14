@@ -368,19 +368,21 @@ export async function syncDailyPageInsights(
     errors: [],
   };
 
-  // 1. Fetch active pages
+  // 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed
   let eligiblePages: FacebookPageRow[] = [];
   if (typeof db.from === 'function') {
+    const cooldownThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
     const { data } = await db
       .from('facebook_pages')
-      .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status')
-      .eq('status', 'active');
+      .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at')
+      .or(`status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`);
     eligiblePages = (data || []) as FacebookPageRow[];
   } else if (typeof db.query === 'function') {
     const rawPages = await db.query(
       `SELECT id, user_id, fb_page_id, page_name, encrypted_access_token, status
        FROM facebook_pages
-       WHERE status = 'active'`
+       WHERE status = 'active'
+          OR (status = 'fb_rate_limited' AND updated_at <= now() - INTERVAL '3 days')`
     );
     eligiblePages = extractRows<FacebookPageRow>(rawPages);
   }

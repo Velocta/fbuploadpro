@@ -127,6 +127,34 @@ export async function handleListPages(
     const startingFollowers = extractStartingFollowers(row, currentFollowers);
     const followersGained = currentFollowers - startingFollowers;
 
+    if (row.status === 'fb_rate_limited' && effectiveStatus === 'active') {
+      // Sync transitioned status back to DB so background workers and RPC functions honor it
+      if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+        dbClient.query(
+          `UPDATE facebook_pages
+           SET status = 'active', updated_at = now()
+           WHERE id = $1 AND user_id = $2`,
+          [row.id, session.userId]
+        ).catch((err: any) => {
+          console.error('[handleListPages] Failed to persist recovered page status:', err);
+        });
+      } else {
+        const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+        if (supabase) {
+          supabase
+            .from('facebook_pages')
+            .update({ status: 'active', updated_at: new Date().toISOString() })
+            .eq('id', row.id)
+            .eq('user_id', session.userId)
+            .then(({ error }: { error: any }) => {
+              if (error) {
+                console.error('[handleListPages] Failed to persist recovered page status via Supabase:', error);
+              }
+            });
+        }
+      }
+    }
+
     return {
       id: row.id,
       facebookAccountId: row.facebook_account_id || row.facebookAccountId,

@@ -583,6 +583,51 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(str).not.toContain('encryptedAccessToken');
       expect(str).not.toContain('accessToken');
     });
+
+    it('persists active status back to DB when a page cooldown has expired from fb_rate_limited (ISSUE-24)', async () => {
+      const pastDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
+      let updateExecuted = false;
+
+      const mockDb = {
+        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
+          if (sql.includes('UPDATE facebook_pages') && sql.includes("status = 'active'")) {
+            updateExecuted = true;
+            return Promise.resolve([]);
+          }
+          if (sql.includes('FROM facebook_pages')) {
+            return Promise.resolve([
+              {
+                id: pageId,
+                facebook_account_id: accountId,
+                account_display_name: 'Alex Marketing',
+                fb_page_id: 'page_rate_limited_expired',
+                page_name: 'Recovered Rate Limited Page',
+                profile_picture_url: null,
+                category: 'Retail Company',
+                starting_followers: 1000,
+                current_followers: 1050,
+                status: 'fb_rate_limited',
+                tasks: ['CREATE_CONTENT'],
+                created_at: pastDate,
+                updated_at: pastDate,
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+      } as unknown as DatabaseClient;
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/pages', {
+        headers: { cookie: validSessionCookie },
+      });
+
+      const res = await handleListPages(req, 'acme', mockDb);
+      expect(res.status).toBe(200);
+
+      const json = await res.json();
+      expect(json.pages[0].status).toBe('active');
+      expect(updateExecuted).toBe(true);
+    });
   });
 
   describe('Disconnect Page (DELETE /api/tenant/[subdomain]/pages/[pageId])', () => {

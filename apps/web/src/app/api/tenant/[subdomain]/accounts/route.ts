@@ -148,7 +148,39 @@ export async function handleListAccounts(
     });
   }
 
-  const accounts = (rows || []).map(mapAccountRowToView);
+  const accounts = (rows || []).map((row) => {
+    const view = mapAccountRowToView(row);
+
+    if (row.status === 'active' && view.status === 'expired') {
+      // Sync expired status back to DB so background workers and RPC functions honor it
+      if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+        dbClient.query(
+          `UPDATE facebook_accounts
+           SET status = 'expired', updated_at = now()
+           WHERE id = $1 AND user_id = $2`,
+          [view.id, session.userId]
+        ).catch((err: any) => {
+          console.error('[handleListAccounts] Failed to persist expired account status:', err);
+        });
+      } else {
+        const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+        if (supabase) {
+          supabase
+            .from('facebook_accounts')
+            .update({ status: 'expired', updated_at: new Date().toISOString() })
+            .eq('id', view.id)
+            .eq('user_id', session.userId)
+            .then(({ error }: { error: any }) => {
+              if (error) {
+                console.error('[handleListAccounts] Failed to persist expired account status via Supabase:', error);
+              }
+            });
+        }
+      }
+    }
+
+    return view;
+  });
 
   accounts.sort((a, b) => {
     const aExpired = a.status === 'expired' ? 1 : 0;
