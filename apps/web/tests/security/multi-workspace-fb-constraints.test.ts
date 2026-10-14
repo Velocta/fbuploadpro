@@ -141,23 +141,49 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         role: 'user' as const,
         status: 'active' as const,
         iat: tokenIssuedAt,
+        exp: tokenIssuedAt + 3600,
       };
 
       const mockSupabase = {
-        from: () => ({
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: {
-                  id: USER_ID,
-                  status: 'active',
-                  password_updated_at: passwordResetAt.toISOString(),
-                },
-                error: null,
+        from: (table: string) => {
+          if (table === 'users') {
+            return {
+              select: () => ({
+                or: () => ({
+                  maybeSingle: async () => ({
+                    data: {
+                      id: USER_ID,
+                      email: 'user@gmail.com',
+                      name: 'User',
+                      phone: '+15555550100',
+                      role: 'user',
+                      status: 'active',
+                      password_updated_at: passwordResetAt.toISOString(),
+                    },
+                    error: null,
+                  }),
+                }),
               }),
-            }),
-          }),
-        }),
+            };
+          }
+          if (table === 'workspaces') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({
+                        data: { subdomain: 'workspace-a' },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        },
       };
 
       _setMockSupabaseClient(mockSupabase as any);
@@ -166,6 +192,7 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
     });
 
     it('revokes session for suspended user', async () => {
+      const now = Math.floor(Date.now() / 1000);
       const session = {
         userId: USER_ID,
         email: 'suspended@gmail.com',
@@ -173,24 +200,50 @@ describe('ISSUES.md Security & Architecture Regressions', () => {
         subdomain: 'workspace-a',
         role: 'user' as const,
         status: 'active' as const,
-        iat: Math.floor(Date.now() / 1000),
+        iat: now,
+        exp: now + 3600,
       };
 
       const mockSupabase = {
-        from: () => ({
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({
-                data: {
-                  id: USER_ID,
-                  status: 'suspended',
-                  password_updated_at: null,
-                },
-                error: null,
+        from: (table: string) => {
+          if (table === 'users') {
+            return {
+              select: () => ({
+                or: () => ({
+                  maybeSingle: async () => ({
+                    data: {
+                      id: USER_ID,
+                      email: 'suspended@gmail.com',
+                      name: 'Suspended User',
+                      phone: '+15555550101',
+                      role: 'user',
+                      status: 'suspended',
+                      password_updated_at: null,
+                    },
+                    error: null,
+                  }),
+                }),
               }),
-            }),
-          }),
-        }),
+            };
+          }
+          if (table === 'workspaces') {
+            return {
+              select: () => ({
+                eq: () => ({
+                  order: () => ({
+                    limit: () => ({
+                      maybeSingle: async () => ({
+                        data: { subdomain: 'workspace-a' },
+                        error: null,
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            };
+          }
+          return {};
+        },
       };
 
       _setMockSupabaseClient(mockSupabase as any);
