@@ -192,10 +192,51 @@ export const SignupRequestSchema = z.object({
 
 export type SignupRequest = z.infer<typeof SignupRequestSchema>;
 
+export const SafeReturnUrlSchema = z
+  .string()
+  .trim()
+  .superRefine((val, ctx) => {
+    // 1. Must be a relative path starting with '/' but not protocol-relative '//'
+    if (!val.startsWith('/') || val.startsWith('//')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'returnUrl must be a relative path starting with /',
+      });
+      return;
+    }
+
+    // 2. No backslashes or dangerous schemes
+    if (val.includes('\\') || /^(?:javascript|data|vbscript):/i.test(val)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'returnUrl contains invalid characters or schemes',
+      });
+      return;
+    }
+
+    // 3. Extract pathname to verify against banned /dashboard
+    try {
+      const parsed = new URL(val, 'https://localhost');
+      const normalizedPath = parsed.pathname.toLowerCase();
+      if (normalizedPath === '/dashboard' || normalizedPath.startsWith('/dashboard/')) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'The /dashboard route has been permanently deprecated per Principle 14.',
+        });
+        return;
+      }
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid returnUrl structure',
+      });
+    }
+  });
+
 export const LoginRequestSchema = z.object({
   email: GmailSchema,
   password: z.string().min(1, 'Password is required').max(128, 'Password cannot exceed 128 characters'),
-  returnUrl: z.string().optional(),
+  returnUrl: SafeReturnUrlSchema.optional(),
 });
 
 export const ForgotPasswordRequestSchema = z.object({
