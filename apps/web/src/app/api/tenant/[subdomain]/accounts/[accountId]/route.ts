@@ -79,7 +79,10 @@ export async function handleDisconnectAccount(
       .eq('owner_id', session.userId)
       .maybeSingle();
 
-    if (wsErr || !ws?.id) {
+    const wsRecord = ws as { id?: string } | null;
+    const workspaceId = wsRecord?.id;
+
+    if (wsErr || !workspaceId) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
@@ -88,7 +91,7 @@ export async function handleDisconnectAccount(
       .select('id', { count: 'exact', head: true })
       .eq('facebook_account_id', accountId)
       .eq('user_id', session.userId)
-      .eq('workspace_id', ws.id);
+      .eq('workspace_id', workspaceId);
     disconnectedPagesCount = count ?? 0;
 
     const { data: deleted, error: deleteErr } = await supabase
@@ -96,7 +99,7 @@ export async function handleDisconnectAccount(
       .delete()
       .eq('id', accountId)
       .eq('user_id', session.userId)
-      .eq('workspace_id', ws.id)
+      .eq('workspace_id', workspaceId)
       .select('id');
 
     if (deleteErr || !deleted || deleted.length === 0) {

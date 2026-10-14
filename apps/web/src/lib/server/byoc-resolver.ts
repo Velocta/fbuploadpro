@@ -33,8 +33,9 @@ export async function resolveWorkspaceFacebookCredentials(
   const encryptionKey = getTokenEncryptionKey();
 
   if (isLegacyClient(client ?? undefined)) {
+    const legacyClient = client as DatabaseClient;
     try {
-      const wsRows = (await client.query(
+      const wsRows = (await legacyClient.query(
         'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
         [subdomain, userId]
       )) as Array<{ id: string }>;
@@ -49,7 +50,7 @@ export async function resolveWorkspaceFacebookCredentials(
         };
       }
 
-      const credRows = (await client.query(
+      const credRows = (await legacyClient.query(
         `SELECT fb_app_id, encrypted_fb_app_secret, webhook_verify_token
          FROM workspace_byoc_credentials
          WHERE workspace_id = $1

@@ -82,7 +82,10 @@ export async function handleDiscoverPages(
       .eq('owner_id', session.userId)
       .maybeSingle();
 
-    if (wsErr || !ws?.id) {
+    const wsRecord = ws as { id?: string } | null;
+    const workspaceId = wsRecord?.id;
+
+    if (wsErr || !workspaceId) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
@@ -91,7 +94,7 @@ export async function handleDiscoverPages(
       .select('*')
       .eq('id', accountId)
       .eq('user_id', session.userId)
-      .eq('workspace_id', ws.id)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
 
     if (accErr || !accData) {
@@ -106,7 +109,7 @@ export async function handleDiscoverPages(
       .from('facebook_pages')
       .select('fb_page_id')
       .eq('user_id', session.userId)
-      .eq('workspace_id', ws.id)
+      .eq('workspace_id', workspaceId)
       .neq('status', 'disconnected');
 
     importedRows = pageRows || [];
