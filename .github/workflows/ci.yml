@@ -31,8 +31,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Run Turbo verification pipeline (with coverage)
-        run: pnpm turbo run build lint typecheck test -- --coverage
+      - name: Run Turbo build, lint & typecheck
+        run: pnpm turbo run build lint typecheck
+
+      - name: Run Turbo test with Vitest coverage
+        run: pnpm turbo run test -- --coverage
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # stable
