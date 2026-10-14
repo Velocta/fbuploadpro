@@ -431,7 +431,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
       const token = await signSessionToken(
         {
           userId: VALID_UUID,
-          email: 'test@example.com',
+          email: 'operator@gmail.com',
           name: 'Test User',
           subdomain: 'acme',
           role: 'user',
@@ -501,7 +501,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
       const token = await signSessionToken(
         {
           userId: VALID_UUID,
-          email: 'test@example.com',
+          email: 'operator@gmail.com',
           name: 'Test User',
           subdomain: 'acme',
           role: 'user',
