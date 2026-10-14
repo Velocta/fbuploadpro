@@ -19,8 +19,6 @@ This document details every required secret, environment variable, and credentia
 | `SESSION_SECRET` | String, $\ge 32$ chars | ✅ | ❌ | ✅ | ❌ |
 | `TOKEN_ENCRYPTION_KEY` | Exactly 64 hex chars (32 bytes) | ✅ | ❌ | ✅ | ❌ |
 | `FB_ENCRYPTION_MASTER_KEY` | Identical to `TOKEN_ENCRYPTION_KEY` | ❌ | ✅ | ❌ | ❌ |
-| `FACEBOOK_APP_ID` | Numeric string | ✅ | ❌ | ✅ | ❌ |
-| `FACEBOOK_APP_SECRET` | 32 hex chars | ✅ | ❌ | ✅ | ❌ |
 | `R2_ACCOUNT_ID` | Cloudflare Account Hex ID | ✅ | ❌ | ✅ | ❌ |
 | `R2_ACCESS_KEY_ID` | R2 S3 Access Key ID | ✅ | ❌ | ✅ | ❌ |
 | `R2_SECRET_ACCESS_KEY` | R2 S3 Secret Access Key | ✅ | ❌ | ✅ | ❌ |
@@ -70,22 +68,22 @@ This document details every required secret, environment variable, and credentia
 
 ---
 
-### Category C: Meta / Facebook Graph API v26.0
+### Category C: Meta / Facebook Graph API v26.0 (Per-Workspace BYOC)
 
-#### `FACEBOOK_APP_ID`
-* **Purpose**: Public App ID from Meta for Developers.
-* **Format**: Numeric string (e.g. `123456789012345`).
+> [!IMPORTANT]
+> **Strict Per-Workspace BYOC (Zero Global Platform Credentials)**: The platform operator does NOT provide global `FACEBOOK_APP_ID` or `FACEBOOK_APP_SECRET` environment variables. Every tenant workspace must configure its own dedicated Facebook App ID and App Secret via the web dashboard under **Settings $\rightarrow$ Facebook BYOC** (`workspace_byoc_credentials`). Raw App Secrets are encrypted at rest using AES-256-GCM via `TOKEN_ENCRYPTION_KEY`.
 
-#### `FACEBOOK_APP_SECRET`
-* **Purpose**: App Secret from Meta for Developers (Settings → Basic).
-* **Format**: 32-character hexadecimal string.
+#### Facebook BYOC Credentials Format
+* **App ID**: Public Numeric App ID from Meta Developer Dashboard (e.g. `123456789012345`).
+* **App Secret**: 32-character hexadecimal App Secret from Meta Developer Dashboard (Settings → Basic).
 * **Required Meta App Settings**:
   - Valid OAuth Redirect URIs must include:
     ```text
-    https://fbuploadpro.com/api/auth/facebook/callback
+    https://app.fbuploadpro.com/api/auth/facebook/callback
     http://localhost:3000/api/auth/facebook/callback (for local testing)
     ```
   - App Permissions in App Review: `pages_manage_posts`, `pages_read_engagement`, `pages_show_list`.
+  - Future X (Twitter) and TikTok platform integrations will utilize platform-provided credentials rather than BYOC.
 
 ---
 

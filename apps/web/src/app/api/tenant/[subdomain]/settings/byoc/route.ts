@@ -46,6 +46,7 @@ export async function GET(
       .from('workspaces')
       .select('id')
       .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
       .maybeSingle();
 
     const workspaceId = workspace?.id as string | undefined;
@@ -116,6 +117,7 @@ export async function PUT(
       .from('workspaces')
       .select('id')
       .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
       .maybeSingle();
 
     const workspaceId = workspace?.id as string | undefined;
@@ -146,6 +148,20 @@ export async function PUT(
         return NextResponse.json({ error: 'Failed to save credentials' }, { status: 500 });
       }
     } else {
+      // First verify that existing credentials with secret exist
+      const { data: existingCreds } = await supabase
+        .from('workspace_byoc_credentials')
+        .select('encrypted_fb_app_secret')
+        .eq('workspace_id', workspaceId)
+        .maybeSingle();
+
+      if (!existingCreds?.encrypted_fb_app_secret) {
+        return NextResponse.json(
+          { error: 'Enter your Facebook App Secret to complete setup.' },
+          { status: 400 }
+        );
+      }
+
       const { error: updateErr } = await supabase
         .from('workspace_byoc_credentials')
         .update({

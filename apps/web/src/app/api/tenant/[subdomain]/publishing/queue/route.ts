@@ -60,10 +60,19 @@ export async function handleEnqueueMedia(
     parsed.data;
 
   if (isLegacyClient(dbClient)) {
-    // 4. Verify page exists and belongs to user
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // 4. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
@@ -282,12 +291,24 @@ export async function handleEnqueueMedia(
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
 
-  // 4. Verify page exists and belongs to user
+  const { data: ws, error: wsErr } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('subdomain', subdomain)
+    .eq('owner_id', session.userId)
+    .maybeSingle();
+
+  if (wsErr || !ws?.id) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  // 4. Verify page exists and belongs to user and workspace
   const { data: pageRow } = await supabase
     .from('facebook_pages')
     .select('id')
     .eq('id', pageId)
     .eq('user_id', session.userId)
+    .eq('workspace_id', ws.id)
     .maybeSingle();
 
   if (!pageRow) {
@@ -527,9 +548,21 @@ export async function handleListQueueItems(
   const { pageId, status, limit, offset } = parsedQuery.data;
 
   if (isLegacyClient(dbClient)) {
-    // 4. Build query filters
-    const conditions = ['qi.user_id = $1'];
-    const params: any[] = [session.userId];
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // 4. Build query filters scoped to workspace pages
+    const conditions = [
+      'qi.user_id = $1',
+      'EXISTS (SELECT 1 FROM facebook_pages fp WHERE fp.id = qi.fb_page_id AND fp.workspace_id = $2 AND fp.user_id = $1)'
+    ];
+    const params: any[] = [session.userId, workspaceId];
 
     if (pageId) {
       params.push(pageId);
@@ -632,13 +665,37 @@ export async function handleListQueueItems(
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
 
+  const { data: ws, error: wsErr } = await supabase
+    .from('workspaces')
+    .select('id')
+    .eq('subdomain', subdomain)
+    .eq('owner_id', session.userId)
+    .maybeSingle();
+
+  if (wsErr || !ws?.id) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  const { data: workspacePages } = await supabase
+    .from('facebook_pages')
+    .select('id')
+    .eq('user_id', session.userId)
+    .eq('workspace_id', ws.id)
+    .neq('status', 'disconnected');
+
+  const workspacePageIds = (workspacePages || []).map((p) => p.id);
+  if (workspacePageIds.length === 0) {
+    return NextResponse.json({ items: [], total: 0, limit, offset }, { status: 200 });
+  }
+
   let queryBuilder = supabase
     .from('queue_items')
     .select(
       'id, user_id, fb_page_id, slot_id, media_id, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at, media:media_items(name, media_type, thumbnail_url, url, aspect_ratio, duration_seconds)',
       { count: 'exact' }
     )
-    .eq('user_id', session.userId);
+    .eq('user_id', session.userId)
+    .in('fb_page_id', workspacePageIds);
 
   if (pageId) {
     queryBuilder = queryBuilder.eq('fb_page_id', pageId);

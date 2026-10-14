@@ -3,10 +3,16 @@ import {
   getSessionSecret,
   signOAuthState,
   verifyMagicLinkToken,
+  type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function handleConnectFacebook(
+  request: NextRequest,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -29,39 +35,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(errorUrl);
   }
 
-  // 2. Resolve App ID: check workspace BYOC credentials first, fallback to env
-  let byocAppId: string | undefined;
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { data: ws } = await supabase
-        .from('workspaces')
-        .select('id')
-        .eq('subdomain', payload.tenantSubdomain)
-        .maybeSingle();
+  // 2. Resolve App ID: check workspace BYOC credentials strictly without env fallback
+  const client = dbClient || getSupabaseClient();
+  const byocResult = await resolveWorkspaceFacebookCredentials(
+    client,
+    payload.tenantSubdomain,
+    payload.userId
+  );
 
-      if (ws?.id) {
-        const { data: creds } = await supabase
-          .from('workspace_byoc_credentials')
-          .select('fb_app_id')
-          .eq('workspace_id', ws.id)
-          .maybeSingle();
-
-        if (creds?.fb_app_id) {
-          byocAppId = creds.fb_app_id;
-        }
-      }
-    } catch (_err) {
-      // Fallback to process.env
-    }
-  }
-
-  const effectiveAppId = byocAppId || process.env.FACEBOOK_APP_ID || '';
-  if (!effectiveAppId) {
+  if (!byocResult.ok) {
     const errorUrl = new URL('/connect/facebook/error', request.url);
     errorUrl.searchParams.set('reason', 'app_not_configured');
     return NextResponse.redirect(errorUrl);
   }
+
+  const effectiveAppId = byocResult.fbAppId;
 
   // 3. Generate signed OAuth state flagged with isMagic: true
   const now = Math.floor(Date.now() / 1000);
@@ -95,4 +83,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   oauthUrl.searchParams.set('response_type', 'code');
 
   return NextResponse.redirect(oauthUrl.toString());
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handleConnectFacebook(request);
 }

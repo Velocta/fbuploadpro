@@ -38,14 +38,23 @@ export async function handleDiscoverPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Fetch account and composite ownership (user_id, accountId)
+  // 3. Fetch account and composite ownership (user_id, workspace_id, accountId)
   let account: any = null;
   let importedRows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     const accounts = (await dbClient.query(
-      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
-      [accountId, session.userId]
+      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [accountId, session.userId, workspaceId]
     )) as any[];
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
@@ -57,8 +66,8 @@ export async function handleDiscoverPages(
     account = accounts[0];
 
     importedRows = (await dbClient.query(
-      "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND status != 'disconnected'",
-      [session.userId]
+      "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND workspace_id = $2 AND status != 'disconnected'",
+      [session.userId, workspaceId]
     )) as any[];
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
@@ -66,11 +75,23 @@ export async function handleDiscoverPages(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     const { data: accData, error: accErr } = await supabase
       .from('facebook_accounts')
       .select('*')
       .eq('id', accountId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id)
       .maybeSingle();
 
     if (accErr || !accData) {
@@ -85,6 +106,7 @@ export async function handleDiscoverPages(
       .from('facebook_pages')
       .select('fb_page_id')
       .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id)
       .neq('status', 'disconnected');
 
     importedRows = pageRows || [];

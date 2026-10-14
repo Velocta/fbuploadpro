@@ -1,5 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { getSessionSecret, signMagicLinkToken, verifySessionToken } from '@fbuploadpro/contracts';
+import {
+  getSessionSecret,
+  signMagicLinkToken,
+  verifySessionToken,
+  type DatabaseClient,
+} from '@fbuploadpro/contracts';
+import { getSupabaseClient } from '@/lib/supabase-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
 async function extractExpectedAccountFromBody(request: NextRequest): Promise<{
   expectedFbAccountId?: string | undefined;
@@ -24,12 +32,11 @@ async function extractExpectedAccountFromBody(request: NextRequest): Promise<{
   }
 }
 
-export async function POST(
+export async function handleGenerateMagicLink(
   request: NextRequest,
-  context: { params: Promise<{ subdomain: string }> }
+  subdomain: string,
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
-  const { subdomain } = await context.params;
-
   const sessionSecret = getSessionSecret();
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
@@ -52,7 +59,20 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Generate 15-minute cryptographically signed magic token
+  // 3. Pre-check that Facebook BYOC is configured for this workspace
+  const client = dbClient || getSupabaseClient();
+  const byoc = await resolveWorkspaceFacebookCredentials(client, subdomain, session.userId);
+  if (!byoc.ok) {
+    return NextResponse.json(
+      {
+        error: 'BYOC_NOT_CONFIGURED',
+        message: 'Facebook BYOC is not configured for this workspace. Configure your App ID and Secret in Settings.',
+      },
+      { status: 422 }
+    );
+  }
+
+  // 4. Generate 15-minute cryptographically signed magic token
   const { expectedFbAccountId, expectedDisplayName } =
     await extractExpectedAccountFromBody(request);
 
@@ -82,4 +102,12 @@ export async function POST(
     expiresAt: new Date(exp * 1000).toISOString(),
     expiresInSeconds,
   });
+}
+
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ subdomain: string }> }
+): Promise<NextResponse> {
+  const { subdomain } = await context.params;
+  return handleGenerateMagicLink(request, subdomain);
 }

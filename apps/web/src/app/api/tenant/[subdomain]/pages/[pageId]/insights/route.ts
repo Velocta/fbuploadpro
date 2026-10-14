@@ -73,14 +73,23 @@ export async function handleGetInsights(
   } | null = null;
 
   if (client && 'query' in client && typeof client.query === 'function') {
+    const wsRows = (await client.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     const whereClause = isUuid ? 'p.id = $1' : 'p.fb_page_id = $1';
     const pageRows = (await client.query(
       `SELECT p.id, p.fb_page_id, p.page_name, 
               p.encrypted_access_token, 
               p.status
        FROM facebook_pages p
-       WHERE ${whereClause} AND p.user_id = $2`,
-      [pageId, session.userId]
+       WHERE ${whereClause} AND p.user_id = $2 AND p.workspace_id = $3`,
+      [pageId, session.userId, workspaceId]
     )) as Array<{
       id: string;
       fb_page_id: string;
@@ -106,10 +115,22 @@ export async function handleGetInsights(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     let queryBuilder = supabase
       .from('facebook_pages')
       .select('id, fb_page_id, page_name, encrypted_access_token, status')
-      .eq('user_id', session.userId);
+      .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id);
 
     if (isUuid) {
       queryBuilder = queryBuilder.eq('id', pageId);

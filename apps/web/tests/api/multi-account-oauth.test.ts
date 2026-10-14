@@ -170,8 +170,33 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
         if (table === 'workspaces') {
           return {
             select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockImplementation(() => ({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { id: 'ws_multi_123', subdomain: 'acme' },
+                    error: null,
+                  }),
+                }),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { id: 'ws_multi_123', subdomain: 'acme' },
+                  error: null,
+                }),
+              })),
+            }),
+          };
+        }
+
+        if (table === 'workspace_byoc_credentials') {
+          return {
+            select: vi.fn().mockReturnValue({
               eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    fb_app_id: 'fb_app_id_123',
+                    encrypted_fb_app_secret: 'enc_secret_valid',
+                  },
+                  error: null,
+                }),
               }),
             }),
           };
@@ -497,7 +522,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     };
     const updateEqMock = {
       eq: vi.fn().mockImplementation((col: string) => {
-        if (col === 'user_id') {
+        if (col === 'workspace_id') {
           return Promise.resolve({ error: { message: 'database permission denied' } });
         }
         return updateEqMock;
@@ -530,6 +555,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
     await refreshConnectedPageTokens(
       null,
       userId,
+      'ws_123',
       'acc_123',
       'long_access_token_123',
       new Date(),

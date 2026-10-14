@@ -6,10 +6,12 @@ import {
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
 export async function handleInitiateFacebookOAuth(
   request: NextRequest,
-  dbClient?: DatabaseClient
+  dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const appUrl =
@@ -32,59 +34,21 @@ export async function handleInitiateFacebookOAuth(
   }
 
   // 2. Resolve workspace BYOC Facebook credentials
-  let byoc: { fbAppId: string; encryptedSecret: string } | undefined;
-  const supabase = getSupabaseClient();
+  const client = dbClient || getSupabaseClient();
+  const byocResult = await resolveWorkspaceFacebookCredentials(
+    client,
+    session.subdomain,
+    session.userId
+  );
 
-  if (supabase && !dbClient) {
-    try {
-      const { data: ws } = await supabase
-        .from('workspaces')
-        .select('id')
-        .eq('subdomain', session.subdomain)
-        .maybeSingle();
-
-      if (ws?.id) {
-        const { data: creds } = await supabase
-          .from('workspace_byoc_credentials')
-          .select('fb_app_id, encrypted_fb_app_secret')
-          .eq('workspace_id', ws.id)
-          .maybeSingle();
-
-        if (creds?.fb_app_id) {
-          byoc = {
-            fbAppId: creds.fb_app_id,
-            encryptedSecret: creds.encrypted_fb_app_secret,
-          };
-        }
-      }
-    } catch (_err) {
-      // Fallback
-    }
-  } else if (dbClient) {
-    try {
-      const byocRows = (await dbClient.query(
-        `SELECT c.fb_app_id AS "fbAppId", c.encrypted_fb_app_secret AS "encryptedSecret"
-         FROM workspace_byoc_credentials c
-         JOIN workspaces w ON w.id = c.workspace_id
-         WHERE w.subdomain = $1
-         LIMIT 1`,
-        [session.subdomain]
-      )) as Array<{ fbAppId: string; encryptedSecret: string }>;
-      byoc = byocRows?.[0];
-    } catch (_err) {
-      // If DB is unavailable or during isolated unit tests, fallback to process.env
-    }
-  }
-
-  const effectiveAppId = byoc?.fbAppId || process.env.FACEBOOK_APP_ID || '';
-  const hasValidSecret = Boolean(byoc?.encryptedSecret || process.env.FACEBOOK_APP_SECRET);
-
-  if (!effectiveAppId || !hasValidSecret) {
+  if (!byocResult.ok) {
     const settingsUrl = new URL(`/tenant/${session.subdomain}/settings`, request.url);
     settingsUrl.searchParams.set('tab', 'byoc');
     settingsUrl.searchParams.set('error', 'credentials_required');
     return NextResponse.redirect(settingsUrl);
   }
+
+  const effectiveAppId = byocResult.fbAppId;
 
   // 3. Generate signed OAuth state
   const expectedFbAccountId =

@@ -102,10 +102,19 @@ export async function handleListPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Query imported pages with parent account display name (excluding soft-deleted disconnected pages)
+  // 3. Query imported pages with parent account display name scoped to workspace
   let rows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     rows = (await dbClient.query(
       `SELECT 
         p.id,
@@ -124,9 +133,10 @@ export async function handleListPages(
       FROM facebook_pages p
       LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
       WHERE p.user_id = $1
+        AND p.workspace_id = $2
         AND p.status != 'disconnected'
       ORDER BY p.created_at DESC`,
-      [session.userId]
+      [session.userId, workspaceId]
     )) as any[];
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
@@ -134,10 +144,22 @@ export async function handleListPages(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     const { data: pageData, error } = await supabase
       .from('facebook_pages')
       .select('*, facebook_accounts(display_name)')
       .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id)
       .neq('status', 'disconnected')
       .order('created_at', { ascending: false });
 

@@ -37,10 +37,19 @@ export async function handleListQueueSlots(
   let slotRows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // 1. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
@@ -61,11 +70,23 @@ export async function handleListQueueSlots(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     const { data: pageData, error: pageErr } = await supabase
       .from('facebook_pages')
       .select('id')
       .eq('id', pageId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id)
       .maybeSingle();
 
     if (pageErr || !pageData) {
@@ -152,10 +173,19 @@ export async function handleCreateQueueSlot(
   }
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // 1. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
-      [pageId, session.userId]
+      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
@@ -205,11 +235,23 @@ export async function handleCreateQueueSlot(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     const { data: pageData, error: pageErr } = await supabase
       .from('facebook_pages')
       .select('id')
       .eq('id', pageId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id)
       .maybeSingle();
 
     if (pageErr || !pageData) {

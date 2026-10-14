@@ -44,6 +44,7 @@ export async function POST(
     .from('workspaces')
     .select('id')
     .eq('subdomain', subdomain)
+    .eq('owner_id', session.userId)
     .maybeSingle();
 
   if (!ws?.id) {

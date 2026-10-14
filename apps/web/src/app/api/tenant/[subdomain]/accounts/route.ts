@@ -96,10 +96,19 @@ export async function handleListAccounts(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Query connected accounts with connected page count and linked pages aggregation
+  // 3. Query connected accounts with connected page count and linked pages aggregation scoped to workspace
   let rows: Array<Record<string, any>> = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    const workspaceId = wsRows?.[0]?.id;
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
     rows = (await dbClient.query(
       `SELECT
         fa.id,
@@ -127,16 +136,28 @@ export async function handleListAccounts(
       LEFT JOIN facebook_pages fp
         ON fp.facebook_account_id = fa.id
         AND fp.user_id = fa.user_id
+        AND fp.workspace_id = fa.workspace_id
         AND fp.status != 'disconnected'
-      WHERE fa.user_id = $1
+      WHERE fa.user_id = $1 AND fa.workspace_id = $2
       GROUP BY fa.id
       ORDER BY fa.created_at DESC`,
-      [session.userId]
+      [session.userId, workspaceId]
     )) as Array<Record<string, any>>;
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
     const { data: accountsData, error } = await supabase
@@ -156,10 +177,12 @@ export async function handleListAccounts(
           id,
           page_name,
           profile_picture_url,
-          status
+          status,
+          workspace_id
         )
       `)
       .eq('user_id', session.userId)
+      .eq('workspace_id', ws.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -167,7 +190,9 @@ export async function handleListAccounts(
     }
 
     rows = (accountsData || []).map((acc: any) => {
-      const activePages = (acc.facebook_pages || []).filter((p: any) => p.status !== 'disconnected');
+      const activePages = (acc.facebook_pages || []).filter(
+        (p: any) => p.status !== 'disconnected' && p.workspace_id === ws.id
+      );
       return {
         ...acc,
         connected_pages_count: activePages.length,

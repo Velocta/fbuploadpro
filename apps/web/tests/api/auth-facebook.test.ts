@@ -48,11 +48,28 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     expect(res.headers.get('location')).toBe('http://localhost:3000/login');
   });
 
-  it('redirects authenticated users to Facebook OAuth dialog targeting v26.0 with required scopes', async () => {
+  it('redirects authenticated users to Facebook OAuth dialog targeting v26.0 with required scopes and workspace BYOC client_id', async () => {
+    const mockDb = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
+        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+          return Promise.resolve([
+            {
+              fb_app_id: 'fb_app_id_byoc_workspace',
+              encrypted_fb_app_secret: 'enc_sec_123',
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DatabaseClient;
+
     const req = new NextRequest('http://localhost:3000/api/auth/facebook', {
       headers: { cookie: validSessionCookie },
     });
-    const res = await initiateFacebookOAuth(req);
+    const res = await initiateFacebookOAuth(req, mockDb);
 
     expect(res.status).toBe(307);
     const location = res.headers.get('location');
@@ -61,7 +78,7 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     const url = new URL(location!);
     expect(url.origin).toBe('https://www.facebook.com');
     expect(url.pathname).toBe('/v26.0/dialog/oauth');
-    expect(url.searchParams.get('client_id')).toBe('fb_app_id_123');
+    expect(url.searchParams.get('client_id')).toBe('fb_app_id_byoc_workspace');
     expect(url.searchParams.get('scope')).toBe(
       'pages_show_list,pages_read_engagement,pages_manage_posts,business_management'
     );
@@ -130,8 +147,19 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     let savedEncryptedToken = '';
     const mockDb = {
       query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
+        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+          return Promise.resolve([
+            {
+              fb_app_id: 'fb_app_id_123',
+              encrypted_fb_app_secret: 'enc_secret_valid',
+            },
+          ]);
+        }
         if (typeof sql === 'string' && sql.includes('INSERT INTO facebook_accounts')) {
-          savedEncryptedToken = params[3] as string;
+          savedEncryptedToken = params[4] as string;
           return Promise.resolve([{ id: 'acc_123' }]);
         }
         return Promise.resolve([]);
@@ -202,7 +230,20 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
       );
 
     const mockDb = {
-      query: vi.fn().mockResolvedValue([{ id: 'acc_prod_99' }]),
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_prod_99' }]);
+        }
+        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+          return Promise.resolve([
+            {
+              fb_app_id: 'fb_app_id_123',
+              encrypted_fb_app_secret: 'enc_secret_valid',
+            },
+          ]);
+        }
+        return Promise.resolve([{ id: 'acc_prod_99' }]);
+      }),
     } as unknown as DatabaseClient;
 
     const req = new NextRequest(
@@ -219,34 +260,39 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
 
   it('pins expired accounts to the top of the returned array ahead of active accounts in handleListAccounts (Spec 029)', async () => {
     const mockDb = {
-      query: vi.fn().mockResolvedValue([
-        {
-          id: '11111111-2222-4333-8444-555555555501',
-          fb_account_id: 'fb_active_newer',
-          display_name: 'Active Newer Account',
-          profile_picture_url: null,
-          gender: 'female',
-          account_link: null,
-          status: 'active',
-          token_expires_at: new Date(Date.now() + 86400 * 1000).toISOString(),
-          connected_pages_count: 2,
-          created_at: new Date('2026-10-10T12:00:00Z'),
-          updated_at: new Date('2026-10-10T12:00:00Z'),
-        },
-        {
-          id: '11111111-2222-4333-8444-555555555502',
-          fb_account_id: 'fb_expired_older',
-          display_name: 'Expired Older Account',
-          profile_picture_url: null,
-          gender: 'male',
-          account_link: null,
-          status: 'expired',
-          token_expires_at: new Date(Date.now() - 86400 * 1000).toISOString(),
-          connected_pages_count: 1,
-          created_at: new Date('2026-09-01T12:00:00Z'),
-          updated_at: new Date('2026-09-01T12:00:00Z'),
-        },
-      ]),
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
+        return Promise.resolve([
+          {
+            id: '11111111-2222-4333-8444-555555555501',
+            fb_account_id: 'fb_active_newer',
+            display_name: 'Active Newer Account',
+            profile_picture_url: null,
+            gender: 'female',
+            account_link: null,
+            status: 'active',
+            token_expires_at: new Date(Date.now() + 86400 * 1000).toISOString(),
+            connected_pages_count: 2,
+            created_at: new Date('2026-10-10T12:00:00Z'),
+            updated_at: new Date('2026-10-10T12:00:00Z'),
+          },
+          {
+            id: '11111111-2222-4333-8444-555555555502',
+            fb_account_id: 'fb_expired_older',
+            display_name: 'Expired Older Account',
+            profile_picture_url: null,
+            gender: 'male',
+            account_link: null,
+            status: 'expired',
+            token_expires_at: new Date(Date.now() - 86400 * 1000).toISOString(),
+            connected_pages_count: 1,
+            created_at: new Date('2026-09-01T12:00:00Z'),
+            updated_at: new Date('2026-09-01T12:00:00Z'),
+          },
+        ]);
+      }),
     } as unknown as DatabaseClient;
 
     const req = new NextRequest('http://localhost:3000/api/tenant/acme/accounts', {
@@ -348,33 +394,38 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     const page1Id = '22222222-3333-4444-8555-666666666601';
     const page2Id = '22222222-3333-4444-8555-666666666602';
     const mockDb = {
-      query: vi.fn().mockResolvedValue([
-        {
-          id: '11111111-2222-4333-8444-555555555501',
-          fb_account_id: 'fb_with_pages',
-          display_name: 'Account With Linked Pages',
-          profile_picture_url: null,
-          gender: 'female',
-          account_link: null,
-          status: 'active',
-          token_expires_at: new Date(Date.now() + 86400 * 1000).toISOString(),
-          connected_pages_count: 2,
-          connected_pages: [
-            {
-              id: page1Id,
-              pageName: 'Alpha Brand Page',
-              profilePictureUrl: 'https://graph.facebook.com/v26.0/p1/picture',
-            },
-            {
-              id: page2Id,
-              pageName: 'Beta Creator Page',
-              profilePictureUrl: null,
-            },
-          ],
-          created_at: new Date('2026-10-10T12:00:00Z'),
-          updated_at: new Date('2026-10-10T12:00:00Z'),
-        },
-      ]),
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
+        return Promise.resolve([
+          {
+            id: '11111111-2222-4333-8444-555555555501',
+            fb_account_id: 'fb_with_pages',
+            display_name: 'Account With Linked Pages',
+            profile_picture_url: null,
+            gender: 'female',
+            account_link: null,
+            status: 'active',
+            token_expires_at: new Date(Date.now() + 86400 * 1000).toISOString(),
+            connected_pages_count: 2,
+            connected_pages: [
+              {
+                id: page1Id,
+                pageName: 'Alpha Brand Page',
+                profilePictureUrl: 'https://graph.facebook.com/v26.0/p1/picture',
+              },
+              {
+                id: page2Id,
+                pageName: 'Beta Creator Page',
+                profilePictureUrl: null,
+              },
+            ],
+            created_at: new Date('2026-10-10T12:00:00Z'),
+            updated_at: new Date('2026-10-10T12:00:00Z'),
+          },
+        ]);
+      }),
     } as unknown as DatabaseClient;
 
     const req = new NextRequest('http://localhost:3000/api/tenant/acme/accounts', {

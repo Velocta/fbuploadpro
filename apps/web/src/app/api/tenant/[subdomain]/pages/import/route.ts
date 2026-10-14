@@ -57,13 +57,23 @@ export async function handleImportPages(
 
   const { accountId, selectedPageIds } = parseResult.data;
 
-  // 4. Verify account ownership
+  // 4. Verify account ownership scoped to workspace
   let account: any = null;
+  let workspaceId = '';
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const wsRows = (await dbClient.query(
+      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
+      [subdomain, session.userId]
+    )) as Array<{ id: string }>;
+    if (!wsRows?.[0]?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+    workspaceId = wsRows[0].id;
+
     const accounts = (await dbClient.query(
-      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2',
-      [accountId, session.userId]
+      'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [accountId, session.userId, workspaceId]
     )) as any[];
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
@@ -79,11 +89,24 @@ export async function handleImportPages(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
+    const { data: ws, error: wsErr } = await supabase
+      .from('workspaces')
+      .select('id')
+      .eq('subdomain', subdomain)
+      .eq('owner_id', session.userId)
+      .maybeSingle();
+
+    if (wsErr || !ws?.id) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+    workspaceId = ws.id;
+
     const { data: accData, error: accErr } = await supabase
       .from('facebook_accounts')
       .select('*')
       .eq('id', accountId)
       .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
 
     if (accErr || !accData) {
@@ -184,9 +207,9 @@ export async function handleImportPages(
     if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
       const result = (await dbClient.query(
         `INSERT INTO facebook_pages (
-          user_id, facebook_account_id, fb_page_id, page_name, category, tasks, starting_followers, current_followers, encrypted_access_token, profile_picture_url
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9)
-        ON CONFLICT (user_id, fb_page_id) DO UPDATE SET
+          user_id, workspace_id, facebook_account_id, fb_page_id, page_name, category, tasks, starting_followers, current_followers, encrypted_access_token, profile_picture_url
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10)
+        ON CONFLICT (workspace_id, fb_page_id) DO UPDATE SET
           facebook_account_id = EXCLUDED.facebook_account_id,
           page_name = EXCLUDED.page_name,
           category = EXCLUDED.category,
@@ -203,6 +226,7 @@ export async function handleImportPages(
         RETURNING id, fb_page_id, page_name`,
         [
           session.userId,
+          workspaceId,
           accountId,
           String(pageItem.id),
           String(pageItem.name),
@@ -242,6 +266,7 @@ export async function handleImportPages(
         .upsert(
           {
             user_id: session.userId,
+            workspace_id: workspaceId,
             facebook_account_id: accountId,
             fb_page_id: String(pageItem.id),
             page_name: String(pageItem.name),
@@ -254,7 +279,7 @@ export async function handleImportPages(
             status: 'active',
             updated_at: new Date().toISOString(),
           },
-          { onConflict: 'user_id,fb_page_id' }
+          { onConflict: 'workspace_id,fb_page_id' }
         )
         .select('id, fb_page_id, page_name')
         .single();
