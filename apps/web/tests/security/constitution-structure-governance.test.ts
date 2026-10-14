@@ -28,7 +28,7 @@ describe('ISSUE-17: Constitution Header & Section Indentation Drift', () => {
     expect(content).not.toContain('TODO: Implement Spec 038');
 
     // Footer version
-    expect(content).toMatch(/\*\*Version\*\*:\s*2\.29\.0/);
+    expect(content).toMatch(/\*\*Version\*\*:\s*2\.(?:29|[3-9]\d)\.0/);
   });
 
   it('verifies Principle 29 is formatted as a top-level principle rather than an indented sub-bullet', () => {

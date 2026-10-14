@@ -1,15 +1,11 @@
 <!--
 Sync Impact Report:
-- Version change: 2.28.0 -> 2.29.0 (MINOR: Added Principle 29 governing Production Mock & Fallback Elimination Rule, Zero Silent Stubs, and Pure PostgREST Route Execution)
+- Version change: 2.29.0 -> 2.30.0 (MINOR: Eliminated redundant local quality gates and builds in favor of remote GitHub Actions CI & SonarQube verification on Pull Requests)
 - List of modified principles:
-  - Principle II: Retired @fbuploadpro/database/edge and raw TCP dependencies in favor of direct @supabase/supabase-js over HTTPS.
-  - Section 3: Replaced raw PostgreSQL/PgBouncer pooler and local db mentions with Pure Supabase PostgREST and remote-only testing.
-  - Section 28: Added Principle 28 governing Pure Supabase PostgREST, RLS policies, and atomic PostgreSQL RPC functions.
-  - Section 29: Added Principle 29 governing Production Mock & Fallback Elimination Rule (Zero Silent Stubs).
-- Added/Modified sections:
-  - Section 28: Pure Supabase PostgREST, Row Level Security (RLS), and Atomic PostgreSQL RPC Function Governance.
-  - Section 29: Production Mock & Fallback Elimination Rule (Zero Silent Stubs).
-- Follow-up TODOs: None (All foundational database and governance migrations completed).
+  - Development Workflow & Quality Gates Section 3: Clarified that CI quality gate is verified via GitHub Actions CI on PRs.
+  - Development Workflow & Quality Gates Section 5: Standardized autonomous workflow to require passing remote CI and SonarQube Cloud checks.
+  - Development Workflow & Quality Gates Section 7: Enforced elimination of redundant local builds and test runs; delegated verification to remote PR CI.
+- Follow-up TODOs: None.
 -->
 
 # FBUploadPro Constitution
@@ -216,11 +212,11 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
    - `/speckit-taskstoissues` — Automated creation of GitHub Issues.
    - `/speckit-implement` — TDD execution of tasks.
    - `/speckit-converge` — Verification against specification before completion.
-3. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates before merge.
+3. **CI Quality Gates**: All PRs must cleanly execute `pnpm turbo run build lint typecheck test` with 100% test pass rates in GitHub Actions CI before merge.
 4. **Post-PR Vercel Preview Deployments**: UI previews are validated directly via automated Vercel Preview Deployments generated on each Pull Request. If and only if the PR includes UI changes, the live Vercel preview link must be presented to the user for interactive visual inspection before requesting merge approval. Non-UI PRs do not surface a preview link.
-5. **Approval Gates & GitHub Issues Autonomous Workflow**: For standard feature workflows, explicit user confirmation is required prior to committing, opening PRs, and merging into `main`. When resolving GitHub issues, the agent is authorized to autonomously commit, create PRs, and merge PRs without asking for permission, PROVIDED THAT all local quality gates and all CI / SonarQube Cloud checks pass completely with zero errors prior to merge.
+5. **Approval Gates & GitHub Issues Autonomous Workflow**: For standard feature workflows, explicit user confirmation is required prior to committing, opening PRs, and merging into `main`. When resolving GitHub issues, the agent is authorized to autonomously commit, create PRs, and merge PRs without asking for permission, PROVIDED THAT all remote CI and SonarQube Cloud checks pass completely with zero errors on the PR prior to merge.
 6. **Single Combined PR Documentation Protocol (Never Separate Docs PRs)**: All documentation updates under `docs/` (including milestone roadmaps, architectural knowledge, API contracts, or schemas) MUST ALWAYS be included and committed directly in the SAME Pull Request as the implementation or architectural changes. Creating separate standalone PRs solely for documentation updates is strictly prohibited.
-7. **Deferred Test Verification Until Commit**: Automated tests do NOT need to be run on intermediate turns or conversational edits. Tests are only run when preparing to commit code changes, or when explicitly requested by the user.
+7. **Elimination of Local Builds & Checks**: AI agents MUST NOT execute full local builds or test suites (`pnpm turbo run build lint typecheck test`, `cargo check`) prior to commit or PR opening. Validation and builds are executed automatically by remote GitHub Actions CI on the Pull Request. Verification is performed by inspecting remote checks (`gh pr checks <PR_NUM> --watch`).
 
 ## Governance
 
@@ -229,6 +225,6 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.29.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-13
+**Version**: 2.30.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-14
 
 
