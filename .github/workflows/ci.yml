@@ -31,13 +31,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Run Turbo verification pipeline
-        run: pnpm turbo run build lint typecheck test
+      - name: Run Turbo verification pipeline (with coverage)
+        run: pnpm turbo run build lint typecheck test -- --coverage
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # stable
         with:
           toolchain: stable
+          components: clippy
 
       - name: Rust Cache
         uses: swatinem/rust-cache@400e7407cfd7a091e5fbb6afec01ec146c432b7c # v2.7.7
@@ -46,6 +47,9 @@ jobs:
 
       - name: Cargo check desktop
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Cargo clippy desktop
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
 
       - name: Cargo test desktop
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
