@@ -127,7 +127,7 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(result.error).toContain('No pending registration found');
   });
 
-  it('correctly finds pending signup and verifies password against pre-hashed staged record', () => {
+  it('correctly finds pending signup and verifies password against pre-hashed staged record', async () => {
     const signupData = {
       name: 'Elena Fisher',
       phone: '+14155552671',
@@ -142,15 +142,15 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(pending?.data.name).toBe('Elena Fisher');
 
     // Valid password check
-    const isCorrect = verifyPendingSignupPassword('elenafisher@gmail.com', 'StrongPassword123!');
+    const isCorrect = await verifyPendingSignupPassword('elenafisher@gmail.com', 'StrongPassword123!');
     expect(isCorrect).toBe(true);
 
     // Invalid password check
-    const isIncorrect = verifyPendingSignupPassword('elenafisher@gmail.com', 'WrongPassword123!');
+    const isIncorrect = await verifyPendingSignupPassword('elenafisher@gmail.com', 'WrongPassword123!');
     expect(isIncorrect).toBe(false);
 
     // Non-existent email check
-    const nonExistent = verifyPendingSignupPassword('nonexistent@gmail.com', 'Password123!');
+    const nonExistent = await verifyPendingSignupPassword('nonexistent@gmail.com', 'Password123!');
     expect(nonExistent).toBe(false);
   });
 

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       // Check if user has an unverified pending registration in fallback store
       const pendingSignup = findPendingSignup(parseResult.data.email);
       if (pendingSignup) {
-        const passwordMatches = verifyPendingSignupPassword(parseResult.data.email, parseResult.data.password);
+        const passwordMatches = await verifyPendingSignupPassword(parseResult.data.email, parseResult.data.password);
         if (passwordMatches) {
           await resendSignupOtpViaSupabase(pendingSignup.data.email);
           return NextResponse.json(

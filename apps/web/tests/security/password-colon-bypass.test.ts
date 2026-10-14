@@ -23,7 +23,7 @@ describe('ISSUE-34: Plaintext Password Storage & Universal Auth Bypass via Colon
     _resetOtpStore();
   });
 
-  it('hashes passwords containing colons instead of storing them as plaintext', () => {
+  it('hashes passwords containing colons instead of storing them as plaintext', async () => {
     const rawPassword = 'MySecret:Password123!';
     const email = 'colon-user@gmail.com';
 
@@ -42,9 +42,9 @@ describe('ISSUE-34: Plaintext Password Storage & Universal Auth Bypass via Colon
     expect(pending?.data.hashedPassword).toMatch(/^[0-9a-f]{32}:[0-9a-f]{64}$/i);
 
     // Verifying with the correct password must succeed
-    expect(verifyPendingSignupPassword(email, rawPassword)).toBe(true);
+    expect(await verifyPendingSignupPassword(email, rawPassword)).toBe(true);
     // Verifying with an incorrect password must fail
-    expect(verifyPendingSignupPassword(email, 'WrongPassword123!')).toBe(false);
+    expect(await verifyPendingSignupPassword(email, 'WrongPassword123!')).toBe(false);
   });
 
   it('rejects malformed hashes that would produce zero-byte keys in verifyHashedPasswordSync', () => {
@@ -65,7 +65,7 @@ describe('ISSUE-34: Plaintext Password Storage & Universal Auth Bypass via Colon
     }
   });
 
-  it('preserves valid PBKDF2 pre-hashed passwords without double-hashing', () => {
+  it('preserves valid PBKDF2 pre-hashed passwords without double-hashing', async () => {
     const rawPassword = 'ValidPassword123!';
     const legitimateHash = hashPasswordSync(rawPassword);
     const email = 'prehashed-user@gmail.com';
@@ -82,7 +82,7 @@ describe('ISSUE-34: Plaintext Password Storage & Universal Auth Bypass via Colon
     // Must preserve the already-hashed password
     expect(pending?.data.hashedPassword).toBe(legitimateHash);
     // Password verification with raw password succeeds
-    expect(verifyPendingSignupPassword(email, rawPassword)).toBe(true);
+    expect(await verifyPendingSignupPassword(email, rawPassword)).toBe(true);
   });
 
   it('strictly enforces key length >= 32 before timingSafeEqual', () => {
