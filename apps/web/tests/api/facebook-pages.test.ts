@@ -680,28 +680,27 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
             };
           }
           if (table === 'facebook_pages') {
-            return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  neq: vi.fn().mockReturnValue({
-                    order: vi.fn().mockResolvedValue({
-                      data: [
-                        {
-                          id: pageId,
-                          facebook_account_id: accountId,
-                          fb_page_id: 'page_rate_limited_sb',
-                          page_name: 'Supabase Cooldown Page',
-                          status: 'fb_rate_limited',
-                          updated_at: pastDate,
-                          created_at: pastDate,
-                          facebook_accounts: { display_name: 'Alex Supabase' },
-                        },
-                      ],
-                      error: null,
-                    }),
-                  }),
-                }),
+            const pageQuery: any = {
+              eq: vi.fn().mockImplementation(() => pageQuery),
+              neq: vi.fn().mockImplementation(() => pageQuery),
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: pageId,
+                    facebook_account_id: accountId,
+                    fb_page_id: 'page_rate_limited_sb',
+                    page_name: 'Supabase Cooldown Page',
+                    status: 'fb_rate_limited',
+                    updated_at: pastDate,
+                    created_at: pastDate,
+                    facebook_accounts: { display_name: 'Alex Supabase' },
+                  },
+                ],
+                error: null,
               }),
+            };
+            return {
+              select: vi.fn().mockReturnValue(pageQuery),
               update: vi.fn((payload: any) => {
                 if (payload.status === 'active') {
                   supabaseUpdated = true;

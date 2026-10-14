@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
+  encryptToken,
   signMagicLinkToken,
   signOAuthState,
   signSessionToken,
@@ -9,6 +10,7 @@ import {
 import { POST as generateMagicLink } from '../../src/app/api/tenant/[subdomain]/accounts/magic-link/route';
 import { GET as forwardMagicLink } from '../../src/app/connect/facebook/route';
 import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
+import * as authModule from '@/lib/supabase-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -18,6 +20,7 @@ const TEST_ENCRYPTION_KEY =
 describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   let validSessionCookie: string;
+  let validEncryptedFbAppSecret: string;
 
   beforeEach(async () => {
     process.env.SESSION_SECRET = TEST_SECRET;
@@ -25,6 +28,56 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
     process.env.FACEBOOK_APP_ID = 'fb_app_id_123';
     process.env.FACEBOOK_APP_SECRET = 'fb_app_secret_456';
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+
+    validEncryptedFbAppSecret = await encryptToken('fb_app_secret_456', TEST_ENCRYPTION_KEY);
+
+    const defaultMockSupabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'workspaces') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockImplementation((col: string, val: string) => {
+              if (col === 'subdomain' && val === 'no-creds') {
+                return {
+                  eq: vi.fn().mockReturnThis(),
+                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                };
+              }
+              return {
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { id: 'workspace_acme_123', subdomain: val },
+                  error: null,
+                }),
+              };
+            }),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'workspace_acme_123' },
+              error: null,
+            }),
+          };
+        }
+        if (table === 'workspace_byoc_credentials') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                fb_app_id: 'fb_app_id_123',
+                encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              },
+              error: null,
+            }),
+          };
+        }
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        };
+      }),
+    };
+    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(defaultMockSupabase as any);
 
     const token = await signSessionToken(
       {
@@ -178,7 +231,10 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
-                data: { fb_app_id: 'byoc_custom_fb_app_999' },
+                data: {
+                  fb_app_id: 'byoc_custom_fb_app_999',
+                  encrypted_fb_app_secret: validEncryptedFbAppSecret,
+                },
                 error: null,
               }),
             };
@@ -190,7 +246,7 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
           };
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      const spy = vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(
         `http://localhost:3000/connect/facebook?token=${magicToken}`
@@ -204,7 +260,7 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
       const url = new URL(location!);
       expect(url.searchParams.get('client_id')).toBe('byoc_custom_fb_app_999');
 
-      vi.restoreAllMocks();
+      spy.mockRestore();
     });
 
     it('redirects to error page if neither BYOC nor process.env.FACEBOOK_APP_ID is configured', async () => {
@@ -286,7 +342,20 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
         });
 
       const mockDb: DatabaseClient = {
-        query: vi.fn().mockResolvedValue([{ id: 'mock-account-uuid' }]),
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'workspace_acme_123' }]);
+          }
+          if (sql.includes('FROM workspace_byoc_credentials')) {
+            return Promise.resolve([
+              {
+                fb_app_id: 'fb_app_id_123',
+                encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              },
+            ]);
+          }
+          return Promise.resolve([{ id: 'mock-account-uuid' }]);
+        }),
       } as unknown as DatabaseClient;
 
       const req = new NextRequest(

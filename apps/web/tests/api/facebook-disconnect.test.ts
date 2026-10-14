@@ -96,17 +96,15 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
             };
           }
           if (table === 'facebook_pages') {
-            return {
-              update: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  eq: vi.fn().mockReturnValue({
-                    select: vi.fn().mockResolvedValue({
-                      data: [{ id: pageId, fb_page_id: 'page_1001' }],
-                      error: null,
-                    }),
-                  }),
-                }),
+            const pageBuilder = {
+              eq: vi.fn().mockImplementation(() => pageBuilder),
+              select: vi.fn().mockResolvedValue({
+                data: [{ id: pageId, fb_page_id: 'page_1001' }],
+                error: null,
               }),
+            };
+            return {
+              update: vi.fn().mockReturnValue(pageBuilder),
             };
           }
           if (table === 'queue_items') {
