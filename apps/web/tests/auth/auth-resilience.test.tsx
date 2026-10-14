@@ -1,25 +1,67 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as loginHandler } from '../../src/app/api/auth/login/route';
 import { POST as signupHandler } from '../../src/app/api/auth/signup/route';
 import { POST as forgotPasswordHandler } from '../../src/app/api/auth/forgot-password/route';
 import { POST as resetPasswordHandler } from '../../src/app/api/auth/reset-password/route';
 import { sanitizeAuthErrorMessage } from '../../src/lib/auth-errors';
+import { _setMockSupabaseClient } from '../../src/lib/supabase-auth';
 import { render } from '../components/setup';
 import { Alert } from '../../src/components/ui';
 
 describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / T007)', () => {
+  const failingSupabaseMock = {
+    auth: {
+      signInWithPassword: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      signUp: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      resetPasswordForEmail: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      verifyOtp: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      updateUser: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      exchangeCodeForSession: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      admin: {
+        getUserById: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      },
+    },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          maybeSingle: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+        })),
+        or: vi.fn(() => ({
+          maybeSingle: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+        })),
+      })),
+      upsert: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+        })),
+      })),
+      update: vi.fn(() => ({
+        eq: vi.fn().mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:5432 (postgres socket error)')),
+      })),
+    })),
+  };
+
+  beforeEach(() => {
+    _setMockSupabaseClient(failingSupabaseMock as any);
+  });
+
+  afterEach(() => {
+    _setMockSupabaseClient(null);
+    vi.restoreAllMocks();
+  });
+
   describe('Zero Technical Plumbing Leaks in API Routes', () => {
     it('masks ECONNREFUSED 127.0.0.1:5432 in /api/auth/login with a clean human message', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // Request that triggers connection refusal or credentials test
+      // Request with valid email format that reaches database client and triggers ECONNREFUSED
       const req = new NextRequest('http://localhost:3000/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'operator@fbuploadpro.com',
+          email: 'operator@gmail.com',
           password: 'Password123!',
         }),
       });
@@ -34,6 +76,7 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
       expect(data.error).not.toContain('5432');
       expect(data.error).not.toContain('postgres');
       expect(data.error).not.toContain('socket');
+      expect(res.status).toBe(500);
 
       consoleSpy.mockRestore();
     });
@@ -46,8 +89,8 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: 'Jane Operator',
-          phone: '+15551234567',
-          email: 'newuser@fbuploadpro.com',
+          phone: '+12025550199',
+          email: 'newuser@gmail.com',
           password: 'Password123!',
         }),
       });
@@ -59,6 +102,7 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
       expect(data.error || '').not.toContain('127.0.0.1');
       expect(data.error || '').not.toContain('5432');
       expect(data.error || '').not.toContain('postgres');
+      expect(res.status).toBe(500);
 
       consoleSpy.mockRestore();
     });
@@ -70,7 +114,7 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: 'forgot@fbuploadpro.com',
+          email: 'forgot@gmail.com',
         }),
       });
 
@@ -80,6 +124,7 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
       expect(data.error || data.message || '').not.toContain('ECONNREFUSED');
       expect(data.error || data.message || '').not.toContain('127.0.0.1');
       expect(data.error || data.message || '').not.toContain('5432');
+      expect(res.status).toBe(500);
 
       consoleSpy.mockRestore();
     });
@@ -91,6 +136,8 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          email: 'forgot@gmail.com',
+          otp: '123456',
           password: 'new-valid-password-1234',
         }),
       });
@@ -101,6 +148,7 @@ describe('Auth Security Leak Prevention & Fault-Tolerant Resilience (Spec 012 / 
       expect(data.error || data.message || '').not.toContain('ECONNREFUSED');
       expect(data.error || data.message || '').not.toContain('127.0.0.1');
       expect(data.error || data.message || '').not.toContain('5432');
+      expect(res.status).toBe(500);
 
       consoleSpy.mockRestore();
     });
