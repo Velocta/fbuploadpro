@@ -453,31 +453,6 @@ export async function signUpTenantUser(params: {
         if (authUserData.user.email_confirmed_at) {
           throw new Error('Email is already registered');
         }
-
-        // User is unconfirmed in Supabase: update details and resend code
-        try {
-          await supabase
-            .from('users')
-            .update({
-              name: params.name,
-              phone: formattedPhone,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingUser.id);
-        } catch (uErr) {
-          console.error('[Supabase PostgREST] User detail update error:', uErr);
-        }
-
-        const resendRes = await resendSignupOtpViaSupabase(canonicalEmail);
-        return {
-          user: {
-            ...existingUser,
-            name: params.name,
-            phone: formattedPhone,
-          },
-          requiresOtp: true,
-          cooldownSecondsRemaining: resendRes.cooldownSecondsRemaining,
-        };
       }
     } catch (adminErr: unknown) {
       if ((adminErr as Error)?.message === 'Email is already registered') {
@@ -485,6 +460,36 @@ export async function signUpTenantUser(params: {
       }
       console.error('[Supabase Auth Admin] getUserById exception:', adminErr);
     }
+
+    // User is unconfirmed in Supabase: update details and resend code
+    try {
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          name: params.name,
+          phone: formattedPhone,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingUser.id);
+
+      if (updateError) {
+        throw new Error(updateError.message || 'User detail update failed');
+      }
+    } catch (uErr) {
+      console.error('[Supabase PostgREST] User detail update error:', uErr);
+      throw uErr;
+    }
+
+    const resendRes = await resendSignupOtpViaSupabase(canonicalEmail);
+    return {
+      user: {
+        ...existingUser,
+        name: params.name,
+        phone: formattedPhone,
+      },
+      requiresOtp: true,
+      cooldownSecondsRemaining: resendRes.cooldownSecondsRemaining,
+    };
   } else if (!supabase && existingUser) {
     // Local / test fallback
     const { isPendingSignup } = await import('@/lib/otp-service');
@@ -592,6 +597,10 @@ export async function signUpTenantUser(params: {
         .select('id, email, name, phone, role, status')
         .single();
 
+      if (insertError) {
+        throw new Error(insertError.message || 'User profile creation failed');
+      }
+
       const wsSubdomain = await ensureWorkspaceForUser(
         supabase,
         userId,
@@ -599,13 +608,14 @@ export async function signUpTenantUser(params: {
         subdomain
       );
 
-      if (!insertError && inserted) {
+      if (inserted) {
         userRecord = { ...(inserted as object), subdomain: wsSubdomain } as AuthUser;
       } else {
         userRecord.subdomain = wsSubdomain;
       }
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
+      throw insertErr;
     }
   } else {
     // Local / test fallback
@@ -679,12 +689,17 @@ export async function verifySignupOtpViaSupabase(params: {
 
     try {
       const quoted = escapePostgrestFilterValue(canonicalEmail);
-      await supabase
+      const { error: updateError } = await supabase
         .from('users')
         .update({ status: 'active', updated_at: new Date().toISOString() })
         .or(`normalized_email.eq.${quoted},email.ilike.${quoted}`);
+
+      if (updateError) {
+        throw new Error(updateError.message || 'User status activation failed');
+      }
     } catch (updateErr) {
       console.error('[Supabase PostgREST] Status activation error:', updateErr);
+      throw updateErr;
     }
 
     userRecord = await findUserByEmail(canonicalEmail);
@@ -856,7 +871,7 @@ export async function registerTenantUser(params: {
         .single();
 
       if (insertError) {
-        console.error('[Supabase PostgREST] User insert error:', insertError.message);
+        throw new Error(insertError.message || 'User profile creation failed');
       }
 
       const wsSubdomain = await ensureWorkspaceForUser(
@@ -878,15 +893,7 @@ export async function registerTenantUser(params: {
       } as AuthUser;
     } catch (insertErr) {
       console.error('[Supabase PostgREST] User insert exception:', insertErr);
-      userRecord = {
-        id: userId,
-        email: canonicalEmail,
-        name: params.name,
-        phone: formattedPhone,
-        subdomain,
-        role: 'user',
-        status: 'active',
-      };
+      throw insertErr;
     }
   } else {
     userId = crypto.randomUUID();
