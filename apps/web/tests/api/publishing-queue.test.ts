@@ -87,6 +87,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 404 Not Found if target Facebook page does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([]);
           }
@@ -112,6 +115,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 404 Not Found if target media item does not belong to user', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -140,6 +146,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 404 Not Found if slotId is provided but slot does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -179,6 +188,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 201 Created and auto-computes next vacant slot when slotId and scheduledTime are omitted', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -266,6 +278,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
       const explicitTime = '2026-10-08T15:30:00.000Z';
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId }]);
           }
@@ -371,6 +386,9 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
     it('returns 200 with list of queue items and joined media information', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
           if (sql.includes('SELECT COUNT(*)')) {
             return Promise.resolve([{ total: 1 }]);
           }
