@@ -956,11 +956,8 @@ export async function loginTenantUser(params: {
     const storedHash =
       localPasswordStore.get(canonicalEmail) ||
       localPasswordStore.get(params.email.trim().toLowerCase());
-    if (storedHash) {
-      const valid = await verifyPassword(params.password, storedHash);
-      if (!valid) {
-        throw new Error('Invalid email or password');
-      }
+    if (!storedHash || !(await verifyPassword(params.password, storedHash))) {
+      throw new Error('Invalid email or password');
     }
   }
 
