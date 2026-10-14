@@ -1,13 +1,13 @@
 # Theme Standards & Design System Enforcement
 
-**Canonical Authority**: [`apps/web/src/lib/theme.ts`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/apps/web/src/lib/theme.ts) & [`apps/web/src/app/globals.css`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/apps/web/src/app/globals.css)  
-**System Specification**: [`DESIGN.md`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/DESIGN.md)
+**Canonical Authority**: [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) & [`apps/web/src/app/globals.css`](apps/web/src/app/globals.css)  
+**System Specification**: [`DESIGN.md`](DESIGN.md)
 
 ---
 
 ## 0. Absolute Immutability of `DESIGN.md` (Never Modify `DESIGN.md`)
 
-> **CRITICAL DIRECTIVE**: AI agents and automated tools MUST NEVER edit, rewrite, reformat, overwrite, or truncate [`DESIGN.md`](file:///home/agent/.gemini/antigravity/worktrees/fbuploadpro/verify_speckit_access/DESIGN.md). `DESIGN.md` is permanently frozen as the repository's immutable design system specification. All frontend code, theme configurations, and components MUST strictly conform to `DESIGN.md` via `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`. Only the human project lead may directly edit `DESIGN.md`.
+> **CRITICAL DIRECTIVE**: AI agents and automated tools MUST NEVER edit, rewrite, reformat, overwrite, or truncate [`DESIGN.md`](DESIGN.md). `DESIGN.md` is permanently frozen as the repository's immutable design system specification. All frontend code, theme configurations, and components MUST strictly conform to `DESIGN.md` via `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`. Only the human project lead may directly edit `DESIGN.md`.
 
 ---
 
