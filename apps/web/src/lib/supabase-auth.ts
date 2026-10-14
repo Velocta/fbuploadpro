@@ -243,11 +243,18 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   return hashHex === expectedHashHex;
 }
 
+/**
+ * AuthUser represents an authenticated user in memory and session returns.
+ * Per Principle 27 of FBUploadPro Constitution, the workspaces table is the sole source of truth
+ * for tenant subdomains (users.subdomain is dropped from the database).
+ * The subdomain field here represents the user's active/primary workspace subdomain.
+ */
 export interface AuthUser {
   id: string;
   email: string;
   name: string | null;
   phone: string | null;
+  /** Primary workspace subdomain derived or resolved via workspaces table (Principle 27) */
   subdomain: string;
   role: UserRole;
   status: UserStatus;
