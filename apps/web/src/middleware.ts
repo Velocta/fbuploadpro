@@ -247,6 +247,31 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       if (!session && subdomain === 'app' && pathname === '/') {
         return NextResponse.redirect(new URL('/login', request.url));
       }
+
+      if (isLogoutSuccess) {
+        const response = NextResponse.next({
+          request: {
+            headers: stripUserHeaders(request),
+          },
+        });
+        response.cookies.set('fbup_session', '', {
+          path: '/',
+          maxAge: 0,
+          httpOnly: true,
+          sameSite: 'lax',
+        });
+        const cleanRoot = rootDomain.toLowerCase().split(':')[0];
+        if (cleanRoot && !cleanRoot.includes('localhost') && !cleanRoot.includes('127.0.0.1')) {
+          response.cookies.set('fbup_session', '', {
+            path: '/',
+            domain: `.${cleanRoot}`,
+            maxAge: 0,
+            httpOnly: true,
+            sameSite: 'lax',
+          });
+        }
+        return response;
+      }
     }
 
     return NextResponse.next({
