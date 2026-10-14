@@ -853,7 +853,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const mockPageRow = {
         id: pageId,
         facebook_account_id: accountId,
-        display_name: 'Alex Acme Account',
+        account_display_name: 'Alex Acme Account',
         fb_page_id: 'fb_page_999',
         page_name: 'Acme Brand',
         profile_picture_url: null,
@@ -896,7 +896,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       const mockPageRow = {
         id: pageId,
         facebook_account_id: accountId,
-        display_name: 'Alex Acme Account',
+        account_display_name: 'Alex Acme Account',
         fb_page_id: 'fb_page_999',
         page_name: 'Acme Brand',
         profile_picture_url: null,
