@@ -10,6 +10,9 @@ import {
   refreshPendingSignupOtp,
   createPasswordResetOtp,
   verifyPasswordResetOtp,
+  resendPasswordResetOtp,
+  getPendingSignup,
+  getPendingPasswordReset,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
@@ -119,6 +122,73 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(earlyResend.success).toBe(false);
     expect(earlyResend.cooldownSecondsRemaining).toBeGreaterThan(0);
     expect(earlyResend.error).toContain('Please wait');
+  });
+
+  it('resets rate-limiter failure attempts upon legitimate OTP resend (ISSUE-36)', () => {
+    const signupData = {
+      name: 'Resend Sync User',
+      phone: '+14155552671',
+      email: 'resend.sync@gmail.com',
+      password: 'SecurePassword123!',
+    };
+
+    createPendingSignup(signupData);
+
+    // Fail 4 times (1 attempt remaining before lockout)
+    for (let i = 0; i < 4; i++) {
+      const res = verifySignupOtp('resendsync@gmail.com', '000000');
+      expect(res.success).toBe(false);
+      expect(res.error).toContain(`${4 - i} attempt${4 - i === 1 ? '' : 's'} remaining`);
+    }
+
+    // Fast-forward cooldown to allow resend
+    const entry = getPendingSignup('resendsync@gmail.com');
+    expect(entry).not.toBeNull();
+    if (entry) {
+      entry.lastSentAt = Date.now() - 65 * 1000;
+    }
+
+    // Legitimate user requests fresh OTP
+    const resendResult = resendSignupOtp('resendsync@gmail.com');
+    expect(resendResult.success).toBe(true);
+    expect(resendResult.otp).toBeDefined();
+
+    // Now, a single typo on the newly issued OTP must NOT trigger immediate lockout;
+    // user must have a full clean slate of attempts (4 remaining after this 1st typo on new code)
+    const typoResult = verifySignupOtp('resendsync@gmail.com', '999999');
+    expect(typoResult.success).toBe(false);
+    expect(typoResult.error).toContain('4 attempts remaining');
+    expect(typoResult.error).not.toContain('temporarily locked');
+  });
+
+  it('resets rate-limiter failure attempts upon legitimate password reset OTP resend (ISSUE-36)', () => {
+    const email = 'reset.sync@gmail.com';
+    createPasswordResetOtp(email);
+
+    // Fail 4 times
+    for (let i = 0; i < 4; i++) {
+      const res = verifyPasswordResetOtp(email, '000000');
+      expect(res.success).toBe(false);
+      expect(res.error).toContain(`${4 - i} attempt${4 - i === 1 ? '' : 's'} remaining`);
+    }
+
+    // Fast-forward cooldown
+    const resetEntry = getPendingPasswordReset(email);
+    expect(resetEntry).not.toBeNull();
+    if (resetEntry) {
+      resetEntry.lastSentAt = Date.now() - 65 * 1000;
+    }
+
+    // Resend password reset OTP
+    const resendResult = resendPasswordResetOtp(email);
+    expect(resendResult.success).toBe(true);
+    expect(resendResult.otp).toBeDefined();
+
+    // Typo on new code should have 4 attempts remaining, NOT immediate lockout
+    const typoResult = verifyPasswordResetOtp(email, '999999');
+    expect(typoResult.success).toBe(false);
+    expect(typoResult.error).toContain('4 attempts remaining');
+    expect(typoResult.error).not.toContain('temporarily locked');
   });
 
   it('returns friendly error when verifying nonexistent or expired registration', () => {
