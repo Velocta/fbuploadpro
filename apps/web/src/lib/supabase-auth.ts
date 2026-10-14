@@ -56,7 +56,6 @@ export function escapePostgrestFilterValue(val: string): string {
   return `"${escaped}"`;
 }
 const localUserStore = new Map<string, AuthUser>();
-const localResetTokenStore = new Map<string, { email: string; expiresAt: number }>();
 let mockSupabaseClientForTesting: SupabaseClient | null = null;
 let mockSupabaseAnonClientForTesting: SupabaseClient | null = null;
 let mockSupabaseServiceClientForTesting: SupabaseClient | null = null;
@@ -1101,13 +1100,6 @@ export async function requestPasswordReset(params: {
     };
   }
 
-  // Generate fallback recovery token for local/test environments
-  const resetToken = crypto.randomUUID();
-  localResetTokenStore.set(resetToken, {
-    email: canonicalEmail,
-    expiresAt: Date.now() + 60 * 60 * 1000, // 1 hour expiration
-  });
-
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -1123,7 +1115,6 @@ export async function requestPasswordReset(params: {
 
   return {
     message: 'If an account exists with this email address, a recovery link has been sent.',
-    resetToken,
   };
 }
 
@@ -1378,7 +1369,7 @@ export async function resetUserPassword(params: {
     // Invalidate existing sessions in production by updating password_updated_at in public.users
     try {
       const nowIso = new Date().toISOString();
-      const { data: authUserData } = await supabase.auth.getUser();
+      const authUserData = typeof supabase.auth?.getUser === 'function' ? (await supabase.auth.getUser())?.data : null;
       const targetUserId = authUserData?.user?.id;
       if (targetUserId) {
         await supabase
@@ -1403,35 +1394,7 @@ export async function resetUserPassword(params: {
       console.error('[Supabase PostgREST] Failed to persist password_updated_at on resetUserPassword:', invalErr);
     }
   } else {
-    // Local / test fallback store
-    let targetEmail: string | null = null;
-    const tokenKey = recoveryToken.trim();
-    const tokenEntry = localResetTokenStore.get(tokenKey);
-
-    if (tokenEntry) {
-      if (Date.now() > tokenEntry.expiresAt) {
-        localResetTokenStore.delete(tokenKey);
-        throw new Error('Password reset link has expired. Please request a new link.');
-      }
-      targetEmail = tokenEntry.email;
-      // Single-use token invalidation
-      localResetTokenStore.delete(tokenKey);
-    } else {
-      throw new Error('Invalid or expired password reset link.');
-    }
-
-    if (!targetEmail) {
-      throw new Error('Invalid or expired password reset link.');
-    }
-
-    const hashed = await hashPassword(params.password);
-    localPasswordStore.set(targetEmail, hashed);
-
-    // Invalidate existing sessions by updating passwordUpdatedAt
-    const user = localUserStore.get(targetEmail);
-    if (user) {
-      user.passwordUpdatedAt = Math.floor(Date.now() / 1000);
-    }
+    throw new Error('A valid password reset link or active Supabase session is required.');
   }
 
   return {
@@ -1442,7 +1405,6 @@ export async function resetUserPassword(params: {
 export function _resetAuthStores(): void {
   localPasswordStore.clear();
   localUserStore.clear();
-  localResetTokenStore.clear();
   mockSupabaseClientForTesting = null;
   mockSupabaseAnonClientForTesting = null;
   mockSupabaseServiceClientForTesting = null;
@@ -1465,10 +1427,10 @@ export async function _seedTestUser(user: AuthUser, password?: string): Promise<
 }
 
 export function _setResetTokenForTesting(
-  token: string,
-  data: { email: string; expiresAt: number }
+  _token: string,
+  _data: { email: string; expiresAt: number }
 ): void {
-  localResetTokenStore.set(token, data);
+  // Deprecated: localResetTokenStore has been eradicated per Principle 12 & Principle 29 (ISSUE-10)
 }
 
 export async function validateSessionActive(session: SessionPayload): Promise<boolean> {
