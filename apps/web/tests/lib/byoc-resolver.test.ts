@@ -18,12 +18,12 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
 
   describe('Legacy DatabaseClient path', () => {
     it('returns 404 when workspace is not found', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([]);
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveWorkspaceFacebookCredentials(mockLegacyClient, subdomain, userId);
       expect(result.ok).toBe(false);
@@ -34,13 +34,13 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
     });
 
     it('returns 422 when BYOC credentials row is missing', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
           if (sql.includes('FROM workspace_byoc_credentials')) return Promise.resolve([]);
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveWorkspaceFacebookCredentials(mockLegacyClient, subdomain, userId);
       expect(result.ok).toBe(false);
@@ -51,7 +51,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
     });
 
     it('returns 422 when BYOC row has missing secret or app id', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
           if (sql.includes('FROM workspace_byoc_credentials')) {
@@ -59,7 +59,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
           }
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveWorkspaceFacebookCredentials(mockLegacyClient, subdomain, userId);
       expect(result.ok).toBe(false);
@@ -70,7 +70,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
     });
 
     it('returns decrypted credentials when valid row exists', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
           if (sql.includes('FROM workspace_byoc_credentials')) {
@@ -84,7 +84,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
           }
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveWorkspaceFacebookCredentials(mockLegacyClient, subdomain, userId);
       expect(result.ok).toBe(true);
@@ -97,7 +97,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
     });
 
     it('returns 422 when decryption fails', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
           if (sql.includes('FROM workspace_byoc_credentials')) {
@@ -110,7 +110,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
           }
           return Promise.resolve([]);
         }),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveWorkspaceFacebookCredentials(mockLegacyClient, subdomain, userId);
       expect(result.ok).toBe(false);

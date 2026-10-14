@@ -9,9 +9,9 @@ describe('resolveTenantWorkspaceId helper suite', () => {
 
   describe('Legacy DatabaseClient path', () => {
     it('returns workspace id when row exists', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockResolvedValue([{ id: workspaceId }]),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveTenantWorkspaceId(mockLegacyClient, subdomain, userId);
       expect(result).toBe(workspaceId);
@@ -22,18 +22,18 @@ describe('resolveTenantWorkspaceId helper suite', () => {
     });
 
     it('returns null when no row is found', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockResolvedValue([]),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveTenantWorkspaceId(mockLegacyClient, subdomain, userId);
       expect(result).toBeNull();
     });
 
     it('returns null when query throws an exception', async () => {
-      const mockLegacyClient: DatabaseClient = {
+      const mockLegacyClient = {
         query: vi.fn().mockRejectedValue(new Error('DB failure')),
-      };
+      } as unknown as DatabaseClient;
 
       const result = await resolveTenantWorkspaceId(mockLegacyClient, subdomain, userId);
       expect(result).toBeNull();

@@ -72,7 +72,7 @@ async function saveOrUpdateBYOCCredentials(
   supabase: any,
   workspaceId: string,
   userId: string,
-  data: { fbAppId: string; fbAppSecret?: string; webhookVerifyToken?: string }
+  data: { fbAppId: string; fbAppSecret?: string | undefined; webhookVerifyToken?: string | undefined }
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const encryptionKey = getTokenEncryptionKey();
 

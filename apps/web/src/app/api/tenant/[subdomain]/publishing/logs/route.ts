@@ -59,7 +59,7 @@ async function fetchLegacyPublishLogs(
   dbClient: DatabaseClient,
   userId: string,
   workspaceId: string,
-  query: { pageId?: string; status?: any; limit: number; offset: number }
+  query: { pageId?: string | undefined; status?: any; limit: number; offset: number }
 ): Promise<{ logs: PublishLog[]; total: number }> {
   const { pageId, status, limit, offset } = query;
   const conditions = [
@@ -104,7 +104,7 @@ async function fetchSupabasePublishLogs(
   supabase: SupabaseClient<any>,
   userId: string,
   workspaceId: string,
-  query: { pageId?: string; status?: any; limit: number; offset: number }
+  query: { pageId?: string | undefined; status?: any; limit: number; offset: number }
 ): Promise<{ logs: PublishLog[]; total: number } | null> {
   const { pageId, status, limit, offset } = query;
 
