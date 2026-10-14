@@ -12,7 +12,6 @@ You are pair programming in **FBUploadPro**, a multi-client monorepo comprising:
 - **`apps/desktop`**: Tauri v2 + Rust native desktop application shell.
 - **`apps/extension`**: WXT Manifest V3 browser companion extension shell.
 - **`packages/contracts`**: Shared TypeScript & Zod contracts.
-- **`packages/database`**: PostgreSQL multi-tenant database substrate.
 
 ## Foundational Directives
 1. **Spec-Driven (SDD)**: Never implement complex features without an approved specification (`spec.md`), architectural blueprint (`plan.md`), and atomic tasks (`tasks.md`).

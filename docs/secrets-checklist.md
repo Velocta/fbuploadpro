@@ -36,7 +36,7 @@ This document details every required secret, environment variable, and credentia
 ### Category A: Database Substrate (PostgreSQL)
 
 #### `DATABASE_URL`
-* **Purpose**: Primary database connection string used by both the Next.js Web App (`@fbuploadpro/database`) and Edge Worker dispatcher (`@fbuploadpro/database/edge`).
+* **Purpose**: Primary Supabase connection URI or REST endpoint configuration used by the Next.js Web App and Edge Worker dispatcher via `@supabase/supabase-js`.
 * **Format**: Standard PostgreSQL connection URI with SSL enforcement.
   ```text
   postgresql://[user]:[password]@[host]:[port]/[dbname]?sslmode=require

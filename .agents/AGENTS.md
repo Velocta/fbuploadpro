@@ -74,7 +74,7 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 | **`apps/web`** (UI, Pages, Layouts, Components, CSS) | `frontend-engineer` | Anti-slop craft (*Taste Skill* dials + *Impeccable* craft floor), Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference from `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; zero capsule pill badges; NEVER modify `DESIGN.md`). |
 | **`apps/desktop`** (Tauri v2 + Rust Native Backend & Desktop UI) | `backend-engineer` (Rust / IPC) & `frontend-engineer` (Desktop UI) | Thin Client / Fat Server IP Isolation (Principle 26), Cargo release profile symbol stripping (`strip = true`, `opt-level = 3`), typed IPC commands via `@fbuploadpro/contracts`, zero client-side storage of raw tokens or publishing secrets. |
 | **`apps/extension`** (WXT Manifest V3 Browser Companion) | `frontend-engineer` (Popup/Options/Content) & `backend-engineer` (Service Worker) | Manifest V3 compliance, scoped permissions (`activeTab`, `storage`), zero inline script injection, typed contracts via `@fbuploadpro/contracts`, edge API integration via `apps/worker`. |
-| **`apps/worker`**, **`packages/contracts`**, **`packages/database`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
+| **`apps/worker`**, **`packages/contracts`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
 | **E2E & Integration Tests**, Contracts, Scenarios | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation, desktop IPC smoke & extension MV3 schema tests. |
 | **Turborepo**, **CI/CD**, **Cloudflare Wrangler**, Docker, Cargo | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, native Cargo toolchain caching, atomic PR hygiene. |
 
@@ -117,11 +117,11 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 
 ### FBUploadPro Monorepo Substrate
 - **Web App**: Next.js 16 (App Router) + React 19 (`apps/web`). Event-driven state transitions only.
-- **Edge Worker**: Cloudflare Workers edge runtime (`apps/worker`). V8 isolate execution; import database via `@fbuploadpro/database/edge`.
+- **Edge Worker**: Cloudflare Workers edge runtime (`apps/worker`). V8 isolate execution; communicates with Supabase strictly via `@supabase/supabase-js` over HTTPS.
 - **Desktop App Shell**: Tauri v2 + Rust (`apps/desktop`). Thin Client / Fat Server IP Isolation (Principle 26). Cargo profile `strip = true`, `opt-level = 3`. No raw OAuth storage or private publishing algorithms client-side. Local folder watching & native OS file system access via typed IPC.
 - **Browser Companion Shell**: Manifest V3 via WXT (`apps/extension`). Minimal scoped permissions (`activeTab`, `storage`). Zero client-side scraping secrets; communicates securely via Edge Worker API and `@fbuploadpro/contracts`.
 - **Contracts**: Shared schemas and validations in `@fbuploadpro/contracts` with strict Zod types.
-- **Database**: PostgreSQL substrate in `@fbuploadpro/database` with compound tenant constraints (`user_id`).
+- **Database**: Remote Supabase PostgreSQL substrate accessed exclusively via `@supabase/supabase-js` PostgREST and RPC functions with compound tenant constraints (`user_id`) and Row Level Security.
 - **Publishing & APIs**: Facebook Graph API v26.0, Cloudflare R2 media storage.
 
 ### Quality & Governance
