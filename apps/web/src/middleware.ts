@@ -166,7 +166,9 @@ function handleDirectTenantPathOnApex(
   const access = canAccessTenant(session, pathSubdomain);
   if (!access.allowed) {
     if (access.reason === 'mismatch') {
-      return NextResponse.redirect(new URL(`/tenant/${session.subdomain}`, request.url), 307);
+      const redirectUrl = new URL(`/tenant/${session.subdomain}`, request.url);
+      redirectUrl.searchParams.set('notice', 'tenant_redirect');
+      return NextResponse.redirect(redirectUrl, 307);
     }
     return NextResponse.redirect(new URL('/login', request.url), 307);
   }
@@ -309,6 +311,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     if (access.reason === 'mismatch') {
       const authorizedUrl = new URL(request.url);
       authorizedUrl.host = `${session.subdomain}.${rootDomain}`;
+      authorizedUrl.searchParams.set('notice', 'tenant_redirect');
       return NextResponse.redirect(authorizedUrl, 307);
     }
     return NextResponse.redirect(new URL('/login', request.url), 307);

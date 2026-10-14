@@ -98,7 +98,7 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     const res = await middleware(req);
     expect(res.status).toBe(307);
     const location = res.headers.get('location');
-    expect(location).toBe('http://beta.localhost:3000/');
+    expect(location).toBe('http://beta.localhost:3000/?notice=tenant_redirect');
   });
 
   it('redirects authenticated user on central app login/root to their tenant workspace root', async () => {
@@ -170,7 +170,7 @@ describe('Next.js Edge Middleware Session Authentication & Tenant Isolation (Use
     });
     const mismatchRes = await middleware(mismatchReq);
     expect(mismatchRes.status).toBe(307);
-    expect(mismatchRes.headers.get('location')).toBe('https://fbuploadpro.vercel.app/tenant/beta');
+    expect(mismatchRes.headers.get('location')).toBe('https://fbuploadpro.vercel.app/tenant/beta?notice=tenant_redirect');
 
     const validReq = new NextRequest('https://fbuploadpro.vercel.app/tenant/acme', {
       headers: {
