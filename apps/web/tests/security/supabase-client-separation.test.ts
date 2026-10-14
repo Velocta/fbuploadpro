@@ -54,4 +54,27 @@ describe('ISSUE-05: Client Separation between Anon Key and Service-Role Key', ()
     expect(authModule.getSupabaseAnonClient()).toBe(mockAnon);
     expect(authModule.getSupabaseServiceClient()).toBe(mockService);
   });
+
+  it('falls back to generic mockSupabaseClientForTesting when specific mock is not set', () => {
+    const genericMock = { type: 'generic' };
+    authModule._setMockSupabaseClient(genericMock as any);
+
+    expect(authModule.getSupabaseAnonClient()).toBe(genericMock);
+    expect(authModule.getSupabaseServiceClient()).toBe(genericMock);
+    expect(authModule.getSupabaseClient()).toBe(genericMock);
+  });
+
+  it('throws in production when required environment variables are missing', () => {
+    (process.env as any).NODE_ENV = 'production';
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    expect(() => authModule.getSupabaseAnonClient()).toThrow(/strictly required in production/);
+    expect(() => authModule.getSupabaseServiceClient()).toThrow(/strictly required in production/);
+  });
+
+  it('returns null when url or key contains placeholder', () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://placeholder.supabase.co';
+    expect(authModule.getSupabaseAnonClient()).toBeNull();
+    expect(authModule.getSupabaseServiceClient()).toBeNull();
+  });
 });
