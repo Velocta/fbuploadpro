@@ -818,12 +818,13 @@ export async function registerTenantUser(params: {
   let userId: string;
   let userRecord: AuthUser;
   const supabase = getSupabaseClient();
+  const rawPassword = params.password || '';
   const rawOrHashedPassword = params.hashedPassword || params.password || '';
 
   if (supabase) {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: canonicalEmail,
-      password: rawOrHashedPassword,
+      password: rawPassword,
       options: {
         data: {
           name: params.name,
