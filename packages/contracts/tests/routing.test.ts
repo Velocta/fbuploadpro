@@ -194,6 +194,22 @@ describe('Tenant Subdomain Routing Contracts', () => {
       const url = buildCentralAppUrl('/login', undefined, 'fbuploadpro.com');
       expect(url.toString()).toBe('https://app.fbuploadpro.com/login');
     });
+
+    it('accepts URL instances as requestUrl and normalizes pathname', () => {
+      const inputUrl = new URL('https://acme.fbuploadpro.com/some/path');
+      const url = buildCentralAppUrl('login?logout=success', inputUrl, 'fbuploadpro.com');
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login?logout=success');
+    });
+
+    it('gracefully falls back when requestUrl is an invalid string', () => {
+      const url = buildCentralAppUrl('/login?logout=success', 'not-a-valid-url', 'fbuploadpro.com');
+      expect(url.toString()).toBe('https://app.fbuploadpro.com/login?logout=success');
+    });
+
+    it('handles localhost rootDomain without port', () => {
+      const url = buildCentralAppUrl('/login?logout=success', undefined, 'localhost');
+      expect(url.toString()).toBe('http://app.localhost/login?logout=success');
+    });
   });
 });
 

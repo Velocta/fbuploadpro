@@ -67,4 +67,17 @@ describe('[ISSUE-22] Central Gateway Routing for Logout Redirect', () => {
     expect(json.success).toBe(true);
     expect(json.redirectUrl).toBe('https://preview-123.vercel.app/login?logout=success');
   });
+
+  it('handles custom host header without full URL and purges host-only cookie when cookie domain is active', async () => {
+    const request = new NextRequest('https://acme.fbuploadpro.com/api/auth/logout', {
+      headers: { host: 'acme.fbuploadpro.com' },
+    });
+
+    const res = await handleLogout(request);
+    expect(res.status).toBe(200);
+
+    const setCookies = res.headers.getSetCookie();
+    expect(setCookies.some((c) => c.includes('Max-Age=0'))).toBe(true);
+  });
 });
+
