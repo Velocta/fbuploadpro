@@ -247,6 +247,7 @@ function updatePendingSignupOtpEntry(entry: PendingSignupEntry): string {
   entry.lastSentAt = now;
   entry.expiresAt = now + OTP_TTL_MS;
   entry.attempts = 0;
+  clearLockout(entry.data.email);
   return newOtp;
 }
 
@@ -567,6 +568,7 @@ export function resendPasswordResetOtp(email: string): {
   entry.lastSentAt = now;
   entry.expiresAt = now + OTP_TTL_MS;
   entry.attempts = 0; // Reset failed attempts on fresh code dispatch
+  clearLockout(lockoutKey); // Synchronize rate-limiter lockout state on fresh code dispatch
 
   return {
     success: true,
