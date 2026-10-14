@@ -35,6 +35,7 @@ export interface DatabaseWorkspaceByocCredentialsRow {
 export interface DatabaseFacebookAccountRow {
   id: string;
   user_id: string;
+  workspace_id: string;
   fb_account_id: string;
   display_name: string;
   status: 'active' | 'disconnected' | 'expired';
@@ -50,6 +51,7 @@ export interface DatabaseFacebookAccountRow {
 export interface DatabaseFacebookPageRow {
   id: string;
   user_id: string;
+  workspace_id: string;
   facebook_account_id: string;
   fb_page_id: string;
   page_name: string;
@@ -67,6 +69,7 @@ export interface DatabaseFacebookPageRow {
 export interface DatabaseMediaFolderRow {
   id: string;
   user_id: string;
+  workspace_id: string;
   name: string;
   parent_id: string | null;
   created_at: string;
@@ -76,6 +79,7 @@ export interface DatabaseMediaFolderRow {
 export interface DatabaseMediaItemRow {
   id: string;
   user_id: string;
+  workspace_id: string;
   folder_id: string | null;
   name: string;
   file_size: number;
@@ -204,6 +208,7 @@ export interface Database {
         Row: DatabaseFacebookAccountRow;
         Insert: Partial<DatabaseFacebookAccountRow> & {
           user_id: string;
+          workspace_id?: string;
           fb_account_id: string;
           display_name: string;
           encrypted_access_token: string;
@@ -214,6 +219,7 @@ export interface Database {
         Row: DatabaseFacebookPageRow;
         Insert: Partial<DatabaseFacebookPageRow> & {
           user_id: string;
+          workspace_id?: string;
           facebook_account_id: string;
           fb_page_id: string;
           page_name: string;
@@ -223,13 +229,14 @@ export interface Database {
       };
       media_folders: {
         Row: DatabaseMediaFolderRow;
-        Insert: Partial<DatabaseMediaFolderRow> & { user_id: string; name: string };
+        Insert: Partial<DatabaseMediaFolderRow> & { user_id: string; workspace_id?: string; name: string };
         Update: Partial<DatabaseMediaFolderRow>;
       };
       media_items: {
         Row: DatabaseMediaItemRow;
         Insert: Partial<DatabaseMediaItemRow> & {
           user_id: string;
+          workspace_id?: string;
           name: string;
           file_size: number;
           mime_type: string;
