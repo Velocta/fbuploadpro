@@ -70,17 +70,34 @@ describe('Rate Limiter & Abuse Shield (Spec 014)', () => {
   });
 
   describe('extractClientIp', () => {
-    it('extracts ip from x-forwarded-for header', () => {
+    it('prioritizes trusted platform header x-vercel-forwarded-for over spoofed x-forwarded-for', () => {
       const headers = new Headers();
-      headers.set('x-forwarded-for', '203.0.113.195, 70.41.3.18');
+      headers.set('x-forwarded-for', '1.1.1.1, 2.2.2.2');
+      headers.set('x-vercel-forwarded-for', '203.0.113.195');
       expect(extractClientIp(headers)).toBe('203.0.113.195');
     });
 
-    it('extracts ip from cf-connecting-ip or fallback', () => {
+    it('prioritizes cf-connecting-ip over spoofed x-forwarded-for', () => {
       const headers = new Headers();
+      headers.set('x-forwarded-for', '1.1.1.1, 2.2.2.2');
       headers.set('cf-connecting-ip', '198.51.100.4');
       expect(extractClientIp(headers)).toBe('198.51.100.4');
+    });
 
+    it('prioritizes x-real-ip over spoofed x-forwarded-for', () => {
+      const headers = new Headers();
+      headers.set('x-forwarded-for', '1.1.1.1, 2.2.2.2');
+      headers.set('x-real-ip', '198.51.100.5');
+      expect(extractClientIp(headers)).toBe('198.51.100.5');
+    });
+
+    it('extracts rightmost client IP when only x-forwarded-for is present to prevent leftmost client spoofing', () => {
+      const headers = new Headers();
+      headers.set('x-forwarded-for', 'spoofed.ip.address, 203.0.113.195');
+      expect(extractClientIp(headers)).toBe('203.0.113.195');
+    });
+
+    it('falls back to 127.0.0.1 when no IP headers are present', () => {
       expect(extractClientIp(new Headers())).toBe('127.0.0.1');
     });
   });
