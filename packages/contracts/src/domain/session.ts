@@ -3,6 +3,13 @@ import { SubdomainSchema, UserRoleSchema, UserStatusSchema } from './user.js';
 import { GmailSchema } from './auth.js';
 import { DomainError, DomainErrorCode } from '../errors/domain-error.js';
 
+export const SessionHeaderSchema = z.object({
+  alg: z.literal('HS256'),
+  typ: z.literal('JWT'),
+});
+
+export type SessionHeader = z.infer<typeof SessionHeaderSchema>;
+
 export const SessionPayloadSchema = z.object({
   userId: z.string().uuid(),
   email: GmailSchema,
@@ -119,6 +126,42 @@ export async function verifySessionToken(
     throw new DomainError(DomainErrorCode.UNAUTHORIZED, 'Malformed session token parts');
   }
 
+  let headerJson: unknown;
+  try {
+    const headerBytes = base64UrlDecode(headerPart);
+    const decodedHeaderText = new TextDecoder().decode(headerBytes);
+    headerJson = JSON.parse(decodedHeaderText);
+  } catch {
+    throw new DomainError(DomainErrorCode.UNAUTHORIZED, 'Invalid session token header JSON');
+  }
+
+  if (
+    typeof headerJson !== 'object' ||
+    headerJson === null ||
+    !('alg' in headerJson) ||
+    (headerJson as { alg?: unknown }).alg !== 'HS256'
+  ) {
+    throw new DomainError(
+      DomainErrorCode.UNAUTHORIZED,
+      'Unsupported or missing algorithm in session token header'
+    );
+  }
+
+  if (
+    !('typ' in headerJson) ||
+    (headerJson as { typ?: unknown }).typ !== 'JWT'
+  ) {
+    throw new DomainError(DomainErrorCode.UNAUTHORIZED, 'Invalid session token header type');
+  }
+
+  const headerParseResult = SessionHeaderSchema.safeParse(headerJson);
+  if (!headerParseResult.success) {
+    throw new DomainError(
+      DomainErrorCode.UNAUTHORIZED,
+      `Corrupted session header schema: ${headerParseResult.error.message}`
+    );
+  }
+
   const encoder = new TextEncoder();
   const signingInput = `${headerPart}.${payloadPart}`;
   const key = await getHmacKey(secret);
@@ -160,6 +203,22 @@ export async function verifySessionToken(
 
   const sessionData: SessionPayload = parseResult.data;
   const now = Math.floor(Date.now() / 1000);
+  const CLOCK_SKEW_SECONDS = 60;
+
+  if (sessionData.exp <= sessionData.iat) {
+    throw new DomainError(
+      DomainErrorCode.UNAUTHORIZED,
+      'Session token expiration must be strictly after issued-at time'
+    );
+  }
+
+  if (sessionData.iat > now + CLOCK_SKEW_SECONDS) {
+    throw new DomainError(
+      DomainErrorCode.UNAUTHORIZED,
+      'Session token issued in the future'
+    );
+  }
+
   if (sessionData.exp <= now) {
     throw new DomainError(DomainErrorCode.UNAUTHORIZED, 'Session token has expired');
   }
