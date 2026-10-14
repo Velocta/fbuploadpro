@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers';
+import type { NextRequest } from 'next/server';
 import {
   getSessionSecret,
   verifySessionToken,
@@ -11,17 +12,19 @@ export interface AuthenticatedUserContext {
   email: string;
   role: UserRole;
   subdomain: string;
+  allowedSubdomains?: string[] | undefined;
 }
 
-export async function getServerSessionContext(): Promise<AuthenticatedUserContext | null> {
-  let cookieStore = null;
-  try {
-    cookieStore = await cookies();
-  } catch {
-    cookieStore = null;
+export async function getServerSessionContext(req?: NextRequest): Promise<AuthenticatedUserContext | null> {
+  let token = req?.cookies?.get('fbup_session')?.value;
+  if (!token) {
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore?.get('fbup_session')?.value;
+    } catch {
+      token = undefined;
+    }
   }
-
-  const token = cookieStore?.get('fbup_session')?.value;
   if (!token) {
     return null;
   }
@@ -34,6 +37,7 @@ export async function getServerSessionContext(): Promise<AuthenticatedUserContex
       email: session.email,
       role: session.role,
       subdomain: session.subdomain,
+      ...(session.allowedSubdomains ? { allowedSubdomains: session.allowedSubdomains } : {}),
     };
   } catch {
     return null;

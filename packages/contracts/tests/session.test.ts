@@ -130,5 +130,58 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
       expect(secret).toBe('valid-custom-secret-key-that-is-at-least-32-chars');
     });
   });
+
+  describe('isSessionAuthorizedForSubdomain (ISSUE-23)', () => {
+    it('authorizes when requestedSubdomain matches session.subdomain', async () => {
+      const { isSessionAuthorizedForSubdomain } = await import('../src/domain/session');
+      expect(
+        isSessionAuthorizedForSubdomain(
+          { subdomain: 'acme', role: 'user', allowedSubdomains: ['acme'] },
+          'acme'
+        )
+      ).toBe(true);
+    });
+
+    it('authorizes when requestedSubdomain is in allowedSubdomains', async () => {
+      const { isSessionAuthorizedForSubdomain } = await import('../src/domain/session');
+      expect(
+        isSessionAuthorizedForSubdomain(
+          { subdomain: 'acme', role: 'user', allowedSubdomains: ['acme', 'acme-beta'] },
+          'acme-beta'
+        )
+      ).toBe(true);
+    });
+
+    it('authorizes case-insensitively', async () => {
+      const { isSessionAuthorizedForSubdomain } = await import('../src/domain/session');
+      expect(
+        isSessionAuthorizedForSubdomain(
+          { subdomain: 'ACME', role: 'user', allowedSubdomains: ['ACME', 'ACME-BETA'] },
+          'acme-beta'
+        )
+      ).toBe(true);
+    });
+
+    it('always authorizes admin role across any subdomain', async () => {
+      const { isSessionAuthorizedForSubdomain } = await import('../src/domain/session');
+      expect(
+        isSessionAuthorizedForSubdomain(
+          { subdomain: 'platform-admin', role: 'admin' },
+          'any-tenant'
+        )
+      ).toBe(true);
+    });
+
+    it('denies access when requestedSubdomain is not in subdomain or allowedSubdomains', async () => {
+      const { isSessionAuthorizedForSubdomain } = await import('../src/domain/session');
+      expect(
+        isSessionAuthorizedForSubdomain(
+          { subdomain: 'acme', role: 'user', allowedSubdomains: ['acme', 'acme-beta'] },
+          'unauthorized-org'
+        )
+      ).toBe(false);
+    });
+  });
 });
+
 
