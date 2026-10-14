@@ -19,17 +19,19 @@ export interface AuthBroadcastPayload {
 export function broadcastAuthEvent(
   event:
     | { type: 'LOGOUT' }
-    | { type: 'LOGIN'; userId?: string; email?: string }
-    | { type: 'USER_SWITCH'; userId?: string; email?: string }
-    | { type: 'SESSION_CHANGE'; userId?: string; email?: string }
+    | { type: 'LOGIN'; userId?: string | undefined; email?: string | undefined }
+    | { type: 'USER_SWITCH'; userId?: string | undefined; email?: string | undefined }
+    | { type: 'SESSION_CHANGE'; userId?: string | undefined; email?: string | undefined }
 ): void {
   if (typeof window === 'undefined' && typeof BroadcastChannel === 'undefined' && typeof localStorage === 'undefined') {
     return;
   }
 
   const payload: AuthBroadcastPayload = {
-    ...event,
+    type: event.type,
     timestamp: Date.now(),
+    ...(('userId' in event && event.userId) ? { userId: event.userId } : {}),
+    ...(('email' in event && event.email) ? { email: event.email } : {}),
   };
 
   try {
@@ -47,7 +49,7 @@ export function broadcastAuthEvent(
       if (event.type === 'LOGOUT') {
         localStorage.setItem('fbup_logout_event', String(payload.timestamp));
         localStorage.removeItem('fbup_active_user');
-      } else if (event.userId) {
+      } else if ('userId' in event && event.userId) {
         localStorage.setItem('fbup_active_user', event.userId);
       }
     }
@@ -61,12 +63,12 @@ export function broadcastAuthEvent(
  */
 export function completeAuthRedirect(
   redirectUrl: string,
-  user?: { id?: string; email?: string; subdomain?: string } | undefined
+  user?: { id?: string | undefined; email?: string | undefined; subdomain?: string | undefined } | undefined
 ): void {
   broadcastAuthEvent({
     type: 'LOGIN',
-    userId: user?.id,
-    email: user?.email,
+    ...(user?.id ? { userId: user.id } : {}),
+    ...(user?.email ? { email: user.email } : {}),
   });
 
   if (typeof window !== 'undefined') {
