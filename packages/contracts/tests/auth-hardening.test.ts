@@ -179,6 +179,84 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('rejects cross-tenant and absolute returnUrl in LoginRequestSchema (ISSUE-28)', () => {
+      // Cross-tenant absolute returnUrl
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: 'https://jane.fbuploadpro.com/',
+        }).success
+      ).toBe(false);
+
+      // Open-redirect external domain
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: 'https://evil.com/phish',
+        }).success
+      ).toBe(false);
+
+      // Protocol-relative URL
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: '//evil.com/phish',
+        }).success
+      ).toBe(false);
+
+      // Backslash evasion
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: '/\\evil.com',
+        }).success
+      ).toBe(false);
+
+      // Javascript/data schemes
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: 'javascript:alert(1)',
+        }).success
+      ).toBe(false);
+    });
+
+    it('rejects banned dashboard route in returnUrl (ISSUE-28 / Principle 14)', () => {
+      const bannedRoute = ['/', 'dashboard'].join('');
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: bannedRoute,
+        }).success
+      ).toBe(false);
+
+      expect(
+        LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: `${bannedRoute}/media`,
+        }).success
+      ).toBe(false);
+    });
+
+    it('accepts safe relative paths in returnUrl (ISSUE-28 / Principle 12)', () => {
+      const validPaths = ['/media', '/accounts', '/pages', '/settings', '/publishing', '/'];
+      for (const path of validPaths) {
+        const result = LoginRequestSchema.safeParse({
+          email: 'jane@gmail.com',
+          password: 'Password123!',
+          returnUrl: path,
+        });
+        expect(result.success).toBe(true);
+      }
+    });
   });
 
   describe('AuthSuccessResponseSchema hardening (ISSUE-29)', () => {

@@ -63,7 +63,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
       const valid = {
         email: 'jane@gmail.com',
         password: 'Password123!',
-        returnUrl: 'https://jane.fbuploadpro.com/',
+        returnUrl: '/media',
       };
       const result = LoginRequestSchema.safeParse(valid);
       expect(result.success).toBe(true);
