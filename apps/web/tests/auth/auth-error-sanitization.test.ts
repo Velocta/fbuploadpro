@@ -110,5 +110,53 @@ describe('Auth Error Sanitization & Zero Leakage (T001, T002)', () => {
       const data = await response.json();
       expect(data.retryAfterSeconds).toBe(30);
     });
+
+    it('returns 400 for Password cannot exceed 128 characters', async () => {
+      const err = new Error('Password cannot exceed 128 characters');
+      const response = formatAuthErrorResponse(err);
+      expect(response.status).toBe(400);
+      const data = await response.json();
+      expect(data.error).toBe('Password cannot exceed 128 characters');
+    });
+
+    it('returns 429 instead of 400 when message contains Too many incorrect attempts', async () => {
+      const err = new Error('Too many incorrect attempts. Verification is temporarily locked for 15 minutes.');
+      const response = formatAuthErrorResponse(err);
+      expect(response.status).toBe(429);
+      const data = await response.json();
+      expect(data.error).toMatch(/temporarily locked/i);
+    });
+
+    it('handles REQUIRES_OTP code returning 403 with requiresOtp and email', async () => {
+      const err = new Error('Please verify your email address to complete registration.');
+      (err as unknown as { code: string; requiresOtp: boolean; email: string }).code = 'REQUIRES_OTP';
+      (err as unknown as { requiresOtp: boolean }).requiresOtp = true;
+      (err as unknown as { email: string }).email = 'alex.user@gmail.com';
+
+      const response = formatAuthErrorResponse(err);
+      expect(response.status).toBe(403);
+      const data = await response.json();
+      expect(data.error).toContain('verify your email address');
+      expect((data as { requiresOtp?: boolean }).requiresOtp).toBe(true);
+      expect((data as { email?: string }).email).toBe('alex.user@gmail.com');
+    });
+
+    it('does not falsely censor conversational English sentences containing select, insert, update, delete, or stack', () => {
+      const msg1 = 'Please select a valid option from the dropdown.';
+      expect(sanitizeAuthErrorMessage(msg1)).toBe(msg1);
+
+      const msg2 = 'Please insert your card to continue.';
+      expect(sanitizeAuthErrorMessage(msg2)).toBe(msg2);
+
+      const msg3 = 'Please update your billing profile.';
+      expect(sanitizeAuthErrorMessage(msg3)).toBe(msg3);
+
+      const msg4 = 'Please delete unnecessary files and retry.';
+      expect(sanitizeAuthErrorMessage(msg4)).toBe(msg4);
+
+      const msg5 = 'The full technology stack is operational.';
+      expect(sanitizeAuthErrorMessage(msg5)).toBe(msg5);
+    });
   });
 });
+
