@@ -19,6 +19,12 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       expect(canonicalizeGmailAddress('j.o.h.n.d.o.e@gmail.com')).toBe('johndoe@gmail.com');
     });
 
+    it('strips non-alphanumeric characters (underscores, hyphens) from username', () => {
+      expect(canonicalizeGmailAddress('john_doe@gmail.com')).toBe('johndoe@gmail.com');
+      expect(canonicalizeGmailAddress('john-doe@gmail.com')).toBe('johndoe@gmail.com');
+      expect(canonicalizeGmailAddress('john_doe-reels@gmail.com')).toBe('johndoereels@gmail.com');
+    });
+
     it('removes plus tags and everything up to @', () => {
       expect(canonicalizeGmailAddress('johndoe+promo@gmail.com')).toBe('johndoe@gmail.com');
       expect(canonicalizeGmailAddress('john.doe+reels+promo@gmail.com')).toBe('johndoe@gmail.com');
