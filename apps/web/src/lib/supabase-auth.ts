@@ -660,7 +660,7 @@ export async function signUpTenantUser(params: {
     if (hashedPassword) {
       localPasswordStore.set(canonicalEmail, hashedPassword);
     }
-    console.log(`[SupabaseAuth Fallback] Simulated OTP dispatch to ${canonicalEmail}: ${otp}`);
+    console.info(`[SupabaseAuth Fallback] Simulated OTP dispatch triggered for ${canonicalEmail}`);
     return {
       user: userRecord,
       requiresOtp: true,
@@ -1141,7 +1141,7 @@ export async function sendPasswordResetOtpViaSupabase(email: string): Promise<{
 
   const { createPasswordResetOtp } = await import('@/lib/otp-service');
   const { otp } = createPasswordResetOtp(canonicalEmail);
-  console.log(`[SupabaseAuth Fallback] Simulated Password Reset OTP dispatch to ${canonicalEmail}: ${otp}`);
+  console.info(`[SupabaseAuth Fallback] Simulated Password Reset OTP dispatch triggered for ${canonicalEmail}`);
   return { success: true, otp };
 }
 
