@@ -26,7 +26,8 @@ export function getTokenEncryptionKey(env?: Record<string, string | undefined>):
     return key.trim();
   }
 
-  if (nodeEnv === 'production') {
+  const isDevOrTest = nodeEnv === 'development' || nodeEnv === 'test';
+  if (!isDevOrTest) {
     throw new DomainError(
       DomainErrorCode.INTERNAL_ERROR,
       'TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required in production environment'

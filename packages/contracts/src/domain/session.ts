@@ -171,10 +171,11 @@ export function getSessionSecret(env?: Record<string, string | undefined>): stri
   const globalEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   const envSource = env ?? globalEnv;
   const secret = envSource?.SESSION_SECRET;
-  const isProduction = envSource?.NODE_ENV === 'production';
+  const nodeEnv = envSource?.NODE_ENV;
+  const isDevOrTest = nodeEnv === 'development' || nodeEnv === 'test';
 
   if (!secret) {
-    if (isProduction) {
+    if (!isDevOrTest) {
       throw new DomainError(
         DomainErrorCode.INTERNAL_ERROR,
         'SESSION_SECRET environment variable is strictly required in production'

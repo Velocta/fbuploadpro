@@ -116,10 +116,27 @@ describe('Session Authentication Contracts (SessionPayload & Web Crypto Tokens)'
       ).toThrowError(/at least 32 characters long/);
     });
 
-    it('returns development fallback secret when not in production', async () => {
+    it('throws DomainError when NODE_ENV is undefined and SESSION_SECRET is missing (ISSUE-39)', async () => {
       const { getSessionSecret } = await import('../src/domain/session');
-      const secret = getSessionSecret({ NODE_ENV: 'development' });
-      expect(secret).toBe('super-secret-session-signing-key-minimum-32-chars-long');
+      expect(() =>
+        getSessionSecret({})
+      ).toThrowError(/strictly required/);
+    });
+
+    it('throws DomainError when NODE_ENV is staging and SESSION_SECRET is missing (ISSUE-39)', async () => {
+      const { getSessionSecret } = await import('../src/domain/session');
+      expect(() =>
+        getSessionSecret({ NODE_ENV: 'staging' })
+      ).toThrowError(/strictly required/);
+    });
+
+    it('returns development fallback secret when NODE_ENV is development or test', async () => {
+      const { getSessionSecret } = await import('../src/domain/session');
+      const devSecret = getSessionSecret({ NODE_ENV: 'development' });
+      expect(devSecret).toBe('super-secret-session-signing-key-minimum-32-chars-long');
+
+      const testSecret = getSessionSecret({ NODE_ENV: 'test' });
+      expect(testSecret).toBe('super-secret-session-signing-key-minimum-32-chars-long');
     });
 
     it('returns configured SESSION_SECRET when valid', async () => {
