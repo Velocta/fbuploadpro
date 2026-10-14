@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   DownloaderIngestRequestSchema,
   DownloaderIngestResponseSchema,
   getSessionSecret,
@@ -188,7 +189,8 @@ export async function handleDownloadMediaFromUrl(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

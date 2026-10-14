@@ -59,6 +59,17 @@ export async function authenticateTenantRoute(
     };
   }
 
+  const { validateSessionActive } = await import('@/lib/supabase-auth');
+  const isActive = await validateSessionActive(session);
+  if (!isActive) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      ),
+    };
+  }
+
   const access = canAccessTenant(session, subdomain);
   if (!access.allowed) {
     return {

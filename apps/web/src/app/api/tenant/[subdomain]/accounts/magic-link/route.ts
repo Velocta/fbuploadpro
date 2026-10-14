@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   getSessionSecret,
   signMagicLinkToken,
   verifySessionToken,
@@ -55,13 +56,14 @@ export async function handleGenerateMagicLink(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // 3. Pre-check that Facebook BYOC is configured for this workspace
   const client = dbClient || getSupabaseClient();
-  const byoc = await resolveWorkspaceFacebookCredentials(client, subdomain, session.userId);
+  const byoc = await resolveWorkspaceFacebookCredentials(client, subdomain, session.userId, session.role);
   if (!byoc.ok) {
     return NextResponse.json(
       {

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   BatchMediaRequestSchema,
   BatchMediaResponseSchema,
+  canAccessTenant,
   getSessionSecret,
   type IStorageService,
   verifySessionToken,
@@ -31,7 +32,8 @@ export async function handleBatchMedia(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

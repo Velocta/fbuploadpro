@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   DeleteMediaItemResponseSchema,
   getSessionSecret,
   type IStorageService,
@@ -34,7 +35,8 @@ async function authenticateUser(request: NextRequest, subdomain: string) {
     };
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return {
       error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
     };

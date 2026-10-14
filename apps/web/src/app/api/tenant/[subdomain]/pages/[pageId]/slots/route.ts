@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   CreateQueueSlotRequestSchema,
   getSessionSecret,
   ListQueueSlotsResponseSchema,
@@ -31,11 +32,12 @@ export async function handleListQueueSlots(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
@@ -131,7 +133,8 @@ export async function handleCreateQueueSlot(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -158,7 +161,7 @@ export async function handleCreateQueueSlot(
     );
   }
 
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   EnqueueMediaRequestSchema,
   getSessionSecret,
   ListQueueItemsQuerySchema,
@@ -34,7 +35,8 @@ export async function handleEnqueueMedia(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -60,7 +62,7 @@ export async function handleEnqueueMedia(
   const { pageId, mediaId, slotId: requestedSlotId, scheduledTime: requestedScheduledTime, caption, firstComment } =
     parsed.data;
 
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
@@ -510,7 +512,8 @@ export async function handleListQueueItems(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -533,7 +536,7 @@ export async function handleListQueueItems(
 
   const { pageId, status, limit, offset } = parsedQuery.data;
 
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import {
+  canAccessTenant,
   getSessionSecret,
   UploadUrlRequestSchema,
   UploadUrlResponseSchema,
@@ -30,7 +31,8 @@ export async function handleCreateUploadUrl(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

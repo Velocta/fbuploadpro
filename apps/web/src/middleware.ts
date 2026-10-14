@@ -288,7 +288,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     pathname === '/login' ||
     pathname === '/signup' ||
     pathname === '/forgot-password' ||
-    pathname === '/reset-password';
+    pathname === '/reset-password' ||
+    pathname === '/verify-otp';
 
   if (isAuthRoute) {
     const gatewayUrl = new URL(request.url);

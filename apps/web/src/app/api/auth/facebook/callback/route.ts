@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   buildTenantUrl,
   encryptToken,
+  fetchAllFacebookPages,
   FacebookTokenExchangeResponseSchema,
   type FacebookUserProfileResponse,
   FacebookUserProfileResponseSchema,
@@ -9,6 +10,7 @@ import {
   getTokenEncryptionKey,
   type OAuthStatePayload,
   verifyOAuthState,
+  verifySessionToken,
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
@@ -74,23 +76,8 @@ async function fetchGraphPageTokenMap(
   longAccessToken: string
 ): Promise<Map<string, string>> {
   const tokenMap = new Map<string, string>();
-  const pagesUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
-  pagesUrl.searchParams.set('fields', 'id,access_token');
-
-  const pagesRes = await fetch(pagesUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${longAccessToken}`,
-    },
-  });
-  if (!pagesRes.ok) {
-    return tokenMap;
-  }
-
-  const pagesJson = (await pagesRes.json()) as {
-    data?: Array<{ id?: string; access_token?: string }>;
-  } | null;
-  const data = Array.isArray(pagesJson?.data) ? pagesJson.data : [];
-  for (const item of data) {
+  const pages = await fetchAllFacebookPages(longAccessToken, 'id,access_token');
+  for (const item of pages) {
     if (
       typeof item?.id === 'string' &&
       item.id &&
@@ -434,6 +421,25 @@ export async function handleFacebookCallback(
     rootDomain
   );
 
+  // CSRF validation for direct OAuth flows (Spec Issue 8)
+  if (!statePayload.isMagic) {
+    const sessionCookie = request.cookies.get('fbup_session')?.value;
+    if (!sessionCookie) {
+      destinationUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(destinationUrl);
+    }
+    try {
+      const session = await verifySessionToken(sessionCookie, sessionSecret);
+      if (session.userId !== userId) {
+        destinationUrl.searchParams.set('error', 'session_mismatch');
+        return NextResponse.redirect(destinationUrl);
+      }
+    } catch {
+      destinationUrl.searchParams.set('error', 'unauthorized');
+      return NextResponse.redirect(destinationUrl);
+    }
+  }
+
   try {
     const db = dbClient ?? null;
     const byocResult = await resolveWorkspaceFacebookCredentials(
@@ -530,7 +536,10 @@ export async function handleFacebookCallback(
       encryptionKey
     );
 
-    const expiresInSeconds = longTokenData.expires_in ?? 5184000; // ~60 days
+    const expiresInSeconds =
+      longTokenData.expires_in && longTokenData.expires_in > 0
+        ? longTokenData.expires_in
+        : 5184000; // ~60 days
     const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
 
     // 6. Check existing & upsert into database with workspace_id isolation

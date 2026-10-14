@@ -209,6 +209,7 @@ export function evaluatePageHealth(
   page: {
     status: FacebookPageStatus;
     updatedAt?: Date | string | null;
+    rateLimitedAt?: Date | string | null;
   },
   now: Date = new Date()
 ): FacebookPageStatus {
@@ -216,9 +217,10 @@ export function evaluatePageHealth(
     return 'paused';
   }
 
-  if (page.status === 'fb_rate_limited' && page.updatedAt) {
-    const updatedDate = new Date(page.updatedAt);
-    const elapsedMs = now.getTime() - updatedDate.getTime();
+  const effectiveTimestamp = page.rateLimitedAt ?? page.updatedAt;
+  if (page.status === 'fb_rate_limited' && effectiveTimestamp) {
+    const rateLimitedDate = new Date(effectiveTimestamp);
+    const elapsedMs = now.getTime() - rateLimitedDate.getTime();
     if (elapsedMs >= FB_RATE_LIMITED_COOLDOWN_MS) {
       return 'active';
     }

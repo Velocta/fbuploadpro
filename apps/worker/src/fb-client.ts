@@ -278,6 +278,7 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
   public nextPostId = 'mock_post_123';
   public nextCommentId = 'mock_comment_456';
   public errorToThrow: Error | null = null;
+  public commentErrorToThrow: Error | null = null;
 
   publishReel(params: {
     pageId: string;
@@ -310,6 +311,9 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
     accessToken: string;
     message: string;
   }): Promise<{ commentId: string }> {
+    if (this.commentErrorToThrow) {
+      return Promise.reject(this.commentErrorToThrow);
+    }
     if (this.errorToThrow) {
       return Promise.reject(this.errorToThrow);
     }
@@ -322,5 +326,6 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
     this.photosPublished = [];
     this.commentsPosted = [];
     this.errorToThrow = null;
+    this.commentErrorToThrow = null;
   }
 }

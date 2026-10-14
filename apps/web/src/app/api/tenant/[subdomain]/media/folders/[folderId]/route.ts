@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   DeleteFolderResponseSchema,
   FolderResponseSchema,
   getSessionSecret,
@@ -32,7 +33,8 @@ export async function handleUpdateFolder(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -357,7 +359,8 @@ export async function handleDeleteFolder(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

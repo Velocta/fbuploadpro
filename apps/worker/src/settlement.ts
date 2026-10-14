@@ -44,7 +44,8 @@ INSERT INTO publish_logs (
 export const UPDATE_PAGE_STATUS_SQL = `
 UPDATE facebook_pages
 SET status = $2,
-    updated_at = now()
+    updated_at = now(),
+    rate_limited_at = CASE WHEN $2 = 'fb_rate_limited' THEN now() ELSE rate_limited_at END
 WHERE id = $1 AND user_id = $3;
 `.trim();
 
@@ -89,8 +90,8 @@ async function settleSupabaseOutcome(
       status: 'success',
       attempt_number: attemptNumber,
       fb_response_code: null,
-      error_message: null,
-      error_details: null,
+      error_message: outcome.errorMessage ?? null,
+      error_details: outcome.errorMessage ? { warning: outcome.errorMessage } : null,
     });
     if (logError) {
       throw new Error(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
@@ -132,10 +133,14 @@ async function settleSupabaseOutcome(
   }
 
   if (outcome.targetPageStatus) {
-    const { error: pageUpdateError } = await supabase.from('facebook_pages').update({
+    const pageUpdate: Record<string, any> = {
       status: outcome.targetPageStatus,
       updated_at: new Date().toISOString(),
-    }).eq('id', item.pageId).eq('user_id', item.userId);
+    };
+    if (outcome.targetPageStatus === 'fb_rate_limited') {
+      pageUpdate.rate_limited_at = new Date().toISOString();
+    }
+    const { error: pageUpdateError } = await supabase.from('facebook_pages').update(pageUpdate).eq('id', item.pageId).eq('user_id', item.userId);
     if (pageUpdateError) {
       throw new Error(`Failed to update facebook_pages status: ${pageUpdateError.message || JSON.stringify(pageUpdateError)}`);
     }
@@ -163,8 +168,8 @@ async function settleLegacyOutcome(
       'success',
       attemptNumber,
       null,
-      null,
-      null,
+      outcome.errorMessage ?? null,
+      outcome.errorMessage ? JSON.stringify({ warning: outcome.errorMessage }) : null,
     ]);
     return;
   }

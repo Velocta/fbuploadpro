@@ -29,9 +29,10 @@ export type ResolveBYOCResult = ResolvedBYOCCredentials | UnresolvedBYOCCredenti
 export async function resolveWorkspaceFacebookCredentials(
   client: DatabaseClient | SupabaseClient<any> | null | undefined,
   subdomain: string,
-  userId: string
+  userId: string,
+  role?: string
 ): Promise<ResolveBYOCResult> {
-  const workspaceId = await resolveTenantWorkspaceId(client, subdomain, userId);
+  const workspaceId = await resolveTenantWorkspaceId(client, subdomain, userId, role);
   if (!workspaceId) {
     return {
       ok: false,

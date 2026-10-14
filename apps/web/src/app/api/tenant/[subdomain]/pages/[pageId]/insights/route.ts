@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   decryptToken,
   getSessionSecret,
   getTokenEncryptionKey,
@@ -44,7 +45,8 @@ export async function handleGetInsights(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -65,7 +67,7 @@ export async function handleGetInsights(
   }
 
   const client = options?.dbClient;
-  const workspaceId = await resolveTenantWorkspaceId(client, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(client, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }

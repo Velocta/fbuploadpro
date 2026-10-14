@@ -30,6 +30,19 @@ describe('resolveTenantWorkspaceId helper suite', () => {
       expect(result).toBeNull();
     });
 
+    it('omits owner_id check when role is admin', async () => {
+      const mockLegacyClient = {
+        query: vi.fn().mockResolvedValue([{ id: workspaceId }]),
+      } as unknown as DatabaseClient;
+
+      const result = await resolveTenantWorkspaceId(mockLegacyClient, subdomain, userId, 'admin');
+      expect(result).toBe(workspaceId);
+      expect(mockLegacyClient.query).toHaveBeenCalledWith(
+        'SELECT id FROM workspaces WHERE subdomain = $1 LIMIT 1',
+        [subdomain]
+      );
+    });
+
     it('returns null when query throws an exception', async () => {
       const mockLegacyClient = {
         query: vi.fn().mockRejectedValue(new Error('DB failure')),
@@ -58,6 +71,23 @@ describe('resolveTenantWorkspaceId helper suite', () => {
       expect(selectMock).toHaveBeenCalledWith('id');
       expect(eqSubdomainMock).toHaveBeenCalledWith('subdomain', subdomain);
       expect(eqOwnerMock).toHaveBeenCalledWith('owner_id', userId);
+    });
+
+    it('omits owner_id check when role is admin', async () => {
+      const maybeSingleMock = vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null });
+      const eqSubdomainMock = vi.fn().mockReturnValue({ maybeSingle: maybeSingleMock });
+      const selectMock = vi.fn().mockReturnValue({ eq: eqSubdomainMock });
+      const fromMock = vi.fn().mockReturnValue({ select: selectMock });
+
+      const mockSupabase = {
+        from: fromMock,
+      } as any;
+
+      const result = await resolveTenantWorkspaceId(mockSupabase, subdomain, userId, 'admin');
+      expect(result).toBe(workspaceId);
+      expect(fromMock).toHaveBeenCalledWith('workspaces');
+      expect(selectMock).toHaveBeenCalledWith('id');
+      expect(eqSubdomainMock).toHaveBeenCalledWith('subdomain', subdomain);
     });
 
     it('returns null when supabase returns an error or empty data', async () => {

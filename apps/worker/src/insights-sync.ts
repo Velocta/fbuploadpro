@@ -237,16 +237,20 @@ async function savePageSnapshot(
     }, { onConflict: 'user_id,fb_page_id,snapshot_date' });
     if (upsertErr) throw upsertErr;
 
-    await db.from('facebook_pages').update({
+    const pageUpdate: Record<string, any> = {
       current_followers: followersCount,
-      updated_at: new Date().toISOString(),
-    }).eq('id', page.id);
+    };
+    if (page.status !== 'fb_rate_limited') {
+      pageUpdate.updated_at = new Date().toISOString();
+    }
+    await db.from('facebook_pages').update(pageUpdate).eq('id', page.id);
   } else if (typeof db.upsertPageInsightsSnapshot === 'function') {
     await db.upsertPageInsightsSnapshot(snapshot);
     if (typeof db.query === 'function') {
       await db.query(
         `UPDATE facebook_pages
-         SET current_followers = $1, updated_at = now()
+         SET current_followers = $1,
+             updated_at = CASE WHEN status = 'fb_rate_limited' THEN updated_at ELSE now() END
          WHERE id = $2`,
         [followersCount, page.id]
       );
@@ -291,7 +295,8 @@ async function savePageSnapshot(
 
     await db.query(
       `UPDATE facebook_pages
-       SET current_followers = $1, updated_at = now()
+       SET current_followers = $1,
+           updated_at = CASE WHEN status = 'fb_rate_limited' THEN updated_at ELSE now() END
        WHERE id = $2`,
       [followersCount, page.id]
     );
