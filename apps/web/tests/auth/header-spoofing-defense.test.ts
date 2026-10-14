@@ -31,7 +31,7 @@ describe('Header Spoofing Defense (Audit Issue 01)', () => {
       const genuineToken = await signSessionToken(
         {
           userId: '11111111-1111-4111-a111-111111111111',
-          email: 'genuine@example.com',
+          email: 'genuine@gmail.com',
           name: 'Genuine User',
           subdomain: 'genuine-sub',
           role: 'user',
@@ -57,7 +57,7 @@ describe('Header Spoofing Defense (Audit Issue 01)', () => {
       expect(session).not.toBeNull();
       expect(session?.userId).toBe('11111111-1111-4111-a111-111111111111');
       expect(session?.role).toBe('user');
-      expect(session?.email).toBe('genuine@example.com');
+      expect(session?.email).toBe('genuine@gmail.com');
       expect(session?.subdomain).toBe('genuine-sub');
     });
 

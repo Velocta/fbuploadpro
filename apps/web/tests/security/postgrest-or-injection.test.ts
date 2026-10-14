@@ -62,7 +62,7 @@ describe('ISSUE-03: PostgREST .or() Filter Injection Defense', () => {
 
       authModule._setMockSupabaseClient(mockSupabase as any);
 
-      const maliciousEmail = 'victim@example.com(status.eq.active)';
+      const maliciousEmail = 'victim@gmail.com(status.eq.active)';
       await expect(
         authModule.verifySignupOtpViaSupabase({
           email: maliciousEmail,
@@ -109,7 +109,7 @@ describe('ISSUE-03: PostgREST .or() Filter Injection Defense', () => {
                     maybeSingle: vi.fn().mockResolvedValue({
                       data: {
                         id: 'test-user-id',
-                        email: 'user@corporate-domain.com',
+                        email: 'usercorp@gmail.com',
                         name: 'Corporate User',
                         role: 'user',
                         status: 'active',
@@ -143,14 +143,14 @@ describe('ISSUE-03: PostgREST .or() Filter Injection Defense', () => {
 
       authModule._setMockSupabaseClient(mockSupabase as any);
 
-      const result = await authModule.findUserByEmail('user@corporate-domain.com');
+      const result = await authModule.findUserByEmail('usercorp@gmail.com');
       expect(result).not.toBeNull();
-      expect(result?.email).toBe('user@corporate-domain.com');
+      expect(result?.email).toBe('usercorp@gmail.com');
 
       // Verify that PostgREST .or() filter properly quotes strings:
-      // normalized_email.eq."user@corporate-domain.com",email.ilike."user@corporate-domain.com"
+      // normalized_email.eq."usercorp@gmail.com",email.ilike."usercorp@gmail.com"
       expect(capturedFilter).toBe(
-        'normalized_email.eq."user@corporate-domain.com",email.ilike."user@corporate-domain.com"'
+        'normalized_email.eq."usercorp@gmail.com",email.ilike."usercorp@gmail.com"'
       );
     });
   });

@@ -5,6 +5,8 @@ import {
   validateClientPhoneNumber,
   SignupRequestSchema,
   LoginRequestSchema,
+  AuthSuccessResponseSchema,
+  SessionPayloadSchema,
 } from '../src/index.js';
 
 describe('Auth Hardening Contracts (Spec 014)', () => {
@@ -175,6 +177,80 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
         email: 'jane@yahoo.com',
         password: 'Password123!',
       });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('AuthSuccessResponseSchema hardening (ISSUE-29)', () => {
+    it('accepts and canonicalizes valid Gmail address in auth success response', () => {
+      const valid = {
+        success: true,
+        user: {
+          id: '11111111-1111-4111-a111-111111111111',
+          email: 'Jane.Doe+vip@googlemail.com',
+          name: 'Jane Doe',
+          subdomain: 'janedoe',
+          role: 'user',
+          status: 'active',
+        },
+        redirectUrl: 'https://janedoe.fbuploadpro.com/dashboard',
+      };
+      const result = AuthSuccessResponseSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.user.email).toBe('janedoe@gmail.com');
+      }
+    });
+
+    it('rejects non-gmail domains in AuthSuccessResponseSchema', () => {
+      const invalid = {
+        success: true,
+        user: {
+          id: '11111111-1111-4111-a111-111111111111',
+          email: 'jane@example.com',
+          name: 'Jane Doe',
+          subdomain: 'janedoe',
+          role: 'user',
+          status: 'active',
+        },
+        redirectUrl: 'https://janedoe.fbuploadpro.com/dashboard',
+      };
+      const result = AuthSuccessResponseSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('SessionPayloadSchema hardening (ISSUE-29)', () => {
+    it('accepts and canonicalizes valid Gmail address in session payload', () => {
+      const valid = {
+        userId: '11111111-1111-4111-a111-111111111111',
+        email: 'John.Doe+promo@googlemail.com',
+        name: 'John Doe',
+        subdomain: 'johndoe',
+        role: 'user',
+        status: 'active',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      };
+      const result = SessionPayloadSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.email).toBe('johndoe@gmail.com');
+      }
+    });
+
+    it('rejects non-gmail domains in SessionPayloadSchema', () => {
+      const invalid = {
+        userId: '11111111-1111-4111-a111-111111111111',
+        email: 'user@yahoo.com',
+        name: 'Yahoo User',
+        subdomain: 'yahoouser',
+        role: 'user',
+        status: 'active',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      };
+      const result = SessionPayloadSchema.safeParse(invalid);
       expect(result.success).toBe(false);
     });
   });

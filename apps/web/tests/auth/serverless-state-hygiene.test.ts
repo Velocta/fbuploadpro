@@ -101,7 +101,7 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       const token = await signSessionToken(
         {
           userId,
-          email: 'alex@acme.com',
+          email: 'alex@gmail.com',
           name: 'Alex Acme',
           subdomain: 'acme',
           role: 'user',

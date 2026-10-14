@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { SubdomainSchema, UserRoleSchema, UserStatusSchema } from './user.js';
+import { GmailSchema } from './auth.js';
 import { DomainError, DomainErrorCode } from '../errors/domain-error.js';
 
 export const SessionPayloadSchema = z.object({
   userId: z.string().uuid(),
-  email: z.string().email(),
+  email: GmailSchema,
   name: z.string().max(100).nullable().optional(),
   subdomain: SubdomainSchema,
   allowedSubdomains: z.array(SubdomainSchema).optional(),

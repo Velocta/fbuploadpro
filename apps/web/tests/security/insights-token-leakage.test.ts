@@ -29,7 +29,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
     const tokenA = await signSessionToken(
       {
         userId: userIdA,
-        email: 'user-a@acme.com',
+        email: 'usera@gmail.com',
         name: 'User A',
         subdomain: 'acme',
         role: 'user',
@@ -42,7 +42,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
     const tokenB = await signSessionToken(
       {
         userId: userIdB,
-        email: 'user-b@other.com',
+        email: 'userb@gmail.com',
         name: 'User B',
         subdomain: 'other',
         role: 'user',

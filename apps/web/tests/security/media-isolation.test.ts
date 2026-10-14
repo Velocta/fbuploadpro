@@ -40,7 +40,7 @@ describe('Multi-Tenant Media Security & Isolation Audit', () => {
     const tokenB = await signSessionToken(
       {
         userId: userB.id,
-        email: 'bob@tenant-b.com',
+        email: 'bob@gmail.com',
         name: 'Bob Tenant B',
         subdomain: userB.subdomain,
         role: 'user',

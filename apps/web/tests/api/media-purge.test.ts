@@ -23,7 +23,7 @@ describe('Media Inspection & Purging', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'alex@acme.com',
+        email: 'alex@gmail.com',
         name: 'Alex Acme',
         subdomain: 'acme',
         role: 'user',
