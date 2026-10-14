@@ -193,7 +193,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
           role: 'user',
           status: 'active',
         },
-        redirectUrl: 'https://janedoe.fbuploadpro.com/dashboard',
+        redirectUrl: 'https://janedoe.fbuploadpro.com/',
       };
       const result = AuthSuccessResponseSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -213,7 +213,7 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
           role: 'user',
           status: 'active',
         },
-        redirectUrl: 'https://janedoe.fbuploadpro.com/dashboard',
+        redirectUrl: 'https://janedoe.fbuploadpro.com/',
       };
       const result = AuthSuccessResponseSchema.safeParse(invalid);
       expect(result.success).toBe(false);

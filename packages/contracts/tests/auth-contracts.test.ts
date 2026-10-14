@@ -63,7 +63,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
       const valid = {
         email: 'jane@gmail.com',
         password: 'Password123!',
-        returnUrl: 'https://jane.fbuploadpro.com/dashboard',
+        returnUrl: 'https://jane.fbuploadpro.com/',
       };
       const result = LoginRequestSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -82,7 +82,7 @@ describe('Auth Contracts & Subdomain Derivation (Spec 009)', () => {
           role: 'user',
           status: 'active',
         },
-        redirectUrl: 'https://janedoe.fbuploadpro.com/dashboard',
+        redirectUrl: 'https://janedoe.fbuploadpro.com/',
       };
       const result = AuthSuccessResponseSchema.safeParse(valid);
       expect(result.success).toBe(true);
