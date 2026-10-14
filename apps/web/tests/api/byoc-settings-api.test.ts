@@ -23,7 +23,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
     const token = await signSessionToken(
       {
         userId,
-        email: 'founder@acme.com',
+        email: 'alexfounder@gmail.com',
         name: 'Alex Founder',
         subdomain,
         role: 'user',
@@ -36,7 +36,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
     const otherToken = await signSessionToken(
       {
         userId,
-        email: 'founder@acme.com',
+        email: 'alexfounder@gmail.com',
         name: 'Alex Founder',
         subdomain: 'other-brand',
         role: 'user',

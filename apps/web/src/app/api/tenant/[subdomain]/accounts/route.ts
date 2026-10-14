@@ -230,7 +230,10 @@ export async function handleListAccounts(
     return dateB - dateA;
   });
 
-  const parsed = ListFacebookAccountsResponseSchema.safeParse({ accounts });
+  const parsed = ListFacebookAccountsResponseSchema.safeParse({
+    accounts,
+    total: accounts.length,
+  });
   if (!parsed.success) {
     console.error('[handleListAccounts] Schema validation error:', parsed.error);
     return NextResponse.json(
