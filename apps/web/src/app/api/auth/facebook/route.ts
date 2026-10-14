@@ -83,6 +83,9 @@ export async function handleInitiateFacebookOAuth(
   return NextResponse.redirect(oauthUrl.toString());
 }
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
-  return handleInitiateFacebookOAuth(request);
+export async function GET(
+  request: NextRequest,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): Promise<NextResponse> {
+  return handleInitiateFacebookOAuth(request, dbClient);
 }

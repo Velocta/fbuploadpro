@@ -156,7 +156,9 @@ export async function handleListAccounts(
       .eq('owner_id', session.userId)
       .maybeSingle();
 
-    if (wsErr || !ws?.id) {
+    const wsRecord = ws as { id?: string } | null;
+    const workspaceId = wsRecord?.id;
+    if (wsErr || !workspaceId) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
@@ -182,7 +184,7 @@ export async function handleListAccounts(
         )
       `)
       .eq('user_id', session.userId)
-      .eq('workspace_id', ws.id)
+      .eq('workspace_id', workspaceId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -191,7 +193,7 @@ export async function handleListAccounts(
 
     rows = (accountsData || []).map((acc: any) => {
       const activePages = (acc.facebook_pages || []).filter(
-        (p: any) => p.status !== 'disconnected' && p.workspace_id === ws.id
+        (p: any) => p.status !== 'disconnected' && p.workspace_id === workspaceId
       );
       return {
         ...acc,

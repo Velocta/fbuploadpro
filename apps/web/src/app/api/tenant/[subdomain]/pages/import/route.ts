@@ -96,10 +96,13 @@ export async function handleImportPages(
       .eq('owner_id', session.userId)
       .maybeSingle();
 
-    if (wsErr || !ws?.id) {
+    const wsRecord = ws as { id?: string } | null;
+    const resolvedWorkspaceId = wsRecord?.id;
+
+    if (wsErr || !resolvedWorkspaceId) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
-    workspaceId = ws.id;
+    workspaceId = resolvedWorkspaceId;
 
     const { data: accData, error: accErr } = await supabase
       .from('facebook_accounts')

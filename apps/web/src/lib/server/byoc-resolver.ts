@@ -32,7 +32,7 @@ export async function resolveWorkspaceFacebookCredentials(
 ): Promise<ResolveBYOCResult> {
   const encryptionKey = getTokenEncryptionKey();
 
-  if (isLegacyClient(client)) {
+  if (isLegacyClient(client ?? undefined)) {
     try {
       const wsRows = (await client.query(
         'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
@@ -89,7 +89,7 @@ export async function resolveWorkspaceFacebookCredentials(
     }
   }
 
-  const supabase = getRouteSupabase(client);
+  const supabase = getRouteSupabase(client ?? undefined);
   if (!supabase) {
     return {
       ok: false,
