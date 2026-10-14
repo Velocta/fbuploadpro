@@ -225,9 +225,12 @@ export async function handleListAccounts(
   });
 
   accounts.sort((a, b) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return dateB - dateA;
+    const aExpired = a.status === 'expired' ? 1 : 0;
+    const bExpired = b.status === 'expired' ? 1 : 0;
+    if (aExpired !== bExpired) {
+      return bExpired - aExpired;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
   const parsed = ListFacebookAccountsResponseSchema.safeParse({
