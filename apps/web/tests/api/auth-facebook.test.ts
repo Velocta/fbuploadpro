@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   decryptToken,
+  encryptToken,
   signOAuthState,
   signSessionToken,
 } from '@fbuploadpro/contracts';
