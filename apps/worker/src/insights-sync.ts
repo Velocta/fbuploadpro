@@ -307,14 +307,20 @@ async function syncSinglePage(
   targetDate: string
 ): Promise<void> {
   // 1. Decrypt access token server-side
-  let token: string;
+  let token: string | null;
   try {
-    token = await decryptToken(page.encrypted_access_token, masterKey);
+    token = await decryptToken(page.encrypted_access_token, masterKey, { allowEmpty: true });
   } catch (decryptErr) {
     throw new Error(
       `Decryption failed for page ${page.fb_page_id}: ${
         decryptErr instanceof Error ? decryptErr.message : String(decryptErr)
       }`
+    );
+  }
+
+  if (!token) {
+    throw new Error(
+      `Access token for page ${page.fb_page_id} is missing or page is soft-deleted`
     );
   }
 
@@ -368,23 +374,35 @@ export async function syncDailyPageInsights(
     errors: [],
   };
 
-  // 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed
+  // 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed (excluding empty tokens from soft-deleted pages)
   let eligiblePages: FacebookPageRow[] = [];
   if (typeof db.from === 'function') {
     const cooldownThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    const { data } = await db
+    let queryBuilder = db
       .from('facebook_pages')
-      .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at')
-      .or(`status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`);
-    eligiblePages = (data || []) as FacebookPageRow[];
+      .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at');
+
+    if (typeof queryBuilder.neq === 'function') {
+      queryBuilder = queryBuilder.neq('encrypted_access_token', '');
+    }
+
+    const { data } = await queryBuilder.or(
+      `status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`
+    );
+    eligiblePages = ((data || []) as FacebookPageRow[]).filter(
+      (p) => Boolean(p.encrypted_access_token && p.encrypted_access_token.trim() !== '')
+    );
   } else if (typeof db.query === 'function') {
     const rawPages = await db.query(
       `SELECT id, user_id, fb_page_id, page_name, encrypted_access_token, status
        FROM facebook_pages
-       WHERE status = 'active'
-          OR (status = 'fb_rate_limited' AND updated_at <= now() - INTERVAL '3 days')`
+       WHERE encrypted_access_token <> ''
+         AND (status = 'active'
+           OR (status = 'fb_rate_limited' AND updated_at <= now() - INTERVAL '3 days'))`
     );
-    eligiblePages = extractRows<FacebookPageRow>(rawPages);
+    eligiblePages = extractRows<FacebookPageRow>(rawPages).filter(
+      (p) => Boolean(p.encrypted_access_token && p.encrypted_access_token.trim() !== '')
+    );
   }
   result.totalEligible = eligiblePages.length;
 

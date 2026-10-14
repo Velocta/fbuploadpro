@@ -148,7 +148,11 @@ export async function dispatchItem(
   // 1. Decrypt page access token
   let accessToken: string;
   try {
-    accessToken = await decryptToken(item.encryptedPageToken, masterKey);
+    const decrypted = await decryptToken(item.encryptedPageToken, masterKey, { allowEmpty: true });
+    if (!decrypted) {
+      throw new Error('Access token is missing or page is soft-deleted');
+    }
+    accessToken = decrypted;
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     const outcome: DispatchOutcome = {
