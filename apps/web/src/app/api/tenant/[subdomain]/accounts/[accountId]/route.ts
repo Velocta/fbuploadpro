@@ -7,6 +7,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleDisconnectAccount(
@@ -35,26 +36,23 @@ export async function handleDisconnectAccount(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
+  // 3. Resolve workspace ID scoped to user
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   let disconnectedPagesCount = 0;
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    const wsRows = (await dbClient.query(
-      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
-      [subdomain, session.userId]
-    )) as Array<{ id: string }>;
-    const workspaceId = wsRows?.[0]?.id;
-    if (!workspaceId) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-
-    // 3. Count connected pages prior to cascade deletion
+    // 4. Count connected pages prior to cascade deletion
     const countRows = (await dbClient.query(
       'SELECT COUNT(*)::int AS count FROM facebook_pages WHERE facebook_account_id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
     )) as any[];
     disconnectedPagesCount = Number(countRows?.[0]?.count ?? 0);
 
-    // 4. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
+    // 5. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
     const result = (await dbClient.query(
       'DELETE FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3 RETURNING id',
       [accountId, session.userId, workspaceId]
@@ -70,20 +68,6 @@ export async function handleDisconnectAccount(
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
-    }
-
-    const { data: ws, error: wsErr } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('subdomain', subdomain)
-      .eq('owner_id', session.userId)
-      .maybeSingle();
-
-    const wsRecord = ws as { id?: string } | null;
-    const workspaceId = wsRecord?.id;
-
-    if (wsErr || !workspaceId) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
     const { count } = await supabase

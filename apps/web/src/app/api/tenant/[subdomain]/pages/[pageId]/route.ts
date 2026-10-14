@@ -7,6 +7,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { globalInsightsCache } from '@/lib/insights/insights-cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -120,29 +121,6 @@ async function fetchActivePageById(
 
   if (error || !data) return null;
   return formatPageRow(data);
-}
-
-async function resolveTenantWorkspaceId(
-  client: DatabaseClient | SupabaseClient<any> | null | undefined,
-  subdomain: string,
-  userId: string
-): Promise<string | null> {
-  if (client && 'query' in client && typeof client.query === 'function') {
-    const rows = (await client.query(
-      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
-      [subdomain, userId]
-    )) as Array<{ id: string }>;
-    return rows?.[0]?.id ?? null;
-  }
-  const supabase = (client && 'from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
-  if (!supabase) return null;
-  const { data } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('subdomain', subdomain)
-    .eq('owner_id', userId)
-    .maybeSingle();
-  return data?.id ?? null;
 }
 
 export async function handleGetPage(

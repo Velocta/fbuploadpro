@@ -1,6 +1,7 @@
 import { decryptToken, getTokenEncryptionKey, type DatabaseClient } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveTenantWorkspaceId } from './workspace-resolver';
 
 export interface ResolvedBYOCCredentials {
   ok: true;
@@ -30,32 +31,27 @@ export async function resolveWorkspaceFacebookCredentials(
   subdomain: string,
   userId: string
 ): Promise<ResolveBYOCResult> {
+  const workspaceId = await resolveTenantWorkspaceId(client, subdomain, userId);
+  if (!workspaceId) {
+    return {
+      ok: false,
+      error: 'WORKSPACE_NOT_FOUND',
+      message: 'Workspace not found',
+      status: 404,
+    };
+  }
+
   const encryptionKey = getTokenEncryptionKey();
 
   if (isLegacyClient(client ?? undefined)) {
     const legacyClient = client as DatabaseClient;
     try {
-      const wsRows = (await legacyClient.query(
-        'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
-        [subdomain, userId]
-      )) as Array<{ id: string }>;
-
-      const workspace = wsRows?.[0];
-      if (!workspace?.id) {
-        return {
-          ok: false,
-          error: 'WORKSPACE_NOT_FOUND',
-          message: 'Workspace not found',
-          status: 404,
-        };
-      }
-
       const credRows = (await legacyClient.query(
         `SELECT fb_app_id, encrypted_fb_app_secret, webhook_verify_token
          FROM workspace_byoc_credentials
          WHERE workspace_id = $1
          LIMIT 1`,
-        [workspace.id]
+        [workspaceId]
       )) as Array<{
         fb_app_id?: string;
         encrypted_fb_app_secret?: string;
@@ -75,12 +71,13 @@ export async function resolveWorkspaceFacebookCredentials(
       const decryptedAppSecret = await decryptToken(creds.encrypted_fb_app_secret, encryptionKey);
       return {
         ok: true,
-        workspaceId: workspace.id,
+        workspaceId,
         fbAppId: creds.fb_app_id,
         decryptedAppSecret,
         webhookVerifyToken: creds.webhook_verify_token ?? null,
       };
     } catch (_err) {
+      // Secret decryption or database query error: treat as unconfigured BYOC credentials
       return {
         ok: false,
         error: 'BYOC_NOT_CONFIGURED',
@@ -101,26 +98,10 @@ export async function resolveWorkspaceFacebookCredentials(
   }
 
   try {
-    const { data: workspace, error: wsError } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('subdomain', subdomain)
-      .eq('owner_id', userId)
-      .maybeSingle();
-
-    if (wsError || !workspace?.id) {
-      return {
-        ok: false,
-        error: 'WORKSPACE_NOT_FOUND',
-        message: 'Workspace not found',
-        status: 404,
-      };
-    }
-
     const { data: creds, error: credError } = await supabase
       .from('workspace_byoc_credentials')
       .select('fb_app_id, encrypted_fb_app_secret, webhook_verify_token')
-      .eq('workspace_id', workspace.id)
+      .eq('workspace_id', workspaceId)
       .maybeSingle();
 
     if (credError || !creds?.fb_app_id || !creds?.encrypted_fb_app_secret) {
@@ -135,12 +116,13 @@ export async function resolveWorkspaceFacebookCredentials(
     const decryptedAppSecret = await decryptToken(creds.encrypted_fb_app_secret, encryptionKey);
     return {
       ok: true,
-      workspaceId: workspace.id,
+      workspaceId,
       fbAppId: creds.fb_app_id,
       decryptedAppSecret,
       webhookVerifyToken: creds.webhook_verify_token ?? null,
     };
   } catch (_err) {
+    // Secret decryption or database query error: treat as unconfigured BYOC credentials
     return {
       ok: false,
       error: 'BYOC_NOT_CONFIGURED',

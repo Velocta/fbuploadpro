@@ -8,6 +8,7 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -39,15 +40,9 @@ export async function POST(
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
 
-  // Find workspace via Supabase PostgREST
-  const { data: ws } = await supabase
-    .from('workspaces')
-    .select('id')
-    .eq('subdomain', subdomain)
-    .eq('owner_id', session.userId)
-    .maybeSingle();
+  const workspaceId = await resolveTenantWorkspaceId(supabase, subdomain, session.userId);
 
-  if (!ws?.id) {
+  if (!workspaceId) {
     return NextResponse.json(
       {
         success: false,
@@ -62,7 +57,7 @@ export async function POST(
   const { data: credentials } = await supabase
     .from('workspace_byoc_credentials')
     .select('workspace_id, fb_app_id, encrypted_fb_app_secret')
-    .eq('workspace_id', ws.id)
+    .eq('workspace_id', workspaceId)
     .maybeSingle();
 
   if (!credentials?.fb_app_id || !credentials.encrypted_fb_app_secret) {
@@ -110,7 +105,7 @@ export async function POST(
       await supabase
         .from('workspace_byoc_credentials')
         .update({ status: 'invalid', last_tested_at: nowIso, updated_at: nowIso })
-        .eq('workspace_id', ws.id);
+        .eq('workspace_id', workspaceId);
 
       return NextResponse.json({
         success: false,
@@ -126,7 +121,7 @@ export async function POST(
     await supabase
       .from('workspace_byoc_credentials')
       .update({ status: 'valid', last_tested_at: nowIso, updated_at: nowIso })
-      .eq('workspace_id', ws.id);
+      .eq('workspace_id', workspaceId);
 
     return NextResponse.json({
       success: true,

@@ -11,6 +11,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleImportPages(
@@ -57,20 +58,15 @@ export async function handleImportPages(
 
   const { accountId, selectedPageIds } = parseResult.data;
 
-  // 4. Verify account ownership scoped to workspace
+  // 4. Resolve workspace ID scoped to user
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
   let account: any = null;
-  let workspaceId = '';
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    const wsRows = (await dbClient.query(
-      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
-      [subdomain, session.userId]
-    )) as Array<{ id: string }>;
-    if (!wsRows?.[0]?.id) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-    workspaceId = wsRows[0].id;
-
     const accounts = (await dbClient.query(
       'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
@@ -88,21 +84,6 @@ export async function handleImportPages(
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
-
-    const { data: ws, error: wsErr } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('subdomain', subdomain)
-      .eq('owner_id', session.userId)
-      .maybeSingle();
-
-    const wsRecord = ws as { id?: string } | null;
-    const resolvedWorkspaceId = wsRecord?.id;
-
-    if (wsErr || !resolvedWorkspaceId) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-    workspaceId = resolvedWorkspaceId;
 
     const { data: accData, error: accErr } = await supabase
       .from('facebook_accounts')

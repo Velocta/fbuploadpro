@@ -9,6 +9,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleDiscoverPages(
@@ -38,20 +39,17 @@ export async function handleDiscoverPages(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Fetch account and composite ownership (user_id, workspace_id, accountId)
+  // 3. Resolve workspace ID scoped to user
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  // 4. Fetch account and composite ownership (user_id, workspace_id, accountId)
   let account: any = null;
   let importedRows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    const wsRows = (await dbClient.query(
-      'SELECT id FROM workspaces WHERE subdomain = $1 AND owner_id = $2 LIMIT 1',
-      [subdomain, session.userId]
-    )) as Array<{ id: string }>;
-    const workspaceId = wsRows?.[0]?.id;
-    if (!workspaceId) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
-    }
-
     const accounts = (await dbClient.query(
       'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
@@ -73,20 +71,6 @@ export async function handleDiscoverPages(
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
-    }
-
-    const { data: ws, error: wsErr } = await supabase
-      .from('workspaces')
-      .select('id')
-      .eq('subdomain', subdomain)
-      .eq('owner_id', session.userId)
-      .maybeSingle();
-
-    const wsRecord = ws as { id?: string } | null;
-    const workspaceId = wsRecord?.id;
-
-    if (wsErr || !workspaceId) {
-      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
     const { data: accData, error: accErr } = await supabase
