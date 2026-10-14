@@ -1,13 +1,15 @@
 <!--
 Sync Impact Report:
-- Version change: 2.27.0 -> 2.28.0 (MINOR: Added Principle 28 governing Pure Supabase PostgREST & RPC Database Substrate, Row Level Security (RLS), and Complete Removal of pg and @fbuploadpro/database; updated Principle II and Constraint 3)
+- Version change: 2.28.0 -> 2.29.0 (MINOR: Added Principle 29 governing Production Mock & Fallback Elimination Rule, Zero Silent Stubs, and Pure PostgREST Route Execution)
 - List of modified principles:
   - Principle II: Retired @fbuploadpro/database/edge and raw TCP dependencies in favor of direct @supabase/supabase-js over HTTPS.
   - Section 3: Replaced raw PostgreSQL/PgBouncer pooler and local db mentions with Pure Supabase PostgREST and remote-only testing.
   - Section 28: Added Principle 28 governing Pure Supabase PostgREST, RLS policies, and atomic PostgreSQL RPC functions.
+  - Section 29: Added Principle 29 governing Production Mock & Fallback Elimination Rule (Zero Silent Stubs).
 - Added/Modified sections:
   - Section 28: Pure Supabase PostgREST, Row Level Security (RLS), and Atomic PostgreSQL RPC Function Governance.
-- Follow-up TODOs: Implement Spec 038 Pure Supabase Database Migration.
+  - Section 29: Production Mock & Fallback Elimination Rule (Zero Silent Stubs).
+- Follow-up TODOs: None (All foundational database and governance migrations completed).
 -->
 
 # FBUploadPro Constitution
@@ -198,7 +200,7 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Mandatory Row Level Security (RLS) & Tenant Isolation**: Row Level Security MUST be enabled across all public database tables (`users`, `workspaces`, `workspace_byoc_credentials`, `facebook_accounts`, `facebook_pages`, `media_folders`, `media_items`, `page_queue_slots`, `queue_items`, `publish_logs`, `page_insights_daily_snapshots`). Public tables containing tenant data must enforce compound tenant isolation policies (`USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id)` for tenant resources, `auth.uid() = id` for `users`, `auth.uid() = owner_id` for `workspaces`). Client-facing operations run under authenticated user session RLS, while background dispatchers utilize `SUPABASE_SERVICE_ROLE_KEY` to securely bypass RLS for administrative operations.
     - **Atomic Queue Concurrency via PostgreSQL RPC Functions**: Operations requiring row locking and transactional guarantees (such as claiming publishing queue items via `FOR UPDATE SKIP LOCKED`) MUST NOT be simulated using client-side loops or unsafe updates. They MUST be encapsulated inside dedicated PostgreSQL stored procedures / RPC functions in `supabase/migrations/` and invoked via `supabase.rpc(...)`.
     - **Strict Prohibition of Local Databases & Direct Remote Test Execution**: Local PostgreSQL instances, local Docker DB containers, or local database daemons are permanently prohibited in development, testing, and production environments. Automated test suites execute data access verification against the remote Supabase project using configured environment variables or isolated test fixtures.
-  - **Principle 29: Production Mock & Fallback Elimination Rule (Zero Silent Stubs)**:
+29. **Production Mock & Fallback Elimination Rule (Zero Silent Stubs)**:
     - **Zero Silent Fallback to Mocks**: In production environments (`NODE_ENV === 'production'`), code MUST NEVER silently fall back to mock implementations, dummy stub adapters (such as `MockStorageProvider` or dummy DB adapters), or hardcoded fallback secrets (such as default `SESSION_SECRET`). If an essential service (Cloudflare R2, Supabase, Upstash Redis) or secret is missing or misconfigured, the application MUST fail fast and throw an explicit configuration error rather than operating in a degraded, simulated, or insecure state.
     - **Pure PostgREST Route Execution**: All API route handlers must query the remote Supabase database directly using `@supabase/supabase-js` PostgREST (`supabase.from('...').select(...)`) and typed `SupabaseClient<Database>`. Route handlers MUST NOT call raw SQL `db.query(...)` with dummy adapters. For unit test speed and isolation, route handlers may accept an optional typed `SupabaseClient<Database>` parameter, avoiding live network calls in test suites.
     - **Elimination of In-Memory State for Ephemeral Serverless Runtime**: In-memory JavaScript `Map`s must not be used for user credentials, OTP codes, or password reset tokens. Native Supabase Auth (`signUp`, `verifyOtp`, `signInWithPassword`) must be used exclusively.
