@@ -119,13 +119,31 @@ export async function encryptToken(
  *
  * @param encryptedPayload - Serialized string '{iv_hex}:{ciphertext_hex}'.
  * @param secretHexOrKey - 256-bit encryption key matching the key used to encrypt.
- * @returns Decrypted raw token string.
+ * @returns Decrypted raw token string, or null if encryptedPayload is empty (e.g. soft-deleted resources).
  * @throws UnauthorizedError if authentication tag fails or ValidationError if payload format is invalid.
  */
 export async function decryptToken(
   encryptedPayload: string,
-  secretHexOrKey: string
-): Promise<string> {
+  secretHexOrKey: string,
+  options: { allowEmpty: true }
+): Promise<string | null>;
+export async function decryptToken(
+  encryptedPayload: string,
+  secretHexOrKey: string,
+  options?: { allowEmpty?: boolean }
+): Promise<string>;
+export async function decryptToken(
+  encryptedPayload: string,
+  secretHexOrKey: string,
+  options?: { allowEmpty?: boolean }
+): Promise<string | null> {
+  if (typeof encryptedPayload === 'string' && encryptedPayload.trim() === '') {
+    if (options?.allowEmpty) {
+      return null;
+    }
+    throw new ValidationError('Encrypted token payload is empty');
+  }
+
   if (typeof encryptedPayload !== 'string' || !encryptedPayload.includes(':')) {
     throw new ValidationError('Invalid encrypted token payload format');
   }

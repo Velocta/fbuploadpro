@@ -50,6 +50,15 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
     );
   });
 
+  it('should safely return null when decryptToken is called with an empty string and allowEmpty: true (ISSUE-49)', async () => {
+    const result = await decryptToken('', validKey, { allowEmpty: true });
+    expect(result).toBeNull();
+  });
+
+  it('should reject empty token string when allowEmpty is not set', async () => {
+    await expect(decryptToken('', validKey)).rejects.toThrow(/empty/i);
+  });
+
   it('should reject invalid key lengths not meeting 256-bit requirement', async () => {
     await expect(encryptToken(sampleToken, 'short-key')).rejects.toThrow(/key/i);
     await expect(decryptToken('iv:cipher', 'short-key')).rejects.toThrow(/key/i);
