@@ -37,6 +37,19 @@ const pendingSignups = new Map<string, PendingSignupEntry>();
 // In-memory store for pending password resets
 const pendingPasswordResets = new Map<string, PendingPasswordResetEntry>();
 
+export function validateOtpServiceConfig(): void {
+  if (process.env.NODE_ENV === 'production') {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || (!key && !serviceKey)) {
+      throw new Error(
+        'Native Supabase Auth credentials (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY or SUPABASE_SERVICE_ROLE_KEY) are strictly required for authentication and OTP in production.'
+      );
+    }
+  }
+}
+
 export function hashPasswordSync(password: string): string {
   const salt = crypto.randomBytes(16);
   const derivedKey = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
@@ -111,6 +124,12 @@ export function createPendingSignup(data: {
   otp: string;
   expiresAt: Date;
 } {
+  validateOtpServiceConfig();
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      `[OTP Service] Fallback in-memory pendingSignup used in production for ${data.email}. Native Supabase GoTrue Auth should be used for serverless persistence.`
+    );
+  }
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(data.email);
   const now = Date.now();
@@ -325,6 +344,12 @@ export function createPasswordResetOtp(email: string): {
   otp: string;
   expiresAt: Date;
 } {
+  validateOtpServiceConfig();
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      `[OTP Service] Fallback in-memory pendingPasswordReset used in production for ${email}. Native Supabase GoTrue Auth should be used for serverless persistence.`
+    );
+  }
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
   const now = Date.now();
