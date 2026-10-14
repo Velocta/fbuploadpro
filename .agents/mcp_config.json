@@ -3,8 +3,8 @@
   "mcpServers": {
     "supabase": {
       "type": "http",
-      "url": "https://mcp.supabase.com/mcp?project_ref=wkumiztsvfwobxxflqpn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions&skip_elicitations=execute_sql%2Capply_migration",
-      "serverUrl": "https://mcp.supabase.com/mcp?project_ref=wkumiztsvfwobxxflqpn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions&skip_elicitations=execute_sql%2Capply_migration"
+      "url": "https://mcp.supabase.com/mcp?project_ref=wkumiztsvfwobxxflqpn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions",
+      "serverUrl": "https://mcp.supabase.com/mcp?project_ref=wkumiztsvfwobxxflqpn&features=docs%2Caccount%2Cdatabase%2Cdebugging%2Cdevelopment%2Cfunctions"
     }
   }
 }
