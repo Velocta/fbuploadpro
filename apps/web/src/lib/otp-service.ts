@@ -50,6 +50,12 @@ export function validateOtpServiceConfig(): void {
   }
 }
 
+export const PRE_HASHED_PASSWORD_REGEX = /^[0-9a-f]{32}:[0-9a-f]{64}$/i;
+
+export function isPreHashedPassword(password: string): boolean {
+  return typeof password === 'string' && PRE_HASHED_PASSWORD_REGEX.test(password);
+}
+
 export function hashPasswordSync(password: string): string {
   const salt = crypto.randomBytes(16);
   const derivedKey = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
@@ -58,12 +64,16 @@ export function hashPasswordSync(password: string): string {
 
 export function verifyHashedPasswordSync(password: string, storedHash: string): boolean {
   try {
+    if (!storedHash || typeof storedHash !== 'string' || !PRE_HASHED_PASSWORD_REGEX.test(storedHash)) {
+      return false;
+    }
     const [saltHex, keyHex] = storedHash.split(':');
     if (!saltHex || !keyHex) return false;
     const salt = Buffer.from(saltHex, 'hex');
     const expectedKey = Buffer.from(keyHex, 'hex');
+    if (salt.length !== 16 || expectedKey.length < 32) return false;
     const actualKey = crypto.pbkdf2Sync(password, salt, 100000, expectedKey.length, 'sha256');
-    if (actualKey.length !== expectedKey.length) return false;
+    if (actualKey.length !== expectedKey.length || actualKey.length < 32) return false;
     return crypto.timingSafeEqual(actualKey, expectedKey);
   } catch {
     return false;
@@ -138,7 +148,7 @@ export function createPendingSignup(data: {
   const rawPassword = data.password || '';
   let hashedPassword = data.hashedPassword;
   if (!hashedPassword) {
-    hashedPassword = rawPassword.includes(':') ? rawPassword : hashPasswordSync(rawPassword);
+    hashedPassword = isPreHashedPassword(rawPassword) ? rawPassword : hashPasswordSync(rawPassword);
   }
 
   const entry: PendingSignupEntry = {
