@@ -38,7 +38,7 @@ function formatMediaRow(row: any) {
 }
 
 function findDuplicatesInRows(
-  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null }>,
+  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null | undefined }>,
   rows: Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>,
   globalFolderId?: string | null
 ): Array<{ clientKey: string; existingItem: any }> {
@@ -65,7 +65,7 @@ async function queryLegacyDuplicates(
   dbClient: DatabaseClient,
   userId: string,
   folderId: string | null | undefined,
-  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null }>
+  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null | undefined }>
 ): Promise<Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>> {
   const fileSizes = entries.map((e) => e.fileSize);
   const names = entries.map((e) => e.name.toLowerCase());
@@ -106,7 +106,7 @@ async function querySupabaseDuplicates(
   supabase: SupabaseClient<any>,
   userId: string,
   folderId: string | null | undefined,
-  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null }>
+  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null | undefined }>
 ): Promise<{ rows?: any[]; error?: string }> {
   const folderIds = Array.from(
     new Set(

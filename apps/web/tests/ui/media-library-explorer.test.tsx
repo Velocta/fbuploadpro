@@ -1104,6 +1104,7 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
       fileSize: 1048576,
       storageKey: 'media/55555555-5555-4555-8555-555555555555/source.mp4',
       url: 'https://cdn.example.com/media/feed.mp4',
+      thumbnailKey: null,
       thumbnailUrl: null,
       durationSeconds: 15,
       aspectRatio: '4:5',
