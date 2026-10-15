@@ -125,18 +125,22 @@ RETURNS TABLE (
   caption TEXT,
   first_comment TEXT,
   scheduled_time TIMESTAMPTZ,
-  status public.queue_status,
-  retry_count SMALLINT,
-  fb_post_id TEXT,
-  fb_comment_id TEXT,
+  status VARCHAR,
+  retry_count INT,
+  max_retries INT,
+  fb_post_id VARCHAR,
+  fb_comment_id VARCHAR,
   published_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
-  page_external_id TEXT,
-  encrypted_page_token BYTEA,
-  media_type public.media_type,
+  external_page_id VARCHAR,
+  page_external_id VARCHAR,
+  encrypted_access_token TEXT,
+  encrypted_page_token TEXT,
+  page_name VARCHAR,
+  media_type VARCHAR,
   media_url TEXT,
-  storage_key TEXT
+  storage_key VARCHAR
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -209,18 +213,22 @@ BEGIN
     c.caption,
     c.first_comment,
     c.scheduled_time,
-    c.status,
-    c.retry_count,
-    c.fb_post_id,
-    c.fb_comment_id,
+    c.status::VARCHAR,
+    c.retry_count::INT,
+    c.max_retries::INT,
+    c.fb_post_id::VARCHAR,
+    c.fb_comment_id::VARCHAR,
     c.published_at,
     c.created_at,
     c.updated_at,
-    fp.fb_page_id AS page_external_id,
-    fp.encrypted_page_token,
-    mi.media_type,
+    fp.fb_page_id::VARCHAR AS external_page_id,
+    fp.fb_page_id::VARCHAR AS page_external_id,
+    fp.encrypted_access_token::TEXT,
+    fp.encrypted_access_token::TEXT AS encrypted_page_token,
+    fp.page_name::VARCHAR,
+    mi.media_type::VARCHAR,
     mi.url AS media_url,
-    mi.storage_key
+    mi.storage_key::VARCHAR
   FROM claimed c
   INNER JOIN public.facebook_pages fp
     ON fp.id = c.fb_page_id
@@ -232,7 +240,12 @@ BEGIN
 END;
 $$;
 
--- 9. Single-roundtrip atomic settlement RPC
+-- 9. Extend publish_logs with error code columns if not present
+ALTER TABLE public.publish_logs
+  ADD COLUMN IF NOT EXISTS fb_error_code INT NULL,
+  ADD COLUMN IF NOT EXISTS fb_error_subcode INT NULL;
+
+-- 10. Single-roundtrip atomic settlement RPC
 CREATE OR REPLACE FUNCTION public.settle_queue_item_outcome(
   p_queue_item_id UUID,
   p_user_id UUID,
@@ -240,7 +253,7 @@ CREATE OR REPLACE FUNCTION public.settle_queue_item_outcome(
   p_outcome_status TEXT,            -- 'published' | 'queued' | 'failed'
   p_fb_post_id TEXT DEFAULT NULL,
   p_fb_comment_id TEXT DEFAULT NULL,
-  p_retry_count SMALLINT DEFAULT 0,
+  p_retry_count INT DEFAULT 0,
   p_retry_delay_seconds INT DEFAULT 300,
   p_error_code INT DEFAULT NULL,
   p_error_subcode INT DEFAULT NULL,
@@ -258,7 +271,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_facebook_account_id UUID;
-  v_log_status TEXT;
+  v_log_status VARCHAR(20);
   v_log_message TEXT;
 BEGIN
   IF p_outcome_status = 'published' THEN
@@ -271,10 +284,10 @@ BEGIN
     WHERE id = p_queue_item_id
       AND user_id = p_user_id;
 
-    v_log_status := 'published';
+    v_log_status := 'success';
     v_log_message := p_comment_warning;
 
-  ELSIF p_outcome_status = 'queued' THEN
+  ELSIF p_outcome_status = 'queued' OR p_outcome_status = 'retry' THEN
     UPDATE public.queue_items
     SET status = 'queued',
         retry_count = p_retry_count,
@@ -283,7 +296,7 @@ BEGIN
     WHERE id = p_queue_item_id
       AND user_id = p_user_id;
 
-    v_log_status := 'retried';
+    v_log_status := 'retry';
     v_log_message := p_error_message;
 
   ELSE
@@ -294,7 +307,7 @@ BEGIN
     WHERE id = p_queue_item_id
       AND user_id = p_user_id;
 
-    v_log_status := 'failed';
+    v_log_status := 'failure';
     v_log_message := p_error_message;
   END IF;
 
@@ -303,25 +316,35 @@ BEGIN
     queue_item_id,
     fb_page_id,
     status,
+    attempt_number,
+    fb_response_code,
     fb_error_code,
     fb_error_subcode,
     error_message,
+    error_details,
     created_at
   ) VALUES (
     p_user_id,
     p_queue_item_id,
     p_fb_page_id,
     v_log_status,
+    COALESCE(p_retry_count, 0) + 1,
+    p_error_code,
     p_error_code,
     p_error_subcode,
     v_log_message,
+    CASE
+      WHEN p_error_subcode IS NOT NULL THEN jsonb_build_object('errorCode', p_error_code, 'errorSubcode', p_error_subcode)
+      WHEN p_error_code IS NOT NULL THEN jsonb_build_object('errorCode', p_error_code)
+      ELSE NULL
+    END,
     now()
   );
 
   -- Update page status, rate_limited_at, next_allowed_publish_at, and buc_usage_pct
   UPDATE public.facebook_pages
   SET status = CASE
-        WHEN p_target_page_status IS NOT NULL THEN p_target_page_status::public.page_status
+        WHEN p_target_page_status IS NOT NULL THEN p_target_page_status::public.facebook_page_status
         ELSE status
       END,
       rate_limited_at = CASE
@@ -351,7 +374,7 @@ BEGIN
 END;
 $$;
 
--- 10. Server-side queue status counter RPC for Dedicated Page Workspace
+-- 11. Server-side queue status counter RPC for Dedicated Page Workspace
 CREATE OR REPLACE FUNCTION public.get_page_queue_status_counts(
   p_page_id UUID,
   p_user_id UUID
