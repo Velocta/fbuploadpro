@@ -36,7 +36,7 @@ jobs:
         run: pnpm --filter @fbuploadpro/contracts build
 
       - name: Deploy to Cloudflare Workers
-        uses: cloudflare/wrangler-action@392082e81ffbcb95b0597334751079d8628b067f # v3.14.0
+        uses: cloudflare/wrangler-action@392082e81ffbcb9ebdde27400634aa004b35ea37 # v3.14.0
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
