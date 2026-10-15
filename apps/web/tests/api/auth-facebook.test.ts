@@ -96,12 +96,15 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
     const mockDb = {
       query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
         if (typeof sql === 'string' && sql.includes('workspace_byoc_credentials')) {
           return Promise.resolve([
             {
               workspace_id: 'ws_123',
               fb_app_id: 'fb_app_id_byoc_workspace',
-              encrypted_fb_app_secret: 'enc_secret',
+              encrypted_fb_app_secret: validEncryptedFbAppSecret,
               status: 'valid',
             },
           ]);
