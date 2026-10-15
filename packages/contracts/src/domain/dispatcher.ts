@@ -2,7 +2,6 @@ import { z } from 'zod';
 import type { FacebookPageStatus, FacebookAccountStatus } from './facebook.js';
 import {
   PostFormatSchema,
-  type PostFormat,
   type GraphRateLimitTelemetry,
   type PublishResult,
 } from './publishing.js';
