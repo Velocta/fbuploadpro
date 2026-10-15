@@ -384,6 +384,72 @@ async function executeSinglePoll(
   }
 }
 
+function getPollErrorMessage(status: number): string {
+  if (status === 404) {
+    return 'Download job not found or expired.';
+  }
+  return 'Authentication error while checking download status.';
+}
+
+interface PollIterationOutcome {
+  done: boolean;
+  outcome?: { saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null };
+}
+
+async function handlePollIteration(params: {
+  subdomain: string;
+  jobId: string;
+  url: string;
+  idx: number;
+  folderId: string | null;
+  fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
+}): Promise<PollIterationOutcome> {
+  const { subdomain, jobId, url, idx, folderId, fetchImpl, signal } = params;
+
+  if (signal?.aborted) {
+    return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
+  }
+
+  await new Promise((r) => setTimeout(r, 1500));
+
+  if (signal?.aborted) {
+    return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
+  }
+
+  const pollResult = await executeSinglePoll(subdomain, jobId, fetchImpl, signal);
+  if (pollResult === 'aborted') {
+    return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
+  }
+
+  if (isPermanentAuthOrNotFoundError(pollResult.status)) {
+    return {
+      done: true,
+      outcome: {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: getPollErrorMessage(pollResult.status),
+        },
+      },
+    };
+  }
+
+  if (!pollResult.ok || !pollResult.data?.job) {
+    return { done: false };
+  }
+
+  const evaluation = await evaluatePollJobStatus(pollResult.data.job, params);
+  if (evaluation.finished && evaluation.outcome) {
+    return { done: true, outcome: evaluation.outcome };
+  }
+
+  return { done: false };
+}
+
 async function pollDownloadJobCompletion(params: {
   subdomain: string;
   jobId: string;
@@ -394,46 +460,11 @@ async function pollDownloadJobCompletion(params: {
   signal?: AbortSignal;
   onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
 }): Promise<{ saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null }> {
-  const { subdomain, jobId, url, idx, folderId, fetchImpl, signal } = params;
   const maxPolls = 60;
   for (let p = 0; p < maxPolls; p++) {
-    if (signal?.aborted) {
-      return createCancelledOutcome(idx, url, folderId);
-    }
-
-    await new Promise((r) => setTimeout(r, 1500));
-
-    if (signal?.aborted) {
-      return createCancelledOutcome(idx, url, folderId);
-    }
-
-    const pollResult = await executeSinglePoll(subdomain, jobId, fetchImpl, signal);
-    if (pollResult === 'aborted') {
-      return createCancelledOutcome(idx, url, folderId);
-    }
-
-    if (isPermanentAuthOrNotFoundError(pollResult.status)) {
-      return {
-        saved: [],
-        failed: {
-          id: `failed-${idx}-${Date.now()}`,
-          url,
-          folderId,
-          errorMessage:
-            pollResult.status === 404
-              ? 'Download job not found or expired.'
-              : 'Authentication error while checking download status.',
-        },
-      };
-    }
-
-    if (!pollResult.ok || !pollResult.data?.job) {
-      continue;
-    }
-
-    const evaluation = await evaluatePollJobStatus(pollResult.data.job, params);
-    if (evaluation.finished && evaluation.outcome) {
-      return evaluation.outcome;
+    const iteration = await handlePollIteration(params);
+    if (iteration.done && iteration.outcome) {
+      return iteration.outcome;
     }
   }
   return { saved: [], failed: null };
