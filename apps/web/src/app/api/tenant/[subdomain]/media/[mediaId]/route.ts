@@ -168,7 +168,7 @@ export async function handleUpdateMedia(
   if (resolvedThumbnailUrl && resolvedThumbnailUrl.startsWith('data:image/')) {
     try {
       const storage = storageService ?? getStorageService();
-      const match = resolvedThumbnailUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+      const match = /^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/.exec(resolvedThumbnailUrl);
       if (match) {
         const mimeSubtype = match[1];
         const ext = mimeSubtype === 'jpeg' ? 'jpg' : mimeSubtype;

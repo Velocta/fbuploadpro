@@ -181,6 +181,56 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
         JSON.stringify({ errorCode: 32 }),
       ]);
     });
+
+    it('settles legacy outcome with warning, page status, cooldown, and expired account side effects', async () => {
+      const queriesExecuted: Array<{ sql: string; params: unknown[] | undefined }> = [];
+      const mockTx = {
+        query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+          queriesExecuted.push({ sql, params });
+          return Promise.resolve([]);
+        }),
+      };
+
+      const outcome: DispatchOutcome = {
+        queueItemId: sampleItem.id,
+        status: 'published',
+        fbPostId: 'post_abc',
+        errorMessage: 'Non-fatal warning logged',
+        targetPageStatus: 'fb_rate_limited',
+        pageCooldownSeconds: 300,
+        targetAccountStatus: 'expired',
+      };
+
+      await settleOutcome(mockTx as any, sampleItem, outcome);
+
+      expect(mockTx.query).toHaveBeenCalled();
+      expect(queriesExecuted.some((q) => q.sql.includes('UPDATE facebook_pages'))).toBe(true);
+      expect(queriesExecuted.some((q) => q.sql.includes('next_allowed_publish_at = now() + make_interval'))).toBe(true);
+      expect(queriesExecuted.some((q) => q.sql.includes('UPDATE facebook_accounts'))).toBe(true);
+
+      const logInsert = queriesExecuted.find((q) => q.sql.includes('INSERT INTO publish_logs'));
+      expect(logInsert).toBeDefined();
+      expect(logInsert!.params?.[7]).toBe(JSON.stringify({ warning: 'Non-fatal warning logged' }));
+    });
+
+    it('settles outcome when called with a single DispatchOutcome argument', async () => {
+      const queriesExecuted: Array<{ sql: string; params: unknown[] | undefined }> = [];
+      const mockTx = {
+        query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+          queriesExecuted.push({ sql, params });
+          return Promise.resolve([]);
+        }),
+      };
+
+      const outcome: DispatchOutcome = {
+        queueItemId: 'item-xyz',
+        status: 'published',
+        fbPostId: 'fb_123',
+      };
+
+      await settleOutcome(mockTx as any, outcome);
+      expect(mockTx.query).toHaveBeenCalled();
+    });
   });
 
   describe('runDispatchCycle Settlement Integration', () => {

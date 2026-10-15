@@ -343,8 +343,12 @@ async function batchDeleteStorageKeys(
   keys: string[],
   batchSize = 50
 ): Promise<void> {
+  const chunks: string[][] = [];
   for (let i = 0; i < keys.length; i += batchSize) {
-    const chunk = keys.slice(i, i + batchSize);
+    chunks.push(keys.slice(i, i + batchSize));
+  }
+  await chunks.reduce(async (prevPromise, chunk) => {
+    await prevPromise;
     await Promise.allSettled(
       chunk.map((key) =>
         storage.deleteObject(key).catch((err) => {
@@ -352,7 +356,7 @@ async function batchDeleteStorageKeys(
         })
       )
     );
-  }
+  }, Promise.resolve());
 }
 
 export async function handleDeleteFolder(

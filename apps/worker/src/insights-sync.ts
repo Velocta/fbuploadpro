@@ -382,42 +382,45 @@ export async function syncDailyPageInsights(
 
   const fetchBatchSize = Math.max(1, options.batchSize ?? 200);
 
-  // 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed (excluding empty tokens from soft-deleted pages)
+async function fetchEligiblePagesSupabase(
+  db: any,
+  offset: number,
+  batchSize: number,
+  cooldownThreshold: string
+): Promise<FacebookPageRow[]> {
+  let queryBuilder = db
+    .from('facebook_pages')
+    .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at');
+
+  if (typeof queryBuilder.neq === 'function') {
+    queryBuilder = queryBuilder.neq('encrypted_access_token', '');
+  }
+
+  if (typeof queryBuilder.range === 'function') {
+    queryBuilder = queryBuilder.range(offset, offset + batchSize - 1);
+  }
+
+  const { data } = await queryBuilder.or(
+    `status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`
+  );
+
+  const rows = ((data || []) as FacebookPageRow[]).filter(
+    (p) => Boolean(p.encrypted_access_token && p.encrypted_access_token.trim() !== '')
+  );
+
+  if (!data || data.length < batchSize || typeof queryBuilder.range !== 'function') {
+    return rows;
+  }
+
+  const nextRows = await fetchEligiblePagesSupabase(db, offset + batchSize, batchSize, cooldownThreshold);
+  return rows.concat(nextRows);
+}
+
+// 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed (excluding empty tokens from soft-deleted pages)
   let eligiblePages: FacebookPageRow[] = [];
   if (typeof db.from === 'function') {
     const cooldownThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      let queryBuilder = db
-        .from('facebook_pages')
-        .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at');
-
-      if (typeof queryBuilder.neq === 'function') {
-        queryBuilder = queryBuilder.neq('encrypted_access_token', '');
-      }
-
-      if (typeof queryBuilder.range === 'function') {
-        queryBuilder = queryBuilder.range(offset, offset + fetchBatchSize - 1);
-      }
-
-      const { data } = await queryBuilder.or(
-        `status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`
-      );
-
-      const rows = ((data || []) as FacebookPageRow[]).filter(
-        (p) => Boolean(p.encrypted_access_token && p.encrypted_access_token.trim() !== '')
-      );
-
-      eligiblePages.push(...rows);
-
-      if (!data || data.length < fetchBatchSize || typeof queryBuilder.range !== 'function') {
-        hasMore = false;
-      } else {
-        offset += fetchBatchSize;
-      }
-    }
+    eligiblePages = await fetchEligiblePagesSupabase(db, 0, fetchBatchSize, cooldownThreshold);
   } else if (typeof db.query === 'function') {
     const rawPages = await db.query(
       `SELECT id, user_id, fb_page_id, page_name, encrypted_access_token, status

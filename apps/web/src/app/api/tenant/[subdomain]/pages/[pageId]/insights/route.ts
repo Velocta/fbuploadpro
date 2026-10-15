@@ -381,12 +381,10 @@ export async function handleGetInsights(
     // Non-fatal if table/mock is missing in unit tests
   }
 
-  const hasFreshSnapshots =
-    snapshotRows.length > 0 &&
-    snapshotRows.some((r) => {
-      const d = typeof r.snapshot_date === 'string' ? r.snapshot_date.slice(0, 10) : '';
-      return d === todayDate;
-    });
+  const hasFreshSnapshots = snapshotRows.some((r) => {
+    const d = typeof r.snapshot_date === 'string' ? r.snapshot_date.slice(0, 10) : '';
+    return d === todayDate;
+  });
 
   if (!query.refresh && hasFreshSnapshots) {
     const assembled = assembleInsightsFromSnapshots(page, query.range, snapshotRows);

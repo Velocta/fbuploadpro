@@ -32,6 +32,13 @@ export interface EnqueueModalProps {
   onEnqueued: () => void;
 }
 
+function findFirstMediaOfType(
+  mediaList: EnqueueMediaItemOption[],
+  type: 'image' | 'video'
+): string | null {
+  return mediaList.find((m) => m.mediaType === type)?.id ?? null;
+}
+
 function resolveMediaForFormat(
   fmt: PostFormat,
   currentMediaId: string | null,
@@ -39,30 +46,14 @@ function resolveMediaForFormat(
 ): string | null {
   if (fmt === 'text') return null;
 
-  const current = currentMediaId ? mediaList.find((m) => m.id === currentMediaId) : null;
-  const isVideoFmt = fmt === 'reel' || fmt === 'video';
+  const targetType = fmt === 'image' ? 'image' : 'video';
+  const current = mediaList.find((m) => m.id === currentMediaId);
 
-  if (current) {
-    if (fmt === 'image' && current.mediaType === 'video') {
-      const firstImg = mediaList.find((m) => m.mediaType === 'image');
-      return firstImg ? firstImg.id : null;
-    }
-    if (isVideoFmt && current.mediaType === 'image') {
-      const firstVid = mediaList.find((m) => m.mediaType === 'video');
-      return firstVid ? firstVid.id : null;
-    }
-    return currentMediaId;
+  if (current?.mediaType === targetType) {
+    return current.id;
   }
 
-  if (fmt === 'image') {
-    const firstImg = mediaList.find((m) => m.mediaType === 'image');
-    return firstImg ? firstImg.id : null;
-  }
-  if (isVideoFmt) {
-    const firstVid = mediaList.find((m) => m.mediaType === 'video');
-    return firstVid ? firstVid.id : null;
-  }
-  return null;
+  return findFirstMediaOfType(mediaList, targetType);
 }
 
 export function EnqueueModal({

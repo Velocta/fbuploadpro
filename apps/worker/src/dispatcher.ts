@@ -221,7 +221,7 @@ export async function dispatchItem(
             linkUrl: item.linkUrl,
           });
         } else {
-          throw new Error('Facebook client does not support publishTextPost');
+          throw new TypeError('Facebook client does not support publishTextPost');
         }
         break;
       }
@@ -286,7 +286,7 @@ export async function dispatchItem(
               imageUrl: item.mediaUrl,
             });
           } else {
-            throw new Error('Facebook client does not support publishPhotoStory');
+            throw new TypeError('Facebook client does not support publishPhotoStory');
           }
         } else if (typeof fbClient.publishVideoStory === 'function') {
           publishResult = await fbClient.publishVideoStory({
@@ -295,7 +295,7 @@ export async function dispatchItem(
             videoUrl: item.mediaUrl,
           });
         } else {
-          throw new Error('Facebook client does not support publishVideoStory');
+          throw new TypeError('Facebook client does not support publishVideoStory');
         }
         break;
       }
@@ -331,7 +331,7 @@ export async function dispatchItem(
       errorCode !== undefined ? evaluateGraphApiError(errorCode, errorSubcode) : null;
 
     let targetPageStatus: FacebookPageStatus | undefined;
-    if (evaluation && evaluation.pageStatus && evaluation.pageStatus !== 'active') {
+    if (evaluation?.pageStatus && evaluation.pageStatus !== 'active') {
       targetPageStatus = evaluation.pageStatus as FacebookPageStatus;
     } else if (errorCode === 368 && errorSubcode === 1390008) {
       targetPageStatus = 'fb_rate_limited';
@@ -339,7 +339,7 @@ export async function dispatchItem(
 
     let targetAccountStatus: 'active' | 'expired' | undefined;
     const isAccountExpired =
-      (evaluation && (evaluation as any).accountStatus === 'expired') ||
+      ((evaluation as any)?.accountStatus === 'expired') ||
       (isAuthError && (errorCode === 190 || errorCode === 102));
     if (isAccountExpired) {
       targetAccountStatus = 'expired';
@@ -351,7 +351,7 @@ export async function dispatchItem(
         : rawMessage;
 
     const isRateLimit = isRateLimitErrorCode(errorCode, errorSubcode);
-    const isTransient = (evaluation && evaluation.isTransient) || isRateLimit || (!isAuthError && !isPermanentPolicyError && !isPermanentClientError);
+    const isTransient = evaluation?.isTransient || isRateLimit || (!isAuthError && !isPermanentPolicyError && !isPermanentClientError);
 
     const canRetry = isTransient && item.retryCount < effectiveMaxRetries;
 

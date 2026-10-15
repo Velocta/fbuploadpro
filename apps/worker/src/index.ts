@@ -85,10 +85,11 @@ async function fanOutClaimedBatches(
     const claimed = await claimDueItems(db, batchSize);
     if (claimed.length === 0) break;
 
+    const slices: any[][] = [];
     for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
-      const slice = claimed.slice(i, i + CHUNK_SIZE);
-      await queue.sendBatch(slice.map((body) => ({ body })));
+      slices.push(claimed.slice(i, i + CHUNK_SIZE));
     }
+    await Promise.all(slices.map((slice) => queue.sendBatch(slice.map((body) => ({ body })))));
   }
 }
 

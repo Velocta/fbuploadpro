@@ -66,8 +66,8 @@ function QueueItemThumbnailPreview({
   mediaType,
 }: {
   resolvedFormat: string;
-  thumbnailUrl?: string | null;
-  mediaType?: string | null;
+  thumbnailUrl?: string | null | undefined;
+  mediaType?: string | null | undefined;
 }) {
   if (resolvedFormat === 'text') {
     return (

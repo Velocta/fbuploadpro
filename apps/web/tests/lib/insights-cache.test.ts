@@ -222,7 +222,7 @@ describe('InsightsCache Suite', () => {
     });
 
     it('throws in production when Upstash environment variables are absent', () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'production';
       delete process.env.UPSTASH_REDIS_REST_URL;
       delete process.env.UPSTASH_REDIS_REST_TOKEN;
 
@@ -232,7 +232,7 @@ describe('InsightsCache Suite', () => {
     });
 
     it('does not throw in development or test', () => {
-      process.env.NODE_ENV = 'test';
+      (process.env as Record<string, string | undefined>).NODE_ENV = 'test';
       delete process.env.UPSTASH_REDIS_REST_URL;
       delete process.env.UPSTASH_REDIS_REST_TOKEN;
 
