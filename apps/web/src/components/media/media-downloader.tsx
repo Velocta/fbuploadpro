@@ -817,6 +817,12 @@ function sortFoldersForDownloader(
   return withPaths;
 }
 
+function getProgressTextColor(status?: string): string {
+  if (status === 'completed') return PALETTE.accent4;
+  if (status === 'cancelled') return PALETTE.accent3;
+  return PALETTE.primary;
+}
+
 function DownloaderSavedItemRow({
   entry,
   folders,
