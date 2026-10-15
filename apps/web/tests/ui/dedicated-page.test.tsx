@@ -58,7 +58,7 @@ function findElementByTestId(
 }
 
 function renderAndCaptureTree(
-  renderFn: () => React.ReactElement
+  renderFn: () => React.ReactElement | null
 ): React.ReactElement {
   let tree: React.ReactElement | null = null;
   function CaptureWrapper() {

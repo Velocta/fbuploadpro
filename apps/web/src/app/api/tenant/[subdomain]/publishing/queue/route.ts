@@ -113,10 +113,21 @@ export async function handleEnqueueMedia(
 
       mediaRecord = mediaRows[0];
       finalPostFormat = requestedFormat ?? (mediaRecord.media_type === 'video' ? 'video' : 'image');
-      const validation = validatePostFormatEligibility(finalPostFormat, mediaRecord);
-      if (!validation.eligible) {
+      const validation = validatePostFormatEligibility({
+        postFormat: finalPostFormat,
+        caption,
+        firstComment,
+        linkUrl,
+        media: {
+          mediaType: mediaRecord.media_type,
+          fileSize: mediaRecord.file_size,
+          durationSeconds: mediaRecord.duration_seconds,
+          aspectRatio: mediaRecord.aspect_ratio,
+        },
+      });
+      if (!validation.valid) {
         return NextResponse.json(
-          { error: 'INVALID_FORMAT', message: validation.reasons.join(', ') },
+          { error: 'INVALID_FORMAT', message: validation.error || 'Media is not eligible for this format' },
           { status: 400 }
         );
       }
@@ -386,10 +397,21 @@ export async function handleEnqueueMedia(
 
     mediaRecord = mediaData;
     finalPostFormat = requestedFormat ?? (mediaRecord.media_type === 'video' ? 'video' : 'image');
-    const validation = validatePostFormatEligibility(finalPostFormat, mediaRecord);
-    if (!validation.eligible) {
+    const validation = validatePostFormatEligibility({
+      postFormat: finalPostFormat,
+      caption,
+      firstComment,
+      linkUrl,
+      media: {
+        mediaType: mediaRecord.media_type,
+        fileSize: mediaRecord.file_size,
+        durationSeconds: mediaRecord.duration_seconds,
+        aspectRatio: mediaRecord.aspect_ratio,
+      },
+    });
+    if (!validation.valid) {
       return NextResponse.json(
-        { error: 'INVALID_FORMAT', message: validation.reasons.join(', ') },
+        { error: 'INVALID_FORMAT', message: validation.error || 'Media is not eligible for this format' },
         { status: 400 }
       );
     }
