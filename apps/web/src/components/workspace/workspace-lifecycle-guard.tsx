@@ -102,26 +102,39 @@ export function setupWorkspaceLifecycleGuard({
   window.addEventListener('pageshow', handlePageShow);
 
   // 5. Intercept client-side fetch calls for 403 ACCOUNT_SUSPENDED
-  const originalFetch = window.fetch;
-  const boundFetch = window.fetch.bind(window);
-  window.fetch = async (...args) => {
-    const response = await boundFetch(...args);
-    if (response.status === 403) {
-      try {
-        const clone = response.clone();
-        const data = await clone.json();
-        if (
-          data?.code === 'ACCOUNT_SUSPENDED' ||
-          (typeof data?.error === 'string' && data.error.toLowerCase().includes('suspended'))
-        ) {
-          window.location.href = '/account-suspended';
+  const FETCH_WRAPPED = Symbol.for('fbup.fetch_wrapped');
+  const FETCH_ORIGINAL = Symbol.for('fbup.fetch_original');
+
+  let originalFetch: typeof window.fetch = window.fetch;
+
+  if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
+    if ((window.fetch as any)[FETCH_WRAPPED]) {
+      originalFetch = (window.fetch as any)[FETCH_ORIGINAL] || window.fetch;
+    } else {
+      const boundFetch = window.fetch.bind(window);
+      const wrappedFetch: typeof window.fetch = async (...args) => {
+        const response = await boundFetch(...args);
+        if (response.status === 403) {
+          try {
+            const clone = response.clone();
+            const data = await clone.json();
+            if (
+              data?.code === 'ACCOUNT_SUSPENDED' ||
+              (typeof data?.error === 'string' && data.error.toLowerCase().includes('suspended'))
+            ) {
+              window.location.href = '/account-suspended';
+            }
+          } catch {
+            // Non-JSON or standard 403, proceed normally
+          }
         }
-      } catch {
-        // Non-JSON or standard 403, proceed normally
-      }
+        return response;
+      };
+      (wrappedFetch as any)[FETCH_WRAPPED] = true;
+      (wrappedFetch as any)[FETCH_ORIGINAL] = originalFetch;
+      window.fetch = wrappedFetch;
     }
-    return response;
-  };
+  }
 
   return () => {
     if (channel) {
@@ -131,7 +144,9 @@ export function setupWorkspaceLifecycleGuard({
     }
     window.removeEventListener('storage', handleStorage);
     window.removeEventListener('pageshow', handlePageShow);
-    window.fetch = originalFetch;
+    if (typeof window !== 'undefined' && originalFetch) {
+      window.fetch = originalFetch;
+    }
   };
 }
 

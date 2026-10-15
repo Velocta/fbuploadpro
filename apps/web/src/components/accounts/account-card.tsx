@@ -130,6 +130,227 @@ export function AccountLinkedPagesList({
   );
 }
 
+function AccountAvatar({
+  profilePictureUrl,
+  displayName,
+  showAvatarImg,
+  initials,
+  onAvatarError,
+}: Readonly<{
+  profilePictureUrl?: string | null | undefined;
+  displayName: string;
+  showAvatarImg: boolean;
+  initials: string;
+  onAvatarError: () => void;
+}>) {
+  if (showAvatarImg && profilePictureUrl) {
+    return (
+      <img
+        src={profilePictureUrl}
+        alt={displayName}
+        data-testid="account-avatar-img"
+        onError={onAvatarError}
+        style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: RADII.full,
+          objectFit: 'cover',
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      data-testid="account-avatar-initials"
+      style={{
+        width: '48px',
+        height: '48px',
+        borderRadius: RADII.full,
+        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        color: `var(--text-main, ${THEME.default.text.primary})`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: TYPOGRAPHY.weights.bold,
+        fontSize: '1rem',
+        flexShrink: 0,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function AccountStatusAlerts({
+  isExpired,
+  isExpiringSoon,
+  daysRemaining,
+}: Readonly<{
+  isExpired: boolean;
+  isExpiringSoon: boolean;
+  daysRemaining: number | null;
+}>) {
+  if (isExpired) {
+    return (
+      <div
+        data-testid="account-expired-alert"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.xs,
+          padding: '8px 10px',
+          backgroundColor: 'rgba(246, 70, 93, 0.10)',
+          border: '1px solid rgba(246, 70, 93, 0.25)',
+          borderRadius: RADII.sm,
+          fontSize: '0.75rem',
+          color: PALETTE.accent3,
+          fontWeight: TYPOGRAPHY.weights.medium,
+          marginBottom: SPACING.md,
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>Session expired — reconnect to resume publishing</span>
+      </div>
+    );
+  }
+
+  if (isExpiringSoon) {
+    return (
+      <div
+        data-testid="account-expiring-soon-alert"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.xs,
+          padding: '8px 10px',
+          backgroundColor: 'rgba(250, 215, 52, 0.10)',
+          border: '1px solid rgba(250, 215, 52, 0.25)',
+          borderRadius: RADII.sm,
+          fontSize: '0.75rem',
+          color: PALETTE.primary,
+          fontWeight: TYPOGRAPHY.weights.medium,
+          marginBottom: SPACING.md,
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>Access token expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'} — reconnect soon</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function AccountMetadataStats({
+  connectedPagesCount,
+  pagesCountLabel,
+  isPagesExpanded,
+  onTogglePagesExpanded,
+  formattedGender,
+}: Readonly<{
+  connectedPagesCount: number;
+  pagesCountLabel: string;
+  isPagesExpanded: boolean;
+  onTogglePagesExpanded: () => void;
+  formattedGender: string | null;
+}>) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACING.md,
+        padding: `${SPACING.sm} 0`,
+        borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        fontSize: '0.8125rem',
+        color: `var(--text-sub, ${THEME.default.text.secondary})`,
+        marginBottom: SPACING.md,
+      }}
+    >
+      {connectedPagesCount > 0 ? (
+        <button
+          type="button"
+          data-testid="account-pages-toggle"
+          aria-expanded={isPagesExpanded}
+          onClick={onTogglePagesExpanded}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            padding: 0,
+            background: 'none',
+            border: 'none',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            fontSize: '0.8125rem',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          <span data-testid="account-pages-count">{pagesCountLabel}</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            style={{
+              transform: isPagesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease',
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      ) : (
+        <span data-testid="account-pages-count">{pagesCountLabel}</span>
+      )}
+
+      {formattedGender && (
+        <>
+          <span style={{ color: `var(--border-subtle, ${THEME.default.borders.hairline})` }}>•</span>
+          <span data-testid="account-gender">{formattedGender}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AccountCard({
   account,
   onReconnect,
@@ -138,6 +359,14 @@ export function AccountCard({
   forceAvatarError = false,
 }: Readonly<AccountCardProps>) {
   const isExpired = account.status === 'expired';
+  const daysRemaining = account.tokenExpiresAt
+    ? Math.ceil((new Date(account.tokenExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isExpiringSoon =
+    !isExpired &&
+    daysRemaining !== null &&
+    daysRemaining > 0 &&
+    daysRemaining <= 7;
   const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(
     forceAvatarError ? (account.profilePictureUrl ?? '__forced__') : null
   );
@@ -198,42 +427,13 @@ export function AccountCard({
         }}
       >
         {/* Avatar */}
-        {showAvatarImg ? (
-          <img
-            src={account.profilePictureUrl!}
-            alt={account.displayName}
-            data-testid="account-avatar-img"
-            onError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: RADII.full,
-              objectFit: 'cover',
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              flexShrink: 0,
-            }}
-          />
-        ) : (
-          <div
-            data-testid="account-avatar-initials"
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: RADII.full,
-              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              fontSize: '1rem',
-              flexShrink: 0,
-            }}
-          >
-            {initials}
-          </div>
-        )}
+        <AccountAvatar
+          profilePictureUrl={account.profilePictureUrl}
+          displayName={account.displayName}
+          showAvatarImg={showAvatarImg}
+          initials={initials}
+          onAvatarError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
+        />
 
         {/* Identity & Link */}
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -308,110 +508,25 @@ export function AccountCard({
       </div>
 
       {/* Account Metadata Stats */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.md,
-          padding: `${SPACING.sm} 0`,
-          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          fontSize: '0.8125rem',
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          marginBottom: SPACING.md,
-        }}
-      >
-        {account.connectedPagesCount > 0 ? (
-          <button
-            type="button"
-            data-testid="account-pages-toggle"
-            aria-expanded={isPagesExpanded}
-            onClick={() => setIsPagesExpanded((prev) => !prev)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              padding: 0,
-              background: 'none',
-              border: 'none',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.8125rem',
-              fontFamily: 'inherit',
-              cursor: 'pointer',
-            }}
-          >
-            <span data-testid="account-pages-count">{pagesCountLabel}</span>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              style={{
-                transform: isPagesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.15s ease',
-              }}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        ) : (
-          <span data-testid="account-pages-count">{pagesCountLabel}</span>
-        )}
-
-        {formattedGender && (
-          <>
-            <span style={{ color: `var(--border-subtle, ${THEME.default.borders.hairline})` }}>•</span>
-            <span data-testid="account-gender">{formattedGender}</span>
-          </>
-        )}
-      </div>
+      <AccountMetadataStats
+        connectedPagesCount={account.connectedPagesCount}
+        pagesCountLabel={pagesCountLabel}
+        isPagesExpanded={isPagesExpanded}
+        onTogglePagesExpanded={() => setIsPagesExpanded((prev) => !prev)}
+        formattedGender={formattedGender}
+      />
 
       {/* Expandable Linked Pages List */}
       {isPagesExpanded && linkedPages.length > 0 && (
         <AccountLinkedPagesList pages={linkedPages} />
       )}
 
-      {/* Re-authentication Warning (Strictly when expired) */}
-      {isExpired && (
-        <div
-          data-testid="account-expired-alert"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            padding: '8px 10px',
-            backgroundColor: 'rgba(246, 70, 93, 0.10)',
-            border: '1px solid rgba(246, 70, 93, 0.25)',
-            borderRadius: RADII.sm,
-            fontSize: '0.75rem',
-            color: PALETTE.accent3,
-            fontWeight: TYPOGRAPHY.weights.medium,
-            marginBottom: SPACING.md,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>Session expired — reconnect to resume publishing</span>
-        </div>
-      )}
+      {/* Status Alerts */}
+      <AccountStatusAlerts
+        isExpired={isExpired}
+        isExpiringSoon={isExpiringSoon}
+        daysRemaining={daysRemaining}
+      />
 
       {/* Card Actions */}
       <div
@@ -423,7 +538,7 @@ export function AccountCard({
           marginTop: 'auto',
         }}
       >
-        {isExpired ? (
+        {isExpired || isExpiringSoon ? (
           <button
             type="button"
             data-testid="account-reconnect-button"
@@ -431,9 +546,9 @@ export function AccountCard({
             style={{
               height: '32px',
               padding: `0 ${SPACING.md}`,
-              backgroundColor: PALETTE.primary,
-              color: PALETTE.background,
-              border: 'none',
+              backgroundColor: isExpired ? PALETTE.primary : 'transparent',
+              color: isExpired ? PALETTE.background : `var(--text-main, ${THEME.default.text.primary})`,
+              border: isExpired ? 'none' : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
               borderRadius: RADII.sm,
               fontWeight: TYPOGRAPHY.weights.semibold,
               fontSize: '0.8125rem',
@@ -443,7 +558,7 @@ export function AccountCard({
               gap: SPACING.xs,
             }}
           >
-            <span>Reconnect account</span>
+            <span>{isExpired ? 'Reconnect account' : 'Refresh token'}</span>
           </button>
         ) : (
           <div style={{ flex: 1 }} />

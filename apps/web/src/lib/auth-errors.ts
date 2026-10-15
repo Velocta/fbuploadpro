@@ -37,15 +37,30 @@ function hasTechnicalLeak(message: string): boolean {
  * If any internal infrastructure or diagnostic plumbing keywords are detected,
  * replaces them with a clean, reassuring commercial SaaS message.
  */
+function extractRawErrorMessage(raw: unknown): string | null {
+  if (typeof raw === 'string') {
+    return raw;
+  }
+  if (raw instanceof Error) {
+    return raw.message;
+  }
+  if (raw && typeof raw === 'object' && 'message' in raw) {
+    return String((raw as { message: unknown }).message);
+  }
+  return null;
+}
+
 export function sanitizeAuthErrorMessage(
-  rawMessage: string | null | undefined,
+  rawMessage: unknown,
   fallbackMessage: string = 'Unable to complete your request at this moment. Please try again shortly.'
 ): string {
-  if (!rawMessage || typeof rawMessage !== 'string' || !rawMessage.trim()) {
+  const message = extractRawErrorMessage(rawMessage);
+
+  if (!message?.trim()) {
     return fallbackMessage;
   }
 
-  const trimmed = rawMessage.trim();
+  const trimmed = message.trim();
 
   if (hasTechnicalLeak(trimmed)) {
     return fallbackMessage;

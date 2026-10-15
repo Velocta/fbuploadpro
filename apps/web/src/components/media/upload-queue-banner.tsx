@@ -464,6 +464,7 @@ export async function ensureNestedFolderHierarchy(params: {
 
 export type QueuedUploadEntry = QueuedFileEntry & {
   relativeSubfolderPath?: string[] | undefined;
+  failureReason?: string | undefined;
 };
 
 export interface DuplicateDetectionResult {
@@ -639,6 +640,56 @@ export interface ExecuteBoundedUploadBatchResult {
   failedEntries: QueuedUploadEntry[];
 }
 
+async function requestPresignedUploadUrl(
+  fetchImpl: typeof fetch,
+  subdomain: string,
+  fileName: string,
+  fileSize: number,
+  mimeType: string
+): Promise<{
+  mediaId: string;
+  mediaKey: string;
+  mediaUploadUrl: string;
+  thumbnailKey: string;
+  thumbnailUploadUrl: string;
+  publicMediaUrl: string;
+  publicThumbnailUrl: string;
+}> {
+  const urlRes = await fetchImpl(`/api/tenant/${subdomain}/media/upload-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fileName,
+      fileSize,
+      mimeType,
+      thumbnailMimeType: 'image/webp',
+    }),
+  });
+  if (!urlRes.ok) {
+    throw new Error('Failed to request upload URL');
+  }
+  return (await urlRes.json()) as any;
+}
+
+async function uploadBinaryToStorage(
+  fetchImpl: typeof fetch,
+  mediaUploadUrl: string,
+  mimeType: string,
+  file: File
+): Promise<void> {
+  const isMockStorageUrl = mediaUploadUrl.includes('mock-r2.fbuploadpro.com');
+  if (!isMockStorageUrl) {
+    const putRes = await fetchImpl(mediaUploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      body: file,
+    });
+    if (!putRes.ok) {
+      throw new Error(`Failed to upload media to storage: HTTP ${putRes.status}`);
+    }
+  }
+}
+
 /**
  * Runs a bounded concurrency upload batch (max 3 concurrent files), updating unified progress via `onStateChange`.
  */
@@ -773,45 +824,16 @@ export async function executeBoundedUploadBatch(
       const metadata = await extractMediaMetadata(entry.file, 1500);
 
       // Step B: Request presigned upload URLs
-      const urlRes = await fetchImpl(`/api/tenant/${subdomain}/media/upload-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: cleanFileName,
-          fileSize: entry.file.size,
-          mimeType: entry.mimeType,
-          thumbnailMimeType: 'image/webp',
-        }),
-      });
-
-      if (!urlRes.ok) {
-        throw new Error('Failed to request upload URL');
-      }
-
-      const presigned = (await urlRes.json()) as {
-        mediaId: string;
-        mediaKey: string;
-        mediaUploadUrl: string;
-        thumbnailKey: string;
-        thumbnailUploadUrl: string;
-        publicMediaUrl: string;
-        publicThumbnailUrl: string;
-      };
+      const presigned = await requestPresignedUploadUrl(
+        fetchImpl,
+        subdomain,
+        cleanFileName,
+        entry.file.size,
+        entry.mimeType
+      );
 
       // Step C: Upload binary to R2 (skip network call if mock local domain is used in dev/test)
-      const isMockStorageUrl = presigned.mediaUploadUrl.includes(
-        'mock-r2.fbuploadpro.com'
-      );
-      if (!isMockStorageUrl) {
-        const putRes = await fetchImpl(presigned.mediaUploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': entry.mimeType },
-          body: entry.file,
-        });
-        if (!putRes.ok) {
-          throw new Error(`Failed to upload media to storage: HTTP ${putRes.status}`);
-        }
-      }
+      await uploadBinaryToStorage(fetchImpl, presigned.mediaUploadUrl, entry.mimeType, entry.file);
 
       // Step D: Confirm upload in PostgreSQL (captionText omitted so backend defaults to stripped filename)
       const mediaType = entry.mimeType.startsWith('video/') ? 'video' : 'image';
@@ -845,14 +867,19 @@ export async function executeBoundedUploadBatch(
       completedFiles += 1;
       transferredBytes = Math.min(totalBytes, transferredBytes + entry.file.size);
       emitProgress('uploading');
-    } catch (_err) {
+    } catch (err) {
       failedFiles += 1;
+      const failureReason =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Upload failed due to network or server error';
       failedEntries.push({
         file: entry.file,
         relativePath: entry.relativePath,
         ...(entry.relativeSubfolderPath
           ? { relativeSubfolderPath: entry.relativeSubfolderPath }
           : {}),
+        failureReason,
       });
       transferredBytes = Math.min(totalBytes, transferredBytes + entry.file.size);
       emitProgress('uploading');
@@ -1207,6 +1234,52 @@ export function UploadQueueBanner({
             </span>
           )}
         </div>
+      )}
+
+      {state.failedFiles > 0 && state.failedEntries && state.failedEntries.length > 0 && (
+        <details
+          data-testid="upload-failure-breakdown"
+          style={{
+            marginTop: SPACING.xs,
+            padding: `${SPACING.xs} ${SPACING.sm}`,
+            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+            borderRadius: RADII.xs,
+            fontSize: '0.75rem',
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          }}
+        >
+          <summary
+            style={{
+              cursor: 'pointer',
+              color: PALETTE.accent3,
+              fontWeight: TYPOGRAPHY.weights.medium,
+            }}
+          >
+            Show failure breakdown ({state.failedEntries.length})
+          </summary>
+          <ul
+            style={{
+              marginTop: SPACING.xs,
+              paddingLeft: SPACING.md,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+            }}
+          >
+            {state.failedEntries.map((failed, idx) => (
+              <li key={`${failed.relativePath || failed.file.name}-${idx}`}>
+                <span style={{ fontWeight: TYPOGRAPHY.weights.medium, color: `var(--text-main, ${THEME.default.text.primary})` }}>
+                  {failed.file.name}
+                </span>
+                {failed.failureReason && (
+                  <span style={{ marginLeft: SPACING.xs, color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+                    — {failed.failureReason}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

@@ -17,10 +17,13 @@ export interface GraphApiErrorEvaluation {
 /**
  * Maps Facebook Graph API error codes and subcodes to internal domain health states.
  * - Error 190 / 102 (with subcodes 458, 459, 460, 463, 464, 467, 483, 492 or general): maps to expired / invalid_token, requiring re-auth.
+ * - Error 10 / 200-299: maps to expired / invalid_token, requiring re-auth.
  * - Error 368:
  *   - Subcode 1390008 (or default 368): "We limit how often you can post, comment or do other things..." -> maps pageStatus to 'fb_rate_limited' with 3-day auto-recovery to 'active'.
  *   - Subcode 4854002: "Confirm your identity before you can publish as this Page." -> maps pageStatus to 'page_checkpoint' (requires user mobile login & verification, then manual reactivation).
  *   - Subcode 1404082: "You've already posted this. Posting the same content repeatedly..." -> keeps pageStatus 'active', marks post as failed (isTransient: false) with reason.
+ * - Error 506: Duplicate post -> keeps pageStatus 'active', marks post as failed (isTransient: false) with duplicate reason.
+ * - Error 1609005: Bad/unreachable link -> keeps pageStatus 'active', marks post as failed (isTransient: false) with bad link reason.
  * - Error 4, 17, 32, 341, 613, 80000-80014 (API call volume rate limits): keeps accountStatus and pageStatus 'active' with isTransient: true.
  */
 export function evaluateGraphApiError(
@@ -71,6 +74,39 @@ export function evaluateGraphApiError(
       isTransient: false,
       requiresReauth: true,
       message: 'Access token is invalid or revoked.',
+    };
+  }
+
+  // Error 10 or 200-299: Facebook Permission / Authorization Denied
+  if (code === 10 || (code >= 200 && code <= 299)) {
+    return {
+      accountStatus: 'expired',
+      pageStatus: 'invalid_token',
+      isTransient: false,
+      requiresReauth: true,
+      message: 'Facebook permission or authorization denied. Please re-authenticate your account.',
+    };
+  }
+
+  // Error 506: Duplicate Post
+  if (code === 506) {
+    return {
+      accountStatus: 'active',
+      pageStatus: 'active',
+      isTransient: false,
+      requiresReauth: false,
+      message: 'This post is identical to the one previously shared and was rejected as duplicate.',
+    };
+  }
+
+  // Error 1609005: Bad Link URL
+  if (code === 1609005) {
+    return {
+      accountStatus: 'active',
+      pageStatus: 'active',
+      isTransient: false,
+      requiresReauth: false,
+      message: 'The provided link URL cannot be loaded or is unreachable by Facebook.',
     };
   }
 

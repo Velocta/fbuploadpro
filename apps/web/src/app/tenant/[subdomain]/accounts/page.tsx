@@ -13,7 +13,7 @@ import {
   MODAL_CONTAINER_STYLE,
 } from '@/components/pages/dedicated/modal-styles';
 
-type AccountStatusFilter = 'all' | 'active' | 'expired';
+type AccountStatusFilter = 'all' | 'active' | 'expiring_soon' | 'expired';
 
 export function sortAccountsExpiredFirst(items: FacebookAccountItem[]): FacebookAccountItem[] {
   return [...items].sort((a, b) => {
@@ -38,8 +38,23 @@ export function filterAccountsList(
     const matchesSearch =
       normalizedQuery.length === 0 ||
       account.displayName.toLowerCase().includes(normalizedQuery);
-    const matchesStatus =
-      statusFilter === 'all' || account.status === statusFilter;
+
+    let matchesStatus = true;
+    if (statusFilter === 'active') {
+      matchesStatus = account.status === 'active';
+    } else if (statusFilter === 'expired') {
+      matchesStatus = account.status === 'expired';
+    } else if (statusFilter === 'expiring_soon') {
+      if (account.status === 'expired' || !account.tokenExpiresAt) {
+        matchesStatus = false;
+      } else {
+        const days = Math.ceil(
+          (new Date(account.tokenExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        );
+        matchesStatus = days > 0 && days <= 7;
+      }
+    }
+
     return matchesSearch && matchesStatus;
   });
 }
@@ -54,6 +69,7 @@ interface AccountsFilterBarProps {
 const FILTER_TABS: Array<{ value: AccountStatusFilter; label: string; testId: string }> = [
   { value: 'all', label: 'All', testId: 'accounts-filter-all' },
   { value: 'active', label: 'Active', testId: 'accounts-filter-active' },
+  { value: 'expiring_soon', label: 'Expiring Soon', testId: 'accounts-filter-expiring-soon' },
   { value: 'expired', label: 'Expired', testId: 'accounts-filter-expired' },
 ];
 
@@ -527,8 +543,10 @@ export default function TenantAccountsPage() {
   const [byocStatus, setByocStatus] = useState<{
     isConfigured: boolean;
     isLoading: boolean;
-  }>({ isConfigured: true, isLoading: true });
+    error: string | null;
+  }>({ isConfigured: false, isLoading: true, error: null });
   const [isByocPromptOpen, setIsByocPromptOpen] = useState(false);
+  const [byocRetryNonce, setByocRetryNonce] = useState(0);
 
   // Modal & filter states
   const [isConnectOpen, setIsConnectOpen] = useState(false);
@@ -551,14 +569,22 @@ export default function TenantAccountsPage() {
           const data = await res.json();
           const isConfigured = Boolean(data.fbAppId && data.hasSecret);
           if (isMounted) {
-            setByocStatus({ isConfigured, isLoading: false });
+            setByocStatus({ isConfigured, isLoading: false, error: null });
           }
         } else if (isMounted) {
-          setByocStatus({ isConfigured: false, isLoading: false });
+          setByocStatus((prev) => ({
+            isConfigured: prev.isConfigured,
+            isLoading: false,
+            error: 'Failed to verify Facebook App credentials. Please check your workspace settings.',
+          }));
         }
       } catch {
         if (isMounted) {
-          setByocStatus({ isConfigured: false, isLoading: false });
+          setByocStatus((prev) => ({
+            isConfigured: prev.isConfigured,
+            isLoading: false,
+            error: 'Network failure verifying Facebook App credentials.',
+          }));
         }
       }
     }
@@ -566,7 +592,7 @@ export default function TenantAccountsPage() {
     return () => {
       isMounted = false;
     };
-  }, [subdomain]);
+  }, [subdomain, byocRetryNonce]);
 
   // Fetch accounts list
   const fetchAccounts = useCallback(async () => {
@@ -604,7 +630,8 @@ export default function TenantAccountsPage() {
   }, [searchParams]);
 
   const handleOpenNewConnect = () => {
-    if (!byocStatus.isLoading && !byocStatus.isConfigured) {
+    if (byocStatus.isLoading) return;
+    if (!byocStatus.isConfigured) {
       setIsByocPromptOpen(true);
       return;
     }
@@ -614,7 +641,8 @@ export default function TenantAccountsPage() {
 
   // Handle Reconnect (opens ConnectAccountModal with reconnectingAccount context)
   const handleReconnect = (account: FacebookAccountItem) => {
-    if (!byocStatus.isLoading && !byocStatus.isConfigured) {
+    if (byocStatus.isLoading) return;
+    if (!byocStatus.isConfigured) {
       setIsByocPromptOpen(true);
       return;
     }
@@ -814,12 +842,15 @@ export default function TenantAccountsPage() {
           <button
             type="button"
             data-testid="header-connect-button"
+            disabled={byocStatus.isLoading}
             onClick={handleOpenNewConnect}
             style={{
               ...COMPONENT_STYLES.primaryButton,
               display: 'inline-flex',
               alignItems: 'center',
               gap: SPACING.xs,
+              opacity: byocStatus.isLoading ? 0.6 : 1,
+              cursor: byocStatus.isLoading ? 'not-allowed' : 'pointer',
             }}
           >
             <svg
@@ -849,8 +880,47 @@ export default function TenantAccountsPage() {
         />
       )}
 
+      {/* BYOC Network / 500 Retry Banner */}
+      {byocStatus.error && (
+        <div
+          data-testid="byoc-retry-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: `${SPACING.sm} ${SPACING.md}`,
+            marginBottom: SPACING.lg,
+            backgroundColor: 'rgba(250, 215, 52, 0.08)',
+            border: '1px solid rgba(250, 215, 52, 0.25)',
+            borderRadius: RADII.sm,
+            fontSize: '0.875rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          <span>{byocStatus.error}</span>
+          <button
+            type="button"
+            data-testid="byoc-retry-btn"
+            onClick={() => {
+              setByocStatus((prev) => ({ ...prev, isLoading: true, error: null }));
+              setByocRetryNonce((n) => n + 1);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: PALETTE.primary,
+              textDecoration: 'underline',
+              cursor: 'pointer',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+            }}
+          >
+            Retry Check
+          </button>
+        </div>
+      )}
+
       {/* BYOC Required Warning Banner */}
-      {!byocStatus.isLoading && !byocStatus.isConfigured && (
+      {!byocStatus.isLoading && !byocStatus.isConfigured && !byocStatus.error && (
         <ByocRequiredBanner subdomain={subdomain} />
       )}
 

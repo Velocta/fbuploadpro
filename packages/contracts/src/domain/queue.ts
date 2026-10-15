@@ -73,6 +73,7 @@ export const QueueItemStatusSchema = z.enum([
   'published',
   'failed',
   'skipped',
+  'cancelled',
 ]);
 
 export type QueueItemStatus = z.infer<typeof QueueItemStatusSchema>;
@@ -134,7 +135,7 @@ export const UpdateQueueItemRequestSchema = z.object({
   caption: z.string().max(5000).optional(),
   firstComment: z.string().max(2000).nullable().optional(),
   scheduledTime: z.string().datetime().optional(),
-  status: z.enum(['queued', 'skipped']).optional(),
+  status: z.enum(['queued', 'skipped', 'cancelled']).optional(),
   postFormat: PostFormatSchema.optional(),
   linkUrl: z.string().url().nullable().optional(),
 });
@@ -193,6 +194,11 @@ export const ListQueueItemsResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   limit: z.number().int(),
   offset: z.number().int(),
+  queuedCount: z.number().int().nonnegative().optional(),
+  publishedCount: z.number().int().nonnegative().optional(),
+  failedCount: z.number().int().nonnegative().optional(),
+  skippedCount: z.number().int().nonnegative().optional(),
+  cancelledCount: z.number().int().nonnegative().optional(),
 });
 
 export type ListQueueItemsResponse = z.infer<typeof ListQueueItemsResponseSchema>;

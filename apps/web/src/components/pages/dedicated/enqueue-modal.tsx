@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import type { PostFormat } from '@fbuploadpro/contracts';
+import { type PostFormat, validatePostFormatEligibility } from '@fbuploadpro/contracts';
 import {
   THEME,
   PALETTE,
@@ -160,6 +160,20 @@ export function EnqueueModal({
     }
     if (selectedFormat === 'text' && (!caption || caption.trim().length === 0)) {
       setError('Caption is required for text posts');
+      return;
+    }
+
+    const chosenMedia = mediaList.find((m) => m.id === selectedMediaId);
+    const eligibility = validatePostFormatEligibility({
+      postFormat: selectedFormat,
+      caption,
+      firstComment: selectedFormat === 'story' ? null : firstComment,
+      linkUrl: linkUrl.trim() || null,
+      media: chosenMedia ? { mediaType: chosenMedia.mediaType } : null,
+    });
+
+    if (!eligibility.valid) {
+      setError(eligibility.error || 'The selected media does not meet requirements for this format');
       return;
     }
 

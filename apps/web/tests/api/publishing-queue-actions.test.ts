@@ -90,6 +90,21 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       expect(json.error).toBe('INVALID_REQUEST');
     });
 
+    it('returns 400 Bad Request if scheduledTime is an unparseable timestamp', async () => {
+      const req = new NextRequest(`http://localhost:3000/api/tenant/acme/publishing/queue/${itemId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ scheduledTime: 'not-a-valid-timestamp' }),
+        headers: {
+          cookie: validSessionCookie,
+          'content-type': 'application/json',
+        },
+      });
+      const res = await handleUpdateQueueItem(req, 'acme', itemId);
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('INVALID_REQUEST');
+    });
+
     it('returns 404 Not Found if queue item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {

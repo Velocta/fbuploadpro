@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   deduplicateBatchUrls,
@@ -32,12 +32,14 @@ import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
 export const DEFAULT_DOWNLOADS_FOLDER_NAME = 'Downloads';
 
 export interface DownloaderBatchProgressState {
-  status: 'idle' | 'downloading' | 'completed';
+  status: 'idle' | 'downloading' | 'completed' | 'cancelled';
   totalLinks: number;
   completedLinks: number;
   currentUrl: string | null;
   duplicateCount: number;
   invalidCount: number;
+  stage?: 'resolving' | 'streaming' | undefined;
+  stagePercent?: number | undefined;
 }
 
 export interface DownloaderFailedEntry {
@@ -252,6 +254,7 @@ export interface ExecuteDownloaderBatchOptions {
   folderId: string | null;
   onProgress?: (state: DownloaderBatchProgressState) => void;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }
 
 export interface ExecuteDownloaderBatchResult {
@@ -271,6 +274,182 @@ async function extractApiErrorMessage(res: Response, fallback: string): Promise<
   }
 }
 
+function createCancelledOutcome(idx: number, url: string, folderId: string | null) {
+  return {
+    saved: [] as DownloaderSavedEntry[],
+    failed: {
+      id: `failed-${idx}-${Date.now()}`,
+      url,
+      folderId,
+      errorMessage: 'Download was cancelled.',
+    },
+  };
+}
+
+async function fetchJobMediaItem(
+  subdomain: string,
+  job: any,
+  fetchImpl: typeof fetch,
+  signal?: AbortSignal
+): Promise<DownloaderSavedEntry[]> {
+  if (!job?.media_id) return [];
+  try {
+    const mediaRes = await fetchImpl(
+      `/api/tenant/${subdomain}/media/${job.media_id}`,
+      signal ? { signal } : {}
+    );
+    if (!mediaRes.ok) return [];
+    const mediaData = await mediaRes.json();
+    return [
+      {
+        item: mediaData?.item ?? mediaData,
+        sourceUrl: job.source_url,
+        platform: job.source_platform,
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
+async function evaluatePollJobStatus(
+  job: any,
+  params: {
+    subdomain: string;
+    url: string;
+    idx: number;
+    folderId: string | null;
+    fetchImpl: typeof fetch;
+    signal?: AbortSignal;
+    onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
+  }
+): Promise<{ finished: boolean; outcome?: { saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null } }> {
+  if (job?.status === 'processing') {
+    const pct = typeof job.progress_percent === 'number' ? job.progress_percent : 0;
+    params.onStageChange?.(pct > 0 ? 'streaming' : 'resolving', pct);
+    return { finished: false };
+  }
+
+  if (job?.status === 'completed') {
+    const saved = await fetchJobMediaItem(params.subdomain, job, params.fetchImpl, params.signal);
+    return { finished: true, outcome: { saved, failed: null } };
+  }
+
+  if (job?.status === 'failed') {
+    return {
+      finished: true,
+      outcome: {
+        saved: [],
+        failed: {
+          id: `failed-${params.idx}-${Date.now()}`,
+          url: params.url,
+          folderId: params.folderId,
+          errorMessage: job.error_message || 'Could not save media from this link.',
+        },
+      },
+    };
+  }
+
+  return { finished: false };
+}
+
+function isPermanentAuthOrNotFoundError(status: number): boolean {
+  return status === 401 || status === 403 || status === 404;
+}
+
+async function executeSinglePoll(
+  subdomain: string,
+  jobId: string,
+  fetchImpl: typeof fetch,
+  signal?: AbortSignal
+): Promise<{ status: number; ok: boolean; data?: any } | 'aborted'> {
+  try {
+    const pollRes = await fetchImpl(
+      `/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`,
+      signal ? { signal } : {}
+    );
+    if (isPermanentAuthOrNotFoundError(pollRes.status)) {
+      return { status: pollRes.status, ok: false };
+    }
+    if (!pollRes.ok) {
+      return { status: pollRes.status, ok: false };
+    }
+    const data = await pollRes.json();
+    return { status: pollRes.status, ok: true, data };
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === 'AbortError') {
+      return 'aborted';
+    }
+    return { status: 0, ok: false };
+  }
+}
+
+function getPollErrorMessage(status: number): string {
+  if (status === 404) {
+    return 'Download job not found or expired.';
+  }
+  return 'Authentication error while checking download status.';
+}
+
+interface PollIterationOutcome {
+  done: boolean;
+  outcome?: { saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null };
+}
+
+async function handlePollIteration(params: {
+  subdomain: string;
+  jobId: string;
+  url: string;
+  idx: number;
+  folderId: string | null;
+  fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
+}): Promise<PollIterationOutcome> {
+  const { subdomain, jobId, url, idx, folderId, fetchImpl, signal } = params;
+
+  if (signal?.aborted) {
+    return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
+  }
+
+  await new Promise((r) => setTimeout(r, 1500));
+
+  if (signal?.aborted) {
+    return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
+  }
+
+  const pollResult = await executeSinglePoll(subdomain, jobId, fetchImpl, signal);
+  if (pollResult === 'aborted') {
+    return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
+  }
+
+  if (isPermanentAuthOrNotFoundError(pollResult.status)) {
+    return {
+      done: true,
+      outcome: {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: getPollErrorMessage(pollResult.status),
+        },
+      },
+    };
+  }
+
+  if (!pollResult.ok || !pollResult.data?.job) {
+    return { done: false };
+  }
+
+  const evaluation = await evaluatePollJobStatus(pollResult.data.job, params);
+  if (evaluation.finished && evaluation.outcome) {
+    return { done: true, outcome: evaluation.outcome };
+  }
+
+  return { done: false };
+}
+
 async function pollDownloadJobCompletion(params: {
   subdomain: string;
   jobId: string;
@@ -278,45 +457,14 @@ async function pollDownloadJobCompletion(params: {
   idx: number;
   folderId: string | null;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
 }): Promise<{ saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null }> {
-  const { subdomain, jobId, url, idx, folderId, fetchImpl } = params;
   const maxPolls = 60;
   for (let p = 0; p < maxPolls; p++) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`);
-    if (!pollRes.ok) continue;
-
-    const pollData = await pollRes.json();
-    const job = pollData?.job;
-    if (job?.status === 'completed') {
-      if (job?.media_id) {
-        const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`).catch(() => null);
-        if (mediaRes?.ok) {
-          const mediaData = await mediaRes.json();
-          return {
-            saved: [
-              {
-                item: mediaData?.item ?? mediaData,
-                sourceUrl: job.source_url,
-                platform: job.source_platform,
-              },
-            ],
-            failed: null,
-          };
-        }
-      }
-      return { saved: [], failed: null };
-    }
-    if (job?.status === 'failed') {
-      return {
-        saved: [],
-        failed: {
-          id: `failed-${idx}-${Date.now()}`,
-          url,
-          folderId,
-          errorMessage: job.error_message || 'Could not save media from this link.',
-        },
-      };
+    const iteration = await handlePollIteration(params);
+    if (iteration.done && iteration.outcome) {
+      return iteration.outcome;
     }
   }
   return { saved: [], failed: null };
@@ -328,11 +476,13 @@ async function processSingleBatchUrl(params: {
   idx: number;
   folderId: string | null;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
 }): Promise<{
   saved: DownloaderSavedEntry[];
   failed: DownloaderFailedEntry | null;
 }> {
-  const { subdomain, url, idx, folderId, fetchImpl } = params;
+  const { subdomain, url, idx, folderId, fetchImpl, signal, onStageChange } = params;
   try {
     const res = await fetchImpl(`/api/tenant/${subdomain}/media/downloader`, {
       method: 'POST',
@@ -341,13 +491,23 @@ async function processSingleBatchUrl(params: {
         url,
         folderId,
       }),
+      ...(signal ? { signal } : {}),
     });
 
     if (res.status === 202) {
       const data = (await res.json()) as { job?: { id: string } };
       const jobId = data?.job?.id;
       if (jobId) {
-        return pollDownloadJobCompletion({ subdomain, jobId, url, idx, folderId, fetchImpl });
+        return pollDownloadJobCompletion({
+          subdomain,
+          jobId,
+          url,
+          idx,
+          folderId,
+          fetchImpl,
+          ...(signal ? { signal } : {}),
+          ...(onStageChange ? { onStageChange } : {}),
+        });
       }
     }
 
@@ -376,7 +536,18 @@ async function processSingleBatchUrl(params: {
         errorMessage: message,
       },
     };
-  } catch {
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === 'AbortError') {
+      return {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: 'Download was cancelled.',
+        },
+      };
+    }
     // Convert network transport error into a structured retryable failed entry
     return {
       saved: [],
@@ -398,7 +569,7 @@ async function processSingleBatchUrl(params: {
 export async function executeDownloaderBatch(
   options: ExecuteDownloaderBatchOptions
 ): Promise<ExecuteDownloaderBatchResult> {
-  const { subdomain, rawInput, folderId, onProgress, fetchImpl = fetch } = options;
+  const { subdomain, rawInput, folderId, onProgress, fetchImpl = fetch, signal } = options;
   const deduped = deduplicateBatchUrls(rawInput);
   const { urls, duplicateCount, invalidUrls } = deduped;
 
@@ -421,9 +592,22 @@ export async function executeDownloaderBatch(
     currentUrl: urls[0] ?? null,
     duplicateCount,
     invalidCount: invalidUrls.length,
+    stage: 'resolving',
   });
 
   const runSequential = async (idx: number): Promise<void> => {
+    if (signal?.aborted) {
+      onProgress?.({
+        status: 'cancelled',
+        totalLinks: urls.length,
+        completedLinks: idx,
+        currentUrl: null,
+        duplicateCount,
+        invalidCount: invalidUrls.length,
+      });
+      return;
+    }
+
     if (idx >= urls.length) {
       return;
     }
@@ -435,6 +619,7 @@ export async function executeDownloaderBatch(
       currentUrl: url,
       duplicateCount,
       invalidCount: invalidUrls.length,
+      stage: 'resolving',
     });
 
     const outcome = await processSingleBatchUrl({
@@ -443,6 +628,19 @@ export async function executeDownloaderBatch(
       idx,
       folderId,
       fetchImpl,
+      ...(signal ? { signal } : {}),
+      onStageChange: (stage, stagePercent) => {
+        onProgress?.({
+          status: 'downloading',
+          totalLinks: urls.length,
+          completedLinks: idx,
+          currentUrl: url,
+          duplicateCount,
+          invalidCount: invalidUrls.length,
+          stage,
+          ...(stagePercent !== undefined ? { stagePercent } : {}),
+        });
+      },
     });
 
     savedEntries.push(...outcome.saved);
@@ -613,6 +811,373 @@ export interface MediaDownloaderProps {
   initialDeduplicationCount?: number;
 }
 
+function resolveInitialDownloaderFolderId(
+  initialId?: string | null,
+  folders?: MediaFolder[]
+): string | null {
+  if (initialId !== undefined) {
+    return initialId;
+  }
+  if (folders) {
+    const existingDownloads = findRootDownloadsFolder(folders);
+    if (existingDownloads) {
+      return existingDownloads.id;
+    }
+  }
+  return null;
+}
+
+function sortFoldersForDownloader(
+  folders: MediaFolder[]
+): Array<{ folder: MediaFolder; pathLabel: string }> {
+  const withPaths = folders.map((folder) => ({
+    folder,
+    pathLabel: formatFolderAncestryPath(folder.id, folders),
+  }));
+  withPaths.sort((a, b) => {
+    const aIsDownloads =
+      (a.folder.parentId ?? null) === null &&
+      a.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
+    const bIsDownloads =
+      (b.folder.parentId ?? null) === null &&
+      b.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
+    if (aIsDownloads && !bIsDownloads) return -1;
+    if (!aIsDownloads && bIsDownloads) return 1;
+    return a.pathLabel.toLowerCase().localeCompare(b.pathLabel.toLowerCase());
+  });
+  return withPaths;
+}
+
+function getProgressTextColor(status?: string): string {
+  if (status === 'completed') return PALETTE.accent4;
+  if (status === 'cancelled') return PALETTE.accent3;
+  return PALETTE.primary;
+}
+
+function DownloaderSavedItemRow({
+  entry,
+  folders,
+  onOpenInFolder,
+}: Readonly<{
+  entry: DownloaderSavedEntry;
+  folders: MediaFolder[];
+  onOpenInFolder: (folderId: string | null) => void;
+}>) {
+  const { item, platform } = entry;
+  const resolvedCaption =
+    item.captionText && item.captionText.trim().length > 0
+      ? item.captionText
+      : deriveDefaultCaption(item.name);
+  const folderPathLabel = formatFolderAncestryPath(item.folderId, folders);
+  const previewSrc = item.thumbnailUrl || item.url;
+
+  return (
+    <article
+      data-testid={`downloader-saved-item-${item.id}`}
+      style={{
+        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderRadius: RADII.md,
+        padding: SPACING.md,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: SPACING.md,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+          minWidth: 0,
+          flex: 1,
+        }}
+      >
+        {/* Thumbnail / Video Preview */}
+        <div
+          style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: RADII.sm,
+            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            overflow: 'hidden',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {renderSavedItemPreview(item, previewSrc)}
+        </div>
+
+        {/* Asset Details & Auto-Populated Caption */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: SPACING.xs,
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.sm,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '0.875rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {item.name}
+            </span>
+
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                fontVariantNumeric: TYPOGRAPHY.tabularNums,
+              }}
+            >
+              {formatBytes(item.fileSize)}
+            </span>
+
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                padding: `2px ${SPACING.xs}`,
+              }}
+            >
+              {formatPlatformLabel(platform)}
+            </span>
+
+            <span
+              data-testid={`downloader-item-folder-${item.id}`}
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                padding: `2px ${SPACING.xs}`,
+              }}
+            >
+              {folderPathLabel}
+            </span>
+          </div>
+
+          <p
+            data-testid={`downloader-item-caption-${item.id}`}
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {resolvedCaption}
+          </p>
+        </div>
+      </div>
+
+      {/* 1-Click Open in Folder Action */}
+      <button
+        type="button"
+        data-testid={`downloader-open-folder-${item.id}`}
+        data-slot="downloader-open-folder-btn"
+        onClick={() => onOpenInFolder(item.folderId)}
+        style={{
+          ...COMPONENT_STYLES.secondaryButton(THEME.default),
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+          height: '34px',
+          fontSize: '0.8125rem',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Open in Folder
+      </button>
+    </article>
+  );
+}
+
+function DownloaderNewFolderDialog({
+  isOpen,
+  onOpenChange,
+  onSubmit,
+  folderName,
+  onFolderNameChange,
+  folderParentId,
+  onFolderParentIdChange,
+  folderError,
+  sortedFolderOptions,
+  isCreatingFolder,
+}: Readonly<{
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  folderName: string;
+  onFolderNameChange: (name: string) => void;
+  folderParentId: string | null;
+  onFolderParentIdChange: (parentId: string | null) => void;
+  folderError: string | null;
+  sortedFolderOptions: Array<{ folder: MediaFolder; pathLabel: string }>;
+  isCreatingFolder: boolean;
+}>) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="downloader-new-folder-dialog">
+        <DialogHeader>
+          <DialogTitle>New Folder</DialogTitle>
+          <DialogDescription>
+            Create a destination folder in your Media Library and select it for upcoming downloads.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={onSubmit}>
+          <DialogBody>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: SPACING.md,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: SPACING.xs,
+                }}
+              >
+                <label
+                  htmlFor="downloader-new-folder-input"
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  Folder name
+                </label>
+                <input
+                  id="downloader-new-folder-input"
+                  data-testid="downloader-new-folder-input"
+                  type="text"
+                  value={folderName}
+                  onChange={(e) => onFolderNameChange(e.target.value)}
+                  placeholder="e.g. Viral Hooks Q4"
+                  maxLength={100}
+                  style={{
+                    ...COMPONENT_STYLES.input(THEME.default),
+                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    width: '100%',
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: SPACING.xs,
+                }}
+              >
+                <label
+                  htmlFor="downloader-new-folder-parent-select"
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  Parent location
+                </label>
+                <select
+                  id="downloader-new-folder-parent-select"
+                  data-testid="downloader-new-folder-parent-select"
+                  value={folderParentId ?? ''}
+                  onChange={(e) =>
+                    onFolderParentIdChange(e.target.value ? e.target.value : null)
+                  }
+                  style={{
+                    ...COMPONENT_STYLES.input(THEME.default),
+                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    width: '100%',
+                  }}
+                >
+                  <option value="">All Media (Root)</option>
+                  {sortedFolderOptions.map(({ folder, pathLabel }) => (
+                    <option key={folder.id} value={folder.id}>
+                      {pathLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {folderError && (
+                <div
+                  role="alert"
+                  data-testid="downloader-new-folder-error"
+                  style={{
+                    color: PALETTE.accent3,
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                  }}
+                >
+                  {folderError}
+                </div>
+              )}
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              style={COMPONENT_STYLES.secondaryButton(THEME.default)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              data-testid="downloader-new-folder-submit"
+              disabled={isCreatingFolder}
+              style={COMPONENT_STYLES.primaryButton}
+            >
+              {isCreatingFolder ? 'Creating...' : 'Create folder'}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function MediaDownloader({
   subdomain,
   initialFolders,
@@ -629,18 +1194,9 @@ export function MediaDownloader({
   const router = useRouter();
 
   const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
-    if (initialSelectedFolderId !== undefined) {
-      return initialSelectedFolderId;
-    }
-    if (initialFolders) {
-      const existingDownloads = findRootDownloadsFolder(initialFolders);
-      if (existingDownloads) {
-        return existingDownloads.id;
-      }
-    }
-    return null;
-  });
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() =>
+    resolveInitialDownloaderFolderId(initialSelectedFolderId, initialFolders)
+  );
 
   const [urlInput, setUrlInput] = useState(initialUrlInput);
   const [urlError, setUrlError] = useState<string | null>(initialUrlError);
@@ -658,6 +1214,17 @@ export function MediaDownloader({
     initialFailedEntries
   );
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleAbortDownload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setBatchProgress((prev) =>
+      prev ? { ...prev, status: 'cancelled' } : null
+    );
+  };
 
   // Inline New Folder Modal state
   const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(
@@ -697,24 +1264,7 @@ export function MediaDownloader({
 
   const isDownloading = batchProgress?.status === 'downloading';
 
-  const sortedFolderOptions = React.useMemo(() => {
-    const withPaths = folders.map((folder) => ({
-      folder,
-      pathLabel: formatFolderAncestryPath(folder.id, folders),
-    }));
-    withPaths.sort((a, b) => {
-      const aIsDownloads =
-        (a.folder.parentId ?? null) === null &&
-        a.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
-      const bIsDownloads =
-        (b.folder.parentId ?? null) === null &&
-        b.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
-      if (aIsDownloads && !bIsDownloads) return -1;
-      if (!aIsDownloads && bIsDownloads) return 1;
-      return a.pathLabel.toLowerCase().localeCompare(b.pathLabel.toLowerCase());
-    });
-    return withPaths;
-  }, [folders]);
+  const sortedFolderOptions = React.useMemo(() => sortFoldersForDownloader(folders), [folders]);
 
   const handleOpenNewFolderDialog = useCallback(() => {
     setNewFolderName('');
@@ -774,26 +1324,34 @@ export function MediaDownloader({
     setUrlError(null);
     setDeduplicationCount(validation.duplicateCount);
 
-    const result = await executeDownloaderBatch({
-      subdomain,
-      rawInput: urlInput,
-      folderId: selectedFolderId,
-      onProgress: (state) => {
-        setBatchProgress(state);
-      },
-    });
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    if (result.savedEntries.length > 0) {
-      setSavedEntries((prev) => [...result.savedEntries, ...prev]);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
+    try {
+      const result = await executeDownloaderBatch({
+        subdomain,
+        rawInput: urlInput,
+        folderId: selectedFolderId,
+        signal: controller.signal,
+        onProgress: (state) => {
+          setBatchProgress(state);
+        },
+      });
+
+      if (result.savedEntries.length > 0) {
+        setSavedEntries((prev) => [...result.savedEntries, ...prev]);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
+        }
       }
-    }
-    if (result.failedEntries.length > 0) {
-      setFailedEntries((prev) => [...result.failedEntries, ...prev]);
-    }
-    if (result.failedEntries.length === 0) {
-      setUrlInput('');
+      if (result.failedEntries.length > 0) {
+        setFailedEntries((prev) => [...result.failedEntries, ...prev]);
+      }
+      if (result.failedEntries.length === 0) {
+        setUrlInput('');
+      }
+    } finally {
+      abortControllerRef.current = null;
     }
   };
 
@@ -1175,6 +1733,18 @@ export function MediaDownloader({
                 Saving {batchProgress.completedLinks} of {batchProgress.totalLinks}{' '}
                 {batchProgress.totalLinks === 1 ? 'link' : 'links'} to Media Library...
               </span>
+              {batchProgress.stage && isDownloading && (
+                <span
+                  data-testid="downloader-stage-label"
+                  style={{
+                    fontSize: '0.75rem',
+                    color: PALETTE.primary,
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                  }}
+                >
+                  [{batchProgress.stage === 'streaming' ? 'Streaming media bytes...' : 'Resolving media link...'}]
+                </span>
+              )}
               {batchProgress.currentUrl && isDownloading && (
                 <span
                   style={{
@@ -1191,20 +1761,40 @@ export function MediaDownloader({
               )}
             </div>
 
-            <span
-              data-testid="downloader-progress-percent"
-              style={{
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.bold,
-                color:
-                  batchProgress.status === 'completed'
-                    ? PALETTE.accent4
-                    : PALETTE.primary,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              }}
-            >
-              {progressPercent}%
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
+              <span
+                data-testid="downloader-progress-percent"
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: TYPOGRAPHY.weights.bold,
+                  color: getProgressTextColor(batchProgress.status),
+                  fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                }}
+              >
+                {batchProgress.status === 'cancelled' ? 'Cancelled' : `${progressPercent}%`}
+              </span>
+
+              {isDownloading && (
+                <button
+                  type="button"
+                  data-testid="abort-download-btn"
+                  onClick={handleAbortDownload}
+                  style={{
+                    height: '28px',
+                    padding: `0 ${SPACING.sm}`,
+                    backgroundColor: 'transparent',
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    borderRadius: RADII.xs,
+                    fontSize: '0.75rem',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Abort Download
+                </button>
+              )}
+            </div>
           </div>
 
           <div
@@ -1400,302 +1990,34 @@ export function MediaDownloader({
             })}
 
             {/* Saved Media Items */}
-            {savedEntries.map(({ item, platform }) => {
-              const resolvedCaption =
-                item.captionText && item.captionText.trim().length > 0
-                  ? item.captionText
-                  : deriveDefaultCaption(item.name);
-              const folderPathLabel = formatFolderAncestryPath(item.folderId, folders);
-              const previewSrc = item.thumbnailUrl || item.url;
-
-              return (
-                <article
-                  key={item.id}
-                  data-testid={`downloader-saved-item-${item.id}`}
-                  style={{
-                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    borderRadius: RADII.md,
-                    padding: SPACING.md,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: SPACING.md,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: SPACING.md,
-                      minWidth: 0,
-                      flex: 1,
-                    }}
-                  >
-                    {/* Thumbnail / Video Preview */}
-                    <div
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: RADII.sm,
-                        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        overflow: 'hidden',
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {renderSavedItemPreview(item, previewSrc)}
-                    </div>
-
-                    {/* Asset Details & Auto-Populated Caption */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: SPACING.xs,
-                        minWidth: 0,
-                        flex: 1,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: SPACING.sm,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '0.875rem',
-                            fontWeight: TYPOGRAPHY.weights.semibold,
-                            color: `var(--text-main, ${THEME.default.text.primary})`,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.name}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: '0.75rem',
-                            color: `var(--text-dim, ${THEME.default.text.muted})`,
-                            fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                          }}
-                        >
-                          {formatBytes(item.fileSize)}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: TYPOGRAPHY.weights.medium,
-                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                            borderRadius: RADII.xs,
-                            padding: `2px ${SPACING.xs}`,
-                          }}
-                        >
-                          {formatPlatformLabel(platform)}
-                        </span>
-
-                        <span
-                          data-testid={`downloader-item-folder-${item.id}`}
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: TYPOGRAPHY.weights.medium,
-                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                            borderRadius: RADII.xs,
-                            padding: `2px ${SPACING.xs}`,
-                          }}
-                        >
-                          {folderPathLabel}
-                        </span>
-                      </div>
-
-                      <p
-                        data-testid={`downloader-item-caption-${item.id}`}
-                        style={{
-                          margin: 0,
-                          fontSize: '0.8125rem',
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {resolvedCaption}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 1-Click Open in Folder Action */}
-                  <button
-                    type="button"
-                    data-testid={`downloader-open-folder-${item.id}`}
-                    data-slot="downloader-open-folder-btn"
-                    onClick={() => handleOpenInFolder(item.folderId)}
-                    style={{
-                      ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      height: '34px',
-                      fontSize: '0.8125rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Open in Folder
-                  </button>
-                </article>
-              );
-            })}
+            {savedEntries.map((entry) => (
+              <DownloaderSavedItemRow
+                key={entry.item.id}
+                entry={entry}
+                folders={folders}
+                onOpenInFolder={handleOpenInFolder}
+              />
+            ))}
           </div>
         )}
       </section>
 
       {/* Inline New Folder Creation Modal */}
-      <Dialog open={isNewFolderDialogOpen} onOpenChange={setIsNewFolderDialogOpen}>
-        <DialogContent data-testid="downloader-new-folder-dialog">
-          <DialogHeader>
-            <DialogTitle>New Folder</DialogTitle>
-            <DialogDescription>
-              Create a destination folder in your Media Library and select it for upcoming downloads.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleCreateNewFolder}>
-            <DialogBody>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: SPACING.md,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: SPACING.xs,
-                  }}
-                >
-                  <label
-                    htmlFor="downloader-new-folder-input"
-                    style={{
-                      fontSize: '0.8125rem',
-                      fontWeight: TYPOGRAPHY.weights.semibold,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                    }}
-                  >
-                    Folder name
-                  </label>
-                  <input
-                    id="downloader-new-folder-input"
-                    data-testid="downloader-new-folder-input"
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => {
-                      setNewFolderName(e.target.value);
-                      if (newFolderError) setNewFolderError(null);
-                    }}
-                    placeholder="e.g. Viral Hooks Q4"
-                    maxLength={100}
-                    style={{
-                      ...COMPONENT_STYLES.input(THEME.default),
-                      backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                      width: '100%',
-                    }}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: SPACING.xs,
-                  }}
-                >
-                  <label
-                    htmlFor="downloader-new-folder-parent-select"
-                    style={{
-                      fontSize: '0.8125rem',
-                      fontWeight: TYPOGRAPHY.weights.semibold,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                    }}
-                  >
-                    Parent location
-                  </label>
-                  <select
-                    id="downloader-new-folder-parent-select"
-                    data-testid="downloader-new-folder-parent-select"
-                    value={newFolderParentId ?? ''}
-                    onChange={(e) =>
-                      setNewFolderParentId(e.target.value ? e.target.value : null)
-                    }
-                    style={{
-                      ...COMPONENT_STYLES.input(THEME.default),
-                      backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                      width: '100%',
-                    }}
-                  >
-                    <option value="">All Media (Root)</option>
-                    {sortedFolderOptions.map(({ folder, pathLabel }) => (
-                      <option key={folder.id} value={folder.id}>
-                        {pathLabel}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {newFolderError && (
-                  <div
-                    role="alert"
-                    data-testid="downloader-new-folder-error"
-                    style={{
-                      color: PALETTE.accent3,
-                      fontSize: '0.8125rem',
-                      fontWeight: TYPOGRAPHY.weights.medium,
-                    }}
-                  >
-                    {newFolderError}
-                  </div>
-                )}
-              </div>
-            </DialogBody>
-
-            <DialogFooter>
-              <button
-                type="button"
-                onClick={() => setIsNewFolderDialogOpen(false)}
-                style={COMPONENT_STYLES.secondaryButton(THEME.default)}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                data-testid="downloader-new-folder-submit"
-                disabled={isCreatingFolder}
-                style={COMPONENT_STYLES.primaryButton}
-              >
-                {isCreatingFolder ? 'Creating...' : 'Create folder'}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <DownloaderNewFolderDialog
+        isOpen={isNewFolderDialogOpen}
+        onOpenChange={setIsNewFolderDialogOpen}
+        onSubmit={handleCreateNewFolder}
+        folderName={newFolderName}
+        onFolderNameChange={(val) => {
+          setNewFolderName(val);
+          if (newFolderError) setNewFolderError(null);
+        }}
+        folderParentId={newFolderParentId}
+        onFolderParentIdChange={setNewFolderParentId}
+        folderError={newFolderError}
+        sortedFolderOptions={sortedFolderOptions}
+        isCreatingFolder={isCreatingFolder}
+      />
     </div>
   );
 }

@@ -131,7 +131,9 @@ export function PageTabQueue({
   onDeleteItem,
   onOpenAddQueue,
 }: Readonly<PageTabQueueProps>) {
-  const [filterStatus, setFilterStatus] = useState<'all' | 'queued' | 'published' | 'failed'>('all');
+  const [filterStatus, setFilterStatus] = useState<
+    'all' | 'queued' | 'published' | 'failed' | 'skipped' | 'cancelled'
+  >('all');
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<DedicatedQueueItem | null>(null);
@@ -144,7 +146,9 @@ export function PageTabQueue({
     if (filterStatus === 'all') return true;
     if (filterStatus === 'queued') return item.status === 'queued' || item.status === 'publishing';
     if (filterStatus === 'published') return item.status === 'published';
-    if (filterStatus === 'failed') return item.status === 'failed' || item.status === 'skipped';
+    if (filterStatus === 'failed') return item.status === 'failed';
+    if (filterStatus === 'skipped') return item.status === 'skipped';
+    if (filterStatus === 'cancelled') return item.status === 'cancelled';
     return true;
   });
 
@@ -211,8 +215,11 @@ export function PageTabQueue({
       case 'publishing':
         return { signal: STATUS_SIGNALS.queued, label: 'Publishing' };
       case 'failed':
-      case 'skipped':
         return { signal: STATUS_SIGNALS.critical, label: 'Failed' };
+      case 'skipped':
+        return { signal: STATUS_SIGNALS.idle, label: 'Skipped' };
+      case 'cancelled':
+        return { signal: STATUS_SIGNALS.idle, label: 'Cancelled' };
       case 'queued':
       default:
         return { signal: STATUS_SIGNALS.queued, label: 'Queued' };
@@ -234,13 +241,15 @@ export function PageTabQueue({
       >
         {/* Status Filter Buttons */}
         <div style={{ display: 'flex', gap: SPACING.xs, alignItems: 'center' }}>
-          {(['all', 'queued', 'published', 'failed'] as const).map((filter) => {
+          {(['all', 'queued', 'published', 'failed', 'skipped', 'cancelled'] as const).map((filter) => {
             const isSelected = filterStatus === filter;
             const labels: Record<typeof filter, string> = {
               all: `All (${queueItems.length})`,
               queued: `Queued (${queueItems.filter((i) => i.status === 'queued' || i.status === 'publishing').length})`,
               published: `Published (${queueItems.filter((i) => i.status === 'published').length})`,
               failed: `Failed (${queueItems.filter((i) => i.status === 'failed').length})`,
+              skipped: `Skipped (${queueItems.filter((i) => i.status === 'skipped').length})`,
+              cancelled: `Cancelled (${queueItems.filter((i) => i.status === 'cancelled').length})`,
             };
 
             return (

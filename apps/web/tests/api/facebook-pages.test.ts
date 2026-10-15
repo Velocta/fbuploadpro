@@ -619,7 +619,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(str).not.toContain('accessToken');
     });
 
-    it('persists active status back to DB when a page cooldown has expired from fb_rate_limited (ISSUE-24)', async () => {
+    it('evaluates active status dynamically without write amplification when a page cooldown has expired from fb_rate_limited (Spec 045 / Issue 9)', async () => {
       const pastDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
       let updateExecuted = false;
 
@@ -664,10 +664,10 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const json = await res.json();
       expect(json.pages[0].status).toBe('active');
-      expect(updateExecuted).toBe(true);
+      expect(updateExecuted).toBe(false);
     });
 
-    it('persists active status via Supabase client when a page cooldown has expired (ISSUE-24)', async () => {
+    it('evaluates active status dynamically via Supabase client without write amplification when a page cooldown has expired (Spec 045 / Issue 9)', async () => {
       const pastDate = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString();
       let supabaseUpdated = false;
 
@@ -733,7 +733,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
 
       const json = await res.json();
       expect(json.pages[0].status).toBe('active');
-      expect(supabaseUpdated).toBe(true);
+      expect(supabaseUpdated).toBe(false);
     });
   });
 

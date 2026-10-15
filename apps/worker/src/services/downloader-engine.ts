@@ -206,6 +206,38 @@ export async function fetchAndValidateRemoteMedia(
   db: any,
   jobId: string
 ): Promise<{ response: Response; body: ReadableStream<Uint8Array>; totalBytesEstimate: number | null } | null> {
+  // Pre-stream HEAD validation to reject oversized files before streaming
+  try {
+    const headRes = await fetchImpl(sourceUrl, {
+      method: 'HEAD',
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadPro/1.0; +https://fbuploadpro.com)',
+      },
+    });
+    if (headRes.ok) {
+      const headLength = Number(headRes.headers.get('content-length') || 0);
+      if (headLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+        await updateJobStatus(db, jobId, {
+          status: 'failed',
+          errorCode: 'FILE_TOO_LARGE',
+          errorMessage: 'Media file exceeds the maximum allowed size of 500 MB.',
+        });
+        return null;
+      }
+      if (headLength > 0 && quota.usedBytes + headLength > quota.totalBytes) {
+        await updateJobStatus(db, jobId, {
+          status: 'failed',
+          errorCode: 'QUOTA_EXCEEDED',
+          errorMessage: 'Storage quota exceeded for this file size.',
+        });
+        return null;
+      }
+    }
+  } catch {
+    // If HEAD request fails or is unsupported by remote server, continue to GET
+  }
+
   const response = await fetchImpl(sourceUrl, {
     redirect: 'follow',
     headers: {

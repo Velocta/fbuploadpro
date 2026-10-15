@@ -143,5 +143,14 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
       });
       expect(key).toBe(prodKey);
     });
+
+    it('throws DomainError in production environment when key is set to DEV_FALLBACK_ENCRYPTION_KEY', () => {
+      expect(() => {
+        getTokenEncryptionKey({
+          NODE_ENV: 'production',
+          TOKEN_ENCRYPTION_KEY: validKey,
+        });
+      }).toThrow(/DEV_FALLBACK_ENCRYPTION_KEY is forbidden in production/i);
+    });
   });
 });

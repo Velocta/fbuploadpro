@@ -492,5 +492,19 @@ fbuploadpro/
 * **Paginated Worker Insights Sync**:
   * `syncDailyPageInsights` accepts configurable `batchSize` and paginates through active pages to prevent subrequest or row limits.
 
+---
+
+## 14. Spec 045 Platform Audit Remediation Architecture & Governance
+
+### 14.1 Zero-Omission Audit Remediation Overview
+Spec 045 executes comprehensive remediation across all 42 audit findings documented in `issues.md`, spanning 7 core architectural modules:
+1. **Module 1: Publishing Engine & 200k Scale Foundation**: Atomic schema constraints, RPC `settle_queue_item_outcome`, stuck item recovery, 5 canonical formats (`text`, `image`, `reel`, `video`, `story`), and bounded first-comment retries.
+2. **Module 2: Account OAuth & BYOC Settings**: Sanitized authentication errors, race-conditioned connect button guards, and token expiration countdown CTAs.
+3. **Module 3: Media Library, Presigned Uploads & Safe Cascades**: Keyset cursor pagination ($O(1)$ scans), server-side duplicate verification, WebP thumbnail presigned R2 storage, chunked 1,000-key R2 deletions, and detailed upload failure banners.
+4. **Module 4: Cloud Media Downloader Streaming Resilience**: Pre-stream 500 MB HEAD guards, byte-counting `TransformStream` abort guards, and fail-fast client polling with `AbortSignal` cancellation.
+5. **Module 5: Real Insights Caching, Pipeline & Visualizations**: Upstash Redis REST integration, database snapshot prioritization, paginated worker sync, dual-series follower/impressions charts, and skeleton layout loaders.
+6. **Module 6: Dedicated Page Workspace & Operational Controls**: Write-amplification elimination in `GET /pages`, zeroed follower initialization, format-filtered slot scheduling, timestamp validation, and checkpoint reactivation controls.
+7. **Module 7: Cross-Cutting Auth, RBAC, Workspace Guard & UI Primitives**: Strict unboxed `STATUS_SIGNALS` tokens on `StatusDot` (zero hex literals), public error copy in `assertRole` and forgot-password, and React StrictMode `window.fetch` double-wrapping prevention via Symbol flags.
+
 
 

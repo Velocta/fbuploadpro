@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     return formatAuthErrorResponse(error, {
-      fallbackMessage: 'Unable to process your request at this moment. Please try again shortly.',
+      fallbackMessage: 'Unable to initiate password reset at this moment. Please try again shortly.',
       defaultStatus: 500,
     });
   }

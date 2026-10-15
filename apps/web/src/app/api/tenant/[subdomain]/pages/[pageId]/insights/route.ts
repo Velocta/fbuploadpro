@@ -341,7 +341,6 @@ export async function handleGetInsights(
   // Query daily snapshots from PostgreSQL
   const days = parseRangeDays(query.range);
   const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const todayDate = new Date().toISOString().slice(0, 10);
 
   let snapshotRows: any[] = [];
   try {
@@ -381,12 +380,7 @@ export async function handleGetInsights(
     // Non-fatal if table/mock is missing in unit tests
   }
 
-  const hasFreshSnapshots = snapshotRows.some((r) => {
-    const d = typeof r.snapshot_date === 'string' ? r.snapshot_date.slice(0, 10) : '';
-    return d === todayDate;
-  });
-
-  if (!query.refresh && hasFreshSnapshots) {
+  if (!query.refresh && snapshotRows.length > 0) {
     const assembled = assembleInsightsFromSnapshots(page, query.range, snapshotRows);
     await globalInsightsCache.setAsync(cacheKey, assembled, 900);
     return NextResponse.json(assembled, {
@@ -411,6 +405,50 @@ export async function handleGetInsights(
   const fetchImpl = options?.fetchImpl ?? fetch;
   try {
     const overviewResult = await getPageOverview(page.fb_page_id, decryptedToken, fetchImpl);
+    if (overviewResult.healthStatus !== 'active' && overviewResult.healthStatus !== 'rate_limited') {
+      const responsePayload: PageInsightsResponse = {
+        success: true,
+        fbPageId: page.fb_page_id,
+        dateRange: query.range,
+        cachedAt: new Date().toISOString(),
+        cacheHit: false,
+        overview: {
+          ...overviewResult.overview,
+          pageName: overviewResult.overview.pageName || page.page_name || null,
+          totalMediaViews: 0,
+          totalVideoViews: 0,
+          totalPostEngagements: 0,
+        },
+        timeSeries: [],
+        reactions: {
+          like: 0,
+          love: 0,
+          wow: 0,
+          haha: 0,
+          sorry: 0,
+          anger: 0,
+          total: 0,
+        },
+        demographics: {
+          topCountries: [],
+          topCities: [],
+        },
+        healthStatus: overviewResult.healthStatus,
+      };
+      return NextResponse.json(responsePayload, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      });
+    }
+
+    if (overviewResult.rawError) {
+      const graphError: any = new Error(overviewResult.rawError);
+      if (overviewResult.healthStatus === 'rate_limited') {
+        graphError.code = 80001;
+      }
+      throw graphError;
+    }
     const timeSeriesResult = await getPageTimeSeriesInsights(
       page.fb_page_id,
       decryptedToken,
@@ -473,7 +511,13 @@ export async function handleGetInsights(
     }
 
     // Never cache zeroed fallback metrics when upstream Graph API call fails
-    throw err;
+    return NextResponse.json(
+      {
+        error: 'UPSTREAM_GRAPH_ERROR',
+        message: err instanceof Error ? err.message : 'Facebook Graph API failed to return page insights.',
+      },
+      { status: 502 }
+    );
   }
 }
 

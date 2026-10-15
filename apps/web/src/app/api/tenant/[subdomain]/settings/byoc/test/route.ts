@@ -9,6 +9,7 @@ import {
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -131,10 +132,14 @@ export async function POST(
       testedAt: nowIso,
     });
   } catch (netErr) {
+    const rawMsg = netErr instanceof Error ? netErr.message : undefined;
     return NextResponse.json({
       success: false,
       status: 'unverified',
-      message: netErr instanceof Error ? netErr.message : 'Network failure testing connection.',
+      message: sanitizeAuthErrorMessage(
+        rawMsg,
+        'Unable to connect to Meta servers to verify credentials. Please try again shortly.'
+      ),
       testedAt: nowIso,
     });
   }

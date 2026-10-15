@@ -23,7 +23,14 @@ export function getTokenEncryptionKey(env?: Record<string, string | undefined>):
   const key = envObj.TOKEN_ENCRYPTION_KEY || envObj.FB_ENCRYPTION_MASTER_KEY;
 
   if (key && key.trim().length > 0) {
-    return key.trim();
+    const trimmed = key.trim();
+    if (nodeEnv === 'production' && trimmed === DEV_FALLBACK_ENCRYPTION_KEY) {
+      throw new DomainError(
+        DomainErrorCode.INTERNAL_ERROR,
+        'DEV_FALLBACK_ENCRYPTION_KEY is forbidden in production environment'
+      );
+    }
+    return trimmed;
   }
 
   const isDevOrTest = nodeEnv === 'development' || nodeEnv === 'test';

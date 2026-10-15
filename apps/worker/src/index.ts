@@ -77,11 +77,78 @@ async function recoverStuckPublishingItems(db: any): Promise<void> {
   const currentMinute = new Date().getMinutes();
   if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
     try {
-      await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
-    } catch {
-      // Non-blocking in environments where recover RPC is not mocked
+      const { data, error } = await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
+      if (error) {
+        console.error('[recoverStuckPublishingItems] RPC error:', error);
+      } else if (data && data > 0) {
+        console.info(`[recoverStuckPublishingItems] Recovered ${data} stuck publishing items`);
+      }
+    } catch (err) {
+      console.error('[recoverStuckPublishingItems] Unexpected error:', err);
     }
   }
+}
+
+async function revertUnsentQueueItems(db: any, unsentIds: string[]): Promise<void> {
+  if (unsentIds.length === 0) return;
+  try {
+    if (typeof db.from === 'function') {
+      await db.from('queue_items').update({ status: 'queued', updated_at: new Date().toISOString() }).in('id', unsentIds);
+    } else if (typeof db.query === 'function') {
+      await db.query(`UPDATE queue_items SET status = 'queued', updated_at = now() WHERE id = ANY($1)`, [unsentIds]);
+    }
+  } catch (revertErr) {
+    console.error('[fanOutClaimedBatches] Failed to revert unsent items to queued:', revertErr);
+  }
+}
+
+async function sendClaimedSlice(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  slice: any[]
+): Promise<void> {
+  try {
+    await queue.sendBatch(slice.map((body) => ({ body })));
+  } catch (sendErr) {
+    console.error('[fanOutClaimedBatches] Failed to send batch to queue; reverting items to queued:', sendErr);
+    const unsentIds = slice.map((item) => item.id);
+    await revertUnsentQueueItems(db, unsentIds);
+  }
+}
+
+async function processSingleClaimedBatch(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  batchSize: number
+): Promise<boolean> {
+  const CHUNK_SIZE = 100;
+  const claimed = await claimDueItems(db, batchSize);
+  if (claimed.length === 0) {
+    return false;
+  }
+
+  const slices: any[][] = [];
+  for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
+    slices.push(claimed.slice(i, i + CHUNK_SIZE));
+  }
+  await Promise.all(slices.map((slice) => sendClaimedSlice(queue, db, slice)));
+  return true;
+}
+
+async function fanOutBatchesSequentially(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  remainingBatches: number,
+  batchSize: number
+): Promise<void> {
+  if (remainingBatches <= 0) {
+    return;
+  }
+  const hasMore = await processSingleClaimedBatch(queue, db, batchSize);
+  if (!hasMore) {
+    return;
+  }
+  return fanOutBatchesSequentially(queue, db, remainingBatches - 1, batchSize);
 }
 
 async function fanOutClaimedBatches(
@@ -90,17 +157,7 @@ async function fanOutClaimedBatches(
   maxBatches: number,
   batchSize: number
 ): Promise<void> {
-  const CHUNK_SIZE = 100;
-  for (let b = 0; b < maxBatches; b++) {
-    const claimed = await claimDueItems(db, batchSize);
-    if (claimed.length === 0) break;
-
-    const slices: any[][] = [];
-    for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
-      slices.push(claimed.slice(i, i + CHUNK_SIZE));
-    }
-    await Promise.all(slices.map((slice) => queue.sendBatch(slice.map((body) => ({ body })))));
-  }
+  await fanOutBatchesSequentially(queue, db, maxBatches, batchSize);
 }
 
 export async function handleScheduled(

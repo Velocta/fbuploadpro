@@ -66,6 +66,37 @@ async function settleSupabaseOutcome(
         }
       : null;
 
+  if (typeof supabase.rpc === 'function' && item.userId && item.pageId) {
+    const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
+    let outcomeStatus = 'failed';
+    if (outcome.status === 'published') {
+      outcomeStatus = 'published';
+    } else if (isRetry) {
+      outcomeStatus = 'queued';
+    }
+    const { error: rpcError } = await supabase.rpc('settle_queue_item_outcome', {
+      p_queue_item_id: item.id,
+      p_user_id: item.userId,
+      p_fb_page_id: item.pageId,
+      p_outcome_status: outcomeStatus,
+      p_fb_post_id: outcome.fbPostId ?? null,
+      p_fb_comment_id: outcome.fbCommentId ?? null,
+      p_retry_count: attemptNumber,
+      p_retry_delay_seconds: outcome.retryDelaySeconds ?? 300,
+      p_error_code: outcome.errorCode ?? null,
+      p_error_subcode: outcome.errorSubcode ?? null,
+      p_error_message: outcome.errorMessage ?? null,
+      p_comment_warning: outcome.status === 'published' ? (outcome.errorMessage ?? null) : null,
+      p_target_page_status: outcome.targetPageStatus ?? null,
+      p_target_account_status: outcome.targetAccountStatus ?? null,
+      p_page_cooldown_seconds: outcome.pageCooldownSeconds ?? null,
+      p_buc_usage_pct: outcome.bucUsagePct ?? null,
+    });
+    if (!rpcError) {
+      return;
+    }
+  }
+
   if (outcome.status === 'published') {
     const { error: updateError } = await supabase.from('queue_items').update({
       status: 'published',
@@ -324,7 +355,10 @@ export async function settleOutcome(
 
   const outcome: DispatchOutcome = maybeOutcome ?? (itemOrOutcome as DispatchOutcome);
 
-  if ('from' in db && typeof (db as any).from === 'function') {
+  if (
+    ('from' in db && typeof (db as any).from === 'function') ||
+    ('rpc' in db && typeof (db as any).rpc === 'function')
+  ) {
     return settleSupabaseOutcome(db, item, outcome);
   }
 

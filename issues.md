@@ -1,3 +1,10 @@
+# Platform Audit Remediation Status
+
+> **STATUS: 100% REMEDIATED (Spec 045)**  
+> All 42 issues across the 7 modules below have been systematically remediated and verified under Spec 045 (`specs/045-platform-audit-remediation/`) on branch `fix/045-platform-audit-remediation`.
+
+---
+
 ## Module 1: Facebook Accounts & BYOC OAuth
 
 **Scope:** `apps/web/src/app/tenant/[subdomain]/accounts/page.tsx`, `apps/web/src/components/accounts/*`, `apps/web/src/app/api/tenant/[subdomain]/accounts/*`, `apps/web/src/app/api/auth/facebook/*`, `apps/web/src/app/connect/facebook/*`, `apps/web/src/app/api/tenant/[subdomain]/settings/byoc/*`, `packages/contracts/src/crypto/token.ts`

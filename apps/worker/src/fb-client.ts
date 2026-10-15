@@ -1,7 +1,8 @@
-import type {
-  IFacebookPublishClient,
-  GraphRateLimitTelemetry,
-  PublishResult,
+import {
+  evaluateGraphApiError,
+  type IFacebookPublishClient,
+  type GraphRateLimitTelemetry,
+  type PublishResult,
 } from '@fbuploadpro/contracts';
 
 export type { IFacebookPublishClient, GraphRateLimitTelemetry, PublishResult };
@@ -39,22 +40,41 @@ export class FacebookGraphError extends Error {
     this.errorType = errorData?.type;
     this.fbtraceId = errorData?.fbtrace_id;
     this.telemetry = telemetry;
-    this.isAuthError = this.code === 190 || this.code === 102;
+
+    const evalResult =
+      this.code !== undefined
+        ? evaluateGraphApiError(this.code, this.errorSubcode)
+        : null;
+
+    this.isAuthError =
+      evalResult?.requiresReauth === true ||
+      this.code === 190 ||
+      this.code === 102 ||
+      this.code === 10 ||
+      (typeof this.code === 'number' && this.code >= 200 && this.code <= 299);
+
     this.isPermanentPolicyError =
       this.code === 368 &&
       (this.errorSubcode === 4854002 || this.errorSubcode === 1404082);
+
     this.isPermanentClientError =
       this.code === 100 ||
+      this.code === 506 ||
+      this.code === 1609005 ||
       (typeof this.code === 'number' &&
         this.code >= 400 &&
         this.code < 500 &&
         !this.isAuthError);
+
     this.isRateLimit =
       this.code === 4 ||
       this.code === 17 ||
       this.code === 32 ||
-      (this.code === 368 && !this.isPermanentPolicyError) ||
-      this.code === 613;
+      this.code === 341 ||
+      this.code === 613 ||
+      (typeof this.code === 'number' && this.code >= 80000 && this.code <= 80014) ||
+      (this.code === 368 && !this.isPermanentPolicyError);
+
     Object.setPrototypeOf(this, new.target.prototype);
   }
 }

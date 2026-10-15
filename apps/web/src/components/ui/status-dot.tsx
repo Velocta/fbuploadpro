@@ -1,7 +1,7 @@
 import React from 'react';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { STATUS_SIGNALS, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
-export type StatusType = 'operational' | 'queued' | 'critical' | 'idle';
+export type StatusType = keyof typeof STATUS_SIGNALS;
 
 export interface StatusDotProps {
   status: StatusType;
@@ -10,36 +10,6 @@ export interface StatusDotProps {
   className?: string;
   style?: React.CSSProperties;
 }
-
-const statusConfig: Record<
-  StatusType,
-  {
-    dot: string;
-    halo: string;
-    label: string;
-  }
-> = {
-  operational: {
-    dot: PALETTE.accent4,
-    halo: '0 0 6px rgba(46, 189, 133, 0.45)',
-    label: 'Operational',
-  },
-  queued: {
-    dot: PALETTE.primary,
-    halo: '0 0 6px rgba(250, 215, 52, 0.45)',
-    label: 'Queued',
-  },
-  critical: {
-    dot: PALETTE.accent3,
-    halo: '0 0 6px rgba(246, 70, 93, 0.45)',
-    label: 'Critical',
-  },
-  idle: {
-    dot: '#848e9c',
-    halo: 'none',
-    label: 'Idle',
-  },
-};
 
 /**
  * StatusDot
@@ -55,7 +25,7 @@ export function StatusDot({
   className = '',
   style,
 }: Readonly<StatusDotProps>) {
-  const signal = statusConfig[status];
+  const signal = STATUS_SIGNALS[status] ?? STATUS_SIGNALS.idle;
   const displayLabel = label || signal.label;
 
   return (

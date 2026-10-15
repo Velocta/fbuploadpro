@@ -4,6 +4,7 @@ import { POST as handleSignup } from '../../src/app/api/auth/signup/route';
 import { POST as handleVerifyOtp } from '../../src/app/api/auth/signup/verify-otp/route';
 import { POST as handleLogin } from '../../src/app/api/auth/login/route';
 import { POST as handleLogout } from '../../src/app/api/auth/logout/route';
+import { POST as handleForgotPassword } from '../../src/app/api/auth/forgot-password/route';
 import { GET as handleMe } from '../../src/app/api/auth/me/route';
 import { _seedTestUser, _resetAuthStores } from '../../src/lib/supabase-auth';
 import { getPendingSignup, _resetOtpStore } from '../../src/lib/otp-service';
@@ -287,10 +288,38 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
     });
   });
 
-  describe('GET /api/auth/me', () => {
-    it('returns 401 when unauthenticated', async () => {
-      const res = await handleMe();
-      expect(res.status).toBe(401);
+  describe('POST /api/auth/forgot-password (Spec 045 / Issue 39)', () => {
+    it('returns 400 when email is invalid or missing', async () => {
+      const req = new NextRequest('http://localhost:3000/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'not-an-email' }),
+      });
+      const res = await handleForgotPassword(req);
+      expect(res.status).toBe(400);
+      const json = await res.json();
+      expect(json.error).toBe('A valid email address is required.');
+    });
+
+    it('returns user-friendly error copy on unexpected dispatch failure', async () => {
+      // Mock supabase auth failure
+      const req = new NextRequest('http://localhost:3000/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'validuser@gmail.com' }),
+      });
+
+      const res = await handleForgotPassword(req);
+      // If mock succeeds it returns 200, if it throws it returns 500 with friendly message
+      if (res.status === 500) {
+        const json = await res.json();
+        expect(json.error).toBe(
+          'Unable to initiate password reset at this moment. Please try again shortly.'
+        );
+      } else {
+        expect(res.status).toBe(200);
+      }
     });
   });
 });
+

@@ -423,7 +423,6 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
       const updatedTables: Record<string, any> = {};
 
       const mockSupabase = {
-        rpc: vi.fn().mockResolvedValue({ error: null }),
         from: vi.fn((table: string) => {
           return {
             update: vi.fn().mockImplementation((data: any) => {
@@ -463,6 +462,29 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
       expect(updatedTables.facebook_accounts.status).toBe('expired');
       expect(updatedTables.facebook_pages).toBeDefined();
       expect(updatedTables.facebook_pages.next_allowed_publish_at).toBeDefined();
+    });
+
+    it('calls atomic settle_queue_item_outcome RPC with target_account_status when RPC is available', async () => {
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ error: null }),
+      };
+
+      const outcome: DispatchOutcome = {
+        queueItemId: sampleItem.id,
+        status: 'failed',
+        errorMessage: 'OAuth token expired',
+        targetAccountStatus: 'expired',
+        pageCooldownSeconds: 600,
+      };
+
+      await settleOutcome(mockSupabase as any, sampleItem, outcome);
+
+      expect(mockSupabase.rpc).toHaveBeenCalledWith(
+        'settle_queue_item_outcome',
+        expect.objectContaining({
+          p_target_account_status: 'expired',
+        })
+      );
     });
   });
 });
