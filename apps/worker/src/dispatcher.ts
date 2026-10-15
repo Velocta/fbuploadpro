@@ -499,32 +499,43 @@ export async function recordDispatchOutcome(
     if (outcome.status === 'published') {
       await db.query(
         `UPDATE queue_items
-         SET status = 'published',
-             fb_post_id = $2,
-             fb_comment_id = $3,
-             published_at = now(),
-             updated_at = now()
-         WHERE id = $1`,
+       SET status = 'published',
+           fb_post_id = $2,
+           fb_comment_id = $3,
+           published_at = now(),
+           updated_at = now()
+       WHERE id = $1`,
         [outcome.queueItemId, outcome.fbPostId ?? null, outcome.fbCommentId ?? null]
       );
     } else if (isRetry) {
-      const delaySeconds = outcome.retryDelaySeconds ?? 300;
-      await db.query(
-        `UPDATE queue_items
-         SET status = 'queued',
-             retry_count = retry_count + 1,
-             scheduled_time = now() + make_interval(secs => $2),
-             updated_at = now()
-         WHERE id = $1`,
-        [outcome.queueItemId, delaySeconds]
-      );
+      if (outcome.retryDelaySeconds !== undefined && outcome.retryDelaySeconds !== 300) {
+        await db.query(
+          `UPDATE queue_items
+       SET status = 'queued',
+           retry_count = retry_count + 1,
+           scheduled_time = now() + make_interval(secs => $2),
+           updated_at = now()
+       WHERE id = $1`,
+          [outcome.queueItemId, outcome.retryDelaySeconds]
+        );
+      } else {
+        await db.query(
+          `UPDATE queue_items
+       SET status = 'queued',
+           retry_count = retry_count + 1,
+           scheduled_time = now() + interval '5 minutes',
+           updated_at = now()
+       WHERE id = $1`,
+          [outcome.queueItemId]
+        );
+      }
     } else {
       await db.query(
         `UPDATE queue_items
-         SET status = 'failed',
-             retry_count = retry_count + 1,
-             updated_at = now()
-         WHERE id = $1`,
+       SET status = 'failed',
+           retry_count = retry_count + 1,
+           updated_at = now()
+       WHERE id = $1`,
         [outcome.queueItemId]
       );
     }

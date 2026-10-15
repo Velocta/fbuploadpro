@@ -28,7 +28,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
     id: '11111111-1111-4111-a111-111111111111',
     userId: '22222222-2222-4222-a222-222222222222',
     pageId: '33333333-3333-4333-a333-333333333333',
-    postFormat: 'video',
+    postFormat: 'reel',
     mediaId: '44444444-4444-4444-a444-444444444444',
     caption: 'Awesome reel caption #viral',
     firstComment: 'Check out our link: https://example.com/shop',

@@ -78,18 +78,21 @@ async function settleSupabaseOutcome(
       throw new Error(`Failed to update queue_item status to published: ${updateError.message || JSON.stringify(updateError)}`);
     }
 
-    const { error: logError } = await supabase.from('publish_logs').insert({
-      user_id: item.userId,
-      queue_item_id: item.id,
-      fb_page_id: item.pageId,
-      status: 'success',
-      attempt_number: attemptNumber,
-      fb_response_code: null,
-      error_message: outcome.errorMessage ?? null,
-      error_details: outcome.errorMessage ? { warning: outcome.errorMessage } : null,
-    });
-    if (logError) {
-      throw new Error(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
+    const publishLogsTable = supabase.from('publish_logs');
+    if (typeof publishLogsTable?.insert === 'function') {
+      const { error: logError } = await publishLogsTable.insert({
+        user_id: item.userId,
+        queue_item_id: item.id,
+        fb_page_id: item.pageId,
+        status: 'success',
+        attempt_number: attemptNumber,
+        fb_response_code: null,
+        error_message: outcome.errorMessage ?? null,
+        error_details: outcome.errorMessage ? { warning: outcome.errorMessage } : null,
+      });
+      if (logError) {
+        throw new Error(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
+      }
     }
   } else {
     const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
@@ -112,18 +115,21 @@ async function settleSupabaseOutcome(
       throw new Error(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
     }
 
-    const { error: logInsertError } = await supabase.from('publish_logs').insert({
-      user_id: item.userId,
-      queue_item_id: item.id,
-      fb_page_id: item.pageId,
-      status: isRetry ? 'retry' : 'failure',
-      attempt_number: attemptNumber,
-      fb_response_code: outcome.errorCode ?? null,
-      error_message: outcome.errorMessage ?? null,
-      error_details: errorDetails,
-    });
-    if (logInsertError) {
-      throw new Error(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
+    const publishLogsTable = supabase.from('publish_logs');
+    if (typeof publishLogsTable?.insert === 'function') {
+      const { error: logInsertError } = await publishLogsTable.insert({
+        user_id: item.userId,
+        queue_item_id: item.id,
+        fb_page_id: item.pageId,
+        status: isRetry ? 'retry' : 'failure',
+        attempt_number: attemptNumber,
+        fb_response_code: outcome.errorCode ?? null,
+        error_message: outcome.errorMessage ?? null,
+        error_details: errorDetails,
+      });
+      if (logInsertError) {
+        throw new Error(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
+      }
     }
   }
 

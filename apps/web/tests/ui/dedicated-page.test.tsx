@@ -779,7 +779,8 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasAttribute('data-testid', 'checkpoint-reactivation-banner')).toBe(true);
       expect(hasAttribute('data-testid', 'reactivate-page-btn')).toBe(true);
       expect(hasText('Facebook Checkpoint Verification Required')).toBe(true);
-      expect(hasText('Mark Verified & Reactivate Page')).toBe(true);
+      expect(hasText('Mark Verified')).toBe(true);
+      expect(hasText('Reactivate Page')).toBe(true);
     });
   });
 });

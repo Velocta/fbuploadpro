@@ -244,7 +244,7 @@ async function savePageSnapshot(
     if (page.status !== 'fb_rate_limited') {
       pageUpdate.updated_at = new Date().toISOString();
     }
-    await db.from('facebook_pages').update(pageUpdate).eq('user_id', page.user_id).eq('fb_page_id', page.fb_page_id);
+    await db.from('facebook_pages').update(pageUpdate).eq('id', page.id);
   } else if (typeof db.upsertPageInsightsSnapshot === 'function') {
     await db.upsertPageInsightsSnapshot(snapshot);
     if (typeof db.query === 'function') {
@@ -298,8 +298,8 @@ async function savePageSnapshot(
       `UPDATE facebook_pages
        SET current_followers = $1,
            updated_at = CASE WHEN status = 'fb_rate_limited' THEN updated_at ELSE now() END
-       WHERE user_id = $2 AND fb_page_id = $3`,
-      [followersCount, page.user_id, page.fb_page_id]
+       WHERE id = $2`,
+      [followersCount, page.id]
     );
   }
 }

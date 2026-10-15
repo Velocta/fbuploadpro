@@ -493,14 +493,22 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       startData.upload_url ??
       `https://rupload.facebook.com/video-upload/v26.0/${videoId}`;
 
-    // Step 2: Transfer remote video via file_url or stream
+    // Step 2: Stream video bytes from videoUrl to upload_url
+    const videoRes = await this.fetchFn(videoUrl);
+    if (!videoRes.ok || !videoRes.body) {
+      throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
+    }
+
     const uploadRes = await this.fetchFn(uploadUrl, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
-        file_url: videoUrl,
+        Authorization: `OAuth ${accessToken}`,
+        offset: '0',
+        'Content-Type': 'application/octet-stream',
       },
-    });
+      body: videoRes.body,
+      duplex: 'half',
+    } as RequestInit);
 
     if (!uploadRes.ok) {
       const uploadData = await this.parseJsonResponse(uploadRes);
@@ -606,14 +614,12 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
 
   public textPostsPublished: Array<{
     pageId: string;
-    accessToken: string;
     message: string;
     linkUrl?: string | null | undefined;
   }> = [];
 
   public videosPublished: Array<{
     pageId: string;
-    accessToken: string;
     videoUrl: string;
     caption: string;
     title?: string | undefined;
@@ -621,13 +627,11 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
 
   public photoStoriesPublished: Array<{
     pageId: string;
-    accessToken: string;
     imageUrl: string;
   }> = [];
 
   public videoStoriesPublished: Array<{
     pageId: string;
-    accessToken: string;
     videoUrl: string;
   }> = [];
 
@@ -684,7 +688,11 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
     if (this.errorToThrow) {
       return Promise.reject(this.errorToThrow);
     }
-    this.textPostsPublished.push(params);
+    this.textPostsPublished.push({
+      pageId: params.pageId,
+      message: params.message,
+      ...(params.linkUrl !== undefined ? { linkUrl: params.linkUrl } : {}),
+    });
     return Promise.resolve({
       postId: this.nextPostId,
       ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
@@ -701,7 +709,12 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
     if (this.errorToThrow) {
       return Promise.reject(this.errorToThrow);
     }
-    this.videosPublished.push(params);
+    this.videosPublished.push({
+      pageId: params.pageId,
+      videoUrl: params.videoUrl,
+      caption: params.caption,
+      ...(params.title !== undefined ? { title: params.title } : {}),
+    });
     return Promise.resolve({
       postId: this.nextPostId,
       ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
@@ -716,7 +729,10 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
     if (this.errorToThrow) {
       return Promise.reject(this.errorToThrow);
     }
-    this.photoStoriesPublished.push(params);
+    this.photoStoriesPublished.push({
+      pageId: params.pageId,
+      imageUrl: params.imageUrl,
+    });
     return Promise.resolve({
       postId: this.nextPostId,
       ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
@@ -731,7 +747,10 @@ export class MockFacebookPublishClient implements IFacebookPublishClient {
     if (this.errorToThrow) {
       return Promise.reject(this.errorToThrow);
     }
-    this.videoStoriesPublished.push(params);
+    this.videoStoriesPublished.push({
+      pageId: params.pageId,
+      videoUrl: params.videoUrl,
+    });
     return Promise.resolve({
       postId: this.nextPostId,
       ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
