@@ -405,6 +405,43 @@ export async function handleGetInsights(
   const fetchImpl = options?.fetchImpl ?? fetch;
   try {
     const overviewResult = await getPageOverview(page.fb_page_id, decryptedToken, fetchImpl);
+    if (overviewResult.healthStatus !== 'active' && overviewResult.healthStatus !== 'rate_limited') {
+      const responsePayload: PageInsightsResponse = {
+        success: true,
+        fbPageId: page.fb_page_id,
+        dateRange: query.range,
+        cachedAt: new Date().toISOString(),
+        cacheHit: false,
+        overview: {
+          ...overviewResult.overview,
+          pageName: overviewResult.overview.pageName || page.page_name || null,
+          totalMediaViews: 0,
+          totalVideoViews: 0,
+          totalPostEngagements: 0,
+        },
+        timeSeries: [],
+        reactions: {
+          like: 0,
+          love: 0,
+          wow: 0,
+          haha: 0,
+          sad: 0,
+          angry: 0,
+          total: 0,
+        },
+        demographics: {
+          topCountries: [],
+          topCities: [],
+        },
+        healthStatus: overviewResult.healthStatus,
+      };
+      return NextResponse.json(responsePayload, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+        },
+      });
+    }
+
     if (overviewResult.rawError) {
       const graphError: any = new Error(overviewResult.rawError);
       if (overviewResult.healthStatus === 'rate_limited') {

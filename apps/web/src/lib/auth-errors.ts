@@ -38,14 +38,23 @@ function hasTechnicalLeak(message: string): boolean {
  * replaces them with a clean, reassuring commercial SaaS message.
  */
 export function sanitizeAuthErrorMessage(
-  rawMessage: string | null | undefined,
+  rawMessage: unknown,
   fallbackMessage: string = 'Unable to complete your request at this moment. Please try again shortly.'
 ): string {
-  if (!rawMessage || typeof rawMessage !== 'string' || !rawMessage.trim()) {
+  const message =
+    typeof rawMessage === 'string'
+      ? rawMessage
+      : rawMessage instanceof Error
+        ? rawMessage.message
+        : rawMessage && typeof rawMessage === 'object' && 'message' in rawMessage
+          ? String((rawMessage as { message: unknown }).message)
+          : null;
+
+  if (!message || !message.trim()) {
     return fallbackMessage;
   }
 
-  const trimmed = rawMessage.trim();
+  const trimmed = message.trim();
 
   if (hasTechnicalLeak(trimmed)) {
     return fallbackMessage;
