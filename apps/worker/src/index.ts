@@ -116,23 +116,48 @@ async function sendClaimedSlice(
   }
 }
 
+async function processSingleClaimedBatch(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  batchSize: number
+): Promise<boolean> {
+  const CHUNK_SIZE = 100;
+  const claimed = await claimDueItems(db, batchSize);
+  if (claimed.length === 0) {
+    return false;
+  }
+
+  const slices: any[][] = [];
+  for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
+    slices.push(claimed.slice(i, i + CHUNK_SIZE));
+  }
+  await Promise.all(slices.map((slice) => sendClaimedSlice(queue, db, slice)));
+  return true;
+}
+
+async function fanOutBatchesSequentially(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  remainingBatches: number,
+  batchSize: number
+): Promise<void> {
+  if (remainingBatches <= 0) {
+    return;
+  }
+  const hasMore = await processSingleClaimedBatch(queue, db, batchSize);
+  if (!hasMore) {
+    return;
+  }
+  return fanOutBatchesSequentially(queue, db, remainingBatches - 1, batchSize);
+}
+
 async function fanOutClaimedBatches(
   queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
   db: any,
   maxBatches: number,
   batchSize: number
 ): Promise<void> {
-  const CHUNK_SIZE = 100;
-  for (let b = 0; b < maxBatches; b++) {
-    const claimed = await claimDueItems(db, batchSize);
-    if (claimed.length === 0) break;
-
-    const slices: any[][] = [];
-    for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
-      slices.push(claimed.slice(i, i + CHUNK_SIZE));
-    }
-    await Promise.all(slices.map((slice) => sendClaimedSlice(queue, db, slice)));
-  }
+  await fanOutBatchesSequentially(queue, db, maxBatches, batchSize);
 }
 
 export async function handleScheduled(

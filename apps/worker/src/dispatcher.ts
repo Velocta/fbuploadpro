@@ -183,35 +183,32 @@ async function postFirstCommentWithRetry(
     accessToken: string;
     message: string;
     itemId: string;
-  }
+  },
+  attempt = 1,
+  maxAttempts = 3
 ): Promise<{ commentId: string | null; warning: string | null }> {
-  let commentAttempts = 0;
-  const maxCommentAttempts = 3;
-  while (commentAttempts < maxCommentAttempts) {
-    commentAttempts++;
-    try {
-      const commentRes = await fbClient.postComment({
-        postId: params.postId,
-        accessToken: params.accessToken,
-        message: params.message,
-      });
-      return { commentId: commentRes.commentId, warning: null };
-    } catch (commentErr: unknown) {
-      if (commentAttempts >= maxCommentAttempts) {
-        const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
-        console.warn(
-          `[Dispatcher] First comment failed for queue item ${params.itemId} (post ${params.postId}):`,
-          commentErr
-        );
-        return {
-          commentId: null,
-          warning: `Published post but first comment failed: ${errMsg}`,
-        };
-      }
-      await new Promise((resolve) => setTimeout(resolve, commentAttempts * 500));
+  try {
+    const commentRes = await fbClient.postComment({
+      postId: params.postId,
+      accessToken: params.accessToken,
+      message: params.message,
+    });
+    return { commentId: commentRes.commentId, warning: null };
+  } catch (commentErr: unknown) {
+    if (attempt >= maxAttempts) {
+      const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+      console.warn(
+        `[Dispatcher] First comment failed for queue item ${params.itemId} (post ${params.postId}):`,
+        commentErr
+      );
+      return {
+        commentId: null,
+        warning: `Published post but first comment failed: ${errMsg}`,
+      };
     }
+    await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    return postFirstCommentWithRetry(fbClient, params, attempt + 1, maxAttempts);
   }
-  return { commentId: null, warning: null };
 }
 
 /**

@@ -353,6 +353,10 @@ async function evaluatePollJobStatus(
   return { finished: false };
 }
 
+function isPermanentAuthOrNotFoundError(status: number): boolean {
+  return status === 401 || status === 403 || status === 404;
+}
+
 async function executeSinglePoll(
   subdomain: string,
   jobId: string,
@@ -364,7 +368,7 @@ async function executeSinglePoll(
       `/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`,
       signal ? { signal } : {}
     );
-    if (pollRes.status === 401 || pollRes.status === 403 || pollRes.status === 404) {
+    if (isPermanentAuthOrNotFoundError(pollRes.status)) {
       return { status: pollRes.status, ok: false };
     }
     if (!pollRes.ok) {
@@ -408,7 +412,7 @@ async function pollDownloadJobCompletion(params: {
       return createCancelledOutcome(idx, url, folderId);
     }
 
-    if (pollResult.status === 401 || pollResult.status === 403 || pollResult.status === 404) {
+    if (isPermanentAuthOrNotFoundError(pollResult.status)) {
       return {
         saved: [],
         failed: {
@@ -813,10 +817,328 @@ function sortFoldersForDownloader(
   return withPaths;
 }
 
-function getProgressTextColor(status?: string): string {
-  if (status === 'completed') return PALETTE.accent4;
-  if (status === 'cancelled') return PALETTE.accent3;
-  return PALETTE.primary;
+function DownloaderSavedItemRow({
+  entry,
+  folders,
+  onOpenInFolder,
+}: Readonly<{
+  entry: DownloaderSavedEntry;
+  folders: MediaFolder[];
+  onOpenInFolder: (folderId: string | null) => void;
+}>) {
+  const { item, platform } = entry;
+  const resolvedCaption =
+    item.captionText && item.captionText.trim().length > 0
+      ? item.captionText
+      : deriveDefaultCaption(item.name);
+  const folderPathLabel = formatFolderAncestryPath(item.folderId, folders);
+  const previewSrc = item.thumbnailUrl || item.url;
+
+  return (
+    <article
+      data-testid={`downloader-saved-item-${item.id}`}
+      style={{
+        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderRadius: RADII.md,
+        padding: SPACING.md,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: SPACING.md,
+        flexWrap: 'wrap',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+          minWidth: 0,
+          flex: 1,
+        }}
+      >
+        {/* Thumbnail / Video Preview */}
+        <div
+          style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: RADII.sm,
+            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            overflow: 'hidden',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {renderSavedItemPreview(item, previewSrc)}
+        </div>
+
+        {/* Asset Details & Auto-Populated Caption */}
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: SPACING.xs,
+            minWidth: 0,
+            flex: 1,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.sm,
+              flexWrap: 'wrap',
+            }}
+          >
+            <span
+              style={{
+                fontSize: '0.875rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {item.name}
+            </span>
+
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                fontVariantNumeric: TYPOGRAPHY.tabularNums,
+              }}
+            >
+              {formatBytes(item.fileSize)}
+            </span>
+
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                padding: `2px ${SPACING.xs}`,
+              }}
+            >
+              {formatPlatformLabel(platform)}
+            </span>
+
+            <span
+              data-testid={`downloader-item-folder-${item.id}`}
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                padding: `2px ${SPACING.xs}`,
+              }}
+            >
+              {folderPathLabel}
+            </span>
+          </div>
+
+          <p
+            data-testid={`downloader-item-caption-${item.id}`}
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {resolvedCaption}
+          </p>
+        </div>
+      </div>
+
+      {/* 1-Click Open in Folder Action */}
+      <button
+        type="button"
+        data-testid={`downloader-open-folder-${item.id}`}
+        data-slot="downloader-open-folder-btn"
+        onClick={() => onOpenInFolder(item.folderId)}
+        style={{
+          ...COMPONENT_STYLES.secondaryButton(THEME.default),
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+          height: '34px',
+          fontSize: '0.8125rem',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Open in Folder
+      </button>
+    </article>
+  );
+}
+
+function DownloaderNewFolderDialog({
+  isOpen,
+  onOpenChange,
+  onSubmit,
+  folderName,
+  onFolderNameChange,
+  folderParentId,
+  onFolderParentIdChange,
+  folderError,
+  sortedFolderOptions,
+  isCreatingFolder,
+}: Readonly<{
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (e: React.SyntheticEvent<HTMLFormElement>) => void;
+  folderName: string;
+  onFolderNameChange: (name: string) => void;
+  folderParentId: string | null;
+  onFolderParentIdChange: (parentId: string | null) => void;
+  folderError: string | null;
+  sortedFolderOptions: Array<{ folder: MediaFolder; pathLabel: string }>;
+  isCreatingFolder: boolean;
+}>) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent data-testid="downloader-new-folder-dialog">
+        <DialogHeader>
+          <DialogTitle>New Folder</DialogTitle>
+          <DialogDescription>
+            Create a destination folder in your Media Library and select it for upcoming downloads.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={onSubmit}>
+          <DialogBody>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: SPACING.md,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: SPACING.xs,
+                }}
+              >
+                <label
+                  htmlFor="downloader-new-folder-input"
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  Folder name
+                </label>
+                <input
+                  id="downloader-new-folder-input"
+                  data-testid="downloader-new-folder-input"
+                  type="text"
+                  value={folderName}
+                  onChange={(e) => onFolderNameChange(e.target.value)}
+                  placeholder="e.g. Viral Hooks Q4"
+                  maxLength={100}
+                  style={{
+                    ...COMPONENT_STYLES.input(THEME.default),
+                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    width: '100%',
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: SPACING.xs,
+                }}
+              >
+                <label
+                  htmlFor="downloader-new-folder-parent-select"
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  Parent location
+                </label>
+                <select
+                  id="downloader-new-folder-parent-select"
+                  data-testid="downloader-new-folder-parent-select"
+                  value={folderParentId ?? ''}
+                  onChange={(e) =>
+                    onFolderParentIdChange(e.target.value ? e.target.value : null)
+                  }
+                  style={{
+                    ...COMPONENT_STYLES.input(THEME.default),
+                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    width: '100%',
+                  }}
+                >
+                  <option value="">All Media (Root)</option>
+                  {sortedFolderOptions.map(({ folder, pathLabel }) => (
+                    <option key={folder.id} value={folder.id}>
+                      {pathLabel}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {folderError && (
+                <div
+                  role="alert"
+                  data-testid="downloader-new-folder-error"
+                  style={{
+                    color: PALETTE.accent3,
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                  }}
+                >
+                  {folderError}
+                </div>
+              )}
+            </div>
+          </DialogBody>
+
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              style={COMPONENT_STYLES.secondaryButton(THEME.default)}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              data-testid="downloader-new-folder-submit"
+              disabled={isCreatingFolder}
+              style={COMPONENT_STYLES.primaryButton}
+            >
+              {isCreatingFolder ? 'Creating...' : 'Create folder'}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function MediaDownloader({
@@ -1631,302 +1953,34 @@ export function MediaDownloader({
             })}
 
             {/* Saved Media Items */}
-            {savedEntries.map(({ item, platform }) => {
-              const resolvedCaption =
-                item.captionText && item.captionText.trim().length > 0
-                  ? item.captionText
-                  : deriveDefaultCaption(item.name);
-              const folderPathLabel = formatFolderAncestryPath(item.folderId, folders);
-              const previewSrc = item.thumbnailUrl || item.url;
-
-              return (
-                <article
-                  key={item.id}
-                  data-testid={`downloader-saved-item-${item.id}`}
-                  style={{
-                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    borderRadius: RADII.md,
-                    padding: SPACING.md,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: SPACING.md,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: SPACING.md,
-                      minWidth: 0,
-                      flex: 1,
-                    }}
-                  >
-                    {/* Thumbnail / Video Preview */}
-                    <div
-                      style={{
-                        width: '64px',
-                        height: '64px',
-                        borderRadius: RADII.sm,
-                        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        overflow: 'hidden',
-                        flexShrink: 0,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      {renderSavedItemPreview(item, previewSrc)}
-                    </div>
-
-                    {/* Asset Details & Auto-Populated Caption */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: SPACING.xs,
-                        minWidth: 0,
-                        flex: 1,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: SPACING.sm,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '0.875rem',
-                            fontWeight: TYPOGRAPHY.weights.semibold,
-                            color: `var(--text-main, ${THEME.default.text.primary})`,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {item.name}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: '0.75rem',
-                            color: `var(--text-dim, ${THEME.default.text.muted})`,
-                            fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                          }}
-                        >
-                          {formatBytes(item.fileSize)}
-                        </span>
-
-                        <span
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: TYPOGRAPHY.weights.medium,
-                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                            borderRadius: RADII.xs,
-                            padding: `2px ${SPACING.xs}`,
-                          }}
-                        >
-                          {formatPlatformLabel(platform)}
-                        </span>
-
-                        <span
-                          data-testid={`downloader-item-folder-${item.id}`}
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: TYPOGRAPHY.weights.medium,
-                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                            borderRadius: RADII.xs,
-                            padding: `2px ${SPACING.xs}`,
-                          }}
-                        >
-                          {folderPathLabel}
-                        </span>
-                      </div>
-
-                      <p
-                        data-testid={`downloader-item-caption-${item.id}`}
-                        style={{
-                          margin: 0,
-                          fontSize: '0.8125rem',
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {resolvedCaption}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* 1-Click Open in Folder Action */}
-                  <button
-                    type="button"
-                    data-testid={`downloader-open-folder-${item.id}`}
-                    data-slot="downloader-open-folder-btn"
-                    onClick={() => handleOpenInFolder(item.folderId)}
-                    style={{
-                      ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      height: '34px',
-                      fontSize: '0.8125rem',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Open in Folder
-                  </button>
-                </article>
-              );
-            })}
+            {savedEntries.map((entry) => (
+              <DownloaderSavedItemRow
+                key={entry.item.id}
+                entry={entry}
+                folders={folders}
+                onOpenInFolder={handleOpenInFolder}
+              />
+            ))}
           </div>
         )}
       </section>
 
       {/* Inline New Folder Creation Modal */}
-      <Dialog open={isNewFolderDialogOpen} onOpenChange={setIsNewFolderDialogOpen}>
-        <DialogContent data-testid="downloader-new-folder-dialog">
-          <DialogHeader>
-            <DialogTitle>New Folder</DialogTitle>
-            <DialogDescription>
-              Create a destination folder in your Media Library and select it for upcoming downloads.
-            </DialogDescription>
-          </DialogHeader>
-
-          <form onSubmit={handleCreateNewFolder}>
-            <DialogBody>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: SPACING.md,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: SPACING.xs,
-                  }}
-                >
-                  <label
-                    htmlFor="downloader-new-folder-input"
-                    style={{
-                      fontSize: '0.8125rem',
-                      fontWeight: TYPOGRAPHY.weights.semibold,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                    }}
-                  >
-                    Folder name
-                  </label>
-                  <input
-                    id="downloader-new-folder-input"
-                    data-testid="downloader-new-folder-input"
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => {
-                      setNewFolderName(e.target.value);
-                      if (newFolderError) setNewFolderError(null);
-                    }}
-                    placeholder="e.g. Viral Hooks Q4"
-                    maxLength={100}
-                    style={{
-                      ...COMPONENT_STYLES.input(THEME.default),
-                      backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                      width: '100%',
-                    }}
-                  />
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: SPACING.xs,
-                  }}
-                >
-                  <label
-                    htmlFor="downloader-new-folder-parent-select"
-                    style={{
-                      fontSize: '0.8125rem',
-                      fontWeight: TYPOGRAPHY.weights.semibold,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                    }}
-                  >
-                    Parent location
-                  </label>
-                  <select
-                    id="downloader-new-folder-parent-select"
-                    data-testid="downloader-new-folder-parent-select"
-                    value={newFolderParentId ?? ''}
-                    onChange={(e) =>
-                      setNewFolderParentId(e.target.value ? e.target.value : null)
-                    }
-                    style={{
-                      ...COMPONENT_STYLES.input(THEME.default),
-                      backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                      width: '100%',
-                    }}
-                  >
-                    <option value="">All Media (Root)</option>
-                    {sortedFolderOptions.map(({ folder, pathLabel }) => (
-                      <option key={folder.id} value={folder.id}>
-                        {pathLabel}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {newFolderError && (
-                  <div
-                    role="alert"
-                    data-testid="downloader-new-folder-error"
-                    style={{
-                      color: PALETTE.accent3,
-                      fontSize: '0.8125rem',
-                      fontWeight: TYPOGRAPHY.weights.medium,
-                    }}
-                  >
-                    {newFolderError}
-                  </div>
-                )}
-              </div>
-            </DialogBody>
-
-            <DialogFooter>
-              <button
-                type="button"
-                onClick={() => setIsNewFolderDialogOpen(false)}
-                style={COMPONENT_STYLES.secondaryButton(THEME.default)}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                data-testid="downloader-new-folder-submit"
-                disabled={isCreatingFolder}
-                style={COMPONENT_STYLES.primaryButton}
-              >
-                {isCreatingFolder ? 'Creating...' : 'Create folder'}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <DownloaderNewFolderDialog
+        isOpen={isNewFolderDialogOpen}
+        onOpenChange={setIsNewFolderDialogOpen}
+        onSubmit={handleCreateNewFolder}
+        folderName={newFolderName}
+        onFolderNameChange={(val) => {
+          setNewFolderName(val);
+          if (newFolderError) setNewFolderError(null);
+        }}
+        folderParentId={newFolderParentId}
+        onFolderParentIdChange={setNewFolderParentId}
+        folderError={newFolderError}
+        sortedFolderOptions={sortedFolderOptions}
+        isCreatingFolder={isCreatingFolder}
+      />
     </div>
   );
 }

@@ -136,13 +136,13 @@ function AccountAvatar({
   showAvatarImg,
   initials,
   onAvatarError,
-}: {
-  profilePictureUrl: string | null;
+}: Readonly<{
+  profilePictureUrl?: string | null | undefined;
   displayName: string;
   showAvatarImg: boolean;
   initials: string;
   onAvatarError: () => void;
-}) {
+}>) {
   if (showAvatarImg && profilePictureUrl) {
     return (
       <img
@@ -188,11 +188,11 @@ function AccountStatusAlerts({
   isExpired,
   isExpiringSoon,
   daysRemaining,
-}: {
+}: Readonly<{
   isExpired: boolean;
   isExpiringSoon: boolean;
   daysRemaining: number | null;
-}) {
+}>) {
   if (isExpired) {
     return (
       <div
@@ -270,6 +270,85 @@ function AccountStatusAlerts({
   }
 
   return null;
+}
+
+function AccountMetadataStats({
+  connectedPagesCount,
+  pagesCountLabel,
+  isPagesExpanded,
+  onTogglePagesExpanded,
+  formattedGender,
+}: Readonly<{
+  connectedPagesCount: number;
+  pagesCountLabel: string;
+  isPagesExpanded: boolean;
+  onTogglePagesExpanded: () => void;
+  formattedGender: string | null;
+}>) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACING.md,
+        padding: `${SPACING.sm} 0`,
+        borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        fontSize: '0.8125rem',
+        color: `var(--text-sub, ${THEME.default.text.secondary})`,
+        marginBottom: SPACING.md,
+      }}
+    >
+      {connectedPagesCount > 0 ? (
+        <button
+          type="button"
+          data-testid="account-pages-toggle"
+          aria-expanded={isPagesExpanded}
+          onClick={onTogglePagesExpanded}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            padding: 0,
+            background: 'none',
+            border: 'none',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            fontSize: '0.8125rem',
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+          }}
+        >
+          <span data-testid="account-pages-count">{pagesCountLabel}</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            style={{
+              transform: isPagesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.15s ease',
+            }}
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      ) : (
+        <span data-testid="account-pages-count">{pagesCountLabel}</span>
+      )}
+
+      {formattedGender && (
+        <>
+          <span style={{ color: `var(--border-subtle, ${THEME.default.borders.hairline})` }}>•</span>
+          <span data-testid="account-gender">{formattedGender}</span>
+        </>
+      )}
+    </div>
+  );
 }
 
 export function AccountCard({
@@ -429,68 +508,13 @@ export function AccountCard({
       </div>
 
       {/* Account Metadata Stats */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.md,
-          padding: `${SPACING.sm} 0`,
-          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          fontSize: '0.8125rem',
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          marginBottom: SPACING.md,
-        }}
-      >
-        {account.connectedPagesCount > 0 ? (
-          <button
-            type="button"
-            data-testid="account-pages-toggle"
-            aria-expanded={isPagesExpanded}
-            onClick={() => setIsPagesExpanded((prev) => !prev)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              padding: 0,
-              background: 'none',
-              border: 'none',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.8125rem',
-              fontFamily: 'inherit',
-              cursor: 'pointer',
-            }}
-          >
-            <span data-testid="account-pages-count">{pagesCountLabel}</span>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              style={{
-                transform: isPagesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                transition: 'transform 0.15s ease',
-              }}
-            >
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-        ) : (
-          <span data-testid="account-pages-count">{pagesCountLabel}</span>
-        )}
-
-        {formattedGender && (
-          <>
-            <span style={{ color: `var(--border-subtle, ${THEME.default.borders.hairline})` }}>•</span>
-            <span data-testid="account-gender">{formattedGender}</span>
-          </>
-        )}
-      </div>
+      <AccountMetadataStats
+        connectedPagesCount={account.connectedPagesCount}
+        pagesCountLabel={pagesCountLabel}
+        isPagesExpanded={isPagesExpanded}
+        onTogglePagesExpanded={() => setIsPagesExpanded((prev) => !prev)}
+        formattedGender={formattedGender}
+      />
 
       {/* Expandable Linked Pages List */}
       {isPagesExpanded && linkedPages.length > 0 && (
