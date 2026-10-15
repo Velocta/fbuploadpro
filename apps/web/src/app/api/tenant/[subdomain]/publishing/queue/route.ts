@@ -766,11 +766,45 @@ export async function handleListQueueItems(
         : undefined,
     }));
 
+    let queuedCount = 0;
+    let publishedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+    let cancelledCount = 0;
+
+    const statusCountSql = `
+      SELECT qi.status, COUNT(*) as cnt
+      FROM queue_items qi
+      WHERE qi.user_id = $1
+        AND EXISTS (SELECT 1 FROM facebook_pages fp WHERE fp.id = qi.fb_page_id AND fp.workspace_id = $2 AND fp.user_id = $1)
+        ${pageId ? 'AND qi.fb_page_id = $3' : ''}
+      GROUP BY qi.status
+    `;
+    const countParams = pageId ? [session.userId, workspaceId, pageId] : [session.userId, workspaceId];
+    try {
+      const statusRows = (await dbClient.query(statusCountSql, countParams)) as any[];
+      for (const row of statusRows || []) {
+        const cnt = Number(row.cnt ?? 0);
+        if (row.status === 'queued') queuedCount = cnt;
+        else if (row.status === 'published') publishedCount = cnt;
+        else if (row.status === 'failed') failedCount = cnt;
+        else if (row.status === 'skipped') skippedCount = cnt;
+        else if (row.status === 'cancelled') cancelledCount = cnt;
+      }
+    } catch (_e) {
+      // Non-fatal counter fallback
+    }
+
     const responsePayload = ListQueueItemsResponseSchema.parse({
       items,
       total,
       limit,
       offset,
+      queuedCount,
+      publishedCount,
+      failedCount,
+      skippedCount,
+      cancelledCount,
     });
 
     return NextResponse.json(responsePayload, { status: 200 });
@@ -859,11 +893,60 @@ export async function handleListQueueItems(
     };
   });
 
+  let queuedCount = 0;
+  let publishedCount = 0;
+  let failedCount = 0;
+  let skippedCount = 0;
+  let cancelledCount = 0;
+
+  if (pageId && typeof (supabase as any).rpc === 'function') {
+    try {
+      const { data: countData } = await (supabase as any).rpc('get_page_queue_status_counts', {
+        p_page_id: pageId,
+        p_user_id: session.userId,
+      });
+      if (Array.isArray(countData) && countData.length > 0) {
+        const counts = countData[0];
+        queuedCount = Number(counts.queued_count ?? 0);
+        publishedCount = Number(counts.published_count ?? 0);
+        failedCount = Number(counts.failed_count ?? 0);
+        skippedCount = Number(counts.skipped_count ?? 0);
+        cancelledCount = Number(counts.cancelled_count ?? 0);
+      }
+    } catch (_e) {
+      // Fallback
+    }
+  } else {
+    try {
+      const { data: statusRows } = await supabase
+        .from('queue_items')
+        .select('status')
+        .eq('user_id', session.userId)
+        .in('fb_page_id', workspacePageIds);
+      if (statusRows) {
+        for (const row of statusRows) {
+          if (row.status === 'queued') queuedCount++;
+          else if (row.status === 'published') publishedCount++;
+          else if (row.status === 'failed') failedCount++;
+          else if (row.status === 'skipped') skippedCount++;
+          else if (row.status === 'cancelled') cancelledCount++;
+        }
+      }
+    } catch (_e) {
+      // Fallback
+    }
+  }
+
   const responsePayload = ListQueueItemsResponseSchema.parse({
     items,
     total: totalCount ?? 0,
     limit,
     offset,
+    queuedCount,
+    publishedCount,
+    failedCount,
+    skippedCount,
+    cancelledCount,
   });
 
   return NextResponse.json(responsePayload, { status: 200 });

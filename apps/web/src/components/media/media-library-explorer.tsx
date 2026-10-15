@@ -261,9 +261,11 @@ async function checkServerDuplicateEntries(
   try {
     const payload = {
       folderId: folderId ?? null,
-      items: entries.map((e) => ({
+      entries: entries.map((e) => ({
+        clientKey: e.id,
         name: e.file.name,
         fileSize: e.file.size,
+        folderId: folderId ?? null,
       })),
     };
     const checkRes = await fetch(`/api/tenant/${subdomain}/media/check-duplicates`, {
@@ -274,16 +276,25 @@ async function checkServerDuplicateEntries(
     if (!checkRes.ok) return null;
 
     const checkData = (await checkRes.json()) as {
-      duplicates: Array<{ name: string; fileSize: number; existingMediaId: string }>;
+      duplicates: Array<{ clientKey: string; existingItem: any }>;
     };
     if (!checkData.duplicates || checkData.duplicates.length === 0) {
       return { duplicates: [], uniqueEntries: entries };
     }
 
-    const dupSet = new Set(
-      checkData.duplicates.map((d) => `${d.name.toLowerCase()}|${d.fileSize}`)
-    );
-    return partitionEntriesByDupSet(entries, dupSet);
+    const dupKeySet = new Set(checkData.duplicates.map((d) => d.clientKey));
+    const duplicates: QueuedUploadEntry[] = [];
+    const uniqueEntries: QueuedUploadEntry[] = [];
+
+    for (const entry of entries) {
+      if (dupKeySet.has(entry.id)) {
+        duplicates.push(entry);
+      } else {
+        uniqueEntries.push(entry);
+      }
+    }
+
+    return { duplicates, uniqueEntries };
   } catch {
     return null;
   }
@@ -356,6 +367,7 @@ export function MediaLibraryExplorer({
     initialTotalMediaCount ?? (initialMediaItems?.length ?? 0)
   );
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<MediaViewMode>(() => {
     if (initialViewMode !== undefined) {
@@ -610,12 +622,14 @@ export function MediaLibraryExplorer({
         const mediaData = (await mediaRes.json()) as {
           items: MediaItemResponse[];
           total?: number;
+          nextCursor?: string | null;
         };
         const fetchedItems = mediaData.items || [];
         setMediaItems(fetchedItems);
         setTotalMediaCount(
           typeof mediaData.total === 'number' ? mediaData.total : fetchedItems.length
         );
+        setNextCursor(mediaData.nextCursor ?? null);
       }
     } catch (_err) {
       // Retain existing state if network request fails
@@ -677,7 +691,11 @@ export function MediaLibraryExplorer({
     query.set('sortBy', sortBy);
     query.set('sortOrder', sortOrder);
     query.set('limit', String(MEDIA_PAGE_LIMIT));
-    query.set('offset', String(mediaItems.length));
+    if (nextCursor) {
+      query.set('cursor', nextCursor);
+    } else {
+      query.set('offset', String(mediaItems.length));
+    }
 
     try {
       const mediaRes = await fetch(
@@ -687,6 +705,7 @@ export function MediaLibraryExplorer({
         const mediaData = (await mediaRes.json()) as {
           items: MediaItemResponse[];
           total?: number;
+          nextCursor?: string | null;
         };
         const nextItems = mediaData.items || [];
         setMediaItems((prev) => {
@@ -697,6 +716,7 @@ export function MediaLibraryExplorer({
         if (typeof mediaData.total === 'number') {
           setTotalMediaCount(mediaData.total);
         }
+        setNextCursor(mediaData.nextCursor ?? null);
       }
     } catch (_err) {
       // Retain existing items on transient failure
@@ -706,6 +726,7 @@ export function MediaLibraryExplorer({
   }, [
     subdomain,
     isLoadingMore,
+    nextCursor,
     sortOption,
     searchQuery,
     currentFolderId,
@@ -737,7 +758,7 @@ export function MediaLibraryExplorer({
       })
     : mediaItems;
 
-  const hasMoreMedia = displayedMediaItems.length < totalMediaCount;
+  const hasMoreMedia = nextCursor !== null || displayedMediaItems.length < totalMediaCount;
 
   // IntersectionObserver for automatic infinite scroll
   useEffect(() => {
@@ -902,7 +923,7 @@ export function MediaLibraryExplorer({
     let nextThumbnailKey: string | null | undefined = undefined;
     let nextThumbnailUrl: string = captured.dataUrl;
 
-    if (!hasInitialData && captured.blob && targetItem) {
+    if (captured.blob && targetItem) {
       try {
         const urlRes = await fetch(
           `/api/tenant/${subdomain}/media/upload-url`,

@@ -32,36 +32,6 @@ function extractPagePictureUrl(row: any): string | null {
   return null;
 }
 
-async function syncRecoveredPageStatus(
-  pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
-): Promise<void> {
-  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    try {
-      await dbClient.query(
-        `UPDATE facebook_pages
-         SET status = 'active', rate_limited_at = NULL, updated_at = now()
-         WHERE id = $1`,
-        [pageId]
-      );
-    } catch (err: any) {
-      console.error('[handleListPages] Failed to persist recovered page status:', err);
-    }
-    return;
-  }
-
-  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
-  if (!supabase) return;
-
-  const { error } = await supabase
-    .from('facebook_pages')
-    .update({ status: 'active', rate_limited_at: null, updated_at: new Date().toISOString() })
-    .eq('id', pageId);
-
-  if (error) {
-    console.error('[handleListPages] Failed to persist recovered page status via Supabase:', error);
-  }
-}
 
 function parsePageTasks(rawTasks: unknown): string[] {
   if (Array.isArray(rawTasks)) {
@@ -215,8 +185,6 @@ export async function handleListPages(
     rows = res.rows || [];
   }
 
-  const recoveryPromises: Promise<void>[] = [];
-
   const pages = (rows || []).map((row) => {
     const updatedAt = row.updated_at || row.updatedAt;
     const rateLimitedAt = row.rate_limited_at || row.rateLimitedAt;
@@ -229,10 +197,6 @@ export async function handleListPages(
     const currentFollowers = extractCurrentFollowers(row);
     const startingFollowers = extractStartingFollowers(row, currentFollowers);
     const followersGained = currentFollowers - startingFollowers;
-
-    if (row.status === 'fb_rate_limited' && effectiveStatus === 'active') {
-      recoveryPromises.push(syncRecoveredPageStatus(row.id, dbClient));
-    }
 
     return {
       id: row.id,
@@ -255,9 +219,6 @@ export async function handleListPages(
     };
   });
 
-  if (recoveryPromises.length > 0) {
-    void Promise.allSettled(recoveryPromises);
-  }
 
   const responsePayload = ListFacebookPagesResponseSchema.parse({
     pages,

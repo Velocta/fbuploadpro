@@ -141,7 +141,7 @@ describe('Publishing Engine Domain Contracts', () => {
   describe('Queue Item & Enqueueing Contracts (T116)', () => {
     describe('QueueItemStatusSchema', () => {
       it('accepts all valid statuses', () => {
-        const statuses = ['queued', 'publishing', 'published', 'failed', 'skipped'];
+        const statuses = ['queued', 'publishing', 'published', 'failed', 'skipped', 'cancelled'];
         for (const status of statuses) {
           expect(QueueItemStatusSchema.safeParse(status).success).toBe(true);
         }
@@ -150,7 +150,7 @@ describe('Publishing Engine Domain Contracts', () => {
       it('rejects invalid statuses', () => {
         expect(QueueItemStatusSchema.safeParse('pending').success).toBe(false);
         expect(QueueItemStatusSchema.safeParse('processing').success).toBe(false);
-        expect(QueueItemStatusSchema.safeParse('cancelled').success).toBe(false);
+        expect(QueueItemStatusSchema.safeParse('unknown').success).toBe(false);
       });
     });
 
@@ -198,9 +198,10 @@ describe('Publishing Engine Domain Contracts', () => {
     });
 
     describe('UpdateQueueItemRequestSchema', () => {
-      it('allows updating status to queued or skipped', () => {
+      it('allows updating status to queued, skipped, or cancelled', () => {
         expect(UpdateQueueItemRequestSchema.safeParse({ status: 'queued' }).success).toBe(true);
         expect(UpdateQueueItemRequestSchema.safeParse({ status: 'skipped' }).success).toBe(true);
+        expect(UpdateQueueItemRequestSchema.safeParse({ status: 'cancelled' }).success).toBe(true);
       });
 
       it('rejects updating status to published or failed via update schema', () => {

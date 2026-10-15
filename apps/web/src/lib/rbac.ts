@@ -4,7 +4,7 @@ export function assertRole(currentRole: UserRole, requiredRole: UserRole): void 
   if (!hasRole(currentRole, requiredRole)) {
     throw new DomainError(
       DomainErrorCode.FORBIDDEN,
-      `Access denied: requires ${requiredRole} role or higher, current role is ${currentRole}`
+      "You don't have permission to perform this action in this workspace."
     );
   }
 }
@@ -17,7 +17,7 @@ export function checkRouteAccess(
     return {
       authorized: false,
       statusCode: 403,
-      error: `Forbidden: role ${requiredRole} required`,
+      error: "You don't have permission to perform this action in this workspace.",
     };
   }
 

@@ -16,6 +16,7 @@ describe('RBAC Route Guard Contracts (User Story 3)', () => {
         const error = err as DomainError;
         expect(error.code).toBe(DomainErrorCode.FORBIDDEN);
         expect(error.statusCode).toBe(403);
+        expect(error.message).toBe("You don't have permission to perform this action in this workspace.");
       }
     });
 
@@ -46,6 +47,7 @@ describe('RBAC Route Guard Contracts (User Story 3)', () => {
       const res = checkRouteAccess('user', 'seller');
       expect(res.authorized).toBe(false);
       expect(res.statusCode).toBe(403);
+      expect(res.error).toBe("You don't have permission to perform this action in this workspace.");
     });
   });
 });

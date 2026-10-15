@@ -77,9 +77,14 @@ async function recoverStuckPublishingItems(db: any): Promise<void> {
   const currentMinute = new Date().getMinutes();
   if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
     try {
-      await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
-    } catch {
-      // Non-blocking in environments where recover RPC is not mocked
+      const { data, error } = await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
+      if (error) {
+        console.error('[recoverStuckPublishingItems] RPC error:', error);
+      } else if (data && data > 0) {
+        console.info(`[recoverStuckPublishingItems] Recovered ${data} stuck publishing items`);
+      }
+    } catch (err) {
+      console.error('[recoverStuckPublishingItems] Unexpected error:', err);
     }
   }
 }
@@ -99,7 +104,25 @@ async function fanOutClaimedBatches(
     for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
       slices.push(claimed.slice(i, i + CHUNK_SIZE));
     }
-    await Promise.all(slices.map((slice) => queue.sendBatch(slice.map((body) => ({ body })))));
+    for (const slice of slices) {
+      try {
+        await queue.sendBatch(slice.map((body) => ({ body })));
+      } catch (sendErr) {
+        console.error('[fanOutClaimedBatches] Failed to send batch to queue; reverting items to queued:', sendErr);
+        const unsentIds = slice.map((item) => item.id);
+        if (unsentIds.length > 0) {
+          try {
+            if (typeof db.from === 'function') {
+              await db.from('queue_items').update({ status: 'queued', updated_at: new Date().toISOString() }).in('id', unsentIds);
+            } else if (typeof db.query === 'function') {
+              await db.query(`UPDATE queue_items SET status = 'queued', updated_at = now() WHERE id = ANY($1)`, [unsentIds]);
+            }
+          } catch (revertErr) {
+            console.error('[fanOutClaimedBatches] Failed to revert unsent items to queued:', revertErr);
+          }
+        }
+      }
+    }
   }
 }
 

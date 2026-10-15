@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   deduplicateBatchUrls,
@@ -32,12 +32,14 @@ import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
 export const DEFAULT_DOWNLOADS_FOLDER_NAME = 'Downloads';
 
 export interface DownloaderBatchProgressState {
-  status: 'idle' | 'downloading' | 'completed';
+  status: 'idle' | 'downloading' | 'completed' | 'cancelled';
   totalLinks: number;
   completedLinks: number;
   currentUrl: string | null;
   duplicateCount: number;
   invalidCount: number;
+  stage?: 'resolving' | 'streaming';
+  stagePercent?: number;
 }
 
 export interface DownloaderFailedEntry {
@@ -252,6 +254,7 @@ export interface ExecuteDownloaderBatchOptions {
   folderId: string | null;
   onProgress?: (state: DownloaderBatchProgressState) => void;
   fetchImpl?: typeof fetch;
+  signal?: AbortSignal;
 }
 
 export interface ExecuteDownloaderBatchResult {
@@ -278,19 +281,89 @@ async function pollDownloadJobCompletion(params: {
   idx: number;
   folderId: string | null;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
 }): Promise<{ saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null }> {
-  const { subdomain, jobId, url, idx, folderId, fetchImpl } = params;
+  const { subdomain, jobId, url, idx, folderId, fetchImpl, signal, onStageChange } = params;
   const maxPolls = 60;
   for (let p = 0; p < maxPolls; p++) {
+    if (signal?.aborted) {
+      return {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: 'Download was cancelled.',
+        },
+      };
+    }
+
     await new Promise((r) => setTimeout(r, 1500));
-    const pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`);
+
+    if (signal?.aborted) {
+      return {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: 'Download was cancelled.',
+        },
+      };
+    }
+
+    let pollRes: Response;
+    try {
+      pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`, { signal });
+    } catch (fetchErr: any) {
+      if (signal?.aborted || fetchErr?.name === 'AbortError') {
+        return {
+          saved: [],
+          failed: {
+            id: `failed-${idx}-${Date.now()}`,
+            url,
+            folderId,
+            errorMessage: 'Download was cancelled.',
+          },
+        };
+      }
+      continue;
+    }
+
+    // Fail-fast immediately on permanent HTTP authentication or not-found status codes
+    if (pollRes.status === 401 || pollRes.status === 403 || pollRes.status === 404) {
+      return {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage:
+            pollRes.status === 404
+              ? 'Download job not found or expired.'
+              : 'Authentication error while checking download status.',
+        },
+      };
+    }
+
     if (!pollRes.ok) continue;
 
-    const pollData = await pollRes.json();
+    let pollData: any;
+    try {
+      pollData = await pollRes.json();
+    } catch {
+      continue;
+    }
+
     const job = pollData?.job;
+    if (job?.status === 'processing') {
+      const pct = typeof job.progress_percent === 'number' ? job.progress_percent : 0;
+      onStageChange?.(pct > 0 ? 'streaming' : 'resolving', pct);
+    }
     if (job?.status === 'completed') {
       if (job?.media_id) {
-        const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`).catch(() => null);
+        const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`, { signal }).catch(() => null);
         if (mediaRes?.ok) {
           const mediaData = await mediaRes.json();
           return {
@@ -328,11 +401,13 @@ async function processSingleBatchUrl(params: {
   idx: number;
   folderId: string | null;
   fetchImpl: typeof fetch;
+  signal?: AbortSignal;
+  onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
 }): Promise<{
   saved: DownloaderSavedEntry[];
   failed: DownloaderFailedEntry | null;
 }> {
-  const { subdomain, url, idx, folderId, fetchImpl } = params;
+  const { subdomain, url, idx, folderId, fetchImpl, signal, onStageChange } = params;
   try {
     const res = await fetchImpl(`/api/tenant/${subdomain}/media/downloader`, {
       method: 'POST',
@@ -341,13 +416,14 @@ async function processSingleBatchUrl(params: {
         url,
         folderId,
       }),
+      signal,
     });
 
     if (res.status === 202) {
       const data = (await res.json()) as { job?: { id: string } };
       const jobId = data?.job?.id;
       if (jobId) {
-        return pollDownloadJobCompletion({ subdomain, jobId, url, idx, folderId, fetchImpl });
+        return pollDownloadJobCompletion({ subdomain, jobId, url, idx, folderId, fetchImpl, signal, onStageChange });
       }
     }
 
@@ -376,7 +452,18 @@ async function processSingleBatchUrl(params: {
         errorMessage: message,
       },
     };
-  } catch {
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === 'AbortError') {
+      return {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: 'Download was cancelled.',
+        },
+      };
+    }
     // Convert network transport error into a structured retryable failed entry
     return {
       saved: [],
@@ -398,7 +485,7 @@ async function processSingleBatchUrl(params: {
 export async function executeDownloaderBatch(
   options: ExecuteDownloaderBatchOptions
 ): Promise<ExecuteDownloaderBatchResult> {
-  const { subdomain, rawInput, folderId, onProgress, fetchImpl = fetch } = options;
+  const { subdomain, rawInput, folderId, onProgress, fetchImpl = fetch, signal } = options;
   const deduped = deduplicateBatchUrls(rawInput);
   const { urls, duplicateCount, invalidUrls } = deduped;
 
@@ -421,9 +508,22 @@ export async function executeDownloaderBatch(
     currentUrl: urls[0] ?? null,
     duplicateCount,
     invalidCount: invalidUrls.length,
+    stage: 'resolving',
   });
 
   const runSequential = async (idx: number): Promise<void> => {
+    if (signal?.aborted) {
+      onProgress?.({
+        status: 'cancelled',
+        totalLinks: urls.length,
+        completedLinks: idx,
+        currentUrl: null,
+        duplicateCount,
+        invalidCount: invalidUrls.length,
+      });
+      return;
+    }
+
     if (idx >= urls.length) {
       return;
     }
@@ -435,6 +535,7 @@ export async function executeDownloaderBatch(
       currentUrl: url,
       duplicateCount,
       invalidCount: invalidUrls.length,
+      stage: 'resolving',
     });
 
     const outcome = await processSingleBatchUrl({
@@ -443,6 +544,19 @@ export async function executeDownloaderBatch(
       idx,
       folderId,
       fetchImpl,
+      signal,
+      onStageChange: (stage, stagePercent) => {
+        onProgress?.({
+          status: 'downloading',
+          totalLinks: urls.length,
+          completedLinks: idx,
+          currentUrl: url,
+          duplicateCount,
+          invalidCount: invalidUrls.length,
+          stage,
+          stagePercent,
+        });
+      },
     });
 
     savedEntries.push(...outcome.saved);
@@ -658,6 +772,17 @@ export function MediaDownloader({
     initialFailedEntries
   );
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleAbortDownload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setBatchProgress((prev) =>
+      prev ? { ...prev, status: 'cancelled' } : null
+    );
+  };
 
   // Inline New Folder Modal state
   const [isNewFolderDialogOpen, setIsNewFolderDialogOpen] = useState(
@@ -774,26 +899,34 @@ export function MediaDownloader({
     setUrlError(null);
     setDeduplicationCount(validation.duplicateCount);
 
-    const result = await executeDownloaderBatch({
-      subdomain,
-      rawInput: urlInput,
-      folderId: selectedFolderId,
-      onProgress: (state) => {
-        setBatchProgress(state);
-      },
-    });
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
-    if (result.savedEntries.length > 0) {
-      setSavedEntries((prev) => [...result.savedEntries, ...prev]);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
+    try {
+      const result = await executeDownloaderBatch({
+        subdomain,
+        rawInput: urlInput,
+        folderId: selectedFolderId,
+        signal: controller.signal,
+        onProgress: (state) => {
+          setBatchProgress(state);
+        },
+      });
+
+      if (result.savedEntries.length > 0) {
+        setSavedEntries((prev) => [...result.savedEntries, ...prev]);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
+        }
       }
-    }
-    if (result.failedEntries.length > 0) {
-      setFailedEntries((prev) => [...result.failedEntries, ...prev]);
-    }
-    if (result.failedEntries.length === 0) {
-      setUrlInput('');
+      if (result.failedEntries.length > 0) {
+        setFailedEntries((prev) => [...result.failedEntries, ...prev]);
+      }
+      if (result.failedEntries.length === 0) {
+        setUrlInput('');
+      }
+    } finally {
+      abortControllerRef.current = null;
     }
   };
 
@@ -1175,6 +1308,18 @@ export function MediaDownloader({
                 Saving {batchProgress.completedLinks} of {batchProgress.totalLinks}{' '}
                 {batchProgress.totalLinks === 1 ? 'link' : 'links'} to Media Library...
               </span>
+              {batchProgress.stage && isDownloading && (
+                <span
+                  data-testid="downloader-stage-label"
+                  style={{
+                    fontSize: '0.75rem',
+                    color: PALETTE.primary,
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                  }}
+                >
+                  [{batchProgress.stage === 'streaming' ? 'Streaming media bytes...' : 'Resolving media link...'}]
+                </span>
+              )}
               {batchProgress.currentUrl && isDownloading && (
                 <span
                   style={{
@@ -1191,20 +1336,45 @@ export function MediaDownloader({
               )}
             </div>
 
-            <span
-              data-testid="downloader-progress-percent"
-              style={{
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.bold,
-                color:
-                  batchProgress.status === 'completed'
-                    ? PALETTE.accent4
-                    : PALETTE.primary,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              }}
-            >
-              {progressPercent}%
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
+              <span
+                data-testid="downloader-progress-percent"
+                style={{
+                  fontSize: '0.875rem',
+                  fontWeight: TYPOGRAPHY.weights.bold,
+                  color:
+                    batchProgress.status === 'completed'
+                      ? PALETTE.accent4
+                      : batchProgress.status === 'cancelled'
+                        ? PALETTE.accent3
+                        : PALETTE.primary,
+                  fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                }}
+              >
+                {batchProgress.status === 'cancelled' ? 'Cancelled' : `${progressPercent}%`}
+              </span>
+
+              {isDownloading && (
+                <button
+                  type="button"
+                  data-testid="abort-download-btn"
+                  onClick={handleAbortDownload}
+                  style={{
+                    height: '28px',
+                    padding: `0 ${SPACING.sm}`,
+                    backgroundColor: 'transparent',
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    borderRadius: RADII.xs,
+                    fontSize: '0.75rem',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Abort Download
+                </button>
+              )}
+            </div>
           </div>
 
           <div

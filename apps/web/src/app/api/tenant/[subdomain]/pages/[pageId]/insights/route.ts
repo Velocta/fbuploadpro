@@ -381,12 +381,7 @@ export async function handleGetInsights(
     // Non-fatal if table/mock is missing in unit tests
   }
 
-  const hasFreshSnapshots = snapshotRows.some((r) => {
-    const d = typeof r.snapshot_date === 'string' ? r.snapshot_date.slice(0, 10) : '';
-    return d === todayDate;
-  });
-
-  if (!query.refresh && hasFreshSnapshots) {
+  if (!query.refresh && snapshotRows.length > 0) {
     const assembled = assembleInsightsFromSnapshots(page, query.range, snapshotRows);
     await globalInsightsCache.setAsync(cacheKey, assembled, 900);
     return NextResponse.json(assembled, {
@@ -411,6 +406,13 @@ export async function handleGetInsights(
   const fetchImpl = options?.fetchImpl ?? fetch;
   try {
     const overviewResult = await getPageOverview(page.fb_page_id, decryptedToken, fetchImpl);
+    if (overviewResult.rawError) {
+      const graphError: any = new Error(overviewResult.rawError);
+      if (overviewResult.healthStatus === 'rate_limited') {
+        graphError.code = 80001;
+      }
+      throw graphError;
+    }
     const timeSeriesResult = await getPageTimeSeriesInsights(
       page.fb_page_id,
       decryptedToken,
@@ -473,7 +475,13 @@ export async function handleGetInsights(
     }
 
     // Never cache zeroed fallback metrics when upstream Graph API call fails
-    throw err;
+    return NextResponse.json(
+      {
+        error: 'UPSTREAM_GRAPH_ERROR',
+        message: err instanceof Error ? err.message : 'Facebook Graph API failed to return page insights.',
+      },
+      { status: 502 }
+    );
   }
 }
 

@@ -339,24 +339,35 @@ export async function handleUpdateFolder(
 }
 
 async function batchDeleteStorageKeys(
-  storage: { deleteObject: (key: string) => Promise<any> },
+  storage: { deleteObject: (key: string) => Promise<any>; deleteObjects?: (keys: string[]) => Promise<any> },
   keys: string[],
-  batchSize = 50
+  batchSize = 1000
 ): Promise<void> {
   const chunks: string[][] = [];
   for (let i = 0; i < keys.length; i += batchSize) {
     chunks.push(keys.slice(i, i + batchSize));
   }
-  await chunks.reduce(async (prevPromise, chunk) => {
-    await prevPromise;
-    await Promise.allSettled(
-      chunk.map((key) =>
-        storage.deleteObject(key).catch((err) => {
-          console.error(`Failed to delete storage key ${key}:`, err);
-        })
-      )
-    );
-  }, Promise.resolve());
+  for (const chunk of chunks) {
+    if (typeof storage.deleteObjects === 'function') {
+      try {
+        await storage.deleteObjects(chunk);
+        continue;
+      } catch (err) {
+        console.warn('storage.deleteObjects failed, falling back to individual deletes:', err);
+      }
+    }
+    const subBatchSize = 25;
+    for (let j = 0; j < chunk.length; j += subBatchSize) {
+      const subChunk = chunk.slice(j, j + subBatchSize);
+      await Promise.allSettled(
+        subChunk.map((key) =>
+          storage.deleteObject(key).catch((err) => {
+            console.error(`Failed to delete storage key ${key}:`, err);
+          })
+        )
+      );
+    }
+  }
 }
 
 export async function handleDeleteFolder(

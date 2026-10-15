@@ -138,6 +138,14 @@ export function AccountCard({
   forceAvatarError = false,
 }: Readonly<AccountCardProps>) {
   const isExpired = account.status === 'expired';
+  const daysRemaining = account.tokenExpiresAt
+    ? Math.ceil((new Date(account.tokenExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isExpiringSoon =
+    !isExpired &&
+    daysRemaining !== null &&
+    daysRemaining > 0 &&
+    daysRemaining <= 7;
   const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(
     forceAvatarError ? (account.profilePictureUrl ?? '__forced__') : null
   );
@@ -413,6 +421,43 @@ export function AccountCard({
         </div>
       )}
 
+      {/* Proactive Token Expiration Horizon Notice */}
+      {isExpiringSoon && (
+        <div
+          data-testid="account-expiring-soon-alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            padding: '8px 10px',
+            backgroundColor: 'rgba(250, 215, 52, 0.10)',
+            border: '1px solid rgba(250, 215, 52, 0.25)',
+            borderRadius: RADII.sm,
+            fontSize: '0.75rem',
+            color: PALETTE.primary,
+            fontWeight: TYPOGRAPHY.weights.medium,
+            marginBottom: SPACING.md,
+          }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>Access token expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'} — reconnect soon</span>
+        </div>
+      )}
+
       {/* Card Actions */}
       <div
         style={{
@@ -423,7 +468,7 @@ export function AccountCard({
           marginTop: 'auto',
         }}
       >
-        {isExpired ? (
+        {isExpired || isExpiringSoon ? (
           <button
             type="button"
             data-testid="account-reconnect-button"
@@ -431,9 +476,9 @@ export function AccountCard({
             style={{
               height: '32px',
               padding: `0 ${SPACING.md}`,
-              backgroundColor: PALETTE.primary,
-              color: PALETTE.background,
-              border: 'none',
+              backgroundColor: isExpired ? PALETTE.primary : 'transparent',
+              color: isExpired ? PALETTE.background : `var(--text-main, ${THEME.default.text.primary})`,
+              border: isExpired ? 'none' : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
               borderRadius: RADII.sm,
               fontWeight: TYPOGRAPHY.weights.semibold,
               fontSize: '0.8125rem',
@@ -443,7 +488,7 @@ export function AccountCard({
               gap: SPACING.xs,
             }}
           >
-            <span>Reconnect account</span>
+            <span>{isExpired ? 'Reconnect account' : 'Refresh token'}</span>
           </button>
         ) : (
           <div style={{ flex: 1 }} />

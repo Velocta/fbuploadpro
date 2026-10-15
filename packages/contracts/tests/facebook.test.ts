@@ -11,6 +11,7 @@ import {
   FacebookPageViewSchema,
   fetchAllFacebookPages,
 } from '../src/domain/facebook.js';
+import { evaluateGraphApiError } from '../src/domain/facebook-health.js';
 
 describe('Facebook Account & Page Domain Schemas', () => {
   const userId = '550e8400-e29b-41d4-a716-446655440000';
@@ -377,6 +378,45 @@ describe('Facebook Account & Page Domain Schemas', () => {
       await expect(
         fetchAllFacebookPages('bad-token', 'id,name', 5, mockFetch as any)
       ).rejects.toThrow('Facebook Graph API returned 401');
+    });
+  });
+
+  describe('evaluateGraphApiError classification', () => {
+    it('maps code 10 and codes 200-299 to expired and invalid_token requiring reauth', () => {
+      const code10 = evaluateGraphApiError(10);
+      expect(code10).not.toBeNull();
+      expect(code10?.accountStatus).toBe('expired');
+      expect(code10?.pageStatus).toBe('invalid_token');
+      expect(code10?.isTransient).toBe(false);
+      expect(code10?.requiresReauth).toBe(true);
+
+      for (const code of [200, 250, 299]) {
+        const evalRes = evaluateGraphApiError(code);
+        expect(evalRes?.accountStatus).toBe('expired');
+        expect(evalRes?.pageStatus).toBe('invalid_token');
+        expect(evalRes?.isTransient).toBe(false);
+        expect(evalRes?.requiresReauth).toBe(true);
+      }
+    });
+
+    it('maps duplicate code 506 to active/active without reauth', () => {
+      const evalRes = evaluateGraphApiError(506);
+      expect(evalRes).not.toBeNull();
+      expect(evalRes?.accountStatus).toBe('active');
+      expect(evalRes?.pageStatus).toBe('active');
+      expect(evalRes?.isTransient).toBe(false);
+      expect(evalRes?.requiresReauth).toBe(false);
+      expect(evalRes?.message).toContain('duplicate');
+    });
+
+    it('maps bad link code 1609005 to active/active without reauth', () => {
+      const evalRes = evaluateGraphApiError(1609005);
+      expect(evalRes).not.toBeNull();
+      expect(evalRes?.accountStatus).toBe('active');
+      expect(evalRes?.pageStatus).toBe('active');
+      expect(evalRes?.isTransient).toBe(false);
+      expect(evalRes?.requiresReauth).toBe(false);
+      expect(evalRes?.message).toContain('link URL');
     });
   });
 });

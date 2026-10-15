@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { PostFormatSchema } from './publishing.js';
+import {
+  PostFormatSchema,
+  validatePostFormatEligibility,
+  getEligiblePostFormatsForMedia,
+} from './publishing.js';
+
+export { validatePostFormatEligibility, getEligiblePostFormatsForMedia };
 
 export const AllowedMediaMimeTypes = [
   'video/mp4',

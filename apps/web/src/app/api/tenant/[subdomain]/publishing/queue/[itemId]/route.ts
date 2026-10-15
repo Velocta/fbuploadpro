@@ -16,10 +16,18 @@ function resolveScheduledTime(
   existingTime?: string | null
 ): string {
   if (requestedTime !== undefined && requestedTime !== null) {
-    return new Date(requestedTime).toISOString();
+    const d = new Date(requestedTime);
+    if (Number.isNaN(d.getTime())) {
+      throw new Error('INVALID_DATE');
+    }
+    return d.toISOString();
   }
   if (existingTime) {
-    return new Date(existingTime).toISOString();
+    const d = new Date(existingTime);
+    if (Number.isNaN(d.getTime())) {
+      return new Date().toISOString();
+    }
+    return d.toISOString();
   }
   return new Date().toISOString();
 }
@@ -106,7 +114,15 @@ export async function handleUpdateQueueItem(
       newFirstComment = null;
     }
     const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
-    const newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
+    let newScheduledTime: string;
+    try {
+      newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
+    } catch (_e) {
+      return NextResponse.json(
+        { error: 'INVALID_REQUEST', message: 'Invalid scheduled time format' },
+        { status: 400 }
+      );
+    }
     const newStatus = parsed.data.status ?? existing.status;
 
     const updateRows = (await dbClient.query(
@@ -211,7 +227,15 @@ export async function handleUpdateQueueItem(
     newFirstComment = null;
   }
   const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
-  const newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
+  let newScheduledTime: string;
+  try {
+    newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
+  } catch (_e) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'Invalid scheduled time format' },
+      { status: 400 }
+    );
+  }
   const newStatus = parsed.data.status ?? existing.status;
 
   const updatePayload: Record<string, any> = {

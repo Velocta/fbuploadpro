@@ -8,7 +8,7 @@
 import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { StatusDot, Tag } from '@/components/ui';
-import { PALETTE } from '@/lib/theme';
+import { PALETTE, STATUS_SIGNALS } from '@/lib/theme';
 import { render } from './setup';
 
 describe('Status Signals: StatusDot & Tag (US4 / T021)', () => {
@@ -26,7 +26,7 @@ describe('Status Signals: StatusDot & Tag (US4 / T021)', () => {
       expect(html).toContain('width:6px');
       expect(html).toContain('height:6px');
       expect(html).toContain(`background-color:${PALETTE.accent4}`);
-      expect(html).toContain('box-shadow:0 0 6px rgba(46, 189, 133, 0.45)');
+      expect(html).toContain(`box-shadow:${STATUS_SIGNALS.operational.halo}`);
     });
 
     it('renders queued state with unboxed 6px Gold dot and luminous micro-halo', () => {
@@ -39,7 +39,7 @@ describe('Status Signals: StatusDot & Tag (US4 / T021)', () => {
       expect(html).toContain('width:6px');
       expect(html).toContain('height:6px');
       expect(html).toContain(`background-color:${PALETTE.primary}`);
-      expect(html).toContain('box-shadow:0 0 6px rgba(250, 215, 52, 0.45)');
+      expect(html).toContain(`box-shadow:${STATUS_SIGNALS.queued.halo}`);
     });
 
     it('renders critical state with unboxed 6px Rose dot and luminous micro-halo', () => {
@@ -52,7 +52,7 @@ describe('Status Signals: StatusDot & Tag (US4 / T021)', () => {
       expect(html).toContain('width:6px');
       expect(html).toContain('height:6px');
       expect(html).toContain(`background-color:${PALETTE.accent3}`);
-      expect(html).toContain('box-shadow:0 0 6px rgba(246, 70, 93, 0.45)');
+      expect(html).toContain(`box-shadow:${STATUS_SIGNALS.critical.halo}`);
     });
 
     it('renders idle state with neutral slate tone', () => {
@@ -62,7 +62,8 @@ describe('Status Signals: StatusDot & Tag (US4 / T021)', () => {
 
       expect(hasText('Idle')).toBe(true);
       expect(getAttribute('aria-label')).toBe('Status: Idle');
-      expect(html).toContain('background-color:#848e9c');
+      expect(html).toContain(`background-color:${STATUS_SIGNALS.idle.dot}`);
+      expect(html).toContain(`box-shadow:${STATUS_SIGNALS.idle.halo}`);
     });
 
     it('supports custom label while maintaining accessible aria-label', () => {

@@ -389,20 +389,31 @@ export async function dispatchItem(
   let commentWarning: string | undefined;
 
   if (format !== 'story' && item.firstComment && item.firstComment.trim().length > 0) {
-    try {
-      const commentRes = await fbClient.postComment({
-        postId: publishResult.postId,
-        accessToken,
-        message: item.firstComment.trim(),
-      });
-      fbCommentId = commentRes.commentId;
-    } catch (commentErr: unknown) {
-      const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
-      commentWarning = `Published post but first comment failed: ${errMsg}`;
-      console.warn(
-        `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
-        commentErr
-      );
+    let commentAttempts = 0;
+    const maxCommentAttempts = 3;
+    while (commentAttempts < maxCommentAttempts) {
+      commentAttempts++;
+      try {
+        const commentRes = await fbClient.postComment({
+          postId: publishResult.postId,
+          accessToken,
+          message: item.firstComment.trim(),
+        });
+        fbCommentId = commentRes.commentId;
+        break;
+      } catch (commentErr: unknown) {
+        if (commentAttempts >= maxCommentAttempts) {
+          const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+          commentWarning = `Published post but first comment failed after ${maxCommentAttempts} attempts: ${errMsg}`;
+          console.warn(
+            `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
+            commentErr
+          );
+        } else {
+          // Short delay between comment attempts (e.g. 500ms * attempt)
+          await new Promise((resolve) => setTimeout(resolve, commentAttempts * 500));
+        }
+      }
     }
   }
 

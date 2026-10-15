@@ -78,11 +78,11 @@ export async function handleConfirmUpload(
           `INSERT INTO media_items (
              id, user_id, folder_id, name, file_size, mime_type, media_type,
              storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-             aspect_ratio, caption_text, created_at, updated_at
+             aspect_ratio, caption_text, width, height, created_at, updated_at
            ) VALUES (
              $1, $2, $3, $4, $5, $6, $7,
              $8, $9, $10, $11, $12,
-             $13, $14, now(), now()
+             $13, $14, $15, $16, now(), now()
            )
            RETURNING *`,
           [
@@ -100,6 +100,8 @@ export async function handleConfirmUpload(
             body.durationSeconds ?? null,
             body.aspectRatio ?? 'unknown',
             resolvedCaptionText,
+            body.width ?? null,
+            body.height ?? null,
           ]
         );
 
@@ -139,6 +141,8 @@ export async function handleConfirmUpload(
           duration_seconds: body.durationSeconds ?? null,
           aspect_ratio: body.aspectRatio ?? 'unknown',
           caption_text: resolvedCaptionText,
+          width: body.width ?? null,
+          height: body.height ?? null,
         })
         .select()
         .single();

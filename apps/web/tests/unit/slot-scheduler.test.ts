@@ -287,4 +287,77 @@ describe('calculateNextVacantSlot (T124)', () => {
       expect(result?.scheduledTime.getTime()).toBeGreaterThan(Date.now());
     });
   });
+
+  describe('format-aware slot scheduling (Spec 045 / Issue 11)', () => {
+    it('filters candidate slots matching postFormat against allowedFormats', () => {
+      const result = calculateNextVacantSlot({
+        slots: [
+          {
+            id: 'slot-reels-only',
+            slotTime: '11:00:00',
+            timezone: 'UTC',
+            isActive: true,
+            allowedFormats: ['reel'],
+          },
+          {
+            id: 'slot-posts-only',
+            slotTime: '12:00:00',
+            timezone: 'UTC',
+            isActive: true,
+            allowedFormats: ['post_image', 'post_video'],
+          },
+        ],
+        existingScheduledTimes: [],
+        now: new Date('2026-10-07T10:00:00.000Z'),
+        postFormat: 'post_image',
+      });
+
+      expect(result).toEqual({
+        slotId: 'slot-posts-only',
+        scheduledTime: new Date('2026-10-07T12:00:00.000Z'),
+      });
+    });
+
+    it('allows any postFormat if slot allowedFormats is null or empty', () => {
+      const result = calculateNextVacantSlot({
+        slots: [
+          {
+            id: 'slot-universal',
+            slotTime: '11:00:00',
+            timezone: 'UTC',
+            isActive: true,
+            allowedFormats: null,
+          },
+        ],
+        existingScheduledTimes: [],
+        now: new Date('2026-10-07T10:00:00.000Z'),
+        postFormat: 'story_photo',
+      });
+
+      expect(result).toEqual({
+        slotId: 'slot-universal',
+        scheduledTime: new Date('2026-10-07T11:00:00.000Z'),
+      });
+    });
+
+    it('returns null if no active slots support the postFormat', () => {
+      const result = calculateNextVacantSlot({
+        slots: [
+          {
+            id: 'slot-reels-only',
+            slotTime: '11:00:00',
+            timezone: 'UTC',
+            isActive: true,
+            allowedFormats: ['reel'],
+          },
+        ],
+        existingScheduledTimes: [],
+        now: new Date('2026-10-07T10:00:00.000Z'),
+        postFormat: 'post_text',
+      });
+
+      expect(result).toBeNull();
+    });
+  });
 });
+

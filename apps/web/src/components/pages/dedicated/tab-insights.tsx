@@ -239,18 +239,40 @@ export function PageTabInsights({
         </div>
       )}
 
-      {/* Loading Skeleton */}
+      {/* Structured Loading Skeleton */}
       {isLoading && !data && (
-        <div
-          data-testid="insights-loading"
-          style={{
-            padding: SPACING.xxl,
-            textAlign: 'center',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            fontSize: '0.875rem',
-          }}
-        >
-          Loading analytics & insights...
+        <div data-testid="insights-loading" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: SPACING.md,
+            }}
+          >
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                style={{
+                  padding: SPACING.lg,
+                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  borderRadius: RADII.md,
+                  height: '92px',
+                  opacity: 0.6,
+                }}
+              />
+            ))}
+          </div>
+          <div
+            style={{
+              padding: SPACING.lg,
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.md,
+              height: '320px',
+              opacity: 0.6,
+            }}
+          />
         </div>
       )}
 
@@ -404,6 +426,10 @@ export function PageTabInsights({
                         <stop offset="5%" stopColor={PALETTE.primary} stopOpacity={0.4} />
                         <stop offset="95%" stopColor={PALETTE.primary} stopOpacity={0.0} />
                       </linearGradient>
+                      <linearGradient id="viewsGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={PALETTE.accent4} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={PALETTE.accent4} stopOpacity={0.0} />
+                      </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={`var(--border-subtle, ${THEME.default.borders.hairline})`} />
                     <XAxis
@@ -431,6 +457,15 @@ export function PageTabInsights({
                       strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#amberGradient)"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="mediaViews"
+                      name="Impressions & Views"
+                      stroke={PALETTE.accent4}
+                      strokeWidth={2}
+                      fillOpacity={1}
+                      fill="url(#viewsGradient)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -511,8 +546,9 @@ export function PageTabInsights({
                       <div
                         style={{
                           width: '100%',
-                          height: '4px',
-                          backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                          height: '3px',
+                          backgroundColor: 'transparent',
+                          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                           borderRadius: RADII.xs,
                           overflow: 'hidden',
                         }}
@@ -585,8 +621,9 @@ export function PageTabInsights({
                       <div
                         style={{
                           width: '100%',
-                          height: '4px',
-                          backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                          height: '3px',
+                          backgroundColor: 'transparent',
+                          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                           borderRadius: RADII.xs,
                           overflow: 'hidden',
                         }}
