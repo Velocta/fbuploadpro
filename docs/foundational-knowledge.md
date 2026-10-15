@@ -482,7 +482,7 @@ fbuploadpro/
 * **Checkpoint Reactivation Banner**:
   * Dedicated banner (`checkpoint-reactivation-banner`) and button (`reactivate-page-btn`) for pages flagged with `status = 'page_checkpoint'`.
 * **Server-Side Queue Counts**:
-  * `get_page_queue_status_counts` returns exact counts for queued, publishing, published, and failed items directly from PostgreSQL.
+  * `get_page_queue_status_counts` returns exact counts for queued, publishing, published, failed, skipped, and cancelled items directly from PostgreSQL.
 
 ### 13.5 Hybrid Insights Architecture
 * **Upstash Redis REST Integration**:
