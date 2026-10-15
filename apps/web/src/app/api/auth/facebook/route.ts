@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   getSessionSecret,
-  sanitizeAuthErrorMessage,
   signOAuthState,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { getSupabaseClient } from '@/lib/supabase-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
