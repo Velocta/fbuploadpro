@@ -221,6 +221,37 @@ export function buildCentralAppUrl(
   return new URL(normalizedPath, `${protocol}//${host}`);
 }
 
+function extractUrlProtocol(urlInput?: string | URL | null): string {
+  if (!urlInput) return 'https:';
+  try {
+    const parsed = typeof urlInput === 'string' ? new URL(urlInput) : urlInput;
+    return parsed.protocol || 'https:';
+  } catch {
+    return 'https:';
+  }
+}
+
+function resolveLocalOAuthRedirectUri(
+  requestUrl?: string | URL | null,
+  appUrlFallback?: string | null
+): string {
+  if (appUrlFallback) {
+    const cleanAppUrl = appUrlFallback.endsWith('/')
+      ? appUrlFallback.slice(0, -1)
+      : appUrlFallback;
+    return `${cleanAppUrl}/api/auth/facebook/callback`;
+  }
+  if (requestUrl) {
+    try {
+      const parsed = typeof requestUrl === 'string' ? new URL(requestUrl) : requestUrl;
+      return `${parsed.origin}/api/auth/facebook/callback`;
+    } catch {
+      // Fall through to default local
+    }
+  }
+  return 'http://localhost:3000/api/auth/facebook/callback';
+}
+
 /**
  * Constructs the canonical OAuth callback URL for a workspace subdomain.
  * In production with a custom root domain (e.g. vinsmokemedia.online), returns:
@@ -235,38 +266,11 @@ export function buildSubdomainOAuthRedirectUri(
   appUrlFallback?: string | null
 ): string {
   const cleanRoot = (rootDomain || '').trim().toLowerCase().split(':')[0] || '';
-  const isLocalRoot =
-    !cleanRoot ||
-    cleanRoot.includes('localhost') ||
-    cleanRoot.includes('127.0.0.1');
-
-  if (isLocalRoot) {
-    if (appUrlFallback) {
-      return `${appUrlFallback.replace(/\/+$/, '')}/api/auth/facebook/callback`;
-    }
-    if (requestUrl) {
-      try {
-        const parsed = typeof requestUrl === 'string' ? new URL(requestUrl) : requestUrl;
-        return `${parsed.origin}/api/auth/facebook/callback`;
-      } catch {
-        // Fall through
-      }
-    }
-    return 'http://localhost:3000/api/auth/facebook/callback';
+  if (!cleanRoot || isLocalHostname(cleanRoot)) {
+    return resolveLocalOAuthRedirectUri(requestUrl, appUrlFallback);
   }
 
-  let protocol = 'https:';
-  if (requestUrl) {
-    try {
-      const parsed = typeof requestUrl === 'string' ? new URL(requestUrl) : requestUrl;
-      if (parsed.protocol) {
-        protocol = parsed.protocol;
-      }
-    } catch {
-      // Keep default https:
-    }
-  }
-
+  const protocol = extractUrlProtocol(requestUrl);
   return `${protocol}//${subdomain}.${cleanRoot}/api/auth/facebook/callback`;
 }
 
