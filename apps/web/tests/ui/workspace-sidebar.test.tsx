@@ -350,31 +350,38 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029 & Spec 037)',
     expect(hasText('Threads')).toBe(true);
     expect(hasText('Being tested — not available for public use')).toBe(true);
 
-    function findButtonByText(node: React.ReactNode, text: string): any {
-      if (!node || typeof node !== 'object') return null;
+    function findAllButtonsByText(node: React.ReactNode, text: string, list: any[] = []): any[] {
+      if (!node || typeof node !== 'object') return list;
       if (Array.isArray(node)) {
         for (const item of node) {
-          const found = findButtonByText(item, text);
-          if (found) return found;
+          findAllButtonsByText(item, text, list);
         }
-        return null;
+        return list;
       }
       if (React.isValidElement(node)) {
         const props = node.props as Record<string, any>;
         if (props.children === text && typeof props.onClick === 'function') {
-          return node;
+          list.push(node);
         }
         if (props.children) {
-          return findButtonByText(props.children, text);
+          findAllButtonsByText(props.children, text, list);
         }
       }
-      return null;
+      return list;
     }
 
-    const accountsBtn = findButtonByText(capturedTree, 'Accounts');
-    expect(accountsBtn).not.toBeNull();
-    accountsBtn.props.onClick();
+    const allAccountsButtons = findAllButtonsByText(capturedTree, 'Accounts');
+    expect(allAccountsButtons.length).toBe(6);
+
+    // Index 0: Facebook, Index 1: Instagram, Index 2: Threads, Index 3: X, Index 4: TikTok, Index 5: YouTube
+    mockPush.mockClear();
+    allAccountsButtons[2].props.onClick();
     expect(mockPush).toHaveBeenCalledWith('/tenant/acme/threads/accounts');
+
+    mockPush.mockClear();
+    allAccountsButtons[1].props.onClick();
+    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/instagram/accounts');
+
   });
 });
 
