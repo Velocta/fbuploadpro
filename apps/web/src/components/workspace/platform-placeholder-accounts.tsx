@@ -43,13 +43,13 @@ export function PlatformPlaceholderAccounts({
           maxWidth: '480px',
           backgroundColor: `var(--bg-surface, ${THEME.default.surfaces.panel})`,
           border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.lg,
+          borderRadius: RADII.md,
           padding: `${SPACING.xxl} ${SPACING.xl}`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           gap: SPACING.lg,
-          boxShadow: THEME.default.shadows.subtle,
+          boxShadow: THEME.default.shadows.card,
         }}
       >
         {/* Brand Icon Container */}
@@ -80,7 +80,7 @@ export function PlatformPlaceholderAccounts({
               fontSize: '1.25rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               color: `var(--text-main, ${THEME.default.text.primary})`,
-              letterSpacing: TYPOGRAPHY.tracking.tight,
+              letterSpacing: TYPOGRAPHY.tracking.h1,
             }}
           >
             {platformName} Accounts

@@ -343,7 +343,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                                 fontSize: '0.6875rem',
                                 lineHeight: 1.35,
                                 color: `var(--text-dim, ${THEME.default.text.muted})`,
-                                letterSpacing: TYPOGRAPHY.tracking.normal,
+                                letterSpacing: TYPOGRAPHY.tracking.body,
                                 userSelect: 'none',
                               }}
                             >
