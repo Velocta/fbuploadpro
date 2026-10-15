@@ -271,6 +271,57 @@ async function extractApiErrorMessage(res: Response, fallback: string): Promise<
   }
 }
 
+async function pollDownloadJobCompletion(params: {
+  subdomain: string;
+  jobId: string;
+  url: string;
+  idx: number;
+  folderId: string | null;
+  fetchImpl: typeof fetch;
+}): Promise<{ saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null }> {
+  const { subdomain, jobId, url, idx, folderId, fetchImpl } = params;
+  const maxPolls = 60;
+  for (let p = 0; p < maxPolls; p++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`);
+    if (!pollRes.ok) continue;
+
+    const pollData = await pollRes.json();
+    const job = pollData?.job;
+    if (job?.status === 'completed') {
+      if (job?.media_id) {
+        const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`).catch(() => null);
+        if (mediaRes?.ok) {
+          const mediaData = await mediaRes.json();
+          return {
+            saved: [
+              {
+                item: mediaData?.item ?? mediaData,
+                sourceUrl: job.source_url,
+                platform: job.source_platform,
+              },
+            ],
+            failed: null,
+          };
+        }
+      }
+      return { saved: [], failed: null };
+    }
+    if (job?.status === 'failed') {
+      return {
+        saved: [],
+        failed: {
+          id: `failed-${idx}-${Date.now()}`,
+          url,
+          folderId,
+          errorMessage: job.error_message || 'Could not save media from this link.',
+        },
+      };
+    }
+  }
+  return { saved: [], failed: null };
+}
+
 async function processSingleBatchUrl(params: {
   subdomain: string;
   url: string;
@@ -296,43 +347,7 @@ async function processSingleBatchUrl(params: {
       const data = (await res.json()) as { job?: { id: string } };
       const jobId = data?.job?.id;
       if (jobId) {
-        const maxPolls = 60;
-        for (let p = 0; p < maxPolls; p++) {
-          await new Promise((r) => setTimeout(r, 1500));
-          const pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`);
-          if (pollRes.ok) {
-            const pollData = await pollRes.json();
-            const job = pollData.job;
-            if (job?.status === 'completed') {
-              if (job.media_id) {
-                const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`).catch(() => null);
-                if (mediaRes && mediaRes.ok) {
-                  const mediaData = await mediaRes.json();
-                  return {
-                    saved: [{
-                      item: mediaData.item || mediaData,
-                      sourceUrl: job.source_url,
-                      platform: job.source_platform,
-                    }],
-                    failed: null,
-                  };
-                }
-              }
-              return { saved: [], failed: null };
-            }
-            if (job?.status === 'failed') {
-              return {
-                saved: [],
-                failed: {
-                  id: `failed-${idx}-${Date.now()}`,
-                  url,
-                  folderId,
-                  errorMessage: job.error_message || 'Could not save media from this link.',
-                },
-              };
-            }
-          }
-        }
+        return pollDownloadJobCompletion({ subdomain, jobId, url, idx, folderId, fetchImpl });
       }
     }
 
