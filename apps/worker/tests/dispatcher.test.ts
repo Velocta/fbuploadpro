@@ -641,7 +641,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       const mockClient = new MockFacebookPublishClient();
       const rateLimitError = new FacebookGraphError(
         'User request limit reached',
-        { code: 17 },
+        { message: 'User request limit reached', code: 17 },
         {
           bucUsageMaxPct: 95,
           estimatedTimeToRegainAccessMinutes: 25,
@@ -660,7 +660,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       const mockClient = new MockFacebookPublishClient();
       const oauthError = new FacebookGraphError(
         'Error validating access token: Session has expired',
-        { code: 190, error_subcode: 463 }
+        { message: 'Error validating access token: Session has expired', code: 190, error_subcode: 463 }
       );
       mockClient.errorToThrow = oauthError;
 

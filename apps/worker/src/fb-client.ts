@@ -7,7 +7,7 @@ import type {
 export type { IFacebookPublishClient, GraphRateLimitTelemetry, PublishResult };
 
 export interface FacebookGraphErrorData {
-  message: string;
+  message?: string;
   type?: string;
   code?: number;
   error_subcode?: number;
