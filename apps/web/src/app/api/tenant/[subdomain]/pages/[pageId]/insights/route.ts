@@ -103,14 +103,17 @@ function assembleInsightsFromSnapshots(
       }
     }
 
+    const v30s = Number(row.video_complete_views_30s) || 0;
+
     return {
       date: typeof row.snapshot_date === 'string' ? row.snapshot_date.slice(0, 10) : new Date(row.snapshot_date).toISOString().slice(0, 10),
+      pageFollows: df,
+      dailyFollowsUnique: df,
+      dailyUnfollowsUnique: du,
       mediaViews: mv,
       videoViews: vv,
-      netFollowers: net,
-      dailyFollows: df,
-      dailyUnfollows: du,
-      watchTimeMinutes: watchMin,
+      videoCompleteViews30s: v30s,
+      videoViewTimeMinutes: watchMin,
     };
   });
 
@@ -136,9 +139,7 @@ function assembleInsightsFromSnapshots(
     });
   }
 
-  const startingFollowers = earliest.followers_count !== undefined ? Number(earliest.followers_count) : null;
   const currentFollowers = latest.followers_count !== undefined ? Number(latest.followers_count) : 0;
-  const followersGained = startingFollowers !== null ? Math.max(0, currentFollowers - startingFollowers) : null;
 
   return {
     success: true,
@@ -148,13 +149,12 @@ function assembleInsightsFromSnapshots(
     cacheHit: false,
     overview: {
       pageName: page.page_name,
+      pageImage: null,
       fanCount: Number(latest.fan_count) || 0,
       followersCount: currentFollowers,
       totalMediaViews,
       totalVideoViews,
       totalPostEngagements,
-      startingFollowers,
-      followersGained,
     },
     timeSeries,
     reactions: {
@@ -336,8 +336,11 @@ export async function handleGetInsights(
          ORDER BY snapshot_date ASC`,
         [session.userId, page.fb_page_id, cutoffDate]
       );
-      if (Array.isArray(result) && result.length > 0 && result[0]?.snapshot_date) {
-        snapshotRows = result;
+      const rawRows = Array.isArray(result)
+        ? (result as Record<string, unknown>[])
+        : ((result as { rows?: Record<string, unknown>[] })?.rows || []);
+      if (rawRows.length > 0 && rawRows[0]?.snapshot_date) {
+        snapshotRows = rawRows;
       }
     } else {
       const supabase = (client && 'from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
