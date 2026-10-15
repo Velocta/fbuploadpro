@@ -135,7 +135,7 @@ export function resolveGoogleDriveDirectUrl(rawUrl: string, htmlContent?: string
 
     let confirmToken = 't';
     if (htmlContent) {
-      const confirmMatch = /confirm=([0-9a-zA-Z_-]+)/i.exec(htmlContent);
+      const confirmMatch = /confirm=([0-9a-zA-Z_-]+)/.exec(htmlContent);
       if (confirmMatch?.[1]) {
         confirmToken = confirmMatch[1];
       }
@@ -160,7 +160,7 @@ export interface ParsedHtmlMedia {
   candidates: RemoteMediaCandidate[];
 }
 
-function decodeHtmlEntities(input: string): string {
+export function decodeHtmlEntities(input: string): string {
   return input
     .replaceAll('&amp;', '&')
     .replaceAll('&quot;', '"')

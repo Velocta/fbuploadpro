@@ -760,6 +760,43 @@ async function uploadBinaryToStorage(
   }
 }
 
+async function uploadPosterThumbnailIfPresent(
+  fetchImpl: typeof fetch,
+  presigned: {
+    thumbnailUploadUrl?: string | null;
+    thumbnailKey?: string | null;
+    publicThumbnailUrl?: string | null;
+    publicMediaUrl?: string | null;
+  },
+  thumbnailBlob: Blob | null,
+  mimeType: string
+): Promise<{ thumbnailKey: string | null; thumbnailUrl: string | null }> {
+  if (thumbnailBlob && presigned.thumbnailUploadUrl) {
+    try {
+      const isMockStorageUrl = presigned.thumbnailUploadUrl.includes('mock-r2.fbuploadpro.com');
+      if (!isMockStorageUrl) {
+        await fetchImpl(presigned.thumbnailUploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'image/webp' },
+          body: thumbnailBlob,
+        });
+      }
+      return {
+        thumbnailKey: presigned.thumbnailKey ?? null,
+        thumbnailUrl: presigned.publicThumbnailUrl ?? null,
+      };
+    } catch {
+      // Poster thumbnail upload failure is non-fatal
+    }
+  } else if (mimeType.startsWith('image/')) {
+    return {
+      thumbnailKey: null,
+      thumbnailUrl: presigned.publicMediaUrl ?? null,
+    };
+  }
+  return { thumbnailKey: null, thumbnailUrl: null };
+}
+
 /**
  * Runs a bounded concurrency upload batch (max 3 concurrent files), updating unified progress via `onStateChange`.
  */
@@ -906,26 +943,13 @@ export async function executeBoundedUploadBatch(
       await uploadBinaryToStorage(fetchImpl, presigned.mediaUploadUrl, entry.mimeType, entry.file);
 
       // Step C2: Upload extracted video poster thumbnail if present
-      let uploadedThumbnailKey: string | null = null;
-      let uploadedThumbnailUrl: string | null = null;
-      if (metadata.thumbnailBlob && presigned.thumbnailUploadUrl) {
-        try {
-          const isMockStorageUrl = presigned.thumbnailUploadUrl.includes('mock-r2.fbuploadpro.com');
-          if (!isMockStorageUrl) {
-            await fetchImpl(presigned.thumbnailUploadUrl, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'image/webp' },
-              body: metadata.thumbnailBlob,
-            });
-          }
-          uploadedThumbnailKey = presigned.thumbnailKey;
-          uploadedThumbnailUrl = presigned.publicThumbnailUrl;
-        } catch {
-          // Poster thumbnail upload failure is non-fatal
-        }
-      } else if (entry.mimeType.startsWith('image/')) {
-        uploadedThumbnailUrl = presigned.publicMediaUrl;
-      }
+      const { thumbnailKey: uploadedThumbnailKey, thumbnailUrl: uploadedThumbnailUrl } =
+        await uploadPosterThumbnailIfPresent(
+          fetchImpl,
+          presigned,
+          metadata.thumbnailBlob,
+          entry.mimeType
+        );
 
       // Step D: Confirm upload in PostgreSQL (captionText omitted so backend defaults to stripped filename)
       const mediaType = entry.mimeType.startsWith('video/') ? 'video' : 'image';

@@ -77,12 +77,14 @@ async function queryLegacyDuplicates(
 
   const hasNullFolder = folderIds.includes(null);
   const nonNullFolders = folderIds.filter((id): id is string => id !== null);
-
-  const folderCondition = hasNullFolder
-    ? nonNullFolders.length > 0
+  let folderCondition: string;
+  if (hasNullFolder) {
+    folderCondition = nonNullFolders.length > 0
       ? '(folder_id IS NULL OR folder_id = ANY($2::uuid[]))'
-      : 'folder_id IS NULL'
-    : 'folder_id = ANY($2::uuid[])';
+      : 'folder_id IS NULL';
+  } else {
+    folderCondition = 'folder_id = ANY($2::uuid[])';
+  }
 
   const query = `
     SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,

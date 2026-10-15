@@ -1189,7 +1189,8 @@ export function MediaLibraryExplorer({
           message: 'Couldn’t delete folder. Please try again.',
         });
       }
-    } catch (_err) {
+    } catch (err: unknown) {
+      // Surface network or unexpected error to user via feedback banner
       setFeedbackBanner({
         type: 'error',
         message: 'Couldn’t delete folder. Please try again.',

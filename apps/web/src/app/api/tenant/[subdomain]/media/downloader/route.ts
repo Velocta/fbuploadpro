@@ -19,23 +19,26 @@ import {
   resolveAndUploadMediaFromUrl,
 } from '../../../../../../lib/media-downloader';
 
+type NullableNumeric = string | number | null;
+type NumericString = string | number;
+
 interface MediaItemDbRow {
   id: string;
   user_id: string;
   folder_id: string | null;
   name: string;
-  file_size: string | number;
+  file_size: NumericString;
   mime_type: string;
   media_type: 'video' | 'image';
   storage_key: string;
   url: string;
   thumbnail_key: string | null;
   thumbnail_url: string | null;
-  duration_seconds: string | number | null;
+  duration_seconds: NullableNumeric;
   aspect_ratio: string | null;
   caption_text: string | null;
-  width?: number | string | null;
-  height?: number | string | null;
+  width?: NullableNumeric;
+  height?: NullableNumeric;
   created_at: Date | string;
   updated_at: Date | string;
 }

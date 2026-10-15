@@ -184,6 +184,109 @@ export async function validateDownloadSafetyAndQuota(
   return { totalBytes: Number.MAX_SAFE_INTEGER, usedBytes: 0 };
 }
 
+async function tryExtractorApi(
+  sourceUrl: string,
+  env: Env,
+  fetchImpl: typeof fetch
+): Promise<RemoteMediaCandidate[] | null> {
+  const extractorUrl = (env as Record<string, unknown>).DOWNLOADER_EXTRACTOR_API_URL;
+  if (!extractorUrl || typeof extractorUrl !== 'string' || extractorUrl.trim().length === 0) {
+    return null;
+  }
+  try {
+    const extRes = await fetchImpl(extractorUrl.trim(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ url: sourceUrl }),
+    });
+    if (!extRes.ok) return null;
+    const extJson: unknown = await extRes.json();
+    const extCandidates = parseJsonPayloadCandidates(extJson);
+    return extCandidates.length > 0 ? extCandidates : null;
+  } catch {
+    return null;
+  }
+}
+
+async function tryPlatformHtmlResolution(
+  sourceUrl: string,
+  platform: string,
+  parsed: URL,
+  html: string,
+  fetchImpl: typeof fetch
+): Promise<RemoteMediaCandidate[] | null> {
+  if (platform === 'google_drive') {
+    const direct = resolveGoogleDriveDirectUrl(sourceUrl, html);
+    if (direct) {
+      return [{ streamUrl: direct, mediaTypeHint: 'video' }];
+    }
+  }
+
+  if (platform === 'x') {
+    const statusMatch = /\/status(?:es)?\/(\d+)/.exec(parsed.pathname);
+    if (statusMatch?.[1]) {
+      try {
+        const fxRes = await fetchImpl(`https://api.fxtwitter.com/status/${statusMatch[1]}`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (fxRes.ok) {
+          const fxCandidates = parseJsonPayloadCandidates(await fxRes.json());
+          if (fxCandidates.length > 0) return fxCandidates;
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return null;
+}
+
+async function tryProbeResolution(
+  normalizedUrl: string,
+  sourceUrl: string,
+  platform: string,
+  parsed: URL,
+  fetchImpl: typeof fetch
+): Promise<RemoteMediaCandidate[] | null> {
+  try {
+    const probeRes = await fetchImpl(normalizedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+        Accept: '*/*',
+      },
+      redirect: 'follow',
+    });
+    if (!probeRes.ok) return null;
+
+    const contentType = (probeRes.headers.get('content-type') ?? '').toLowerCase();
+    const effectiveUrl = probeRes.url || normalizedUrl;
+
+    if (contentType.includes('text/html') || contentType.includes('application/xhtml+xml')) {
+      const html = await probeRes.text();
+      const parsedHtml = parseHtmlMediaCandidates(html, effectiveUrl);
+      if (parsedHtml.candidates.length > 0) {
+        return parsedHtml.candidates;
+      }
+      return await tryPlatformHtmlResolution(sourceUrl, platform, parsed, html, fetchImpl);
+    }
+
+    if (contentType.includes('application/json')) {
+      try {
+        const jsonCandidates = parseJsonPayloadCandidates(await probeRes.json());
+        if (jsonCandidates.length > 0) return jsonCandidates;
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // ignore probe errors, fallback to normalizedUrl
+  }
+  return null;
+}
+
 /**
  * Edge-compatible link resolution: handles social platforms, cloud drives, and virus-scan bypass.
  */
@@ -196,85 +299,14 @@ export async function resolveRemoteCandidates(
   const normalizedUrl = normalizeCloudDriveUrl(parsed);
   const platform = detectSourcePlatform(sourceUrl);
 
-  const extractorUrl = (env as any).DOWNLOADER_EXTRACTOR_API_URL;
-  if (extractorUrl && typeof extractorUrl === 'string' && extractorUrl.trim().length > 0) {
-    try {
-      const extRes = await fetchImpl(extractorUrl.trim(), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ url: sourceUrl }),
-      });
-      if (extRes.ok) {
-        const extJson: unknown = await extRes.json();
-        const extCandidates = parseJsonPayloadCandidates(extJson);
-        if (extCandidates.length > 0) {
-          return extCandidates;
-        }
-      }
-    } catch {
-      // fallback to built-in resolution
-    }
+  const extractorCandidates = await tryExtractorApi(sourceUrl, env, fetchImpl);
+  if (extractorCandidates) {
+    return extractorCandidates;
   }
 
-  // Pre-fetch candidate to check headers / HTML
-  try {
-    const probeRes = await fetchImpl(normalizedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
-        Accept: '*/*',
-      },
-      redirect: 'follow',
-    });
-
-    if (probeRes.ok) {
-      const contentType = (probeRes.headers.get('content-type') ?? '').toLowerCase();
-      const effectiveUrl = probeRes.url || normalizedUrl;
-
-      if (contentType.includes('text/html') || contentType.includes('application/xhtml+xml')) {
-        const html = await probeRes.text();
-        const parsedHtml = parseHtmlMediaCandidates(html, effectiveUrl);
-
-        if (parsedHtml.candidates.length > 0) {
-          return parsedHtml.candidates;
-        }
-
-        if (platform === 'google_drive') {
-          const direct = resolveGoogleDriveDirectUrl(sourceUrl, html);
-          if (direct) {
-            return [{ streamUrl: direct, mediaTypeHint: 'video' }];
-          }
-        }
-
-        if (platform === 'x') {
-          const statusMatch = /\/status(?:es)?\/(\d+)/.exec(parsed.pathname);
-          if (statusMatch?.[1]) {
-            try {
-              const fxRes = await fetchImpl(`https://api.fxtwitter.com/status/${statusMatch[1]}`, {
-                headers: { Accept: 'application/json' },
-              });
-              if (fxRes.ok) {
-                const fxCandidates = parseJsonPayloadCandidates(await fxRes.json());
-                if (fxCandidates.length > 0) return fxCandidates;
-              }
-            } catch {
-              // ignore
-            }
-          }
-        }
-      } else if (contentType.includes('application/json')) {
-        try {
-          const jsonCandidates = parseJsonPayloadCandidates(await probeRes.json());
-          if (jsonCandidates.length > 0) return jsonCandidates;
-        } catch {
-          // ignore
-        }
-      }
-    }
-  } catch {
-    // ignore probe errors, fallback to normalizedUrl
+  const probeCandidates = await tryProbeResolution(normalizedUrl, sourceUrl, platform, parsed, fetchImpl);
+  if (probeCandidates) {
+    return probeCandidates;
   }
 
   return [{ streamUrl: normalizedUrl }];
@@ -612,6 +644,103 @@ export async function cleanupFailedDownload(
   }
 }
 
+interface ProcessCandidateContext {
+  db: any;
+  jobId: string;
+  userId: string;
+  targetFolderId: string | null;
+  customFilename: string | null;
+  fetchImpl: typeof fetch;
+  env: Env;
+  storageService?: any;
+  createdMediaIds: string[];
+}
+
+async function streamAndPersistCandidate(
+  candidate: RemoteMediaCandidate,
+  index: number,
+  ctx: ProcessCandidateContext
+): Promise<{ mediaId: string; storageKey: string } | null> {
+  const { db, jobId, userId, targetFolderId, customFilename, fetchImpl, env, storageService, createdMediaIds } = ctx;
+  const fetched = await fetchAndValidateRemoteMedia(candidate.streamUrl, fetchImpl, db, jobId);
+  if (!fetched) return null;
+  const { response, body, totalBytesEstimate } = fetched;
+
+  const mimeType = inferMimeFromUrlOrHeader(response.headers.get('content-type'), candidate.streamUrl);
+  const mediaType: 'video' | 'image' =
+    candidate.mediaTypeHint ?? (mimeType.startsWith('image/') ? 'image' : 'video');
+  const contentDisposition = response.headers.get('content-disposition');
+  const headerFilename = extractFilenameFromHeader(contentDisposition);
+  const defaultStem = index === 0 ? 'downloaded_asset' : `downloaded_asset_${index + 1}`;
+  const fileName = sanitizeFileName(
+    candidate.fileName || (index === 0 ? customFilename : null) || headerFilename,
+    mimeType,
+    defaultStem
+  );
+
+  const mediaId = crypto.randomUUID();
+  createdMediaIds.push(mediaId);
+  const storageKey = `users/${userId}/media/${mediaId}/${fileName}`;
+
+  let downloadedBytes = 0;
+  const progressTransform = createStreamProgressTracker({
+    db,
+    jobId,
+    totalBytesEstimate,
+    onBytesUpdate: (bytes) => {
+      downloadedBytes = bytes;
+    },
+  });
+
+  const transformedStream = body.pipeThrough(progressTransform);
+
+  const publicUrl = await writeStreamToDestination({
+    stream: transformedStream,
+    storageKey,
+    mimeType,
+    env,
+    storageService,
+  });
+
+  let thumbResult: { thumbnailKey: string | null; thumbnailUrl: string | null } = {
+    thumbnailKey: null,
+    thumbnailUrl: null,
+  };
+
+  if (mediaType === 'video' && candidate.thumbnailUrl) {
+    thumbResult = await tryUploadVideoThumbnailToR2({
+      thumbnailUrl: candidate.thumbnailUrl,
+      userId,
+      mediaId,
+      env,
+      fetchImpl,
+      storageService,
+    });
+  }
+
+  await persistDownloadedMediaItem({
+    db,
+    jobId,
+    userId,
+    targetFolderId,
+    mediaId,
+    fileName,
+    mimeType,
+    mediaType,
+    storageKey,
+    publicUrl,
+    downloadedBytes,
+    thumbnailKey: thumbResult.thumbnailKey,
+    thumbnailUrl: thumbResult.thumbnailUrl,
+    durationSeconds: candidate.durationSeconds ?? null,
+    aspectRatio: candidate.aspectRatio ?? 'unknown',
+    captionText: candidate.caption ?? null,
+    allMediaIds: createdMediaIds,
+  });
+
+  return { mediaId, storageKey };
+}
+
 export async function executeDownloadJob(params: IngestJobParams): Promise<void> {
   const {
     jobId,
@@ -647,89 +776,29 @@ export async function executeDownloadJob(params: IngestJobParams): Promise<void>
     }
 
     const createdMediaIds: string[] = [];
-    let primaryMediaId: string | null = null;
+    const candidateCtx: ProcessCandidateContext = {
+      db,
+      jobId,
+      userId,
+      targetFolderId,
+      customFilename,
+      fetchImpl,
+      env,
+      storageService,
+      createdMediaIds,
+    };
 
-    for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i]!;
-      const fetched = await fetchAndValidateRemoteMedia(candidate.streamUrl, fetchImpl, db, jobId);
-      if (!fetched) return;
-      const { response, body, totalBytesEstimate } = fetched;
-
-      const mimeType = inferMimeFromUrlOrHeader(response.headers.get('content-type'), candidate.streamUrl);
-      const mediaType: 'video' | 'image' =
-        candidate.mediaTypeHint ?? (mimeType.startsWith('image/') ? 'image' : 'video');
-      const contentDisposition = response.headers.get('content-disposition');
-      const headerFilename = extractFilenameFromHeader(contentDisposition);
-      const defaultStem = i === 0 ? 'downloaded_asset' : `downloaded_asset_${i + 1}`;
-      const fileName = sanitizeFileName(
-        candidate.fileName || (i === 0 ? customFilename : null) || headerFilename,
-        mimeType,
-        defaultStem
-      );
-
-      const mediaId = crypto.randomUUID();
-      if (!primaryMediaId) {
-        primaryMediaId = mediaId;
+    let pipelineAborted = false;
+    await candidates.reduce(async (prevPromise, candidate, i) => {
+      await prevPromise;
+      if (pipelineAborted) return;
+      const res = await streamAndPersistCandidate(candidate, i, candidateCtx);
+      if (!res) {
+        pipelineAborted = true;
+        return;
       }
-      createdMediaIds.push(mediaId);
-      storageKey = `users/${userId}/media/${mediaId}/${fileName}`;
-
-      let downloadedBytes = 0;
-      const progressTransform = createStreamProgressTracker({
-        db,
-        jobId,
-        totalBytesEstimate,
-        onBytesUpdate: (bytes) => {
-          downloadedBytes = bytes;
-        },
-      });
-
-      const transformedStream = body.pipeThrough(progressTransform);
-
-      const publicUrl = await writeStreamToDestination({
-        stream: transformedStream,
-        storageKey,
-        mimeType,
-        env,
-        storageService,
-      });
-
-      let thumbResult: { thumbnailKey: string | null; thumbnailUrl: string | null } = {
-        thumbnailKey: null,
-        thumbnailUrl: null,
-      };
-
-      if (mediaType === 'video' && candidate.thumbnailUrl) {
-        thumbResult = await tryUploadVideoThumbnailToR2({
-          thumbnailUrl: candidate.thumbnailUrl,
-          userId,
-          mediaId,
-          env,
-          fetchImpl,
-          storageService,
-        });
-      }
-
-      await persistDownloadedMediaItem({
-        db,
-        jobId,
-        userId,
-        targetFolderId,
-        mediaId,
-        fileName,
-        mimeType,
-        mediaType,
-        storageKey,
-        publicUrl,
-        downloadedBytes,
-        thumbnailKey: thumbResult.thumbnailKey,
-        thumbnailUrl: thumbResult.thumbnailUrl,
-        durationSeconds: candidate.durationSeconds ?? null,
-        aspectRatio: candidate.aspectRatio ?? 'unknown',
-        captionText: candidate.caption ?? null,
-        allMediaIds: createdMediaIds,
-      });
-    }
+      storageKey = res.storageKey;
+    }, Promise.resolve());
   } catch (err: unknown) {
     await cleanupFailedDownload(db, jobId, storageKey, env, err);
   }
