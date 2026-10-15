@@ -25,7 +25,7 @@ export const ClaimedQueueItemSchema = z.object({
   maxRetries: z.number().int().nonnegative(),
   // Joined media details (nullable/optional for text posts)
   mediaType: z.enum(['video', 'image']).nullable().optional(),
-  mediaUrl: z.string().nullable().optional(),
+  mediaUrl: z.string().url().nullable().optional(),
   storageKey: z.string().nullable().optional(),
   // Joined page details
   fbPageId: z.string(),
