@@ -252,6 +252,8 @@ function classifyAspectRatio(width: number, height: number): string {
 export interface ExtractedClientMetadata {
   durationSeconds: number | null;
   aspectRatio: string;
+  width?: number | null;
+  height?: number | null;
   thumbnailBlob: Blob | null;
 }
 
@@ -265,6 +267,8 @@ export async function extractMediaMetadata(
   const fallback: ExtractedClientMetadata = {
     durationSeconds: null,
     aspectRatio: 'unknown',
+    width: null,
+    height: null,
     thumbnailBlob: null,
   };
 
@@ -308,35 +312,101 @@ export async function extractMediaMetadata(
         video.muted = true;
         video.playsInline = true;
 
+        const cleanupVideo = () => {
+          try {
+            video.onloadedmetadata = null;
+            video.onseeked = null;
+            video.onerror = null;
+            video.pause();
+            video.removeAttribute('src');
+            video.load();
+          } catch (_e) {
+            // Ignore cleanup errors
+          }
+        };
+
+        const finishVideo = (result: ExtractedClientMetadata) => {
+          cleanupVideo();
+          finish(result);
+        };
+
         video.onloadedmetadata = () => {
           const duration =
             Number.isFinite(video.duration) && video.duration > 0
               ? Math.round(video.duration * 10) / 10
               : null;
-          const aspectRatio = classifyAspectRatio(video.videoWidth, video.videoHeight);
+          const width = video.videoWidth || null;
+          const height = video.videoHeight || null;
+          const aspectRatio = width && height ? classifyAspectRatio(width, height) : 'unknown';
 
-          clearTimeout(timer);
-          finish({
-            durationSeconds: duration,
-            aspectRatio,
-            thumbnailBlob: null,
-          });
+          const capturePoster = () => {
+            try {
+              if (video.videoWidth > 0 && video.videoHeight > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.min(video.videoWidth, 640);
+                canvas.height = Math.round((canvas.width / video.videoWidth) * video.videoHeight);
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                  canvas.toBlob(
+                    (blob) => {
+                      clearTimeout(timer);
+                      finishVideo({
+                        durationSeconds: duration,
+                        aspectRatio,
+                        width,
+                        height,
+                        thumbnailBlob: blob,
+                      });
+                    },
+                    'image/webp',
+                    0.8
+                  );
+                  return;
+                }
+              }
+            } catch (_e) {
+              // fallback below
+            }
+
+            clearTimeout(timer);
+            finishVideo({
+              durationSeconds: duration,
+              aspectRatio,
+              width,
+              height,
+              thumbnailBlob: null,
+            });
+          };
+
+          if (duration && duration > 0.5) {
+            video.onseeked = () => {
+              capturePoster();
+            };
+            video.currentTime = Math.min(0.5, duration / 2);
+          } else {
+            capturePoster();
+          }
         };
 
         video.onerror = () => {
           clearTimeout(timer);
-          finish(fallback);
+          finishVideo(fallback);
         };
 
         video.src = objectUrl;
       } else {
         const img = new Image();
         img.onload = () => {
-          const aspectRatio = classifyAspectRatio(img.naturalWidth, img.naturalHeight);
+          const width = img.naturalWidth || null;
+          const height = img.naturalHeight || null;
+          const aspectRatio = width && height ? classifyAspectRatio(width, height) : 'unknown';
           clearTimeout(timer);
           finish({
             durationSeconds: null,
             aspectRatio,
+            width,
+            height,
             thumbnailBlob: null,
           });
         };
@@ -690,6 +760,43 @@ async function uploadBinaryToStorage(
   }
 }
 
+async function uploadPosterThumbnailIfPresent(
+  fetchImpl: typeof fetch,
+  presigned: {
+    thumbnailUploadUrl?: string | null;
+    thumbnailKey?: string | null;
+    publicThumbnailUrl?: string | null;
+    publicMediaUrl?: string | null;
+  },
+  thumbnailBlob: Blob | null,
+  mimeType: string
+): Promise<{ thumbnailKey: string | null; thumbnailUrl: string | null }> {
+  if (thumbnailBlob && presigned.thumbnailUploadUrl) {
+    try {
+      const isMockStorageUrl = presigned.thumbnailUploadUrl.includes('mock-r2.fbuploadpro.com');
+      if (!isMockStorageUrl) {
+        await fetchImpl(presigned.thumbnailUploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'image/webp' },
+          body: thumbnailBlob,
+        });
+      }
+      return {
+        thumbnailKey: presigned.thumbnailKey ?? null,
+        thumbnailUrl: presigned.publicThumbnailUrl ?? null,
+      };
+    } catch {
+      // Poster thumbnail upload failure is non-fatal
+    }
+  } else if (mimeType.startsWith('image/')) {
+    return {
+      thumbnailKey: null,
+      thumbnailUrl: presigned.publicMediaUrl ?? null,
+    };
+  }
+  return { thumbnailKey: null, thumbnailUrl: null };
+}
+
 /**
  * Runs a bounded concurrency upload batch (max 3 concurrent files), updating unified progress via `onStateChange`.
  */
@@ -835,6 +942,15 @@ export async function executeBoundedUploadBatch(
       // Step C: Upload binary to R2 (skip network call if mock local domain is used in dev/test)
       await uploadBinaryToStorage(fetchImpl, presigned.mediaUploadUrl, entry.mimeType, entry.file);
 
+      // Step C2: Upload extracted video poster thumbnail if present
+      const { thumbnailKey: uploadedThumbnailKey, thumbnailUrl: uploadedThumbnailUrl } =
+        await uploadPosterThumbnailIfPresent(
+          fetchImpl,
+          presigned,
+          metadata.thumbnailBlob,
+          entry.mimeType
+        );
+
       // Step D: Confirm upload in PostgreSQL (captionText omitted so backend defaults to stripped filename)
       const mediaType = entry.mimeType.startsWith('video/') ? 'video' : 'image';
       const confirmRes = await fetchImpl(`/api/tenant/${subdomain}/media/confirm`, {
@@ -848,11 +964,13 @@ export async function executeBoundedUploadBatch(
           mediaType,
           storageKey: presigned.mediaKey,
           url: presigned.publicMediaUrl,
-          thumbnailKey: metadata.thumbnailBlob ? presigned.thumbnailKey : null,
-          thumbnailUrl: metadata.thumbnailBlob ? presigned.publicThumbnailUrl : null,
+          thumbnailKey: uploadedThumbnailKey,
+          thumbnailUrl: uploadedThumbnailUrl,
           durationSeconds: metadata.durationSeconds,
           aspectRatio: metadata.aspectRatio || 'unknown',
           folderId: targetFolderId,
+          width: metadata.width ?? null,
+          height: metadata.height ?? null,
         }),
       });
 
@@ -881,7 +999,7 @@ export async function executeBoundedUploadBatch(
           : {}),
         failureReason,
       });
-      transferredBytes = Math.min(totalBytes, transferredBytes + entry.file.size);
+      // Do not add entry.file.size to transferredBytes on failure
       emitProgress('uploading');
     }
   };

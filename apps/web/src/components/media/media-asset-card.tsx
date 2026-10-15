@@ -23,6 +23,7 @@ export interface MediaAssetCardProps {
     | undefined;
   onMoveRequest?: ((item: MediaItemResponse) => void) | undefined;
   onDeleteRequest?: ((item: MediaItemResponse) => void) | undefined;
+  onScheduleRequest?: ((item: MediaItemResponse) => void) | undefined;
   onDragStartMedia?:
     | ((e: React.DragEvent<HTMLElement>, item: MediaItemResponse) => void)
     | undefined;
@@ -50,6 +51,7 @@ export function MediaAssetCard({
   onUpdateCaption,
   onMoveRequest,
   onDeleteRequest,
+  onScheduleRequest,
   onDragStartMedia,
 }: Readonly<MediaAssetCardProps>) {
   const resolvedCaption =
@@ -589,6 +591,26 @@ export function MediaAssetCard({
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+            {onScheduleRequest && (
+              <button
+                type="button"
+                data-testid={`schedule-media-${item.id}`}
+                onClick={() => onScheduleRequest(item)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  borderRadius: RADII.xs,
+                  padding: '2px 8px',
+                  color: PALETTE.primary,
+                  fontSize: '0.75rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  cursor: 'pointer',
+                }}
+              >
+                Schedule
+              </button>
+            )}
+
             {onMoveRequest && (
               <button
                 type="button"

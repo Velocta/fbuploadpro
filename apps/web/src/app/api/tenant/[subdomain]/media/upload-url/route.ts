@@ -55,7 +55,17 @@ export async function handleCreateUploadUrl(
   const body = parsed.data;
 
   // 4. Build isolated object keys
-  const sanitizedFileName = body.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const normalizedFileName = body.fileName.normalize('NFKC');
+  let sanitizedFileName = normalizedFileName
+    .replaceAll(/[/\\]/g, '_')
+    .replace(/[^\p{L}\p{N}._-]/gu, '_')
+    .replace(/^_+/, '');
+
+  if (!sanitizedFileName || sanitizedFileName === '.' || sanitizedFileName.startsWith('.')) {
+    const ext = body.mimeType.startsWith('image/') ? '.jpg' : '.mp4';
+    sanitizedFileName = `upload_${Date.now()}${ext}`;
+  }
+
   const mediaId = randomUUID();
   const mediaKey = `users/${session.userId}/media/${mediaId}/${sanitizedFileName}`;
   const thumbnailExt = body.thumbnailMimeType === 'image/jpeg' ? 'jpeg' : 'webp';

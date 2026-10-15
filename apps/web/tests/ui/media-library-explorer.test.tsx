@@ -44,8 +44,23 @@ import {
   computeRangeSelection,
   computeFolderSubtreeImpact,
   filterAndSortMediaItems,
+  resolveTargetFolderIdForEntry,
+  checkServerDuplicateEntries,
 } from '@/components/media/media-library-explorer';
 import { render } from '../components/setup';
+
+const mockPush = vi.fn();
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: vi.fn(),
+  }),
+  useParams: () => ({
+    subdomain: 'acme',
+  }),
+  usePathname: () => '/media',
+}));
 
 const SAMPLE_FOLDERS: MediaFolder[] = [
   {
@@ -1024,6 +1039,155 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
 
     const captured = await captureVideoFrameAsWebp(null);
     expect(captured.dataUrl.startsWith('data:image/webp;base64,')).toBe(true);
+  });
+
+  it('Spec 046 US3: resolveTargetFolderIdForEntry resolves nested subfolder IDs and checkServerDuplicateEntries passes folderId per entry', async () => {
+    const entryInNested: any = {
+      file: new File(['video content'], 'clip1.mp4', { type: 'video/mp4' }),
+      relativePath: 'Campaign A/Reels/clip1.mp4',
+    };
+    const entryInRoot: any = {
+      file: new File(['image content'], 'banner.png', { type: 'image/png' }),
+      relativePath: 'banner.png',
+    };
+    const entryInUncreatedSubfolder: any = {
+      file: new File(['image content'], 'new.png', { type: 'image/png' }),
+      relativePath: 'BrandNewFolder/Sub/new.png',
+    };
+
+    // 'Campaign A' -> id '11111111-1111-4111-8111-111111111111', then 'Reels' under Campaign A -> id '22222222-2222-4222-8222-222222222222'
+    const resolvedNested = resolveTargetFolderIdForEntry(entryInNested, SAMPLE_FOLDERS, null);
+    expect(resolvedNested).toBe('22222222-2222-4222-8222-222222222222');
+
+    const resolvedRoot = resolveTargetFolderIdForEntry(entryInRoot, SAMPLE_FOLDERS, null);
+    expect(resolvedRoot).toBeNull();
+
+    const resolvedUncreated = resolveTargetFolderIdForEntry(entryInUncreatedSubfolder, SAMPLE_FOLDERS, null);
+    expect(resolvedUncreated).toBeUndefined();
+
+    // Verify checkServerDuplicateEntries makes request with individual folderId per entry
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ duplicates: [] }),
+    });
+    const originalFetch = global.fetch;
+    global.fetch = fetchSpy as any;
+
+    try {
+      const result = await checkServerDuplicateEntries(
+        'acme',
+        null,
+        [entryInNested, entryInRoot, entryInUncreatedSubfolder],
+        SAMPLE_FOLDERS
+      );
+
+      expect(result).not.toBeNull();
+      expect(result?.duplicates).toEqual([]);
+      expect(result?.uniqueEntries.length).toBe(3);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const callBody = JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string);
+      expect(callBody.entries).toEqual([
+        {
+          clientKey: '0',
+          name: 'clip1.mp4',
+          fileSize: entryInNested.file.size,
+          folderId: '22222222-2222-4222-8222-222222222222',
+        },
+        {
+          clientKey: '1',
+          name: 'banner.png',
+          fileSize: entryInRoot.file.size,
+          folderId: null,
+        },
+      ]);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('Spec 046 US3: filterAndSortMediaItems and explorer UI support 4:5 portrait ratio filter', () => {
+    const portraitItem: MediaItemResponse = {
+      id: '55555555-5555-4555-8555-555555555555',
+      userId: '00000000-0000-4000-8000-000000000001',
+      folderId: null,
+      name: 'Facebook_Feed_4_5.mp4',
+      mediaType: 'video',
+      mimeType: 'video/mp4',
+      fileSize: 1048576,
+      storageKey: 'media/55555555-5555-4555-8555-555555555555/source.mp4',
+      url: 'https://cdn.example.com/media/feed.mp4',
+      thumbnailKey: null,
+      thumbnailUrl: null,
+      durationSeconds: 15,
+      aspectRatio: '4:5',
+      captionText: 'Portrait post',
+      width: 1080,
+      height: 1350,
+      createdAt: '2026-10-10T12:00:00.000Z',
+      updatedAt: '2026-10-10T12:00:00.000Z',
+    };
+
+    const filtered = filterAndSortMediaItems([portraitItem, ...SAMPLE_MEDIA_ITEMS], {
+      currentFolderId: null,
+      mediaTypeFilter: 'all',
+      aspectRatioFilter: '4:5',
+      captionStatusFilter: 'all',
+      searchQuery: '',
+      sortOption: 'created_at:desc',
+    });
+    expect(filtered.map((i) => i.name)).toEqual(['Facebook_Feed_4_5.mp4']);
+
+    const explorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={[portraitItem, ...SAMPLE_MEDIA_ITEMS]}
+        initialAspectRatioFilter="4:5"
+      />
+    );
+    expect(explorer.hasAttribute('data-testid', 'media-aspect-ratio-select')).toBe(true);
+    expect(explorer.hasText('Facebook_Feed_4_5.mp4')).toBe(true);
+    expect(explorer.hasText('Viral Launch Reel.mp4')).toBe(false);
+  });
+
+  it('Spec 046 US4: renders 1-click "Schedule / Add to Queue" CTA across cards, batch action bar, and table rows', () => {
+    const onScheduleBatch = vi.fn();
+    const batchBar = render(
+      <BatchActionBar
+        selectedIds={['item-1', 'item-2']}
+        totalAvailableCount={2}
+        onBatchSchedule={onScheduleBatch}
+      />
+    );
+    expect(batchBar.hasAttribute('data-testid', 'batch-schedule-btn')).toBe(true);
+    expect(batchBar.hasText('Schedule / Add to Queue')).toBe(true);
+
+    const onScheduleCard = vi.fn();
+    const card = render(
+      <MediaAssetCard
+        item={SAMPLE_MEDIA_ITEMS[0]!}
+        onScheduleRequest={onScheduleCard}
+      />
+    );
+    expect(
+      card.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
+    ).toBe(true);
+
+    const onScheduleRow = vi.fn();
+    const row = render(
+      <table>
+        <tbody>
+          <MediaTableRow
+            item={SAMPLE_MEDIA_ITEMS[0]!}
+            onScheduleRequest={onScheduleRow}
+          />
+        </tbody>
+      </table>
+    );
+    expect(
+      row.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
+    ).toBe(true);
   });
 });
 

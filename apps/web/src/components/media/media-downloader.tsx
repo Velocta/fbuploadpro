@@ -858,10 +858,12 @@ function DownloaderSavedItemRow({
   entry,
   folders,
   onOpenInFolder,
+  onSchedule,
 }: Readonly<{
   entry: DownloaderSavedEntry;
   folders: MediaFolder[];
   onOpenInFolder: (folderId: string | null) => void;
+  onSchedule?: (entry: DownloaderSavedEntry) => void;
 }>) {
   const { item, platform } = entry;
   const resolvedCaption =
@@ -1000,23 +1002,40 @@ function DownloaderSavedItemRow({
         </div>
       </div>
 
-      {/* 1-Click Open in Folder Action */}
-      <button
-        type="button"
-        data-testid={`downloader-open-folder-${item.id}`}
-        data-slot="downloader-open-folder-btn"
-        onClick={() => onOpenInFolder(item.folderId)}
-        style={{
-          ...COMPONENT_STYLES.secondaryButton(THEME.default),
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          height: '34px',
-          fontSize: '0.8125rem',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        Open in Folder
-      </button>
+      {/* 1-Click Schedule / Add to Queue and Open in Folder Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+        {onSchedule && (
+          <button
+            type="button"
+            data-testid={`downloader-schedule-btn-${item.id}`}
+            onClick={() => onSchedule(entry)}
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              height: '34px',
+              fontSize: '0.8125rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Schedule / Add to Queue
+          </button>
+        )}
+        <button
+          type="button"
+          data-testid={`downloader-open-folder-${item.id}`}
+          data-slot="downloader-open-folder-btn"
+          onClick={() => onOpenInFolder(item.folderId)}
+          style={{
+            ...COMPONENT_STYLES.secondaryButton(THEME.default),
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            height: '34px',
+            fontSize: '0.8125rem',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Open in Folder
+        </button>
+      </div>
     </article>
   );
 }
@@ -1360,7 +1379,7 @@ export function MediaDownloader({
     const retryResult = await retryFailedDownloadEntry({
       subdomain,
       entry,
-      targetFolderId: selectedFolderId,
+      targetFolderId: entry.folderId ?? selectedFolderId,
     });
     setRetryingId(null);
 
@@ -1383,6 +1402,10 @@ export function MediaDownloader({
 
   const handleOpenInFolder = (folderId: string | null) => {
     router.push(buildMediaFolderHref(subdomain, folderId));
+  };
+
+  const handleScheduleEntry = (entry: DownloaderSavedEntry) => {
+    router.push(`/tenant/${subdomain}/pages?mediaId=${encodeURIComponent(entry.item.id)}`);
   };
 
   const progressPercent =
@@ -1996,6 +2019,7 @@ export function MediaDownloader({
                 entry={entry}
                 folders={folders}
                 onOpenInFolder={handleOpenInFolder}
+                onSchedule={handleScheduleEntry}
               />
             ))}
           </div>

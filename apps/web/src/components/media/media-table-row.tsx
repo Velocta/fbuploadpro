@@ -22,6 +22,7 @@ export interface MediaTableRowProps {
     | undefined;
   onMoveRequest?: ((item: MediaItemResponse) => void) | undefined;
   onDeleteRequest?: ((item: MediaItemResponse) => void) | undefined;
+  onScheduleRequest?: ((item: MediaItemResponse) => void) | undefined;
 }
 
 export function MediaTableRow({
@@ -35,6 +36,7 @@ export function MediaTableRow({
   onUpdateCaption,
   onMoveRequest,
   onDeleteRequest,
+  onScheduleRequest,
 }: Readonly<MediaTableRowProps>) {
   const resolvedCaption =
     item.captionText !== null &&
@@ -440,6 +442,25 @@ export function MediaTableRow({
           >
             Preview
           </button>
+
+          {onScheduleRequest && (
+            <button
+              type="button"
+              data-testid={`schedule-media-${item.id}`}
+              onClick={() => onScheduleRequest(item)}
+              style={{
+                backgroundColor: 'transparent',
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                padding: '2px 8px',
+                fontSize: '0.75rem',
+                color: PALETTE.primary,
+                cursor: 'pointer',
+              }}
+            >
+              Schedule
+            </button>
+          )}
 
           {onMoveRequest && (
             <button

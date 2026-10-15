@@ -19,21 +19,26 @@ import {
   resolveAndUploadMediaFromUrl,
 } from '../../../../../../lib/media-downloader';
 
+type NullableNumeric = string | number | null;
+type NumericString = string | number;
+
 interface MediaItemDbRow {
   id: string;
   user_id: string;
   folder_id: string | null;
   name: string;
-  file_size: string | number;
+  file_size: NumericString;
   mime_type: string;
   media_type: 'video' | 'image';
   storage_key: string;
   url: string;
   thumbnail_key: string | null;
   thumbnail_url: string | null;
-  duration_seconds: string | number | null;
+  duration_seconds: NullableNumeric;
   aspect_ratio: string | null;
   caption_text: string | null;
+  width?: NullableNumeric;
+  height?: NullableNumeric;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -70,9 +75,35 @@ function mapRowToMediaItemResponse(row: MediaItemDbRow): MediaItemResponse {
         : null,
     aspectRatio: row.aspect_ratio ?? 'unknown',
     captionText: row.caption_text ?? null,
+    width:
+      row.width !== null && row.width !== undefined
+        ? Number(row.width)
+        : null,
+    height:
+      row.height !== null && row.height !== undefined
+        ? Number(row.height)
+        : null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   });
+}
+
+async function cleanupUploadedItems(
+  storage: IStorageService,
+  items: Array<{ storageKey: string; thumbnailKey?: string | null }>
+): Promise<void> {
+  await Promise.allSettled(
+    items.map(async (item) => {
+      try {
+        await storage.deleteObject(item.storageKey);
+        if (item.thumbnailKey) {
+          await storage.deleteObject(item.thumbnailKey);
+        }
+      } catch {
+        // ignore cleanup error
+      }
+    })
+  );
 }
 
 async function verifyFolderOwnership(
@@ -231,6 +262,7 @@ export async function handleDownloadMediaFromUrl(
 
   const storage = storageService ?? getStorageService();
   const targetFolderId = body.folderId ?? null;
+  let uploadedItemsToCleanup: Array<{ storageKey: string; thumbnailKey?: string | null }> | null = null;
 
   try {
     if (isLegacyClient(dbClient)) {
@@ -256,6 +288,7 @@ export async function handleDownloadMediaFromUrl(
         fetchImpl,
         extractorApiUrl,
       });
+      uploadedItemsToCleanup = resolved.items;
 
       // 6. Persist all resolved media items inside a transaction
       const insertedRows = await persistResolvedMediaItems(
@@ -265,6 +298,18 @@ export async function handleDownloadMediaFromUrl(
         resolved.items
       );
 
+      if (insertedRows.length !== resolved.items.length) {
+        await cleanupUploadedItems(storage, uploadedItemsToCleanup);
+        return NextResponse.json(
+          {
+            error: 'INTERNAL_ERROR',
+            message: 'Could not save all media items. Please try again.',
+          },
+          { status: 500 }
+        );
+      }
+
+      uploadedItemsToCleanup = null; // Successfully saved
       const responseItems = insertedRows.map(mapRowToMediaItemResponse);
       const responsePayload = DownloaderIngestResponseSchema.parse({
         sourceUrl: resolved.sourceUrl,
@@ -306,6 +351,7 @@ export async function handleDownloadMediaFromUrl(
       fetchImpl,
       extractorApiUrl,
     });
+    uploadedItemsToCleanup = resolved.items;
 
     const insertRecords = resolved.items.map((item) => ({
       id: item.mediaId,
@@ -330,6 +376,7 @@ export async function handleDownloadMediaFromUrl(
       .select();
 
     if (insertErr || !insertedRows) {
+      await cleanupUploadedItems(storage, uploadedItemsToCleanup);
       return NextResponse.json(
         {
           error: 'INTERNAL_ERROR',
@@ -339,6 +386,7 @@ export async function handleDownloadMediaFromUrl(
       );
     }
 
+    uploadedItemsToCleanup = null; // Successfully saved
     const responseItems = (insertedRows as MediaItemDbRow[]).map(mapRowToMediaItemResponse);
     const responsePayload = DownloaderIngestResponseSchema.parse({
       sourceUrl: resolved.sourceUrl,
@@ -348,6 +396,9 @@ export async function handleDownloadMediaFromUrl(
 
     return NextResponse.json(responsePayload, { status: 201 });
   } catch (err) {
+    if (uploadedItemsToCleanup && uploadedItemsToCleanup.length > 0) {
+      await cleanupUploadedItems(storage, uploadedItemsToCleanup);
+    }
     if (err instanceof MediaDownloaderError) {
       return NextResponse.json(
         { error: err.code, message: err.message },

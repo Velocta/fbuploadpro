@@ -506,5 +506,32 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 6. **Module 6: Dedicated Page Workspace & Operational Controls**: Write-amplification elimination in `GET /pages`, zeroed follower initialization, format-filtered slot scheduling, timestamp validation, and checkpoint reactivation controls.
 7. **Module 7: Cross-Cutting Auth, RBAC, Workspace Guard & UI Primitives**: Strict unboxed `STATUS_SIGNALS` tokens on `StatusDot` (zero hex literals), public error copy in `assertRole` and forgot-password, and React StrictMode `window.fetch` double-wrapping prevention via Symbol flags.
 
+---
+
+## 15. Spec 046 Cloud Media Downloader & Media Library Remediation Architecture
+
+### 15.1 Downloader Ingestion & Worker Resilience
+* **Storage Quota Abolition Compliance**: Completely excised all references to `user_storage_quotas`, `getUserStorageQuota`, and `increment_user_storage_used` in `apps/worker/src/services/downloader-engine.ts`, fully aligning edge worker ingestion with Spec 028's unrestricted R2 storage model.
+* **Isomorphic Link Resolvers (`@fbuploadpro/contracts`)**: Ported and unified link resolution (`normalizeCloudDriveUrl`, `resolveGoogleDriveDirectUrl`, `parseHtmlMediaCandidates`, `parseJsonPayloadCandidates`) to run seamlessly across both Cloudflare Workers edge runtime and Next.js serverless environments.
+* **Large File Virus-Scan Bypass**: Added Google Drive large-file virus-scan interstitial bypass (`confirm=t` / `drive.usercontent.google.com/download?id=...&export=download&confirm=t`) for videos $>100\text{ MB}$.
+* **Rich Metadata & Thumbnail Persistence**: Edge worker persists video thumbnails to R2, captures social captions, durations, and aspect ratios, and stores all child item IDs in `metadata.mediaIds` for multi-item carousels.
+* **Stream Concatenation Safety**: Replaced unbounded recursive `readNextChunk()` with an iterative `while (true)` loop in `apps/web/src/lib/media-downloader.ts`.
+* **Orphaned Storage Cleanup**: Added `cleanupUploadedItems` with `Promise.allSettled` to delete uploaded R2 objects when multi-item downloads or subsequent database inserts fail.
+* **Stuck Job Recovery Cron**: Deployed `fail_stuck_download_jobs(p_timeout_minutes)` stored procedure and hooked it into the Cloudflare Worker scheduled cron handler to transition jobs abandoned $>15\text{ minutes}$ from `queued` or `downloading` to `failed`.
+
+### 15.2 PC Upload Metadata & Hardware Decoder Optimization
+* **Pixel Dimensions & Poster Frames**: Updated `extractMediaMetadata` in `upload-queue-banner.tsx` to return `width` and `height`, and automatically capture WebP poster frames from an offscreen `<canvas>` for video uploads, uploading thumbnails to presigned R2 storage.
+* **Decoder Pool Detachment**: Explicitly clears event listeners, calls `video.pause()`, `video.removeAttribute('src')`, and `video.load()` before revoking object URLs in `finishVideo()` to prevent hardware video decoder pool exhaustion during 1,000-file uploads.
+* **Accurate Progress Accounting**: Removed false `transferredBytes` addition in `catch` blocks so failed uploads do not falsely report 100% completion.
+* **Unicode Filename Preservation**: Updated `POST /media/upload-url` to normalize filenames via `NFKC` and retain Unicode letters and digits (`[^\p{L}\p{N}._-]`), preventing non-Latin filenames (Arabic, Urdu, Chinese, etc.) from collapsing into strings of underscores.
+
+### 15.3 Multi-Folder Duplicate Detection & Explorer UX
+* **Strict Tuple Duplicate Checking**: `POST /media/check-duplicates` executes strict composite tuple matching `(LOWER(name), file_size, folder_id)` across batched queries, eliminating Cartesian product false positives.
+* **Nested Folder Path Resolution**: `resolveTargetFolderIdForEntry` maps relative directory segments in queued folder uploads to their resolved destination folder IDs, ensuring files in nested folders are checked against their target folder rather than root.
+* **Active Re-fetching (`isFirstMountWithInitialDataRef`)**: Replaced the permanent `hasInitialData` guard in `MediaLibraryExplorer` with a ref that only skips the first mount fetch, enabling seamless re-fetching on folder changes, filter changes, uploads, and deletions.
+* **Load Error Recovery**: Added `loadError` state and retry banner in `MediaLibraryExplorer` to alert users and enable 1-click retry on transient network failures.
+* **4:5 Portrait Feed Support**: Added `4:5` aspect ratio classification and filter dropdown option across contracts, upload banners, and explorer views.
+* **1-Click Publishing Scheduling**: Added "Schedule / Add to Queue" CTA across `MediaAssetCard`, `BatchActionBar`, `MediaTableRow`, and `RecentDownloads` in `MediaDownloader` to direct users immediately to page scheduling workflows with media attached.
+
 
 
