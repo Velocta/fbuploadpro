@@ -87,7 +87,7 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     expect(url.pathname).toBe('/v26.0/dialog/oauth');
     expect(url.searchParams.get('client_id')).toBe('fb_app_id_byoc_workspace');
     expect(url.searchParams.get('scope')).toBe(
-      'pages_show_list,pages_read_engagement,pages_manage_posts,business_management'
+      'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,business_management'
     );
     expect(url.searchParams.get('state')).toBeDefined();
   });

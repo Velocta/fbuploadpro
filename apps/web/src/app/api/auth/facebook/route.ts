@@ -72,7 +72,7 @@ export async function handleInitiateFacebookOAuth(
 
   // 4. Construct Facebook OAuth Dialog URL (Graph API v26.0)
   const scopes =
-    'pages_show_list,pages_read_engagement,pages_manage_posts,business_management';
+    'pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement,business_management';
   const oauthUrl = new URL('https://www.facebook.com/v26.0/dialog/oauth');
   oauthUrl.searchParams.set('client_id', effectiveAppId);
   oauthUrl.searchParams.set('redirect_uri', redirectUri);

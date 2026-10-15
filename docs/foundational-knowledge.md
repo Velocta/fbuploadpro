@@ -411,7 +411,12 @@ fbuploadpro/
   * Secret field in settings UI is masked (`••••••••`) with a show/hide toggle.
 * **Developer Setup Assistance**:
   * 1-click copy helpers for authorized OAuth Redirect URIs (`https://app.fbuploadpro.com/api/auth/facebook/callback`) and Webhook Callback URLs.
-  * Clear, user-friendly guidance for configuring Meta Developer App settings.
+  * Clear, user-friendly guidance for configuring Meta Developer App settings and required Graph API v26.0 permissions:
+    * `pages_show_list`: Discover and enumerate Facebook Pages managed by the operator.
+    * `pages_read_engagement`: Read Page metadata and post engagement.
+    * `pages_manage_posts`: Create, schedule, and publish posts, photos, videos, and reels.
+    * `pages_manage_engagement`: Publish automated first comments (`POST /{post-id}/comments`) as the Page without permission errors.
+    * `business_management`: Manage Business assets and associate Page tokens.
 * **Connection Diagnostics & Automated Verification**:
   * Automatically tests App ID and Secret validity on save against Meta Graph API `https://graph.facebook.com/v26.0/{app_id}?access_token={app_id}|{app_secret}`.
   * Prompts operator with a failure advisory dialog (`ByocTestFailedModal`) if Graph API validation fails, highlighting credential issues immediately.
