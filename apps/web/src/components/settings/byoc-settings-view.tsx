@@ -51,7 +51,7 @@ interface MetaAppSetupSectionProps {
   onCopy: (key: string, value: string) => void;
 }
 
-function MetaAppSetupSection({
+export function MetaAppSetupSection({
   redirectUri,
   webhookUrl,
   copiedKey,
@@ -184,7 +184,7 @@ function MetaAppSetupSection({
             Required Meta App Permissions
           </span>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs, marginTop: SPACING.xs }}>
-            {['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'business_management'].map((perm) => (
+            {['pages_show_list', 'pages_read_engagement', 'pages_manage_posts', 'pages_manage_engagement', 'business_management'].map((perm) => (
               <span
                 key={perm}
                 style={{
