@@ -19,35 +19,6 @@ import {
   getPageReactionsAndDemographics,
 } from '../../../../../../../lib/insights/facebook-insights-client';
 
-function assembleInsightsFromSnapshots(
-  page: { fb_page_id: string; page_name: string },
-  range: '7d' | '14d' | '28d' | '90d',
-  snapshotRows: any[]
-): PageInsightsResponse {
-  const sorted = [...snapshotRows].sort((a, b) => {
-    const da = typeof a.snapshot_date === 'string' ? a.snapshot_date : new Date(a.snapshot_date).toISOString();
-    const db = typeof b.snapshot_date === 'string' ? b.snapshot_date : new Date(b.snapshot_date).toISOString();
-    return da.localeCompare(db);
-  });
-
-  const latest = sorted[sorted.length - 1] ?? {};
-
-  let totalMediaViews = 0;
-  let totalVideoViews = 0;
-  let totalPostEngagements = 0;
-  const aggregatedReactions: Record<string, number> = {
-    like: 0,
-    love: 0,
-    wow: 0,
-    haha: 0,
-    sorry: 0,
-    anger: 0,
-    total: 0,
-  };
-
-  const countriesMap = new Map<string, number>();
-  const citiesMap = new Map<string, number>();
-
 function parseJsonField<T>(field: unknown): T {
   if (typeof field === 'string') {
     try {
@@ -109,6 +80,35 @@ function parseRangeDays(range?: string): number {
       return 28;
   }
 }
+
+function assembleInsightsFromSnapshots(
+  page: { fb_page_id: string; page_name: string },
+  range: '7d' | '14d' | '28d' | '90d',
+  snapshotRows: any[]
+): PageInsightsResponse {
+  const sorted = [...snapshotRows].sort((a, b) => {
+    const da = typeof a.snapshot_date === 'string' ? a.snapshot_date : new Date(a.snapshot_date).toISOString();
+    const db = typeof b.snapshot_date === 'string' ? b.snapshot_date : new Date(b.snapshot_date).toISOString();
+    return da.localeCompare(db);
+  });
+
+  const latest = sorted[sorted.length - 1] ?? {};
+
+  let totalMediaViews = 0;
+  let totalVideoViews = 0;
+  let totalPostEngagements = 0;
+  const aggregatedReactions: Record<string, number> = {
+    like: 0,
+    love: 0,
+    wow: 0,
+    haha: 0,
+    sorry: 0,
+    anger: 0,
+    total: 0,
+  };
+
+  const countriesMap = new Map<string, number>();
+  const citiesMap = new Map<string, number>();
 
   const timeSeries = sorted.map((row) => {
     const mv = Number(row.media_views) || 0;
