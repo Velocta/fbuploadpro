@@ -34,6 +34,8 @@ interface MediaItemDbRow {
   duration_seconds: string | number | null;
   aspect_ratio: string | null;
   caption_text: string | null;
+  width?: number | string | null;
+  height?: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -70,6 +72,14 @@ function mapRowToMediaItemResponse(row: MediaItemDbRow): MediaItemResponse {
         : null,
     aspectRatio: row.aspect_ratio ?? 'unknown',
     captionText: row.caption_text ?? null,
+    width:
+      row.width !== null && row.width !== undefined
+        ? Number(row.width)
+        : null,
+    height:
+      row.height !== null && row.height !== undefined
+        ? Number(row.height)
+        : null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   });

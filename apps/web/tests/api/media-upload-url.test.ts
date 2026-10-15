@@ -138,7 +138,7 @@ describe('Presigned Upload URL Endpoint (POST /api/tenant/[subdomain]/media/uplo
 
     expect(res.status).toBe(200);
     const data = await res.json();
-    expect(data.mediaKey).toContain(encodeURI(unicodeName.split('.')[0]!) || 'فيديو_تسويقي_2026');
-    expect(data.mediaKey).not.toBe(`users/${userId}/media/${data.mediaId}/____________.mp4`);
+    expect(data.mediaKey).toContain('فيديو_تسويقي_2026');
+    expect(data.mediaKey).not.toContain('____________');
   });
 });

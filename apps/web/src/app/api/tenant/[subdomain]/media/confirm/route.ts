@@ -175,6 +175,14 @@ export async function handleConfirmUpload(
           : null,
       aspectRatio: insertedRow.aspect_ratio ?? 'unknown',
       captionText: insertedRow.caption_text ?? null,
+      width:
+        insertedRow.width !== null && insertedRow.width !== undefined
+          ? Number(insertedRow.width)
+          : null,
+      height:
+        insertedRow.height !== null && insertedRow.height !== undefined
+          ? Number(insertedRow.height)
+          : null,
       createdAt: new Date(insertedRow.created_at).toISOString(),
       updatedAt: new Date(insertedRow.updated_at).toISOString(),
     });
