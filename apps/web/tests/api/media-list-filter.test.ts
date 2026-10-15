@@ -442,3 +442,4 @@ describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', 
       expect(body.duplicates[0].existingItem.id).toBe('55555555-5555-4555-a555-555555555555');
     });
   });
+});
