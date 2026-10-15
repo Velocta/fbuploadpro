@@ -2,14 +2,7 @@ import { decryptToken, type PageInsightsDailySnapshot } from '@fbuploadpro/contr
 
 export interface InsightsSyncDbClient {
   query?<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
-  from?(table: string): {
-    upsert(data: unknown, options?: { onConflict?: string }): Promise<{ error?: unknown }>;
-    update(data: unknown): {
-      eq(col1: string, val1: unknown): {
-        eq(col2: string, val2: unknown): Promise<{ error?: unknown }>;
-      };
-    };
-  };
+  from?(table: string): any;
   upsertPageInsightsSnapshot?(snapshot: PageInsightsDailySnapshot): Promise<void>;
 }
 

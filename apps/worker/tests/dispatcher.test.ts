@@ -28,6 +28,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
     id: '11111111-1111-4111-a111-111111111111',
     userId: '22222222-2222-4222-a222-222222222222',
     pageId: '33333333-3333-4333-a333-333333333333',
+    postFormat: 'video',
     mediaId: '44444444-4444-4444-a444-444444444444',
     caption: 'Awesome reel caption #viral',
     firstComment: 'Check out our link: https://example.com/shop',
@@ -45,6 +46,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
     id: '55555555-5555-4555-a555-555555555555',
     userId: '22222222-2222-4222-a222-222222222222',
     pageId: '33333333-3333-4333-a333-333333333333',
+    postFormat: 'image',
     mediaId: '66666666-6666-4666-a666-666666666666',
     caption: 'Stunning photo post',
     firstComment: null,
@@ -639,9 +641,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       const mockClient = new MockFacebookPublishClient();
       const rateLimitError = new FacebookGraphError(
         'User request limit reached',
-        17,
-        undefined,
-        400,
+        { code: 17 },
         {
           bucUsageMaxPct: 95,
           estimatedTimeToRegainAccessMinutes: 25,
@@ -651,7 +651,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       const outcome = await dispatchItem(sampleClaimedVideoItem, mockClient, TEST_MASTER_KEY);
 
-      expect(outcome.status).toBe('queued');
+      expect(outcome.status).toBe('retry');
       expect(outcome.retryDelaySeconds).toBe(25 * 60);
       expect(outcome.pageCooldownSeconds).toBe(25 * 60);
     });
@@ -660,9 +660,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       const mockClient = new MockFacebookPublishClient();
       const oauthError = new FacebookGraphError(
         'Error validating access token: Session has expired',
-        190,
-        463,
-        400
+        { code: 190, error_subcode: 463 }
       );
       mockClient.errorToThrow = oauthError;
 

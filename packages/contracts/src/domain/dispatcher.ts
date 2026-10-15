@@ -12,36 +12,27 @@ import {
 // ==========================================
 
 // Due Queue Item claimed by worker
-export const ClaimedQueueItemSchema = z
-  .object({
-    id: z.string().uuid(),
-    userId: z.string().uuid(),
-    pageId: z.string().uuid(),
-    facebookAccountId: z.string().uuid().nullable().optional(),
-    mediaId: z.string().uuid().nullable().optional(),
-    postFormat: PostFormatSchema.optional(),
-    linkUrl: z.string().nullable().optional(),
-    caption: z.string(),
-    firstComment: z.string().nullable(),
-    retryCount: z.number().int().nonnegative(),
-    maxRetries: z.number().int().nonnegative(),
-    // Joined media details (nullable/optional for text posts)
-    mediaType: z.enum(['video', 'image']).nullable().optional(),
-    mediaUrl: z.string().nullable().optional(),
-    storageKey: z.string().nullable().optional(),
-    // Joined page details
-    fbPageId: z.string(),
-    encryptedPageToken: z.string(),
-    pageName: z.string().optional().default(''),
-  })
-  .transform((data) => {
-    const postFormat: PostFormat =
-      data.postFormat ?? (data.mediaType === 'image' ? 'image' : 'reel');
-    return {
-      ...data,
-      postFormat,
-    };
-  });
+export const ClaimedQueueItemSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  pageId: z.string().uuid(),
+  facebookAccountId: z.string().uuid().nullable().optional(),
+  mediaId: z.string().uuid().nullable().optional(),
+  postFormat: PostFormatSchema.optional(),
+  linkUrl: z.string().nullable().optional(),
+  caption: z.string(),
+  firstComment: z.string().nullable(),
+  retryCount: z.number().int().nonnegative(),
+  maxRetries: z.number().int().nonnegative(),
+  // Joined media details (nullable/optional for text posts)
+  mediaType: z.enum(['video', 'image']).nullable().optional(),
+  mediaUrl: z.string().nullable().optional(),
+  storageKey: z.string().nullable().optional(),
+  // Joined page details
+  fbPageId: z.string(),
+  encryptedPageToken: z.string(),
+  pageName: z.string().optional().default(''),
+});
 
 export type ClaimedQueueItem = z.infer<typeof ClaimedQueueItemSchema>;
 

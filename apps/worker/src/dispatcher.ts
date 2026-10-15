@@ -330,7 +330,7 @@ export async function dispatchItem(
     const rawMessage = err instanceof Error ? err.message : String(err);
 
     const evaluation =
-      errorCode !== undefined ? evaluateGraphApiError(errorCode, errorSubcode, rawMessage) : null;
+      errorCode !== undefined ? evaluateGraphApiError(errorCode, errorSubcode) : null;
 
     let targetPageStatus: FacebookPageStatus | undefined;
     if (evaluation && evaluation.pageStatus && evaluation.pageStatus !== 'active') {
@@ -411,9 +411,13 @@ export async function dispatchItem(
   let bucUsagePct: number | undefined;
   let pageCooldownSeconds: number | undefined;
 
-  if (publishResult.telemetry?.bucUsageMaxPct !== undefined) {
-    bucUsagePct = publishResult.telemetry.bucUsageMaxPct;
-    if (bucUsagePct >= 85) {
+  if (
+    publishResult.telemetry?.bucUsageMaxPct !== undefined &&
+    publishResult.telemetry.bucUsageMaxPct !== null
+  ) {
+    const usage = publishResult.telemetry.bucUsageMaxPct;
+    bucUsagePct = usage;
+    if (usage >= 85) {
       const waitMins = publishResult.telemetry.estimatedTimeToRegainAccessMinutes || 5;
       pageCooldownSeconds = waitMins * 60;
     }
