@@ -211,6 +211,24 @@ async function tryExtractorApi(
   }
 }
 
+async function resolveFxTwitterStatus(
+  pathname: string,
+  fetchImpl: typeof fetch
+): Promise<RemoteMediaCandidate[] | null> {
+  const statusMatch = /\/status(?:es)?\/(\d+)/.exec(pathname);
+  if (!statusMatch?.[1]) return null;
+  try {
+    const fxRes = await fetchImpl(`https://api.fxtwitter.com/status/${statusMatch[1]}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!fxRes.ok) return null;
+    const fxCandidates = parseJsonPayloadCandidates(await fxRes.json());
+    return fxCandidates.length > 0 ? fxCandidates : null;
+  } catch {
+    return null;
+  }
+}
+
 async function tryPlatformHtmlResolution(
   sourceUrl: string,
   platform: string,
@@ -226,20 +244,7 @@ async function tryPlatformHtmlResolution(
   }
 
   if (platform === 'x') {
-    const statusMatch = /\/status(?:es)?\/(\d+)/.exec(parsed.pathname);
-    if (statusMatch?.[1]) {
-      try {
-        const fxRes = await fetchImpl(`https://api.fxtwitter.com/status/${statusMatch[1]}`, {
-          headers: { Accept: 'application/json' },
-        });
-        if (fxRes.ok) {
-          const fxCandidates = parseJsonPayloadCandidates(await fxRes.json());
-          if (fxCandidates.length > 0) return fxCandidates;
-        }
-      } catch {
-        // ignore
-      }
-    }
+    return resolveFxTwitterStatus(parsed.pathname, fetchImpl);
   }
   return null;
 }

@@ -9,7 +9,6 @@ import {
   normalizeCloudDriveUrl,
   parseHtmlMediaCandidates,
   parseJsonPayloadCandidates,
-  decodeHtmlEntities,
   type RemoteMediaCandidate,
   type DownloaderSourcePlatform,
   type IStorageService,
