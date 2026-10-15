@@ -1,10 +1,7 @@
 import {
   MAX_MEDIA_DOWNLOAD_BYTES,
-  detectSourcePlatform,
   validateSafeRemoteUrl,
   deriveDefaultCaptionFromFilename,
-  type AllowedMediaMime,
-  type DownloaderSourcePlatform,
 } from '@fbuploadpro/contracts';
 import type { Env } from '../index.js';
 

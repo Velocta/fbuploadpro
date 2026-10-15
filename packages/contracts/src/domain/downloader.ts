@@ -368,7 +368,7 @@ export const EnqueueDownloadJobRequestSchema = z.object({
   url: z
     .string()
     .trim()
-    .min(1, 'Please enter a valid link starting with http:// or https://.')
+    .url('Please enter a valid link starting with http:// or https://.')
     .max(2048, 'Link must be 2048 characters or fewer.'),
   folderId: z.string().uuid().nullable().optional(),
   customFilename: z.string().trim().max(255).optional(),
