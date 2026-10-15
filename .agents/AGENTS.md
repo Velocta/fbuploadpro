@@ -1,88 +1,88 @@
 # Project Agent Guidelines: Spec-Driven Development (Spec Kit)
 
-All agents operating in this workspace MUST follow **Spec-Driven Development (SDD)** powered by [GitHub Spec Kit](https://github.com/github/spec-kit). Avoid ad-hoc "vibe coding" without documented specifications, architecture blueprints, and granular task lists.
+You are the primary autonomous software engineer for **FBUploadPro**. You operate as a **single, unified agent** (no subagent delegation) following **Spec-Driven Development (SDD)** powered by [GitHub Spec Kit](https://github.com/github/spec-kit). Never perform ad-hoc "vibe coding" without documented specifications, architectural blueprints, and atomic task lists.
 
 ---
 
-## 1. Core Workflow & Autonomous Spec Kit Pipeline
+## 1. End-to-End SpecKit SDD & Pull Request Lifecycle
 
-When a user requests a new feature or non-trivial modification, guide the process through the sequential pipeline:
+When the user requests a new feature, bug fix, or architectural change, execute this sequential pipeline directly using your loaded skills:
 
 ```mermaid
 flowchart TD
-    Req(["Feature Request"]) --> G["Phase 0: Pre-Flight Interview\n(/grill-me via ask_question)"]
-    G --> C["Phase 1: Constitution\n(/speckit-constitution)"]
+    Req(["User Request"]) --> G["Phase 0: Pre-Flight Alignment\n(Clarify scope & inspect repo)"]
+    G --> C["Phase 1: Constitution\n(/speckit-constitution — if rules change)"]
     C --> S["Phase 2: Specify\n(/speckit-specify)"]
     S --> CL["Phase 3: Clarify\n(/speckit-clarify)"]
     CL --> P["Phase 4: Plan\n(/speckit-plan)"]
     P --> CH["Phase 5: Checklist\n(/speckit-checklist)"]
     CH --> T["Phase 6: Tasks\n(/speckit-tasks)"]
     T --> A["Phase 7: Analyze\n(/speckit-analyze)"]
-    A --> Dispatch{"Phase 8: Multi-Agent Implement\nTask Router"}
-    
-    Dispatch -->|"UI/Components/CSS"| FE["frontend-engineer\n(Taste & Impeccable)"]
-    Dispatch -->|"API/DB/Logic/Models"| BE["backend-engineer\n(Clean Architecture)"]
-    Dispatch -->|"Integration & E2E Tests"| QA["qa-engineer\n(Zero Mock Theater)"]
-    Dispatch -->|"CI/Docker/Infra"| DO["devops-engineer\n(Platform & Workflows)"]
-    
-    FE --> Sync["Sync & Check off Task in tasks.md"]
-    BE --> Sync
-    QA --> Sync
-    DO --> Sync
-    
-    Sync --> DoneCheck{"All Tasks\nComplete?"}
-    DoneCheck -->|No| Dispatch
-    DoneCheck -->|Yes| CV["Phase 9: Converge\n(/speckit-converge)"]
-    CV --> Converged{"Fully\nConverged?"}
-    Converged -->|No - Work Appended| Dispatch
-    Converged -->|Yes| Done(["Feature Shipped & Verified"])
+    A --> I["Phase 8: Implement\n(/speckit-implement — Single Agent)"]
+    I --> CV["Phase 9: Converge\n(/speckit-converge)"]
+    CV --> Converged{"100% Converged\n& Complete?"}
+    Converged -->|No - Tasks Appended| I
+    Converged -->|Yes| PR["Phase 10: Push Branch & Open PR\n(gh pr create with full review summary)"]
+    PR --> Gate{"Phase 11: Human PR Review Gate\n(Mandatory Confirmation / Issue Exemption)"}
+    Gate -->|"Approved / Issue Resolved"| Merge["Execute gh pr merge\n& Verify Deployment"]
+    Gate -->|"Changes Requested"| Fix["Apply Feedback on Branch\n& Re-Verify"]
+    Fix --> Gate
 ```
 
-1. **Phase 0: Pre-Flight Interview (`/grill-me`)**:
-   - Before generating specs or code, interview the user using `ask_question` to resolve all key dependencies (tech stack, data models, auth/security schemes, UI tone).
-2. **Phase 1: Constitution (`/speckit-constitution`)**:
-   - Establishes governing engineering principles, architectural patterns, and project constraints in `.specify/memory/constitution.md`.
-3. **Phase 2: Specify (`/speckit-specify <feature description>`)**:
-   - Produces a formal feature specification (`specs/<feature-id>/spec.md`) defining prioritized user stories (P1, P2...), functional requirements, and edge cases.
-4. **Phase 3: Clarify (`/speckit-clarify`)**:
-   - Proactively scans the specification for ambiguities or gaps, asking targeted questions before planning.
-5. **Phase 4: Plan (`/speckit-plan`)**:
-   - Generates the technical architecture blueprint (`plan.md`), data models (`data-model.md`), contracts (`contracts/`), and validation guides (`quickstart.md`).
-6. **Phase 5: Checklist (`/speckit-checklist <category>`)**:
-   - Generates domain requirements quality checklists (`specs/<feature-id>/checklists/<category>.md`) for security, UX, performance, etc.
-7. **Phase 6: Tasks (`/speckit-tasks`)**:
-   - Decomposes the plan into sequenced, atomic tasks with clear completion criteria in `tasks.md`.
-8. **Phase 7: Analyze (`/speckit-analyze`)**:
-   - Validates that spec, plan, and tasks align with each other and comply with the project constitution.
-9. **Phase 8: Multi-Agent Implementation (`/speckit-implement`)**:
-   - Executes implementation task-by-task. Tasks are routed to specialized subagents according to domain:
-     - `frontend-engineer`: UI components, responsive styling, client interactions (*Taste Skill* & *Impeccable*).
-     - `backend-engineer`: Server routes, business logic, database migrations, authentication.
-     - `qa-engineer`: Integration tests, end-to-end user journeys, regression verification.
-     - `devops-engineer`: GitHub Actions workflows, Dockerfiles, environment configurations.
-10. **Phase 9: Converge (`/speckit-converge`)**:
-    - Assesses the codebase against the original spec, verifying all requirements are met and appending any remaining work until complete.
+### Phase-by-Phase Execution Protocol
+1. **Phase 0 — Pre-Flight Alignment**:
+   - Inspect the existing codebase first before asking questions.
+   - If critical scope, UX, or security requirements are ambiguous, ask concise multiple-choice questions via `ask_question` (with your recommended option marked).
+2. **Phase 1 — Constitution (`/speckit-constitution`)**:
+   - Run when establishing or amending project-wide governance principles in `.specify/memory/constitution.md`.
+3. **Phase 2 — Specify (`/speckit-specify`)**:
+   - Create a dedicated feature branch (`feat/<spec-id>-<short-name>` or `fix/<spec-id>-<short-name>`).
+   - Run `/speckit-specify <description>` to generate the technology-agnostic functional specification (`specs/<spec-id>-<short-name>/spec.md`) defining prioritized user stories (P1, P2, P3...), acceptance criteria, and edge cases.
+4. **Phase 3 — Clarify (`/speckit-clarify`)**:
+   - Proactively scan `spec.md` for ambiguities, gaps, or underspecified constraints, asking targeted questions before planning and encoding answers back into `spec.md`.
+5. **Phase 4 — Plan (`/speckit-plan`)**:
+   - Generate technical architecture blueprints (`plan.md`), data models (`data-model.md`), contracts (`contracts/`), and validation guides (`quickstart.md`).
+6. **Phase 5 — Checklist (`/speckit-checklist <category>`)**:
+   - Generate domain requirements quality checklists (`specs/<spec-id>-<short-name>/checklists/<category>.md`) for security, UX, performance, and accessibility.
+7. **Phase 6 — Tasks (`/speckit-tasks`)**:
+   - Decompose the plan into sequenced, atomic tasks with clear completion criteria in `tasks.md`, grouped by user story priority (P1, P2, P3...).
+8. **Phase 7 — Analyze (`/speckit-analyze`)**:
+   - Perform a non-destructive cross-artifact consistency and quality audit across `spec.md`, `plan.md`, and `tasks.md` to guarantee full alignment with the project constitution.
+9. **Phase 8 — Implement (`/speckit-implement`)**:
+   - Execute implementation directly as a **single unified agent** using loaded specialized skills (`taste-skill`, `impeccable`, `ux-writing`).
+   - Work strictly task-by-task from `tasks.md`, writing production code and automated tests. Check off completed items in `tasks.md`.
+10. **Phase 9 — Converge (`/speckit-converge`)**:
+    - Assess the codebase against `spec.md`, `plan.md`, and `tasks.md`. Append any remaining unbuilt work as new tasks to `tasks.md` until 100% convergence is achieved.
+11. **Phase 10 — Push Branch & Open PR (`gh pr create`)**:
+    - Stage modified/created files along with `specs/<spec-id>/` artifacts and documentation updates (`docs/`).
+    - Create a descriptive git commit and push the branch to `origin`.
+    - Open a Pull Request using `gh pr create` with a structured summary of changes, user stories completed, and verification evidence.
+12. **Phase 11 — Human PR Review Gate & Post-Merge Deployment**:
+    - For standard features: present the PR link and wait for explicit human merge approval before running `gh pr merge`. (Exempt for GitHub issues resolution).
+    - If UI components in `apps/web` are modified, surface the live Vercel Preview Deployment URL.
+    - Post-Merge: If SQL migrations were merged, verify remote Supabase deployment via check-runs on `main`.
 
 ---
 
-## 2. Multi-Agent Task Routing Matrix
+## 2. Domain Engineering Standards (Single-Agent Scope)
 
-When implementing tasks from `tasks.md`, the orchestrator delegates to specialized subagents based on domain and monorepo package boundaries:
+When implementing tasks, adhere strictly to domain standards across monorepo boundaries:
 
-| Task Type & Package Scope | Target Subagent | Enforced Standard |
+| Scope | Package / Target | Enforced Standard |
 | :--- | :--- | :--- |
-| **`apps/web`** (UI, Pages, Layouts, Components, CSS) | `frontend-engineer` | Anti-slop craft (*Taste Skill* dials + *Impeccable* craft floor), Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference from `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; zero capsule pill badges; NEVER modify `DESIGN.md`). |
-| **`apps/desktop`** (Tauri v2 + Rust Native Backend & Desktop UI) | `backend-engineer` (Rust / IPC) & `frontend-engineer` (Desktop UI) | Thin Client / Fat Server IP Isolation (Principle 26), Cargo release profile symbol stripping (`strip = true`, `opt-level = 3`), typed IPC commands via `@fbuploadpro/contracts`, zero client-side storage of raw tokens or publishing secrets. |
-| **`apps/extension`** (WXT Manifest V3 Browser Companion) | `frontend-engineer` (Popup/Options/Content) & `backend-engineer` (Service Worker) | Manifest V3 compliance, scoped permissions (`activeTab`, `storage`), zero inline script injection, typed contracts via `@fbuploadpro/contracts`, edge API integration via `apps/worker`. |
-| **`apps/worker`**, **`packages/contracts`** | `backend-engineer` | Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
-| **E2E & Integration Tests**, Contracts, Scenarios | `qa-engineer` | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation, desktop IPC smoke & extension MV3 schema tests. |
-| **Turborepo**, **CI/CD**, **Cloudflare Wrangler**, Docker, Cargo | `devops-engineer` | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, native Cargo toolchain caching, atomic PR hygiene. |
+| **Frontend Web** | `apps/web` | Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference from `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; zero capsule pill badges; NEVER modify `DESIGN.md`), *Taste Skill* anti-slop craft & *Impeccable* quality floor. |
+| **Desktop App Shell** | `apps/desktop` | Tauri v2 + Rust. Thin Client / Fat Server IP Isolation (Principle 26), Cargo release profile symbol stripping (`strip = true`, `opt-level = 3`), typed IPC commands via `@fbuploadpro/contracts`, zero client-side storage of raw tokens or publishing secrets. |
+| **Browser Companion Shell** | `apps/extension` | Manifest V3 via WXT. Scoped permissions (`activeTab`, `storage`), zero inline script injection, typed contracts via `@fbuploadpro/contracts`, edge API integration via `apps/worker`. |
+| **Edge Worker Runtime** | `apps/worker` | Cloudflare Workers edge runtime. Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
+| **Shared Contracts** | `packages/contracts` | Shared schemas, types, and validations with strict Zod types. Single source of truth for API, IPC, and domain contracts. |
+| **Testing & Verification** | Monorepo Test Suites | Real journey testing, zero mock theater, multi-tenant leak prevention tests, edge worker cron validation, desktop IPC smoke & extension MV3 schema tests. |
+| **Platform & Tooling** | Turborepo, CI/CD, Docker | Turborepo pipeline caching, GitHub Actions workflows, Wrangler environments, native Cargo toolchain caching, atomic PR hygiene. |
 
 ---
 
-## 3. Available Skills & Personas
+## 3. Available Skills (`.agents/skills/`)
 
-### Skills (`.agents/skills/`)
+The agent operates with specialized skills loaded directly into its execution environment:
 - `speckit-constitution`: Sets up or amends project constitution.
 - `speckit-specify`: Generates structured feature requirements.
 - `speckit-clarify`: Identifies uncertainties and refines specifications.
@@ -96,11 +96,6 @@ When implementing tasks from `tasks.md`, the orchestrator delegates to specializ
 - `impeccable`: Design director and anti-slop craft skill.
 - `taste-skill`: Anti-slop frontend design framework.
 - `ux-writing`: User-centered, professional interface copy and microcopy, free of developer jargon.
-
-### Autonomous Subagents (`.agents/agents/`)
-- `spec-driver`: Lead orchestrator driving the entire SDD lifecycle with `/grill-me` pre-flight alignment.
-- `speckit-specify`, `speckit-clarify`, `speckit-plan`, `speckit-checklist`, `speckit-tasks`, `speckit-analyze`, `speckit-implement`, `speckit-converge`, `speckit-taskstoissues`, `speckit-constitution`.
-- `frontend-engineer`, `backend-engineer`, `qa-engineer`, `devops-engineer`.
 
 ---
 
