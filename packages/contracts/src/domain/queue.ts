@@ -87,7 +87,12 @@ export const EnqueueMediaRequestSchema = z
     slotId: z.string().uuid().optional(),
     scheduledTime: z.string().datetime().optional(), // If omitted, calculated from next vacant slot
     caption: z.string().max(5000).default(''),
-    firstComment: z.string().max(2000).nullable().optional(),
+    firstComment: z
+      .string()
+      .max(2000)
+      .nullable()
+      .optional()
+      .transform((v) => (typeof v === 'string' && v.trim().length === 0 ? null : v)),
   })
   .superRefine((val, ctx) => {
     // If postFormat is omitted, infer 'text' if mediaId is missing/null
