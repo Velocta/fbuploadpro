@@ -425,8 +425,8 @@ export async function handleGetInsights(
           love: 0,
           wow: 0,
           haha: 0,
-          sad: 0,
-          angry: 0,
+          sorry: 0,
+          anger: 0,
           total: 0,
         },
         demographics: {
