@@ -38,8 +38,8 @@ export interface DownloaderBatchProgressState {
   currentUrl: string | null;
   duplicateCount: number;
   invalidCount: number;
-  stage?: 'resolving' | 'streaming';
-  stagePercent?: number;
+  stage?: 'resolving' | 'streaming' | undefined;
+  stagePercent?: number | undefined;
 }
 
 export interface DownloaderFailedEntry {
@@ -315,7 +315,10 @@ async function pollDownloadJobCompletion(params: {
 
     let pollRes: Response;
     try {
-      pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`, { signal });
+      pollRes = await fetchImpl(
+        `/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`,
+        signal ? { signal } : {}
+      );
     } catch (fetchErr: any) {
       if (signal?.aborted || fetchErr?.name === 'AbortError') {
         return {
@@ -363,7 +366,10 @@ async function pollDownloadJobCompletion(params: {
     }
     if (job?.status === 'completed') {
       if (job?.media_id) {
-        const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`, { signal }).catch(() => null);
+        const mediaRes = await fetchImpl(
+          `/api/tenant/${subdomain}/media/${job.media_id}`,
+          signal ? { signal } : {}
+        ).catch(() => null);
         if (mediaRes?.ok) {
           const mediaData = await mediaRes.json();
           return {
@@ -416,14 +422,23 @@ async function processSingleBatchUrl(params: {
         url,
         folderId,
       }),
-      signal,
+      ...(signal ? { signal } : {}),
     });
 
     if (res.status === 202) {
       const data = (await res.json()) as { job?: { id: string } };
       const jobId = data?.job?.id;
       if (jobId) {
-        return pollDownloadJobCompletion({ subdomain, jobId, url, idx, folderId, fetchImpl, signal, onStageChange });
+        return pollDownloadJobCompletion({
+          subdomain,
+          jobId,
+          url,
+          idx,
+          folderId,
+          fetchImpl,
+          ...(signal ? { signal } : {}),
+          ...(onStageChange ? { onStageChange } : {}),
+        });
       }
     }
 
@@ -544,7 +559,7 @@ export async function executeDownloaderBatch(
       idx,
       folderId,
       fetchImpl,
-      signal,
+      ...(signal ? { signal } : {}),
       onStageChange: (stage, stagePercent) => {
         onProgress?.({
           status: 'downloading',
@@ -554,7 +569,7 @@ export async function executeDownloaderBatch(
           duplicateCount,
           invalidCount: invalidUrls.length,
           stage,
-          stagePercent,
+          ...(stagePercent !== undefined ? { stagePercent } : {}),
         });
       },
     });

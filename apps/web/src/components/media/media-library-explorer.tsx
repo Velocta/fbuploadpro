@@ -245,8 +245,8 @@ async function checkServerDuplicateEntries(
   try {
     const payload = {
       folderId: folderId ?? null,
-      entries: entries.map((e) => ({
-        clientKey: e.id,
+      entries: entries.map((e, idx) => ({
+        clientKey: String(idx),
         name: e.file.name,
         fileSize: e.file.size,
         folderId: folderId ?? null,
@@ -270,13 +270,13 @@ async function checkServerDuplicateEntries(
     const duplicates: QueuedUploadEntry[] = [];
     const uniqueEntries: QueuedUploadEntry[] = [];
 
-    for (const entry of entries) {
-      if (dupKeySet.has(entry.id)) {
+    entries.forEach((entry, idx) => {
+      if (dupKeySet.has(String(idx))) {
         duplicates.push(entry);
       } else {
         uniqueEntries.push(entry);
       }
-    }
+    });
 
     return { duplicates, uniqueEntries };
   } catch {

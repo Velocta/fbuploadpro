@@ -350,7 +350,10 @@ export async function settleOutcome(
 
   const outcome: DispatchOutcome = maybeOutcome ?? (itemOrOutcome as DispatchOutcome);
 
-  if ('from' in db && typeof (db as any).from === 'function') {
+  if (
+    ('from' in db && typeof (db as any).from === 'function') ||
+    ('rpc' in db && typeof (db as any).rpc === 'function')
+  ) {
     return settleSupabaseOutcome(db, item, outcome);
   }
 
