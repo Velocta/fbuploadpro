@@ -23,7 +23,6 @@ describe('[ISSUE-30] Gmail Username Bounds and Reserved Keywords Enforcement', (
       expect(() => canonicalizeGmailAddress('billing@gmail.com')).toThrow();
       expect(() => canonicalizeGmailAddress('dashboard@gmail.com')).toThrow();
       expect(() => canonicalizeGmailAddress('internal@gmail.com')).toThrow();
-      expect(() => canonicalizeGmailAddress('webhook@gmail.com')).toThrow();
     });
 
     it('accepts valid 6-30 character Gmail addresses', () => {

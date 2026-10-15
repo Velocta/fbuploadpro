@@ -70,7 +70,6 @@ describe('Auth Hardening Contracts (Spec 014)', () => {
       expect(() => canonicalizeGmailAddress('billing@gmail.com')).toThrow(/reserved/i);
       expect(() => canonicalizeGmailAddress('dashboard@gmail.com')).toThrow(/reserved/i);
       expect(() => canonicalizeGmailAddress('internal@gmail.com')).toThrow(/reserved/i);
-      expect(() => canonicalizeGmailAddress('webhook@gmail.com')).toThrow(/reserved/i);
       expect(() => canonicalizeGmailAddress('system@gmail.com')).toThrow(/reserved/i);
       expect(() => canonicalizeGmailAddress('status@gmail.com')).toThrow(/reserved/i);
     });

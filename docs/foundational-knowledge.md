@@ -412,7 +412,7 @@ fbuploadpro/
   * Raw secret is NEVER returned over client-facing APIs (`hasSecret: boolean`).
   * Secret field in settings UI is masked (`••••••••`) with a show/hide toggle.
 * **Developer Setup Assistance**:
-  * 1-click copy helpers for authorized OAuth Redirect URIs (`https://app.fbuploadpro.com/api/auth/facebook/callback`) and Webhook Callback URLs.
+  * 1-click copy helper for authorized OAuth Redirect URIs (`https://app.fbuploadpro.com/api/auth/facebook/callback`).
   * Clear, user-friendly guidance for configuring Meta Developer App settings and required Graph API v26.0 permissions:
     * `pages_show_list`: Discover and enumerate Facebook Pages managed by the operator.
     * `pages_read_engagement`: Read Page metadata and post engagement.
@@ -553,6 +553,16 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **Route Topology**: Dedicated Next.js tenant routes at `/tenant/[subdomain]/instagram/accounts`, `/tenant/[subdomain]/threads/accounts`, `/tenant/[subdomain]/x/accounts`, `/tenant/[subdomain]/tiktok/accounts`, and `/tenant/[subdomain]/youtube/accounts`.
 * **Zero 404 Resilience**: Reusable `PlatformPlaceholderAccounts` view component displays a clean empty state card with brand icon, heading, testing notice, and a "Return to Overview" CTA button navigating to `/tenant/[subdomain]`.
 
+---
 
+## 17. Spec 048 Complete Elimination of Webhooks Architecture
 
+### 17.1 Webhook Substrate & Dead Code Purge
+* **Zero Webhook Ingestion Dependency**: The FBUploadPro publishing engine and insights collection operate entirely via Cloudflare Workers cron polling and Facebook Graph API v26.0 direct calls. Unused real-time webhook endpoints, tokens, and verification columns are completely excised from the platform substrate.
+* **Database Schema Pruning**: Executed forward migration `supabase/migrations/20261020000000_drop_byoc_webhook_verify_token.sql` safely dropping column `webhook_verify_token` from `public.workspace_byoc_credentials`.
+* **Clean BYOC Contracts**: Excised `webhookVerifyToken` from `BYOCCredentialsViewSchema` and `SaveBYOCCredentialsRequestSchema` in `packages/contracts/src/domain/workspace.ts`, and updated `workspace_byoc_credentials` row definitions in `packages/contracts/src/domain/database.ts`.
+* **Reserved Subdomain Release**: Removed `'webhook'` from `RESERVED_SUBDOMAINS` in `packages/contracts/src/domain/user.ts`, allowing tenant accounts or subdomains with the name `webhook` to be registered safely.
 
+### 17.2 Meta App Settings UI & Resolver Streamlining
+* **Concise App Setup Guidance**: Excised the "Webhook Callback URL" input box, copy helper, and webhook instructions from `MetaAppSetupSection` in `apps/web/src/components/settings/byoc-settings-view.tsx`. The setup card now focuses strictly and exclusively on the OAuth Redirect URI and required Meta App Permissions.
+* **Edge & Route Resolver Cleanliness**: Removed `webhook_verify_token` from SQL queries and payloads in `apps/web/src/app/api/tenant/[subdomain]/settings/byoc/route.ts` and `apps/web/src/lib/server/byoc-resolver.ts`.

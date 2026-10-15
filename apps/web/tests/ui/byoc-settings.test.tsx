@@ -181,11 +181,10 @@ describe('Settings Views Suite (BYOC & General)', () => {
   });
 
   describe('MetaAppSetupSection', () => {
-    it('renders all 5 required Meta permissions including pages_manage_engagement', () => {
+    it('renders all 5 required Meta permissions and no webhook callback url', () => {
       const { hasText } = render(
         <MetaAppSetupSection
           redirectUri="https://app.fbuploadpro.com/api/auth/facebook/callback"
-          webhookUrl="https://app.fbuploadpro.com/api/webhooks/facebook"
           copiedKey={null}
           onCopy={() => {}}
         />
@@ -196,6 +195,8 @@ describe('Settings Views Suite (BYOC & General)', () => {
       expect(hasText('pages_manage_posts')).toBe(true);
       expect(hasText('pages_manage_engagement')).toBe(true);
       expect(hasText('business_management')).toBe(true);
+      expect(hasText('Webhook Callback URL')).toBe(false);
+      expect(hasText('api/webhooks/facebook')).toBe(false);
     });
   });
 });

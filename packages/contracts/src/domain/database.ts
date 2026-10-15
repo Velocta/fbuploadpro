@@ -25,7 +25,6 @@ export interface DatabaseWorkspaceByocCredentialsRow {
   user_id: string;
   fb_app_id: string;
   encrypted_fb_app_secret: string;
-  webhook_verify_token: string | null;
   status: 'unverified' | 'valid' | 'invalid';
   last_tested_at: string | null;
   created_at: string;

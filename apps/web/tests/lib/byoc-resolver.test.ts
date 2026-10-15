@@ -78,7 +78,6 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
               {
                 fb_app_id: 'app_1234567890',
                 encrypted_fb_app_secret: encryptedSecret,
-                webhook_verify_token: 'wh_token_xyz',
               },
             ]);
           }
@@ -92,7 +91,6 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
         expect(result.workspaceId).toBe(workspaceId);
         expect(result.fbAppId).toBe('app_1234567890');
         expect(result.decryptedAppSecret).toBe(rawSecret);
-        expect(result.webhookVerifyToken).toBe('wh_token_xyz');
       }
     });
 
@@ -144,7 +142,6 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
                     data: {
                       fb_app_id: 'fb_app_9999',
                       encrypted_fb_app_secret: encryptedSecret,
-                      webhook_verify_token: null,
                     },
                     error: null,
                   }),
@@ -162,7 +159,6 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
         expect(result.workspaceId).toBe(workspaceId);
         expect(result.fbAppId).toBe('fb_app_9999');
         expect(result.decryptedAppSecret).toBe(rawSecret);
-        expect(result.webhookVerifyToken).toBeNull();
       }
     });
 

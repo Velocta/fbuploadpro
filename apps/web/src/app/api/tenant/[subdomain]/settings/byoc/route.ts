@@ -49,7 +49,7 @@ export async function GET(
 
     const { data: byoc } = await supabase
       .from('workspace_byoc_credentials')
-      .select('workspace_id, fb_app_id, encrypted_fb_app_secret, webhook_verify_token, status, last_tested_at')
+      .select('workspace_id, fb_app_id, encrypted_fb_app_secret, status, last_tested_at')
       .eq('workspace_id', workspaceId)
       .maybeSingle();
 
@@ -58,7 +58,6 @@ export async function GET(
       subdomain,
       fbAppId: byoc?.fb_app_id || '',
       hasSecret: Boolean(byoc?.encrypted_fb_app_secret),
-      webhookVerifyToken: byoc?.webhook_verify_token || null,
       status: byoc?.status || 'unverified',
       lastTestedAt: byoc?.last_tested_at || null,
     });
@@ -72,7 +71,7 @@ async function saveOrUpdateBYOCCredentials(
   supabase: any,
   workspaceId: string,
   userId: string,
-  data: { fbAppId: string; fbAppSecret?: string | undefined; webhookVerifyToken?: string | undefined }
+  data: { fbAppId: string; fbAppSecret?: string | undefined }
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const encryptionKey = getTokenEncryptionKey();
 
@@ -85,7 +84,6 @@ async function saveOrUpdateBYOCCredentials(
         user_id: userId,
         fb_app_id: data.fbAppId,
         encrypted_fb_app_secret: encryptedSecret,
-        webhook_verify_token: data.webhookVerifyToken || null,
         status: 'unverified',
         updated_at: new Date().toISOString(),
       },
@@ -114,7 +112,6 @@ async function saveOrUpdateBYOCCredentials(
     .from('workspace_byoc_credentials')
     .update({
       fb_app_id: data.fbAppId,
-      webhook_verify_token: data.webhookVerifyToken || null,
       status: 'unverified',
       updated_at: new Date().toISOString(),
     })

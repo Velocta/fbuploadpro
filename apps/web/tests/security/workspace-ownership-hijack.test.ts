@@ -482,7 +482,6 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
                       workspace_id: '00000000-0000-4000-a000-000000000099',
                       fb_app_id: '123456789',
                       encrypted_fb_app_secret: 'enc_secret',
-                      webhook_verify_token: 'wh_token',
                       status: 'valid',
                       last_tested_at: '2026-10-14T00:00:00Z',
                     },

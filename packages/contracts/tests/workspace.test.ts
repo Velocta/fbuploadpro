@@ -121,7 +121,6 @@ describe('Workspace Domain Contracts', () => {
       const req = {
         fbAppId: '987654321098765',
         fbAppSecret: 'abcdef0123456789abcdef0123456789',
-        webhookVerifyToken: 'my-custom-verify-token-123',
       };
       const parsed = SaveBYOCCredentialsRequestSchema.parse(req);
       expect(parsed.fbAppId).toBe('987654321098765');

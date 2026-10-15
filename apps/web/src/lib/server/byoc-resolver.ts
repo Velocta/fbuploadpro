@@ -8,7 +8,6 @@ export interface ResolvedBYOCCredentials {
   workspaceId: string;
   fbAppId: string;
   decryptedAppSecret: string;
-  webhookVerifyToken: string | null;
 }
 
 export interface UnresolvedBYOCCredentials {
@@ -48,7 +47,7 @@ export async function resolveWorkspaceFacebookCredentials(
     const legacyClient = client as DatabaseClient;
     try {
       const credRows = (await legacyClient.query(
-        `SELECT fb_app_id, encrypted_fb_app_secret, webhook_verify_token
+        `SELECT fb_app_id, encrypted_fb_app_secret
          FROM workspace_byoc_credentials
          WHERE workspace_id = $1
          LIMIT 1`,
@@ -56,7 +55,6 @@ export async function resolveWorkspaceFacebookCredentials(
       )) as Array<{
         fb_app_id?: string;
         encrypted_fb_app_secret?: string;
-        webhook_verify_token?: string | null;
       }>;
 
       const creds = credRows?.[0];
@@ -75,7 +73,6 @@ export async function resolveWorkspaceFacebookCredentials(
         workspaceId,
         fbAppId: creds.fb_app_id,
         decryptedAppSecret,
-        webhookVerifyToken: creds.webhook_verify_token ?? null,
       };
     } catch (err) {
       console.warn('[BYOC Resolver] Failed to resolve legacy BYOC credentials:', err);
@@ -101,7 +98,7 @@ export async function resolveWorkspaceFacebookCredentials(
   try {
     const { data: creds, error: credError } = await supabase
       .from('workspace_byoc_credentials')
-      .select('fb_app_id, encrypted_fb_app_secret, webhook_verify_token')
+      .select('fb_app_id, encrypted_fb_app_secret')
       .eq('workspace_id', workspaceId)
       .maybeSingle();
 
@@ -120,7 +117,6 @@ export async function resolveWorkspaceFacebookCredentials(
       workspaceId,
       fbAppId: creds.fb_app_id,
       decryptedAppSecret,
-      webhookVerifyToken: creds.webhook_verify_token ?? null,
     };
   } catch (err) {
     console.warn('[BYOC Resolver] Failed to resolve Supabase BYOC credentials:', err);
