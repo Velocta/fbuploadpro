@@ -46,14 +46,12 @@ function getStatusDetails(status: BYOCStatus) {
 
 interface MetaAppSetupSectionProps {
   redirectUri: string;
-  webhookUrl: string;
   copiedKey: string | null;
   onCopy: (key: string, value: string) => void;
 }
 
 export function MetaAppSetupSection({
   redirectUri,
-  webhookUrl,
   copiedKey,
   onCopy,
 }: Readonly<MetaAppSetupSectionProps>) {
@@ -135,48 +133,6 @@ export function MetaAppSetupSection({
           </div>
         </div>
 
-        {/* Webhook Callback URL */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-            Webhook Callback URL
-          </span>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: `${SPACING.sm} ${SPACING.md}`,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              borderRadius: RADII.sm,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '0.75rem',
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {webhookUrl}
-            </span>
-            <button
-              type="button"
-              onClick={() => onCopy('webhook', webhookUrl)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-              }}
-            >
-              {copiedKey === 'webhook' ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-        </div>
 
         {/* Required Permissions Checklist */}
         <div style={{ marginTop: SPACING.xs }}>
@@ -426,7 +382,6 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
       : 'https://fbuploadpro.com';
 
   const redirectUri = `${origin}/api/auth/facebook/callback`;
-  const webhookUrl = `${origin}/api/webhooks/facebook`;
 
   useEffect(() => {
     let isMounted = true;
@@ -776,7 +731,6 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
       {/* Meta Developer Configuration Helpers */}
       <MetaAppSetupSection
         redirectUri={redirectUri}
-        webhookUrl={webhookUrl}
         copiedKey={copiedKey}
         onCopy={handleCopy}
       />

@@ -12,7 +12,6 @@ export const RESERVED_SUBDOMAINS = [
   'status',
   'system',
   'test',
-  'webhook',
   'www',
 ] as const;
 

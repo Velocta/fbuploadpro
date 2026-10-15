@@ -151,7 +151,6 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
                       workspace_id: workspaceId,
                       fb_app_id: '123456789012345',
                       encrypted_fb_app_secret: 'enc_secret_abc',
-                      webhook_verify_token: 'custom_token_123',
                       status: 'valid',
                       last_tested_at: '2026-10-14T10:00:00Z',
                     },
@@ -175,7 +174,6 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
       expect(json.workspaceId).toBe(workspaceId);
       expect(json.fbAppId).toBe('123456789012345');
       expect(json.hasSecret).toBe(true);
-      expect(json.webhookVerifyToken).toBe('custom_token_123');
       expect(json.status).toBe('valid');
       expect(json.lastTestedAt).toBe('2026-10-14T10:00:00Z');
     });
@@ -262,7 +260,6 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
         body: JSON.stringify({
           fbAppId: '123456789012345',
           fbAppSecret: 'super_secret_fb_key_999',
-          webhookVerifyToken: 'verify_tok',
         }),
       });
       const res = await saveBYOC(req, { params: Promise.resolve({ subdomain }) });
@@ -275,7 +272,6 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           workspace_id: workspaceId,
           user_id: userId,
           fb_app_id: '123456789012345',
-          webhook_verify_token: 'verify_tok',
           status: 'unverified',
         }),
         { onConflict: 'workspace_id' }

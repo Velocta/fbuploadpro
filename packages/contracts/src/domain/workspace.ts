@@ -56,7 +56,6 @@ export const BYOCCredentialsViewSchema = z.object({
   subdomain: z.string(),
   fbAppId: z.string().default(''),
   hasSecret: z.boolean().default(false),
-  webhookVerifyToken: z.string().nullable().optional(),
   status: BYOCStatusSchema.default('unverified'),
   lastTestedAt: z.string().nullable().optional(),
 });
@@ -74,12 +73,6 @@ export const SaveBYOCCredentialsRequestSchema = z.object({
     .trim()
     .min(10, 'Facebook App Secret must be at least 10 characters')
     .max(128, 'Facebook App Secret is too long')
-    .optional()
-    .or(z.literal('')),
-  webhookVerifyToken: z
-    .string()
-    .trim()
-    .max(255, 'Webhook verify token cannot exceed 255 characters')
     .optional()
     .or(z.literal('')),
 });
