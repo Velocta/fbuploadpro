@@ -205,7 +205,7 @@ export async function fetchAndValidateRemoteMedia(
   quota: StorageQuotaInfo,
   db: any,
   jobId: string
-): Promise<{ response: Response; totalBytesEstimate: number | null } | null> {
+): Promise<{ response: Response; body: ReadableStream<Uint8Array>; totalBytesEstimate: number | null } | null> {
   const response = await fetchImpl(sourceUrl, {
     redirect: 'follow',
     headers: {
@@ -222,6 +222,7 @@ export async function fetchAndValidateRemoteMedia(
     return null;
   }
 
+  const body = response.body;
   const headerLength = Number(response.headers.get('content-length') || 0);
   const totalBytesEstimate = headerLength > 0 ? headerLength : null;
 
@@ -243,7 +244,7 @@ export async function fetchAndValidateRemoteMedia(
     return null;
   }
 
-  return { response, totalBytesEstimate };
+  return { response, body, totalBytesEstimate };
 }
 
 export function createStreamProgressTracker(params: {
@@ -292,6 +293,32 @@ export function createStreamProgressTracker(params: {
   });
 }
 
+export async function collectStreamBuffer(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+  const combined = new Uint8Array(totalLen);
+  let offset = 0;
+  for (const c of chunks) {
+    combined.set(c, offset);
+    offset += c.length;
+  }
+  return combined;
+}
+
+export async function drainAndDiscardStream(stream: ReadableStream<Uint8Array>): Promise<void> {
+  const reader = stream.getReader();
+  while (true) {
+    const { done } = await reader.read();
+    if (done) break;
+  }
+}
+
 export async function writeStreamToDestination(params: {
   stream: ReadableStream<Uint8Array>;
   storageKey: string;
@@ -310,20 +337,7 @@ export async function writeStreamToDestination(params: {
   }
 
   if (storageService && typeof storageService.putObject === 'function') {
-    const reader = stream.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-    const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
-    const combined = new Uint8Array(totalLen);
-    let offset = 0;
-    for (const c of chunks) {
-      combined.set(c, offset);
-      offset += c.length;
-    }
+    const combined = await collectStreamBuffer(stream);
     const putResult = await storageService.putObject({
       key: storageKey,
       body: combined,
@@ -333,11 +347,7 @@ export async function writeStreamToDestination(params: {
   }
 
   // Mock environment fallback for tests without storage
-  const reader = stream.getReader();
-  while (true) {
-    const { done } = await reader.read();
-    if (done) break;
-  }
+  await drainAndDiscardStream(stream);
   return `https://media.fbuploadpro.com/${storageKey}`;
 }
 
@@ -478,7 +488,7 @@ export async function executeDownloadJob(params: IngestJobParams): Promise<void>
 
     const fetched = await fetchAndValidateRemoteMedia(sourceUrl, fetchImpl, quota, db, jobId);
     if (!fetched) return;
-    const { response, totalBytesEstimate } = fetched;
+    const { response, body, totalBytesEstimate } = fetched;
 
     const mimeType = inferMimeFromUrlOrHeader(response.headers.get('content-type'), sourceUrl);
     const mediaType: 'video' | 'image' = mimeType.startsWith('image/') ? 'image' : 'video';
@@ -500,7 +510,7 @@ export async function executeDownloadJob(params: IngestJobParams): Promise<void>
       },
     });
 
-    const transformedStream = response.body.pipeThrough(progressTransform);
+    const transformedStream = body.pipeThrough(progressTransform);
 
     const publicUrl = await writeStreamToDestination({
       stream: transformedStream,

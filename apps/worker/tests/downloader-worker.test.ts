@@ -4,6 +4,10 @@ import worker, {
   inferMimeFromUrlOrHeader,
   sanitizeFileName,
   extractFilenameFromHeader,
+  trimTrailingSlash,
+  writeStreamToDestination,
+  validateDownloadSafetyAndQuota,
+  cleanupFailedDownload,
   type Env,
 } from '../src/index.js';
 
@@ -29,6 +33,13 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       expect(extractFilenameFromHeader("attachment; filename*=UTF-8''encoded_clip.mp4")).toBe('encoded_clip.mp4');
       expect(extractFilenameFromHeader('inline; filename=direct.mp4')).toBe('direct.mp4');
       expect(extractFilenameFromHeader(null)).toBeNull();
+    });
+
+    it('trims trailing slashes safely without regex backtracking', () => {
+      expect(trimTrailingSlash('https://media.fbuploadpro.com///')).toBe('https://media.fbuploadpro.com');
+      expect(trimTrailingSlash('https://media.fbuploadpro.com/')).toBe('https://media.fbuploadpro.com');
+      expect(trimTrailingSlash('https://media.fbuploadpro.com')).toBe('https://media.fbuploadpro.com');
+      expect(trimTrailingSlash('')).toBe('');
     });
   });
 
@@ -142,6 +153,31 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       const res = await worker.fetch(req, env, ctx);
       // In environment without real db connection, it will try createClient or return error if not mocked
       expect([202, 500]).toContain(res.status);
+    });
+
+    it('GET /api/media/download/jobs/:id returns response with job or 404', async () => {
+      const req = new Request('https://worker.internal/api/media/download/jobs/test-job-123', {
+        method: 'GET',
+        headers: {
+          'x-test-user-id': '11111111-1111-4111-a111-111111111111',
+        },
+      });
+      const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
+      expect([200, 404]).toContain(res.status);
+    });
+
+    it('GET /api/media/download/jobs returns list of jobs', async () => {
+      const req = new Request('https://worker.internal/api/media/download/jobs', {
+        method: 'GET',
+        headers: {
+          'x-test-user-id': '11111111-1111-4111-a111-111111111111',
+        },
+      });
+      const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as { success?: boolean; jobs?: any[] };
+      expect(data.success).toBe(true);
+      expect(Array.isArray(data.jobs)).toBe(true);
     });
   });
 
@@ -280,7 +316,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       });
 
       expect(mockR2Bucket.put).toHaveBeenCalled();
-      expect(inserts.length).toBe(1);
+      expect(inserts).toHaveLength(1);
       expect(inserts[0].name).toBe('awesome_reel.mp4');
       expect(inserts[0].file_size).toBe(8);
 
@@ -288,6 +324,102 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       expect(completedUpdate).toBeDefined();
       expect(completedUpdate.progress_percent).toBe(100);
       expect(completedUpdate.media_id).toBeDefined();
+    });
+
+    it('writeStreamToDestination handles custom storageService buffer collection', async () => {
+      const chunk = new Uint8Array([10, 20, 30]);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(chunk);
+          controller.close();
+        },
+      });
+
+      const mockStorageService = {
+        putObject: vi.fn().mockResolvedValue({
+          publicUrl: 'https://cdn.custom.com/media/file.mp4',
+        }),
+      };
+
+      const resultUrl = await writeStreamToDestination({
+        stream,
+        storageKey: 'users/123/file.mp4',
+        mimeType: 'video/mp4',
+        env: { ENVIRONMENT: 'test' },
+        storageService: mockStorageService,
+      });
+
+      expect(mockStorageService.putObject).toHaveBeenCalled();
+      expect(resultUrl).toBe('https://cdn.custom.com/media/file.mp4');
+    });
+
+    it('writeStreamToDestination handles fallback without storage by draining stream', async () => {
+      const chunk = new Uint8Array([1, 2, 3]);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(chunk);
+          controller.close();
+        },
+      });
+
+      const resultUrl = await writeStreamToDestination({
+        stream,
+        storageKey: 'users/123/fallback.mp4',
+        mimeType: 'video/mp4',
+        env: { ENVIRONMENT: 'test' },
+      });
+
+      expect(resultUrl).toContain('fallback.mp4');
+    });
+
+    it('validateDownloadSafetyAndQuota fails when storage quota is exhausted', async () => {
+      const mockDb = {
+        from: vi.fn(() => ({
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: { total_bytes: 1000, used_bytes: 1000 },
+                error: null,
+              }),
+            })),
+          })),
+          update: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({}),
+          })),
+        })),
+      };
+
+      const result = await validateDownloadSafetyAndQuota(
+        'https://cdn.example.com/video.mp4',
+        'user-123',
+        mockDb,
+        'job-123'
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('cleanupFailedDownload removes partial upload from R2 if present', async () => {
+      const mockBucket = {
+        delete: vi.fn().mockResolvedValue({}),
+      };
+      const mockDb = {
+        from: vi.fn(() => ({
+          update: vi.fn(() => ({
+            eq: vi.fn().mockResolvedValue({}),
+          })),
+        })),
+      };
+
+      await cleanupFailedDownload(
+        mockDb,
+        'job-123',
+        'users/123/partial.mp4',
+        { MEDIA_BUCKET: mockBucket },
+        new Error('FILE_TOO_LARGE')
+      );
+
+      expect(mockBucket.delete).toHaveBeenCalledWith('users/123/partial.mp4');
     });
   });
 });

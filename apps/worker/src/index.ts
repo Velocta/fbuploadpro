@@ -212,9 +212,9 @@ function createTestMockDb(userId: string): any {
   };
 
   const queryBuilder = {
-    single: async () => ({ data: defaultJob, error: null }),
-    maybeSingle: async () => ({ data: null, error: null }),
-    limit: async () => ({ data: [], error: null }),
+    single: () => Promise.resolve({ data: defaultJob, error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+    limit: () => Promise.resolve({ data: [], error: null }),
   };
 
   const tableMock = {
@@ -226,13 +226,13 @@ function createTestMockDb(userId: string): any {
       }),
     }),
     update: () => ({
-      eq: async () => ({ data: null, error: null }),
+      eq: () => Promise.resolve({ data: null, error: null }),
     }),
   };
 
   return {
     auth: {
-      getUser: async () => ({ data: { user: { id: userId } }, error: null }),
+      getUser: () => Promise.resolve({ data: { user: { id: userId } }, error: null }),
     },
     from: () => tableMock,
   };
