@@ -637,6 +637,18 @@ export function MediaLibraryExplorer({
     void refreshLibraryData();
   }, [refreshLibraryData]);
 
+  useEffect(() => {
+    const handleDownloadComplete = () => {
+      void refreshLibraryData();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('fbuploadpro:download-completed', handleDownloadComplete);
+      return () => {
+        window.removeEventListener('fbuploadpro:download-completed', handleDownloadComplete);
+      };
+    }
+  }, [refreshLibraryData]);
+
   // Load next page of media items (infinite scroll / load more)
   const handleLoadMoreMedia = useCallback(async () => {
     if (!subdomain || isLoadingMore) return;

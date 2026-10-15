@@ -292,6 +292,50 @@ async function processSingleBatchUrl(params: {
       }),
     });
 
+    if (res.status === 202) {
+      const data = (await res.json()) as { job?: { id: string } };
+      const jobId = data?.job?.id;
+      if (jobId) {
+        const maxPolls = 60;
+        for (let p = 0; p < maxPolls; p++) {
+          await new Promise((r) => setTimeout(r, 1500));
+          const pollRes = await fetchImpl(`/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`);
+          if (pollRes.ok) {
+            const pollData = await pollRes.json();
+            const job = pollData.job;
+            if (job?.status === 'completed') {
+              if (job.media_id) {
+                const mediaRes = await fetchImpl(`/api/tenant/${subdomain}/media/${job.media_id}`).catch(() => null);
+                if (mediaRes && mediaRes.ok) {
+                  const mediaData = await mediaRes.json();
+                  return {
+                    saved: [{
+                      item: mediaData.item || mediaData,
+                      sourceUrl: job.source_url,
+                      platform: job.source_platform,
+                    }],
+                    failed: null,
+                  };
+                }
+              }
+              return { saved: [], failed: null };
+            }
+            if (job?.status === 'failed') {
+              return {
+                saved: [],
+                failed: {
+                  id: `failed-${idx}-${Date.now()}`,
+                  url,
+                  folderId,
+                  errorMessage: job.error_message || 'Could not save media from this link.',
+                },
+              };
+            }
+          }
+        }
+      }
+    }
+
     if (res.ok) {
       const data = (await res.json()) as DownloaderIngestResponse;
       return {
@@ -726,6 +770,9 @@ export function MediaDownloader({
 
     if (result.savedEntries.length > 0) {
       setSavedEntries((prev) => [...result.savedEntries, ...prev]);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
+      }
     }
     if (result.failedEntries.length > 0) {
       setFailedEntries((prev) => [...result.failedEntries, ...prev]);
@@ -747,6 +794,9 @@ export function MediaDownloader({
     if (retryResult.ok) {
       setFailedEntries((prev) => prev.filter((item) => item.id !== entry.id));
       setSavedEntries((prev) => [...retryResult.savedEntries, ...prev]);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
+      }
     } else if (retryResult.errorMessage) {
       setFailedEntries((prev) =>
         prev.map((item) =>
