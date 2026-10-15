@@ -450,7 +450,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
           if (sql.includes('INSERT INTO queue_items')) {
             return Promise.resolve([
               {
-                id: 'queue-text-1',
+                id: queueItemId,
                 user_id: userId,
                 fb_page_id: pageId,
                 slot_id: null,
@@ -513,7 +513,12 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
             return Promise.resolve([
               {
                 id: mediaId,
+                name: 'story-image.jpg',
                 media_type: 'image',
+                url: 'https://cdn.example.com/story.jpg',
+                thumbnail_url: null,
+                aspect_ratio: '9:16',
+                duration_seconds: null,
                 file_size: 2 * 1024 * 1024,
               },
             ]);
@@ -521,7 +526,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
           if (sql.includes('INSERT INTO queue_items')) {
             return Promise.resolve([
               {
-                id: 'queue-story-1',
+                id: queueItemId,
                 user_id: userId,
                 fb_page_id: pageId,
                 slot_id: null,
