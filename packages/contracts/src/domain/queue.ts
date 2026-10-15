@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PostFormatSchema, type PostFormat } from './publishing.js';
+import { PostFormatSchema } from './publishing.js';
 
 // ==========================================
 // Page Queue Slots (T115)
