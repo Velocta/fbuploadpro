@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
   canAccessTenant,
-  detectSourcePlatform,
   DownloaderIngestRequestSchema,
   DownloaderIngestResponseSchema,
   getSessionSecret,
