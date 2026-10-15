@@ -409,8 +409,9 @@ fbuploadpro/
   * `fb_app_secret` symmetrically encrypted at rest via AES-256-GCM using `FB_ENCRYPTION_MASTER_KEY` / `TOKEN_ENCRYPTION_KEY`.
   * Raw secret is NEVER returned over client-facing APIs (`hasSecret: boolean`).
   * Secret field in settings UI is masked (`••••••••`) with a show/hide toggle.
-* **Developer Setup Assistance**:
-  * 1-click copy helpers for authorized OAuth Redirect URIs (`https://app.fbuploadpro.com/api/auth/facebook/callback`) and Webhook Callback URLs.
+* **Developer Setup Assistance & Canonical Workspace Subdomain OAuth (Spec 047)**:
+  * 1-click copy helpers for authorized OAuth Redirect URIs (`https://{subdomain}.{rootDomain}/api/auth/facebook/callback`) and Webhook Callback URLs (`https://{subdomain}.{rootDomain}/api/webhooks/facebook`).
+  * **Strict Subdomain URI Alignment**: In both direct OAuth (`/api/auth/facebook`) and Magic Link OAuth (`/connect/facebook`), `redirect_uri` is dynamically generated using `buildSubdomainOAuthRedirectUri` to match the initiating workspace's canonical subdomain (`https://{subdomain}.{rootDomain}/api/auth/facebook/callback`), signed into the `state` envelope (`OAuthStatePayload.redirectUri`), and supplied identically during token exchange in `/api/auth/facebook/callback`.
   * Clear, user-friendly guidance for configuring Meta Developer App settings and required Graph API v26.0 permissions:
     * `pages_show_list`: Discover and enumerate Facebook Pages managed by the operator.
     * `pages_read_engagement`: Read Page metadata and post engagement.

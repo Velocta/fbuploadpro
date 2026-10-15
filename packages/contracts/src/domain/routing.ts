@@ -221,4 +221,53 @@ export function buildCentralAppUrl(
   return new URL(normalizedPath, `${protocol}//${host}`);
 }
 
+/**
+ * Constructs the canonical OAuth callback URL for a workspace subdomain.
+ * In production with a custom root domain (e.g. vinsmokemedia.online), returns:
+ * https://{subdomain}.{cleanRoot}/api/auth/facebook/callback
+ * In local development or environments without root domain, falls back to:
+ * {appUrlFallback}/api/auth/facebook/callback or {requestUrl.origin}/api/auth/facebook/callback
+ */
+export function buildSubdomainOAuthRedirectUri(
+  subdomain: string,
+  requestUrl?: string | URL | null,
+  rootDomain?: string | null,
+  appUrlFallback?: string | null
+): string {
+  const cleanRoot = (rootDomain || '').trim().toLowerCase().split(':')[0] || '';
+  const isLocalRoot =
+    !cleanRoot ||
+    cleanRoot.includes('localhost') ||
+    cleanRoot.includes('127.0.0.1');
+
+  if (isLocalRoot) {
+    if (appUrlFallback) {
+      return `${appUrlFallback.replace(/\/+$/, '')}/api/auth/facebook/callback`;
+    }
+    if (requestUrl) {
+      try {
+        const parsed = typeof requestUrl === 'string' ? new URL(requestUrl) : requestUrl;
+        return `${parsed.origin}/api/auth/facebook/callback`;
+      } catch {
+        // Fall through
+      }
+    }
+    return 'http://localhost:3000/api/auth/facebook/callback';
+  }
+
+  let protocol = 'https:';
+  if (requestUrl) {
+    try {
+      const parsed = typeof requestUrl === 'string' ? new URL(requestUrl) : requestUrl;
+      if (parsed.protocol) {
+        protocol = parsed.protocol;
+      }
+    } catch {
+      // Keep default https:
+    }
+  }
+
+  return `${protocol}//${subdomain}.${cleanRoot}/api/auth/facebook/callback`;
+}
+
 

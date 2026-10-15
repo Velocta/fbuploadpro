@@ -27,6 +27,29 @@ describe('Facebook OAuth Contracts & State Signing', () => {
     expect(parsed.userId).toBe('123e4567-e89b-12d3-a456-426614174000');
   });
 
+  it('should validate and preserve redirectUri in OAuthStatePayloadSchema', () => {
+    const withRedirectUri = {
+      ...validStatePayload,
+      redirectUri: 'https://acme.vinsmokemedia.online/api/auth/facebook/callback',
+    };
+    const parsed = OAuthStatePayloadSchema.parse(withRedirectUri);
+    expect(parsed.redirectUri).toBe(
+      'https://acme.vinsmokemedia.online/api/auth/facebook/callback'
+    );
+  });
+
+  it('should sign and verify OAuth state with redirectUri', async () => {
+    const withRedirectUri = {
+      ...validStatePayload,
+      redirectUri: 'https://acme.vinsmokemedia.online/api/auth/facebook/callback',
+    };
+    const signedToken = await signOAuthState(withRedirectUri, secret);
+    const verified = await verifyOAuthState(signedToken, secret);
+    expect(verified.redirectUri).toBe(
+      'https://acme.vinsmokemedia.online/api/auth/facebook/callback'
+    );
+  });
+
   it('should sign and verify OAuth state successfully', async () => {
     const signedToken = await signOAuthState(validStatePayload, secret);
     expect(signedToken).toContain('.');
