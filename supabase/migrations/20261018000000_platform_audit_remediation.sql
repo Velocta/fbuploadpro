@@ -82,6 +82,9 @@ CREATE INDEX IF NOT EXISTS idx_queue_items_stuck_publishing
   WHERE status = 'publishing';
 
 -- 6. Dedicated stuck-publishing recovery RPC
+DROP FUNCTION IF EXISTS public.recover_stuck_publishing_items(INT);
+DROP FUNCTION IF EXISTS public.recover_stuck_publishing_items();
+
 CREATE OR REPLACE FUNCTION public.recover_stuck_publishing_items(
   p_timeout_minutes INT DEFAULT 10
 )
@@ -242,6 +245,8 @@ END;
 $$;
 
 -- 8. Single-roundtrip atomic settlement RPC
+DROP FUNCTION IF EXISTS public.settle_queue_item_outcome;
+
 CREATE OR REPLACE FUNCTION public.settle_queue_item_outcome(
   p_queue_item_id UUID,
   p_user_id UUID,
@@ -371,6 +376,9 @@ END;
 $$;
 
 -- 9. Server-side queue status counter RPC (supporting skipped & cancelled)
+DROP FUNCTION IF EXISTS public.get_page_queue_status_counts(UUID, UUID);
+DROP FUNCTION IF EXISTS public.get_page_queue_status_counts;
+
 CREATE OR REPLACE FUNCTION public.get_page_queue_status_counts(
   p_page_id UUID,
   p_user_id UUID
