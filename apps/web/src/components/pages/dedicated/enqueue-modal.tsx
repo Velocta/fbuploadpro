@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import type { PostFormat } from '@fbuploadpro/contracts';
 import {
   THEME,
   PALETTE,
@@ -39,21 +40,26 @@ export function EnqueueModal({
   onClose,
   onEnqueued,
 }: Readonly<EnqueueModalProps>) {
+  const [selectedFormat, setSelectedFormat] = useState<PostFormat>('reel');
   const [mediaList, setMediaList] = useState<EnqueueMediaItemOption[]>([]);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [selectedSlotId, setSelectedSlotId] = useState<string>('');
   const [caption, setCaption] = useState('');
   const [isCaptionDirty, setIsCaptionDirty] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
   const [firstComment, setFirstComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
+      setSelectedFormat('reel');
       setSelectedMediaId(null);
+      setSelectedSlotId('');
       setCaption('');
       setIsCaptionDirty(false);
+      setLinkUrl('');
       setFirstComment('');
       setError(null);
       return;
@@ -110,12 +116,47 @@ export function EnqueueModal({
     if (!firstComment && m.firstComment) {
       setFirstComment(m.firstComment);
     }
+    if (m.mediaType === 'image' && (selectedFormat === 'reel' || selectedFormat === 'video')) {
+      setSelectedFormat('image');
+    } else if (m.mediaType === 'video' && selectedFormat === 'image') {
+      setSelectedFormat('reel');
+    }
+  };
+
+  const handleSelectFormat = (fmt: PostFormat) => {
+    setSelectedFormat(fmt);
+    if (fmt === 'text') {
+      setSelectedMediaId(null);
+    } else if (selectedMediaId) {
+      const current = mediaList.find((m) => m.id === selectedMediaId);
+      if (current) {
+        if (fmt === 'image' && current.mediaType === 'video') {
+          const firstImg = mediaList.find((m) => m.mediaType === 'image');
+          setSelectedMediaId(firstImg ? firstImg.id : null);
+        } else if ((fmt === 'reel' || fmt === 'video') && current.mediaType === 'image') {
+          const firstVid = mediaList.find((m) => m.mediaType === 'video');
+          setSelectedMediaId(firstVid ? firstVid.id : null);
+        }
+      }
+    } else {
+      if (fmt === 'image') {
+        const firstImg = mediaList.find((m) => m.mediaType === 'image');
+        if (firstImg) setSelectedMediaId(firstImg.id);
+      } else if (fmt === 'reel' || fmt === 'video') {
+        const firstVid = mediaList.find((m) => m.mediaType === 'video');
+        if (firstVid) setSelectedMediaId(firstVid.id);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!selectedMediaId) {
+    if (selectedFormat !== 'text' && !selectedMediaId) {
       setError('Please select a media item to enqueue');
+      return;
+    }
+    if (selectedFormat === 'text' && (!caption || caption.trim().length === 0)) {
+      setError('Caption is required for text posts');
       return;
     }
 
@@ -125,10 +166,21 @@ export function EnqueueModal({
     try {
       const payload: Record<string, any> = {
         pageId,
-        mediaId: selectedMediaId,
         caption,
-        firstComment: firstComment.trim() ? firstComment.trim() : undefined,
+        postFormat: selectedFormat,
       };
+
+      if (selectedFormat !== 'text' && selectedMediaId) {
+        payload.mediaId = selectedMediaId;
+      }
+
+      if (linkUrl.trim()) {
+        payload.linkUrl = linkUrl.trim();
+      }
+
+      if (selectedFormat !== 'story' && firstComment.trim()) {
+        payload.firstComment = firstComment.trim();
+      }
 
       if (selectedSlotId) {
         payload.slotId = selectedSlotId;
@@ -349,7 +401,7 @@ export function EnqueueModal({
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          {/* Media Selection Grid */}
+          {/* Format Selector Bar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
             <span
               style={{
@@ -358,11 +410,71 @@ export function EnqueueModal({
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
               }}
             >
-              Select Asset
+              Post Format
             </span>
-
-            {renderMediaList()}
+            <div
+              data-testid="enqueue-format-selector"
+              style={{
+                display: 'flex',
+                gap: SPACING.xs,
+                flexWrap: 'wrap',
+              }}
+            >
+              {[
+                { id: 'reel', label: 'Reel', testId: 'enqueue-format-reel' },
+                { id: 'video', label: 'Video', testId: 'enqueue-format-video' },
+                { id: 'image', label: 'Photo', testId: 'enqueue-format-image' },
+                { id: 'story', label: 'Story', testId: 'enqueue-format-story' },
+                { id: 'text', label: 'Text', testId: 'enqueue-format-text' },
+              ].map((f) => {
+                const isCurrent = selectedFormat === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    data-testid={f.testId}
+                    onClick={() => handleSelectFormat(f.id as PostFormat)}
+                    style={{
+                      padding: `${SPACING.xs} ${SPACING.md}`,
+                      borderRadius: RADII.xs,
+                      fontSize: '0.8125rem',
+                      fontWeight: isCurrent ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.medium,
+                      border: `1px solid ${
+                        isCurrent ? PALETTE.primary : `var(--border-subtle, ${THEME.default.borders.hairline})`
+                      }`,
+                      backgroundColor: isCurrent
+                        ? `var(--bg-active, ${THEME.default.surfaces.active})`
+                        : 'transparent',
+                      color: isCurrent
+                        ? PALETTE.text
+                        : `var(--text-sub, ${THEME.default.text.secondary})`,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {/* Media Selection Grid */}
+          {selectedFormat !== 'text' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+              <span
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                }}
+              >
+                Select Asset
+              </span>
+
+              {renderMediaList()}
+            </div>
+          )}
 
           {/* Slot Target Selector */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
@@ -435,25 +547,25 @@ export function EnqueueModal({
             />
           </div>
 
-          {/* First Comment Field */}
+          {/* Link URL Field */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
             <label
-              htmlFor="enqueue-first-comment-field"
+              htmlFor="enqueue-link-url-input"
               style={{
                 fontSize: '0.8125rem',
                 fontWeight: TYPOGRAPHY.weights.medium,
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
               }}
             >
-              Automated First Comment (Optional)
+              Link URL (Optional)
             </label>
-            <textarea
-              id="enqueue-first-comment-field"
-              data-testid="enqueue-first-comment-field"
-              rows={2}
-              value={firstComment}
-              onChange={(e) => setFirstComment(e.target.value)}
-              placeholder="Links, hashtags, or supplementary notes..."
+            <input
+              id="enqueue-link-url-input"
+              data-testid="enqueue-link-url-input"
+              type="url"
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://example.com/..."
               style={{
                 width: '100%',
                 padding: SPACING.sm,
@@ -462,11 +574,62 @@ export function EnqueueModal({
                 border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                 color: `var(--text-main, ${THEME.default.text.primary})`,
                 fontSize: '0.875rem',
-                resize: 'vertical',
                 boxSizing: 'border-box',
               }}
             />
           </div>
+
+          {/* First Comment Field / Story Notice */}
+          {selectedFormat === 'story' ? (
+            <div
+              data-testid="story-no-comment-notice"
+              style={{
+                padding: SPACING.sm,
+                borderRadius: RADII.sm,
+                backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                fontSize: '0.8125rem',
+              }}
+            >
+              Facebook Stories do not support comments.
+            </div>
+          ) : (
+            <div
+              data-testid="enqueue-first-comment-field"
+              style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}
+            >
+              <label
+                htmlFor="enqueue-first-comment-input"
+                style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                }}
+              >
+                Automated First Comment (Optional)
+              </label>
+              <textarea
+                id="enqueue-first-comment-input"
+                data-testid="enqueue-first-comment-input"
+                rows={2}
+                value={firstComment}
+                onChange={(e) => setFirstComment(e.target.value)}
+                placeholder="Links, hashtags, or supplementary notes..."
+                style={{
+                  width: '100%',
+                  padding: SPACING.sm,
+                  borderRadius: RADII.sm,
+                  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                  fontSize: '0.875rem',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+          )}
 
           {/* Modal Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.sm }}>
@@ -490,14 +653,25 @@ export function EnqueueModal({
             <button
               type="submit"
               data-testid="submit-enqueue-btn"
-              disabled={isSubmitting || !selectedMediaId}
+              disabled={
+                isSubmitting ||
+                (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId)
+              }
               style={{
                 ...COMPONENT_STYLES.primaryButton,
                 padding: `${SPACING.xs} ${SPACING.lg}`,
                 fontSize: '0.875rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isSubmitting || !selectedMediaId ? 'not-allowed' : 'pointer',
-                opacity: isSubmitting || !selectedMediaId ? 0.7 : 1,
+                cursor:
+                  isSubmitting ||
+                  (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId)
+                    ? 'not-allowed'
+                    : 'pointer',
+                opacity:
+                  isSubmitting ||
+                  (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId)
+                    ? 0.7
+                    : 1,
               }}
             >
               {isSubmitting ? 'Scheduling...' : 'Enqueue Post'}

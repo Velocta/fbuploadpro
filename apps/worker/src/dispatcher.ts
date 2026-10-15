@@ -5,6 +5,7 @@ import {
   type FacebookPageStatus,
   type IFacebookPublishClient,
   type IPublishDispatcher,
+  type PostFormat,
   decryptToken,
   evaluateGraphApiError,
 } from '@fbuploadpro/contracts';
@@ -77,21 +78,41 @@ function toSafeString(val: unknown): string {
 }
 
 function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueItem {
+  const postFormat =
+    (row.post_format as PostFormat | undefined) ??
+    (row.media_type === 'image' ? 'image' : 'reel');
+
   return ClaimedQueueItemSchema.parse({
     id: row.id,
     userId: row.user_id,
     pageId: row.fb_page_id,
-    mediaId: row.media_id,
+    facebookAccountId:
+      row.facebook_account_id != null ? toSafeString(row.facebook_account_id) : undefined,
+    mediaId: row.media_id != null ? toSafeString(row.media_id) : null,
+    postFormat,
+    linkUrl: row.link_url != null ? toSafeString(row.link_url) : null,
     caption: toSafeString(row.caption),
     firstComment: row.first_comment != null ? toSafeString(row.first_comment) : null,
     retryCount: Number(row.retry_count ?? 0),
     maxRetries: Number(row.max_retries ?? 3),
-    mediaType: row.media_type,
-    mediaUrl: toSafeString(row.media_url),
-    storageKey: toSafeString(row.storage_key),
-    fbPageId: toSafeString(row.external_page_id ?? row.fb_page_id),
-    encryptedPageToken: toSafeString(row.encrypted_access_token),
-    pageName: toSafeString(row.page_name),
+    mediaType: row.media_type ?? (postFormat === 'text' ? null : 'video'),
+    mediaUrl:
+      row.media_url != null
+        ? toSafeString(row.media_url)
+        : postFormat === 'text'
+          ? null
+          : '',
+    storageKey:
+      row.storage_key != null
+        ? toSafeString(row.storage_key)
+        : postFormat === 'text'
+          ? null
+          : '',
+    fbPageId: toSafeString(row.page_external_id ?? row.external_page_id ?? row.fb_page_id),
+    encryptedPageToken: toSafeString(
+      row.encrypted_page_token ?? row.encrypted_access_token
+    ),
+    pageName: toSafeString(row.page_name ?? ''),
   });
 }
 
@@ -101,11 +122,16 @@ function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueIte
  */
 export async function claimDueItems(
   db: DispatcherDbClient,
-  limit: number = 10
+  limit: number = 10,
+  maxPerPage: number = 3
 ): Promise<ClaimedQueueItem[]> {
   // 1. Supabase RPC claim_due_queue_items stored procedure
   if (typeof db.rpc === 'function') {
-    const { data, error } = await db.rpc('claim_due_queue_items', { p_limit: limit });
+    const rpcArgs: Record<string, unknown> = { p_limit: limit };
+    if (maxPerPage !== 3) {
+      rpcArgs.p_max_per_page = maxPerPage;
+    }
+    const { data, error } = await db.rpc('claim_due_queue_items', rpcArgs);
     if (error) {
       console.error('[claimDueItems] Supabase RPC error:', error);
       throw error;
@@ -136,15 +162,34 @@ export async function claimDueItems(
   }
 }
 
+function isRateLimitErrorCode(code?: number, subcode?: number): boolean {
+  if (code === undefined) return false;
+  if (code === 4 || code === 17 || code === 32 || code === 341 || code === 613) {
+    return true;
+  }
+  if (code === 368 && subcode === 1390008) {
+    return true;
+  }
+  if (code >= 80000 && code <= 80014) {
+    return true;
+  }
+  return false;
+}
+
 /**
- * Dispatches a claimed queue item to Facebook Graph API v26.0.
- * Decrypts access token, streams video reel or photo, and posts first comment if configured.
+ * Dispatches a claimed queue item to Facebook Graph API v26.0 based on its post format:
+ * 'text', 'image', 'reel', 'video', or 'story'.
  */
 export async function dispatchItem(
   item: ClaimedQueueItem,
   fbClient: IFacebookPublishClient,
-  masterKey: string
+  masterKey: string,
+  maxRetries: number = 3
 ): Promise<DispatchOutcome> {
+  const effectiveMaxRetries = item.maxRetries ?? maxRetries;
+  const format: PostFormat =
+    item.postFormat ?? (item.mediaType === 'image' ? 'image' : 'reel');
+
   // 1. Decrypt page access token
   let accessToken: string;
   try {
@@ -163,30 +208,113 @@ export async function dispatchItem(
     return outcome;
   }
 
-  // 2. Publish media to Facebook Graph API
-  let publishResult: { postId: string };
+  // 2. Publish post according to format
+  let publishResult: { postId: string; telemetry?: any };
   try {
-    if (item.mediaType === 'video') {
-      publishResult = await fbClient.publishReel({
-        pageId: item.fbPageId,
-        accessToken,
-        videoUrl: item.mediaUrl,
-        caption: item.caption,
-      });
-    } else {
-      publishResult = await fbClient.publishPhoto({
-        pageId: item.fbPageId,
-        accessToken,
-        imageUrl: item.mediaUrl,
-        caption: item.caption,
-      });
+    switch (format) {
+      case 'text': {
+        if (typeof fbClient.publishTextPost === 'function') {
+          publishResult = await fbClient.publishTextPost({
+            pageId: item.fbPageId,
+            accessToken,
+            message: item.caption,
+            linkUrl: item.linkUrl,
+          });
+        } else {
+          throw new Error('Facebook client does not support publishTextPost');
+        }
+        break;
+      }
+
+      case 'image': {
+        if (!item.mediaUrl) {
+          throw new Error('Media URL is required for image publishing');
+        }
+        publishResult = await fbClient.publishPhoto({
+          pageId: item.fbPageId,
+          accessToken,
+          imageUrl: item.mediaUrl,
+          caption: item.caption,
+        });
+        break;
+      }
+
+      case 'reel': {
+        if (!item.mediaUrl) {
+          throw new Error('Media URL is required for reel publishing');
+        }
+        publishResult = await fbClient.publishReel({
+          pageId: item.fbPageId,
+          accessToken,
+          videoUrl: item.mediaUrl,
+          caption: item.caption,
+        });
+        break;
+      }
+
+      case 'video': {
+        if (!item.mediaUrl) {
+          throw new Error('Media URL is required for video publishing');
+        }
+        if (typeof fbClient.publishVideo === 'function') {
+          publishResult = await fbClient.publishVideo({
+            pageId: item.fbPageId,
+            accessToken,
+            videoUrl: item.mediaUrl,
+            caption: item.caption,
+          });
+        } else {
+          publishResult = await fbClient.publishReel({
+            pageId: item.fbPageId,
+            accessToken,
+            videoUrl: item.mediaUrl,
+            caption: item.caption,
+          });
+        }
+        break;
+      }
+
+      case 'story': {
+        if (!item.mediaUrl) {
+          throw new Error('Media URL is required for story publishing');
+        }
+        if (item.mediaType === 'image') {
+          if (typeof fbClient.publishPhotoStory === 'function') {
+            publishResult = await fbClient.publishPhotoStory({
+              pageId: item.fbPageId,
+              accessToken,
+              imageUrl: item.mediaUrl,
+            });
+          } else {
+            throw new Error('Facebook client does not support publishPhotoStory');
+          }
+        } else {
+          if (typeof fbClient.publishVideoStory === 'function') {
+            publishResult = await fbClient.publishVideoStory({
+              pageId: item.fbPageId,
+              accessToken,
+              videoUrl: item.mediaUrl,
+            });
+          } else {
+            throw new Error('Facebook client does not support publishVideoStory');
+          }
+        }
+        break;
+      }
+
+      default: {
+        throw new Error(`Unsupported post format: ${String(format)}`);
+      }
     }
   } catch (err: unknown) {
     let errorCode: number | undefined;
     let errorSubcode: number | undefined;
+    let graphTelemetry: any;
+
     if (err instanceof FacebookGraphError) {
       errorCode = err.code;
       errorSubcode = err.errorSubcode;
+      graphTelemetry = err.telemetry;
     } else if (typeof (err as { code?: number })?.code === 'number') {
       errorCode = (err as { code: number }).code;
     }
@@ -202,11 +330,20 @@ export async function dispatchItem(
     const rawMessage = err instanceof Error ? err.message : String(err);
 
     const evaluation =
-      errorCode !== undefined ? evaluateGraphApiError(errorCode, errorSubcode) : null;
+      errorCode !== undefined ? evaluateGraphApiError(errorCode, errorSubcode, rawMessage) : null;
 
     let targetPageStatus: FacebookPageStatus | undefined;
-    if (errorCode === 368 && evaluation && evaluation.pageStatus !== 'active') {
-      targetPageStatus = evaluation.pageStatus;
+    if (evaluation && evaluation.pageStatus && evaluation.pageStatus !== 'active') {
+      targetPageStatus = evaluation.pageStatus as FacebookPageStatus;
+    } else if (errorCode === 368 && errorSubcode === 1390008) {
+      targetPageStatus = 'fb_rate_limited';
+    }
+
+    let targetAccountStatus: 'active' | 'expired' | undefined;
+    if (evaluation && (evaluation as any).accountStatus === 'expired') {
+      targetAccountStatus = 'expired';
+    } else if (isAuthError && (errorCode === 190 || errorCode === 102)) {
+      targetAccountStatus = 'expired';
     }
 
     const errorMessage =
@@ -214,14 +351,26 @@ export async function dispatchItem(
         ? evaluation.message
         : rawMessage;
 
-    // Rate limits or transient errors can be retried if retryCount < maxRetries;
-    // auth errors (190/102), permanent policy errors (4854002 checkpoint, 1404082 duplicate),
-    // and permanent client errors (code 100, 4xx) fail immediately.
-    const canRetry =
-      !isAuthError &&
-      !isPermanentPolicyError &&
-      !isPermanentClientError &&
-      item.retryCount < item.maxRetries;
+    const isRateLimit = isRateLimitErrorCode(errorCode, errorSubcode);
+    const isTransient = (evaluation && evaluation.isTransient) || isRateLimit || (!isAuthError && !isPermanentPolicyError && !isPermanentClientError);
+
+    const nextRetryCount = (item.retryCount || 0) + 1;
+    const canRetry = isTransient && item.retryCount < effectiveMaxRetries;
+
+    let retryDelaySeconds: number | undefined;
+    let pageCooldownSeconds: number | undefined;
+
+    if (canRetry) {
+      if (graphTelemetry?.estimatedTimeToRegainAccessMinutes && graphTelemetry.estimatedTimeToRegainAccessMinutes > 0) {
+        retryDelaySeconds = graphTelemetry.estimatedTimeToRegainAccessMinutes * 60;
+      } else {
+        retryDelaySeconds = Math.min(3600, 300 * Math.pow(2, item.retryCount || 0));
+      }
+
+      if (isRateLimit) {
+        pageCooldownSeconds = retryDelaySeconds;
+      }
+    }
 
     const outcome: DispatchOutcome = {
       queueItemId: item.id,
@@ -230,14 +379,18 @@ export async function dispatchItem(
       ...(errorCode !== undefined ? { errorCode } : {}),
       ...(errorSubcode !== undefined ? { errorSubcode } : {}),
       ...(targetPageStatus !== undefined ? { targetPageStatus } : {}),
+      ...(targetAccountStatus !== undefined ? { targetAccountStatus } : {}),
+      ...(retryDelaySeconds !== undefined ? { retryDelaySeconds } : {}),
+      ...(pageCooldownSeconds !== undefined ? { pageCooldownSeconds } : {}),
     };
     return outcome;
   }
 
-  // 3. Automated first comment (if configured)
+  // 3. Automated first comment (strictly forbidden on 'story')
   let fbCommentId: string | undefined;
   let commentWarning: string | undefined;
-  if (item.firstComment && item.firstComment.trim().length > 0) {
+
+  if (format !== 'story' && item.firstComment && item.firstComment.trim().length > 0) {
     try {
       const commentRes = await fbClient.postComment({
         postId: publishResult.postId,
@@ -246,7 +399,6 @@ export async function dispatchItem(
       });
       fbCommentId = commentRes.commentId;
     } catch (commentErr: unknown) {
-      // If post succeeds but comment fails, post remains published.
       const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
       commentWarning = `Published post but first comment failed: ${errMsg}`;
       console.warn(
@@ -256,12 +408,26 @@ export async function dispatchItem(
     }
   }
 
+  // 4. Proactive telemetry pacing check
+  let bucUsagePct: number | undefined;
+  let pageCooldownSeconds: number | undefined;
+
+  if (publishResult.telemetry?.bucUsageMaxPct !== undefined) {
+    bucUsagePct = publishResult.telemetry.bucUsageMaxPct;
+    if (bucUsagePct >= 85) {
+      const waitMins = publishResult.telemetry.estimatedTimeToRegainAccessMinutes || 5;
+      pageCooldownSeconds = waitMins * 60;
+    }
+  }
+
   const outcome: DispatchOutcome = {
     queueItemId: item.id,
     status: 'published',
     fbPostId: publishResult.postId,
     ...(fbCommentId !== undefined ? { fbCommentId } : {}),
     ...(commentWarning ? { errorMessage: commentWarning } : {}),
+    ...(bucUsagePct !== undefined ? { bucUsagePct } : {}),
+    ...(pageCooldownSeconds !== undefined ? { pageCooldownSeconds } : {}),
   };
   return outcome;
 }
@@ -273,6 +439,8 @@ export async function recordDispatchOutcome(
   db: Queryable,
   outcome: DispatchOutcome
 ): Promise<void> {
+  const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
+
   if (typeof db.from === 'function') {
     if (outcome.status === 'published') {
       const { error } = await db.from('queue_items').update({
@@ -286,7 +454,6 @@ export async function recordDispatchOutcome(
         throw new Error(`Failed to record published dispatch outcome: ${error.message || JSON.stringify(error)}`);
       }
     } else {
-      // Fetch current retry_count to increment it in Supabase branch
       const { data: currentItem, error: fetchErr } = await db
         .from('queue_items')
         .select('retry_count')
@@ -299,8 +466,9 @@ export async function recordDispatchOutcome(
 
       const nextRetryCount = ((currentItem as any)?.retry_count ?? 0) + 1;
 
-      if (outcome.status === 'retry') {
-        const scheduledTime = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+      if (isRetry) {
+        const delaySeconds = outcome.retryDelaySeconds ?? 300;
+        const scheduledTime = new Date(Date.now() + delaySeconds * 1000).toISOString();
         const { error: updateErr } = await db.from('queue_items').update({
           status: 'queued',
           retry_count: nextRetryCount,
@@ -328,31 +496,32 @@ export async function recordDispatchOutcome(
     if (outcome.status === 'published') {
       await db.query(
         `UPDATE queue_items
-       SET status = 'published',
-           fb_post_id = $2,
-           fb_comment_id = $3,
-           published_at = now(),
-           updated_at = now()
-       WHERE id = $1`,
+         SET status = 'published',
+             fb_post_id = $2,
+             fb_comment_id = $3,
+             published_at = now(),
+             updated_at = now()
+         WHERE id = $1`,
         [outcome.queueItemId, outcome.fbPostId ?? null, outcome.fbCommentId ?? null]
       );
-    } else if (outcome.status === 'retry') {
+    } else if (isRetry) {
+      const delaySeconds = outcome.retryDelaySeconds ?? 300;
       await db.query(
         `UPDATE queue_items
-       SET status = 'queued',
-           retry_count = retry_count + 1,
-           scheduled_time = now() + interval '5 minutes',
-           updated_at = now()
-       WHERE id = $1`,
-        [outcome.queueItemId]
+         SET status = 'queued',
+             retry_count = retry_count + 1,
+             scheduled_time = now() + make_interval(secs => $2),
+             updated_at = now()
+         WHERE id = $1`,
+        [outcome.queueItemId, delaySeconds]
       );
     } else {
       await db.query(
         `UPDATE queue_items
-       SET status = 'failed',
-           retry_count = retry_count + 1,
-           updated_at = now()
-       WHERE id = $1`,
+         SET status = 'failed',
+             retry_count = retry_count + 1,
+             updated_at = now()
+         WHERE id = $1`,
         [outcome.queueItemId]
       );
     }
@@ -364,16 +533,17 @@ export interface RunDispatchCycleParams {
   fbClient?: IFacebookPublishClient;
   masterKey: string;
   limit?: number;
+  concurrency?: number;
   onSettleOutcome?: (outcome: DispatchOutcome, item?: ClaimedQueueItem) => Promise<void>;
 }
 
 /**
- * Runs a full dispatch cycle: claims due items, streams to Facebook, settles outcome.
+ * Runs a full dispatch cycle: claims due items, streams to Facebook with bounded parallel pool, settles outcomes.
  */
 export async function runDispatchCycle(
   params: RunDispatchCycleParams
 ): Promise<{ processed: number; succeeded: number; failed: number; retried: number }> {
-  const { db, masterKey, limit = 10, onSettleOutcome } = params;
+  const { db, masterKey, limit = 10, concurrency = 25, onSettleOutcome } = params;
   const fbClient = params.fbClient ?? new FacebookPublishClient();
 
   const claimedItems = await claimDueItems(db, limit);
@@ -381,23 +551,36 @@ export async function runDispatchCycle(
   let failed = 0;
   let retried = 0;
 
-  for (const item of claimedItems) {
-    const outcome = await dispatchItem(item, fbClient, masterKey);
-
-    if (onSettleOutcome) {
-      await onSettleOutcome(outcome, item);
-    } else {
-      await settleOutcome(db, item, outcome);
-    }
-
-    if (outcome.status === 'published') {
-      succeeded++;
-    } else if (outcome.status === 'retry') {
-      retried++;
-    } else {
-      failed++;
-    }
+  if (claimedItems.length === 0) {
+    return { processed: 0, succeeded: 0, failed: 0, retried: 0 };
   }
+
+  const poolLimit = Math.max(1, Math.min(concurrency, claimedItems.length));
+  let cursor = 0;
+
+  const workers = Array.from({ length: poolLimit }, async () => {
+    while (cursor < claimedItems.length) {
+      const idx = cursor++;
+      const item = claimedItems[idx];
+      const outcome = await dispatchItem(item, fbClient, masterKey);
+
+      if (onSettleOutcome) {
+        await onSettleOutcome(outcome, item);
+      } else {
+        await settleOutcome(db, item, outcome);
+      }
+
+      if (outcome.status === 'published') {
+        succeeded++;
+      } else if (outcome.status === 'retry' || outcome.status === 'queued') {
+        retried++;
+      } else {
+        failed++;
+      }
+    }
+  });
+
+  await Promise.all(workers);
 
   return {
     processed: claimedItems.length,
@@ -417,8 +600,8 @@ export class PublishDispatcher implements IPublishDispatcher {
     private readonly masterKey: string
   ) {}
 
-  async claimDueItems(limit: number = 10): Promise<ClaimedQueueItem[]> {
-    return await claimDueItems(this.db, limit);
+  async claimDueItems(limit: number = 10, maxPerPage: number = 3): Promise<ClaimedQueueItem[]> {
+    return await claimDueItems(this.db, limit, maxPerPage);
   }
 
   async dispatchItem(item: ClaimedQueueItem): Promise<DispatchOutcome> {

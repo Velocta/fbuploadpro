@@ -123,6 +123,83 @@ async function fetchActivePageById(
   return formatPageRow(data);
 }
 
+async function fetchPageQueueCounts(
+  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+  pageId: string,
+  userId: string
+): Promise<{ queued: number; publishing: number; published: number; failed: number }> {
+  const defaultCounts = { queued: 0, publishing: 0, published: 0, failed: 0 };
+  if (!client) return defaultCounts;
+
+  if ('query' in client && typeof client.query === 'function') {
+    try {
+      const rows = (await client.query(
+        `SELECT
+           COUNT(*) FILTER (WHERE status = 'queued') AS queued,
+           COUNT(*) FILTER (WHERE status = 'publishing') AS publishing,
+           COUNT(*) FILTER (WHERE status = 'published') AS published,
+           COUNT(*) FILTER (WHERE status = 'failed') AS failed
+         FROM queue_items
+         WHERE page_id = $1 AND user_id = $2`,
+        [pageId, userId]
+      )) as any[];
+      if (rows && rows[0]) {
+        return {
+          queued: Number(rows[0].queued ?? 0),
+          publishing: Number(rows[0].publishing ?? 0),
+          published: Number(rows[0].published ?? 0),
+          failed: Number(rows[0].failed ?? 0),
+        };
+      }
+    } catch (_err) {
+      // fallback
+    }
+    return defaultCounts;
+  }
+
+  const supabase = ('from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
+  if (!supabase) return defaultCounts;
+
+  try {
+    const { data, error } = await supabase.rpc('get_page_queue_status_counts', {
+      p_page_id: pageId,
+      p_user_id: userId,
+    });
+    if (!error && data && data.length > 0) {
+      return {
+        queued: Number(data[0].queued ?? 0),
+        publishing: Number(data[0].publishing ?? 0),
+        published: Number(data[0].published ?? 0),
+        failed: Number(data[0].failed ?? 0),
+      };
+    }
+  } catch (_e) {
+    // fallback
+  }
+
+  try {
+    const { data: rows } = await supabase
+      .from('queue_items')
+      .select('status')
+      .eq('page_id', pageId)
+      .eq('user_id', userId);
+    if (rows) {
+      const counts = { ...defaultCounts };
+      for (const row of rows) {
+        if (row.status === 'queued') counts.queued++;
+        else if (row.status === 'publishing') counts.publishing++;
+        else if (row.status === 'published') counts.published++;
+        else if (row.status === 'failed') counts.failed++;
+      }
+      return counts;
+    }
+  } catch (_e) {
+    // return defaults
+  }
+
+  return defaultCounts;
+}
+
 export async function handleGetPage(
   request: NextRequest,
   subdomain: string,
@@ -138,12 +215,15 @@ export async function handleGetPage(
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
-  const page = await fetchActivePageById(dbClient, pageId, session.userId, workspaceId);
+  const [page, queueCounts] = await Promise.all([
+    fetchActivePageById(dbClient, pageId, session.userId, workspaceId),
+    fetchPageQueueCounts(dbClient, pageId, session.userId),
+  ]);
   if (!page) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ page });
+  return NextResponse.json({ page, queueCounts });
 }
 
 export async function handleUpdatePage(
@@ -183,7 +263,10 @@ export async function handleUpdatePage(
     if (parsed.data.status) {
       await dbClient.query(
         `UPDATE facebook_pages
-         SET status = $1, updated_at = now()
+         SET status = $1,
+             rate_limited_at = CASE WHEN $1 = 'active' THEN NULL ELSE rate_limited_at END,
+             next_allowed_publish_at = CASE WHEN $1 = 'active' THEN NULL ELSE next_allowed_publish_at END,
+             updated_at = now()
          WHERE id = $2 AND user_id = $3 AND workspace_id = $4 AND status != 'disconnected'`,
         [parsed.data.status, pageId, session.userId, workspaceId]
       );
@@ -194,9 +277,17 @@ export async function handleUpdatePage(
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
     if (parsed.data.status) {
+      const updates: Record<string, any> = {
+        status: parsed.data.status,
+        updated_at: new Date().toISOString(),
+      };
+      if (parsed.data.status === 'active') {
+        updates.rate_limited_at = null;
+        updates.next_allowed_publish_at = null;
+      }
       await supabase
         .from('facebook_pages')
-        .update({ status: parsed.data.status, updated_at: new Date().toISOString() })
+        .update(updates)
         .eq('id', pageId)
         .eq('user_id', session.userId)
         .eq('workspace_id', workspaceId)

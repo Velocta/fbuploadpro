@@ -256,7 +256,7 @@ export default function TenantDedicatedPageView({
   };
 
   // Add Slot Handler
-  const handleAddSlot = async (slotData: { slotTime: string; timezone: string }) => {
+  const handleAddSlot = async (slotData: { slotTime: string; timezone: string; allowedFormats?: string[] }) => {
     const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}/slots`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -264,6 +264,7 @@ export default function TenantDedicatedPageView({
         pageId,
         slotTime: slotData.slotTime,
         timezone: slotData.timezone,
+        allowedFormats: slotData.allowedFormats,
       }),
     });
     if (!res.ok) {

@@ -18,7 +18,7 @@ export interface PageTabCalendarProps {
   page: FacebookPageItem;
   slots: PageSlotSummary[];
   isLoading?: boolean;
-  onAddSlot: (data: { slotTime: string; timezone: string }) => Promise<void>;
+  onAddSlot: (data: { slotTime: string; timezone: string; allowedFormats?: string[] }) => Promise<void>;
   onToggleSlot: (slotId: string, isActive: boolean) => Promise<void>;
   onDeleteSlot: (slotId: string) => Promise<void>;
 }
@@ -55,6 +55,13 @@ export function PageTabCalendar({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [slotTimeInput, setSlotTimeInput] = useState('09:00');
   const [timezoneInput, setTimezoneInput] = useState('UTC');
+  const [allowedFormatsInput, setAllowedFormatsInput] = useState<string[]>([
+    'text',
+    'image',
+    'reel',
+    'video',
+    'story',
+  ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -67,6 +74,7 @@ export function PageTabCalendar({
   const handleOpenAddModal = () => {
     setSlotTimeInput('09:00');
     setTimezoneInput('UTC');
+    setAllowedFormatsInput(['text', 'image', 'reel', 'video', 'story']);
     setFormError(null);
     setIsAddModalOpen(true);
   };
@@ -87,6 +95,7 @@ export function PageTabCalendar({
       await onAddSlot({
         slotTime: slotTimeInput,
         timezone: timezoneInput,
+        allowedFormats: allowedFormatsInput,
       });
       setIsAddModalOpen(false);
     } catch (err: any) {
@@ -321,6 +330,37 @@ export function PageTabCalendar({
                     >
                       {slot.timezone} {slot.isActive ? '• Active' : '• Paused'}
                     </div>
+                    {slot.allowedFormats && slot.allowedFormats.length > 0 && (
+                      <div
+                        data-testid={`slot-format-chips-${slot.id}`}
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '4px',
+                          marginTop: '6px',
+                        }}
+                      >
+                        {slot.allowedFormats.map((fmt) => (
+                          <span
+                            key={fmt}
+                            data-testid={`slot-format-chip-${slot.id}-${fmt}`}
+                            style={{
+                              fontSize: '0.625rem',
+                              fontWeight: TYPOGRAPHY.weights.semibold,
+                              padding: '2px 5px',
+                              borderRadius: RADII.xs,
+                              backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.04em',
+                            }}
+                          >
+                            {fmt}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -607,6 +647,68 @@ export function PageTabCalendar({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Allowed Content Formats */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+                <label
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  }}
+                >
+                  Allowed Content Formats
+                </label>
+                <div
+                  data-testid="slot-allowed-formats-selector"
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs }}
+                >
+                  {(['text', 'image', 'reel', 'video', 'story'] as const).map((fmt) => {
+                    const isSelected = allowedFormatsInput.includes(fmt);
+                    return (
+                      <button
+                        key={fmt}
+                        type="button"
+                        data-testid={`slot-format-chip-${fmt}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            if (allowedFormatsInput.length > 1) {
+                              setAllowedFormatsInput(allowedFormatsInput.filter((f) => f !== fmt));
+                            }
+                          } else {
+                            setAllowedFormatsInput([...allowedFormatsInput, fmt]);
+                          }
+                        }}
+                        style={{
+                          padding: `${SPACING.xs} ${SPACING.sm}`,
+                          borderRadius: RADII.xs,
+                          fontSize: '0.75rem',
+                          fontWeight: TYPOGRAPHY.weights.medium,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.03em',
+                          cursor: 'pointer',
+                          backgroundColor: isSelected
+                            ? 'rgba(14, 165, 233, 0.15)'
+                            : `var(--bg-active, ${THEME.default.surfaces.active})`,
+                          borderColor: isSelected
+                            ? PALETTE.primary
+                            : `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                          borderStyle: 'solid',
+                          borderWidth: '1px',
+                          color: isSelected
+                            ? PALETTE.primary
+                            : `var(--text-sub, ${THEME.default.text.secondary})`,
+                        }}
+                      >
+                        {fmt}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span style={{ fontSize: '0.75rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+                  Queued posts matching any of these formats can fill this slot.
+                </span>
               </div>
 
               {/* Modal Actions */}

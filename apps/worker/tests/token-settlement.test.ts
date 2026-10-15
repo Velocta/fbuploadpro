@@ -367,5 +367,46 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
         })
       ).rejects.toThrow('Failed to fetch current queue_item retry_count: Fetch error');
     });
+
+    it('cascades targetAccountStatus: expired to facebook_accounts table in Supabase client', async () => {
+      const updatedTables: Record<string, any> = {};
+
+      const mockSupabase = {
+        rpc: vi.fn().mockResolvedValue({ error: null }),
+        from: vi.fn((table: string) => {
+          return {
+            update: vi.fn().mockImplementation((data: any) => {
+              updatedTables[table] = data;
+              return {
+                eq: vi.fn().mockResolvedValue({ error: null }),
+              };
+            }),
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: { facebook_account_id: 'acc-uuid-999' },
+                  error: null,
+                }),
+              }),
+            }),
+          };
+        }),
+      };
+
+      const outcome: DispatchOutcome = {
+        queueItemId: sampleItem.id,
+        status: 'failed',
+        errorMessage: 'OAuth token expired',
+        targetAccountStatus: 'expired',
+        pageCooldownSeconds: 600,
+      };
+
+      await settleOutcome(mockSupabase as any, sampleItem, outcome);
+
+      expect(updatedTables.facebook_accounts).toBeDefined();
+      expect(updatedTables.facebook_accounts.status).toBe('expired');
+      expect(updatedTables.facebook_pages).toBeDefined();
+      expect(updatedTables.facebook_pages.next_allowed_publish_at).toBeDefined();
+    });
   });
 });

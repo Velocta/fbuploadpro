@@ -1,14 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 import { FacebookPublishClient, type IFacebookPublishClient } from './fb-client.js';
-import { runDispatchCycle, type DispatcherDbClient } from './dispatcher.js';
+import {
+  runDispatchCycle,
+  claimDueItems,
+  dispatchItem,
+  type DispatcherDbClient,
+} from './dispatcher.js';
+import { settleOutcome } from './settlement.js';
+import type { ClaimedQueueItem } from '@fbuploadpro/contracts';
 
 export interface Env {
   ENVIRONMENT?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
+  MASTER_ENCRYPTION_KEY?: string;
   FB_GRAPH_API_URL?: string;
   SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
+  DATABASE_URL?: string;
+  DISPATCH_BATCH_SIZE?: string;
+  DISPATCH_MAX_BATCHES_PER_TICK?: string;
+  DISPATCH_CONCURRENCY?: string;
+  PUBLISH_QUEUE?: {
+    sendBatch(messages: Array<{ body: ClaimedQueueItem }>): Promise<void>;
+  };
 }
 
 export * from './fb-client.js';
@@ -25,15 +40,26 @@ export interface ScheduledOptions {
   insightsFetchImpl?: typeof fetch;
 }
 
+export interface QueueMessage {
+  body: ClaimedQueueItem;
+  ack(): void;
+  retry(): void;
+}
+
+export interface QueueBatch {
+  messages: QueueMessage[];
+  queue: string;
+}
+
 export async function handleScheduled(
   controller: ScheduledController,
   env: Env,
   _ctx?: ExecutionContext,
   options?: ScheduledOptions
 ): Promise<void> {
-  const masterKey = env.FB_ENCRYPTION_MASTER_KEY;
+  const masterKey = env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
   if (!masterKey) {
-    console.warn('[Scheduled] FB_ENCRYPTION_MASTER_KEY is not configured; skipping cycle');
+    console.warn('[Scheduled] Encryption master key is not configured; skipping cycle');
     return;
   }
 
@@ -61,14 +87,45 @@ export async function handleScheduled(
     );
 
   try {
-    await runDispatchCycle({
-      db,
-      fbClient,
-      masterKey,
-      limit: options?.limit ?? 10,
-    });
+    // 1. Every 5 minutes, recover items stuck in 'publishing' status
+    const currentMinute = new Date().getMinutes();
+    if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
+      try {
+        await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
+      } catch {
+        // Non-blocking in environments where recover RPC is not mocked
+      }
+    }
 
-    // Run Daily Page Insights Snapshot Sync if explicitly requested or on daily schedule
+    // 2. High-Throughput Producer vs Direct Runner
+    if (env.PUBLISH_QUEUE && typeof env.PUBLISH_QUEUE.sendBatch === 'function') {
+      const maxBatches = Number(env.DISPATCH_MAX_BATCHES_PER_TICK || 5);
+      const batchSize = Number(env.DISPATCH_BATCH_SIZE || 500);
+
+      for (let b = 0; b < maxBatches; b++) {
+        const claimed = await claimDueItems(db, batchSize);
+        if (claimed.length === 0) break;
+
+        // Fan out claimed items to queue in slices of 100
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
+          const slice = claimed.slice(i, i + CHUNK_SIZE);
+          await env.PUBLISH_QUEUE.sendBatch(slice.map((body) => ({ body })));
+        }
+      }
+    } else {
+      // Direct execution for tests and local development
+      const concurrency = Number(env.DISPATCH_CONCURRENCY || 25);
+      await runDispatchCycle({
+        db,
+        fbClient,
+        masterKey,
+        limit: options?.limit ?? 10,
+        concurrency,
+      });
+    }
+
+    // 3. Daily Page Insights Snapshot Sync
     const isDailyInsightsCron = controller.cron === '0 2 * * *' || controller.cron === '0 0 * * *';
     if (options?.syncInsights || isDailyInsightsCron) {
       await syncDailyPageInsights({
@@ -79,8 +136,48 @@ export async function handleScheduled(
       });
     }
   } finally {
-    // No-op cleanup for stateless HTTPS Supabase client
+    // Stateless cleanup
   }
+}
+
+export async function handleQueueBatch(
+  batch: QueueBatch,
+  env: Env,
+  _ctx?: ExecutionContext
+): Promise<void> {
+  const masterKey = env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
+  if (!masterKey) {
+    console.error('[QueueConsumer] Encryption master key is missing');
+    return;
+  }
+
+  const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('[QueueConsumer] Supabase credentials missing');
+    return;
+  }
+
+  const db = createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  }) as any;
+
+  const fbClient = new FacebookPublishClient(
+    env.FB_GRAPH_API_URL ? { baseUrl: env.FB_GRAPH_API_URL } : undefined
+  );
+
+  await Promise.allSettled(
+    batch.messages.map(async (msg) => {
+      try {
+        const outcome = await dispatchItem(msg.body, fbClient, masterKey);
+        await settleOutcome(db, msg.body, outcome);
+        msg.ack();
+      } catch (err) {
+        console.error(`[QueueConsumer] Failed processing item ${msg.body.id}:`, err);
+        msg.retry();
+      }
+    })
+  );
 }
 
 export default {
@@ -121,5 +218,13 @@ export default {
     ctx: ExecutionContext
   ): Promise<void> {
     await handleScheduled(controller, env, ctx);
+  },
+
+  async queue(
+    batch: QueueBatch,
+    env: Env,
+    ctx: ExecutionContext
+  ): Promise<void> {
+    await handleQueueBatch(batch, env, ctx);
   },
 };

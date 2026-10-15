@@ -436,4 +436,137 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
       expect(data.items[0].media.durationSeconds).toBe(29.5);
     });
   });
+
+  describe('Multi-Format Enqueueing (Spec 042)', () => {
+    it('enqueues a text post with mediaId: null, non-empty caption, and linkUrl', async () => {
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM facebook_pages')) {
+            return Promise.resolve([{ id: pageId, status: 'active' }]);
+          }
+          if (sql.includes('INSERT INTO queue_items')) {
+            return Promise.resolve([
+              {
+                id: 'queue-text-1',
+                user_id: userId,
+                fb_page_id: pageId,
+                slot_id: null,
+                media_id: null,
+                post_format: 'text',
+                link_url: 'https://example.com/blog',
+                caption: 'Exciting product update!',
+                first_comment: 'Check the link in post',
+                scheduled_time: new Date('2026-10-16T12:00:00Z'),
+                status: 'queued',
+                retry_count: 0,
+                max_retries: 3,
+                fb_post_id: null,
+                fb_comment_id: null,
+                published_at: null,
+                created_at: new Date('2026-10-16T10:00:00Z'),
+                updated_at: new Date('2026-10-16T10:00:00Z'),
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/publishing/queue', {
+        method: 'POST',
+        headers: {
+          cookie: validSessionCookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          pageId,
+          mediaId: null,
+          postFormat: 'text',
+          caption: 'Exciting product update!',
+          linkUrl: 'https://example.com/blog',
+          firstComment: 'Check the link in post',
+          scheduledTime: '2026-10-16T12:00:00Z',
+        }),
+      });
+
+      const res = await handleEnqueueMedia(req, 'acme', mockDb as DatabaseClient);
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.postFormat).toBe('text');
+      expect(data.linkUrl).toBe('https://example.com/blog');
+      expect(data.mediaId).toBeNull();
+    });
+
+    it('enqueues a story post and forces firstComment to null', async () => {
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('FROM facebook_pages')) {
+            return Promise.resolve([{ id: pageId, status: 'active' }]);
+          }
+          if (sql.includes('FROM media_items')) {
+            return Promise.resolve([
+              {
+                id: mediaId,
+                media_type: 'image',
+                file_size: 2 * 1024 * 1024,
+              },
+            ]);
+          }
+          if (sql.includes('INSERT INTO queue_items')) {
+            return Promise.resolve([
+              {
+                id: 'queue-story-1',
+                user_id: userId,
+                fb_page_id: pageId,
+                slot_id: null,
+                media_id: mediaId,
+                post_format: 'story',
+                link_url: null,
+                caption: 'Morning Story',
+                first_comment: null,
+                scheduled_time: new Date('2026-10-16T12:00:00Z'),
+                status: 'queued',
+                retry_count: 0,
+                max_retries: 3,
+                fb_post_id: null,
+                fb_comment_id: null,
+                published_at: null,
+                created_at: new Date('2026-10-16T10:00:00Z'),
+                updated_at: new Date('2026-10-16T10:00:00Z'),
+              },
+            ]);
+          }
+          return Promise.resolve([]);
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/publishing/queue', {
+        method: 'POST',
+        headers: {
+          cookie: validSessionCookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          pageId,
+          mediaId,
+          postFormat: 'story',
+          caption: 'Morning Story',
+          firstComment: null,
+          scheduledTime: '2026-10-16T12:00:00Z',
+        }),
+      });
+
+      const res = await handleEnqueueMedia(req, 'acme', mockDb as DatabaseClient);
+      expect(res.status).toBe(201);
+      const data = await res.json();
+      expect(data.postFormat).toBe('story');
+      expect(data.firstComment).toBeNull();
+    });
+  });
 });

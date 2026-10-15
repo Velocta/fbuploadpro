@@ -338,6 +338,23 @@ export async function handleUpdateFolder(
   }
 }
 
+async function batchDeleteStorageKeys(
+  storage: { deleteObject: (key: string) => Promise<any> },
+  keys: string[],
+  batchSize = 50
+): Promise<void> {
+  for (let i = 0; i < keys.length; i += batchSize) {
+    const chunk = keys.slice(i, i + batchSize);
+    await Promise.allSettled(
+      chunk.map((key) =>
+        storage.deleteObject(key).catch((err) => {
+          console.error(`Failed to delete storage key ${key}:`, err);
+        })
+      )
+    );
+  }
+}
+
 export async function handleDeleteFolder(
   request: NextRequest,
   subdomain: string,
@@ -404,18 +421,12 @@ export async function handleDeleteFolder(
       [session.userId, folderIds]
     )) as any[]) ?? [];
 
-    // 4. Purge R2 objects for all contained media items
+    // 4. Purge R2 objects for all contained media items in bounded batches of 50
     const keysToDelete = mediaRows
       .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
       .filter((k): k is string => Boolean(k));
 
-    await Promise.all(
-      keysToDelete.map((key) =>
-        storage.deleteObject(key).catch((err) => {
-          console.error(`Failed to delete storage key ${key}:`, err);
-        })
-      )
-    );
+    await batchDeleteStorageKeys(storage, keysToDelete, 50);
 
     // 5. Delete media items and folder subtree in PostgreSQL
     await dbClient.query(
@@ -488,13 +499,7 @@ export async function handleDeleteFolder(
     .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
     .filter((k): k is string => Boolean(k));
 
-  await Promise.all(
-    keysToDelete.map((key) =>
-      storage.deleteObject(key).catch((err) => {
-        console.error(`Failed to delete storage key ${key}:`, err);
-      })
-    )
-  );
+  await batchDeleteStorageKeys(storage, keysToDelete, 50);
 
   await supabase
     .from('media_items')

@@ -57,7 +57,7 @@ export async function handleListQueueSlots(
 
     // 2. Fetch slots for this page and user
     slotRows = (await dbClient.query(
-      `SELECT id, user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at
+      `SELECT id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at
        FROM page_queue_slots
        WHERE fb_page_id = $1 AND user_id = $2
        ORDER BY slot_time ASC`,
@@ -83,7 +83,7 @@ export async function handleListQueueSlots(
 
     const { data: slotsData, error: slotsErr } = await supabase
       .from('page_queue_slots')
-      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at')
+      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at')
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
       .order('slot_time', { ascending: true });
@@ -101,6 +101,7 @@ export async function handleListQueueSlots(
     slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
     timezone: row.timezone,
     isActive: Boolean(row.is_active),
+    allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }));
@@ -179,11 +180,12 @@ export async function handleCreateQueueSlot(
 
     // 2. Insert slot
     try {
+      const allowedFormats = parsed.data.allowedFormats ?? ['text', 'image', 'reel', 'video', 'story'];
       const rows = (await dbClient.query(
-        `INSERT INTO page_queue_slots (user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, true, now(), now())
-         RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at`,
-        [session.userId, pageId, parsed.data.slotTime, parsed.data.timezone ?? 'UTC']
+        `INSERT INTO page_queue_slots (user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, true, $5, now(), now())
+         RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at`,
+        [session.userId, pageId, parsed.data.slotTime, parsed.data.timezone ?? 'UTC', allowedFormats]
       )) as any[];
 
       const row = rows[0];
@@ -194,6 +196,7 @@ export async function handleCreateQueueSlot(
         slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
         timezone: row.timezone,
         isActive: Boolean(row.is_active),
+        allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : allowedFormats,
         createdAt: new Date(row.created_at).toISOString(),
         updatedAt: new Date(row.updated_at).toISOString(),
       });
@@ -232,6 +235,7 @@ export async function handleCreateQueueSlot(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
 
+    const allowedFormats = parsed.data.allowedFormats ?? ['text', 'image', 'reel', 'video', 'story'];
     const { data: inserted, error: insertErr } = await supabase
       .from('page_queue_slots')
       .insert({
@@ -240,8 +244,9 @@ export async function handleCreateQueueSlot(
         slot_time: parsed.data.slotTime,
         timezone: parsed.data.timezone ?? 'UTC',
         is_active: true,
+        allowed_formats: allowedFormats,
       })
-      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at')
+      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at')
       .single();
 
     if (insertErr) {
@@ -267,6 +272,7 @@ export async function handleCreateQueueSlot(
       slotTime: typeof inserted.slot_time === 'string' ? inserted.slot_time : String(inserted.slot_time),
       timezone: inserted.timezone,
       isActive: Boolean(inserted.is_active),
+      allowedFormats: Array.isArray(inserted.allowed_formats) ? inserted.allowed_formats : allowedFormats,
       createdAt: new Date(inserted.created_at).toISOString(),
       updatedAt: new Date(inserted.updated_at).toISOString(),
     });

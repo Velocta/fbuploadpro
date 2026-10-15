@@ -793,6 +793,58 @@ export function MediaLibraryExplorer({
   const handleStartUploadBatch = async (entries: QueuedUploadEntry[]) => {
     if (entries.length === 0) return;
 
+    if (subdomain && !hasInitialData) {
+      try {
+        const payload = {
+          folderId: currentFolderId ?? null,
+          items: entries.map((e) => ({
+            name: e.file.name,
+            fileSize: e.file.size,
+          })),
+        };
+        const checkRes = await fetch(
+          `/api/tenant/${subdomain}/media/check-duplicates`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }
+        );
+        if (checkRes.ok) {
+          const checkData = (await checkRes.json()) as {
+            duplicates: Array<{ name: string; fileSize: number; existingMediaId: string }>;
+          };
+          if (checkData.duplicates && checkData.duplicates.length > 0) {
+            const dupSet = new Set(
+              checkData.duplicates.map((d) => `${d.name.toLowerCase()}|${d.fileSize}`)
+            );
+            const duplicates: QueuedUploadEntry[] = [];
+            const uniqueEntries: QueuedUploadEntry[] = [];
+            for (const entry of entries) {
+              const key = `${entry.file.name.toLowerCase()}|${entry.file.size}`;
+              if (dupSet.has(key)) {
+                duplicates.push(entry);
+              } else {
+                uniqueEntries.push(entry);
+              }
+            }
+            if (duplicates.length > 0) {
+              setPendingDuplicateUpload({
+                allEntries: entries,
+                uniqueEntries,
+                duplicates,
+              });
+              return;
+            }
+          }
+          await runUploadBatch(entries, 0);
+          return;
+        }
+      } catch (_err) {
+        // Fallback to client-side detectDuplicateUploadEntries
+      }
+    }
+
     const detection = detectDuplicateUploadEntries(
       entries,
       mediaItems,

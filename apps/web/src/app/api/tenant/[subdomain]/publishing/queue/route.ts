@@ -6,8 +6,10 @@ import {
   ListQueueItemsQuerySchema,
   ListQueueItemsResponseSchema,
   QueueItemSchema,
+  validatePostFormatEligibility,
   verifySessionToken,
   type DatabaseClient,
+  type PostFormat,
 } from '@fbuploadpro/contracts';
 import { calculateNextVacantSlot } from '../../../../../../lib/slot-scheduler';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
@@ -59,8 +61,16 @@ export async function handleEnqueueMedia(
     );
   }
 
-  const { pageId, mediaId, slotId: requestedSlotId, scheduledTime: requestedScheduledTime, caption, firstComment } =
-    parsed.data;
+  const {
+    pageId,
+    mediaId,
+    slotId: requestedSlotId,
+    scheduledTime: requestedScheduledTime,
+    caption,
+    firstComment,
+    postFormat: requestedFormat,
+    linkUrl,
+  } = parsed.data;
 
   const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
@@ -78,19 +88,51 @@ export async function handleEnqueueMedia(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
 
-    // 6. Verify media item exists and belongs to user
-    const mediaRows = (await dbClient.query(
-      `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds
-       FROM media_items
-       WHERE id = $1 AND user_id = $2`,
-      [mediaId, session.userId]
-    )) as any[];
+    let finalPostFormat: PostFormat;
+    let mediaRecord: any = null;
 
-    if (!mediaRows || mediaRows.length === 0) {
-      return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+    if (requestedFormat === 'text' || (!mediaId && !requestedFormat)) {
+      finalPostFormat = 'text';
+      if (!caption || caption.trim().length === 0) {
+        return NextResponse.json(
+          { error: 'INVALID_REQUEST', message: 'Caption is required for text posts' },
+          { status: 400 }
+        );
+      }
+    } else if (mediaId) {
+      const mediaRows = (await dbClient.query(
+        `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds, width, height
+         FROM media_items
+         WHERE id = $1 AND user_id = $2`,
+        [mediaId, session.userId]
+      )) as any[];
+
+      if (!mediaRows || mediaRows.length === 0) {
+        return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+      }
+
+      mediaRecord = mediaRows[0];
+      finalPostFormat = requestedFormat ?? (mediaRecord.media_type === 'video' ? 'video' : 'image');
+      const validation = validatePostFormatEligibility(finalPostFormat, mediaRecord);
+      if (!validation.eligible) {
+        return NextResponse.json(
+          { error: 'INVALID_FORMAT', message: validation.reasons.join(', ') },
+          { status: 400 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: 'INVALID_REQUEST', message: 'mediaId is required for non-text posts' },
+        { status: 400 }
+      );
     }
 
-    const mediaRecord = mediaRows[0];
+    if (finalPostFormat === 'story' && firstComment && firstComment.trim().length > 0) {
+      return NextResponse.json(
+        { error: 'INVALID_REQUEST', message: 'First comment is not supported for story posts' },
+        { status: 400 }
+      );
+    }
 
     // 7. Resolve slot and scheduledTime
     let finalSlotId: string | null = null;
@@ -98,7 +140,7 @@ export async function handleEnqueueMedia(
 
     if (requestedSlotId) {
       const slotRows = (await dbClient.query(
-        `SELECT id, slot_time, timezone, is_active
+        `SELECT id, slot_time, timezone, is_active, allowed_formats
          FROM page_queue_slots
          WHERE id = $1 AND fb_page_id = $2 AND user_id = $3`,
         [requestedSlotId, pageId, session.userId]
@@ -132,12 +174,14 @@ export async function handleEnqueueMedia(
                   : String(slot.slot_time),
               timezone: slot.timezone,
               isActive: Boolean(slot.is_active),
+              allowedFormats: slot.allowed_formats ?? null,
             },
           ],
           existingScheduledTimes: (existingQueued || []).map(
             (q: any) => new Date(q.scheduled_time)
           ),
           now: new Date(),
+          postFormat: finalPostFormat,
         });
 
         if (!computed) {
@@ -155,7 +199,7 @@ export async function handleEnqueueMedia(
       finalScheduledTime = new Date(requestedScheduledTime).toISOString();
     } else {
       const activeSlots = (await dbClient.query(
-        `SELECT id, slot_time, timezone, is_active
+        `SELECT id, slot_time, timezone, is_active, allowed_formats
          FROM page_queue_slots
          WHERE fb_page_id = $1 AND user_id = $2 AND is_active = true
          ORDER BY slot_time ASC`,
@@ -185,11 +229,13 @@ export async function handleEnqueueMedia(
             typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
           timezone: s.timezone,
           isActive: Boolean(s.is_active),
+          allowedFormats: s.allowed_formats ?? null,
         })),
         existingScheduledTimes: (existingQueued || []).map(
           (q: any) => new Date(q.scheduled_time)
         ),
         now: new Date(),
+        postFormat: finalPostFormat,
       });
 
       if (!computed) {
@@ -212,19 +258,23 @@ export async function handleEnqueueMedia(
          fb_page_id,
          slot_id,
          media_id,
+         post_format,
+         link_url,
          scheduled_time,
          caption,
          first_comment,
          status,
          retry_count,
          max_retries
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', 0, 3)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'queued', 0, 3)
        RETURNING
          id,
          user_id,
          fb_page_id,
          slot_id,
          media_id,
+         post_format,
+         link_url,
          scheduled_time,
          caption,
          first_comment,
@@ -240,7 +290,9 @@ export async function handleEnqueueMedia(
         session.userId,
         pageId,
         finalSlotId,
-        mediaId,
+        mediaId ?? null,
+        finalPostFormat,
+        linkUrl ?? null,
         finalScheduledTime,
         caption ?? '',
         firstComment ?? null,
@@ -254,7 +306,9 @@ export async function handleEnqueueMedia(
       userId: createdRow.user_id,
       pageId: createdRow.fb_page_id,
       slotId: createdRow.slot_id ?? null,
-      mediaId: createdRow.media_id,
+      mediaId: createdRow.media_id ?? null,
+      postFormat: (createdRow.post_format as PostFormat) ?? finalPostFormat,
+      linkUrl: createdRow.link_url ?? linkUrl ?? null,
       scheduledTime: new Date(createdRow.scheduled_time).toISOString(),
       caption: createdRow.caption ?? '',
       firstComment: createdRow.first_comment ?? null,
@@ -268,17 +322,21 @@ export async function handleEnqueueMedia(
         : null,
       createdAt: new Date(createdRow.created_at).toISOString(),
       updatedAt: new Date(createdRow.updated_at).toISOString(),
-      media: {
-        name: mediaRecord.name,
-        mediaType: mediaRecord.media_type,
-        url: mediaRecord.url,
-        thumbnailUrl: mediaRecord.thumbnail_url ?? null,
-        aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
-        durationSeconds:
-          mediaRecord.duration_seconds != null
-            ? Number(mediaRecord.duration_seconds)
-            : null,
-      },
+      ...(mediaRecord
+        ? {
+            media: {
+              name: mediaRecord.name,
+              mediaType: mediaRecord.media_type,
+              url: mediaRecord.url,
+              thumbnailUrl: mediaRecord.thumbnail_url ?? null,
+              aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
+              durationSeconds:
+                mediaRecord.duration_seconds != null
+                  ? Number(mediaRecord.duration_seconds)
+                  : null,
+            },
+          }
+        : {}),
     };
 
     const validated = QueueItemSchema.parse(queueItem);
@@ -303,16 +361,50 @@ export async function handleEnqueueMedia(
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
 
-  // 6. Verify media item exists and belongs to user
-  const { data: mediaRecord } = await supabase
-    .from('media_items')
-    .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds')
-    .eq('id', mediaId)
-    .eq('user_id', session.userId)
-    .maybeSingle();
+  let finalPostFormat: PostFormat;
+  let mediaRecord: any = null;
 
-  if (!mediaRecord) {
-    return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+  if (requestedFormat === 'text' || (!mediaId && !requestedFormat)) {
+    finalPostFormat = 'text';
+    if (!caption || caption.trim().length === 0) {
+      return NextResponse.json(
+        { error: 'INVALID_REQUEST', message: 'Caption is required for text posts' },
+        { status: 400 }
+      );
+    }
+  } else if (mediaId) {
+    const { data: mediaData } = await supabase
+      .from('media_items')
+      .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds, width, height')
+      .eq('id', mediaId)
+      .eq('user_id', session.userId)
+      .maybeSingle();
+
+    if (!mediaData) {
+      return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+    }
+
+    mediaRecord = mediaData;
+    finalPostFormat = requestedFormat ?? (mediaRecord.media_type === 'video' ? 'video' : 'image');
+    const validation = validatePostFormatEligibility(finalPostFormat, mediaRecord);
+    if (!validation.eligible) {
+      return NextResponse.json(
+        { error: 'INVALID_FORMAT', message: validation.reasons.join(', ') },
+        { status: 400 }
+      );
+    }
+  } else {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'mediaId is required for non-text posts' },
+      { status: 400 }
+    );
+  }
+
+  if (finalPostFormat === 'story' && firstComment && firstComment.trim().length > 0) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'First comment is not supported for story posts' },
+      { status: 400 }
+    );
   }
 
   // 7. Resolve slot and scheduledTime
@@ -322,7 +414,7 @@ export async function handleEnqueueMedia(
   if (requestedSlotId) {
     const { data: slot } = await supabase
       .from('page_queue_slots')
-      .select('id, slot_time, timezone, is_active')
+      .select('id, slot_time, timezone, is_active, allowed_formats')
       .eq('id', requestedSlotId)
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
@@ -357,12 +449,14 @@ export async function handleEnqueueMedia(
                 : String(slot.slot_time),
             timezone: slot.timezone,
             isActive: Boolean(slot.is_active),
+            allowedFormats: (slot as any).allowed_formats ?? null,
           },
         ],
         existingScheduledTimes: (existingQueued || []).map(
           (q: any) => new Date(q.scheduled_time)
         ),
         now: new Date(),
+        postFormat: finalPostFormat,
       });
 
       if (!computed) {
@@ -381,7 +475,7 @@ export async function handleEnqueueMedia(
   } else {
     const { data: activeSlots } = await supabase
       .from('page_queue_slots')
-      .select('id, slot_time, timezone, is_active')
+      .select('id, slot_time, timezone, is_active, allowed_formats')
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
       .eq('is_active', true)
@@ -412,11 +506,13 @@ export async function handleEnqueueMedia(
           typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
         timezone: s.timezone,
         isActive: Boolean(s.is_active),
+        allowedFormats: s.allowed_formats ?? null,
       })),
       existingScheduledTimes: (existingQueued || []).map(
         (q: any) => new Date(q.scheduled_time)
       ),
       now: new Date(),
+      postFormat: finalPostFormat,
     });
 
     if (!computed) {
@@ -440,7 +536,9 @@ export async function handleEnqueueMedia(
       user_id: session.userId,
       fb_page_id: pageId,
       slot_id: finalSlotId,
-      media_id: mediaId,
+      media_id: mediaId ?? null,
+      post_format: finalPostFormat,
+      link_url: linkUrl ?? null,
       scheduled_time: finalScheduledTime,
       caption: caption ?? '',
       first_comment: firstComment ?? null,
@@ -460,7 +558,9 @@ export async function handleEnqueueMedia(
     userId: createdRow.user_id,
     pageId: createdRow.fb_page_id,
     slotId: createdRow.slot_id ?? null,
-    mediaId: createdRow.media_id,
+    mediaId: createdRow.media_id ?? null,
+    postFormat: (createdRow.post_format as PostFormat) ?? finalPostFormat,
+    linkUrl: createdRow.link_url ?? linkUrl ?? null,
     scheduledTime: new Date(createdRow.scheduled_time).toISOString(),
     caption: createdRow.caption ?? '',
     firstComment: createdRow.first_comment ?? null,
@@ -474,17 +574,21 @@ export async function handleEnqueueMedia(
       : null,
     createdAt: new Date(createdRow.created_at).toISOString(),
     updatedAt: new Date(createdRow.updated_at).toISOString(),
-    media: {
-      name: mediaRecord.name,
-      mediaType: mediaRecord.media_type,
-      url: mediaRecord.url,
-      thumbnailUrl: mediaRecord.thumbnail_url ?? null,
-      aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
-      durationSeconds:
-        mediaRecord.duration_seconds != null
-          ? Number(mediaRecord.duration_seconds)
-          : null,
-    },
+    ...(mediaRecord
+      ? {
+          media: {
+            name: mediaRecord.name,
+            mediaType: mediaRecord.media_type,
+            url: mediaRecord.url,
+            thumbnailUrl: mediaRecord.thumbnail_url ?? null,
+            aspectRatio: mediaRecord.aspect_ratio ?? 'unknown',
+            durationSeconds:
+              mediaRecord.duration_seconds != null
+                ? Number(mediaRecord.duration_seconds)
+                : null,
+          },
+        }
+      : {}),
   };
 
   const validated = QueueItemSchema.parse(queueItem);
@@ -576,6 +680,8 @@ export async function handleListQueueItems(
         qi.fb_page_id,
         qi.slot_id,
         qi.media_id,
+        qi.post_format,
+        qi.link_url,
         qi.scheduled_time,
         qi.caption,
         qi.first_comment,
@@ -607,7 +713,9 @@ export async function handleListQueueItems(
       userId: row.user_id,
       pageId: row.fb_page_id,
       slotId: row.slot_id ?? null,
-      mediaId: row.media_id,
+      mediaId: row.media_id ?? null,
+      postFormat: (row.post_format as PostFormat) ?? (row.media_type === 'video' ? 'video' : 'image'),
+      linkUrl: row.link_url ?? null,
       scheduledTime: new Date(row.scheduled_time).toISOString(),
       caption: row.caption ?? '',
       firstComment: row.first_comment ?? null,
@@ -666,7 +774,7 @@ export async function handleListQueueItems(
   let queryBuilder = supabase
     .from('queue_items')
     .select(
-      'id, user_id, fb_page_id, slot_id, media_id, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at, media:media_items(name, media_type, thumbnail_url, url, aspect_ratio, duration_seconds)',
+      'id, user_id, fb_page_id, slot_id, media_id, post_format, link_url, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at, media:media_items(name, media_type, thumbnail_url, url, aspect_ratio, duration_seconds)',
       { count: 'exact' }
     )
     .eq('user_id', session.userId)
@@ -697,7 +805,9 @@ export async function handleListQueueItems(
       userId: row.user_id,
       pageId: row.fb_page_id,
       slotId: row.slot_id ?? null,
-      mediaId: row.media_id,
+      mediaId: row.media_id ?? null,
+      postFormat: (row.post_format as PostFormat) ?? (m?.media_type === 'video' ? 'video' : 'image'),
+      linkUrl: row.link_url ?? null,
       scheduledTime: new Date(row.scheduled_time).toISOString(),
       caption: row.caption ?? '',
       firstComment: row.first_comment ?? null,

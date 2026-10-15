@@ -1,8 +1,8 @@
 <!--
 Sync Impact Report:
-- Version change: 2.31.0 -> 2.32.0 (MINOR: Codified 100% strict per-workspace Facebook BYOC, global user media library across workspaces, and workspace-scoped social resources)
+- Version change: 2.32.0 -> 2.33.0 (MINOR: Codified Spec 042 Multi-Format 200k/day publishing engine, keyset cursor pagination, pre-upload duplicate detection, dedicated page workspace and hybrid insights architecture)
 - List of modified principles:
-  - Principle 27 (Multi-Workspace Architecture, Dedicated Settings Hub Layout, and Strict Workspace-Scoped BYOC Facebook App Credentials): Codified that Facebook (and future Instagram) strictly uses per-workspace BYOC credentials with zero platform process.env fallbacks; noted future X/TikTok will use platform-provided credentials; established that Media Library and Cloud Downloader are global per user (user_id) across all workspaces, while social connections (accounts, pages), slots, queues, logs, and insights are strictly isolated per workspace (workspace_id).
+  - Principle 30 (Multi-Format Publishing Engine, 200k Posts/Day Edge Dispatcher, Keyset Cursor Pagination & Hybrid Insights Architecture - Spec 042): Codified 5 publishing formats ('text', 'image', 'reel', 'video', 'story'), strict story no-first-comment constraint, keyset cursor pagination, pre-upload duplicate detection, fair per-page claiming, proactive rate-limit pacing via Graph API headers, Upstash Redis REST hybrid insights, and Cloudflare Queues producer-consumer architecture.
 - Follow-up TODOs: None.
 -->
 
@@ -202,6 +202,12 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Pure PostgREST Route Execution**: All API route handlers must query the remote Supabase database directly using `@supabase/supabase-js` PostgREST (`supabase.from('...').select(...)`) and typed `SupabaseClient<Database>`. Route handlers MUST NOT call raw SQL `db.query(...)` with dummy adapters. For unit test speed and isolation, route handlers may accept an optional typed `SupabaseClient<Database>` parameter, avoiding live network calls in test suites.
     - **Elimination of In-Memory State for Ephemeral Serverless Runtime**: In-memory JavaScript `Map`s must not be used for user credentials, OTP codes, or password reset tokens. Native Supabase Auth (`signUp`, `verifyOtp`, `signInWithPassword`) must be used exclusively.
     - **Distributed Rate Limiting in Production**: Rate limiting in production must be backed by distributed storage (e.g. Upstash Redis) and must strictly throw if environment variables are missing in production.
+30. **Multi-Format Publishing Engine, 200k Posts/Day Edge Dispatcher, Keyset Cursor Pagination & Hybrid Insights Architecture (Spec 042)**:
+    - **Five Canonical Post Formats**: The publishing engine strictly supports 5 distinct format routes: `text` (status & link posts without media, `media_id = NULL`), `image` (feed photo), `reel` (short-form 9:16 vertical video $\le 90$s via 3-phase video reels), `video` (standard feed video across all aspect ratios and durations), and `story` (24h ephemeral photo $\le 10$MB or video $\le 60$s). Database constraints (`chk_queue_items_format_media`, `chk_queue_items_story_no_comment`) strictly enforce format invariants.
+    - **Story Format First-Comment Prohibition**: Facebook Page Stories (`/{page-id}/photo_stories`, `/{page-id}/video_stories`) do not support comments. The UI, API, database constraints, and dispatcher MUST strictly prohibit and suppress first comments on story items (`first_comment = NULL`).
+    - **Keyset Cursor Pagination & Pre-Upload Duplicate Detection**: Media library queries support keyset pagination (`createdAt|id`) for $O(1)$ database index scans at scale. Upload workflows pre-screen files via `POST /api/tenant/[subdomain]/media/check-duplicates` to detect duplicates across libraries with 10,000+ files before initiating cloud storage ingestion.
+    - **High-Throughput 200,000 Posts/Day Edge Architecture**: The edge publishing runtime (`apps/worker`) claims items using fair per-page partitioned RPC (`claim_due_queue_items(p_limit, p_max_per_page)`), recovers stuck items via `recover_stuck_publishing_items`, executes atomic settlement via `settle_queue_item_outcome`, proactively paces rate limits using Graph API `X-Business-Use-Case-Usage` telemetry headers (`next_allowed_publish_at`, `buc_usage_pct`), and fans out large batches across Cloudflare Queues (`PUBLISH_QUEUE`).
+    - **Hybrid DB + Upstash Redis Insights**: Page insights prioritize persisted daily snapshots from `page_insights_daily_snapshots` to conserve Facebook Graph API rate-limit quota, with Upstash Redis REST caching and graceful L1 memory fallback.
 
 ## Development Workflow & Quality Gates
 
@@ -227,6 +233,6 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.32.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-14
+**Version**: 2.33.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-15
 
 

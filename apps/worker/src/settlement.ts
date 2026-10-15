@@ -50,12 +50,7 @@ WHERE id = $1 AND user_id = $3;
 `.trim();
 
 /**
- * Atomically settles outcome of a queue item publication.
- * - On success ('published'): Updates queue_items to published and inserts
- *   a success audit log in publish_logs.
- * - On failure/retry: Updates queue_items status and inserts an error audit log in publish_logs.
- * - When targetPageStatus is present (e.g. 'fb_rate_limited' on 368/1390008 or 'page_checkpoint' on 368/4854002),
- *   updates facebook_pages.status accordingly.
+ * Atomically settles outcome of a queue item publication in Supabase environment.
  */
 async function settleSupabaseOutcome(
   supabase: any,
@@ -96,53 +91,92 @@ async function settleSupabaseOutcome(
     if (logError) {
       throw new Error(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
     }
-    return;
+  } else {
+    const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
+    const retryDelay = outcome.retryDelaySeconds ?? 300;
+    const itemUpdate = isRetry
+      ? {
+          status: 'queued',
+          retry_count: attemptNumber,
+          scheduled_time: new Date(Date.now() + retryDelay * 1000).toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      : {
+          status: 'failed',
+          retry_count: attemptNumber,
+          updated_at: new Date().toISOString(),
+        };
+
+    const { error: itemUpdateError } = await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
+    if (itemUpdateError) {
+      throw new Error(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
+    }
+
+    const { error: logInsertError } = await supabase.from('publish_logs').insert({
+      user_id: item.userId,
+      queue_item_id: item.id,
+      fb_page_id: item.pageId,
+      status: isRetry ? 'retry' : 'failure',
+      attempt_number: attemptNumber,
+      fb_response_code: outcome.errorCode ?? null,
+      error_message: outcome.errorMessage ?? null,
+      error_details: errorDetails,
+    });
+    if (logInsertError) {
+      throw new Error(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
+    }
   }
 
-  const isRetry = outcome.status === 'retry';
-  const itemUpdate = isRetry
-    ? {
-        status: 'queued',
-        retry_count: attemptNumber,
-        scheduled_time: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-    : {
-        status: 'failed',
-        retry_count: attemptNumber,
-        updated_at: new Date().toISOString(),
-      };
-
-  const { error: itemUpdateError } = await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
-  if (itemUpdateError) {
-    throw new Error(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
-  }
-
-  const { error: logInsertError } = await supabase.from('publish_logs').insert({
-    user_id: item.userId,
-    queue_item_id: item.id,
-    fb_page_id: item.pageId,
-    status: isRetry ? 'retry' : 'failure',
-    attempt_number: attemptNumber,
-    fb_response_code: outcome.errorCode ?? null,
-    error_message: outcome.errorMessage ?? null,
-    error_details: errorDetails,
-  });
-  if (logInsertError) {
-    throw new Error(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
-  }
-
+  // Update page status, rate-limit cooldown, and BUC telemetry if present
+  const pageUpdate: Record<string, any> = {};
   if (outcome.targetPageStatus) {
-    const pageUpdate: Record<string, any> = {
-      status: outcome.targetPageStatus,
-      updated_at: new Date().toISOString(),
-    };
+    pageUpdate.status = outcome.targetPageStatus;
+    pageUpdate.updated_at = new Date().toISOString();
     if (outcome.targetPageStatus === 'fb_rate_limited') {
       pageUpdate.rate_limited_at = new Date().toISOString();
     }
-    const { error: pageUpdateError } = await supabase.from('facebook_pages').update(pageUpdate).eq('id', item.pageId).eq('user_id', item.userId);
+  }
+  if (outcome.pageCooldownSeconds && outcome.pageCooldownSeconds > 0) {
+    pageUpdate.next_allowed_publish_at = new Date(
+      Date.now() + outcome.pageCooldownSeconds * 1000
+    ).toISOString();
+    pageUpdate.updated_at = new Date().toISOString();
+  }
+  if (outcome.bucUsagePct !== undefined) {
+    pageUpdate.buc_usage_pct = outcome.bucUsagePct;
+    pageUpdate.updated_at = new Date().toISOString();
+  }
+
+  if (Object.keys(pageUpdate).length > 0) {
+    const { error: pageUpdateError } = await supabase
+      .from('facebook_pages')
+      .update(pageUpdate)
+      .eq('id', item.pageId)
+      .eq('user_id', item.userId);
     if (pageUpdateError) {
       throw new Error(`Failed to update facebook_pages status: ${pageUpdateError.message || JSON.stringify(pageUpdateError)}`);
+    }
+  }
+
+  // Cascade parent Facebook account status to 'expired' when required (e.g. 190 non-492, 102, 10, 200-299)
+  if (outcome.targetAccountStatus === 'expired') {
+    let accountId = item.facebookAccountId;
+    if (!accountId) {
+      const { data: pageRow } = await supabase
+        .from('facebook_pages')
+        .select('facebook_account_id')
+        .eq('id', item.pageId)
+        .eq('user_id', item.userId)
+        .maybeSingle();
+      accountId = pageRow?.facebook_account_id;
+    }
+
+    if (accountId) {
+      await supabase
+        .from('facebook_accounts')
+        .update({ status: 'expired', updated_at: new Date().toISOString() })
+        .eq('id', accountId)
+        .eq('user_id', item.userId);
     }
   }
 }
@@ -171,31 +205,30 @@ async function settleLegacyOutcome(
       outcome.errorMessage ?? null,
       outcome.errorMessage ? JSON.stringify({ warning: outcome.errorMessage }) : null,
     ]);
-    return;
+  } else {
+    const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
+    const updateSql = isRetry ? UPDATE_QUEUE_ITEM_RETRY_SQL : UPDATE_QUEUE_ITEM_FAILED_SQL;
+    await tx.query(updateSql, [item.id]);
+
+    const errorDetails =
+      outcome.errorCode !== undefined
+        ? JSON.stringify({
+            errorCode: outcome.errorCode,
+            ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+          })
+        : null;
+
+    await tx.query(INSERT_PUBLISH_LOG_SQL, [
+      item.userId,
+      item.id,
+      item.pageId,
+      isRetry ? 'retry' : 'failure',
+      attemptNumber,
+      outcome.errorCode ?? null,
+      outcome.errorMessage ?? null,
+      errorDetails,
+    ]);
   }
-
-  const isRetry = outcome.status === 'retry';
-  const updateSql = isRetry ? UPDATE_QUEUE_ITEM_RETRY_SQL : UPDATE_QUEUE_ITEM_FAILED_SQL;
-  await tx.query(updateSql, [item.id]);
-
-  const errorDetails =
-    outcome.errorCode !== undefined
-      ? JSON.stringify({
-          errorCode: outcome.errorCode,
-          ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
-        })
-      : null;
-
-  await tx.query(INSERT_PUBLISH_LOG_SQL, [
-    item.userId,
-    item.id,
-    item.pageId,
-    isRetry ? 'retry' : 'failure',
-    attemptNumber,
-    outcome.errorCode ?? null,
-    outcome.errorMessage ?? null,
-    errorDetails,
-  ]);
 
   if (outcome.targetPageStatus) {
     await tx.query(UPDATE_PAGE_STATUS_SQL, [
@@ -204,6 +237,26 @@ async function settleLegacyOutcome(
       item.userId,
     ]);
   }
+
+  if (outcome.pageCooldownSeconds && outcome.pageCooldownSeconds > 0) {
+    await tx.query(
+      `UPDATE facebook_pages
+       SET next_allowed_publish_at = now() + make_interval(secs => $1),
+           updated_at = now()
+       WHERE id = $2 AND user_id = $3`,
+      [outcome.pageCooldownSeconds, item.pageId, item.userId]
+    );
+  }
+
+  if (outcome.targetAccountStatus === 'expired') {
+    await tx.query(
+      `UPDATE facebook_accounts
+       SET status = 'expired', updated_at = now()
+       WHERE user_id = $2
+         AND id = (SELECT facebook_account_id FROM facebook_pages WHERE id = $1 AND user_id = $2)`,
+      [item.pageId, item.userId]
+    );
+  }
 }
 
 /**
@@ -211,9 +264,31 @@ async function settleLegacyOutcome(
  */
 export async function settleOutcome(
   db: DispatcherDbClient | Queryable,
-  item: ClaimedQueueItem,
-  outcome: DispatchOutcome
+  itemOrOutcome: ClaimedQueueItem | DispatchOutcome,
+  maybeOutcome?: DispatchOutcome
 ): Promise<void> {
+  const item: ClaimedQueueItem = maybeOutcome
+    ? (itemOrOutcome as ClaimedQueueItem)
+    : ({
+        id: (itemOrOutcome as DispatchOutcome).queueItemId,
+        userId: '',
+        pageId: '',
+        mediaId: '',
+        caption: '',
+        firstComment: null,
+        retryCount: 0,
+        maxRetries: 3,
+        mediaType: 'video',
+        mediaUrl: '',
+        storageKey: '',
+        fbPageId: '',
+        encryptedPageToken: '',
+        pageName: '',
+        postFormat: 'reel',
+      } as ClaimedQueueItem);
+
+  const outcome: DispatchOutcome = maybeOutcome ?? (itemOrOutcome as DispatchOutcome);
+
   if ('from' in db && typeof (db as any).from === 'function') {
     return settleSupabaseOutcome(db, item, outcome);
   }

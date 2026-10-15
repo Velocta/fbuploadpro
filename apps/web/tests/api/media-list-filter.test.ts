@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { handleListMedia, sanitizePostgrestSearchPattern } from '../../src/app/api/tenant/[subdomain]/media/route';
+import { handleCheckDuplicates } from '../../src/app/api/tenant/[subdomain]/media/check-duplicates/route';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -284,4 +285,160 @@ describe('Media Items Listing & Filtering (GET /api/tenant/[subdomain]/media)', 
       );
     });
   });
-});
+
+  describe('PostFormat Filtering & Keyset Cursor Pagination', () => {
+    it('filters media items by postFormat (reel, image, story, video)', async () => {
+      let capturedSql = '';
+
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          capturedSql = sql;
+          if (sql.includes('SELECT COUNT(*)')) {
+            return Promise.resolve([{ total: 0 }]);
+          }
+          return Promise.resolve([]);
+        }),
+      };
+
+      // Reel
+      const reqReel = new NextRequest('http://localhost:3000/api/tenant/acme/media?postFormat=reel', {
+        headers: { cookie: validSessionCookie },
+      });
+      await handleListMedia(reqReel, 'acme', mockDb as DatabaseClient);
+      expect(capturedSql).toContain("media_type = 'video' AND (duration_seconds IS NULL OR duration_seconds <= 90)");
+
+      // Image
+      const reqImage = new NextRequest('http://localhost:3000/api/tenant/acme/media?postFormat=image', {
+        headers: { cookie: validSessionCookie },
+      });
+      await handleListMedia(reqImage, 'acme', mockDb as DatabaseClient);
+      expect(capturedSql).toContain("media_type = 'image'");
+
+      // Story
+      const reqStory = new NextRequest('http://localhost:3000/api/tenant/acme/media?postFormat=story', {
+        headers: { cookie: validSessionCookie },
+      });
+      await handleListMedia(reqStory, 'acme', mockDb as DatabaseClient);
+      expect(capturedSql).toContain(
+        "((media_type = 'image' AND file_size <= 10485760) OR (media_type = 'video' AND (duration_seconds IS NULL OR duration_seconds <= 60)))"
+      );
+
+      // Video
+      const reqVideo = new NextRequest('http://localhost:3000/api/tenant/acme/media?postFormat=video', {
+        headers: { cookie: validSessionCookie },
+      });
+      await handleListMedia(reqVideo, 'acme', mockDb as DatabaseClient);
+      expect(capturedSql).toContain("media_type = 'video'");
+    });
+
+    it('applies keyset cursor pagination condition and returns nextCursor', async () => {
+      let capturedSql = '';
+      const cursorVal = '2026-10-15T00:00:00.000Z|33333333-3333-4333-a333-333333333333';
+
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          capturedSql = sql;
+          if (sql.includes('SELECT COUNT(*)')) {
+            return Promise.resolve([{ total: 1 }]);
+          }
+          return Promise.resolve([
+            {
+              id: '44444444-4444-4444-a444-444444444444',
+              user_id: userId,
+              folder_id: null,
+              name: 'next_item.mp4',
+              file_size: '5242880',
+              mime_type: 'video/mp4',
+              media_type: 'video',
+              storage_key: `users/${userId}/media/44444444/next_item.mp4`,
+              url: 'https://example.com/next_item.mp4',
+              thumbnail_key: null,
+              thumbnail_url: null,
+              duration_seconds: '15.0',
+              aspect_ratio: '9:16',
+              caption_text: 'Next caption',
+              width: 1080,
+              height: 1920,
+              created_at: '2026-10-14T23:50:00.000Z',
+              updated_at: '2026-10-14T23:50:00.000Z',
+            },
+          ]);
+        }),
+      };
+
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/media?cursor=${encodeURIComponent(cursorVal)}&limit=1`,
+        { headers: { cookie: validSessionCookie } }
+      );
+      const res = await handleListMedia(req, 'acme', mockDb as DatabaseClient);
+      expect(res.status).toBe(200);
+      expect(capturedSql).toContain('created_at < $');
+
+      const body = await res.json();
+      expect(body.items).toHaveLength(1);
+      expect(body.nextCursor).toBe('2026-10-14T23:50:00.000Z|44444444-4444-4444-a444-444444444444');
+    });
+  });
+
+  describe('Pre-Upload Duplicate Detection (POST /api/tenant/[subdomain]/media/check-duplicates)', () => {
+    it('detects duplicate files in target folder by case-insensitive name and size', async () => {
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((_sql: string, params: any[]) => {
+          // params: [userId, targetFolderId, names, fileSizes]
+          return Promise.resolve([
+            {
+              id: '55555555-5555-4555-a555-555555555555',
+              user_id: userId,
+              folder_id: folderId,
+              name: 'EXISTING_VIDEO.MP4',
+              file_size: 10485760,
+              mime_type: 'video/mp4',
+              media_type: 'video',
+              storage_key: `users/${userId}/media/55555555/video.mp4`,
+              url: 'https://example.com/video.mp4',
+              thumbnail_key: null,
+              thumbnail_url: null,
+              duration_seconds: 30,
+              aspect_ratio: '9:16',
+              caption_text: null,
+              width: 1080,
+              height: 1920,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ]);
+        }),
+      };
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/check-duplicates', {
+        method: 'POST',
+        headers: {
+          cookie: validSessionCookie,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          folderId,
+          entries: [
+            {
+              clientKey: 'file-1',
+              name: 'existing_video.mp4',
+              fileSize: 10485760,
+            },
+            {
+              clientKey: 'file-2',
+              name: 'brand_new_video.mp4',
+              fileSize: 20485760,
+            },
+          ],
+        }),
+      });
+
+      const res = await handleCheckDuplicates(req, 'acme', mockDb as DatabaseClient);
+      expect(res.status).toBe(200);
+
+      const body = await res.json();
+      expect(body.duplicates).toHaveLength(1);
+      expect(body.duplicates[0].clientKey).toBe('file-1');
+      expect(body.duplicates[0].existingItem.id).toBe('55555555-5555-4555-a555-555555555555');
+    });
+  });

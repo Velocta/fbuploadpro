@@ -419,4 +419,72 @@ fbuploadpro/
 * **Zero Upsert Fallbacks**:
   * All BYOC endpoints (`GET`, `PUT`, `POST .../test`) query workspace records strictly by `subdomain` and return 404 when absent. They never execute blind upserts or backfills on `workspaces` (`workspaces.upsert({ ... }, { onConflict: 'subdomain' })`), completely eliminating cross-tenant workspace ownership hijacking vulnerabilities.
 
+---
+
+## 13. High-Throughput 200,000 Posts/Day Multi-Format Publishing Engine, Media Scaling & Hybrid Insights Architecture (Spec 042)
+
+### 13.1 Multi-Format Publishing Engine (`text`, `image`, `reel`, `video`, `story`)
+* **Five Canonical Post Formats**:
+  1. **`text`**: Text-only or Link status post. Does not require or link a row in `media_items` (`queue_items.media_id = NULL`). Must have a non-empty `caption`. Allows optional `linkUrl`. Supports automatic first comment.
+  2. **`image`**: Single photo feed post (`media_type = 'image'`). Published via Graph API `/{page-id}/photos`. Supports automatic first comment.
+  3. **`reel`**: Short-form vertical video ($9:16$, $3\text{–}90\text{s}$). Published via 3-phase video reels Graph API (`upload_phase: 'start'`, rupload binary stream, `upload_phase: 'finish'` with `video_state: 'PUBLISHED'`). Supports automatic first comment.
+  4. **`video`**: Standard feed video supporting all aspect ratios ($16:9$, $1:1$, $9:16$) and durations (up to 500 MB). Published via `/{page-id}/videos`. Supports automatic first comment.
+  5. **`story`**: 24-hour ephemeral Page Story. Supports photo stories ($\le 10\text{ MB}$, via unpublished photo upload + `/{page-id}/photo_stories`) and video stories ($\le 60\text{s}$, via 3-phase `/{page-id}/video_stories`). **Strict no-comment rule**: First comments are strictly prohibited and suppressed (`first_comment = NULL`), enforced by database check constraint `chk_queue_items_story_no_comment`.
+* **Database Invariants**:
+  * `chk_queue_items_format_media`: `(post_format = 'text' AND length(btrim(caption)) > 0) OR (post_format <> 'text' AND media_id IS NOT NULL)`
+  * `chk_queue_items_story_no_comment`: `(post_format = 'story' AND first_comment IS NULL) OR (post_format <> 'story')`
+* **Format-Aware Recurring Slots (`page_queue_slots.allowed_formats`)**:
+  * Slot operators can configure allowed formats (e.g. `['story']` for morning slots, `['reel']` for afternoon, `['video', 'text']` for evening).
+  * `findNextAvailableSlot` matches queued items only against slots permitting their format.
+
+### 13.2 High-Throughput 200,000 Posts/Day Edge Dispatcher & Graph API v26.0 Integration
+* **Partitioned Queue Claiming (`claim_due_queue_items`)**:
+  * Claims up to `p_limit` items (default 100, up to 500 in batch ticks) with per-page fair partitioning (`p_max_per_page`, default 3--5) using `ROW_NUMBER() OVER (PARTITION BY fb_page_id ORDER BY scheduled_time ASC)`.
+  * Filters out paused, disconnected, and rate-limited pages (`next_allowed_publish_at > now()`).
+  * Claims with `FOR UPDATE SKIP LOCKED` for zero contention across parallel worker invocations.
+* **Single-Roundtrip Atomic Settlement (`settle_queue_item_outcome`)**:
+  * Consolidates queue item status update, retry interval backoff, publish log insertion, page status/cooldown update, and parent account status cascade into a single PostgreSQL RPC call.
+* **Stuck Job Recovery (`recover_stuck_publishing_items`)**:
+  * Automatically recovers items stranded in `status = 'publishing'` for $>10\text{ minutes}` due to worker timeouts, resetting them to `queued` on a 5-minute schedule.
+* **Graph API Rate-Limit Telemetry & Proactive Pacing**:
+  * `parseGraphRateLimitHeaders` inspects `X-App-Usage` and `X-Business-Use-Case-Usage`.
+  * Extracts max CPU/call percentage and `estimated_time_to_regain_access`.
+  * If BUC usage $\ge 85\%$, sets `next_allowed_publish_at` on the Page to proactively pause publishing before hitting hard blocks (`80001`).
+* **OAuth Error Cascade**:
+  * Graph API errors `190` (non-492 subcodes), `102`, `10`, and `200–299` set `facebook_accounts.status = 'expired'`, notifying operators to reconnect.
+* **Cloudflare Queues Producer-Consumer Engine (`PUBLISH_QUEUE`)**:
+  * Edge cron claims items in batches and dispatches to Cloudflare Queue, processing messages across parallel consumer invocations with `Promise.allSettled` and message acknowledgment (`msg.ack()`).
+
+### 13.3 Media Library Keyset Scaling & Optimization
+* **Keyset Cursor Pagination (`createdAt|id`)**:
+  * Media queries support `cursor: "createdAt|id"` for $O(1)$ index scans at 50,000+ media assets, eliminating offset drift.
+* **Pre-Upload Duplicate Detection**:
+  * `POST /api/tenant/[subdomain]/media/check-duplicates` inspects queued uploads against existing files in the target folder by case-insensitive name and exact file size across full library depth.
+* **Base64 Data-URL Elimination**:
+  * Video frame covers captured in the browser are automatically uploaded to Cloudflare R2 at `users/${userId}/thumbnails/${mediaId}-${timestamp}.webp`, storing public CDN URLs instead of megabytes of base64 strings in PostgreSQL.
+* **Batched R2 Deletions**:
+  * Cascading folder deletions collect all media and thumbnail storage keys and execute deletions in bounded concurrent batches (`Promise.allSettled`, batch size 50).
+* **Format Compatibility Signals**:
+  * Media cards and table rows render format eligibility badges (`REEL`, `STORY`, `VIDEO`, `PHOTO`) computed via `getEligiblePostFormatsForMedia`.
+
+### 13.4 Dedicated Page Section & EnqueueModal
+* **Multi-Format Enqueue Modal (`enqueue-modal.tsx`)**:
+  * Format selector bar with 5 buttons (`Reel`, `Video`, `Image`, `Story`, `Text`).
+  * Dynamically switches format on media selection to preserve existing workflows.
+  * For `text`, hides media picker and exposes caption + link input.
+  * For `story`, hides first comment field and displays informative notice (`story-no-comment-notice`).
+* **Checkpoint Reactivation Banner**:
+  * Dedicated banner (`checkpoint-reactivation-banner`) and button (`reactivate-page-btn`) for pages flagged with `status = 'page_checkpoint'`.
+* **Server-Side Queue Counts**:
+  * `get_page_queue_status_counts` returns exact counts for queued, publishing, published, and failed items directly from PostgreSQL.
+
+### 13.5 Hybrid Insights Architecture
+* **Upstash Redis REST Integration**:
+  * `InsightsCache` supports `getAsync` and `setAsync` with Upstash Redis REST endpoints and fallback to L1 in-memory `Map`.
+* **Database-First Snapshot Serving**:
+  * Serves cached insights from `page_insights_daily_snapshots` for non-refresh requests and transient rate limits, conserving Graph API BUC quota for 200k/day publishing.
+* **Paginated Worker Insights Sync**:
+  * `syncDailyPageInsights` accepts configurable `batchSize` and paginates through active pages to prevent subrequest or row limits.
+
+
 

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PostFormatSchema, type PostFormat } from './publishing.js';
 
 export const AllowedMediaMimeTypes = [
   'video/mp4',
@@ -60,9 +61,13 @@ export const ConfirmUploadRequestSchema = z.object({
   aspectRatio: z.string().min(1).max(20).default('unknown'),
   folderId: z.string().uuid().nullable().optional(),
   captionText: z.string().max(5000).nullable().optional(),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
 });
 
 export type ConfirmUploadRequest = z.infer<typeof ConfirmUploadRequestSchema>;
+export const ConfirmMediaUploadRequestSchema = ConfirmUploadRequestSchema;
+export type ConfirmMediaUploadRequest = ConfirmUploadRequest;
 
 export const MediaItemResponseSchema = z.object({
   id: z.string().uuid(),
@@ -79,6 +84,8 @@ export const MediaItemResponseSchema = z.object({
   durationSeconds: z.number().nullable(),
   aspectRatio: z.string(),
   captionText: z.string().nullable(),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -95,6 +102,8 @@ export const MediaListQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+  cursor: z.string().optional(),
+  postFormat: PostFormatSchema.optional(),
 });
 
 export type MediaListQuery = z.infer<typeof MediaListQuerySchema>;
@@ -104,6 +113,7 @@ export const MediaListResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
+  nextCursor: z.string().nullable().optional(),
 });
 
 export type MediaListResponse = z.infer<typeof MediaListResponseSchema>;
@@ -114,6 +124,8 @@ export const UpdateMediaItemRequestSchema = z.object({
   captionText: z.string().max(5000).nullable().optional(),
   thumbnailKey: z.string().min(1).max(500).nullable().optional(),
   thumbnailUrl: z.string().min(1).nullable().optional(),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
 });
 
 export type UpdateMediaItemRequest = z.infer<typeof UpdateMediaItemRequestSchema>;
@@ -151,3 +163,33 @@ export const BatchMediaResponseSchema = z.object({
 });
 
 export type BatchMediaResponse = z.infer<typeof BatchMediaResponseSchema>;
+
+// Pre-upload Duplicate Check Schemas
+export const CheckDuplicatesEntrySchema = z.object({
+  clientKey: z.string().min(1),
+  name: z.string().min(1),
+  fileSize: z.number().int().nonnegative(),
+  folderId: z.string().uuid().nullable().optional(),
+});
+
+export type CheckDuplicatesEntry = z.infer<typeof CheckDuplicatesEntrySchema>;
+
+export const CheckDuplicatesRequestSchema = z.object({
+  folderId: z.string().uuid().nullable().optional(),
+  entries: z.array(CheckDuplicatesEntrySchema).min(1).max(500),
+});
+
+export type CheckDuplicatesRequest = z.infer<typeof CheckDuplicatesRequestSchema>;
+
+export const DuplicateMatchSchema = z.object({
+  clientKey: z.string().min(1),
+  existingItem: MediaItemResponseSchema,
+});
+
+export type DuplicateMatch = z.infer<typeof DuplicateMatchSchema>;
+
+export const CheckDuplicatesResponseSchema = z.object({
+  duplicates: z.array(DuplicateMatchSchema),
+});
+
+export type CheckDuplicatesResponse = z.infer<typeof CheckDuplicatesResponseSchema>;
