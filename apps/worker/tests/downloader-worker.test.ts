@@ -253,7 +253,16 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       });
 
       const mockR2Bucket = {
-        put: vi.fn().mockResolvedValue({}),
+        put: vi.fn(async (_key: string, stream: any) => {
+          if (stream && typeof stream.getReader === 'function') {
+            const reader = stream.getReader();
+            while (true) {
+              const { done } = await reader.read();
+              if (done) break;
+            }
+          }
+          return {};
+        }),
       };
 
       await executeDownloadJob({

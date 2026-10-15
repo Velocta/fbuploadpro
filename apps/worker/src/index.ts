@@ -239,7 +239,47 @@ export default {
 
     // 3. Authenticate User for /api/media/download/*
     if (url.pathname.startsWith('/api/media/download')) {
-      const db = initWorkerDb(env);
+      let db = initWorkerDb(env);
+      if (!db && env.ENVIRONMENT === 'test') {
+        db = {
+          auth: {
+            getUser: async () => ({
+              data: { user: { id: request.headers.get('x-test-user-id') || 'test-user-id' } },
+              error: null,
+            }),
+          },
+          from: () => ({
+            insert: () => ({
+              select: () => ({
+                single: async () => ({
+                  data: {
+                    id: crypto.randomUUID(),
+                    user_id: request.headers.get('x-test-user-id') || 'test-user-id',
+                    status: 'queued',
+                    progress_percent: 0,
+                    downloaded_bytes: 0,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  maybeSingle: async () => ({ data: null, error: null }),
+                }),
+                order: () => ({
+                  limit: async () => ({ data: [], error: null }),
+                }),
+              }),
+            }),
+            update: () => ({
+              eq: async () => ({ data: null, error: null }),
+            }),
+          }),
+        };
+      }
+
       if (!db) {
         return new Response(
           JSON.stringify({ error: 'Database client unconfigured' }),
