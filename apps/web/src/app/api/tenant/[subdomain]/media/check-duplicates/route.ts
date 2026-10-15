@@ -140,7 +140,6 @@ export async function handleCheckDuplicates(
     queryBuilder = queryBuilder.is('folder_id', null);
   }
 
-  const names = entries.map((e) => e.name);
   const fileSizes = entries.map((e) => e.fileSize);
   queryBuilder = queryBuilder.in('file_size', fileSizes);
 
@@ -152,7 +151,7 @@ export async function handleCheckDuplicates(
   const candidateRows = rows || [];
   for (const entry of entries) {
     const match = candidateRows.find(
-      (r: any) =>
+      (r: Record<string, unknown> & { name: string; file_size: number | string }) =>
         r.name.toLowerCase() === entry.name.toLowerCase() &&
         Number(r.file_size) === entry.fileSize
     );
