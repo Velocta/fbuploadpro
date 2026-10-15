@@ -31,7 +31,6 @@ function assembleInsightsFromSnapshots(
   });
 
   const latest = sorted[sorted.length - 1] ?? {};
-  const earliest = sorted[0] ?? {};
 
   let totalMediaViews = 0;
   let totalVideoViews = 0;
@@ -54,7 +53,6 @@ function assembleInsightsFromSnapshots(
     const vv = Number(row.video_views) || 0;
     const df = Number(row.daily_follows) || 0;
     const du = Number(row.daily_unfollows) || 0;
-    const net = df - du;
     const watchSec = Number(row.video_view_time_seconds) || 0;
     const watchMin = Math.round(watchSec / 60);
 
