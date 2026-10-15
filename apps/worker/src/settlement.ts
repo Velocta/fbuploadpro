@@ -195,8 +195,12 @@ async function settleSupabaseOutcome(
   }
 }
 
+type ActiveQueryable = Queryable & {
+  query: NonNullable<Queryable['query']>;
+};
+
 async function settleLegacyPublishStatus(
-  tx: Queryable,
+  tx: ActiveQueryable,
   item: ClaimedQueueItem,
   outcome: DispatchOutcome,
   attemptNumber: number
@@ -245,7 +249,7 @@ async function settleLegacyPublishStatus(
 }
 
 async function settleLegacyPageSideEffects(
-  tx: Queryable,
+  tx: ActiveQueryable,
   item: ClaimedQueueItem,
   outcome: DispatchOutcome
 ): Promise<void> {
@@ -284,9 +288,10 @@ async function settleLegacyOutcome(
   outcome: DispatchOutcome
 ): Promise<void> {
   if (typeof tx.query !== 'function') return;
+  const activeTx = tx as ActiveQueryable;
   const attemptNumber = (item.retryCount || 0) + 1;
-  await settleLegacyPublishStatus(tx, item, outcome, attemptNumber);
-  await settleLegacyPageSideEffects(tx, item, outcome);
+  await settleLegacyPublishStatus(activeTx, item, outcome, attemptNumber);
+  await settleLegacyPageSideEffects(activeTx, item, outcome);
 }
 
 /**
