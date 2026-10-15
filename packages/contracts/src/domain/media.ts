@@ -67,7 +67,7 @@ export const ConfirmUploadRequestSchema = z.object({
 
 export type ConfirmUploadRequest = z.infer<typeof ConfirmUploadRequestSchema>;
 export const ConfirmMediaUploadRequestSchema = ConfirmUploadRequestSchema;
-export type ConfirmMediaUploadRequest = ConfirmUploadRequest;
+export type ConfirmMediaUploadRequest = z.infer<typeof ConfirmMediaUploadRequestSchema>;
 
 export const MediaItemResponseSchema = z.object({
   id: z.string().uuid(),

@@ -37,6 +37,83 @@ function formatMediaRow(row: any) {
   });
 }
 
+function findDuplicatesInRows(
+  entries: Array<{ clientKey: string; name: string; fileSize: number }>,
+  rows: Array<Record<string, unknown> & { name: string; file_size: number | string }>
+): Array<{ clientKey: string; existingItem: any }> {
+  const duplicates: Array<{ clientKey: string; existingItem: any }> = [];
+  for (const entry of entries) {
+    const match = rows.find(
+      (r) =>
+        r.name.toLowerCase() === entry.name.toLowerCase() &&
+        Number(r.file_size) === entry.fileSize
+    );
+    if (match) {
+      duplicates.push({
+        clientKey: entry.clientKey,
+        existingItem: formatMediaRow(match),
+      });
+    }
+  }
+  return duplicates;
+}
+
+async function queryLegacyDuplicates(
+  dbClient: DatabaseClient,
+  userId: string,
+  folderId: string | null | undefined,
+  entries: Array<{ clientKey: string; name: string; fileSize: number }>
+): Promise<Array<Record<string, unknown> & { name: string; file_size: number | string }>> {
+  const fileSizes = entries.map((e) => e.fileSize);
+  const names = entries.map((e) => e.name.toLowerCase());
+  const targetFolderId = folderId ?? null;
+  const query = `
+    SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
+           storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
+           aspect_ratio, caption_text, width, height, created_at, updated_at
+    FROM media_items
+    WHERE user_id = $1
+      AND (folder_id = $2 OR ($2 IS NULL AND folder_id IS NULL))
+      AND LOWER(name) = ANY($3::text[])
+      AND file_size = ANY($4::bigint[])
+  `;
+  return (await dbClient.query(query, [
+    userId,
+    targetFolderId,
+    names,
+    fileSizes,
+  ])) as any[];
+}
+
+async function querySupabaseDuplicates(
+  supabase: SupabaseClient<any>,
+  userId: string,
+  folderId: string | null | undefined,
+  entries: Array<{ clientKey: string; name: string; fileSize: number }>
+): Promise<{ rows?: any[]; error?: string }> {
+  let queryBuilder = supabase
+    .from('media_items')
+    .select(
+      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, width, height, created_at, updated_at'
+    )
+    .eq('user_id', userId);
+
+  if (folderId) {
+    queryBuilder = queryBuilder.eq('folder_id', folderId);
+  } else {
+    queryBuilder = queryBuilder.is('folder_id', null);
+  }
+
+  const fileSizes = entries.map((e) => e.fileSize);
+  queryBuilder = queryBuilder.in('file_size', fileSizes);
+
+  const { data: rows, error } = await queryBuilder;
+  if (error) {
+    return { error: error.message };
+  }
+  return { rows: rows || [] };
+}
+
 export async function handleCheckDuplicates(
   request: NextRequest,
   subdomain: string,
@@ -80,45 +157,10 @@ export async function handleCheckDuplicates(
   }
 
   const { folderId, entries } = parsed.data;
-  const duplicates: Array<{ clientKey: string; existingItem: any }> = [];
 
   if (isLegacyClient(dbClient)) {
-    const fileSizes = entries.map((e) => e.fileSize);
-    const names = entries.map((e) => e.name.toLowerCase());
-
-    const targetFolderId = folderId ?? null;
-    const query = `
-      SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
-             storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-             aspect_ratio, caption_text, width, height, created_at, updated_at
-      FROM media_items
-      WHERE user_id = $1
-        AND (folder_id = $2 OR ($2 IS NULL AND folder_id IS NULL))
-        AND LOWER(name) = ANY($3::text[])
-        AND file_size = ANY($4::bigint[])
-    `;
-
-    const rows = (await dbClient.query(query, [
-      session.userId,
-      targetFolderId,
-      names,
-      fileSizes,
-    ])) as any[];
-
-    for (const entry of entries) {
-      const match = rows.find(
-        (r) =>
-          r.name.toLowerCase() === entry.name.toLowerCase() &&
-          Number(r.file_size) === entry.fileSize
-      );
-      if (match) {
-        duplicates.push({
-          clientKey: entry.clientKey,
-          existingItem: formatMediaRow(match),
-        });
-      }
-    }
-
+    const rows = await queryLegacyDuplicates(dbClient, session.userId, folderId, entries);
+    const duplicates = findDuplicatesInRows(entries, rows);
     return NextResponse.json(CheckDuplicatesResponseSchema.parse({ duplicates }));
   }
 
@@ -127,42 +169,12 @@ export async function handleCheckDuplicates(
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }
 
-  let queryBuilder = supabase
-    .from('media_items')
-    .select(
-      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, width, height, created_at, updated_at'
-    )
-    .eq('user_id', session.userId);
-
-  if (folderId) {
-    queryBuilder = queryBuilder.eq('folder_id', folderId);
-  } else {
-    queryBuilder = queryBuilder.is('folder_id', null);
-  }
-
-  const fileSizes = entries.map((e) => e.fileSize);
-  queryBuilder = queryBuilder.in('file_size', fileSizes);
-
-  const { data: rows, error } = await queryBuilder;
+  const { rows, error } = await querySupabaseDuplicates(supabase, session.userId, folderId, entries);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error }, { status: 500 });
   }
 
-  const candidateRows = rows || [];
-  for (const entry of entries) {
-    const match = candidateRows.find(
-      (r: Record<string, unknown> & { name: string; file_size: number | string }) =>
-        r.name.toLowerCase() === entry.name.toLowerCase() &&
-        Number(r.file_size) === entry.fileSize
-    );
-    if (match) {
-      duplicates.push({
-        clientKey: entry.clientKey,
-        existingItem: formatMediaRow(match),
-      });
-    }
-  }
-
+  const duplicates = findDuplicatesInRows(entries, rows || []);
   return NextResponse.json(CheckDuplicatesResponseSchema.parse({ duplicates }));
 }
 

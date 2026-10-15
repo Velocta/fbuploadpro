@@ -60,6 +60,68 @@ export interface PageTabQueueProps {
   onOpenAddQueue: () => void;
 }
 
+function QueueItemThumbnailPreview({
+  resolvedFormat,
+  thumbnailUrl,
+  mediaType,
+}: {
+  resolvedFormat: string;
+  thumbnailUrl?: string | null;
+  mediaType?: string | null;
+}) {
+  if (resolvedFormat === 'text') {
+    return (
+      <div
+        style={{
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="4 7 4 4 20 4 20 7" />
+          <line x1="9" y1="20" x2="15" y2="20" />
+          <line x1="12" y1="4" x2="12" y2="20" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (thumbnailUrl) {
+    return (
+      <img
+        src={thumbnailUrl}
+        alt="Media Preview"
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        color: `var(--text-sub, ${THEME.default.text.secondary})`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {mediaType === 'video' ? (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>
+      ) : (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <polyline points="21 15 16 10 5 21" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 export function PageTabQueue({
   page: _page,
   queueItems,
@@ -377,49 +439,11 @@ export function PageTabQueue({
                       justifyContent: 'center',
                     }}
                   >
-                    {resolvedFormat === 'text' ? (
-                      <div
-                        style={{
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="4 7 4 4 20 4 20 7" />
-                          <line x1="9" y1="20" x2="15" y2="20" />
-                          <line x1="12" y1="4" x2="12" y2="20" />
-                        </svg>
-                      </div>
-                    ) : thumbnailUrl ? (
-                      <img
-                        src={thumbnailUrl}
-                        alt="Media Preview"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {mediaType === 'video' ? (
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                          </svg>
-                        ) : (
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <polyline points="21 15 16 10 5 21" />
-                          </svg>
-                        )}
-                      </div>
-                    )}
+                    <QueueItemThumbnailPreview
+                      resolvedFormat={resolvedFormat}
+                      thumbnailUrl={thumbnailUrl}
+                      mediaType={mediaType}
+                    />
                     {/* Media Type Indicator */}
                     <div
                       style={{

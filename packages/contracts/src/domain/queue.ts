@@ -127,7 +127,7 @@ export const EnqueueMediaRequestSchema = z
 
 export const EnqueueRequestSchema = EnqueueMediaRequestSchema;
 export type EnqueueMediaRequest = z.infer<typeof EnqueueMediaRequestSchema>;
-export type EnqueueRequest = EnqueueMediaRequest;
+export type EnqueueRequest = z.infer<typeof EnqueueRequestSchema>;
 
 // Update Queue Item Request
 export const UpdateQueueItemRequestSchema = z.object({

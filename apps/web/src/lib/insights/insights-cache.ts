@@ -14,6 +14,65 @@ export function validateInsightsCacheConfig(): void {
   }
 }
 
+function parseUpstashRawResult(rawResult: unknown): any {
+  if (typeof rawResult === 'string') {
+    try {
+      return JSON.parse(rawResult);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof rawResult === 'object' && rawResult !== null) {
+    return rawResult;
+  }
+  return null;
+}
+
+function normalizeUpstashEntry<T>(parsed: any): CacheEntry<T> | null {
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const entry: CacheEntry<T> = ('data' in parsed && 'expiresAt' in parsed)
+    ? parsed
+    : {
+        data: parsed.data ?? parsed,
+        cachedAt: parsed.cachedAt ?? new Date().toISOString(),
+        expiresAt: parsed.expiresAt ?? (Date.now() + 900 * 1000),
+      };
+
+  if (Date.now() <= entry.expiresAt) {
+    return entry;
+  }
+  return null;
+}
+
+async function fetchUpstashEntry<T>(
+  restUrl: string,
+  restToken: string,
+  key: string
+): Promise<CacheEntry<T> | null> {
+  try {
+    const res = await fetch(`${restUrl}/get/${encodeURIComponent(key)}`, {
+      headers: {
+        Authorization: `Bearer ${restToken}`,
+      },
+    });
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as { result?: unknown };
+    if (!body || !body.result) return null;
+
+    const parsed = parseUpstashRawResult(body.result);
+    return normalizeUpstashEntry<T>(parsed);
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[InsightsCache] Upstash Redis GET failed, using in-memory fallback:', err);
+    }
+    return null;
+  }
+}
+
 export class InsightsCache {
   private readonly cache = new Map<string, CacheEntry<unknown>>();
 
@@ -70,46 +129,10 @@ export class InsightsCache {
     const restUrl = process.env.UPSTASH_REDIS_REST_URL;
     const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
     if (restUrl && restToken && typeof fetch === 'function') {
-      try {
-        const res = await fetch(`${restUrl}/get/${encodeURIComponent(key)}`, {
-          headers: {
-            Authorization: `Bearer ${restToken}`,
-          },
-        });
-        if (res.ok) {
-          const body = (await res.json()) as { result?: unknown };
-          if (body && body.result) {
-            let parsed: any = null;
-            if (typeof body.result === 'string') {
-              try {
-                parsed = JSON.parse(body.result);
-              } catch {
-                parsed = null;
-              }
-            } else if (typeof body.result === 'object') {
-              parsed = body.result;
-            }
-
-            if (parsed && typeof parsed === 'object') {
-              const entry: CacheEntry<T> = ('data' in parsed && 'expiresAt' in parsed)
-                ? parsed
-                : {
-                    data: parsed.data ?? parsed,
-                    cachedAt: parsed.cachedAt ?? new Date().toISOString(),
-                    expiresAt: parsed.expiresAt ?? (Date.now() + 900 * 1000),
-                  };
-
-              if (Date.now() <= entry.expiresAt) {
-                this.cache.set(key, entry as CacheEntry<unknown>);
-                return entry;
-              }
-            }
-          }
-        }
-      } catch (err) {
-        if (process.env.NODE_ENV !== 'test') {
-          console.warn('[InsightsCache] Upstash Redis GET failed, using in-memory fallback:', err);
-        }
+      const remoteEntry = await fetchUpstashEntry<T>(restUrl, restToken, key);
+      if (remoteEntry) {
+        this.cache.set(key, remoteEntry as CacheEntry<unknown>);
+        return remoteEntry;
       }
     }
 

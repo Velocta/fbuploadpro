@@ -77,6 +77,16 @@ function toSafeString(val: unknown): string {
   return '';
 }
 
+function resolveClaimedMediaUrl(mediaUrl: unknown, postFormat: string): string | null {
+  if (mediaUrl != null) return toSafeString(mediaUrl);
+  return postFormat === 'text' ? null : '';
+}
+
+function resolveClaimedStorageKey(storageKey: unknown, postFormat: string): string | null {
+  if (storageKey != null) return toSafeString(storageKey);
+  return postFormat === 'text' ? null : '';
+}
+
 function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueItem {
   const postFormat =
     (row.post_format as PostFormat | undefined) ??
@@ -96,18 +106,8 @@ function mapRowToClaimedQueueItem(row: Record<string, unknown>): ClaimedQueueIte
     retryCount: Number(row.retry_count ?? 0),
     maxRetries: Number(row.max_retries ?? 3),
     mediaType: row.media_type ?? (postFormat === 'text' ? null : 'video'),
-    mediaUrl:
-      row.media_url != null
-        ? toSafeString(row.media_url)
-        : postFormat === 'text'
-          ? null
-          : '',
-    storageKey:
-      row.storage_key != null
-        ? toSafeString(row.storage_key)
-        : postFormat === 'text'
-          ? null
-          : '',
+    mediaUrl: resolveClaimedMediaUrl(row.media_url, postFormat),
+    storageKey: resolveClaimedStorageKey(row.storage_key, postFormat),
     fbPageId: toSafeString(row.page_external_id ?? row.external_page_id ?? row.fb_page_id),
     encryptedPageToken: toSafeString(
       row.encrypted_page_token ?? row.encrypted_access_token
@@ -288,16 +288,14 @@ export async function dispatchItem(
           } else {
             throw new Error('Facebook client does not support publishPhotoStory');
           }
+        } else if (typeof fbClient.publishVideoStory === 'function') {
+          publishResult = await fbClient.publishVideoStory({
+            pageId: item.fbPageId,
+            accessToken,
+            videoUrl: item.mediaUrl,
+          });
         } else {
-          if (typeof fbClient.publishVideoStory === 'function') {
-            publishResult = await fbClient.publishVideoStory({
-              pageId: item.fbPageId,
-              accessToken,
-              videoUrl: item.mediaUrl,
-            });
-          } else {
-            throw new Error('Facebook client does not support publishVideoStory');
-          }
+          throw new Error('Facebook client does not support publishVideoStory');
         }
         break;
       }
@@ -340,9 +338,10 @@ export async function dispatchItem(
     }
 
     let targetAccountStatus: 'active' | 'expired' | undefined;
-    if (evaluation && (evaluation as any).accountStatus === 'expired') {
-      targetAccountStatus = 'expired';
-    } else if (isAuthError && (errorCode === 190 || errorCode === 102)) {
+    const isAccountExpired =
+      (evaluation && (evaluation as any).accountStatus === 'expired') ||
+      (isAuthError && (errorCode === 190 || errorCode === 102));
+    if (isAccountExpired) {
       targetAccountStatus = 'expired';
     }
 

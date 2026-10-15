@@ -32,6 +32,39 @@ export interface EnqueueModalProps {
   onEnqueued: () => void;
 }
 
+function resolveMediaForFormat(
+  fmt: PostFormat,
+  currentMediaId: string | null,
+  mediaList: EnqueueMediaItemOption[]
+): string | null {
+  if (fmt === 'text') return null;
+
+  const current = currentMediaId ? mediaList.find((m) => m.id === currentMediaId) : null;
+  const isVideoFmt = fmt === 'reel' || fmt === 'video';
+
+  if (current) {
+    if (fmt === 'image' && current.mediaType === 'video') {
+      const firstImg = mediaList.find((m) => m.mediaType === 'image');
+      return firstImg ? firstImg.id : null;
+    }
+    if (isVideoFmt && current.mediaType === 'image') {
+      const firstVid = mediaList.find((m) => m.mediaType === 'video');
+      return firstVid ? firstVid.id : null;
+    }
+    return currentMediaId;
+  }
+
+  if (fmt === 'image') {
+    const firstImg = mediaList.find((m) => m.mediaType === 'image');
+    return firstImg ? firstImg.id : null;
+  }
+  if (isVideoFmt) {
+    const firstVid = mediaList.find((m) => m.mediaType === 'video');
+    return firstVid ? firstVid.id : null;
+  }
+  return null;
+}
+
 export function EnqueueModal({
   pageId,
   subdomain,
@@ -125,28 +158,7 @@ export function EnqueueModal({
 
   const handleSelectFormat = (fmt: PostFormat) => {
     setSelectedFormat(fmt);
-    if (fmt === 'text') {
-      setSelectedMediaId(null);
-    } else if (selectedMediaId) {
-      const current = mediaList.find((m) => m.id === selectedMediaId);
-      if (current) {
-        if (fmt === 'image' && current.mediaType === 'video') {
-          const firstImg = mediaList.find((m) => m.mediaType === 'image');
-          setSelectedMediaId(firstImg ? firstImg.id : null);
-        } else if ((fmt === 'reel' || fmt === 'video') && current.mediaType === 'image') {
-          const firstVid = mediaList.find((m) => m.mediaType === 'video');
-          setSelectedMediaId(firstVid ? firstVid.id : null);
-        }
-      }
-    } else {
-      if (fmt === 'image') {
-        const firstImg = mediaList.find((m) => m.mediaType === 'image');
-        if (firstImg) setSelectedMediaId(firstImg.id);
-      } else if (fmt === 'reel' || fmt === 'video') {
-        const firstVid = mediaList.find((m) => m.mediaType === 'video');
-        if (firstVid) setSelectedMediaId(firstVid.id);
-      }
-    }
+    setSelectedMediaId(resolveMediaForFormat(fmt, selectedMediaId, mediaList));
   };
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
@@ -327,6 +339,10 @@ export function EnqueueModal({
       </div>
     );
   };
+
+  const isSubmitDisabled =
+    isSubmitting ||
+    (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId);
 
   return (
     <div
@@ -653,25 +669,14 @@ export function EnqueueModal({
             <button
               type="submit"
               data-testid="submit-enqueue-btn"
-              disabled={
-                isSubmitting ||
-                (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId)
-              }
+              disabled={isSubmitDisabled}
               style={{
                 ...COMPONENT_STYLES.primaryButton,
                 padding: `${SPACING.xs} ${SPACING.lg}`,
                 fontSize: '0.875rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor:
-                  isSubmitting ||
-                  (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId)
-                    ? 'not-allowed'
-                    : 'pointer',
-                opacity:
-                  isSubmitting ||
-                  (selectedFormat === 'text' ? !caption.trim() : !selectedMediaId)
-                    ? 0.7
-                    : 1,
+                cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+                opacity: isSubmitDisabled ? 0.7 : 1,
               }}
             >
               {isSubmitting ? 'Scheduling...' : 'Enqueue Post'}

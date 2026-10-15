@@ -651,7 +651,7 @@ export function PageTabCalendar({
 
               {/* Allowed Content Formats */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-                <label
+                <span
                   style={{
                     fontSize: '0.8125rem',
                     fontWeight: TYPOGRAPHY.weights.medium,
@@ -659,7 +659,7 @@ export function PageTabCalendar({
                   }}
                 >
                   Allowed Content Formats
-                </label>
+                </span>
                 <div
                   data-testid="slot-allowed-formats-selector"
                   style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xs }}

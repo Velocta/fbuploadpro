@@ -48,6 +48,68 @@ function assembleInsightsFromSnapshots(
   const countriesMap = new Map<string, number>();
   const citiesMap = new Map<string, number>();
 
+function parseJsonField<T>(field: unknown): T {
+  if (typeof field === 'string') {
+    try {
+      return JSON.parse(field) as T;
+    } catch {
+      return {} as T;
+    }
+  }
+  if (field && typeof field === 'object') {
+    return field as T;
+  }
+  return {} as T;
+}
+
+function accumulateReactions(
+  rawField: unknown,
+  aggregatedReactions: Record<string, number>
+): number {
+  const rx = parseJsonField<Record<string, unknown>>(rawField);
+  let engagements = 0;
+  for (const [k, v] of Object.entries(rx)) {
+    const num = Number(v) || 0;
+    if (k in aggregatedReactions) {
+      aggregatedReactions[k] = (aggregatedReactions[k] || 0) + num;
+    }
+    aggregatedReactions.total = (aggregatedReactions.total || 0) + num;
+    engagements += num;
+  }
+  return engagements;
+}
+
+function accumulateDemographics(
+  rawField: unknown,
+  countriesMap: Map<string, number>,
+  citiesMap: Map<string, number>
+): void {
+  const demo = parseJsonField<{ countries?: Record<string, unknown>; cities?: Record<string, unknown> }>(rawField);
+  if (demo.countries && typeof demo.countries === 'object') {
+    for (const [c, cnt] of Object.entries(demo.countries)) {
+      countriesMap.set(c, (countriesMap.get(c) || 0) + (Number(cnt) || 0));
+    }
+  }
+  if (demo.cities && typeof demo.cities === 'object') {
+    for (const [c, cnt] of Object.entries(demo.cities)) {
+      citiesMap.set(c, (citiesMap.get(c) || 0) + (Number(cnt) || 0));
+    }
+  }
+}
+
+function parseRangeDays(range?: string): number {
+  switch (range) {
+    case '7d':
+      return 7;
+    case '14d':
+      return 14;
+    case '90d':
+      return 90;
+    default:
+      return 28;
+  }
+}
+
   const timeSeries = sorted.map((row) => {
     const mv = Number(row.media_views) || 0;
     const vv = Number(row.video_views) || 0;
@@ -58,48 +120,8 @@ function assembleInsightsFromSnapshots(
 
     totalMediaViews += mv;
     totalVideoViews += vv;
-
-    let rx: Record<string, unknown> = {};
-    if (typeof row.reactions_summary === 'string') {
-      try {
-        rx = JSON.parse(row.reactions_summary);
-      } catch {
-        rx = {};
-      }
-    } else if (row.reactions_summary && typeof row.reactions_summary === 'object') {
-      rx = row.reactions_summary;
-    }
-
-    for (const [k, v] of Object.entries(rx)) {
-      const num = Number(v) || 0;
-      if (k in aggregatedReactions) {
-        aggregatedReactions[k] = (aggregatedReactions[k] || 0) + num;
-      }
-      aggregatedReactions.total = (aggregatedReactions.total || 0) + num;
-      totalPostEngagements += num;
-    }
-
-    let demo: Record<string, any> = {};
-    if (typeof row.demographics_summary === 'string') {
-      try {
-        demo = JSON.parse(row.demographics_summary);
-      } catch {
-        demo = {};
-      }
-    } else if (row.demographics_summary && typeof row.demographics_summary === 'object') {
-      demo = row.demographics_summary;
-    }
-
-    if (demo.countries && typeof demo.countries === 'object') {
-      for (const [c, cnt] of Object.entries(demo.countries)) {
-        countriesMap.set(c, (countriesMap.get(c) || 0) + (Number(cnt) || 0));
-      }
-    }
-    if (demo.cities && typeof demo.cities === 'object') {
-      for (const [c, cnt] of Object.entries(demo.cities)) {
-        citiesMap.set(c, (citiesMap.get(c) || 0) + (Number(cnt) || 0));
-      }
-    }
+    totalPostEngagements += accumulateReactions(row.reactions_summary, aggregatedReactions);
+    accumulateDemographics(row.demographics_summary, countriesMap, citiesMap);
 
     const v30s = Number(row.video_complete_views_30s) || 0;
 
@@ -317,7 +339,7 @@ export async function handleGetInsights(
   }
 
   // Query daily snapshots from PostgreSQL
-  const days = query.range === '7d' ? 7 : query.range === '14d' ? 14 : query.range === '90d' ? 90 : 28;
+  const days = parseRangeDays(query.range);
   const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const todayDate = new Date().toISOString().slice(0, 10);
 

@@ -123,43 +123,55 @@ async function fetchActivePageById(
   return formatPageRow(data);
 }
 
-async function fetchPageQueueCounts(
-  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+interface QueueStatusCounts {
+  queued: number;
+  publishing: number;
+  published: number;
+  failed: number;
+}
+
+const DEFAULT_QUEUE_STATUS_COUNTS: QueueStatusCounts = {
+  queued: 0,
+  publishing: 0,
+  published: 0,
+  failed: 0,
+};
+
+async function fetchQueueCountsLegacy(
+  client: DatabaseClient,
   pageId: string,
   userId: string
-): Promise<{ queued: number; publishing: number; published: number; failed: number }> {
-  const defaultCounts = { queued: 0, publishing: 0, published: 0, failed: 0 };
-  if (!client) return defaultCounts;
-
-  if ('query' in client && typeof client.query === 'function') {
-    try {
-      const rows = (await client.query(
-        `SELECT
-           COUNT(*) FILTER (WHERE status = 'queued') AS queued,
-           COUNT(*) FILTER (WHERE status = 'publishing') AS publishing,
-           COUNT(*) FILTER (WHERE status = 'published') AS published,
-           COUNT(*) FILTER (WHERE status = 'failed') AS failed
-         FROM queue_items
-         WHERE page_id = $1 AND user_id = $2`,
-        [pageId, userId]
-      )) as any[];
-      if (rows && rows[0]) {
-        return {
-          queued: Number(rows[0].queued ?? 0),
-          publishing: Number(rows[0].publishing ?? 0),
-          published: Number(rows[0].published ?? 0),
-          failed: Number(rows[0].failed ?? 0),
-        };
-      }
-    } catch (_err) {
-      // fallback
+): Promise<QueueStatusCounts | null> {
+  try {
+    const rows = (await client.query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'queued') AS queued,
+         COUNT(*) FILTER (WHERE status = 'publishing') AS publishing,
+         COUNT(*) FILTER (WHERE status = 'published') AS published,
+         COUNT(*) FILTER (WHERE status = 'failed') AS failed
+       FROM queue_items
+       WHERE page_id = $1 AND user_id = $2`,
+      [pageId, userId]
+    )) as any[];
+    if (rows && rows[0]) {
+      return {
+        queued: Number(rows[0].queued ?? 0),
+        publishing: Number(rows[0].publishing ?? 0),
+        published: Number(rows[0].published ?? 0),
+        failed: Number(rows[0].failed ?? 0),
+      };
     }
-    return defaultCounts;
+  } catch {
+    // fallback
   }
+  return null;
+}
 
-  const supabase = ('from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
-  if (!supabase) return defaultCounts;
-
+async function fetchQueueCountsRpc(
+  supabase: SupabaseClient<any>,
+  pageId: string,
+  userId: string
+): Promise<QueueStatusCounts | null> {
   try {
     const { data, error } = await supabase.rpc('get_page_queue_status_counts', {
       p_page_id: pageId,
@@ -173,10 +185,17 @@ async function fetchPageQueueCounts(
         failed: Number(data[0].failed ?? 0),
       };
     }
-  } catch (_e) {
+  } catch {
     // fallback
   }
+  return null;
+}
 
+async function fetchQueueCountsFallback(
+  supabase: SupabaseClient<any>,
+  pageId: string,
+  userId: string
+): Promise<QueueStatusCounts | null> {
   try {
     const { data: rows } = await supabase
       .from('queue_items')
@@ -184,20 +203,40 @@ async function fetchPageQueueCounts(
       .eq('page_id', pageId)
       .eq('user_id', userId);
     if (rows) {
-      const counts = { ...defaultCounts };
+      const counts: QueueStatusCounts = { ...DEFAULT_QUEUE_STATUS_COUNTS };
       for (const row of rows) {
-        if (row.status === 'queued') counts.queued++;
-        else if (row.status === 'publishing') counts.publishing++;
-        else if (row.status === 'published') counts.published++;
-        else if (row.status === 'failed') counts.failed++;
+        if (row.status in counts) {
+          counts[row.status as keyof QueueStatusCounts]++;
+        }
       }
       return counts;
     }
-  } catch (_e) {
+  } catch {
     // return defaults
   }
+  return null;
+}
 
-  return defaultCounts;
+async function fetchPageQueueCounts(
+  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+  pageId: string,
+  userId: string
+): Promise<QueueStatusCounts> {
+  if (!client) return { ...DEFAULT_QUEUE_STATUS_COUNTS };
+
+  if ('query' in client && typeof client.query === 'function') {
+    const counts = await fetchQueueCountsLegacy(client, pageId, userId);
+    return counts ?? { ...DEFAULT_QUEUE_STATUS_COUNTS };
+  }
+
+  const supabase = ('from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
+  if (!supabase) return { ...DEFAULT_QUEUE_STATUS_COUNTS };
+
+  const rpcCounts = await fetchQueueCountsRpc(supabase, pageId, userId);
+  if (rpcCounts) return rpcCounts;
+
+  const fallbackCounts = await fetchQueueCountsFallback(supabase, pageId, userId);
+  return fallbackCounts ?? { ...DEFAULT_QUEUE_STATUS_COUNTS };
 }
 
 export async function handleGetPage(

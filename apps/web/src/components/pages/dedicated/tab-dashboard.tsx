@@ -43,6 +43,11 @@ export interface PageTabDashboardProps {
   onOpenAddQueue: () => void;
 }
 
+function formatItemBadge(item: PageQueueItemSummary): string {
+  const fmt = item.postFormat || (item.mediaType === 'video' ? 'video' : 'image');
+  return fmt === 'image' ? 'PHOTO' : fmt.toUpperCase();
+}
+
 export function PageTabDashboard({
   page,
   queueItems,
@@ -361,9 +366,7 @@ export function PageTabDashboard({
                           textTransform: 'uppercase',
                         }}
                       >
-                        {(item.postFormat ?? (item.mediaType === 'video' ? 'video' : 'image')) === 'image'
-                          ? 'PHOTO'
-                          : (item.postFormat ?? (item.mediaType === 'video' ? 'video' : 'image')).toUpperCase()}
+                        {formatItemBadge(item)}
                       </span>
                       <p
                         style={{

@@ -51,6 +51,47 @@ export interface QueueBatch {
   queue: string;
 }
 
+function initWorkerDb(env: Env, optionsDb?: any): any {
+  if (optionsDb) return optionsDb;
+  const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey || env.ENVIRONMENT === 'test') {
+    return null;
+  }
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  }) as any;
+}
+
+async function recoverStuckPublishingItems(db: any): Promise<void> {
+  const currentMinute = new Date().getMinutes();
+  if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
+    try {
+      await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
+    } catch {
+      // Non-blocking in environments where recover RPC is not mocked
+    }
+  }
+}
+
+async function fanOutClaimedBatches(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  maxBatches: number,
+  batchSize: number
+): Promise<void> {
+  const CHUNK_SIZE = 100;
+  for (let b = 0; b < maxBatches; b++) {
+    const claimed = await claimDueItems(db, batchSize);
+    if (claimed.length === 0) break;
+
+    for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
+      const slice = claimed.slice(i, i + CHUNK_SIZE);
+      await queue.sendBatch(slice.map((body) => ({ body })));
+    }
+  }
+}
+
 export async function handleScheduled(
   controller: ScheduledController,
   env: Env,
@@ -63,19 +104,7 @@ export async function handleScheduled(
     return;
   }
 
-  let db = options?.db;
-
-  if (!db) {
-    const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !supabaseKey || env.ENVIRONMENT === 'test') {
-      return;
-    }
-    db = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    }) as any;
-  }
-
+  const db = initWorkerDb(env, options?.db);
   if (!db) {
     return;
   }
@@ -88,31 +117,13 @@ export async function handleScheduled(
 
   try {
     // 1. Every 5 minutes, recover items stuck in 'publishing' status
-    const currentMinute = new Date().getMinutes();
-    if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
-      try {
-        await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
-      } catch {
-        // Non-blocking in environments where recover RPC is not mocked
-      }
-    }
+    await recoverStuckPublishingItems(db);
 
     // 2. High-Throughput Producer vs Direct Runner
     if (env.PUBLISH_QUEUE && typeof env.PUBLISH_QUEUE.sendBatch === 'function') {
       const maxBatches = Number(env.DISPATCH_MAX_BATCHES_PER_TICK || 5);
       const batchSize = Number(env.DISPATCH_BATCH_SIZE || 500);
-
-      for (let b = 0; b < maxBatches; b++) {
-        const claimed = await claimDueItems(db, batchSize);
-        if (claimed.length === 0) break;
-
-        // Fan out claimed items to queue in slices of 100
-        const CHUNK_SIZE = 100;
-        for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
-          const slice = claimed.slice(i, i + CHUNK_SIZE);
-          await env.PUBLISH_QUEUE.sendBatch(slice.map((body) => ({ body })));
-        }
-      }
+      await fanOutClaimedBatches(env.PUBLISH_QUEUE, db, maxBatches, batchSize);
     } else {
       // Direct execution for tests and local development
       const concurrency = Number(env.DISPATCH_CONCURRENCY || 25);

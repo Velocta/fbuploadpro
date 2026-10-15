@@ -59,6 +59,88 @@ export class FacebookGraphError extends Error {
   }
 }
 
+interface BucUsageSummary {
+  bucUsageMaxPct?: number | undefined;
+  estimatedTimeToRegainAccessMinutes?: number | undefined;
+}
+
+function parseAppUsage(header: string | null): number | undefined {
+  if (!header) return undefined;
+  try {
+    const parsed = JSON.parse(header) as {
+      call_count?: number;
+      total_cputime?: number;
+      total_time?: number;
+    };
+    return Math.max(
+      parsed.call_count || 0,
+      parsed.total_cputime || 0,
+      parsed.total_time || 0
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function parseBucEntries(entries: Array<{
+  call_count?: number;
+  total_cputime?: number;
+  total_time?: number;
+  estimated_time_to_regain_access?: number;
+}>): { maxBuc: number; maxWait: number } {
+  let maxBuc = 0;
+  let maxWait = 0;
+  for (const entry of entries) {
+    const entryMax = Math.max(
+      entry.call_count || 0,
+      entry.total_cputime || 0,
+      entry.total_time || 0
+    );
+    if (entryMax > maxBuc) maxBuc = entryMax;
+    if (entry.estimated_time_to_regain_access && entry.estimated_time_to_regain_access > maxWait) {
+      maxWait = entry.estimated_time_to_regain_access;
+    }
+  }
+  return { maxBuc, maxWait };
+}
+
+function parseBucUsage(header: string | null): BucUsageSummary | undefined {
+  if (!header) return undefined;
+  try {
+    const parsed = JSON.parse(header) as Record<
+      string,
+      Array<{
+        call_count?: number;
+        total_cputime?: number;
+        total_time?: number;
+        estimated_time_to_regain_access?: number;
+      }>
+    >;
+
+    let maxBuc = 0;
+    let maxWait = 0;
+    let found = false;
+
+    for (const pageKey of Object.keys(parsed)) {
+      const entries = parsed[pageKey];
+      if (Array.isArray(entries)) {
+        found = true;
+        const entryMetrics = parseBucEntries(entries);
+        if (entryMetrics.maxBuc > maxBuc) maxBuc = entryMetrics.maxBuc;
+        if (entryMetrics.maxWait > maxWait) maxWait = entryMetrics.maxWait;
+      }
+    }
+
+    if (!found) return undefined;
+    return {
+      bucUsageMaxPct: maxBuc,
+      ...(maxWait > 0 ? { estimatedTimeToRegainAccessMinutes: maxWait } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Parses Facebook Graph API rate limit telemetry headers (X-App-Usage and X-Business-Use-Case-Usage).
  */
@@ -67,90 +149,18 @@ export function parseGraphRateLimitHeaders(
 ): GraphRateLimitTelemetry | undefined {
   if (!headers) return undefined;
 
-  let appUsageMaxPct: number | undefined;
-  let bucUsageMaxPct: number | undefined;
-  let estimatedTimeToRegainAccessMinutes: number | undefined;
+  const appUsageMaxPct = parseAppUsage(headers.get('x-app-usage'));
+  const bucSummary = parseBucUsage(headers.get('x-business-use-case-usage'));
 
-  const appUsageHeader = headers.get('x-app-usage');
-  if (appUsageHeader) {
-    try {
-      const parsed = JSON.parse(appUsageHeader) as {
-        call_count?: number;
-        total_cputime?: number;
-        total_time?: number;
-      };
-      appUsageMaxPct = Math.max(
-        parsed.call_count || 0,
-        parsed.total_cputime || 0,
-        parsed.total_time || 0
-      );
-    } catch {
-      // Ignore JSON parse error on malformed header
-    }
-  }
-
-  const bucUsageHeader = headers.get('x-business-use-case-usage');
-  if (bucUsageHeader) {
-    try {
-      const parsed = JSON.parse(bucUsageHeader) as Record<
-        string,
-        Array<{
-          call_count?: number;
-          total_cputime?: number;
-          total_time?: number;
-          estimated_time_to_regain_access?: number;
-        }>
-      >;
-
-      let maxBuc = 0;
-      let maxWait = 0;
-      let found = false;
-
-      for (const pageKey of Object.keys(parsed)) {
-        const entries = parsed[pageKey];
-        if (Array.isArray(entries)) {
-          for (const entry of entries) {
-            found = true;
-            const entryMax = Math.max(
-              entry.call_count || 0,
-              entry.total_cputime || 0,
-              entry.total_time || 0
-            );
-            if (entryMax > maxBuc) maxBuc = entryMax;
-            if (
-              entry.estimated_time_to_regain_access &&
-              entry.estimated_time_to_regain_access > maxWait
-            ) {
-              maxWait = entry.estimated_time_to_regain_access;
-            }
-          }
-        }
-      }
-
-      if (found) {
-        bucUsageMaxPct = maxBuc;
-        if (maxWait > 0) {
-          estimatedTimeToRegainAccessMinutes = maxWait;
-        }
-      }
-    } catch {
-      // Ignore JSON parse error on malformed header
-    }
-  }
-
-  if (
-    appUsageMaxPct === undefined &&
-    bucUsageMaxPct === undefined &&
-    estimatedTimeToRegainAccessMinutes === undefined
-  ) {
+  if (appUsageMaxPct === undefined && !bucSummary) {
     return undefined;
   }
 
   return {
     ...(appUsageMaxPct !== undefined ? { appUsageMaxPct } : {}),
-    ...(bucUsageMaxPct !== undefined ? { bucUsageMaxPct } : {}),
-    ...(estimatedTimeToRegainAccessMinutes !== undefined
-      ? { estimatedTimeToRegainAccessMinutes }
+    ...(bucSummary?.bucUsageMaxPct !== undefined ? { bucUsageMaxPct: bucSummary.bucUsageMaxPct } : {}),
+    ...(bucSummary?.estimatedTimeToRegainAccessMinutes !== undefined
+      ? { estimatedTimeToRegainAccessMinutes: bucSummary.estimatedTimeToRegainAccessMinutes }
       : {}),
   };
 }
@@ -216,26 +226,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     }
 
     // Phase 2: Stream video bytes from videoUrl to upload_url
-    const videoRes = await this.fetchFn(videoUrl);
-    if (!videoRes.ok || !videoRes.body) {
-      throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
-    }
-
-    const uploadRes = await this.fetchFn(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `OAuth ${accessToken}`,
-        offset: '0',
-        'Content-Type': 'application/octet-stream',
-      },
-      body: videoRes.body,
-      duplex: 'half',
-    } as RequestInit);
-
-    if (!uploadRes.ok) {
-      const uploadData = await this.parseJsonResponse(uploadRes);
-      throw this.createGraphError(uploadRes, uploadData);
-    }
+    await this.streamVideoUpload(uploadUrl, accessToken, videoUrl);
 
     // Phase 3: Finish upload and publish
     const finishUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/video_reels`;
@@ -494,26 +485,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       `https://rupload.facebook.com/video-upload/v26.0/${videoId}`;
 
     // Step 2: Stream video bytes from videoUrl to upload_url
-    const videoRes = await this.fetchFn(videoUrl);
-    if (!videoRes.ok || !videoRes.body) {
-      throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
-    }
-
-    const uploadRes = await this.fetchFn(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `OAuth ${accessToken}`,
-        offset: '0',
-        'Content-Type': 'application/octet-stream',
-      },
-      body: videoRes.body,
-      duplex: 'half',
-    } as RequestInit);
-
-    if (!uploadRes.ok) {
-      const uploadData = await this.parseJsonResponse(uploadRes);
-      throw this.createGraphError(uploadRes, uploadData);
-    }
+    await this.streamVideoUpload(uploadUrl, accessToken, videoUrl);
 
     // Step 3: Finish Video Story
     const finishUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/video_stories`;
@@ -594,6 +566,33 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     const message = errorData?.message ?? `Facebook Graph API error: HTTP ${res.status}`;
     const telemetry = parseGraphRateLimitHeaders(res.headers);
     return new FacebookGraphError(message, errorData, telemetry);
+  }
+
+  private async streamVideoUpload(
+    uploadUrl: string,
+    accessToken: string,
+    videoUrl: string
+  ): Promise<void> {
+    const videoRes = await this.fetchFn(videoUrl);
+    if (!videoRes.ok || !videoRes.body) {
+      throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
+    }
+
+    const uploadRes = await this.fetchFn(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `OAuth ${accessToken}`,
+        offset: '0',
+        'Content-Type': 'application/octet-stream',
+      },
+      body: videoRes.body,
+      duplex: 'half',
+    } as RequestInit);
+
+    if (!uploadRes.ok) {
+      const uploadData = await this.parseJsonResponse(uploadRes);
+      throw this.createGraphError(uploadRes, uploadData);
+    }
   }
 }
 

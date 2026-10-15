@@ -195,14 +195,12 @@ async function settleSupabaseOutcome(
   }
 }
 
-async function settleLegacyOutcome(
+async function settleLegacyPublishStatus(
   tx: Queryable,
   item: ClaimedQueueItem,
-  outcome: DispatchOutcome
+  outcome: DispatchOutcome,
+  attemptNumber: number
 ): Promise<void> {
-  if (typeof tx.query !== 'function') return;
-  const attemptNumber = (item.retryCount || 0) + 1;
-
   if (outcome.status === 'published') {
     await tx.query(UPDATE_QUEUE_ITEM_PUBLISHED_SQL, [
       item.id,
@@ -219,31 +217,38 @@ async function settleLegacyOutcome(
       outcome.errorMessage ?? null,
       outcome.errorMessage ? JSON.stringify({ warning: outcome.errorMessage }) : null,
     ]);
-  } else {
-    const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
-    const updateSql = isRetry ? UPDATE_QUEUE_ITEM_RETRY_SQL : UPDATE_QUEUE_ITEM_FAILED_SQL;
-    await tx.query(updateSql, [item.id]);
-
-    const errorDetails =
-      outcome.errorCode !== undefined
-        ? JSON.stringify({
-            errorCode: outcome.errorCode,
-            ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
-          })
-        : null;
-
-    await tx.query(INSERT_PUBLISH_LOG_SQL, [
-      item.userId,
-      item.id,
-      item.pageId,
-      isRetry ? 'retry' : 'failure',
-      attemptNumber,
-      outcome.errorCode ?? null,
-      outcome.errorMessage ?? null,
-      errorDetails,
-    ]);
+    return;
   }
 
+  const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
+  const updateSql = isRetry ? UPDATE_QUEUE_ITEM_RETRY_SQL : UPDATE_QUEUE_ITEM_FAILED_SQL;
+  await tx.query(updateSql, [item.id]);
+
+  const errorDetails =
+    outcome.errorCode !== undefined
+      ? JSON.stringify({
+          errorCode: outcome.errorCode,
+          ...(outcome.errorSubcode !== undefined ? { errorSubcode: outcome.errorSubcode } : {}),
+        })
+      : null;
+
+  await tx.query(INSERT_PUBLISH_LOG_SQL, [
+    item.userId,
+    item.id,
+    item.pageId,
+    isRetry ? 'retry' : 'failure',
+    attemptNumber,
+    outcome.errorCode ?? null,
+    outcome.errorMessage ?? null,
+    errorDetails,
+  ]);
+}
+
+async function settleLegacyPageSideEffects(
+  tx: Queryable,
+  item: ClaimedQueueItem,
+  outcome: DispatchOutcome
+): Promise<void> {
   if (outcome.targetPageStatus) {
     await tx.query(UPDATE_PAGE_STATUS_SQL, [
       item.pageId,
@@ -271,6 +276,17 @@ async function settleLegacyOutcome(
       [item.pageId, item.userId]
     );
   }
+}
+
+async function settleLegacyOutcome(
+  tx: Queryable,
+  item: ClaimedQueueItem,
+  outcome: DispatchOutcome
+): Promise<void> {
+  if (typeof tx.query !== 'function') return;
+  const attemptNumber = (item.retryCount || 0) + 1;
+  await settleLegacyPublishStatus(tx, item, outcome, attemptNumber);
+  await settleLegacyPageSideEffects(tx, item, outcome);
 }
 
 /**
