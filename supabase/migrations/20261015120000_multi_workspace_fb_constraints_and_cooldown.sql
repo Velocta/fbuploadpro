@@ -15,7 +15,7 @@ DROP INDEX IF EXISTS "public"."uq_fb_accounts_user_account";
 -- Drop legacy unique constraint on facebook_pages(user_id, fb_page_id)
 ALTER TABLE "public"."facebook_pages"
   DROP CONSTRAINT IF EXISTS uq_fb_pages_user_page;
-DROP INDEX IF EXISTS "public"."uq_fb_pages_user_page;
+DROP INDEX IF EXISTS "public"."uq_fb_pages_user_page";
 
 -- ============================================================================
 -- 2. ENSURE WORKSPACE-SCOPED COMPOUND UNIQUE CONSTRAINTS
