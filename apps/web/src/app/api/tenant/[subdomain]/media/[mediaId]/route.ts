@@ -187,7 +187,7 @@ export async function handleUpdateMedia(
       // Keep data: URL fallback in test environments without R2 credentials
     }
 
-    if (process.env.NODE_ENV === 'production' && resolvedThumbnailUrl && resolvedThumbnailUrl.startsWith('data:')) {
+    if (process.env.NODE_ENV === 'production' && resolvedThumbnailUrl?.startsWith('data:')) {
       return NextResponse.json(
         { error: 'INVALID_REQUEST', message: 'Direct base64 thumbnail URLs are not supported in production. Please upload image to cloud storage.' },
         { status: 400 }

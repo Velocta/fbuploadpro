@@ -18,7 +18,7 @@ function resolveScheduledTime(
   if (requestedTime !== undefined && requestedTime !== null) {
     const d = new Date(requestedTime);
     if (Number.isNaN(d.getTime())) {
-      throw new Error('INVALID_DATE');
+      throw new TypeError('INVALID_DATE');
     }
     return d.toISOString();
   }

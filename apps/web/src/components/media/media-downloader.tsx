@@ -274,6 +274,112 @@ async function extractApiErrorMessage(res: Response, fallback: string): Promise<
   }
 }
 
+function createCancelledOutcome(idx: number, url: string, folderId: string | null) {
+  return {
+    saved: [] as DownloaderSavedEntry[],
+    failed: {
+      id: `failed-${idx}-${Date.now()}`,
+      url,
+      folderId,
+      errorMessage: 'Download was cancelled.',
+    },
+  };
+}
+
+async function fetchJobMediaItem(
+  subdomain: string,
+  job: any,
+  fetchImpl: typeof fetch,
+  signal?: AbortSignal
+): Promise<DownloaderSavedEntry[]> {
+  if (!job?.media_id) return [];
+  try {
+    const mediaRes = await fetchImpl(
+      `/api/tenant/${subdomain}/media/${job.media_id}`,
+      signal ? { signal } : {}
+    );
+    if (!mediaRes.ok) return [];
+    const mediaData = await mediaRes.json();
+    return [
+      {
+        item: mediaData?.item ?? mediaData,
+        sourceUrl: job.source_url,
+        platform: job.source_platform,
+      },
+    ];
+  } catch {
+    return [];
+  }
+}
+
+async function evaluatePollJobStatus(
+  job: any,
+  params: {
+    subdomain: string;
+    url: string;
+    idx: number;
+    folderId: string | null;
+    fetchImpl: typeof fetch;
+    signal?: AbortSignal;
+    onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
+  }
+): Promise<{ finished: boolean; outcome?: { saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null } }> {
+  if (job?.status === 'processing') {
+    const pct = typeof job.progress_percent === 'number' ? job.progress_percent : 0;
+    params.onStageChange?.(pct > 0 ? 'streaming' : 'resolving', pct);
+    return { finished: false };
+  }
+
+  if (job?.status === 'completed') {
+    const saved = await fetchJobMediaItem(params.subdomain, job, params.fetchImpl, params.signal);
+    return { finished: true, outcome: { saved, failed: null } };
+  }
+
+  if (job?.status === 'failed') {
+    return {
+      finished: true,
+      outcome: {
+        saved: [],
+        failed: {
+          id: `failed-${params.idx}-${Date.now()}`,
+          url: params.url,
+          folderId: params.folderId,
+          errorMessage: job.error_message || 'Could not save media from this link.',
+        },
+      },
+    };
+  }
+
+  return { finished: false };
+}
+
+async function executeSinglePoll(
+  subdomain: string,
+  jobId: string,
+  fetchImpl: typeof fetch,
+  signal?: AbortSignal
+): Promise<{ status: number; ok: boolean; data?: any } | 'aborted'> {
+  try {
+    const pollRes = await fetchImpl(
+      `/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`,
+      signal ? { signal } : {}
+    );
+    if (pollRes.status === 401 || pollRes.status === 403 || pollRes.status === 404) {
+      return { status: pollRes.status, ok: false };
+    }
+    if (!pollRes.ok) {
+      return { status: pollRes.status, ok: false };
+    }
+    const data = await pollRes.json();
+    return { status: pollRes.status, ok: true, data };
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === 'AbortError') {
+      return 'aborted';
+    }
+    return { status: 0, ok: false };
+  }
+}
+
 async function pollDownloadJobCompletion(params: {
   subdomain: string;
   jobId: string;
@@ -284,58 +390,25 @@ async function pollDownloadJobCompletion(params: {
   signal?: AbortSignal;
   onStageChange?: (stage: 'resolving' | 'streaming', percent?: number) => void;
 }): Promise<{ saved: DownloaderSavedEntry[]; failed: DownloaderFailedEntry | null }> {
-  const { subdomain, jobId, url, idx, folderId, fetchImpl, signal, onStageChange } = params;
+  const { subdomain, jobId, url, idx, folderId, fetchImpl, signal } = params;
   const maxPolls = 60;
   for (let p = 0; p < maxPolls; p++) {
     if (signal?.aborted) {
-      return {
-        saved: [],
-        failed: {
-          id: `failed-${idx}-${Date.now()}`,
-          url,
-          folderId,
-          errorMessage: 'Download was cancelled.',
-        },
-      };
+      return createCancelledOutcome(idx, url, folderId);
     }
 
     await new Promise((r) => setTimeout(r, 1500));
 
     if (signal?.aborted) {
-      return {
-        saved: [],
-        failed: {
-          id: `failed-${idx}-${Date.now()}`,
-          url,
-          folderId,
-          errorMessage: 'Download was cancelled.',
-        },
-      };
+      return createCancelledOutcome(idx, url, folderId);
     }
 
-    let pollRes: Response;
-    try {
-      pollRes = await fetchImpl(
-        `/api/tenant/${subdomain}/media/downloader?jobId=${jobId}`,
-        signal ? { signal } : {}
-      );
-    } catch (fetchErr: any) {
-      if (signal?.aborted || fetchErr?.name === 'AbortError') {
-        return {
-          saved: [],
-          failed: {
-            id: `failed-${idx}-${Date.now()}`,
-            url,
-            folderId,
-            errorMessage: 'Download was cancelled.',
-          },
-        };
-      }
-      continue;
+    const pollResult = await executeSinglePoll(subdomain, jobId, fetchImpl, signal);
+    if (pollResult === 'aborted') {
+      return createCancelledOutcome(idx, url, folderId);
     }
 
-    // Fail-fast immediately on permanent HTTP authentication or not-found status codes
-    if (pollRes.status === 401 || pollRes.status === 403 || pollRes.status === 404) {
+    if (pollResult.status === 401 || pollResult.status === 403 || pollResult.status === 404) {
       return {
         saved: [],
         failed: {
@@ -343,59 +416,20 @@ async function pollDownloadJobCompletion(params: {
           url,
           folderId,
           errorMessage:
-            pollRes.status === 404
+            pollResult.status === 404
               ? 'Download job not found or expired.'
               : 'Authentication error while checking download status.',
         },
       };
     }
 
-    if (!pollRes.ok) continue;
-
-    let pollData: any;
-    try {
-      pollData = await pollRes.json();
-    } catch {
+    if (!pollResult.ok || !pollResult.data?.job) {
       continue;
     }
 
-    const job = pollData?.job;
-    if (job?.status === 'processing') {
-      const pct = typeof job.progress_percent === 'number' ? job.progress_percent : 0;
-      onStageChange?.(pct > 0 ? 'streaming' : 'resolving', pct);
-    }
-    if (job?.status === 'completed') {
-      if (job?.media_id) {
-        const mediaRes = await fetchImpl(
-          `/api/tenant/${subdomain}/media/${job.media_id}`,
-          signal ? { signal } : {}
-        ).catch(() => null);
-        if (mediaRes?.ok) {
-          const mediaData = await mediaRes.json();
-          return {
-            saved: [
-              {
-                item: mediaData?.item ?? mediaData,
-                sourceUrl: job.source_url,
-                platform: job.source_platform,
-              },
-            ],
-            failed: null,
-          };
-        }
-      }
-      return { saved: [], failed: null };
-    }
-    if (job?.status === 'failed') {
-      return {
-        saved: [],
-        failed: {
-          id: `failed-${idx}-${Date.now()}`,
-          url,
-          folderId,
-          errorMessage: job.error_message || 'Could not save media from this link.',
-        },
-      };
+    const evaluation = await evaluatePollJobStatus(pollResult.data.job, params);
+    if (evaluation.finished && evaluation.outcome) {
+      return evaluation.outcome;
     }
   }
   return { saved: [], failed: null };
@@ -742,6 +776,49 @@ export interface MediaDownloaderProps {
   initialDeduplicationCount?: number;
 }
 
+function resolveInitialDownloaderFolderId(
+  initialId?: string | null,
+  folders?: MediaFolder[]
+): string | null {
+  if (initialId !== undefined) {
+    return initialId;
+  }
+  if (folders) {
+    const existingDownloads = findRootDownloadsFolder(folders);
+    if (existingDownloads) {
+      return existingDownloads.id;
+    }
+  }
+  return null;
+}
+
+function sortFoldersForDownloader(
+  folders: MediaFolder[]
+): Array<{ folder: MediaFolder; pathLabel: string }> {
+  const withPaths = folders.map((folder) => ({
+    folder,
+    pathLabel: formatFolderAncestryPath(folder.id, folders),
+  }));
+  withPaths.sort((a, b) => {
+    const aIsDownloads =
+      (a.folder.parentId ?? null) === null &&
+      a.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
+    const bIsDownloads =
+      (b.folder.parentId ?? null) === null &&
+      b.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
+    if (aIsDownloads && !bIsDownloads) return -1;
+    if (!aIsDownloads && bIsDownloads) return 1;
+    return a.pathLabel.toLowerCase().localeCompare(b.pathLabel.toLowerCase());
+  });
+  return withPaths;
+}
+
+function getProgressTextColor(status?: string): string {
+  if (status === 'completed') return PALETTE.accent4;
+  if (status === 'cancelled') return PALETTE.accent3;
+  return PALETTE.primary;
+}
+
 export function MediaDownloader({
   subdomain,
   initialFolders,
@@ -758,18 +835,9 @@ export function MediaDownloader({
   const router = useRouter();
 
   const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() => {
-    if (initialSelectedFolderId !== undefined) {
-      return initialSelectedFolderId;
-    }
-    if (initialFolders) {
-      const existingDownloads = findRootDownloadsFolder(initialFolders);
-      if (existingDownloads) {
-        return existingDownloads.id;
-      }
-    }
-    return null;
-  });
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() =>
+    resolveInitialDownloaderFolderId(initialSelectedFolderId, initialFolders)
+  );
 
   const [urlInput, setUrlInput] = useState(initialUrlInput);
   const [urlError, setUrlError] = useState<string | null>(initialUrlError);
@@ -837,24 +905,7 @@ export function MediaDownloader({
 
   const isDownloading = batchProgress?.status === 'downloading';
 
-  const sortedFolderOptions = React.useMemo(() => {
-    const withPaths = folders.map((folder) => ({
-      folder,
-      pathLabel: formatFolderAncestryPath(folder.id, folders),
-    }));
-    withPaths.sort((a, b) => {
-      const aIsDownloads =
-        (a.folder.parentId ?? null) === null &&
-        a.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
-      const bIsDownloads =
-        (b.folder.parentId ?? null) === null &&
-        b.folder.name.trim().toLowerCase() === DEFAULT_DOWNLOADS_FOLDER_NAME.toLowerCase();
-      if (aIsDownloads && !bIsDownloads) return -1;
-      if (!aIsDownloads && bIsDownloads) return 1;
-      return a.pathLabel.toLowerCase().localeCompare(b.pathLabel.toLowerCase());
-    });
-    return withPaths;
-  }, [folders]);
+  const sortedFolderOptions = React.useMemo(() => sortFoldersForDownloader(folders), [folders]);
 
   const handleOpenNewFolderDialog = useCallback(() => {
     setNewFolderName('');
@@ -1357,12 +1408,7 @@ export function MediaDownloader({
                 style={{
                   fontSize: '0.875rem',
                   fontWeight: TYPOGRAPHY.weights.bold,
-                  color:
-                    batchProgress.status === 'completed'
-                      ? PALETTE.accent4
-                      : batchProgress.status === 'cancelled'
-                        ? PALETTE.accent3
-                        : PALETTE.primary,
+                  color: getProgressTextColor(batchProgress.status),
                   fontVariantNumeric: TYPOGRAPHY.tabularNums,
                 }}
               >

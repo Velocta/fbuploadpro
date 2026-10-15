@@ -68,7 +68,12 @@ async function settleSupabaseOutcome(
 
   if (typeof supabase.rpc === 'function' && item.userId && item.pageId) {
     const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
-    const outcomeStatus = outcome.status === 'published' ? 'published' : isRetry ? 'queued' : 'failed';
+    let outcomeStatus = 'failed';
+    if (outcome.status === 'published') {
+      outcomeStatus = 'published';
+    } else if (isRetry) {
+      outcomeStatus = 'queued';
+    }
     const { error: rpcError } = await supabase.rpc('settle_queue_item_outcome', {
       p_queue_item_id: item.id,
       p_user_id: item.userId,

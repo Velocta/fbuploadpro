@@ -338,6 +338,43 @@ export async function handleUpdateFolder(
   }
 }
 
+async function deleteKeySubChunks(
+  storage: { deleteObject: (key: string) => Promise<any> },
+  chunk: string[]
+): Promise<void> {
+  const subBatchSize = 25;
+  const subChunks: string[][] = [];
+  for (let j = 0; j < chunk.length; j += subBatchSize) {
+    subChunks.push(chunk.slice(j, j + subBatchSize));
+  }
+  await Promise.all(
+    subChunks.map((subChunk) =>
+      Promise.allSettled(
+        subChunk.map((key) =>
+          storage.deleteObject(key).catch((err) => {
+            console.error(`Failed to delete storage key ${key}:`, err);
+          })
+        )
+      )
+    )
+  );
+}
+
+async function deleteChunk(
+  storage: { deleteObject: (key: string) => Promise<any>; deleteObjects?: (keys: string[]) => Promise<any> },
+  chunk: string[]
+): Promise<void> {
+  if (typeof storage.deleteObjects === 'function') {
+    try {
+      await storage.deleteObjects(chunk);
+      return;
+    } catch (err) {
+      console.warn('storage.deleteObjects failed, falling back to individual deletes:', err);
+    }
+  }
+  await deleteKeySubChunks(storage, chunk);
+}
+
 async function batchDeleteStorageKeys(
   storage: { deleteObject: (key: string) => Promise<any>; deleteObjects?: (keys: string[]) => Promise<any> },
   keys: string[],
@@ -347,27 +384,7 @@ async function batchDeleteStorageKeys(
   for (let i = 0; i < keys.length; i += batchSize) {
     chunks.push(keys.slice(i, i + batchSize));
   }
-  for (const chunk of chunks) {
-    if (typeof storage.deleteObjects === 'function') {
-      try {
-        await storage.deleteObjects(chunk);
-        continue;
-      } catch (err) {
-        console.warn('storage.deleteObjects failed, falling back to individual deletes:', err);
-      }
-    }
-    const subBatchSize = 25;
-    for (let j = 0; j < chunk.length; j += subBatchSize) {
-      const subChunk = chunk.slice(j, j + subBatchSize);
-      await Promise.allSettled(
-        subChunk.map((key) =>
-          storage.deleteObject(key).catch((err) => {
-            console.error(`Failed to delete storage key ${key}:`, err);
-          })
-        )
-      );
-    }
-  }
+  await Promise.all(chunks.map((chunk) => deleteChunk(storage, chunk)));
 }
 
 export async function handleDeleteFolder(

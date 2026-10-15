@@ -89,6 +89,33 @@ async function recoverStuckPublishingItems(db: any): Promise<void> {
   }
 }
 
+async function revertUnsentQueueItems(db: any, unsentIds: string[]): Promise<void> {
+  if (unsentIds.length === 0) return;
+  try {
+    if (typeof db.from === 'function') {
+      await db.from('queue_items').update({ status: 'queued', updated_at: new Date().toISOString() }).in('id', unsentIds);
+    } else if (typeof db.query === 'function') {
+      await db.query(`UPDATE queue_items SET status = 'queued', updated_at = now() WHERE id = ANY($1)`, [unsentIds]);
+    }
+  } catch (revertErr) {
+    console.error('[fanOutClaimedBatches] Failed to revert unsent items to queued:', revertErr);
+  }
+}
+
+async function sendClaimedSlice(
+  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
+  db: any,
+  slice: any[]
+): Promise<void> {
+  try {
+    await queue.sendBatch(slice.map((body) => ({ body })));
+  } catch (sendErr) {
+    console.error('[fanOutClaimedBatches] Failed to send batch to queue; reverting items to queued:', sendErr);
+    const unsentIds = slice.map((item) => item.id);
+    await revertUnsentQueueItems(db, unsentIds);
+  }
+}
+
 async function fanOutClaimedBatches(
   queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
   db: any,
@@ -104,25 +131,7 @@ async function fanOutClaimedBatches(
     for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
       slices.push(claimed.slice(i, i + CHUNK_SIZE));
     }
-    for (const slice of slices) {
-      try {
-        await queue.sendBatch(slice.map((body) => ({ body })));
-      } catch (sendErr) {
-        console.error('[fanOutClaimedBatches] Failed to send batch to queue; reverting items to queued:', sendErr);
-        const unsentIds = slice.map((item) => item.id);
-        if (unsentIds.length > 0) {
-          try {
-            if (typeof db.from === 'function') {
-              await db.from('queue_items').update({ status: 'queued', updated_at: new Date().toISOString() }).in('id', unsentIds);
-            } else if (typeof db.query === 'function') {
-              await db.query(`UPDATE queue_items SET status = 'queued', updated_at = now() WHERE id = ANY($1)`, [unsentIds]);
-            }
-          } catch (revertErr) {
-            console.error('[fanOutClaimedBatches] Failed to revert unsent items to queued:', revertErr);
-          }
-        }
-      }
-    }
+    await Promise.all(slices.map((slice) => sendClaimedSlice(queue, db, slice)));
   }
 }
 

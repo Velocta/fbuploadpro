@@ -176,6 +176,44 @@ function isRateLimitErrorCode(code?: number, subcode?: number): boolean {
   return false;
 }
 
+async function postFirstCommentWithRetry(
+  fbClient: IFacebookPublishClient,
+  params: {
+    postId: string;
+    accessToken: string;
+    message: string;
+    itemId: string;
+  }
+): Promise<{ commentId: string | null; warning: string | null }> {
+  let commentAttempts = 0;
+  const maxCommentAttempts = 3;
+  while (commentAttempts < maxCommentAttempts) {
+    commentAttempts++;
+    try {
+      const commentRes = await fbClient.postComment({
+        postId: params.postId,
+        accessToken: params.accessToken,
+        message: params.message,
+      });
+      return { commentId: commentRes.commentId, warning: null };
+    } catch (commentErr: unknown) {
+      if (commentAttempts >= maxCommentAttempts) {
+        const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+        console.warn(
+          `[Dispatcher] First comment failed for queue item ${params.itemId} (post ${params.postId}):`,
+          commentErr
+        );
+        return {
+          commentId: null,
+          warning: `Published post but first comment failed: ${errMsg}`,
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, commentAttempts * 500));
+    }
+  }
+  return { commentId: null, warning: null };
+}
+
 /**
  * Dispatches a claimed queue item to Facebook Graph API v26.0 based on its post format:
  * 'text', 'image', 'reel', 'video', or 'story'.
@@ -389,32 +427,14 @@ export async function dispatchItem(
   let commentWarning: string | undefined;
 
   if (format !== 'story' && item.firstComment && item.firstComment.trim().length > 0) {
-    let commentAttempts = 0;
-    const maxCommentAttempts = 3;
-    while (commentAttempts < maxCommentAttempts) {
-      commentAttempts++;
-      try {
-        const commentRes = await fbClient.postComment({
-          postId: publishResult.postId,
-          accessToken,
-          message: item.firstComment.trim(),
-        });
-        fbCommentId = commentRes.commentId;
-        break;
-      } catch (commentErr: unknown) {
-        if (commentAttempts >= maxCommentAttempts) {
-          const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
-          commentWarning = `Published post but first comment failed: ${errMsg}`;
-          console.warn(
-            `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
-            commentErr
-          );
-        } else {
-          // Short delay between comment attempts (e.g. 500ms * attempt)
-          await new Promise((resolve) => setTimeout(resolve, commentAttempts * 500));
-        }
-      }
-    }
+    const outcome = await postFirstCommentWithRetry(fbClient, {
+      postId: publishResult.postId,
+      accessToken,
+      message: item.firstComment.trim(),
+      itemId: item.id,
+    });
+    fbCommentId = outcome.commentId ?? undefined;
+    commentWarning = outcome.warning ?? undefined;
   }
 
   // 4. Proactive telemetry pacing check

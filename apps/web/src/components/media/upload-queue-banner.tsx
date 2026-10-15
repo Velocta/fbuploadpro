@@ -640,6 +640,56 @@ export interface ExecuteBoundedUploadBatchResult {
   failedEntries: QueuedUploadEntry[];
 }
 
+async function requestPresignedUploadUrl(
+  fetchImpl: typeof fetch,
+  subdomain: string,
+  fileName: string,
+  fileSize: number,
+  mimeType: string
+): Promise<{
+  mediaId: string;
+  mediaKey: string;
+  mediaUploadUrl: string;
+  thumbnailKey: string;
+  thumbnailUploadUrl: string;
+  publicMediaUrl: string;
+  publicThumbnailUrl: string;
+}> {
+  const urlRes = await fetchImpl(`/api/tenant/${subdomain}/media/upload-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      fileName,
+      fileSize,
+      mimeType,
+      thumbnailMimeType: 'image/webp',
+    }),
+  });
+  if (!urlRes.ok) {
+    throw new Error('Failed to request upload URL');
+  }
+  return (await urlRes.json()) as any;
+}
+
+async function uploadBinaryToStorage(
+  fetchImpl: typeof fetch,
+  mediaUploadUrl: string,
+  mimeType: string,
+  file: File
+): Promise<void> {
+  const isMockStorageUrl = mediaUploadUrl.includes('mock-r2.fbuploadpro.com');
+  if (!isMockStorageUrl) {
+    const putRes = await fetchImpl(mediaUploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': mimeType },
+      body: file,
+    });
+    if (!putRes.ok) {
+      throw new Error(`Failed to upload media to storage: HTTP ${putRes.status}`);
+    }
+  }
+}
+
 /**
  * Runs a bounded concurrency upload batch (max 3 concurrent files), updating unified progress via `onStateChange`.
  */
@@ -774,45 +824,16 @@ export async function executeBoundedUploadBatch(
       const metadata = await extractMediaMetadata(entry.file, 1500);
 
       // Step B: Request presigned upload URLs
-      const urlRes = await fetchImpl(`/api/tenant/${subdomain}/media/upload-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: cleanFileName,
-          fileSize: entry.file.size,
-          mimeType: entry.mimeType,
-          thumbnailMimeType: 'image/webp',
-        }),
-      });
-
-      if (!urlRes.ok) {
-        throw new Error('Failed to request upload URL');
-      }
-
-      const presigned = (await urlRes.json()) as {
-        mediaId: string;
-        mediaKey: string;
-        mediaUploadUrl: string;
-        thumbnailKey: string;
-        thumbnailUploadUrl: string;
-        publicMediaUrl: string;
-        publicThumbnailUrl: string;
-      };
+      const presigned = await requestPresignedUploadUrl(
+        fetchImpl,
+        subdomain,
+        cleanFileName,
+        entry.file.size,
+        entry.mimeType
+      );
 
       // Step C: Upload binary to R2 (skip network call if mock local domain is used in dev/test)
-      const isMockStorageUrl = presigned.mediaUploadUrl.includes(
-        'mock-r2.fbuploadpro.com'
-      );
-      if (!isMockStorageUrl) {
-        const putRes = await fetchImpl(presigned.mediaUploadUrl, {
-          method: 'PUT',
-          headers: { 'Content-Type': entry.mimeType },
-          body: entry.file,
-        });
-        if (!putRes.ok) {
-          throw new Error(`Failed to upload media to storage: HTTP ${putRes.status}`);
-        }
-      }
+      await uploadBinaryToStorage(fetchImpl, presigned.mediaUploadUrl, entry.mimeType, entry.file);
 
       // Step D: Confirm upload in PostgreSQL (captionText omitted so backend defaults to stripped filename)
       const mediaType = entry.mimeType.startsWith('video/') ? 'video' : 'image';

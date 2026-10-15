@@ -130,6 +130,148 @@ export function AccountLinkedPagesList({
   );
 }
 
+function AccountAvatar({
+  profilePictureUrl,
+  displayName,
+  showAvatarImg,
+  initials,
+  onAvatarError,
+}: {
+  profilePictureUrl: string | null;
+  displayName: string;
+  showAvatarImg: boolean;
+  initials: string;
+  onAvatarError: () => void;
+}) {
+  if (showAvatarImg && profilePictureUrl) {
+    return (
+      <img
+        src={profilePictureUrl}
+        alt={displayName}
+        data-testid="account-avatar-img"
+        onError={onAvatarError}
+        style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: RADII.full,
+          objectFit: 'cover',
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          flexShrink: 0,
+        }}
+      />
+    );
+  }
+  return (
+    <div
+      data-testid="account-avatar-initials"
+      style={{
+        width: '48px',
+        height: '48px',
+        borderRadius: RADII.full,
+        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        color: `var(--text-main, ${THEME.default.text.primary})`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: TYPOGRAPHY.weights.bold,
+        fontSize: '1rem',
+        flexShrink: 0,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function AccountStatusAlerts({
+  isExpired,
+  isExpiringSoon,
+  daysRemaining,
+}: {
+  isExpired: boolean;
+  isExpiringSoon: boolean;
+  daysRemaining: number | null;
+}) {
+  if (isExpired) {
+    return (
+      <div
+        data-testid="account-expired-alert"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.xs,
+          padding: '8px 10px',
+          backgroundColor: 'rgba(246, 70, 93, 0.10)',
+          border: '1px solid rgba(246, 70, 93, 0.25)',
+          borderRadius: RADII.sm,
+          fontSize: '0.75rem',
+          color: PALETTE.accent3,
+          fontWeight: TYPOGRAPHY.weights.medium,
+          marginBottom: SPACING.md,
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>Session expired — reconnect to resume publishing</span>
+      </div>
+    );
+  }
+
+  if (isExpiringSoon) {
+    return (
+      <div
+        data-testid="account-expiring-soon-alert"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.xs,
+          padding: '8px 10px',
+          backgroundColor: 'rgba(250, 215, 52, 0.10)',
+          border: '1px solid rgba(250, 215, 52, 0.25)',
+          borderRadius: RADII.sm,
+          fontSize: '0.75rem',
+          color: PALETTE.primary,
+          fontWeight: TYPOGRAPHY.weights.medium,
+          marginBottom: SPACING.md,
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span>Access token expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'} — reconnect soon</span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export function AccountCard({
   account,
   onReconnect,
@@ -206,42 +348,13 @@ export function AccountCard({
         }}
       >
         {/* Avatar */}
-        {showAvatarImg ? (
-          <img
-            src={account.profilePictureUrl!}
-            alt={account.displayName}
-            data-testid="account-avatar-img"
-            onError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: RADII.full,
-              objectFit: 'cover',
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              flexShrink: 0,
-            }}
-          />
-        ) : (
-          <div
-            data-testid="account-avatar-initials"
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: RADII.full,
-              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              fontSize: '1rem',
-              flexShrink: 0,
-            }}
-          >
-            {initials}
-          </div>
-        )}
+        <AccountAvatar
+          profilePictureUrl={account.profilePictureUrl}
+          displayName={account.displayName}
+          showAvatarImg={showAvatarImg}
+          initials={initials}
+          onAvatarError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
+        />
 
         {/* Identity & Link */}
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -384,79 +497,12 @@ export function AccountCard({
         <AccountLinkedPagesList pages={linkedPages} />
       )}
 
-      {/* Re-authentication Warning (Strictly when expired) */}
-      {isExpired && (
-        <div
-          data-testid="account-expired-alert"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            padding: '8px 10px',
-            backgroundColor: 'rgba(246, 70, 93, 0.10)',
-            border: '1px solid rgba(246, 70, 93, 0.25)',
-            borderRadius: RADII.sm,
-            fontSize: '0.75rem',
-            color: PALETTE.accent3,
-            fontWeight: TYPOGRAPHY.weights.medium,
-            marginBottom: SPACING.md,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>Session expired — reconnect to resume publishing</span>
-        </div>
-      )}
-
-      {/* Proactive Token Expiration Horizon Notice */}
-      {isExpiringSoon && (
-        <div
-          data-testid="account-expiring-soon-alert"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            padding: '8px 10px',
-            backgroundColor: 'rgba(250, 215, 52, 0.10)',
-            border: '1px solid rgba(250, 215, 52, 0.25)',
-            borderRadius: RADII.sm,
-            fontSize: '0.75rem',
-            color: PALETTE.primary,
-            fontWeight: TYPOGRAPHY.weights.medium,
-            marginBottom: SPACING.md,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>Access token expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'} — reconnect soon</span>
-        </div>
-      )}
+      {/* Status Alerts */}
+      <AccountStatusAlerts
+        isExpired={isExpired}
+        isExpiringSoon={isExpiringSoon}
+        daysRemaining={daysRemaining}
+      />
 
       {/* Card Actions */}
       <div
