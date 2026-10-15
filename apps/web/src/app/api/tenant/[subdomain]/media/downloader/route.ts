@@ -364,6 +364,89 @@ export async function handleDownloadMediaFromUrl(
   }
 }
 
+export async function handleGetDownloadJobs(
+  request: NextRequest,
+  subdomain: string,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): Promise<NextResponse> {
+  const sessionSecret = getSessionSecret();
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let session;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const jobId = request.nextUrl.searchParams.get('jobId');
+
+  try {
+    if (isLegacyClient(dbClient)) {
+      if (jobId) {
+        const res = await (dbClient as any).query(
+          'SELECT * FROM media_download_jobs WHERE id = $1 AND user_id = $2',
+          [jobId, session.userId]
+        );
+        const rows = normalizeQueryRows<any>(res);
+        if (rows.length === 0) {
+          return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+        }
+        return NextResponse.json({ success: true, job: rows[0] }, { status: 200 });
+      }
+
+      const res = await (dbClient as any).query(
+        'SELECT * FROM media_download_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
+        [session.userId]
+      );
+      const rows = normalizeQueryRows<any>(res);
+      return NextResponse.json({ success: true, jobs: rows }, { status: 200 });
+    }
+
+    const supabase = getRouteSupabase(dbClient);
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    if (jobId) {
+      const { data: job, error } = await supabase
+        .from('media_download_jobs')
+        .select('*')
+        .eq('id', jobId)
+        .eq('user_id', session.userId)
+        .maybeSingle();
+
+      if (error || !job) {
+        return NextResponse.json({ error: 'Job not found' }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, job }, { status: 200 });
+    }
+
+    const { data: jobs, error } = await supabase
+      .from('media_download_jobs')
+      .select('*')
+      .eq('user_id', session.userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      return NextResponse.json({ error: 'Failed to fetch jobs' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, jobs: jobs || [] }, { status: 200 });
+  } catch (err: any) {
+    return NextResponse.json({ error: 'Internal Error', message: err?.message }, { status: 500 });
+  }
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ subdomain: string }> }
@@ -371,3 +454,12 @@ export async function POST(
   const { subdomain } = await context.params;
   return handleDownloadMediaFromUrl(request, subdomain);
 }
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ subdomain: string }> }
+): Promise<NextResponse> {
+  const { subdomain } = await context.params;
+  return handleGetDownloadJobs(request, subdomain);
+}
+
