@@ -96,16 +96,26 @@ function isAllowedBrowserPreviewHost(
   parsed: URL,
   actualHostname: string,
   userSubdomain: string | undefined,
-  cleanRoot: string
+  cleanRoot: string,
+  allowedSubdomains?: string[]
 ): boolean {
   const browserHost = window.location.hostname.toLowerCase();
   if (actualHostname === browserHost) return true;
-  if (userSubdomain && actualHostname === `${userSubdomain}.${cleanRoot}`.toLowerCase()) return true;
+  const allSubdomains = [
+    ...(userSubdomain ? [userSubdomain.toLowerCase()] : []),
+    ...(allowedSubdomains ? allowedSubdomains.map((s) => s.toLowerCase()) : []),
+  ];
+  if (allSubdomains.some((sub) => actualHostname === `${sub}.${cleanRoot}`.toLowerCase())) {
+    return true;
+  }
   return Boolean(
-    userSubdomain &&
+    allSubdomains.length > 0 &&
       actualHostname.endsWith('.vercel.app') &&
-      (parsed.pathname === `/tenant/${userSubdomain}` ||
-        parsed.pathname.startsWith(`/tenant/${userSubdomain}/`))
+      allSubdomains.some(
+        (sub) =>
+          parsed.pathname === `/tenant/${sub}` ||
+          parsed.pathname.startsWith(`/tenant/${sub}/`)
+      )
   );
 }
 
@@ -113,11 +123,17 @@ function isAllowedCustomDomainHost(
   actualHostname: string,
   userSubdomain: string | undefined,
   cleanRoot: string,
-  serverPreviewHost: string | null
+  serverPreviewHost: string | null,
+  allowedSubdomains?: string[]
 ): boolean {
-  if (userSubdomain) {
-    const expectedHostname = `${userSubdomain}.${cleanRoot}`.toLowerCase();
-    if (actualHostname === expectedHostname) return true;
+  const allSubdomains = [
+    ...(userSubdomain ? [userSubdomain.toLowerCase()] : []),
+    ...(allowedSubdomains ? allowedSubdomains.map((s) => s.toLowerCase()) : []),
+  ];
+  if (allSubdomains.length > 0) {
+    if (allSubdomains.some((sub) => actualHostname === `${sub}.${cleanRoot}`.toLowerCase())) {
+      return true;
+    }
     return actualHostname === serverPreviewHost?.toLowerCase();
   }
   return actualHostname === cleanRoot || actualHostname.endsWith(`.${cleanRoot}`);
@@ -129,7 +145,8 @@ function validateFullUrl(
   cleanRoot: string,
   isBrowserPreview: boolean,
   serverPreviewHost: string | null,
-  defaultUrl: string
+  defaultUrl: string,
+  allowedSubdomains?: string[]
 ): string {
   try {
     const parsed = new URL(trimmed);
@@ -144,12 +161,22 @@ function validateFullUrl(
 
     const actualHostname = parsed.hostname.toLowerCase();
     if (isBrowserPreview) {
-      return isAllowedBrowserPreviewHost(parsed, actualHostname, userSubdomain, cleanRoot)
-        ? buildBrowserPreviewTenantUrl(parsed, userSubdomain)
-        : defaultUrl;
+      if (isAllowedBrowserPreviewHost(parsed, actualHostname, userSubdomain, cleanRoot, allowedSubdomains)) {
+        const allSubdomains = [
+          ...(userSubdomain ? [userSubdomain] : []),
+          ...(allowedSubdomains || []),
+        ];
+        const matchedSub = allSubdomains.find(
+          (sub) =>
+            parsed.pathname === `/tenant/${sub}` ||
+            parsed.pathname.startsWith(`/tenant/${sub}/`)
+        );
+        return buildBrowserPreviewTenantUrl(parsed, matchedSub || userSubdomain);
+      }
+      return defaultUrl;
     }
 
-    if (isAllowedCustomDomainHost(actualHostname, userSubdomain, cleanRoot, serverPreviewHost)) {
+    if (isAllowedCustomDomainHost(actualHostname, userSubdomain, cleanRoot, serverPreviewHost, allowedSubdomains)) {
       return trimmed;
     }
   } catch {
@@ -200,7 +227,8 @@ export function sanitizeAuthRedirectUrl(
   rawReturnUrl: string | null | undefined,
   userSubdomain?: string | undefined,
   rootDomain: string = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000',
-  requestHost?: string | null
+  requestHost?: string | null,
+  allowedSubdomains?: string[]
 ): string {
   const { cleanRoot, normalizedRoot, isLocal, protocol } = normalizeDomainInput(rootDomain);
   const { isBrowserPreview, serverPreviewHost } = resolvePreviewContext(
@@ -243,6 +271,7 @@ export function sanitizeAuthRedirectUrl(
     cleanRoot,
     isBrowserPreview,
     serverPreviewHost,
-    defaultUrl
+    defaultUrl,
+    allowedSubdomains
   );
 }

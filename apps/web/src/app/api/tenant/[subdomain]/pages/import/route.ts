@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   decryptToken,
   encryptToken,
+  fetchAllFacebookPages,
   getSessionSecret,
   getTokenEncryptionKey,
   ImportPagesRequestSchema,
@@ -36,7 +38,8 @@ export async function handleImportPages(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -59,7 +62,7 @@ export async function handleImportPages(
   const { accountId, selectedPageIds } = parseResult.data;
 
   // 4. Resolve workspace ID scoped to user
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
@@ -115,28 +118,19 @@ export async function handleImportPages(
     );
   }
 
-  // 5. Query Facebook Graph API v26.0 /me/accounts
-  const graphUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
-  graphUrl.searchParams.set(
-    'fields',
-    'id,name,category,tasks,access_token,followers_count,picture{url}'
-  );
-
-  const graphRes = await fetch(graphUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${rawToken}`,
-    },
-  });
-
-  if (!graphRes.ok) {
+  // 5. Query Facebook Graph API v26.0 /me/accounts with pagination
+  let rawItems: any[] = [];
+  try {
+    rawItems = await fetchAllFacebookPages(
+      rawToken,
+      'id,name,category,tasks,access_token,followers_count,picture{url}'
+    );
+  } catch (_err) {
     return NextResponse.json(
       { error: 'Failed to query Facebook Graph API' },
-      { status: graphRes.status }
+      { status: 502 }
     );
   }
-
-  const graphData = await graphRes.json();
-  const rawItems: any[] = Array.isArray(graphData.data) ? graphData.data : [];
 
   const selectedSet = new Set(selectedPageIds);
   const matchedPages = rawItems.filter((item) => selectedSet.has(String(item.id)));
@@ -158,7 +152,7 @@ export async function handleImportPages(
       const { data: existingRows } = await supabase
         .from('facebook_pages')
         .select('fb_page_id, status, starting_followers')
-        .eq('user_id', session.userId)
+        .eq('workspace_id', workspaceId)
         .in('fb_page_id', pageFbIds);
 
       if (Array.isArray(existingRows)) {

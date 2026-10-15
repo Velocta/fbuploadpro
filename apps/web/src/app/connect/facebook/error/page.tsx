@@ -24,7 +24,7 @@ export function getConnectErrorCopy(reason?: string | null): {
   return {
     title: 'Connection Link Expired or Invalid',
     description:
-      'This single-use Facebook authorization link has expired or is no longer valid. Please generate a fresh link.',
+      'This Facebook authorization link has expired or is no longer valid (links are valid for 15 minutes). Please generate a fresh link.',
   };
 }
 

@@ -348,7 +348,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
     expect(insertSpy).not.toHaveBeenCalled();
   });
 
-  it('handles database errors gracefully and stops retrying when non-conflict error occurs in ensureWorkspaceForUser', async () => {
+  it('rejects with an explicit error when non-conflict database error occurs in ensureWorkspaceForUser', async () => {
     const mockSupabase = {
       from: vi.fn(() => ({
         select: vi.fn(() => ({
@@ -367,14 +367,14 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
       })),
     };
 
-    const result = await authModule.ensureWorkspaceForUser(
-      mockSupabase as any,
-      VALID_UUID,
-      'Test User',
-      'test-subdomain'
-    );
-
-    expect(result).toBe('test-subdomain');
+    await expect(
+      authModule.ensureWorkspaceForUser(
+        mockSupabase as any,
+        VALID_UUID,
+        'Test User',
+        'test-subdomain'
+      )
+    ).rejects.toThrow('Failed to provision workspace');
   });
 
   it('handles exceptions in select and insert gracefully in ensureWorkspaceForUser', async () => {

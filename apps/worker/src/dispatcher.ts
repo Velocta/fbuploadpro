@@ -236,6 +236,7 @@ export async function dispatchItem(
 
   // 3. Automated first comment (if configured)
   let fbCommentId: string | undefined;
+  let commentWarning: string | undefined;
   if (item.firstComment && item.firstComment.trim().length > 0) {
     try {
       const commentRes = await fbClient.postComment({
@@ -246,6 +247,8 @@ export async function dispatchItem(
       fbCommentId = commentRes.commentId;
     } catch (commentErr: unknown) {
       // If post succeeds but comment fails, post remains published.
+      const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
+      commentWarning = `Published post but first comment failed: ${errMsg}`;
       console.warn(
         `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
         commentErr
@@ -258,6 +261,7 @@ export async function dispatchItem(
     status: 'published',
     fbPostId: publishResult.postId,
     ...(fbCommentId !== undefined ? { fbCommentId } : {}),
+    ...(commentWarning ? { errorMessage: commentWarning } : {}),
   };
   return outcome;
 }

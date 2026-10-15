@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   DisconnectAccountResponseSchema,
   getSessionSecret,
   verifySessionToken,
@@ -32,12 +33,13 @@ export async function handleDisconnectAccount(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // 3. Resolve workspace ID scoped to user
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }

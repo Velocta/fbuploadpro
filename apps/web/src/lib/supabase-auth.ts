@@ -407,6 +407,7 @@ export async function ensureWorkspaceForUser(
   let candidate = await resolveUniqueSubdomain(preferredSubdomain);
 
   // 3. Insert explicitly with retry on unique constraint violation (SQLSTATE 23505)
+  let lastFatalError: Error | null = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const { error: insertError } = await supabase.from('workspaces').insert({
@@ -429,16 +430,22 @@ export async function ensureWorkspaceForUser(
         candidate = `${preferredSubdomain}-${randomSuffix}`;
       } else {
         console.error('[Supabase PostgREST] Workspace insert error:', insertError.message);
+        lastFatalError = new Error(`Failed to provision workspace: ${insertError.message || insertError.code}`);
         break;
       }
     } catch (insertEx) {
       console.error('[Supabase PostgREST] Workspace insert exception:', insertEx);
-      const randomSuffix = crypto.randomUUID().slice(0, 6);
-      candidate = `${preferredSubdomain}-${randomSuffix}`;
+      const isTransient = attempt < 4;
+      if (isTransient) {
+        const randomSuffix = crypto.randomUUID().slice(0, 6);
+        candidate = `${preferredSubdomain}-${randomSuffix}`;
+      } else {
+        lastFatalError = insertEx instanceof Error ? insertEx : new Error('Failed to provision workspace');
+      }
     }
   }
 
-  return candidate;
+  throw lastFatalError ?? new Error('Failed to provision workspace');
 }
 
 export async function signUpTenantUser(params: {
@@ -1059,6 +1066,28 @@ export async function loginTenantUser(params: {
     throw error;
   }
 
+  let allowedSubdomains: string[] = [user.subdomain];
+  if (supabase) {
+    try {
+      const { data: allWorkspaces } = await supabase
+        .from('workspaces')
+        .select('subdomain')
+        .eq('owner_id', user.id);
+      const subs = Array.from(
+        new Set(
+          (allWorkspaces || [])
+            .map((w: { subdomain?: string }) => w.subdomain?.toLowerCase())
+            .filter((sub): sub is string => Boolean(sub))
+        )
+      );
+      if (subs.length > 0) {
+        allowedSubdomains = subs;
+      }
+    } catch {
+      // Fallback to primary workspace subdomain
+    }
+  }
+
   const sessionSecret = getSessionSecret();
   const now = Math.floor(Date.now() / 1000);
   const minIat = user.passwordUpdatedAt ? Math.max(now, user.passwordUpdatedAt + 1) : now;
@@ -1071,6 +1100,7 @@ export async function loginTenantUser(params: {
       role: user.role,
       status: user.status,
       iat: minIat,
+      allowedSubdomains,
     },
     sessionSecret,
     86400 * 30 // 30 days matching fbup_session cookie maxAge
@@ -1081,7 +1111,8 @@ export async function loginTenantUser(params: {
     params.returnUrl,
     user.subdomain,
     rootDomain,
-    params.requestHost
+    params.requestHost,
+    allowedSubdomains
   );
 
   return {
@@ -1444,8 +1475,14 @@ export function _setResetTokenForTesting(
 }
 
 export async function validateSessionActive(session: SessionPayload): Promise<boolean> {
+  if (session.status === 'suspended') return false;
   const user = await findUserByEmail(session.email);
-  if (!user) return false;
+  if (!user) {
+    if (!getSupabaseClient() && process.env.NODE_ENV !== 'production') {
+      return session.status === 'active';
+    }
+    return false;
+  }
   if (user.status !== 'active') return false;
   if (user.passwordUpdatedAt && session.iat <= user.passwordUpdatedAt) {
     return false;

@@ -4,7 +4,7 @@ import {
   ListFacebookPagesResponseSchema,
   evaluatePageHealth,
   verifySessionToken,
-  isSessionAuthorizedForSubdomain,
+  canAccessTenant,
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
@@ -32,36 +32,35 @@ function extractPagePictureUrl(row: any): string | null {
   return null;
 }
 
-function syncRecoveredPageStatus(
+async function syncRecoveredPageStatus(
   pageId: string,
-  userId: string,
   dbClient?: DatabaseClient | SupabaseClient<any>
-): void {
+): Promise<void> {
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    dbClient.query(
-      `UPDATE facebook_pages
-       SET status = 'active', updated_at = now()
-       WHERE id = $1 AND user_id = $2`,
-      [pageId, userId]
-    ).catch((err: any) => {
+    try {
+      await dbClient.query(
+        `UPDATE facebook_pages
+         SET status = 'active', rate_limited_at = NULL, updated_at = now()
+         WHERE id = $1`,
+        [pageId]
+      );
+    } catch (err: any) {
       console.error('[handleListPages] Failed to persist recovered page status:', err);
-    });
+    }
     return;
   }
 
   const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
   if (!supabase) return;
 
-  supabase
+  const { error } = await supabase
     .from('facebook_pages')
-    .update({ status: 'active', updated_at: new Date().toISOString() })
-    .eq('id', pageId)
-    .eq('user_id', userId)
-    .then(({ error }: { error: any }) => {
-      if (error) {
-        console.error('[handleListPages] Failed to persist recovered page status via Supabase:', error);
-      }
-    });
+    .update({ status: 'active', rate_limited_at: null, updated_at: new Date().toISOString() })
+    .eq('id', pageId);
+
+  if (error) {
+    console.error('[handleListPages] Failed to persist recovered page status via Supabase:', error);
+  }
 }
 
 function parsePageTasks(rawTasks: unknown): string[] {
@@ -81,8 +80,35 @@ function parsePageTasks(rawTasks: unknown): string[] {
 async function fetchLegacyPages(
   dbClient: DatabaseClient,
   workspaceId: string,
-  userId: string
+  userId: string,
+  role?: string
 ): Promise<any[]> {
+  if (role === 'admin') {
+    return (await dbClient.query(
+      `SELECT 
+        p.id,
+        p.facebook_account_id,
+        a.display_name AS account_display_name,
+        p.fb_page_id,
+        p.page_name,
+        p.profile_picture_url,
+        p.category,
+        p.starting_followers,
+        p.current_followers,
+        p.status,
+        p.tasks,
+        p.rate_limited_at,
+        p.created_at,
+        p.updated_at
+      FROM facebook_pages p
+      LEFT JOIN facebook_accounts a ON a.id = p.facebook_account_id
+      WHERE p.workspace_id = $1
+        AND p.status != 'disconnected'
+      ORDER BY p.created_at DESC`,
+      [workspaceId]
+    )) as any[];
+  }
+
   return (await dbClient.query(
     `SELECT 
       p.id,
@@ -96,6 +122,7 @@ async function fetchLegacyPages(
       p.current_followers,
       p.status,
       p.tasks,
+      p.rate_limited_at,
       p.created_at,
       p.updated_at
     FROM facebook_pages p
@@ -111,15 +138,20 @@ async function fetchLegacyPages(
 async function fetchSupabasePages(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
-  userId: string
+  userId: string,
+  role?: string
 ): Promise<{ rows?: any[]; error?: string }> {
-  const { data: pageData, error } = await supabase
+  let query = supabase
     .from('facebook_pages')
     .select('*, facebook_accounts(display_name)')
-    .eq('user_id', userId)
     .eq('workspace_id', workspaceId)
-    .neq('status', 'disconnected')
-    .order('created_at', { ascending: false });
+    .neq('status', 'disconnected');
+
+  if (role !== 'admin') {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data: pageData, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
     return { error: error.message };
@@ -154,12 +186,13 @@ export async function handleListPages(
   }
 
   // 2. Tenant isolation check
-  if (!isSessionAuthorizedForSubdomain(session, subdomain)) {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // 3. Resolve workspace ID scoped to user
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
@@ -168,25 +201,29 @@ export async function handleListPages(
   let rows: any[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    rows = await fetchLegacyPages(dbClient as DatabaseClient, workspaceId, session.userId);
+    rows = await fetchLegacyPages(dbClient as DatabaseClient, workspaceId, session.userId, session.role);
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
 
-    const res = await fetchSupabasePages(supabase, workspaceId, session.userId);
+    const res = await fetchSupabasePages(supabase, workspaceId, session.userId, session.role);
     if (res.error) {
       return NextResponse.json({ error: res.error }, { status: 500 });
     }
     rows = res.rows || [];
   }
 
+  const recoveryPromises: Promise<void>[] = [];
+
   const pages = (rows || []).map((row) => {
     const updatedAt = row.updated_at || row.updatedAt;
+    const rateLimitedAt = row.rate_limited_at || row.rateLimitedAt;
     const effectiveStatus = evaluatePageHealth({
       status: row.status ?? 'active',
       updatedAt,
+      rateLimitedAt,
     });
 
     const currentFollowers = extractCurrentFollowers(row);
@@ -194,7 +231,7 @@ export async function handleListPages(
     const followersGained = currentFollowers - startingFollowers;
 
     if (row.status === 'fb_rate_limited' && effectiveStatus === 'active') {
-      syncRecoveredPageStatus(row.id, session.userId, dbClient);
+      recoveryPromises.push(syncRecoveredPageStatus(row.id, dbClient));
     }
 
     return {
@@ -212,10 +249,15 @@ export async function handleListPages(
       followersCount: currentFollowers,
       status: effectiveStatus,
       tasks: parsePageTasks(row.tasks),
+      rateLimitedAt: rateLimitedAt ? new Date(rateLimitedAt) : null,
       createdAt: row.created_at || row.createdAt,
       updatedAt: row.updated_at || row.updatedAt,
     };
   });
+
+  if (recoveryPromises.length > 0) {
+    await Promise.all(recoveryPromises);
+  }
 
   const responsePayload = ListFacebookPagesResponseSchema.parse({
     pages,

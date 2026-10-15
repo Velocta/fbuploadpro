@@ -9,6 +9,7 @@ import {
   FacebookPageStatusEnum,
   FacebookPageStatusSchema,
   FacebookPageViewSchema,
+  fetchAllFacebookPages,
 } from '../src/domain/facebook.js';
 
 describe('Facebook Account & Page Domain Schemas', () => {
@@ -241,6 +242,141 @@ describe('Facebook Account & Page Domain Schemas', () => {
       expect(FacebookPageSchema.safeParse({ ...validPage, facebookAccountId: 'bad-id' }).success).toBe(false);
       expect(FacebookPageSchema.safeParse({ ...validPage, pageName: '' }).success).toBe(false);
       expect(FacebookPageSchema.safeParse({ ...validPage, fbPageId: '' }).success).toBe(false);
+    });
+  });
+
+  describe('rateLimitedAt in FacebookPageViewSchema', () => {
+    it('accepts valid date, null, and undefined for rateLimitedAt', () => {
+      const now = new Date();
+      const withDate = FacebookPageViewSchema.parse({
+        id: pageId,
+        facebookAccountId: accountId,
+        accountDisplayName: 'Main Media Ops',
+        fbPageId: 'page_1092837465',
+        pageName: 'Engineering Insights',
+        profilePictureUrl: null,
+        category: null,
+        startingFollowers: 100,
+        currentFollowers: 150,
+        followersGained: 50,
+        followersCount: 150,
+        status: 'fb_rate_limited',
+        tasks: [],
+        rateLimitedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+      expect(withDate.rateLimitedAt).toEqual(now);
+
+      const withNull = FacebookPageViewSchema.parse({
+        id: pageId,
+        facebookAccountId: accountId,
+        accountDisplayName: 'Main Media Ops',
+        fbPageId: 'page_1092837465',
+        pageName: 'Engineering Insights',
+        profilePictureUrl: null,
+        category: null,
+        startingFollowers: 100,
+        currentFollowers: 150,
+        followersGained: 50,
+        followersCount: 150,
+        status: 'active',
+        tasks: [],
+        rateLimitedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      expect(withNull.rateLimitedAt).toBeNull();
+    });
+  });
+
+  describe('fetchAllFacebookPages helper', () => {
+    it('fetches a single page of results with limit=100', async () => {
+      const mockFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        const urlStr = String(input);
+        expect(urlStr).toContain('limit=100');
+        expect(urlStr).toContain('fields=id%2Cname');
+        expect(init?.headers).toEqual({ Authorization: 'Bearer test-token' });
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [
+              { id: 'p1', name: 'Page One' },
+              { id: 'p2', name: 'Page Two' },
+            ],
+          }),
+        } as Response;
+      };
+
+      const pages = await fetchAllFacebookPages('test-token', 'id,name', 5, mockFetch as any);
+      expect(pages).toHaveLength(2);
+      expect(pages[0]?.id).toBe('p1');
+      expect(pages[1]?.id).toBe('p2');
+    });
+
+    it('follows cursor pagination paging.next across multiple pages', async () => {
+      let callCount = 0;
+      const mockFetch = async () => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              data: [{ id: 'p1', name: 'Page One' }],
+              paging: {
+                next: 'https://graph.facebook.com/v26.0/me/accounts?after=cursor123',
+              },
+            }),
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [{ id: 'p2', name: 'Page Two' }],
+          }),
+        } as Response;
+      };
+
+      const pages = await fetchAllFacebookPages('test-token', 'id,name', 5, mockFetch as any);
+      expect(callCount).toBe(2);
+      expect(pages).toHaveLength(2);
+      expect(pages.map((p) => p.id)).toEqual(['p1', 'p2']);
+    });
+
+    it('stops after maxPages limit is reached', async () => {
+      let callCount = 0;
+      const mockFetch = async () => {
+        callCount++;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            data: [{ id: `p${callCount}`, name: `Page ${callCount}` }],
+            paging: {
+              next: `https://graph.facebook.com/v26.0/me/accounts?after=cursor${callCount}`,
+            },
+          }),
+        } as Response;
+      };
+
+      const pages = await fetchAllFacebookPages('test-token', 'id,name', 2, mockFetch as any);
+      expect(callCount).toBe(2);
+      expect(pages).toHaveLength(2);
+    });
+
+    it('throws when graph API returns an error response', async () => {
+      const mockFetch = async () => ({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+      });
+
+      await expect(
+        fetchAllFacebookPages('bad-token', 'id,name', 5, mockFetch as any)
+      ).rejects.toThrow('Facebook Graph API returned 401');
     });
   });
 });

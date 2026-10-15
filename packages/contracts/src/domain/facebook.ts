@@ -112,6 +112,7 @@ export const FacebookPageViewSchema = z.object({
   tasks: z.array(z.string()).default([]),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  rateLimitedAt: z.coerce.date().nullable().optional(),
 });
 
 export type FacebookPageView = z.infer<typeof FacebookPageViewSchema>;
@@ -124,6 +125,77 @@ export const ListFacebookPagesResponseSchema = z.object({
 export type ListFacebookPagesResponse = z.infer<
   typeof ListFacebookPagesResponseSchema
 >;
+
+export interface FacebookGraphPageItem {
+  id: string;
+  name?: string;
+  category?: string | null;
+  tasks?: string[];
+  access_token?: string;
+  followers_count?: number;
+  picture?: {
+    data?: {
+      url?: string;
+    };
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Shared helper for fetching all Facebook Pages via /me/accounts with limit=100
+ * and following cursor pagination (paging.next) up to maxPages (default: 5 = 500 pages max).
+ */
+export async function fetchAllFacebookPages(
+  accessToken: string,
+  fields: string,
+  maxPages = 5,
+  fetchFn: typeof fetch = globalThis.fetch
+): Promise<FacebookGraphPageItem[]> {
+  const allPages: FacebookGraphPageItem[] = [];
+  const initialUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
+  initialUrl.searchParams.set('fields', fields);
+  initialUrl.searchParams.set('limit', '100');
+
+  let nextUrl: string | null = initialUrl.toString();
+  let pagesFetched = 0;
+
+  while (nextUrl && pagesFetched < maxPages) {
+    pagesFetched++;
+    const res = await fetchFn(nextUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      if (pagesFetched === 1) {
+        const err = new Error(`Facebook Graph API returned ${res.status}`);
+        (err as any).status = res.status;
+        throw err;
+      }
+      break;
+    }
+
+    const json = (await res.json()) as {
+      data?: FacebookGraphPageItem[];
+      paging?: {
+        next?: string;
+      };
+    };
+
+    if (Array.isArray(json?.data)) {
+      for (const item of json.data) {
+        if (item && item.id) {
+          allPages.push(item);
+        }
+      }
+    }
+
+    nextUrl = json?.paging?.next || null;
+  }
+
+  return allPages;
+}
 
 
 // In-memory representation of pages discovered from Graph API /me/accounts

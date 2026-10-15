@@ -39,8 +39,8 @@ export function generateWorkspaceSubdomain(
 ): string {
   const cleanMain = mainSubdomain.toLowerCase().replace(/[^a-z0-9]/g, '');
   const suffix = (randomSuffix || generateRandomAlphabetString(4)).toLowerCase().replace(/[^a-z]/g, '');
-  const trimmedBase = cleanMain.slice(0, 50 - suffix.length);
-  return `${trimmedBase}${suffix}`;
+  const trimmedBase = cleanMain.slice(0, 46);
+  return `${trimmedBase}${suffix}`.slice(0, 50);
 }
 
 export const SwitchWorkspaceRequestSchema = z.object({

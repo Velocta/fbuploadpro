@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  canAccessTenant,
   decryptToken,
   DiscoverPagesResponseSchema,
+  fetchAllFacebookPages,
   getSessionSecret,
   getTokenEncryptionKey,
   verifySessionToken,
@@ -35,12 +37,13 @@ export async function handleDiscoverPages(
   }
 
   // 2. Tenant isolation check
-  if (session.subdomain !== subdomain && session.role !== 'admin') {
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // 3. Resolve workspace ID scoped to user
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId);
+  // 3. Resolve workspace ID scoped to user (supports admin inspection)
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
@@ -112,25 +115,19 @@ export async function handleDiscoverPages(
     );
   }
 
-  // 4. Query Facebook Graph API v26.0 /me/accounts
-  const discoverEndpoint =
-    'https://graph.facebook.com/v26.0/me/accounts?fields=id,name,category,tasks,access_token,followers_count,picture{url}';
-
-  const graphRes = await fetch(discoverEndpoint, {
-    headers: {
-      Authorization: `Bearer ${rawToken}`,
-    },
-  });
-
-  if (!graphRes.ok) {
+  // 4. Query Facebook Graph API v26.0 /me/accounts with pagination
+  let rawItems: any[] = [];
+  try {
+    rawItems = await fetchAllFacebookPages(
+      rawToken,
+      'id,name,category,tasks,access_token,followers_count,picture{url}'
+    );
+  } catch (err: any) {
     return NextResponse.json(
       { error: 'Failed to query Facebook Graph API' },
-      { status: graphRes.status }
+      { status: typeof err?.status === 'number' ? err.status : 500 }
     );
   }
-
-  const graphData = await graphRes.json();
-  const rawItems: any[] = Array.isArray(graphData.data) ? graphData.data : [];
 
   // 5. Query already imported active/linked pages for this user to compute isImported
   const importedPageIds = new Set(

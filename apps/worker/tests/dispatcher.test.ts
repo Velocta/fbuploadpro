@@ -168,6 +168,19 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       expect(mockFbClient.photosPublished).toHaveLength(0);
     });
 
+    it('preserves published status and logs warning in errorMessage when firstComment post fails (Issue 10)', async () => {
+      const mockFbClient = new MockFacebookPublishClient();
+      mockFbClient.nextPostId = '10987654321_video_99999';
+      mockFbClient.commentErrorToThrow = new Error('Rate limited on comments');
+
+      const outcome = await dispatchItem(sampleClaimedVideoItem, mockFbClient, TEST_MASTER_KEY);
+
+      expect(outcome.status).toBe('published');
+      expect(outcome.fbPostId).toBe('10987654321_video_99999');
+      expect(outcome.fbCommentId).toBeUndefined();
+      expect(outcome.errorMessage).toContain('Published post but first comment failed: Rate limited on comments');
+    });
+
     it('decrypts page access token and posts image to publishPhoto', async () => {
       const mockFbClient = new MockFacebookPublishClient();
       mockFbClient.nextPostId = '10987654321_photo_88888';
