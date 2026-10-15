@@ -2,7 +2,14 @@ import { decryptToken, type PageInsightsDailySnapshot } from '@fbuploadpro/contr
 
 export interface InsightsSyncDbClient {
   query?<T = unknown>(text: string, params?: unknown[]): Promise<T[] | { rows?: T[] }>;
-  from?(table: string): any;
+  from?(table: string): {
+    upsert(data: unknown, options?: { onConflict?: string }): Promise<{ error?: unknown }>;
+    update(data: unknown): {
+      eq(col1: string, val1: unknown): {
+        eq(col2: string, val2: unknown): Promise<{ error?: unknown }>;
+      };
+    };
+  };
   upsertPageInsightsSnapshot?(snapshot: PageInsightsDailySnapshot): Promise<void>;
 }
 
@@ -238,7 +245,7 @@ async function savePageSnapshot(
     }, { onConflict: 'user_id,fb_page_id,snapshot_date' });
     if (upsertErr) throw upsertErr;
 
-    const pageUpdate: Record<string, any> = {
+    const pageUpdate: Record<string, unknown> = {
       current_followers: followersCount,
     };
     if (page.status !== 'fb_rate_limited') {

@@ -354,7 +354,6 @@ export async function dispatchItem(
     const isRateLimit = isRateLimitErrorCode(errorCode, errorSubcode);
     const isTransient = (evaluation && evaluation.isTransient) || isRateLimit || (!isAuthError && !isPermanentPolicyError && !isPermanentClientError);
 
-    const nextRetryCount = (item.retryCount || 0) + 1;
     const canRetry = isTransient && item.retryCount < effectiveMaxRetries;
 
     let retryDelaySeconds: number | undefined;
