@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  buildSubdomainOAuthRedirectUri,
   getSessionSecret,
   signOAuthState,
   verifySessionToken,
@@ -15,9 +16,9 @@ export async function handleInitiateFacebookOAuth(
   dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
-  const appUrl =
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';
+  const appUrlFallback =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const redirectUri = `${appUrl}/api/auth/facebook/callback`;
 
   try {
     const sessionCookie = request.cookies.get('fbup_session')?.value;
@@ -50,6 +51,12 @@ export async function handleInitiateFacebookOAuth(
     }
 
     const effectiveAppId = byocResult.fbAppId;
+    const redirectUri = buildSubdomainOAuthRedirectUri(
+      session.subdomain,
+      request.url,
+      rootDomain,
+      appUrlFallback
+    );
 
     // 3. Generate signed OAuth state
     const expectedFbAccountId =
@@ -65,6 +72,7 @@ export async function handleInitiateFacebookOAuth(
         nonce,
         iat: now,
         exp: now + 600, // 10 minutes
+        redirectUri,
         ...(expectedFbAccountId ? { expectedFbAccountId } : {}),
         ...(expectedDisplayName ? { expectedDisplayName } : {}),
       },

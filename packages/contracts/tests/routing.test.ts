@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCentralAppUrl,
+  buildSubdomainOAuthRedirectUri,
   buildTenantUrl,
   extractSubdomain,
   getTenantRewriteUrl,
@@ -209,6 +210,39 @@ describe('Tenant Subdomain Routing Contracts', () => {
     it('handles localhost rootDomain without port', () => {
       const url = buildCentralAppUrl('/login?logout=success', undefined, 'localhost');
       expect(url.toString()).toBe('http://app.localhost/login?logout=success');
+    });
+  });
+
+  describe('buildSubdomainOAuthRedirectUri', () => {
+    it('constructs https subdomain redirect URI on custom production domain', () => {
+      const redirectUri = buildSubdomainOAuthRedirectUri(
+        'shahzebpycozgy',
+        'https://shahzebpycozgy.vinsmokemedia.online/api/auth/facebook',
+        'vinsmokemedia.online'
+      );
+      expect(redirectUri).toBe(
+        'https://shahzebpycozgy.vinsmokemedia.online/api/auth/facebook/callback'
+      );
+    });
+
+    it('falls back to appUrlFallback when rootDomain is localhost', () => {
+      const redirectUri = buildSubdomainOAuthRedirectUri(
+        'acme',
+        'http://localhost:3000/api/auth/facebook',
+        'localhost:3000',
+        'http://localhost:3000'
+      );
+      expect(redirectUri).toBe('http://localhost:3000/api/auth/facebook/callback');
+    });
+
+    it('falls back to requestUrl origin when rootDomain is missing', () => {
+      const redirectUri = buildSubdomainOAuthRedirectUri(
+        'acme',
+        'http://localhost:3000/api/auth/facebook',
+        undefined,
+        undefined
+      );
+      expect(redirectUri).toBe('http://localhost:3000/api/auth/facebook/callback');
     });
   });
 });

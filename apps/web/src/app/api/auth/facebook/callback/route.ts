@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  buildSubdomainOAuthRedirectUri,
   buildTenantUrl,
   encryptToken,
   fetchAllFacebookPages,
@@ -460,13 +461,22 @@ export async function handleFacebookCallback(
 
     const { fbAppId: effectiveAppId, decryptedAppSecret: effectiveAppSecret, workspaceId } = byocResult;
 
+    const effectiveRedirectUri =
+      statePayload.redirectUri ||
+      buildSubdomainOAuthRedirectUri(
+        tenantSubdomain,
+        request.url,
+        rootDomain,
+        redirectUri
+      );
+
     // 2. Exchange temporary code for short-lived token (Graph API v26.0)
     const codeExchangeUrl = new URL(
       'https://graph.facebook.com/v26.0/oauth/access_token'
     );
     codeExchangeUrl.searchParams.set('client_id', effectiveAppId);
     codeExchangeUrl.searchParams.set('client_secret', effectiveAppSecret);
-    codeExchangeUrl.searchParams.set('redirect_uri', redirectUri);
+    codeExchangeUrl.searchParams.set('redirect_uri', effectiveRedirectUri);
     codeExchangeUrl.searchParams.set('code', code);
 
     const shortTokenRes = await fetch(codeExchangeUrl.toString(), {

@@ -92,6 +92,40 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
     expect(url.searchParams.get('state')).toBeDefined();
   });
 
+  it('constructs workspace subdomain redirect_uri in Facebook OAuth dialog URL when NEXT_PUBLIC_ROOT_DOMAIN is configured (Spec 047)', async () => {
+    process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'vinsmokemedia.online';
+    const mockDb = {
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
+          return Promise.resolve([{ id: 'ws_123' }]);
+        }
+        if (typeof sql === 'string' && sql.includes('workspace_byoc_credentials')) {
+          return Promise.resolve([
+            {
+              workspace_id: 'ws_123',
+              fb_app_id: 'fb_app_id_byoc_workspace',
+              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              status: 'valid',
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
+    } as unknown as DatabaseClient;
+
+    const req = new NextRequest('https://acme.vinsmokemedia.online/api/auth/facebook', {
+      headers: { cookie: validSessionCookie },
+    });
+    const res = await initiateFacebookOAuth(req, mockDb);
+
+    expect(res.status).toBe(307);
+    const location = res.headers.get('location')!;
+    const url = new URL(location);
+    expect(url.searchParams.get('redirect_uri')).toBe(
+      'https://acme.vinsmokemedia.online/api/auth/facebook/callback'
+    );
+  });
+
   it('handles Facebook OAuth callback error with safe redirection', async () => {
     const mockDb = { query: vi.fn() } as unknown as DatabaseClient;
     const req = new NextRequest(
