@@ -2,13 +2,14 @@ import {
   MAX_MEDIA_DOWNLOAD_BYTES,
   validateSafeRemoteUrl,
   deriveDefaultCaptionFromFilename,
+  detectSourcePlatform,
+  normalizeCloudDriveUrl,
+  resolveGoogleDriveDirectUrl,
+  parseHtmlMediaCandidates,
+  parseJsonPayloadCandidates,
+  type RemoteMediaCandidate,
 } from '@fbuploadpro/contracts';
 import type { Env } from '../index.js';
-
-export interface StorageQuotaInfo {
-  totalBytes: number;
-  usedBytes: number;
-}
 
 export interface IngestJobParams {
   jobId: string;
@@ -113,27 +114,6 @@ export function extractFilenameFromHeader(header: string | null): string | null 
   return null;
 }
 
-export async function getUserStorageQuota(db: any, userId: string): Promise<StorageQuotaInfo> {
-  const { data, error } = await db
-    .from('user_storage_quotas')
-    .select('total_bytes, used_bytes')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error || !data) {
-    // Default 5 GB
-    return {
-      totalBytes: 5_368_709_120,
-      usedBytes: 0,
-    };
-  }
-
-  return {
-    totalBytes: Number(data.total_bytes ?? 5_368_709_120),
-    usedBytes: Number(data.used_bytes ?? 0),
-  };
-}
-
 export async function updateJobStatus(
   db: any,
   jobId: string,
@@ -145,6 +125,7 @@ export async function updateJobStatus(
     mediaId?: string | null;
     errorCode?: string | null;
     errorMessage?: string | null;
+    metadata?: Record<string, unknown>;
   }
 ): Promise<void> {
   const dbUpdates: Record<string, unknown> = {
@@ -158,6 +139,7 @@ export async function updateJobStatus(
   if (updates.mediaId !== undefined) dbUpdates.media_id = updates.mediaId;
   if (updates.errorCode !== undefined) dbUpdates.error_code = updates.errorCode;
   if (updates.errorMessage !== undefined) dbUpdates.error_message = updates.errorMessage;
+  if (updates.metadata !== undefined) dbUpdates.metadata = updates.metadata;
 
   await db.from('media_download_jobs').update(dbUpdates).eq('id', jobId);
 }
@@ -170,12 +152,14 @@ export function trimTrailingSlash(url: string): string {
   return url.slice(0, end);
 }
 
-export async function validateDownloadSafetyAndQuota(
+/**
+ * Validates remote download safety. Per Spec 028, user storage quotas are abolished.
+ */
+export async function validateDownloadSafety(
   sourceUrl: string,
-  userId: string,
   db: any,
   jobId: string
-): Promise<StorageQuotaInfo | null> {
+): Promise<boolean> {
   const safeCheck = validateSafeRemoteUrl(sourceUrl);
   if (!safeCheck.valid) {
     await updateJobStatus(db, jobId, {
@@ -183,30 +167,126 @@ export async function validateDownloadSafetyAndQuota(
       errorCode: 'UNSAFE_URL',
       errorMessage: safeCheck.reason || 'Private and loopback network addresses are not allowed.',
     });
-    return null;
+    return false;
+  }
+  return true;
+}
+
+// Backward-compatible alias for existing test imports
+export async function validateDownloadSafetyAndQuota(
+  sourceUrl: string,
+  _userId: string,
+  db: any,
+  jobId: string
+): Promise<{ totalBytes: number; usedBytes: number } | null> {
+  const safe = await validateDownloadSafety(sourceUrl, db, jobId);
+  if (!safe) return null;
+  return { totalBytes: Number.MAX_SAFE_INTEGER, usedBytes: 0 };
+}
+
+/**
+ * Edge-compatible link resolution: handles social platforms, cloud drives, and virus-scan bypass.
+ */
+export async function resolveRemoteCandidates(
+  sourceUrl: string,
+  env: Env,
+  fetchImpl: typeof fetch
+): Promise<RemoteMediaCandidate[]> {
+  const parsed = new URL(sourceUrl);
+  const normalizedUrl = normalizeCloudDriveUrl(parsed);
+  const platform = detectSourcePlatform(sourceUrl);
+
+  const extractorUrl = (env as any).DOWNLOADER_EXTRACTOR_API_URL;
+  if (extractorUrl && typeof extractorUrl === 'string' && extractorUrl.trim().length > 0) {
+    try {
+      const extRes = await fetchImpl(extractorUrl.trim(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ url: sourceUrl }),
+      });
+      if (extRes.ok) {
+        const extJson: unknown = await extRes.json();
+        const extCandidates = parseJsonPayloadCandidates(extJson);
+        if (extCandidates.length > 0) {
+          return extCandidates;
+        }
+      }
+    } catch {
+      // fallback to built-in resolution
+    }
   }
 
-  const quota = await getUserStorageQuota(db, userId);
-  if (quota.usedBytes >= quota.totalBytes) {
-    await updateJobStatus(db, jobId, {
-      status: 'failed',
-      errorCode: 'QUOTA_EXCEEDED',
-      errorMessage: 'Storage quota limit reached. Please remove old media or upgrade storage.',
+  // Pre-fetch candidate to check headers / HTML
+  try {
+    const probeRes = await fetchImpl(normalizedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+        Accept: '*/*',
+      },
+      redirect: 'follow',
     });
-    return null;
+
+    if (probeRes.ok) {
+      const contentType = (probeRes.headers.get('content-type') ?? '').toLowerCase();
+      const effectiveUrl = probeRes.url || normalizedUrl;
+
+      if (contentType.includes('text/html') || contentType.includes('application/xhtml+xml')) {
+        const html = await probeRes.text();
+        const parsedHtml = parseHtmlMediaCandidates(html, effectiveUrl);
+
+        if (parsedHtml.candidates.length > 0) {
+          return parsedHtml.candidates;
+        }
+
+        if (platform === 'google_drive') {
+          const direct = resolveGoogleDriveDirectUrl(sourceUrl, html);
+          if (direct) {
+            return [{ streamUrl: direct, mediaTypeHint: 'video' }];
+          }
+        }
+
+        if (platform === 'x') {
+          const statusMatch = /\/status(?:es)?\/(\d+)/.exec(parsed.pathname);
+          if (statusMatch?.[1]) {
+            try {
+              const fxRes = await fetchImpl(`https://api.fxtwitter.com/status/${statusMatch[1]}`, {
+                headers: { Accept: 'application/json' },
+              });
+              if (fxRes.ok) {
+                const fxCandidates = parseJsonPayloadCandidates(await fxRes.json());
+                if (fxCandidates.length > 0) return fxCandidates;
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } else if (contentType.includes('application/json')) {
+        try {
+          const jsonCandidates = parseJsonPayloadCandidates(await probeRes.json());
+          if (jsonCandidates.length > 0) return jsonCandidates;
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore probe errors, fallback to normalizedUrl
   }
 
-  return quota;
+  return [{ streamUrl: normalizedUrl }];
 }
 
 export async function fetchAndValidateRemoteMedia(
   sourceUrl: string,
   fetchImpl: typeof fetch,
-  quota: StorageQuotaInfo,
   db: any,
   jobId: string
 ): Promise<{ response: Response; body: ReadableStream<Uint8Array>; totalBytesEstimate: number | null } | null> {
-  // Pre-stream HEAD validation to reject oversized files before streaming
+  // Pre-stream HEAD validation
   try {
     const headRes = await fetchImpl(sourceUrl, {
       method: 'HEAD',
@@ -225,17 +305,9 @@ export async function fetchAndValidateRemoteMedia(
         });
         return null;
       }
-      if (headLength > 0 && quota.usedBytes + headLength > quota.totalBytes) {
-        await updateJobStatus(db, jobId, {
-          status: 'failed',
-          errorCode: 'QUOTA_EXCEEDED',
-          errorMessage: 'Storage quota exceeded for this file size.',
-        });
-        return null;
-      }
     }
   } catch {
-    // If HEAD request fails or is unsupported by remote server, continue to GET
+    // HEAD failure is non-fatal
   }
 
   const response = await fetchImpl(sourceUrl, {
@@ -254,6 +326,18 @@ export async function fetchAndValidateRemoteMedia(
     return null;
   }
 
+  if (response.url) {
+    const redirectSafety = validateSafeRemoteUrl(response.url);
+    if (!redirectSafety.valid) {
+      await updateJobStatus(db, jobId, {
+        status: 'failed',
+        errorCode: 'UNSAFE_URL',
+        errorMessage: redirectSafety.reason || 'Redirected to an unsafe network address.',
+      });
+      return null;
+    }
+  }
+
   const body = response.body;
   const headerLength = Number(response.headers.get('content-length') || 0);
   const totalBytesEstimate = headerLength > 0 ? headerLength : null;
@@ -267,26 +351,16 @@ export async function fetchAndValidateRemoteMedia(
     return null;
   }
 
-  if (totalBytesEstimate !== null && quota.usedBytes + totalBytesEstimate > quota.totalBytes) {
-    await updateJobStatus(db, jobId, {
-      status: 'failed',
-      errorCode: 'QUOTA_EXCEEDED',
-      errorMessage: 'Storage quota exceeded for this file size.',
-    });
-    return null;
-  }
-
   return { response, body, totalBytesEstimate };
 }
 
 export function createStreamProgressTracker(params: {
   db: any;
   jobId: string;
-  quota: StorageQuotaInfo;
   totalBytesEstimate: number | null;
   onBytesUpdate: (bytes: number) => void;
 }): TransformStream<Uint8Array, Uint8Array> {
-  const { db, jobId, quota, totalBytesEstimate, onBytesUpdate } = params;
+  const { db, jobId, totalBytesEstimate, onBytesUpdate } = params;
   let downloadedBytes = 0;
   let lastProgressPercent = 5;
   let lastDbUpdateMs = Date.now();
@@ -298,11 +372,6 @@ export function createStreamProgressTracker(params: {
 
       if (downloadedBytes > MAX_MEDIA_DOWNLOAD_BYTES) {
         controller.error(new Error('FILE_TOO_LARGE'));
-        return;
-      }
-
-      if (quota.usedBytes + downloadedBytes > quota.totalBytes) {
-        controller.error(new Error('QUOTA_EXCEEDED'));
         return;
       }
 
@@ -383,7 +452,48 @@ export async function writeStreamToDestination(params: {
   return `https://media.fbuploadpro.com/${storageKey}`;
 }
 
-export async function persistDownloadedMediaItem(params: {
+export async function tryUploadVideoThumbnailToR2(params: {
+  thumbnailUrl?: string | null;
+  userId: string;
+  mediaId: string;
+  env: Env;
+  fetchImpl: typeof fetch;
+  storageService?: any;
+}): Promise<{ thumbnailKey: string | null; thumbnailUrl: string | null }> {
+  const { thumbnailUrl, userId, mediaId, env, fetchImpl, storageService } = params;
+  if (!thumbnailUrl) return { thumbnailKey: null, thumbnailUrl: null };
+
+  const safeCheck = validateSafeRemoteUrl(thumbnailUrl);
+  if (!safeCheck.valid || !safeCheck.url) return { thumbnailKey: null, thumbnailUrl: null };
+
+  try {
+    const res = await fetchImpl(safeCheck.url.toString(), {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+      },
+    });
+    if (!res.ok || !res.body) return { thumbnailKey: null, thumbnailUrl: null };
+
+    const rawMime = (res.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase();
+    const ext = rawMime === 'image/jpeg' || rawMime === 'image/jpg' ? '.jpg' : '.webp';
+    const mime = ext === '.jpg' ? 'image/jpeg' : 'image/webp';
+    const thumbnailKey = `users/${userId}/thumbnails/${mediaId}${ext}`;
+
+    const r2Url = await writeStreamToDestination({
+      stream: res.body,
+      storageKey: thumbnailKey,
+      mimeType: mime,
+      env,
+      storageService,
+    });
+
+    return { thumbnailKey, thumbnailUrl: r2Url };
+  } catch {
+    return { thumbnailKey: null, thumbnailUrl: null };
+  }
+}
+
+export interface PersistDownloadedMediaItemParams {
   db: any;
   jobId: string;
   userId: string;
@@ -395,8 +505,17 @@ export async function persistDownloadedMediaItem(params: {
   storageKey: string;
   publicUrl: string;
   downloadedBytes: number;
-  quotaUsedBytes: number;
-}): Promise<void> {
+  thumbnailKey?: string | null;
+  thumbnailUrl?: string | null;
+  durationSeconds?: number | null;
+  aspectRatio?: string | null;
+  captionText?: string | null;
+  allMediaIds?: string[];
+}
+
+export async function persistDownloadedMediaItem(
+  params: PersistDownloadedMediaItemParams
+): Promise<void> {
   const {
     db,
     jobId,
@@ -409,7 +528,12 @@ export async function persistDownloadedMediaItem(params: {
     storageKey,
     publicUrl,
     downloadedBytes,
-    quotaUsedBytes,
+    thumbnailKey = null,
+    thumbnailUrl = null,
+    durationSeconds = null,
+    aspectRatio = 'unknown',
+    captionText = null,
+    allMediaIds,
   } = params;
 
   await updateJobStatus(db, jobId, {
@@ -419,7 +543,10 @@ export async function persistDownloadedMediaItem(params: {
     totalBytes: downloadedBytes,
   });
 
-  const captionText = deriveDefaultCaptionFromFilename(fileName);
+  const finalCaption =
+    captionText && captionText.trim().length > 0
+      ? captionText.trim().slice(0, 5000)
+      : deriveDefaultCaptionFromFilename(fileName);
 
   const { error: mediaInsertError } = await db.from('media_items').insert({
     id: mediaId,
@@ -431,29 +558,18 @@ export async function persistDownloadedMediaItem(params: {
     media_type: mediaType,
     storage_key: storageKey,
     url: publicUrl,
-    thumbnail_key: null,
-    thumbnail_url: mediaType === 'image' ? publicUrl : null,
-    duration_seconds: null,
-    aspect_ratio: 'unknown',
-    caption_text: captionText,
+    thumbnail_key: thumbnailKey,
+    thumbnail_url: mediaType === 'image' ? publicUrl : (thumbnailUrl ?? null),
+    duration_seconds: durationSeconds,
+    aspect_ratio: aspectRatio ?? 'unknown',
+    caption_text: finalCaption,
   });
 
   if (mediaInsertError) {
     throw new Error(`Failed to save media metadata: ${mediaInsertError.message}`);
   }
 
-  await db.rpc('increment_user_storage_used', {
-    p_user_id: userId,
-    p_bytes: downloadedBytes,
-  }).catch(async () => {
-    await db
-      .from('user_storage_quotas')
-      .update({
-        used_bytes: quotaUsedBytes + downloadedBytes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId);
-  });
+  const mediaIds = allMediaIds && allMediaIds.length > 0 ? allMediaIds : [mediaId];
 
   await updateJobStatus(db, jobId, {
     status: 'completed',
@@ -461,6 +577,10 @@ export async function persistDownloadedMediaItem(params: {
     downloadedBytes,
     totalBytes: downloadedBytes,
     mediaId,
+    metadata: {
+      media_ids: mediaIds,
+      total_items: mediaIds.length,
+    },
   });
 }
 
@@ -475,8 +595,6 @@ export async function cleanupFailedDownload(
   let errorCode = 'DOWNLOAD_FAILED';
   if (errorMsg.includes('FILE_TOO_LARGE')) {
     errorCode = 'FILE_TOO_LARGE';
-  } else if (errorMsg.includes('QUOTA_EXCEEDED')) {
-    errorCode = 'QUOTA_EXCEEDED';
   }
 
   await updateJobStatus(db, jobId, {
@@ -510,62 +628,108 @@ export async function executeDownloadJob(params: IngestJobParams): Promise<void>
   let storageKey: string | null = null;
 
   try {
-    const quota = await validateDownloadSafetyAndQuota(sourceUrl, userId, db, jobId);
-    if (!quota) return;
+    const isSafe = await validateDownloadSafety(sourceUrl, db, jobId);
+    if (!isSafe) return;
 
     await updateJobStatus(db, jobId, {
       status: 'downloading',
       progressPercent: 5,
     });
 
-    const fetched = await fetchAndValidateRemoteMedia(sourceUrl, fetchImpl, quota, db, jobId);
-    if (!fetched) return;
-    const { response, body, totalBytesEstimate } = fetched;
+    const candidates = await resolveRemoteCandidates(sourceUrl, env, fetchImpl);
+    if (candidates.length === 0) {
+      await updateJobStatus(db, jobId, {
+        status: 'failed',
+        errorCode: 'DOWNLOAD_FAILED',
+        errorMessage: 'No downloadable video or image was found at this link.',
+      });
+      return;
+    }
 
-    const mimeType = inferMimeFromUrlOrHeader(response.headers.get('content-type'), sourceUrl);
-    const mediaType: 'video' | 'image' = mimeType.startsWith('image/') ? 'image' : 'video';
-    const contentDisposition = response.headers.get('content-disposition');
-    const headerFilename = extractFilenameFromHeader(contentDisposition);
-    const fileName = sanitizeFileName(customFilename || headerFilename, mimeType, 'downloaded_asset');
+    const createdMediaIds: string[] = [];
+    let primaryMediaId: string | null = null;
 
-    const mediaId = crypto.randomUUID();
-    storageKey = `users/${userId}/media/${mediaId}/${fileName}`;
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i]!;
+      const fetched = await fetchAndValidateRemoteMedia(candidate.streamUrl, fetchImpl, db, jobId);
+      if (!fetched) return;
+      const { response, body, totalBytesEstimate } = fetched;
 
-    let downloadedBytes = 0;
-    const progressTransform = createStreamProgressTracker({
-      db,
-      jobId,
-      quota,
-      totalBytesEstimate,
-      onBytesUpdate: (bytes) => {
-        downloadedBytes = bytes;
-      },
-    });
+      const mimeType = inferMimeFromUrlOrHeader(response.headers.get('content-type'), candidate.streamUrl);
+      const mediaType: 'video' | 'image' =
+        candidate.mediaTypeHint ?? (mimeType.startsWith('image/') ? 'image' : 'video');
+      const contentDisposition = response.headers.get('content-disposition');
+      const headerFilename = extractFilenameFromHeader(contentDisposition);
+      const defaultStem = i === 0 ? 'downloaded_asset' : `downloaded_asset_${i + 1}`;
+      const fileName = sanitizeFileName(
+        candidate.fileName || (i === 0 ? customFilename : null) || headerFilename,
+        mimeType,
+        defaultStem
+      );
 
-    const transformedStream = body.pipeThrough(progressTransform);
+      const mediaId = crypto.randomUUID();
+      if (!primaryMediaId) {
+        primaryMediaId = mediaId;
+      }
+      createdMediaIds.push(mediaId);
+      storageKey = `users/${userId}/media/${mediaId}/${fileName}`;
 
-    const publicUrl = await writeStreamToDestination({
-      stream: transformedStream,
-      storageKey,
-      mimeType,
-      env,
-      storageService,
-    });
+      let downloadedBytes = 0;
+      const progressTransform = createStreamProgressTracker({
+        db,
+        jobId,
+        totalBytesEstimate,
+        onBytesUpdate: (bytes) => {
+          downloadedBytes = bytes;
+        },
+      });
 
-    await persistDownloadedMediaItem({
-      db,
-      jobId,
-      userId,
-      targetFolderId,
-      mediaId,
-      fileName,
-      mimeType,
-      mediaType,
-      storageKey,
-      publicUrl,
-      downloadedBytes,
-      quotaUsedBytes: quota.usedBytes,
-    });
+      const transformedStream = body.pipeThrough(progressTransform);
+
+      const publicUrl = await writeStreamToDestination({
+        stream: transformedStream,
+        storageKey,
+        mimeType,
+        env,
+        storageService,
+      });
+
+      let thumbResult: { thumbnailKey: string | null; thumbnailUrl: string | null } = {
+        thumbnailKey: null,
+        thumbnailUrl: null,
+      };
+
+      if (mediaType === 'video' && candidate.thumbnailUrl) {
+        thumbResult = await tryUploadVideoThumbnailToR2({
+          thumbnailUrl: candidate.thumbnailUrl,
+          userId,
+          mediaId,
+          env,
+          fetchImpl,
+          storageService,
+        });
+      }
+
+      await persistDownloadedMediaItem({
+        db,
+        jobId,
+        userId,
+        targetFolderId,
+        mediaId,
+        fileName,
+        mimeType,
+        mediaType,
+        storageKey,
+        publicUrl,
+        downloadedBytes,
+        thumbnailKey: thumbResult.thumbnailKey,
+        thumbnailUrl: thumbResult.thumbnailUrl,
+        durationSeconds: candidate.durationSeconds ?? null,
+        aspectRatio: candidate.aspectRatio ?? 'unknown',
+        captionText: candidate.caption ?? null,
+        allMediaIds: createdMediaIds,
+      });
+    }
   } catch (err: unknown) {
     await cleanupFailedDownload(db, jobId, storageKey, env, err);
   }

@@ -97,10 +97,13 @@ export const MediaItemResponseSchema = z.object({
 
 export type MediaItemResponse = z.infer<typeof MediaItemResponseSchema>;
 
+export const AllowedAspectRatios = ['9:16', '16:9', '1:1', '4:5'] as const;
+export type AllowedAspectRatio = (typeof AllowedAspectRatios)[number];
+
 export const MediaListQuerySchema = z.object({
   folderId: z.string().uuid().or(z.literal('unorganized')).optional(),
   mediaType: z.enum(['video', 'image']).optional(),
-  aspectRatio: z.enum(['9:16', '16:9', '1:1']).optional(),
+  aspectRatio: z.enum(['9:16', '16:9', '1:1', '4:5']).optional(),
   captionStatus: z.enum(['has_caption', 'empty_caption']).optional(),
   search: z.string().optional(),
   sortBy: z.enum(['created_at', 'name', 'file_size']).default('created_at'),

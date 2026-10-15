@@ -147,4 +147,68 @@ describe('Media Upload Confirmation (POST /api/tenant/[subdomain]/media/confirm)
     expect(capturedInsertParams[13]).toBe('My Viral Reel');
     expect(data.captionText).toBe('My Viral Reel');
   });
+
+  it('persists and returns width and height pixel dimensions (Spec 046)', async () => {
+    let capturedParams: any[] = [];
+    const mockDb: Partial<DatabaseClient> = {
+      withTransaction: vi.fn().mockImplementation(async (callback) => {
+        const txClient = {
+          query: vi.fn().mockImplementation(async (sql: string, params: any[]) => {
+            capturedParams = params;
+            return {
+              rows: [
+                {
+                  id: mediaId,
+                  user_id: userId,
+                  folder_id: null,
+                  name: 'dimension_test.mp4',
+                  file_size: '5000000',
+                  mime_type: 'video/mp4',
+                  media_type: 'video',
+                  storage_key: `users/${userId}/media/${mediaId}/dimension_test.mp4`,
+                  url: `https://media.fbuploadpro.com/users/${userId}/media/${mediaId}/dimension_test.mp4`,
+                  thumbnail_key: `users/${userId}/thumbnails/${mediaId}.webp`,
+                  thumbnail_url: `https://media.fbuploadpro.com/users/${userId}/thumbnails/${mediaId}.webp`,
+                  durationSeconds: '15.0',
+                  aspectRatio: '9:16',
+                  caption_text: 'dimension_test',
+                  width: 1080,
+                  height: 1920,
+                  created_at: new Date('2026-10-07T12:00:00Z'),
+                  updated_at: new Date('2026-10-07T12:00:00Z'),
+                },
+              ],
+              rowCount: 1,
+            };
+          }),
+        };
+        return callback(txClient as any);
+      }),
+    };
+
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/confirm', {
+      method: 'POST',
+      headers: { cookie: validSessionCookie },
+      body: JSON.stringify({
+        mediaId,
+        name: 'dimension_test.mp4',
+        fileSize: 5000000,
+        mimeType: 'video/mp4',
+        mediaType: 'video',
+        storageKey: `users/${userId}/media/${mediaId}/dimension_test.mp4`,
+        url: `https://media.fbuploadpro.com/users/${userId}/media/${mediaId}/dimension_test.mp4`,
+        width: 1080,
+        height: 1920,
+        aspectRatio: '9:16',
+      }),
+    });
+    const res = await handleConfirmUpload(req, 'acme', mockDb as DatabaseClient);
+
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    expect(data.width).toBe(1080);
+    expect(data.height).toBe(1920);
+    expect(capturedParams[14]).toBe(1080);
+    expect(capturedParams[15]).toBe(1920);
+  });
 });

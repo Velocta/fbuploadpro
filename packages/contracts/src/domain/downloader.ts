@@ -98,6 +98,541 @@ export function detectSourcePlatform(rawUrl: string): DownloaderSourcePlatform {
   return 'web';
 }
 
+export function normalizeCloudDriveUrl(url: URL): string {
+  const host = url.hostname.toLowerCase();
+
+  if (host === 'drive.google.com') {
+    const fileMatch = /\/file\/d\/([a-zA-Z0-9_-]+)/.exec(url.pathname);
+    if (fileMatch?.[1]) {
+      return `https://drive.google.com/uc?export=download&id=${fileMatch[1]}`;
+    }
+    const queryId = url.searchParams.get('id');
+    if (url.pathname === '/open' && queryId) {
+      return `https://drive.google.com/uc?export=download&id=${queryId}`;
+    }
+  }
+
+  if (host === 'www.dropbox.com' || host === 'dropbox.com') {
+    const cloned = new URL(url.toString());
+    cloned.searchParams.set('dl', '1');
+    return cloned.toString();
+  }
+
+  return url.toString();
+}
+
+export function resolveGoogleDriveDirectUrl(rawUrl: string, htmlContent?: string): string | null {
+  try {
+    const parsed = new URL(rawUrl);
+    let fileId: string | null = null;
+    const fileMatch = /\/file\/d\/([a-zA-Z0-9_-]+)/.exec(parsed.pathname);
+    if (fileMatch?.[1]) {
+      fileId = fileMatch[1];
+    } else {
+      fileId = parsed.searchParams.get('id');
+    }
+    if (!fileId) return null;
+
+    let confirmToken = 't';
+    if (htmlContent) {
+      const confirmMatch = /confirm=([0-9a-zA-Z_-]+)/i.exec(htmlContent);
+      if (confirmMatch?.[1]) {
+        confirmToken = confirmMatch[1];
+      }
+    }
+    return `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=${confirmToken}`;
+  } catch {
+    return null;
+  }
+}
+
+export interface RemoteMediaCandidate {
+  streamUrl: string;
+  thumbnailUrl?: string | null | undefined;
+  caption?: string | null | undefined;
+  fileName?: string | null | undefined;
+  mediaTypeHint?: 'video' | 'image' | undefined;
+  durationSeconds?: number | null | undefined;
+  aspectRatio?: string | null | undefined;
+}
+
+export interface ParsedHtmlMedia {
+  candidates: RemoteMediaCandidate[];
+}
+
+function decodeHtmlEntities(input: string): string {
+  return input
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&#x27;', "'")
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .trim();
+}
+
+function isAttributeNameChar(code: number): boolean {
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    code === 95 ||
+    code === 58 ||
+    code === 45
+  );
+}
+
+function readAttrNameBeforeEquals(text: string, eqIdx: number): string {
+  let pos = eqIdx - 1;
+  while (pos >= 0 && text.codePointAt(pos) === 32) {
+    pos -= 1;
+  }
+  const nameEnd = pos + 1;
+  while (pos >= 0 && isAttributeNameChar(text.codePointAt(pos) ?? 0)) {
+    pos -= 1;
+  }
+  return text.slice(pos + 1, nameEnd).toLowerCase();
+}
+
+function readQuotedAttrValueAfterEquals(
+  text: string,
+  eqIdx: number
+): { value: string; nextIndex: number } | null {
+  let pos = eqIdx + 1;
+  while (pos < text.length && text.codePointAt(pos) === 32) {
+    pos += 1;
+  }
+  const quoteChar = text[pos];
+  if (quoteChar !== '"' && quoteChar !== "'") {
+    return null;
+  }
+  const closeIdx = text.indexOf(quoteChar, pos + 1);
+  if (closeIdx === -1) {
+    return null;
+  }
+  return {
+    value: text.slice(pos + 1, closeIdx),
+    nextIndex: closeIdx + 1,
+  };
+}
+
+function parseMetaTagAttributes(tag: string): Record<string, string> {
+  const normalized = tag.replaceAll(/\s+/g, ' ');
+  const attrs: Record<string, string> = {};
+  let searchFrom = 0;
+
+  while (searchFrom < normalized.length) {
+    const eqIdx = normalized.indexOf('=', searchFrom);
+    if (eqIdx === -1) {
+      break;
+    }
+    const attrName = readAttrNameBeforeEquals(normalized, eqIdx);
+    const quoted = readQuotedAttrValueAfterEquals(normalized, eqIdx);
+    if (!quoted) {
+      searchFrom = eqIdx + 1;
+      continue;
+    }
+    if (attrName) {
+      attrs[attrName] = quoted.value;
+    }
+    searchFrom = quoted.nextIndex;
+  }
+
+  return attrs;
+}
+
+function extractMetaValues(html: string, keys: string[]): string[] {
+  const results: string[] = [];
+  const metaTagRegex = /<meta\b[^>]*>/gi;
+  const keySet = new Set(keys.map((k) => k.toLowerCase()));
+
+  let tagMatch: RegExpExecArray | null;
+  while ((tagMatch = metaTagRegex.exec(html)) !== null) {
+    const attrs = parseMetaTagAttributes(tagMatch[0]);
+    const prop = (attrs.property ?? attrs.name ?? attrs.itemprop ?? '').toLowerCase();
+    const content = attrs.content ? decodeHtmlEntities(attrs.content) : '';
+    if (prop && content && keySet.has(prop)) {
+      results.push(content);
+    }
+  }
+
+  return results;
+}
+
+function resolveRelativeUrl(candidate: string, baseUrl: string): string | null {
+  const trimmed = candidate.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    return new URL(trimmed, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function firstNonEmptyString(...values: unknown[]): string | null {
+  for (const val of values) {
+    if (typeof val === 'string' && val.trim().length > 0) {
+      return val;
+    }
+  }
+  return null;
+}
+
+interface HtmlMediaAccumulator {
+  videoUrls: string[];
+  imageUrls: string[];
+  thumbnailUrls: string[];
+  captions: string[];
+}
+
+function appendResolvedUrl(target: string[], rawUrl: string | null, baseUrl: string): void {
+  if (!rawUrl) {
+    return;
+  }
+  const resolved = resolveRelativeUrl(rawUrl, baseUrl);
+  if (resolved) {
+    target.push(resolved);
+  }
+}
+
+function extractJsonLdCaption(record: Record<string, unknown>, captions: string[]): void {
+  const rawText = firstNonEmptyString(record.description, record.name, record.headline);
+  if (rawText) {
+    captions.push(decodeHtmlEntities(rawText));
+  }
+}
+
+function extractJsonLdThumbnails(
+  record: Record<string, unknown>,
+  baseUrl: string,
+  thumbnails: string[]
+): void {
+  if (typeof record.thumbnailUrl === 'string') {
+    appendResolvedUrl(thumbnails, record.thumbnailUrl, baseUrl);
+    return;
+  }
+  if (Array.isArray(record.thumbnailUrl)) {
+    for (const item of record.thumbnailUrl) {
+      if (typeof item === 'string') {
+        appendResolvedUrl(thumbnails, item, baseUrl);
+      }
+    }
+  }
+}
+
+function extractJsonLdMediaStream(
+  record: Record<string, unknown>,
+  baseUrl: string,
+  acc: HtmlMediaAccumulator
+): void {
+  const typeVal = typeof record['@type'] === 'string' ? record['@type'].toLowerCase() : '';
+  const streamCandidate = firstNonEmptyString(record.contentUrl, record.url);
+  if (typeVal.includes('video')) {
+    appendResolvedUrl(acc.videoUrls, streamCandidate, baseUrl);
+  } else if (typeVal.includes('image')) {
+    appendResolvedUrl(acc.imageUrls, streamCandidate, baseUrl);
+  }
+}
+
+const JSON_LD_NESTED_KEYS = [
+  '@graph',
+  'video',
+  'image',
+  'hasPart',
+  'sharedContent',
+  'associatedMedia',
+] as const;
+
+function parseJsonLdNodes(node: unknown, baseUrl: string, acc: HtmlMediaAccumulator): void {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      parseJsonLdNodes(item, baseUrl, acc);
+    }
+    return;
+  }
+
+  const record = node as Record<string, unknown>;
+  extractJsonLdCaption(record, acc.captions);
+  extractJsonLdThumbnails(record, baseUrl, acc.thumbnailUrls);
+  extractJsonLdMediaStream(record, baseUrl, acc);
+
+  for (const nestedKey of JSON_LD_NESTED_KEYS) {
+    if (record[nestedKey]) {
+      parseJsonLdNodes(record[nestedKey], baseUrl, acc);
+    }
+  }
+}
+
+function extractJsonLdBlocksFromHtml(
+  html: string,
+  baseUrl: string,
+  acc: HtmlMediaAccumulator
+): void {
+  const jsonLdRegex = /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let scriptMatch: RegExpExecArray | null;
+  while ((scriptMatch = jsonLdRegex.exec(html)) !== null) {
+    const rawJson = scriptMatch[1]?.trim();
+    if (!rawJson) {
+      continue;
+    }
+    try {
+      const parsedJson: unknown = JSON.parse(rawJson);
+      parseJsonLdNodes(parsedJson, baseUrl, acc);
+    } catch {
+      // Ignore malformed JSON-LD script blocks
+    }
+  }
+}
+
+function extractHtmlVideoTags(html: string, baseUrl: string, videoUrls: string[]): void {
+  const videoSrcRegex = /<(?:video|source)\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi;
+  let videoMatch: RegExpExecArray | null;
+  while ((videoMatch = videoSrcRegex.exec(html)) !== null) {
+    const src = videoMatch[1];
+    if (src) {
+      appendResolvedUrl(videoUrls, decodeHtmlEntities(src), baseUrl);
+    }
+  }
+}
+
+function deduplicateUrlsByHttpsKey(urls: string[]): string[] {
+  const unique: string[] = [];
+  const seenKeys = new Set<string>();
+  for (const rawUrl of urls) {
+    const canonicalKey = rawUrl.replace(/^http:\/\//i, 'https://');
+    if (!seenKeys.has(canonicalKey)) {
+      seenKeys.add(canonicalKey);
+      unique.push(rawUrl);
+    }
+  }
+  return unique;
+}
+
+function extractTitleTagFallback(html: string): string | null {
+  const titleMatch = /<title\b[^>]*>([^<]+)<\/title>/i.exec(html);
+  if (!titleMatch?.[1]) {
+    return null;
+  }
+  const cleanedTitle = decodeHtmlEntities(titleMatch[1]);
+  return cleanedTitle.length > 0 ? cleanedTitle : null;
+}
+
+export function parseHtmlMediaCandidates(html: string, baseUrl: string): ParsedHtmlMedia {
+  const acc: HtmlMediaAccumulator = {
+    videoUrls: [],
+    imageUrls: [],
+    thumbnailUrls: [],
+    captions: [],
+  };
+
+  const metaDescriptions = extractMetaValues(html, [
+    'og:description',
+    'twitter:description',
+    'description',
+  ]);
+  const metaTitles = extractMetaValues(html, ['og:title', 'twitter:title']);
+  acc.captions.push(...metaDescriptions, ...metaTitles);
+
+  const ogVideos = extractMetaValues(html, [
+    'og:video:secure_url',
+    'og:video:url',
+    'og:video',
+    'twitter:player:stream',
+  ]);
+  for (const v of ogVideos) {
+    appendResolvedUrl(acc.videoUrls, v, baseUrl);
+  }
+
+  const ogImages = extractMetaValues(html, [
+    'og:image:secure_url',
+    'og:image:url',
+    'og:image',
+    'twitter:image',
+    'twitter:image:src',
+  ]);
+  for (const img of ogImages) {
+    appendResolvedUrl(acc.imageUrls, img, baseUrl);
+  }
+
+  extractJsonLdBlocksFromHtml(html, baseUrl, acc);
+  extractHtmlVideoTags(html, baseUrl, acc.videoUrls);
+
+  if (acc.captions.length === 0) {
+    const fallbackTitle = extractTitleTagFallback(html);
+    if (fallbackTitle) {
+      acc.captions.push(fallbackTitle);
+    }
+  }
+
+  const primaryCaption = acc.captions.find((c) => c.trim().length > 0)?.trim() ?? null;
+  const uniqueVideos = deduplicateUrlsByHttpsKey(acc.videoUrls);
+  const uniqueImages = deduplicateUrlsByHttpsKey(acc.imageUrls);
+
+  if (uniqueVideos.length > 0) {
+    const defaultThumb = acc.thumbnailUrls[0] ?? uniqueImages[0] ?? null;
+    return {
+      candidates: uniqueVideos.map((streamUrl, idx) => ({
+        streamUrl,
+        thumbnailUrl: acc.thumbnailUrls[idx] ?? defaultThumb,
+        caption: primaryCaption,
+        mediaTypeHint: 'video',
+      })),
+    };
+  }
+
+  if (uniqueImages.length > 0) {
+    return {
+      candidates: uniqueImages.map((streamUrl) => ({
+        streamUrl,
+        thumbnailUrl: null,
+        caption: primaryCaption,
+        mediaTypeHint: 'image',
+      })),
+    };
+  }
+
+  return { candidates: [] };
+}
+
+function classifyMediaTypeHint(rawType: unknown): 'video' | 'image' | undefined {
+  if (typeof rawType !== 'string') {
+    return undefined;
+  }
+  const lower = rawType.toLowerCase();
+  if (lower === 'photo' || lower === 'image') {
+    return 'image';
+  }
+  if (lower === 'video' || lower === 'gif') {
+    return 'video';
+  }
+  return undefined;
+}
+
+function parsePickerArrayItem(
+  rawItem: unknown,
+  topThumb: string | null,
+  topCaption: string | null
+): RemoteMediaCandidate | null {
+  if (!rawItem || typeof rawItem !== 'object') {
+    return null;
+  }
+  const item = rawItem as Record<string, unknown>;
+  const streamUrl = firstNonEmptyString(item.url, item.streamUrl);
+  if (!streamUrl) {
+    return null;
+  }
+
+  return {
+    streamUrl,
+    thumbnailUrl: firstNonEmptyString(item.thumb, item.thumbnailUrl, item.thumbnail) ?? topThumb,
+    caption: firstNonEmptyString(item.caption, item.title) ?? topCaption,
+    fileName: firstNonEmptyString(item.filename),
+    mediaTypeHint: classifyMediaTypeHint(item.type),
+  };
+}
+
+function extractTweetMediaList(mediaObj: Record<string, unknown> | null): unknown[] {
+  if (!mediaObj) {
+    return [];
+  }
+  if (Array.isArray(mediaObj.all)) {
+    return mediaObj.all as unknown[];
+  }
+  const videos = Array.isArray(mediaObj.videos) ? (mediaObj.videos as unknown[]) : [];
+  const photos = Array.isArray(mediaObj.photos) ? (mediaObj.photos as unknown[]) : [];
+  return [...videos, ...photos];
+}
+
+function parseTweetCandidatesFromObject(
+  tweet: Record<string, unknown>,
+  topCaption: string | null
+): RemoteMediaCandidate[] {
+  const tweetText = firstNonEmptyString(tweet.text) ?? topCaption;
+  const mediaObj =
+    tweet.media && typeof tweet.media === 'object'
+      ? (tweet.media as Record<string, unknown>)
+      : null;
+  const mediaList = extractTweetMediaList(mediaObj);
+
+  const tweetCandidates: RemoteMediaCandidate[] = [];
+  for (const entry of mediaList) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const m = entry as Record<string, unknown>;
+    const streamUrl = firstNonEmptyString(m.url);
+    if (!streamUrl) {
+      continue;
+    }
+    const hint = classifyMediaTypeHint(m.type) ?? 'video';
+    tweetCandidates.push({
+      streamUrl,
+      thumbnailUrl: firstNonEmptyString(m.thumbnail_url),
+      caption: tweetText,
+      mediaTypeHint: hint,
+      durationSeconds: typeof m.duration === 'number' ? m.duration : null,
+    });
+  }
+  return tweetCandidates;
+}
+
+export function parseJsonPayloadCandidates(payload: unknown): RemoteMediaCandidate[] {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+  const data = payload as Record<string, unknown>;
+  const topCaption = firstNonEmptyString(data.caption, data.title, data.description);
+  const topThumb = firstNonEmptyString(data.thumbnail, data.thumbnailUrl, data.thumb);
+
+  let arrayField: unknown[] | null = null;
+  if (Array.isArray(data.picker)) {
+    arrayField = data.picker;
+  } else if (Array.isArray(data.items)) {
+    arrayField = data.items;
+  }
+
+  if (arrayField && arrayField.length > 0) {
+    const candidates = arrayField
+      .map((rawItem) => parsePickerArrayItem(rawItem, topThumb, topCaption))
+      .filter((item): item is RemoteMediaCandidate => item !== null);
+    if (candidates.length > 0) {
+      return candidates;
+    }
+  }
+
+  if (data.tweet && typeof data.tweet === 'object') {
+    const tweetCandidates = parseTweetCandidatesFromObject(
+      data.tweet as Record<string, unknown>,
+      topCaption
+    );
+    if (tweetCandidates.length > 0) {
+      return tweetCandidates;
+    }
+  }
+
+  const singleUrl = firstNonEmptyString(data.url, data.streamUrl);
+  if (singleUrl) {
+    return [
+      {
+        streamUrl: singleUrl,
+        thumbnailUrl: topThumb,
+        caption: topCaption,
+        fileName: firstNonEmptyString(data.filename),
+        durationSeconds: typeof data.duration === 'number' ? data.duration : null,
+        aspectRatio: firstNonEmptyString(data.aspectRatio),
+      },
+    ];
+  }
+
+  return [];
+}
+
 function isDocumentationOrBenchmarkIpv4(a: number, b: number, c: number): boolean {
   if (a === 192 && b === 0) {
     return c === 0 || c === 2;

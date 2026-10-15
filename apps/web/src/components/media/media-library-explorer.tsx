@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import {
   Dialog,
@@ -19,6 +20,7 @@ import {
   extractDroppedFileEntries,
   executeBoundedUploadBatch,
   detectDuplicateUploadEntries,
+  resolveFolderPathSegments,
   type QueuedUploadEntry,
   type UploadBatchState,
 } from './upload-queue-banner';
@@ -31,7 +33,7 @@ export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
 
 export type MediaViewMode = 'grid' | 'table';
 
-export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1';
+export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1' | '4:5';
 
 export type CaptionStatusFilterKey = 'all' | 'has_caption' | 'empty_caption';
 
@@ -237,20 +239,73 @@ export function filterAndSortMediaItems(
 }
 
 
-async function checkServerDuplicateEntries(
+export function resolveTargetFolderIdForEntry(
+  entry: QueuedUploadEntry,
+  existingFolders: MediaFolder[],
+  baseFolderId: string | null
+): string | null | undefined {
+  const segments =
+    entry.relativeSubfolderPath ??
+    resolveFolderPathSegments(entry.relativePath || entry.file.name);
+
+  if (segments.length === 0) {
+    return baseFolderId ?? null;
+  }
+
+  let currentParentId: string | null = baseFolderId ?? null;
+  for (const rawSegment of segments) {
+    const segmentLower = rawSegment.trim().toLowerCase();
+    const matched = existingFolders.find(
+      (f) =>
+        (f.parentId ?? null) === currentParentId &&
+        f.name.trim().toLowerCase() === segmentLower
+    );
+    if (!matched) {
+      // Subfolder does not exist yet on server; newly uploaded files inside it cannot duplicate existing server items
+      return undefined;
+    }
+    currentParentId = matched.id;
+  }
+  return currentParentId;
+}
+
+export async function checkServerDuplicateEntries(
   subdomain: string,
   folderId: string | null | undefined,
-  entries: QueuedUploadEntry[]
+  entries: QueuedUploadEntry[],
+  existingFolders: MediaFolder[] = []
 ): Promise<{ duplicates: QueuedUploadEntry[]; uniqueEntries: QueuedUploadEntry[] } | null> {
   try {
+    const checkableEntries: Array<{
+      clientKey: string;
+      name: string;
+      fileSize: number;
+      folderId: string | null;
+    }> = [];
+
+    entries.forEach((e, idx) => {
+      const targetFolderId = resolveTargetFolderIdForEntry(
+        e,
+        existingFolders,
+        folderId ?? null
+      );
+      if (targetFolderId !== undefined) {
+        checkableEntries.push({
+          clientKey: String(idx),
+          name: e.file.name,
+          fileSize: e.file.size,
+          folderId: targetFolderId,
+        });
+      }
+    });
+
+    if (checkableEntries.length === 0) {
+      return { duplicates: [], uniqueEntries: entries };
+    }
+
     const payload = {
       folderId: folderId ?? null,
-      entries: entries.map((e, idx) => ({
-        clientKey: String(idx),
-        name: e.file.name,
-        fileSize: e.file.size,
-        folderId: folderId ?? null,
-      })),
+      entries: checkableEntries,
     };
     const checkRes = await fetch(`/api/tenant/${subdomain}/media/check-duplicates`, {
       method: 'POST',
@@ -342,6 +397,8 @@ export function MediaLibraryExplorer({
 }: Readonly<MediaLibraryExplorerProps>) {
   const hasInitialData =
     initialFolders !== undefined || initialMediaItems !== undefined;
+  const isFirstMountWithInitialDataRef = useRef(hasInitialData);
+  const router = useRouter();
 
   const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
   const [mediaItems, setMediaItems] = useState<MediaItemResponse[]>(
@@ -411,6 +468,7 @@ export function MediaLibraryExplorer({
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Upload Queue State
   const [uploadState, setUploadState] = useState<UploadBatchState>(
@@ -562,7 +620,14 @@ export function MediaLibraryExplorer({
 
   // Fetch folders and current directory (or global search) media items
   const refreshLibraryData = useCallback(async () => {
-    if (!subdomain || hasInitialData) return;
+    if (!subdomain) return;
+    if (isFirstMountWithInitialDataRef.current) {
+      isFirstMountWithInitialDataRef.current = false;
+      return;
+    }
+
+    setLoadError(null);
+    setIsLoading(true);
 
     const [sortBy, sortOrder] = sortOption.split(':') as [
       'created_at' | 'name' | 'file_size',
@@ -595,34 +660,34 @@ export function MediaLibraryExplorer({
         fetch(`/api/tenant/${subdomain}/media?${query.toString()}`),
       ]);
 
-      if (foldersRes.ok) {
-        const foldersData = (await foldersRes.json()) as {
-          folders: MediaFolder[];
-        };
-        setFolders(foldersData.folders || []);
+      if (!foldersRes.ok || !mediaRes.ok) {
+        setLoadError('Unable to load media items. Please check your connection and try again.');
+        return;
       }
 
-      if (mediaRes.ok) {
-        const mediaData = (await mediaRes.json()) as {
-          items: MediaItemResponse[];
-          total?: number;
-          nextCursor?: string | null;
-        };
-        const fetchedItems = mediaData.items || [];
-        setMediaItems(fetchedItems);
-        setTotalMediaCount(
-          typeof mediaData.total === 'number' ? mediaData.total : fetchedItems.length
-        );
-        setNextCursor(mediaData.nextCursor ?? null);
-      }
+      const foldersData = (await foldersRes.json()) as {
+        folders: MediaFolder[];
+      };
+      setFolders(foldersData.folders || []);
+
+      const mediaData = (await mediaRes.json()) as {
+        items: MediaItemResponse[];
+        total?: number;
+        nextCursor?: string | null;
+      };
+      const fetchedItems = mediaData.items || [];
+      setMediaItems(fetchedItems);
+      setTotalMediaCount(
+        typeof mediaData.total === 'number' ? mediaData.total : fetchedItems.length
+      );
+      setNextCursor(mediaData.nextCursor ?? null);
     } catch (_err) {
-      // Retain existing state if network request fails
+      setLoadError('Unable to load media items. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
   }, [
     subdomain,
-    hasInitialData,
     currentFolderId,
     mediaTypeFilter,
     aspectRatioFilter,
@@ -849,7 +914,7 @@ export function MediaLibraryExplorer({
       waitIfPaused: waitIfUploadPaused,
     });
 
-    if (!hasInitialData && result.uploadedItems.length > 0) {
+    if (result.uploadedItems.length > 0) {
       await refreshLibraryData();
     }
   };
@@ -859,12 +924,27 @@ export function MediaLibraryExplorer({
     void runUploadBatch(failedEntries, 0);
   };
 
+  // 1-Click Publishing Schedule Actions
+  const handleScheduleMedia = (item: MediaItemResponse) => {
+    router.push(`/tenant/${subdomain}/pages?mediaId=${encodeURIComponent(item.id)}`);
+  };
+
+  const handleBatchSchedule = () => {
+    if (selectedIds.length === 0) return;
+    router.push(`/tenant/${subdomain}/pages?mediaIds=${encodeURIComponent(selectedIds.join(','))}`);
+  };
+
   // Multi-file & Folder Upload Trigger with Pre-Upload Duplicate Detection
   const handleStartUploadBatch = async (entries: QueuedUploadEntry[]) => {
     if (entries.length === 0) return;
 
-    if (subdomain && !hasInitialData) {
-      const serverResult = await checkServerDuplicateEntries(subdomain, currentFolderId, entries);
+    if (subdomain) {
+      const serverResult = await checkServerDuplicateEntries(
+        subdomain,
+        currentFolderId,
+        entries,
+        folders
+      );
       if (serverResult) {
         if (serverResult.duplicates.length > 0) {
           setPendingDuplicateUpload({
@@ -1652,6 +1732,42 @@ export function MediaLibraryExplorer({
         </div>
       )}
 
+      {/* Network Load Error Retry Banner */}
+      {loadError && (
+        <div
+          data-testid="media-load-error-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: `${SPACING.sm} ${SPACING.md}`,
+            marginBottom: SPACING.md,
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            border: `1px solid ${PALETTE.accent3}`,
+            borderRadius: RADII.sm,
+            fontSize: '0.875rem',
+            color: PALETTE.accent3,
+          }}
+        >
+          <span>{loadError}</span>
+          <button
+            type="button"
+            data-testid="media-load-retry-btn"
+            onClick={() => void refreshLibraryData()}
+            style={{
+              ...COMPONENT_STYLES.secondaryButton(THEME.default),
+              padding: '4px 10px',
+              fontSize: '0.75rem',
+              borderColor: PALETTE.accent3,
+              color: PALETTE.accent3,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Single Unified Windows Copy-Style Upload Progress Banner */}
       <UploadQueueBanner
         state={uploadState}
@@ -1889,6 +2005,7 @@ export function MediaLibraryExplorer({
             <option value="9:16">9:16 Vertical</option>
             <option value="16:9">16:9 Landscape</option>
             <option value="1:1">1:1 Square</option>
+            <option value="4:5">4:5 Portrait</option>
           </select>
 
           <select
@@ -2022,6 +2139,7 @@ export function MediaLibraryExplorer({
           setBatchCaptionModalOpen(true);
         }}
         onBatchDelete={() => void handleBatchDelete()}
+        onBatchSchedule={handleBatchSchedule}
         isBusy={isBatchBusy}
       />
 
@@ -2523,6 +2641,7 @@ export function MediaLibraryExplorer({
                         onDeleteRequest={(target) =>
                           void handleDeleteMediaItem(target.id)
                         }
+                        onScheduleRequest={handleScheduleMedia}
                       />
                     ))}
                   </tbody>
@@ -2576,6 +2695,7 @@ export function MediaLibraryExplorer({
                       onDeleteRequest={(target) =>
                         void handleDeleteMediaItem(target.id)
                       }
+                      onScheduleRequest={handleScheduleMedia}
                     />
                   ))}
                 </div>

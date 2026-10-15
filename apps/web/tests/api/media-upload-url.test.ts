@@ -121,4 +121,24 @@ describe('Presigned Upload URL Endpoint (POST /api/tenant/[subdomain]/media/uplo
     );
     expect(data.expiresInSeconds).toBe(900);
   });
+
+  it('preserves non-Latin and Unicode characters in filenames (Spec 046)', async () => {
+    const unicodeName = 'فيديو_تسويقي_2026.mp4';
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/upload-url', {
+      method: 'POST',
+      headers: { cookie: validSessionCookie },
+      body: JSON.stringify({
+        fileName: unicodeName,
+        fileSize: 1048576,
+        mimeType: 'video/mp4',
+        thumbnailMimeType: 'image/webp',
+      }),
+    });
+    const res = await handleCreateUploadUrl(req, 'acme', mockStorage);
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.mediaKey).toContain(encodeURI(unicodeName.split('.')[0]!) || 'فيديو_تسويقي_2026');
+    expect(data.mediaKey).not.toBe(`users/${userId}/media/${data.mediaId}/____________.mp4`);
+  });
 });

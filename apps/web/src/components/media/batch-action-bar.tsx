@@ -11,6 +11,7 @@ export interface BatchActionBarProps {
   onBatchMove?: () => void;
   onBatchCaption?: () => void;
   onBatchDelete?: () => void;
+  onBatchSchedule?: () => void;
   isBusy?: boolean;
 }
 
@@ -22,6 +23,7 @@ export function BatchActionBar({
   onBatchMove,
   onBatchCaption,
   onBatchDelete,
+  onBatchSchedule,
   isBusy = false,
 }: Readonly<BatchActionBarProps>) {
   if (selectedIds.length === 0) {
@@ -121,6 +123,23 @@ export function BatchActionBar({
           flexWrap: 'wrap',
         }}
       >
+        {onBatchSchedule && (
+          <button
+            type="button"
+            data-testid="batch-schedule-btn"
+            disabled={isBusy}
+            onClick={onBatchSchedule}
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              height: '32px',
+              padding: `0 ${SPACING.md}`,
+              fontSize: '0.8125rem',
+            }}
+          >
+            Schedule / Add to Queue
+          </button>
+        )}
+
         {onBatchMove && (
           <button
             type="button"

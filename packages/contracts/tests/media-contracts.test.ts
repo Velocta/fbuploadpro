@@ -12,6 +12,8 @@ import {
   BatchMediaRequestSchema,
   BatchMediaResponseSchema,
   deriveDefaultCaptionFromFilename,
+  CheckDuplicatesRequestSchema,
+  AllowedAspectRatios,
 } from '../src/index.js';
 
 describe('Media Domain Contracts', () => {
@@ -232,6 +234,44 @@ describe('Media Domain Contracts', () => {
         mediaId: '44444444-4444-4444-a444-444444444444',
       });
       expect(res.success).toBe(true);
+    });
+  });
+
+  describe('Aspect Ratio and Duplicate Check Contracts (Spec 046)', () => {
+    it('accepts 4:5 aspect ratio in MediaListQuerySchema and confirms AllowedAspectRatios contains 4:5', () => {
+      expect(AllowedAspectRatios).toContain('4:5');
+      const res = MediaListQuerySchema.safeParse({
+        aspectRatio: '4:5',
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.aspectRatio).toBe('4:5');
+      }
+    });
+
+    it('accepts CheckDuplicatesRequestSchema with per-entry folderId and global folderId', () => {
+      const res = CheckDuplicatesRequestSchema.safeParse({
+        folderId: '11111111-1111-4111-a111-111111111111',
+        entries: [
+          {
+            clientKey: 'file-1',
+            name: 'video1.mp4',
+            fileSize: 1024,
+            folderId: '22222222-2222-4222-a222-222222222222',
+          },
+          {
+            clientKey: 'file-2',
+            name: 'photo.jpg',
+            fileSize: 2048,
+            folderId: null,
+          },
+        ],
+      });
+      expect(res.success).toBe(true);
+      if (res.success) {
+        expect(res.data.entries[0]?.folderId).toBe('22222222-2222-4222-a222-222222222222');
+        expect(res.data.entries[1]?.folderId).toBeNull();
+      }
     });
   });
 });

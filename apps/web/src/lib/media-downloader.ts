@@ -5,6 +5,7 @@ import {
    deriveDefaultCaptionFromFilename,
   detectSourcePlatform,
   validateSafeRemoteUrl,
+  resolveGoogleDriveDirectUrl,
   type DownloaderSourcePlatform,
   type IStorageService,
 } from '@fbuploadpro/contracts';
@@ -778,27 +779,29 @@ async function readResponseBytesWithLimit(
   const chunks: Uint8Array[] = [];
   let totalBytes = 0;
 
-  const readNextChunk = async (): Promise<void> => {
-    const { done, value } = await reader.read();
-    if (done) {
-      return;
-    }
-    if (value) {
-      totalBytes += value.byteLength;
-      if (totalBytes > maxBytes) {
-        await reader.cancel();
-        throw new MediaDownloaderError(
-          'FILE_TOO_LARGE',
-          'This file exceeds the 500 MB maximum size limit.',
-          400
-        );
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
       }
-      chunks.push(value);
+      if (value) {
+        totalBytes += value.byteLength;
+        if (totalBytes > maxBytes) {
+          await reader.cancel();
+          throw new MediaDownloaderError(
+            'FILE_TOO_LARGE',
+            'This file exceeds the 500 MB maximum size limit.',
+            400
+          );
+        }
+        chunks.push(value);
+      }
     }
-    await readNextChunk();
-  };
+  } finally {
+    reader.releaseLock();
+  }
 
-  await readNextChunk();
   return concatUint8Chunks(chunks, totalBytes);
 }
 
@@ -1140,6 +1143,19 @@ async function parseOkInitialResponse(
   if (parsedHtml.candidates.length === 0 && platform === 'x') {
     return { candidates: await tryResolveFromFxTwitter(sourceUrl, fetchFn) };
   }
+  if (parsedHtml.candidates.length === 0 && platform === 'google_drive') {
+    const directUrl = resolveGoogleDriveDirectUrl(sourceUrl.toString(), htmlText);
+    if (directUrl) {
+      return {
+        candidates: [
+          {
+            streamUrl: directUrl,
+            mediaTypeHint: 'video',
+          },
+        ],
+      };
+    }
+  }
   return { candidates: parsedHtml.candidates };
 }
 
@@ -1238,7 +1254,7 @@ export async function resolveAndUploadMediaFromUrl(
     );
   }
 
-  const uploadedItems = await Promise.all(
+  const results = await Promise.allSettled(
     candidates.map((candidate, idx) =>
       downloadAndStoreSingleCandidate(
         candidate,
@@ -1251,10 +1267,41 @@ export async function resolveAndUploadMediaFromUrl(
     )
   );
 
+  const successfulItems: UploadedDownloadedMediaItem[] = [];
+  let firstError: unknown = null;
+
+  for (const res of results) {
+    if (res.status === 'fulfilled') {
+      successfulItems.push(res.value);
+    } else if (!firstError) {
+      firstError = res.reason;
+    }
+  }
+
+  if (firstError || successfulItems.length === 0) {
+    await Promise.all(
+      successfulItems.map(async (item) => {
+        try {
+          await params.storage.deleteObject(item.storageKey);
+          if (item.thumbnailKey) {
+            await params.storage.deleteObject(item.thumbnailKey);
+          }
+        } catch {
+          // ignore cleanup errors
+        }
+      })
+    );
+    throw firstError ?? new MediaDownloaderError(
+      'DOWNLOAD_FAILED',
+      'Failed to download media assets from this link.',
+      502
+    );
+  }
+
   return {
     sourceUrl: canonicalSourceUrl,
     platform,
-    items: uploadedItems,
+    items: successfulItems,
   };
 }
 

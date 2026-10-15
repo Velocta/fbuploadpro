@@ -89,6 +89,26 @@ async function recoverStuckPublishingItems(db: any): Promise<void> {
   }
 }
 
+export async function failStuckDownloadJobs(db: any): Promise<number> {
+  if (typeof db?.rpc === 'function') {
+    try {
+      const { data, error } = await db.rpc('fail_stuck_download_jobs', { p_timeout_minutes: 15 });
+      if (error) {
+        console.error('[failStuckDownloadJobs] RPC error:', error);
+        return 0;
+      }
+      if (data && data > 0) {
+        console.info(`[failStuckDownloadJobs] Marked ${data} stuck download jobs as failed`);
+      }
+      return Number(data ?? 0);
+    } catch (err) {
+      console.error('[failStuckDownloadJobs] Unexpected error:', err);
+      return 0;
+    }
+  }
+  return 0;
+}
+
 async function revertUnsentQueueItems(db: any, unsentIds: string[]): Promise<void> {
   if (unsentIds.length === 0) return;
   try {
@@ -186,6 +206,9 @@ export async function handleScheduled(
   try {
     // 1. Every 5 minutes, recover items stuck in 'publishing' status
     await recoverStuckPublishingItems(db);
+
+    // 1b. Fail download jobs stalled for > 15 minutes
+    await failStuckDownloadJobs(db);
 
     // 2. High-Throughput Producer vs Direct Runner
     if (env.PUBLISH_QUEUE && typeof env.PUBLISH_QUEUE.sendBatch === 'function') {

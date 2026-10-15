@@ -38,15 +38,18 @@ function formatMediaRow(row: any) {
 }
 
 function findDuplicatesInRows(
-  entries: Array<{ clientKey: string; name: string; fileSize: number }>,
-  rows: Array<Record<string, unknown> & { name: string; file_size: number | string }>
+  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null }>,
+  rows: Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>,
+  globalFolderId?: string | null
 ): Array<{ clientKey: string; existingItem: any }> {
   const duplicates: Array<{ clientKey: string; existingItem: any }> = [];
   for (const entry of entries) {
+    const targetFolder = entry.folderId !== undefined ? entry.folderId : (globalFolderId ?? null);
     const match = rows.find(
       (r) =>
         r.name.toLowerCase() === entry.name.toLowerCase() &&
-        Number(r.file_size) === entry.fileSize
+        Number(r.file_size) === entry.fileSize &&
+        ((r.folder_id as string | null | undefined) ?? null) === targetFolder
     );
     if (match) {
       duplicates.push({
@@ -62,24 +65,38 @@ async function queryLegacyDuplicates(
   dbClient: DatabaseClient,
   userId: string,
   folderId: string | null | undefined,
-  entries: Array<{ clientKey: string; name: string; fileSize: number }>
-): Promise<Array<Record<string, unknown> & { name: string; file_size: number | string }>> {
+  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null }>
+): Promise<Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>> {
   const fileSizes = entries.map((e) => e.fileSize);
   const names = entries.map((e) => e.name.toLowerCase());
-  const targetFolderId = folderId ?? null;
+  const folderIds = Array.from(
+    new Set(
+      entries.map((e) => (e.folderId !== undefined ? e.folderId : (folderId ?? null)))
+    )
+  );
+
+  const hasNullFolder = folderIds.includes(null);
+  const nonNullFolders = folderIds.filter((id): id is string => id !== null);
+
+  const folderCondition = hasNullFolder
+    ? nonNullFolders.length > 0
+      ? '(folder_id IS NULL OR folder_id = ANY($2::uuid[]))'
+      : 'folder_id IS NULL'
+    : 'folder_id = ANY($2::uuid[])';
+
   const query = `
     SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
            storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
            aspect_ratio, caption_text, width, height, created_at, updated_at
     FROM media_items
     WHERE user_id = $1
-      AND (folder_id = $2 OR ($2 IS NULL AND folder_id IS NULL))
+      AND ${folderCondition}
       AND LOWER(name) = ANY($3::text[])
       AND file_size = ANY($4::bigint[])
   `;
   return (await dbClient.query(query, [
     userId,
-    targetFolderId,
+    nonNullFolders,
     names,
     fileSizes,
   ])) as any[];
@@ -89,8 +106,16 @@ async function querySupabaseDuplicates(
   supabase: SupabaseClient<any>,
   userId: string,
   folderId: string | null | undefined,
-  entries: Array<{ clientKey: string; name: string; fileSize: number }>
+  entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null }>
 ): Promise<{ rows?: any[]; error?: string }> {
+  const folderIds = Array.from(
+    new Set(
+      entries.map((e) => (e.folderId !== undefined ? e.folderId : (folderId ?? null)))
+    )
+  );
+  const hasNullFolder = folderIds.includes(null);
+  const nonNullFolders = folderIds.filter((id): id is string => id !== null);
+
   let queryBuilder = supabase
     .from('media_items')
     .select(
@@ -98,10 +123,12 @@ async function querySupabaseDuplicates(
     )
     .eq('user_id', userId);
 
-  if (folderId) {
-    queryBuilder = queryBuilder.eq('folder_id', folderId);
-  } else {
+  if (hasNullFolder && nonNullFolders.length > 0) {
+    queryBuilder = queryBuilder.or(`folder_id.is.null,folder_id.in.(${nonNullFolders.join(',')})`);
+  } else if (hasNullFolder) {
     queryBuilder = queryBuilder.is('folder_id', null);
+  } else if (nonNullFolders.length > 0) {
+    queryBuilder = queryBuilder.in('folder_id', nonNullFolders);
   }
 
   const fileSizes = entries.map((e) => e.fileSize);
@@ -160,7 +187,7 @@ export async function handleCheckDuplicates(
 
   if (isLegacyClient(dbClient)) {
     const rows = await queryLegacyDuplicates(dbClient, session.userId, folderId, entries);
-    const duplicates = findDuplicatesInRows(entries, rows);
+    const duplicates = findDuplicatesInRows(entries, rows, folderId);
     return NextResponse.json(CheckDuplicatesResponseSchema.parse({ duplicates }));
   }
 
@@ -174,7 +201,7 @@ export async function handleCheckDuplicates(
     return NextResponse.json({ error }, { status: 500 });
   }
 
-  const duplicates = findDuplicatesInRows(entries, rows || []);
+  const duplicates = findDuplicatesInRows(entries, rows || [], folderId);
   return NextResponse.json(CheckDuplicatesResponseSchema.parse({ duplicates }));
 }
 

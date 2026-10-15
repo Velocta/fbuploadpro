@@ -7,6 +7,8 @@ import worker, {
   trimTrailingSlash,
   writeStreamToDestination,
   validateDownloadSafetyAndQuota,
+  validateDownloadSafety,
+  failStuckDownloadJobs,
   cleanupFailedDownload,
   type Env,
 } from '../src/index.js';
@@ -372,31 +374,30 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       expect(resultUrl).toContain('fallback.mp4');
     });
 
-    it('validateDownloadSafetyAndQuota fails when storage quota is exhausted', async () => {
+    it('validateDownloadSafety succeeds for safe public URLs and does not query storage quotas (Spec 028 & 046)', async () => {
       const mockDb = {
-        from: vi.fn(() => ({
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              maybeSingle: vi.fn().mockResolvedValue({
-                data: { total_bytes: 1000, used_bytes: 1000 },
-                error: null,
-              }),
-            })),
-          })),
-          update: vi.fn(() => ({
-            eq: vi.fn().mockResolvedValue({}),
-          })),
-        })),
+        from: vi.fn(),
+        update: vi.fn(),
       };
 
-      const result = await validateDownloadSafetyAndQuota(
+      const result = await validateDownloadSafety(
         'https://cdn.example.com/video.mp4',
-        'user-123',
         mockDb,
         'job-123'
       );
 
-      expect(result).toBeNull();
+      expect(result).toBe(true);
+      expect(mockDb.from).not.toHaveBeenCalledWith('user_storage_quotas');
+    });
+
+    it('failStuckDownloadJobs invokes RPC and returns number of failed jobs', async () => {
+      const mockDb = {
+        rpc: vi.fn().mockResolvedValue({ data: 3, error: null }),
+      };
+
+      const count = await failStuckDownloadJobs(mockDb);
+      expect(count).toBe(3);
+      expect(mockDb.rpc).toHaveBeenCalledWith('fail_stuck_download_jobs', { p_timeout_minutes: 15 });
     });
 
     it('cleanupFailedDownload removes partial upload from R2 if present', async () => {
