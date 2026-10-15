@@ -63,7 +63,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       }, dummyCtx);
 
       expect(res.status).toBe(401);
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string };
       expect(data.error).toContain('Unauthorized');
     });
 
@@ -84,7 +84,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       }, dummyCtx);
 
       expect(res.status).toBe(400);
-      const data = await res.json();
+      const data = (await res.json()) as { errorCode?: string };
       expect(data.errorCode).toBe('UNSAFE_URL');
     });
 
