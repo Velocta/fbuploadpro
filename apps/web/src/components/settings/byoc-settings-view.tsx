@@ -376,12 +376,12 @@ export function BYOCSettingsView({ subdomain }: Readonly<BYOCSettingsViewProps>)
     message: string;
   }>({ open: false, message: '' });
 
-  const rootDomain =
-    typeof window !== 'undefined' && window.location.host
-      ? window.location.host
-      : 'fbuploadpro.com';
+  const origin =
+    typeof window !== 'undefined' && window.location.origin
+      ? window.location.origin
+      : 'https://fbuploadpro.com';
 
-  const redirectUri = `https://${rootDomain}/api/auth/facebook/callback`;
+  const redirectUri = `${origin}/api/auth/facebook/callback`;
 
   useEffect(() => {
     let isMounted = true;

@@ -10,6 +10,7 @@ export const OAuthStatePayloadSchema = z.object({
   isMagic: z.boolean().optional(),
   expectedFbAccountId: z.string().min(1).optional(),
   expectedDisplayName: z.string().min(1).optional(),
+  redirectUri: z.string().url().optional(),
 });
 
 export type OAuthStatePayload = z.infer<typeof OAuthStatePayloadSchema>;

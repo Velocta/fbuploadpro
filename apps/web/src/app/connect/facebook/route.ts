@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  buildSubdomainOAuthRedirectUri,
   getSessionSecret,
   signOAuthState,
   verifyMagicLinkToken,
@@ -14,9 +15,9 @@ export async function handleConnectFacebook(
   dbClient?: DatabaseClient | SupabaseClient<any>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
-  const appUrl =
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';
+  const appUrlFallback =
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const redirectUri = `${appUrl}/api/auth/facebook/callback`;
 
   const token = request.nextUrl.searchParams.get('token');
   if (!token) {
@@ -50,6 +51,12 @@ export async function handleConnectFacebook(
   }
 
   const effectiveAppId = byocResult.fbAppId;
+  const redirectUri = buildSubdomainOAuthRedirectUri(
+    payload.tenantSubdomain,
+    request.url,
+    rootDomain,
+    appUrlFallback
+  );
 
   // 3. Generate signed OAuth state flagged with isMagic: true
   const now = Math.floor(Date.now() / 1000);
@@ -62,6 +69,7 @@ export async function handleConnectFacebook(
       iat: now,
       exp: now + 600, // 10 minutes
       isMagic: true,
+      redirectUri,
       ...(payload.expectedFbAccountId
         ? { expectedFbAccountId: payload.expectedFbAccountId }
         : {}),
