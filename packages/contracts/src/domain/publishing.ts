@@ -62,7 +62,7 @@ export function validatePostFormatEligibility(input: ValidatePostFormatInput): F
         return { valid: false, error: 'Image posts require an attached image file.' };
       }
       if (media.mediaType !== 'image') {
-        return { valid: false, error: 'Image posts require an image asset, not a video.' };
+        return { valid: false, error: 'Image posts require an image media asset, not a video.' };
       }
       return { valid: true };
     }
@@ -85,10 +85,10 @@ export function validatePostFormatEligibility(input: ValidatePostFormatInput): F
 
     case 'video': {
       if (!media) {
-        return { valid: false, error: 'Feed Videos require an attached video file.' };
+        return { valid: false, error: 'Video posts require an attached video file.' };
       }
       if (media.mediaType !== 'video') {
-        return { valid: false, error: 'Feed Videos require a video asset, not an image.' };
+        return { valid: false, error: 'Video posts require a video media asset, not an image.' };
       }
       return { valid: true };
     }
@@ -132,13 +132,13 @@ export function getEligiblePostFormatsForMedia(media: MediaEligibilityInput): Po
   const formats: PostFormat[] = [];
   const duration = media.durationSeconds;
 
+  // Video: all durations supported
+  formats.push('video');
+
   // Reels: 3-90 seconds (or unspecified duration)
   if (duration === null || duration === undefined || (duration >= 3 && duration <= 90)) {
     formats.push('reel');
   }
-
-  // Video: all durations supported
-  formats.push('video');
 
   // Story: <= 60 seconds (or unspecified duration)
   if (duration === null || duration === undefined || duration <= 60) {
