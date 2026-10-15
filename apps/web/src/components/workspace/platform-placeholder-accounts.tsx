@@ -1,0 +1,146 @@
+'use client';
+
+import React from 'react';
+import { useRouter } from 'next/navigation';
+import { THEME, SPACING, RADII, TYPOGRAPHY, PALETTE } from '@/lib/theme';
+import { TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
+
+export interface PlatformPlaceholderAccountsProps {
+  platformName: string;
+  subdomain: string;
+  icon?: React.ReactNode;
+}
+
+export function PlatformPlaceholderAccounts({
+  platformName,
+  subdomain,
+  icon,
+}: Readonly<PlatformPlaceholderAccountsProps>) {
+  const router = useRouter();
+
+  const handleReturnHome = () => {
+    router.push(`/tenant/${subdomain}`);
+  };
+
+  return (
+    <div
+      data-slot="platform-placeholder-page"
+      data-testid="platform-placeholder-accounts"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh',
+        padding: SPACING.xl,
+        textAlign: 'center',
+        boxSizing: 'border-box',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '480px',
+          backgroundColor: `var(--bg-surface, ${THEME.default.surfaces.panel})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          borderRadius: RADII.lg,
+          padding: `${SPACING.xxl} ${SPACING.xl}`,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: SPACING.lg,
+          boxShadow: THEME.default.shadows.subtle,
+        }}
+      >
+        {/* Brand Icon Container */}
+        {icon && (
+          <div
+            data-slot="platform-icon-container"
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: RADII.md,
+              backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: PALETTE.primary,
+            }}
+          >
+            {icon}
+          </div>
+        )}
+
+        {/* Header & Status Notice */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: '1.25rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              letterSpacing: TYPOGRAPHY.tracking.tight,
+            }}
+          >
+            {platformName} Accounts
+          </h1>
+          <p
+            data-testid="testing-placeholder-notice"
+            style={{
+              margin: 0,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              lineHeight: 1.4,
+            }}
+          >
+            {TESTING_PLACEHOLDER_TEXT}
+          </p>
+        </div>
+
+        {/* Informative Body Copy */}
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.875rem',
+            color: `var(--text-muted, ${THEME.default.text.secondary})`,
+            lineHeight: 1.5,
+            maxWidth: '380px',
+          }}
+        >
+          {platformName} integration is currently undergoing testing and verification.
+          Account connectivity and publishing tools for this channel will be enabled once public validation completes.
+        </p>
+
+        {/* Primary Action Button */}
+        <div style={{ marginTop: SPACING.sm, width: '100%' }}>
+          <button
+            type="button"
+            onClick={handleReturnHome}
+            style={{
+              width: '100%',
+              padding: `${SPACING.sm} ${SPACING.lg}`,
+              borderRadius: RADII.sm,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              cursor: 'pointer',
+              transition: 'background-color 150ms ease, border-color 150ms ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = `var(--bg-active, ${THEME.default.surfaces.active})`;
+            }}
+          >
+            Return to Overview
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

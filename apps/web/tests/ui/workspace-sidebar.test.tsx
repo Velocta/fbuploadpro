@@ -275,7 +275,109 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029 & Spec 037)',
     expect(hasText('jane@example.com')).toBe(true);
     expect(hasText('JD')).toBe(true);
   });
+
+  it('renders all upcoming platforms (Instagram, Threads, X (Twitter), TikTok, YouTube) in the Platform group below Facebook', () => {
+    mockPathname = '/tenant/acme';
+    const { hasText, html } = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    // Verify Facebook and all 5 upcoming platforms are present
+    expect(hasText('Facebook')).toBe(true);
+    expect(hasText('Instagram')).toBe(true);
+    expect(hasText('Threads')).toBe(true);
+    expect(hasText('X (Twitter)')).toBe(true);
+    expect(hasText('TikTok')).toBe(true);
+    expect(hasText('YouTube')).toBe(true);
+
+    // Verify ordering in HTML
+    const fbIdx = html.indexOf('Facebook');
+    const igIdx = html.indexOf('Instagram');
+    const thIdx = html.indexOf('Threads');
+    const xIdx = html.indexOf('X (Twitter)');
+    const ttIdx = html.indexOf('TikTok');
+    const ytIdx = html.indexOf('YouTube');
+
+    expect(fbIdx).toBeGreaterThan(-1);
+    expect(igIdx).toBeGreaterThan(fbIdx);
+    expect(thIdx).toBeGreaterThan(igIdx);
+    expect(xIdx).toBeGreaterThan(thIdx);
+    expect(ttIdx).toBeGreaterThan(xIdx);
+    expect(ytIdx).toBeGreaterThan(ttIdx);
+  });
+
+  it('displays the Accounts sub-button and testing placeholder note when an upcoming platform is active', () => {
+    mockPathname = '/tenant/acme/instagram/accounts';
+    const { hasText, html } = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    expect(hasText('Instagram')).toBe(true);
+    expect(hasText('Accounts')).toBe(true);
+    expect(hasText('Being tested — not available for public use')).toBe(true);
+    expect(html).toContain('sidebar-testing-note-instagram');
+  });
+
+  it('navigates to /tenant/{subdomain}/{platform}/accounts when an upcoming platform Accounts sub-item is clicked', () => {
+    mockPathname = '/tenant/acme/threads/accounts';
+    mockPush.mockClear();
+
+    let capturedTree: React.ReactElement | null = null;
+    function CaptureSidebar() {
+      capturedTree = WorkspaceSidebar({
+        subdomain: 'acme',
+        user: { name: 'Jane Doe', email: 'jane@example.com' },
+      });
+      return capturedTree;
+    }
+
+    const { hasText } = render(
+      <SidebarProvider>
+        <CaptureSidebar />
+      </SidebarProvider>
+    );
+
+    expect(hasText('Threads')).toBe(true);
+    expect(hasText('Being tested — not available for public use')).toBe(true);
+
+    function findButtonByText(node: React.ReactNode, text: string): any {
+      if (!node || typeof node !== 'object') return null;
+      if (Array.isArray(node)) {
+        for (const item of node) {
+          const found = findButtonByText(item, text);
+          if (found) return found;
+        }
+        return null;
+      }
+      if (React.isValidElement(node)) {
+        const props = node.props as Record<string, any>;
+        if (props.children === text && typeof props.onClick === 'function') {
+          return node;
+        }
+        if (props.children) {
+          return findButtonByText(props.children, text);
+        }
+      }
+      return null;
+    }
+
+    const accountsBtn = findButtonByText(capturedTree, 'Accounts');
+    expect(accountsBtn).not.toBeNull();
+    accountsBtn.props.onClick();
+    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/threads/accounts');
+  });
 });
+
 
 
 

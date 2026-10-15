@@ -23,9 +23,10 @@ import {
   CollapsibleContent,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { THEME } from '@/lib/theme';
+import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { WorkspaceUserMenu } from './workspace-user-menu';
 import { WorkspaceSwitcher } from './workspace-switcher';
+import { UPCOMING_PLATFORMS, TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
 
 export interface WorkspaceSidebarProps {
   subdomain: string;
@@ -42,6 +43,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const { state, isMobile, setOpenMobile } = useSidebar();
   const isCollapsed = !isMobile && state === 'collapsed';
   const [isFacebookOpen, setIsFacebookOpen] = useState(true);
+  const [openPlatforms, setOpenPlatforms] = useState<Record<string, boolean>>({});
 
   const homeHref = `/tenant/${subdomain}`;
   const mediaHref = `/tenant/${subdomain}/media`;
@@ -252,9 +254,112 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+
+              {/* Upcoming Supported Platforms (Being Tested) */}
+              {UPCOMING_PLATFORMS.map((platform) => {
+                const platformAccountsHref = `/tenant/${subdomain}/${platform.routeSlug}/accounts`;
+                const isPlatformActive = pathname ? pathname.startsWith(`/tenant/${subdomain}/${platform.routeSlug}`) : false;
+                const isAccountsSubActive = pathname ? pathname.startsWith(platformAccountsHref) : false;
+                const isOpen = openPlatforms[platform.key] ?? (isPlatformActive ? true : false);
+
+                return (
+                  <Collapsible
+                    key={platform.key}
+                    open={isOpen}
+                    onOpenChange={(open) =>
+                      setOpenPlatforms((prev) => ({ ...prev, [platform.key]: open }))
+                    }
+                    defaultOpen={false}
+                  >
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                          tooltip={platform.tooltip}
+                          isActive={isCollapsed && isPlatformActive}
+                          onClick={() => {
+                            if (isCollapsed) {
+                              handleNavigate(platformAccountsHref);
+                            }
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {platform.icon}
+                          </span>
+                          <span
+                            style={{
+                              flex: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {platform.label}
+                          </span>
+                          <svg
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden="true"
+                            style={{
+                              marginLeft: 'auto',
+                              flexShrink: 0,
+                              transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                              transition: 'transform 200ms ease',
+                              color: `var(--text-dim, ${THEME.default.text.muted})`,
+                            }}
+                          >
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+
+                      <CollapsibleContent>
+                        <SidebarMenuSub>
+                          <SidebarMenuSubItem>
+                            <SidebarMenuSubButton
+                              isActive={isAccountsSubActive}
+                              onClick={() => handleNavigate(platformAccountsHref)}
+                            >
+                              Accounts
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                          <SidebarMenuSubItem>
+                            <div
+                              data-testid={`sidebar-testing-note-${platform.key}`}
+                              style={{
+                                padding: `${SPACING.xs} ${SPACING.sm}`,
+                                fontSize: '0.6875rem',
+                                lineHeight: 1.35,
+                                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                                letterSpacing: TYPOGRAPHY.tracking.normal,
+                                userSelect: 'none',
+                              }}
+                            >
+                              {TESTING_PLACEHOLDER_TEXT}
+                            </div>
+                          </SidebarMenuSubItem>
+                        </SidebarMenuSub>
+                      </CollapsibleContent>
+                    </SidebarMenuItem>
+                  </Collapsible>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
 
         {/* Separator Line */}
         <SidebarSeparator />
