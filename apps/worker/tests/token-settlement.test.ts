@@ -378,16 +378,21 @@ describe('User Story 4: Settlement & Publish Logs (Pure Settlement, Tokens Aboli
           return {
             update: vi.fn().mockImplementation((data: any) => {
               updatedTables[table] = data;
+              const eqHandler: any = vi.fn().mockImplementation(() => eqHandler);
+              eqHandler.then = (resolve: any) => Promise.resolve({ error: null }).then(resolve);
               return {
-                eq: vi.fn().mockResolvedValue({ error: null }),
+                eq: eqHandler,
               };
             }),
             select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: { facebook_account_id: 'acc-uuid-999' },
-                  error: null,
-                }),
+              eq: vi.fn().mockImplementation(function eqFn() {
+                return {
+                  eq: eqFn,
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: { facebook_account_id: 'acc-uuid-999' },
+                    error: null,
+                  }),
+                };
               }),
             }),
           };

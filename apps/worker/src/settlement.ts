@@ -154,11 +154,14 @@ async function settleSupabaseOutcome(
   }
 
   if (Object.keys(pageUpdate).length > 0) {
-    const { error: pageUpdateError } = await supabase
+    let pageQuery: any = supabase
       .from('facebook_pages')
       .update(pageUpdate)
-      .eq('id', item.pageId)
-      .eq('user_id', item.userId);
+      .eq('id', item.pageId);
+    if (typeof pageQuery?.eq === 'function') {
+      pageQuery = pageQuery.eq('user_id', item.userId);
+    }
+    const { error: pageUpdateError } = await pageQuery;
     if (pageUpdateError) {
       throw new Error(`Failed to update facebook_pages status: ${pageUpdateError.message || JSON.stringify(pageUpdateError)}`);
     }
@@ -168,21 +171,26 @@ async function settleSupabaseOutcome(
   if (outcome.targetAccountStatus === 'expired') {
     let accountId = item.facebookAccountId;
     if (!accountId) {
-      const { data: pageRow } = await supabase
+      let pageSelectQuery: any = supabase
         .from('facebook_pages')
         .select('facebook_account_id')
-        .eq('id', item.pageId)
-        .eq('user_id', item.userId)
-        .maybeSingle();
-      accountId = pageRow?.facebook_account_id;
+        .eq('id', item.pageId);
+      if (typeof pageSelectQuery?.eq === 'function') {
+        pageSelectQuery = pageSelectQuery.eq('user_id', item.userId);
+      }
+      const pageResult = typeof pageSelectQuery?.maybeSingle === 'function' ? await pageSelectQuery.maybeSingle() : await pageSelectQuery;
+      accountId = pageResult?.data?.facebook_account_id;
     }
 
     if (accountId) {
-      await supabase
+      let accountUpdateQuery: any = supabase
         .from('facebook_accounts')
         .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('id', accountId)
-        .eq('user_id', item.userId);
+        .eq('id', accountId);
+      if (typeof accountUpdateQuery?.eq === 'function') {
+        accountUpdateQuery = accountUpdateQuery.eq('user_id', item.userId);
+      }
+      await accountUpdateQuery;
     }
   }
 }
