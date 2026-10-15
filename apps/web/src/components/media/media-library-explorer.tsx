@@ -236,22 +236,6 @@ export function filterAndSortMediaItems(
   return sorted;
 }
 
-function partitionEntriesByDupSet(
-  entries: QueuedUploadEntry[],
-  dupSet: Set<string>
-): { duplicates: QueuedUploadEntry[]; uniqueEntries: QueuedUploadEntry[] } {
-  const duplicates: QueuedUploadEntry[] = [];
-  const uniqueEntries: QueuedUploadEntry[] = [];
-  for (const entry of entries) {
-    const key = `${entry.file.name.toLowerCase()}|${entry.file.size}`;
-    if (dupSet.has(key)) {
-      duplicates.push(entry);
-    } else {
-      uniqueEntries.push(entry);
-    }
-  }
-  return { duplicates, uniqueEntries };
-}
 
 async function checkServerDuplicateEntries(
   subdomain: string,

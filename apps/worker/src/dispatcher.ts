@@ -404,7 +404,7 @@ export async function dispatchItem(
       } catch (commentErr: unknown) {
         if (commentAttempts >= maxCommentAttempts) {
           const errMsg = commentErr instanceof Error ? commentErr.message : String(commentErr);
-          commentWarning = `Published post but first comment failed after ${maxCommentAttempts} attempts: ${errMsg}`;
+          commentWarning = `Published post but first comment failed: ${errMsg}`;
           console.warn(
             `[Dispatcher] First comment failed for queue item ${item.id} (post ${publishResult.postId}):`,
             commentErr

@@ -341,7 +341,6 @@ export async function handleGetInsights(
   // Query daily snapshots from PostgreSQL
   const days = parseRangeDays(query.range);
   const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const todayDate = new Date().toISOString().slice(0, 10);
 
   let snapshotRows: any[] = [];
   try {
