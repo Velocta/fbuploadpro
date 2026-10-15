@@ -111,6 +111,85 @@ export function DedicatedPageHeader({
         </button>
       </div>
 
+      {/* Checkpoint Reactivation Banner */}
+      {(page.status === 'page_checkpoint' || (page.status as string) === 'checkpoint_required') && (
+        <div
+          data-testid="checkpoint-reactivation-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: SPACING.md,
+            padding: SPACING.md,
+            marginBottom: SPACING.md,
+            borderRadius: RADII.sm,
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.3)',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flex: '1 1 300px' }}>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+              aria-hidden="true"
+            >
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <div>
+              <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '0.875rem' }}>
+                Facebook Checkpoint Verification Required
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+                Facebook requires verification in the mobile app or browser before automated publishing can resume.
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="reactivate-page-btn"
+            disabled={isUpdatingStatus}
+            onClick={async () => {
+              setIsUpdatingStatus(true);
+              try {
+                const res = await fetch(`/api/tenant/${subdomain}/pages/${page.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: 'active' }),
+                });
+                if (res.ok) {
+                  await onStatusToggle('active');
+                }
+              } catch {
+                await onStatusToggle('active');
+              } finally {
+                setIsUpdatingStatus(false);
+              }
+            }}
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              padding: `${SPACING.xs} ${SPACING.md}`,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {isUpdatingStatus ? 'Reactivating...' : 'Mark Verified & Reactivate Page'}
+          </button>
+        </div>
+      )}
+
       {/* Main Header Container */}
       <div
         style={{

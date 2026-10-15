@@ -13,6 +13,7 @@ export interface SyncDailyPageInsightsOptions {
   fetchImpl?: typeof fetch | undefined;
   targetDate?: string | undefined;
   concurrency?: number | undefined;
+  batchSize?: number | undefined;
 }
 
 export interface InsightsSyncResult {
@@ -237,7 +238,7 @@ async function savePageSnapshot(
     }, { onConflict: 'user_id,fb_page_id,snapshot_date' });
     if (upsertErr) throw upsertErr;
 
-    const pageUpdate: Record<string, any> = {
+    const pageUpdate: Record<string, unknown> = {
       current_followers: followersCount,
     };
     if (page.status !== 'fb_rate_limited') {
@@ -379,24 +380,47 @@ export async function syncDailyPageInsights(
     errors: [],
   };
 
-  // 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed (excluding empty tokens from soft-deleted pages)
+  const fetchBatchSize = Math.max(1, options.batchSize ?? 200);
+
+async function fetchEligiblePagesSupabase(
+  db: any,
+  offset: number,
+  batchSize: number,
+  cooldownThreshold: string
+): Promise<FacebookPageRow[]> {
+  let queryBuilder = db
+    .from('facebook_pages')
+    .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at');
+
+  if (typeof queryBuilder.neq === 'function') {
+    queryBuilder = queryBuilder.neq('encrypted_access_token', '');
+  }
+
+  if (typeof queryBuilder.range === 'function') {
+    queryBuilder = queryBuilder.range(offset, offset + batchSize - 1);
+  }
+
+  const { data } = await queryBuilder.or(
+    `status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`
+  );
+
+  const rows = ((data || []) as FacebookPageRow[]).filter(
+    (p) => Boolean(p.encrypted_access_token && p.encrypted_access_token.trim() !== '')
+  );
+
+  if (!data || data.length < batchSize || typeof queryBuilder.range !== 'function') {
+    return rows;
+  }
+
+  const nextRows = await fetchEligiblePagesSupabase(db, offset + batchSize, batchSize, cooldownThreshold);
+  return rows.concat(nextRows);
+}
+
+// 1. Fetch active pages or pages whose 3-day rate limit cooldown has elapsed (excluding empty tokens from soft-deleted pages)
   let eligiblePages: FacebookPageRow[] = [];
   if (typeof db.from === 'function') {
     const cooldownThreshold = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-    let queryBuilder = db
-      .from('facebook_pages')
-      .select('id, user_id, fb_page_id, page_name, encrypted_access_token, status, updated_at');
-
-    if (typeof queryBuilder.neq === 'function') {
-      queryBuilder = queryBuilder.neq('encrypted_access_token', '');
-    }
-
-    const { data } = await queryBuilder.or(
-      `status.eq.active,and(status.eq.fb_rate_limited,updated_at.lte."${cooldownThreshold}")`
-    );
-    eligiblePages = ((data || []) as FacebookPageRow[]).filter(
-      (p) => Boolean(p.encrypted_access_token && p.encrypted_access_token.trim() !== '')
-    );
+    eligiblePages = await fetchEligiblePagesSupabase(db, 0, fetchBatchSize, cooldownThreshold);
   } else if (typeof db.query === 'function') {
     const rawPages = await db.query(
       `SELECT id, user_id, fb_page_id, page_name, encrypted_access_token, status

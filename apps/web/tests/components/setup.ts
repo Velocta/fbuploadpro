@@ -55,7 +55,8 @@ export function render(ui: React.ReactElement): RenderResult {
 
   return {
     html,
-    hasText: (text: string) => html.includes(text),
+    hasText: (text: string) =>
+      html.includes(text) || html.includes(text.replace(/&/g, '&amp;')),
     hasAttribute: (name: string, value?: string | RegExp) => {
       if (value === undefined) {
         // Boolean or valued attribute presence

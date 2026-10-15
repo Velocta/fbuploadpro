@@ -5,9 +5,16 @@
  */
 
 export interface SlotSchedulerParams {
-  slots: Array<{ id: string; slotTime: string; timezone: string; isActive: boolean }>;
+  slots: Array<{
+    id: string;
+    slotTime: string;
+    timezone: string;
+    isActive: boolean;
+    allowedFormats?: string[] | null;
+  }>;
   existingScheduledTimes: Date[];
   now?: Date;
+  postFormat?: string | null;
 }
 
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -113,7 +120,13 @@ function makeZonedDate(
 export function calculateNextVacantSlot(
   params: SlotSchedulerParams
 ): { slotId: string; scheduledTime: Date } | null {
-  const activeSlots = (params.slots || []).filter((s) => s.isActive);
+  const activeSlots = (params.slots || []).filter((s) => {
+    if (!s.isActive) return false;
+    if (params.postFormat && s.allowedFormats && s.allowedFormats.length > 0) {
+      return s.allowedFormats.includes(params.postFormat);
+    }
+    return true;
+  });
   if (activeSlots.length === 0) {
     return null;
   }
@@ -192,3 +205,5 @@ export function calculateNextVacantSlot(
 
   return null;
 }
+
+export const findNextAvailableSlot = calculateNextVacantSlot;

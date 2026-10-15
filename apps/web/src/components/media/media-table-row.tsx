@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
+import { getEligiblePostFormatsForMedia } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
 import { formatDuration } from './media-asset-card';
@@ -41,6 +42,8 @@ export function MediaTableRow({
     item.captionText.trim().length > 0
       ? item.captionText
       : deriveDefaultCaption(item.name);
+
+  const eligibleFormats = getEligiblePostFormatsForMedia(item);
 
   const [isEditingCaption, setIsEditingCaption] = useState(initialEditingCaption);
   const [captionDraft, setCaptionDraft] = useState(resolvedCaption);
@@ -250,6 +253,36 @@ export function MediaTableRow({
               </button>
             </div>
           )}
+
+          {/* Format Eligibility Badges */}
+          <div
+            data-testid={`media-eligible-formats-${item.id}`}
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '4px',
+              marginTop: '2px',
+            }}
+          >
+            {eligibleFormats.map((fmt) => (
+              <span
+                key={fmt}
+                data-testid={`media-format-badge-${item.id}-${fmt}`}
+                style={{
+                  padding: '1px 5px',
+                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  borderRadius: RADII.xs,
+                  fontSize: '0.625rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                }}
+              >
+                {fmt === 'image' ? 'PHOTO' : fmt.toUpperCase()}
+              </span>
+            ))}
+          </div>
         </div>
       </td>
 

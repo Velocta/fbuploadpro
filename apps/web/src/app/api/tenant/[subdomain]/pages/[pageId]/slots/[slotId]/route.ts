@@ -72,13 +72,15 @@ export async function handleUpdateQueueSlot(
          SET slot_time = COALESCE($1, slot_time),
              timezone = COALESCE($2, timezone),
              is_active = COALESCE($3, is_active),
+             allowed_formats = COALESCE($4, allowed_formats),
              updated_at = now()
-         WHERE id = $4 AND fb_page_id = $5 AND user_id = $6
-         RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at`,
+         WHERE id = $5 AND fb_page_id = $6 AND user_id = $7
+         RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at`,
         [
           parsed.data.slotTime ?? null,
           parsed.data.timezone ?? null,
           parsed.data.isActive ?? null,
+          parsed.data.allowedFormats ?? null,
           slotId,
           pageId,
           session.userId,
@@ -97,6 +99,7 @@ export async function handleUpdateQueueSlot(
         slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
         timezone: row.timezone,
         isActive: Boolean(row.is_active),
+        allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
         createdAt: new Date(row.created_at).toISOString(),
         updatedAt: new Date(row.updated_at).toISOString(),
       });
@@ -140,6 +143,7 @@ export async function handleUpdateQueueSlot(
     if (parsed.data.slotTime !== undefined) updatePayload.slot_time = parsed.data.slotTime;
     if (parsed.data.timezone !== undefined) updatePayload.timezone = parsed.data.timezone;
     if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
+    if (parsed.data.allowedFormats !== undefined) updatePayload.allowed_formats = parsed.data.allowedFormats;
 
     const { data: updated, error: updateErr } = await supabase
       .from('page_queue_slots')
@@ -147,7 +151,7 @@ export async function handleUpdateQueueSlot(
       .eq('id', slotId)
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
-      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, created_at, updated_at')
+      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at')
       .maybeSingle();
 
     if (updateErr) {
@@ -177,6 +181,7 @@ export async function handleUpdateQueueSlot(
       slotTime: typeof updated.slot_time === 'string' ? updated.slot_time : String(updated.slot_time),
       timezone: updated.timezone,
       isActive: Boolean(updated.is_active),
+      allowedFormats: Array.isArray(updated.allowed_formats) ? updated.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
       createdAt: new Date(updated.created_at).toISOString(),
       updatedAt: new Date(updated.updated_at).toISOString(),
     });

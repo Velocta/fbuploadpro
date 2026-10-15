@@ -270,8 +270,10 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     let capturedParams: any[] = [];
     const mockDb = {
       query: vi.fn().mockImplementation((sql: string, params: any[]) => {
-        capturedSql = sql;
-        capturedParams = params;
+        if (sql.includes('facebook_pages')) {
+          capturedSql = sql;
+          capturedParams = params;
+        }
         return Promise.resolve([
           {
             id: '33333333-3333-4333-a333-333333333333',

@@ -16,6 +16,9 @@ import {
   PublishLogSchema,
   ListPublishLogsQuerySchema,
   ListPublishLogsResponseSchema,
+  PostFormatSchema,
+  validatePostFormatEligibility,
+  getEligiblePostFormatsForMedia,
 } from '../src/index.js';
 
 describe('Publishing Engine Domain Contracts', () => {
@@ -374,6 +377,290 @@ describe('Publishing Engine Domain Contracts', () => {
           total: 0,
         });
         expect(res.success).toBe(true);
+      });
+    });
+  });
+
+  describe('Multi-Format 200k/Day Publishing Contracts (Spec 042)', () => {
+    describe('PostFormatSchema', () => {
+      it('accepts all 5 valid post formats', () => {
+        const formats = ['text', 'image', 'reel', 'video', 'story'];
+        for (const fmt of formats) {
+          expect(PostFormatSchema.safeParse(fmt).success).toBe(true);
+        }
+      });
+
+      it('rejects invalid post formats', () => {
+        expect(PostFormatSchema.safeParse('carousel').success).toBe(false);
+        expect(PostFormatSchema.safeParse('audio').success).toBe(false);
+        expect(PostFormatSchema.safeParse('').success).toBe(false);
+      });
+    });
+
+    describe('validatePostFormatEligibility', () => {
+      it('validates text posts (requires caption, allows firstComment, rejects media)', () => {
+        const validText = validatePostFormatEligibility({
+          postFormat: 'text',
+          caption: 'Great news today!',
+          firstComment: 'Read more here',
+          media: null,
+        });
+        expect(validText.valid).toBe(true);
+
+        const textWithLink = validatePostFormatEligibility({
+          postFormat: 'text',
+          caption: '',
+          linkUrl: 'https://example.com/article',
+          media: null,
+        });
+        expect(textWithLink.valid).toBe(true);
+
+        const invalidEmptyText = validatePostFormatEligibility({
+          postFormat: 'text',
+          caption: '   ',
+          media: null,
+        });
+        expect(invalidEmptyText.valid).toBe(false);
+        expect(invalidEmptyText.error).toContain('non-empty caption or link URL');
+
+        const textWithMedia = validatePostFormatEligibility({
+          postFormat: 'text',
+          caption: 'Caption',
+          media: { mediaType: 'image' },
+        });
+        expect(textWithMedia.valid).toBe(false);
+        expect(textWithMedia.error).toContain('Text posts cannot have attached media');
+      });
+
+      it('validates image posts (requires image media, allows firstComment, rejects video)', () => {
+        const validImage = validatePostFormatEligibility({
+          postFormat: 'image',
+          caption: 'Photo of the day',
+          firstComment: 'Check out our page',
+          media: { mediaType: 'image' },
+        });
+        expect(validImage.valid).toBe(true);
+
+        const imageWithVideo = validatePostFormatEligibility({
+          postFormat: 'image',
+          caption: 'Invalid',
+          media: { mediaType: 'video' },
+        });
+        expect(imageWithVideo.valid).toBe(false);
+        expect(imageWithVideo.error).toContain('Image posts require an image media asset');
+
+        const imageNoMedia = validatePostFormatEligibility({
+          postFormat: 'image',
+          caption: 'Missing media',
+          media: null,
+        });
+        expect(imageNoMedia.valid).toBe(false);
+      });
+
+      it('validates reel posts (requires video media <= 90s, warns on non-9:16 aspect ratio)', () => {
+        const validReel = validatePostFormatEligibility({
+          postFormat: 'reel',
+          caption: 'Viral reel',
+          media: { mediaType: 'video', durationSeconds: 60, aspectRatio: '9:16' },
+        });
+        expect(validReel.valid).toBe(true);
+        expect(validReel.warnings).toBeUndefined();
+
+        const reelAspectWarning = validatePostFormatEligibility({
+          postFormat: 'reel',
+          caption: 'Horizontal reel',
+          media: { mediaType: 'video', durationSeconds: 45, aspectRatio: '16:9' },
+        });
+        expect(reelAspectWarning.valid).toBe(true);
+        expect(reelAspectWarning.warnings).toBeDefined();
+        expect(reelAspectWarning.warnings?.[0]).toContain('9:16 vertical aspect ratio');
+
+        const reelTooLong = validatePostFormatEligibility({
+          postFormat: 'reel',
+          caption: 'Too long',
+          media: { mediaType: 'video', durationSeconds: 95 },
+        });
+        expect(reelTooLong.valid).toBe(false);
+        expect(reelTooLong.error).toContain('Reels cannot exceed 90 seconds');
+      });
+
+      it('validates video posts (accepts video of any duration and aspect ratio)', () => {
+        const validVideo = validatePostFormatEligibility({
+          postFormat: 'video',
+          caption: 'Full documentary',
+          firstComment: 'Subscribe for part 2',
+          media: { mediaType: 'video', durationSeconds: 1200, aspectRatio: '16:9' },
+        });
+        expect(validVideo.valid).toBe(true);
+
+        const videoWithImage = validatePostFormatEligibility({
+          postFormat: 'video',
+          caption: 'Wrong media',
+          media: { mediaType: 'image' },
+        });
+        expect(videoWithImage.valid).toBe(false);
+        expect(videoWithImage.error).toContain('Video posts require a video media asset');
+      });
+
+      it('validates story posts (accepts image <=10MB and video <=60s, strictly rejects firstComment)', () => {
+        const validPhotoStory = validatePostFormatEligibility({
+          postFormat: 'story',
+          caption: '',
+          firstComment: null,
+          media: { mediaType: 'image', fileSize: 5 * 1024 * 1024 },
+        });
+        expect(validPhotoStory.valid).toBe(true);
+
+        const photoStoryTooLarge = validatePostFormatEligibility({
+          postFormat: 'story',
+          caption: '',
+          media: { mediaType: 'image', fileSize: 12 * 1024 * 1024 },
+        });
+        expect(photoStoryTooLarge.valid).toBe(false);
+        expect(photoStoryTooLarge.error).toContain('Photo Stories cannot exceed 10 MB');
+
+        const validVideoStory = validatePostFormatEligibility({
+          postFormat: 'story',
+          caption: '',
+          media: { mediaType: 'video', durationSeconds: 45 },
+        });
+        expect(validVideoStory.valid).toBe(true);
+
+        const videoStoryTooLong = validatePostFormatEligibility({
+          postFormat: 'story',
+          caption: '',
+          media: { mediaType: 'video', durationSeconds: 75 },
+        });
+        expect(videoStoryTooLong.valid).toBe(false);
+        expect(videoStoryTooLong.error).toContain('Video Stories cannot exceed 60 seconds');
+
+        const storyWithComment = validatePostFormatEligibility({
+          postFormat: 'story',
+          caption: '',
+          firstComment: 'Check this link',
+          media: { mediaType: 'image', fileSize: 1024 * 1024 },
+        });
+        expect(storyWithComment.valid).toBe(false);
+        expect(storyWithComment.error).toContain('Facebook Stories do not support comments');
+      });
+    });
+
+    describe('getEligiblePostFormatsForMedia', () => {
+      it('returns eligible formats for images (image and story if <= 10MB)', () => {
+        expect(getEligiblePostFormatsForMedia({ mediaType: 'image', fileSize: 2 * 1024 * 1024 })).toEqual([
+          'image',
+          'story',
+        ]);
+        expect(getEligiblePostFormatsForMedia({ mediaType: 'image', fileSize: 15 * 1024 * 1024 })).toEqual([
+          'image',
+        ]);
+      });
+
+      it('returns eligible formats for short vertical videos (video, reel, story)', () => {
+        const formats = getEligiblePostFormatsForMedia({
+          mediaType: 'video',
+          durationSeconds: 30,
+          aspectRatio: '9:16',
+        });
+        expect(formats).toContain('video');
+        expect(formats).toContain('reel');
+        expect(formats).toContain('story');
+      });
+
+      it('returns eligible formats for long videos (> 90s only gets video)', () => {
+        const formats = getEligiblePostFormatsForMedia({
+          mediaType: 'video',
+          durationSeconds: 150,
+        });
+        expect(formats).toEqual(['video']);
+      });
+
+      it('returns video and reel for videos between 60s and 90s', () => {
+        const formats = getEligiblePostFormatsForMedia({
+          mediaType: 'video',
+          durationSeconds: 80,
+        });
+        expect(formats).toEqual(['video', 'reel']);
+      });
+    });
+
+    describe('EnqueueMediaRequestSchema format refinements', () => {
+      it('allows text post with null mediaId and non-empty caption', () => {
+        const valid = EnqueueMediaRequestSchema.safeParse({
+          pageId: '11111111-1111-4111-a111-111111111111',
+          mediaId: null,
+          postFormat: 'text',
+          caption: 'Hello world text post',
+          linkUrl: 'https://example.com',
+          firstComment: 'First comment allowed',
+        });
+        expect(valid.success).toBe(true);
+      });
+
+      it('rejects text post with empty caption', () => {
+        const invalid = EnqueueMediaRequestSchema.safeParse({
+          pageId: '11111111-1111-4111-a111-111111111111',
+          mediaId: null,
+          postFormat: 'text',
+          caption: '',
+        });
+        expect(invalid.success).toBe(false);
+      });
+
+      it('rejects non-text post with null mediaId', () => {
+        const invalid = EnqueueMediaRequestSchema.safeParse({
+          pageId: '11111111-1111-4111-a111-111111111111',
+          mediaId: null,
+          postFormat: 'reel',
+          caption: 'Caption',
+        });
+        expect(invalid.success).toBe(false);
+      });
+
+      it('rejects story post with non-empty firstComment', () => {
+        const invalid = EnqueueMediaRequestSchema.safeParse({
+          pageId: '11111111-1111-4111-a111-111111111111',
+          mediaId: '22222222-2222-4222-a222-222222222222',
+          postFormat: 'story',
+          caption: 'Caption',
+          firstComment: 'No comments on stories',
+        });
+        expect(invalid.success).toBe(false);
+      });
+
+      it('allows story post with empty string firstComment and normalizes to null', () => {
+        const valid = EnqueueMediaRequestSchema.safeParse({
+          pageId: '11111111-1111-4111-a111-111111111111',
+          mediaId: '22222222-2222-4222-a222-222222222222',
+          postFormat: 'story',
+          caption: 'Story caption',
+          firstComment: '',
+        });
+        expect(valid.success).toBe(true);
+        if (valid.success) {
+          expect(valid.data.firstComment).toBeNull();
+        }
+      });
+    });
+
+    describe('PageQueueSlotSchema allowedFormats', () => {
+      it('validates allowedFormats array on recurring slot', () => {
+        const slot = {
+          id: '22222222-2222-4222-a222-222222222222',
+          userId: '33333333-3333-4333-a333-333333333333',
+          pageId: '11111111-1111-4111-a111-111111111111',
+          slotTime: '15:00',
+          timezone: 'UTC',
+          isActive: true,
+          allowedFormats: ['reel', 'story'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        const res = PageQueueSlotSchema.safeParse(slot);
+        expect(res.success).toBe(true);
+        if (res.success) {
+          expect(res.data.allowedFormats).toEqual(['reel', 'story']);
+        }
       });
     });
   });

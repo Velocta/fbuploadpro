@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PostFormatSchema } from './publishing.js';
 
 // ==========================================
 // Page Queue Slots (T115)
@@ -17,6 +18,11 @@ export const CreateQueueSlotRequestSchema = z.object({
   pageId: z.string().uuid(),
   slotTime: SlotTimeSchema,
   timezone: TimezoneSchema,
+  allowedFormats: z
+    .array(PostFormatSchema)
+    .min(1)
+    .default(['text', 'image', 'reel', 'video', 'story'])
+    .optional(),
 });
 
 export type CreateQueueSlotRequest = z.infer<typeof CreateQueueSlotRequestSchema>;
@@ -26,6 +32,7 @@ export const UpdateQueueSlotRequestSchema = z.object({
   slotTime: SlotTimeSchema.optional(),
   timezone: TimezoneSchema.optional(),
   isActive: z.boolean().optional(),
+  allowedFormats: z.array(PostFormatSchema).min(1).optional(),
 });
 
 export type UpdateQueueSlotRequest = z.infer<typeof UpdateQueueSlotRequestSchema>;
@@ -38,6 +45,9 @@ export const PageQueueSlotSchema = z.object({
   slotTime: z.string(),
   timezone: z.string(),
   isActive: z.boolean(),
+  allowedFormats: z
+    .array(PostFormatSchema)
+    .default(['text', 'image', 'reel', 'video', 'story']),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -68,23 +78,65 @@ export const QueueItemStatusSchema = z.enum([
 export type QueueItemStatus = z.infer<typeof QueueItemStatusSchema>;
 
 // Enqueue Asset Request
-export const EnqueueMediaRequestSchema = z.object({
-  pageId: z.string().uuid(),
-  mediaId: z.string().uuid(),
-  slotId: z.string().uuid().optional(),
-  scheduledTime: z.string().datetime().optional(), // If omitted, calculated from next vacant slot
-  caption: z.string().max(5000).default(''),
-  firstComment: z.string().max(2000).optional(),
-});
+export const EnqueueMediaRequestSchema = z
+  .object({
+    pageId: z.string().uuid(),
+    mediaId: z.string().uuid().nullable().optional(),
+    postFormat: PostFormatSchema.optional(),
+    linkUrl: z.string().url().nullable().optional(),
+    slotId: z.string().uuid().optional(),
+    scheduledTime: z.string().datetime().optional(), // If omitted, calculated from next vacant slot
+    caption: z.string().max(5000).default(''),
+    firstComment: z
+      .string()
+      .max(2000)
+      .nullable()
+      .optional()
+      .transform((v) => (typeof v === 'string' && v.trim().length === 0 ? null : v)),
+  })
+  .superRefine((val, ctx) => {
+    // If postFormat is omitted, infer 'text' if mediaId is missing/null
+    const format = val.postFormat ?? (val.mediaId ? undefined : 'text');
 
+    if (format === 'text') {
+      if (!val.caption || val.caption.trim().length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Caption is required for text posts',
+          path: ['caption'],
+        });
+      }
+    } else if (val.postFormat !== undefined) {
+      if (!val.mediaId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'mediaId is required for media posts',
+          path: ['mediaId'],
+        });
+      }
+    }
+
+    if (val.postFormat === 'story' && val.firstComment && val.firstComment.trim().length > 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Facebook Stories do not support comments',
+        path: ['firstComment'],
+      });
+    }
+  });
+
+export const EnqueueRequestSchema = EnqueueMediaRequestSchema;
 export type EnqueueMediaRequest = z.infer<typeof EnqueueMediaRequestSchema>;
+export type EnqueueRequest = z.infer<typeof EnqueueRequestSchema>;
 
 // Update Queue Item Request
 export const UpdateQueueItemRequestSchema = z.object({
   caption: z.string().max(5000).optional(),
-  firstComment: z.string().max(2000).optional(),
+  firstComment: z.string().max(2000).nullable().optional(),
   scheduledTime: z.string().datetime().optional(),
   status: z.enum(['queued', 'skipped']).optional(),
+  postFormat: PostFormatSchema.optional(),
+  linkUrl: z.string().url().nullable().optional(),
 });
 
 export type UpdateQueueItemRequest = z.infer<typeof UpdateQueueItemRequestSchema>;
@@ -95,7 +147,9 @@ export const QueueItemSchema = z.object({
   userId: z.string().uuid(),
   pageId: z.string().uuid(),
   slotId: z.string().uuid().nullable(),
-  mediaId: z.string().uuid(),
+  mediaId: z.string().uuid().nullable(),
+  postFormat: PostFormatSchema.default('reel'),
+  linkUrl: z.string().nullable().optional(),
   scheduledTime: z.string().datetime(),
   caption: z.string(),
   firstComment: z.string().nullable(),
@@ -107,7 +161,7 @@ export const QueueItemSchema = z.object({
   publishedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
-  // Expanded media fields for UI display
+  // Expanded media fields for UI display (optional for text posts)
   media: z
     .object({
       name: z.string(),
@@ -117,6 +171,7 @@ export const QueueItemSchema = z.object({
       aspectRatio: z.string(),
       durationSeconds: z.number().nullable(),
     })
+    .nullable()
     .optional(),
 });
 

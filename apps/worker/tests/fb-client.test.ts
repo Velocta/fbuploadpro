@@ -3,6 +3,7 @@ import {
   FacebookPublishClient,
   MockFacebookPublishClient,
   FacebookGraphError,
+  parseGraphRateLimitHeaders,
 } from '../src/fb-client.js';
 
 describe('FacebookPublishClient', () => {
@@ -496,6 +497,264 @@ describe('FacebookPublishClient', () => {
       await expect(
         mockClient.postComment({ postId: 'p1', accessToken, message: 'm1' })
       ).rejects.toThrow('Simulated Meta API failure');
+    });
+
+    it('records published text posts, videos, and stories in tracking arrays', async () => {
+      const mockClient = new MockFacebookPublishClient();
+
+      const textRes = await mockClient.publishTextPost({
+        pageId,
+        accessToken,
+        message: 'Status update',
+        linkUrl: 'https://example.com',
+      });
+      expect(textRes).toEqual({ postId: 'mock_post_123' });
+      expect(mockClient.textPostsPublished).toHaveLength(1);
+      expect(mockClient.textPostsPublished[0]).toEqual({
+        pageId,
+        message: 'Status update',
+        linkUrl: 'https://example.com',
+      });
+
+      const videoRes = await mockClient.publishVideo({
+        pageId,
+        accessToken,
+        videoUrl,
+        caption: 'Video caption',
+        title: 'Video Title',
+      });
+      expect(videoRes).toEqual({ postId: 'mock_post_123' });
+      expect(mockClient.videosPublished).toHaveLength(1);
+      expect(mockClient.videosPublished[0].caption).toBe('Video caption');
+
+      const photoStoryRes = await mockClient.publishPhotoStory({
+        pageId,
+        accessToken,
+        imageUrl,
+      });
+      expect(photoStoryRes).toEqual({ postId: 'mock_post_123' });
+      expect(mockClient.photoStoriesPublished).toHaveLength(1);
+
+      const videoStoryRes = await mockClient.publishVideoStory({
+        pageId,
+        accessToken,
+        videoUrl,
+      });
+      expect(videoStoryRes).toEqual({ postId: 'mock_post_123' });
+      expect(mockClient.videoStoriesPublished).toHaveLength(1);
+
+      mockClient.reset();
+      expect(mockClient.textPostsPublished).toHaveLength(0);
+      expect(mockClient.videosPublished).toHaveLength(0);
+      expect(mockClient.photoStoriesPublished).toHaveLength(0);
+      expect(mockClient.videoStoriesPublished).toHaveLength(0);
+    });
+  });
+
+  describe('Multi-Format Publishers in FacebookPublishClient (Spec 042)', () => {
+    it('publishes text post via POST /{pageId}/feed with message and link', async () => {
+      const mockFetch = vi.fn().mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: `${pageId}_112233` }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const res = await client.publishTextPost({
+        pageId,
+        accessToken,
+        message: 'Exciting announcement!',
+        linkUrl: 'https://example.com/announcement',
+      });
+
+      expect(res.postId).toBe(`${pageId}_112233`);
+      expect(mockFetch).toHaveBeenCalledWith(
+        `https://graph.facebook.com/v26.0/${pageId}/feed`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({
+            message: 'Exciting announcement!',
+            link: 'https://example.com/announcement',
+          }),
+        })
+      );
+    });
+
+    it('publishes standard feed video via POST /{pageId}/videos', async () => {
+      const mockFetch = vi.fn().mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'video_id_9988' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const res = await client.publishVideo({
+        pageId,
+        accessToken,
+        videoUrl,
+        caption: 'Full length tutorial',
+        title: 'Tutorial 101',
+      });
+
+      expect(res.postId).toBe('video_id_9988');
+      expect(mockFetch).toHaveBeenCalledWith(
+        `https://graph.facebook.com/v26.0/${pageId}/videos`,
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          }),
+          body: JSON.stringify({
+            file_url: videoUrl,
+            description: 'Full length tutorial',
+            title: 'Tutorial 101',
+          }),
+        })
+      );
+    });
+
+    it('publishes photo story via 2-phase API (unpublished photo -> photo story)', async () => {
+      const mockFetch = vi.fn();
+      // Step 1: upload unpublished photo
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'photo_temp_123' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      // Step 2: publish photo story
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: 'story_post_456', post_id: 'story_post_456' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const res = await client.publishPhotoStory({
+        pageId,
+        accessToken,
+        imageUrl,
+      });
+
+      expect(res.postId).toBe('story_post_456');
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+
+      // Phase 1 verification
+      expect(mockFetch.mock.calls[0][0]).toBe(`https://graph.facebook.com/v26.0/${pageId}/photos`);
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({
+        url: imageUrl,
+        published: false,
+      });
+
+      // Phase 2 verification
+      expect(mockFetch.mock.calls[1][0]).toBe(`https://graph.facebook.com/v26.0/${pageId}/photo_stories`);
+      expect(JSON.parse(mockFetch.mock.calls[1][1].body)).toEqual({
+        photo_id: 'photo_temp_123',
+      });
+    });
+
+    it('publishes video story via 3-phase API (start -> rupload -> finish)', async () => {
+      const mockFetch = vi.fn();
+      // Phase 1: start video story session
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            video_id: 'vid_story_789',
+            upload_url: 'https://rupload.facebook.com/video-stories/vid_story_789',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+      // Phase 2: fetch remote video binary stream
+      const fakeVideoBody = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('fake-binary-story-data'));
+          controller.close();
+        },
+      });
+      mockFetch.mockResolvedValueOnce(
+        new Response(fakeVideoBody, {
+          status: 200,
+          headers: { 'Content-Type': 'video/mp4' },
+        })
+      );
+      // Phase 2: upload binary stream to rupload
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+      // Phase 3: finish video story
+      mockFetch.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            post_id: 'vid_story_post_111',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const res = await client.publishVideoStory({
+        pageId,
+        accessToken,
+        videoUrl,
+      });
+
+      expect(res.postId).toBe('vid_story_post_111');
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+
+      // Phase 1: start
+      expect(mockFetch.mock.calls[0][0]).toBe(`https://graph.facebook.com/v26.0/${pageId}/video_stories`);
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({ upload_phase: 'start' });
+
+      // Phase 3: finish
+      expect(mockFetch.mock.calls[3][0]).toBe(`https://graph.facebook.com/v26.0/${pageId}/video_stories`);
+      expect(JSON.parse(mockFetch.mock.calls[3][1].body)).toEqual({
+        upload_phase: 'finish',
+        video_id: 'vid_story_789',
+      });
+    });
+  });
+
+  describe('Rate Limit Header Telemetry (parseGraphRateLimitHeaders)', () => {
+    it('parses X-App-Usage and X-Business-Use-Case-Usage correctly', () => {
+      const headers = new Headers();
+      headers.set('x-app-usage', JSON.stringify({ call_count: 45, total_cputime: 60, total_time: 30 }));
+      headers.set(
+        'x-business-use-case-usage',
+        JSON.stringify({
+          page_12345: [
+            {
+              call_count: 88,
+              total_cputime: 75,
+              total_time: 50,
+              estimated_time_to_regain_access: 15,
+            },
+          ],
+        })
+      );
+
+      const telemetry = parseGraphRateLimitHeaders(headers);
+      expect(telemetry).toBeDefined();
+      expect(telemetry?.appUsageMaxPct).toBe(60);
+      expect(telemetry?.bucUsageMaxPct).toBe(88);
+      expect(telemetry?.estimatedTimeToRegainAccessMinutes).toBe(15);
+    });
+
+    it('returns undefined when rate-limit headers are not present', () => {
+      const headers = new Headers();
+      expect(parseGraphRateLimitHeaders(headers)).toBeUndefined();
+      expect(parseGraphRateLimitHeaders(null)).toBeUndefined();
     });
   });
 });

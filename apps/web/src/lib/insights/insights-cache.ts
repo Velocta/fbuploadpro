@@ -14,7 +14,66 @@ export function validateInsightsCacheConfig(): void {
   }
 }
 
-class InsightsCache {
+function parseUpstashRawResult(rawResult: unknown): any {
+  if (typeof rawResult === 'string') {
+    try {
+      return JSON.parse(rawResult);
+    } catch {
+      return null;
+    }
+  }
+  if (typeof rawResult === 'object' && rawResult !== null) {
+    return rawResult;
+  }
+  return null;
+}
+
+function normalizeUpstashEntry<T>(parsed: any): CacheEntry<T> | null {
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const entry: CacheEntry<T> = ('data' in parsed && 'expiresAt' in parsed)
+    ? parsed
+    : {
+        data: parsed.data ?? parsed,
+        cachedAt: parsed.cachedAt ?? new Date().toISOString(),
+        expiresAt: parsed.expiresAt ?? (Date.now() + 900 * 1000),
+      };
+
+  if (Date.now() <= entry.expiresAt) {
+    return entry;
+  }
+  return null;
+}
+
+async function fetchUpstashEntry<T>(
+  restUrl: string,
+  restToken: string,
+  key: string
+): Promise<CacheEntry<T> | null> {
+  try {
+    const res = await fetch(`${restUrl}/get/${encodeURIComponent(key)}`, {
+      headers: {
+        Authorization: `Bearer ${restToken}`,
+      },
+    });
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as { result?: unknown };
+    if (!body || !body.result) return null;
+
+    const parsed = parseUpstashRawResult(body.result);
+    return normalizeUpstashEntry<T>(parsed);
+  } catch (err) {
+    if (process.env.NODE_ENV !== 'test') {
+      console.warn('[InsightsCache] Upstash Redis GET failed, using in-memory fallback:', err);
+    }
+    return null;
+  }
+}
+
+export class InsightsCache {
   private readonly cache = new Map<string, CacheEntry<unknown>>();
 
   get<T>(key: string): CacheEntry<T> | null {
@@ -61,8 +120,86 @@ class InsightsCache {
     return entry;
   }
 
+  async getAsync<T>(key: string): Promise<CacheEntry<T> | null> {
+    const memoryEntry = this.get<T>(key);
+    if (memoryEntry) {
+      return memoryEntry;
+    }
+
+    const restUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (restUrl && restToken && typeof fetch === 'function') {
+      const remoteEntry = await fetchUpstashEntry<T>(restUrl, restToken, key);
+      if (remoteEntry) {
+        this.cache.set(key, remoteEntry as CacheEntry<unknown>);
+        return remoteEntry;
+      }
+    }
+
+    return null;
+  }
+
+  async setAsync<T>(key: string, data: T, ttlSeconds: number = 900): Promise<CacheEntry<T>> {
+    const entry = this.set<T>(key, data, ttlSeconds);
+
+    const restUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (restUrl && restToken && typeof fetch === 'function') {
+      try {
+        await fetch(`${restUrl}/set/${encodeURIComponent(key)}?EX=${ttlSeconds}`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${restToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(entry),
+        });
+      } catch (err) {
+        if (process.env.NODE_ENV !== 'test') {
+          console.warn('[InsightsCache] Upstash Redis SET failed, stored in-memory only:', err);
+        }
+      }
+    }
+
+    return entry;
+  }
+
+  async getOrFetchAsync<T>(
+    key: string,
+    fetcher: () => Promise<T>,
+    ttlSeconds: number = 900
+  ): Promise<T> {
+    const cached = await this.getAsync<T>(key);
+    if (cached) {
+      return cached.data;
+    }
+
+    const data = await fetcher();
+    if (data !== null && data !== undefined) {
+      await this.setAsync<T>(key, data, ttlSeconds);
+    }
+    return data;
+  }
+
   delete(key: string): void {
     this.cache.delete(key);
+  }
+
+  async deleteAsync(key: string): Promise<void> {
+    this.delete(key);
+    const restUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (restUrl && restToken && typeof fetch === 'function') {
+      try {
+        await fetch(`${restUrl}/del/${encodeURIComponent(key)}`, {
+          headers: {
+            Authorization: `Bearer ${restToken}`,
+          },
+        });
+      } catch {
+        // Ignored
+      }
+    }
   }
 
   deleteMatching(predicate: (key: string) => boolean): void {
@@ -89,4 +226,5 @@ class InsightsCache {
 }
 
 export const globalInsightsCache = new InsightsCache();
+export const insightsCache = globalInsightsCache;
 

@@ -256,7 +256,7 @@ export async function handleListPages(
   });
 
   if (recoveryPromises.length > 0) {
-    await Promise.all(recoveryPromises);
+    void Promise.allSettled(recoveryPromises);
   }
 
   const responsePayload = ListFacebookPagesResponseSchema.parse({

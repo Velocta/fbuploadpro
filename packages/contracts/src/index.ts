@@ -13,9 +13,9 @@ export * from './domain/storage.js';
 export * from './domain/downloader.js';
 export * from './domain/queue.js';
 export * from './domain/dispatcher.js';
+export * from './domain/publishing.js';
 export * from './domain/insights.js';
 export * from './domain/auth.js';
 export * from './domain/desktop.js';
 export * from './domain/workspace.js';
 export * from './domain/database.js';
-

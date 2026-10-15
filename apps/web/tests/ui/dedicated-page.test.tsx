@@ -58,7 +58,7 @@ function findElementByTestId(
 }
 
 function renderAndCaptureTree(
-  renderFn: () => React.ReactElement
+  renderFn: () => React.ReactElement | null
 ): React.ReactElement {
   let tree: React.ReactElement | null = null;
   function CaptureWrapper() {
@@ -690,6 +690,97 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasAttribute('data-testid', 'enqueue-modal')).toBe(true);
       expect(hasText('Add Media to Queue')).toBe(true);
       expect(hasAttribute('data-testid', 'enqueue-caption-field')).toBe(true);
+    });
+
+    it('renders 5 format selector buttons and toggles format behaviors', () => {
+      const { hasAttribute, hasText } = render(
+        <EnqueueModal
+          pageId="page-101"
+          subdomain="cyberdyne"
+          slots={sampleSlots}
+          isOpen={true}
+          onClose={vi.fn()}
+          onEnqueued={vi.fn()}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'enqueue-format-selector')).toBe(true);
+      expect(hasAttribute('data-testid', 'enqueue-format-reel')).toBe(true);
+      expect(hasAttribute('data-testid', 'enqueue-format-video')).toBe(true);
+      expect(hasAttribute('data-testid', 'enqueue-format-image')).toBe(true);
+      expect(hasAttribute('data-testid', 'enqueue-format-story')).toBe(true);
+      expect(hasAttribute('data-testid', 'enqueue-format-text')).toBe(true);
+    });
+
+    it('hides media picker and shows link input when text format is selected', () => {
+      const tree = renderAndCaptureTree(() =>
+        EnqueueModal({
+          pageId: 'page-101',
+          subdomain: 'cyberdyne',
+          slots: sampleSlots,
+          isOpen: true,
+          onClose: vi.fn(),
+          onEnqueued: vi.fn(),
+        })
+      );
+
+      const textFormatBtn = findElementByTestId(tree, 'enqueue-format-text');
+      expect(textFormatBtn).not.toBeNull();
+      textFormatBtn?.props.onClick();
+
+      const { hasAttribute } = render(
+        <EnqueueModal
+          pageId="page-101"
+          subdomain="cyberdyne"
+          slots={sampleSlots}
+          isOpen={true}
+          onClose={vi.fn()}
+          onEnqueued={vi.fn()}
+        />
+      );
+      expect(hasAttribute('data-testid', 'enqueue-format-text')).toBe(true);
+    });
+
+    it('shows story-no-comment-notice when story format is selected', () => {
+      const tree = renderAndCaptureTree(() =>
+        EnqueueModal({
+          pageId: 'page-101',
+          subdomain: 'cyberdyne',
+          slots: sampleSlots,
+          isOpen: true,
+          onClose: vi.fn(),
+          onEnqueued: vi.fn(),
+        })
+      );
+
+      const storyFormatBtn = findElementByTestId(tree, 'enqueue-format-story');
+      expect(storyFormatBtn).not.toBeNull();
+      storyFormatBtn?.props.onClick();
+    });
+  });
+
+  describe('DedicatedPageHeader Checkpoint Verification Banner', () => {
+    it('renders checkpoint-reactivation-banner when page status is page_checkpoint', () => {
+      const checkpointPage: FacebookPageItem = {
+        ...samplePage,
+        status: 'page_checkpoint',
+      };
+
+      const { hasAttribute, hasText } = render(
+        <DedicatedPageHeader
+          page={checkpointPage}
+          subdomain="cyberdyne"
+          onStatusToggle={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+          onDisconnectRequest={vi.fn()}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'checkpoint-reactivation-banner')).toBe(true);
+      expect(hasAttribute('data-testid', 'reactivate-page-btn')).toBe(true);
+      expect(hasText('Facebook Checkpoint Verification Required')).toBe(true);
+      expect(hasText('Mark Verified')).toBe(true);
+      expect(hasText('Reactivate Page')).toBe(true);
     });
   });
 });

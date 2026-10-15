@@ -12,6 +12,7 @@ import {
 } from '@/lib/theme';
 import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import type { FacebookPageItem } from '../page-card';
+import type { PostFormat } from '@fbuploadpro/contracts';
 
 const QUEUE_EDIT_TEXTAREA_STYLE: React.CSSProperties = {
   width: '100%',
@@ -27,7 +28,9 @@ const QUEUE_EDIT_TEXTAREA_STYLE: React.CSSProperties = {
 
 export interface DedicatedQueueItem {
   id: string;
-  mediaId: string;
+  mediaId?: string | null;
+  postFormat?: PostFormat;
+  linkUrl?: string | null;
   caption?: string | null;
   firstComment?: string | null;
   scheduledTime: string;
@@ -55,6 +58,68 @@ export interface PageTabQueueProps {
   onUpdateItem: (itemId: string, data: { caption?: string; firstComment?: string | null }) => Promise<void>;
   onDeleteItem: (itemId: string) => Promise<void>;
   onOpenAddQueue: () => void;
+}
+
+function QueueItemThumbnailPreview({
+  resolvedFormat,
+  thumbnailUrl,
+  mediaType,
+}: {
+  resolvedFormat: string;
+  thumbnailUrl?: string | null | undefined;
+  mediaType?: string | null | undefined;
+}) {
+  if (resolvedFormat === 'text') {
+    return (
+      <div
+        style={{
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="4 7 4 4 20 4 20 7" />
+          <line x1="9" y1="20" x2="15" y2="20" />
+          <line x1="12" y1="4" x2="12" y2="20" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (thumbnailUrl) {
+    return (
+      <img
+        src={thumbnailUrl}
+        alt="Media Preview"
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        color: `var(--text-sub, ${THEME.default.text.secondary})`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {mediaType === 'video' ? (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polygon points="5 3 19 12 5 21 5 3" />
+        </svg>
+      ) : (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <polyline points="21 15 16 10 5 21" />
+        </svg>
+      )}
+    </div>
+  );
 }
 
 export function PageTabQueue({
@@ -336,7 +401,8 @@ export function PageTabQueue({
             const isItemDeleting = deletingId === item.id;
             const isPublished = item.status === 'published';
             const { signal, label } = getStatusSignal(item.status);
-            const mediaType = item.media?.mediaType ?? 'video';
+            const resolvedFormat = item.postFormat ?? (item.media?.mediaType === 'video' ? 'video' : 'image');
+            const mediaType = item.media?.mediaType ?? (resolvedFormat === 'video' || resolvedFormat === 'reel' ? 'video' : 'image');
             const thumbnailUrl = item.media?.thumbnailUrl || item.media?.url;
 
             return (
@@ -373,34 +439,11 @@ export function PageTabQueue({
                       justifyContent: 'center',
                     }}
                   >
-                    {thumbnailUrl ? (
-                      <img
-                        src={thumbnailUrl}
-                        alt="Media Preview"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        {mediaType === 'video' ? (
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                          </svg>
-                        ) : (
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <polyline points="21 15 16 10 5 21" />
-                          </svg>
-                        )}
-                      </div>
-                    )}
+                    <QueueItemThumbnailPreview
+                      resolvedFormat={resolvedFormat}
+                      thumbnailUrl={thumbnailUrl}
+                      mediaType={mediaType}
+                    />
                     {/* Media Type Indicator */}
                     <div
                       style={{
@@ -417,7 +460,7 @@ export function PageTabQueue({
                         letterSpacing: '0.04em',
                       }}
                     >
-                      {mediaType}
+                      {resolvedFormat === 'image' ? 'PHOTO' : resolvedFormat.toUpperCase()}
                     </div>
                   </div>
 
@@ -425,6 +468,23 @@ export function PageTabQueue({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, flex: 1 }}>
                     {/* Scheduled Time & Unboxed Status Dot */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
+                      <span
+                        data-testid={`queue-item-format-${item.id}`}
+                        style={{
+                          padding: '1px 5px',
+                          backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                          borderRadius: RADII.xs,
+                          fontSize: '0.625rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          letterSpacing: '0.04em',
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {resolvedFormat === 'image' ? 'PHOTO' : resolvedFormat.toUpperCase()}
+                      </span>
+
                       <span
                         style={{
                           fontSize: '0.8125rem',
@@ -711,38 +771,54 @@ export function PageTabQueue({
               </span>
             </div>
 
-            {/* First Comment Input */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-              <label
-                htmlFor="edit-first-comment-field"
+            {/* First Comment Input / Story Notice */}
+            {editingItem?.postFormat === 'story' ? (
+              <div
+                data-testid="story-no-comment-notice"
                 style={{
+                  padding: SPACING.sm,
+                  borderRadius: RADII.sm,
+                  backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
+                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   fontSize: '0.8125rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 }}
               >
-                Automated First Comment (Optional)
-              </label>
-              <textarea
-                id="edit-first-comment-field"
-                data-testid="edit-first-comment-input"
-                rows={2}
-                value={editFirstComment}
-                maxLength={2000}
-                onChange={(e) => setEditFirstComment(e.target.value)}
-                placeholder="Links, hashtags, or supplementary notes..."
-                style={QUEUE_EDIT_TEXTAREA_STYLE}
-              />
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  alignSelf: 'flex-end',
-                }}
-              >
-                {editFirstComment.length} / 2000
-              </span>
-            </div>
+                Facebook Stories do not support comments.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+                <label
+                  htmlFor="edit-first-comment-field"
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  }}
+                >
+                  Automated First Comment (Optional)
+                </label>
+                <textarea
+                  id="edit-first-comment-field"
+                  data-testid="edit-first-comment-input"
+                  rows={2}
+                  value={editFirstComment}
+                  maxLength={2000}
+                  onChange={(e) => setEditFirstComment(e.target.value)}
+                  placeholder="Links, hashtags, or supplementary notes..."
+                  style={QUEUE_EDIT_TEXTAREA_STYLE}
+                />
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                    alignSelf: 'flex-end',
+                  }}
+                >
+                  {editFirstComment.length} / 2000
+                </span>
+              </div>
+            )}
 
             {/* Modal Actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>

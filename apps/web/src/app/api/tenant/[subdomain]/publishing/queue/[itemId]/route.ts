@@ -6,6 +6,7 @@ import {
   UpdateQueueItemRequestSchema,
   verifySessionToken,
   type DatabaseClient,
+  type PostFormat,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -72,7 +73,7 @@ export async function handleUpdateQueueItem(
   if (isLegacyClient(dbClient)) {
     // 4. Check existing item
     const existingRows = (await dbClient.query(
-      `SELECT qi.id, qi.user_id, qi.fb_page_id, qi.slot_id, qi.media_id, qi.scheduled_time, qi.caption, qi.first_comment, qi.status, qi.retry_count, qi.max_retries, qi.fb_post_id, qi.fb_comment_id, qi.published_at, qi.created_at, qi.updated_at
+      `SELECT qi.id, qi.user_id, qi.fb_page_id, qi.slot_id, qi.media_id, qi.post_format, qi.link_url, qi.scheduled_time, qi.caption, qi.first_comment, qi.status, qi.retry_count, qi.max_retries, qi.fb_post_id, qi.fb_comment_id, qi.published_at, qi.created_at, qi.updated_at
        FROM queue_items qi
        WHERE qi.id = $1 AND qi.user_id = $2`,
       [itemId, session.userId]
@@ -93,7 +94,18 @@ export async function handleUpdateQueueItem(
 
     // 5. Compute updated values
     const newCaption = parsed.data.caption ?? existing.caption ?? '';
-    const newFirstComment = parsed.data.firstComment ?? existing.first_comment ?? null;
+    const newPostFormat = (parsed.data.postFormat ?? existing.post_format ?? (existing.media_id ? undefined : 'text')) as PostFormat | undefined;
+    let newFirstComment = parsed.data.firstComment !== undefined ? parsed.data.firstComment : (existing.first_comment ?? null);
+    if (newPostFormat === 'story') {
+      if (parsed.data.firstComment && parsed.data.firstComment.trim().length > 0) {
+        return NextResponse.json(
+          { error: 'INVALID_REQUEST', message: 'First comment is not supported for story posts' },
+          { status: 400 }
+        );
+      }
+      newFirstComment = null;
+    }
+    const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
     const newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
     const newStatus = parsed.data.status ?? existing.status;
 
@@ -103,30 +115,36 @@ export async function handleUpdateQueueItem(
            first_comment = $2,
            scheduled_time = $3,
            status = $4,
+           post_format = COALESCE($5, post_format),
+           link_url = $6,
            updated_at = now()
-       WHERE id = $5 AND user_id = $6
-       RETURNING id, user_id, fb_page_id, slot_id, media_id, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at`,
-      [newCaption, newFirstComment, newScheduledTime, newStatus, itemId, session.userId]
+       WHERE id = $7 AND user_id = $8
+       RETURNING id, user_id, fb_page_id, slot_id, media_id, post_format, link_url, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at`,
+      [newCaption, newFirstComment, newScheduledTime, newStatus, newPostFormat ?? null, newLinkUrl, itemId, session.userId]
     )) as any[];
 
     const updated = updateRows[0];
 
-    // 6. Fetch joined media details
-    const mediaRows = (await dbClient.query(
-      `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds
-       FROM media_items
-       WHERE id = $1 AND user_id = $2`,
-      [updated.media_id, session.userId]
-    )) as any[];
-
-    const mediaRecord = mediaRows[0];
+    // 6. Fetch joined media details if present
+    let mediaRecord: any = null;
+    if (updated.media_id) {
+      const mediaRows = (await dbClient.query(
+        `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds
+         FROM media_items
+         WHERE id = $1 AND user_id = $2`,
+        [updated.media_id, session.userId]
+      )) as any[];
+      mediaRecord = mediaRows?.[0] ?? null;
+    }
 
     const queueItem = {
       id: updated.id,
       userId: updated.user_id,
       pageId: updated.fb_page_id,
       slotId: updated.slot_id ?? null,
-      mediaId: updated.media_id,
+      mediaId: updated.media_id ?? null,
+      postFormat: (updated.post_format as PostFormat) ?? newPostFormat ?? (mediaRecord?.media_type === 'video' ? 'video' : 'image'),
+      linkUrl: updated.link_url ?? newLinkUrl ?? null,
       scheduledTime: new Date(updated.scheduled_time).toISOString(),
       caption: updated.caption ?? '',
       firstComment: updated.first_comment ?? null,
@@ -181,19 +199,36 @@ export async function handleUpdateQueueItem(
   }
 
   const newCaption = parsed.data.caption ?? existing.caption ?? '';
-  const newFirstComment = parsed.data.firstComment ?? existing.first_comment ?? null;
+  const newPostFormat = (parsed.data.postFormat ?? existing.post_format ?? (existing.media_id ? undefined : 'text')) as PostFormat | undefined;
+  let newFirstComment = parsed.data.firstComment !== undefined ? parsed.data.firstComment : (existing.first_comment ?? null);
+  if (newPostFormat === 'story') {
+    if (parsed.data.firstComment && parsed.data.firstComment.trim().length > 0) {
+      return NextResponse.json(
+        { error: 'INVALID_REQUEST', message: 'First comment is not supported for story posts' },
+        { status: 400 }
+      );
+    }
+    newFirstComment = null;
+  }
+  const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
   const newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
   const newStatus = parsed.data.status ?? existing.status;
 
+  const updatePayload: Record<string, any> = {
+    caption: newCaption,
+    first_comment: newFirstComment,
+    scheduled_time: newScheduledTime,
+    status: newStatus,
+    link_url: newLinkUrl,
+    updated_at: new Date().toISOString(),
+  };
+  if (newPostFormat) {
+    updatePayload.post_format = newPostFormat;
+  }
+
   const { data: updated, error: updateErr } = await supabase
     .from('queue_items')
-    .update({
-      caption: newCaption,
-      first_comment: newFirstComment,
-      scheduled_time: newScheduledTime,
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', itemId)
     .eq('user_id', session.userId)
     .select()
@@ -203,19 +238,25 @@ export async function handleUpdateQueueItem(
     return NextResponse.json({ error: 'Failed to update queue item' }, { status: 500 });
   }
 
-  const { data: mediaRecord } = await supabase
-    .from('media_items')
-    .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds')
-    .eq('id', updated.media_id)
-    .eq('user_id', session.userId)
-    .maybeSingle();
+  let mediaRecord: any = null;
+  if (updated.media_id) {
+    const { data: mediaData } = await supabase
+      .from('media_items')
+      .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds')
+      .eq('id', updated.media_id)
+      .eq('user_id', session.userId)
+      .maybeSingle();
+    mediaRecord = mediaData;
+  }
 
   const queueItem = {
     id: updated.id,
     userId: updated.user_id,
     pageId: updated.fb_page_id,
     slotId: updated.slot_id ?? null,
-    mediaId: updated.media_id,
+    mediaId: updated.media_id ?? null,
+    postFormat: (updated.post_format as PostFormat) ?? newPostFormat ?? (mediaRecord?.media_type === 'video' ? 'video' : 'image'),
+    linkUrl: updated.link_url ?? newLinkUrl ?? null,
     scheduledTime: new Date(updated.scheduled_time).toISOString(),
     caption: updated.caption ?? '',
     firstComment: updated.first_comment ?? null,

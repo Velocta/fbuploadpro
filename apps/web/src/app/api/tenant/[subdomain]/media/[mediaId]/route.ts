@@ -64,6 +64,8 @@ function formatMediaRow(row: any) {
         : null,
     aspectRatio: row.aspect_ratio,
     captionText: row.caption_text,
+    width: row.width ? Number(row.width) : null,
+    height: row.height ? Number(row.height) : null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   });
@@ -89,7 +91,7 @@ export async function handleGetMedia(
     const rows = (await dbClient.query(
       `SELECT id, user_id, folder_id, name, file_size, mime_type, media_type,
               storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-              aspect_ratio, caption_text,
+              aspect_ratio, caption_text, width, height,
               created_at, updated_at
        FROM media_items
        WHERE id = $1 AND user_id = $2`,
@@ -111,7 +113,7 @@ export async function handleGetMedia(
   const { data, error } = await supabase
     .from('media_items')
     .select(
-      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, created_at, updated_at'
+      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, width, height, created_at, updated_at'
     )
     .eq('id', mediaId)
     .eq('user_id', auth.session.userId)
@@ -159,6 +161,33 @@ export async function handleUpdateMedia(
     );
   }
 
+  // Eliminate base64 data-URL bloat: upload to R2 if storageService is available
+  let resolvedThumbnailUrl = parsed.data.thumbnailUrl;
+  let resolvedThumbnailKey = parsed.data.thumbnailKey;
+
+  if (resolvedThumbnailUrl && resolvedThumbnailUrl.startsWith('data:image/')) {
+    try {
+      const storage = storageService ?? getStorageService();
+      const match = /^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/.exec(resolvedThumbnailUrl);
+      if (match) {
+        const mimeSubtype = match[1];
+        const ext = mimeSubtype === 'jpeg' ? 'jpg' : mimeSubtype;
+        const base64Data = match[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        const key = `users/${auth.session.userId}/thumbnails/${mediaId}-${Date.now()}.${ext}`;
+        const putResult = await storage.putObject({
+          key,
+          body: buffer,
+          contentType: `image/${mimeSubtype}`,
+        });
+        resolvedThumbnailKey = key;
+        resolvedThumbnailUrl = putResult.publicUrl || storage.getPublicUrl(key);
+      }
+    } catch (_e) {
+      // Keep data: URL fallback in test environments without R2 credentials
+    }
+  }
+
   if (isLegacyClient(dbClient)) {
     const existingMedia = (await dbClient.query(
       `SELECT id, folder_id, caption_text, thumbnail_key
@@ -201,13 +230,21 @@ export async function handleUpdateMedia(
       updates.push(`caption_text = $${paramIdx++}`);
       values.push(parsed.data.captionText);
     }
-    if (parsed.data.thumbnailKey !== undefined) {
+    if (resolvedThumbnailKey !== undefined) {
       updates.push(`thumbnail_key = $${paramIdx++}`);
-      values.push(parsed.data.thumbnailKey);
+      values.push(resolvedThumbnailKey);
     }
-    if (parsed.data.thumbnailUrl !== undefined) {
+    if (resolvedThumbnailUrl !== undefined) {
       updates.push(`thumbnail_url = $${paramIdx++}`);
-      values.push(parsed.data.thumbnailUrl);
+      values.push(resolvedThumbnailUrl);
+    }
+    if (parsed.data.width !== undefined) {
+      updates.push(`width = $${paramIdx++}`);
+      values.push(parsed.data.width);
+    }
+    if (parsed.data.height !== undefined) {
+      updates.push(`height = $${paramIdx++}`);
+      values.push(parsed.data.height);
     }
 
     values.push(mediaId, auth.session.userId);
@@ -217,7 +254,7 @@ export async function handleUpdateMedia(
       WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
       RETURNING id, user_id, folder_id, name, file_size, mime_type, media_type,
                 storage_key, url, thumbnail_key, thumbnail_url, duration_seconds,
-                aspect_ratio, caption_text,
+                aspect_ratio, caption_text, width, height,
                 created_at, updated_at
     `;
 
@@ -228,9 +265,9 @@ export async function handleUpdateMedia(
 
     const previousThumbnailKey = existingMedia[0]?.thumbnail_key as string | null | undefined;
     if (
-      parsed.data.thumbnailKey !== undefined &&
+      resolvedThumbnailKey !== undefined &&
       previousThumbnailKey &&
-      previousThumbnailKey !== parsed.data.thumbnailKey
+      previousThumbnailKey !== resolvedThumbnailKey
     ) {
       const storage = storageService ?? getStorageService();
       try {
@@ -282,8 +319,10 @@ export async function handleUpdateMedia(
   if (parsed.data.name !== undefined) updatePayload.name = parsed.data.name;
   if (parsed.data.folderId !== undefined) updatePayload.folder_id = parsed.data.folderId;
   if (parsed.data.captionText !== undefined) updatePayload.caption_text = parsed.data.captionText;
-  if (parsed.data.thumbnailKey !== undefined) updatePayload.thumbnail_key = parsed.data.thumbnailKey;
-  if (parsed.data.thumbnailUrl !== undefined) updatePayload.thumbnail_url = parsed.data.thumbnailUrl;
+  if (resolvedThumbnailKey !== undefined) updatePayload.thumbnail_key = resolvedThumbnailKey;
+  if (resolvedThumbnailUrl !== undefined) updatePayload.thumbnail_url = resolvedThumbnailUrl;
+  if (parsed.data.width !== undefined) updatePayload.width = parsed.data.width;
+  if (parsed.data.height !== undefined) updatePayload.height = parsed.data.height;
 
   const { data: updatedRow, error: updateErr } = await supabase
     .from('media_items')
@@ -291,7 +330,7 @@ export async function handleUpdateMedia(
     .eq('id', mediaId)
     .eq('user_id', auth.session.userId)
     .select(
-      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, created_at, updated_at'
+      'id, user_id, folder_id, name, file_size, mime_type, media_type, storage_key, url, thumbnail_key, thumbnail_url, duration_seconds, aspect_ratio, caption_text, width, height, created_at, updated_at'
     )
     .single();
 
@@ -301,9 +340,9 @@ export async function handleUpdateMedia(
 
   const previousThumbnailKey = (existingMedia as any).thumbnail_key as string | null | undefined;
   if (
-    parsed.data.thumbnailKey !== undefined &&
+    resolvedThumbnailKey !== undefined &&
     previousThumbnailKey &&
-    previousThumbnailKey !== parsed.data.thumbnailKey
+    previousThumbnailKey !== resolvedThumbnailKey
   ) {
     const storage = storageService ?? getStorageService();
     try {

@@ -11,11 +11,14 @@ import {
   STATUS_SIGNALS,
 } from '@/lib/theme';
 import type { FacebookPageItem } from '../page-card';
+import type { PostFormat } from '@fbuploadpro/contracts';
 
 export interface PageQueueItemSummary {
   id: string;
-  mediaId: string;
+  mediaId?: string | null;
   mediaType?: 'video' | 'image';
+  postFormat?: PostFormat;
+  linkUrl?: string | null;
   caption?: string | null;
   firstComment?: string | null;
   scheduledTime: string;
@@ -28,6 +31,7 @@ export interface PageSlotSummary {
   slotTime: string;
   timezone: string;
   isActive: boolean;
+  allowedFormats?: string[] | null;
 }
 
 export interface PageTabDashboardProps {
@@ -37,6 +41,11 @@ export interface PageTabDashboardProps {
   onPublishNow: (itemId: string) => Promise<void>;
   onSwitchTab: (tab: 'queue' | 'calendar' | 'insights' | 'settings') => void;
   onOpenAddQueue: () => void;
+}
+
+function formatItemBadge(item: PageQueueItemSummary): string {
+  const fmt = item.postFormat || (item.mediaType === 'video' ? 'video' : 'image');
+  return fmt === 'image' ? 'PHOTO' : fmt.toUpperCase();
 }
 
 export function PageTabDashboard({
@@ -341,20 +350,39 @@ export function PageTabDashboard({
                     borderRadius: RADII.sm,
                   }}
                 >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: '0.875rem',
-                        fontWeight: TYPOGRAPHY.weights.medium,
-                        color: `var(--text-main, ${THEME.default.text.primary})`,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {item.caption || 'Untitled post'}
-                    </p>
+                  <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
+                      <span
+                        data-testid={`dashboard-item-format-${item.id}`}
+                        style={{
+                          padding: '1px 5px',
+                          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                          borderRadius: RADII.xs,
+                          fontSize: '0.625rem',
+                          fontWeight: TYPOGRAPHY.weights.semibold,
+                          letterSpacing: '0.04em',
+                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {formatItemBadge(item)}
+                      </span>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: '0.875rem',
+                          fontWeight: TYPOGRAPHY.weights.medium,
+                          color: `var(--text-main, ${THEME.default.text.primary})`,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          flex: 1,
+                        }}
+                      >
+                        {item.caption || 'Untitled post'}
+                      </p>
+                    </div>
                     <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
                       Scheduled for {new Date(item.scheduledTime).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                     </span>

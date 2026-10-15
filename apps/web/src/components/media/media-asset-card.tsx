@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import type { MediaItemResponse } from '@fbuploadpro/contracts';
+import { type MediaItemResponse, getEligiblePostFormatsForMedia } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
 
@@ -56,6 +56,8 @@ export function MediaAssetCard({
     item.captionText !== null && item.captionText !== undefined && item.captionText.length > 0
       ? item.captionText
       : deriveDefaultCaption(item.name);
+
+  const eligibleFormats = getEligiblePostFormatsForMedia(item);
 
   const [isEditingCaption, setIsEditingCaption] = useState(initialEditingCaption);
   const [draftCaption, setDraftCaption] = useState<string | null>(
@@ -398,6 +400,35 @@ export function MediaAssetCard({
           >
             {formatBytes(item.fileSize)}
           </span>
+        </div>
+
+        {/* Format Eligibility Badges */}
+        <div
+          data-testid={`media-eligible-formats-${item.id}`}
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '4px',
+          }}
+        >
+          {eligibleFormats.map((fmt) => (
+            <span
+              key={fmt}
+              data-testid={`media-format-badge-${item.id}-${fmt}`}
+              style={{
+                padding: '1px 5px',
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.xs,
+                fontSize: '0.625rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                letterSpacing: '0.04em',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              {fmt === 'image' ? 'PHOTO' : fmt.toUpperCase()}
+            </span>
+          ))}
         </div>
 
         {/* Clickable Folder Path Badge (Shown in Global Search Results) */}

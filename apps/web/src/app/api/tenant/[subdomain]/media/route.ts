@@ -13,13 +13,6 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
  * Sanitizes and escapes user search input for safe interpolation into PostgREST `.or()` filter strings.
- *
- * PostgREST syntax uses `,` and `()` as query delimiters. Quoting patterns with `"` protects commas
- * and parentheses from breaking PostgREST query parsing.
- * Inside double quotes:
- * - `\` is escaped to prevent escape injection.
- * - `"` is escaped to prevent quote breakout.
- * - `%` and `_` are escaped to treat them as literals in LIKE / ILIKE pattern matching.
  */
 export function sanitizePostgrestSearchPattern(input: string): string {
   const escaped = input
@@ -65,6 +58,8 @@ export async function handleListMedia(
     sortOrder: searchParams.get('sortOrder') || undefined,
     limit: searchParams.get('limit') || undefined,
     offset: searchParams.get('offset') || undefined,
+    cursor: searchParams.get('cursor') || undefined,
+    postFormat: searchParams.get('postFormat') || undefined,
   });
 
   if (!parsedQuery.success) {
@@ -84,6 +79,8 @@ export async function handleListMedia(
     sortOrder,
     limit,
     offset,
+    cursor,
+    postFormat,
   } = parsedQuery.data;
 
   let total = 0;
@@ -122,7 +119,38 @@ export async function handleListMedia(
       conditions.push(`(name ILIKE $${paramIndex} OR caption_text ILIKE $${paramIndex})`);
     }
 
+    // Format compatibility filter
+    if (postFormat === 'image') {
+      conditions.push("media_type = 'image'");
+    } else if (postFormat === 'reel') {
+      conditions.push("media_type = 'video' AND (duration_seconds IS NULL OR duration_seconds <= 90)");
+    } else if (postFormat === 'video') {
+      conditions.push("media_type = 'video'");
+    } else if (postFormat === 'story') {
+      conditions.push(
+        "((media_type = 'image' AND file_size <= 10485760) OR (media_type = 'video' AND (duration_seconds IS NULL OR duration_seconds <= 60)))"
+      );
+    }
+
     const whereClause = conditions.join(' AND ');
+
+    // 1. Total count
+    const countSql = `SELECT COUNT(*)::int AS total FROM media_items WHERE ${whereClause}`;
+    const countRows = (await dbClient.query(countSql, params)) as any[];
+    total = Number(countRows[0]?.total ?? 0);
+
+    // Keyset cursor pagination condition
+    if (cursor) {
+      const [cursorCreatedAt, cursorId] = cursor.split('|');
+      if (cursorCreatedAt && cursorId) {
+        params.push(cursorCreatedAt, cursorId);
+        conditions.push(
+          `(created_at < $${params.length - 1} OR (created_at = $${params.length - 1} AND id < $${params.length}))`
+        );
+      }
+    }
+
+    const cursorWhereClause = conditions.join(' AND ');
 
     const SORT_COLUMN_MAP: Record<'created_at' | 'name' | 'file_size', string> = {
       created_at: 'created_at',
@@ -132,15 +160,16 @@ export async function handleListMedia(
     const orderColumn = SORT_COLUMN_MAP[sortBy] ?? 'created_at';
     const orderDirection = sortOrder === 'asc' ? 'ASC' : 'DESC';
 
-    // 1. Total count
-    const countSql = `SELECT COUNT(*)::int AS total FROM media_items WHERE ${whereClause}`;
-    const countRows = (await dbClient.query(countSql, params)) as any[];
-    total = Number(countRows[0]?.total ?? 0);
-
     // 2. Fetch page items
-    const queryParams = [...params, limit, offset];
-    const itemsSql = `SELECT * FROM media_items WHERE ${whereClause} ORDER BY ${orderColumn} ${orderDirection} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
-    rows = (await dbClient.query(itemsSql, queryParams)) as any[];
+    if (cursor) {
+      const queryParams = [...params, limit];
+      const itemsSql = `SELECT * FROM media_items WHERE ${cursorWhereClause} ORDER BY created_at DESC, id DESC LIMIT $${queryParams.length}`;
+      rows = (await dbClient.query(itemsSql, queryParams)) as any[];
+    } else {
+      const queryParams = [...params, limit, offset];
+      const itemsSql = `SELECT * FROM media_items WHERE ${cursorWhereClause} ORDER BY ${orderColumn} ${orderDirection} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
+      rows = (await dbClient.query(itemsSql, queryParams)) as any[];
+    }
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
@@ -177,14 +206,34 @@ export async function handleListMedia(
       queryBuilder = queryBuilder.or(`name.ilike.${pattern},caption_text.ilike.${pattern}`);
     }
 
-    let sortCol = 'created_at';
-    if (sortBy === 'name') {
-      sortCol = 'name';
-    } else if (sortBy === 'file_size') {
-      sortCol = 'file_size';
+    if (postFormat === 'image') {
+      queryBuilder = queryBuilder.eq('media_type', 'image');
+    } else if (postFormat === 'reel') {
+      queryBuilder = queryBuilder.eq('media_type', 'video').or('duration_seconds.is.null,duration_seconds.lte.90');
+    } else if (postFormat === 'video') {
+      queryBuilder = queryBuilder.eq('media_type', 'video');
+    } else if (postFormat === 'story') {
+      queryBuilder = queryBuilder.or(
+        'and(media_type.eq.image,file_size.lte.10485760),and(media_type.eq.video,or(duration_seconds.is.null,duration_seconds.lte.60))'
+      );
     }
-    queryBuilder = queryBuilder.order(sortCol as any, { ascending: sortOrder === 'asc' });
-    queryBuilder = queryBuilder.range(offset, offset + limit - 1);
+
+    if (cursor) {
+      const [cursorCreatedAt] = cursor.split('|');
+      if (cursorCreatedAt) {
+        queryBuilder = queryBuilder.lt('created_at', cursorCreatedAt);
+      }
+      queryBuilder = queryBuilder.order('created_at', { ascending: false }).limit(limit);
+    } else {
+      let sortCol = 'created_at';
+      if (sortBy === 'name') {
+        sortCol = 'name';
+      } else if (sortBy === 'file_size') {
+        sortCol = 'file_size';
+      }
+      queryBuilder = queryBuilder.order(sortCol as any, { ascending: sortOrder === 'asc' });
+      queryBuilder = queryBuilder.range(offset, offset + limit - 1);
+    }
 
     const { data: mediaRows, count, error } = await queryBuilder;
     if (error) {
@@ -213,15 +262,24 @@ export async function handleListMedia(
         : null,
     aspectRatio: row.aspect_ratio ?? 'unknown',
     captionText: row.caption_text ?? null,
+    width: row.width ? Number(row.width) : null,
+    height: row.height ? Number(row.height) : null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   }));
+
+  let nextCursor: string | null = null;
+  if (items.length === limit && items.length > 0) {
+    const lastItem = items[items.length - 1];
+    nextCursor = `${lastItem.createdAt}|${lastItem.id}`;
+  }
 
   const responsePayload = MediaListResponseSchema.parse({
     items,
     total,
     limit,
     offset,
+    nextCursor,
   });
 
   return NextResponse.json(responsePayload);

@@ -236,6 +236,59 @@ export function filterAndSortMediaItems(
   return sorted;
 }
 
+function partitionEntriesByDupSet(
+  entries: QueuedUploadEntry[],
+  dupSet: Set<string>
+): { duplicates: QueuedUploadEntry[]; uniqueEntries: QueuedUploadEntry[] } {
+  const duplicates: QueuedUploadEntry[] = [];
+  const uniqueEntries: QueuedUploadEntry[] = [];
+  for (const entry of entries) {
+    const key = `${entry.file.name.toLowerCase()}|${entry.file.size}`;
+    if (dupSet.has(key)) {
+      duplicates.push(entry);
+    } else {
+      uniqueEntries.push(entry);
+    }
+  }
+  return { duplicates, uniqueEntries };
+}
+
+async function checkServerDuplicateEntries(
+  subdomain: string,
+  folderId: string | null | undefined,
+  entries: QueuedUploadEntry[]
+): Promise<{ duplicates: QueuedUploadEntry[]; uniqueEntries: QueuedUploadEntry[] } | null> {
+  try {
+    const payload = {
+      folderId: folderId ?? null,
+      items: entries.map((e) => ({
+        name: e.file.name,
+        fileSize: e.file.size,
+      })),
+    };
+    const checkRes = await fetch(`/api/tenant/${subdomain}/media/check-duplicates`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!checkRes.ok) return null;
+
+    const checkData = (await checkRes.json()) as {
+      duplicates: Array<{ name: string; fileSize: number; existingMediaId: string }>;
+    };
+    if (!checkData.duplicates || checkData.duplicates.length === 0) {
+      return { duplicates: [], uniqueEntries: entries };
+    }
+
+    const dupSet = new Set(
+      checkData.duplicates.map((d) => `${d.name.toLowerCase()}|${d.fileSize}`)
+    );
+    return partitionEntriesByDupSet(entries, dupSet);
+  } catch {
+    return null;
+  }
+}
+
 export interface MediaLibraryExplorerProps {
   subdomain: string;
   initialFolders?: MediaFolder[];
@@ -792,6 +845,22 @@ export function MediaLibraryExplorer({
   // Multi-file & Folder Upload Trigger with Pre-Upload Duplicate Detection
   const handleStartUploadBatch = async (entries: QueuedUploadEntry[]) => {
     if (entries.length === 0) return;
+
+    if (subdomain && !hasInitialData) {
+      const serverResult = await checkServerDuplicateEntries(subdomain, currentFolderId, entries);
+      if (serverResult) {
+        if (serverResult.duplicates.length > 0) {
+          setPendingDuplicateUpload({
+            allEntries: entries,
+            uniqueEntries: serverResult.uniqueEntries,
+            duplicates: serverResult.duplicates,
+          });
+          return;
+        }
+        await runUploadBatch(entries, 0);
+        return;
+      }
+    }
 
     const detection = detectDuplicateUploadEntries(
       entries,
