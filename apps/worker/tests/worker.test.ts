@@ -142,6 +142,7 @@ describe('Cloudflare Queue Producer & Consumer Handling (Spec 042)', () => {
     const ackMock = vi.fn();
     const retryMock = vi.fn();
     const batch: QueueBatch = {
+      queue: 'publishing-queue',
       messages: [
         {
           body: sampleItem,
