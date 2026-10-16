@@ -11,10 +11,10 @@ import type { BYOCStatus } from '@fbuploadpro/contracts';
 
 export interface BYOCSettingsViewProps {
   subdomain: string;
-  initialCredentials?: CredentialsState | null;
-  initialLoading?: boolean;
-  initialEditMode?: boolean;
-  initialShowDisconnectModal?: boolean;
+  initialCredentials?: CredentialsState | null | undefined;
+  initialLoading?: boolean | undefined;
+  initialEditMode?: boolean | undefined;
+  initialShowDisconnectModal?: boolean | undefined;
 }
 
 export interface CredentialsState {
@@ -24,7 +24,7 @@ export interface CredentialsState {
   hasSecret: boolean;
   status: BYOCStatus;
   lastTestedAt: string | null;
-  connectedAt?: string | null;
+  connectedAt?: string | null | undefined;
 }
 
 function formatConnectedDate(dateStr?: string | null): string {
@@ -386,7 +386,7 @@ function FacebookNotConnectedForm({
 
 interface FacebookConnectedViewProps {
   fbAppId: string;
-  connectedAt?: string | null;
+  connectedAt?: string | null | undefined;
   copiedKey: string | null;
   showSecretState2: boolean;
   onCopyAppId: () => void;
@@ -1163,7 +1163,7 @@ export function BYOCSettingsView({
         {isConnectedState && (
           <FacebookConnectedView
             fbAppId={credentials?.fbAppId || ''}
-            connectedAt={credentials?.connectedAt}
+            connectedAt={credentials?.connectedAt ?? null}
             copiedKey={copiedKey}
             showSecretState2={showSecretState2}
             onCopyAppId={() => handleCopy('appId', credentials?.fbAppId || '')}

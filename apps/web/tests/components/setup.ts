@@ -57,12 +57,12 @@ export function render(ui: React.ReactElement): RenderResult {
     html,
     hasText: (text: string) =>
       html.includes(text) ||
-      html.includes(text.replace(/&/g, '&amp;')) ||
+      html.includes(text.replaceAll('&', '&amp;')) ||
       html.includes(
         text
-          .replace(/&/g, '&amp;')
-          .replace(/'/g, '&#x27;')
-          .replace(/"/g, '&quot;')
+          .replaceAll('&', '&amp;')
+          .replaceAll("'", '&#x27;')
+          .replaceAll('"', '&quot;')
       ),
     hasAttribute: (name: string, value?: string | RegExp) => {
       if (value === undefined) {
