@@ -432,7 +432,7 @@ export function PageTabDashboard({
                 color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
-              Recurring Schedule
+              Daily Posting Times
             </h2>
             <button
               type="button"
@@ -448,7 +448,7 @@ export function PageTabDashboard({
                 padding: 0,
               }}
             >
-              Manage slots →
+              Manage times →
             </button>
           </div>
 
@@ -465,7 +465,7 @@ export function PageTabDashboard({
               }}
             >
               <p style={{ margin: `0 0 ${SPACING.md} 0`, fontSize: '0.875rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                No active recurring publishing slots defined yet.
+                No active daily posting times defined yet.
               </p>
               <button
                 type="button"
@@ -478,7 +478,7 @@ export function PageTabDashboard({
                   fontSize: '0.8125rem',
                 }}
               >
-                Configure Slots
+                Set Posting Times
               </button>
             </div>
           ) : (

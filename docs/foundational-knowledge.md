@@ -309,6 +309,7 @@ flowchart LR
 - **Spec 056 (Completed & Verified)**: **Sidebar Sign-Out Resilience & Cross-Environment Logout Gateway** (Upgraded `handleSignOut` in `WorkspaceStudioFooter` to issue asynchronous `POST /api/auth/logout` with `keepalive: true` to clear `httpOnly` session cookies via server-side `Set-Cookie` expiration; added resilient fallback redirection; introduced `isSigningOut` state with disabled loading affordance; hardened `resolveRequestGatewayBase` in `@fbuploadpro/contracts` to adapt local hostnames and prevent unresolvable hybrid domains; aligned route fallback rootDomain to `localhost:3000`).
 - **Spec 057 (Completed & Verified)**: **Facebook Page Detail Top Section & Action Buttons Redesign** (Redesigned the dedicated Facebook Page view top section in `apps/web/src/components/pages/dedicated/page-header.tsx` and tab bar in `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx` following Option A Mirror Studio Header; implemented 44x44px avatar with 1.5px status-colored ring border matching `PageCard`, quiet back link `← Facebook Pages`, pure human copy subtitle with strictly zero bullet point dots (`•`) using 12px vertical hairline dividers, uniform 34px action buttons `Pause / Resume Automation`, signature yellow `+ Queue Post`, 34x34px `···` More Options dropdown with outside-click closing, and flat typographic tabs with 2px brand yellow underline and quiet numeric count chip; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
 - **Spec 057b (Completed & Merged)**: **Fdola Studio Desktop-Only Section & Native Shell Scaffolding** (Introduced `Fdola Studio` in primary navigation directly below Downloader; rendered environment-adaptive gate `FdolaStudioGate` for web browsers informing users that the feature is desktop-only with strictly zero external URLs or buttons, alongside `FdolaStudioWorkspace` for native desktop runtime; merged via PR #573).
+- **Spec 058 (Completed & Verified)**: **Facebook Page Posting Times Redesign (Minimalist Editorial Ledger & Format Selection)** (Purged legacy power-tool "Calendar & Slots" view and replaced with serene, typography-forward `PageTabPostingTimes` in `apps/web/src/components/pages/dedicated/tab-posting-times.tsx`; renamed tab in dedicated page workspace to **Posting Times**; features unified schedule timezone header, unboxed 6px luminous status dots, clean tabular numeric 12h/24h time display, permitted content format badges with granular format filtering per window, tactile accessible active/pause switches (`role="switch"`), quiet hover-only remove actions, interactive multi-select format buttons with `Select All` shortcut in Add/Edit modal, and serene empty state; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
 - **Spec 059 (Completed & Verified)**: **Theme-Reactive Cards & Placeholder Surfaces** (Resolved light/dark mode color switching issues in `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` by replacing undefined `--bg-surface` and `--text-muted` variables and hardcoded dark shadows with canonical `--bg-panel`, `--shadow-card`, and `--text-sub` tokens; added global fallback aliases to `globals.css` for system-wide resilience; verified with UI unit tests).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
@@ -747,7 +748,22 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 
 ---
 
-## 26. Production Deployment & Cloud Architecture Reference
+## 26. Spec 058 Facebook Page Posting Times Redesign (Minimalist Editorial Ledger)
+
+### 26.1 De-Cluttering & Renaming "Calendar & Slots"
+* **Evolution into Posting Times**: Completely purges the dense, box-in-a-box "Calendar & Slots" view and 7-day "Weekly Schedule Preview" showing repetitive "None" cells. Replaces it with a serene, typography-forward **Posting Times** section (`apps/web/src/components/pages/dedicated/tab-posting-times.tsx`).
+* **Calm Header & Timezone Indicator**: Features a quiet page title, a professional executive subtitle (*"Daily publishing windows and permitted content formats for automated dispatch."*), and a unified schedule timezone indicator (`America/New_York (EST)`).
+
+### 26.2 Minimalist Editorial Ledger & Permitted Format Architecture
+* **Tabular Typography & Format Display**: Each posting time row features large, crisp numbers (e.g. `09:00 AM (09:00)`), an unboxed 6px luminous status dot, and active format tags (`Reels`, `Photos`, `Videos`, `Stories`, `Text Updates` or `All Formats Allowed`). Strictly ZERO bullet point dots (`•`) and ZERO capsule pill badges are used anywhere in the view.
+* **Permitted Content Format Filtering**: Provides granular format configuration per posting time via an inline `Edit Formats` button and dedicated format selection in the Add/Edit dialog, ensuring queued content dispatches strictly into appropriate media windows.
+* **Tactile Active/Pause Switch**: Accessible switch control (`role="switch"`, `aria-checked={slot.isActive}`) allowing creators to pause or resume posting times with a single tactile click without entering sub-menus.
+* **Quiet Hover-Only Actions**: Replace harsh red delete trash cans with an understated, hover-only `Remove` link with a gentle, professional confirmation modal.
+* **Frictionless Add/Edit Dialog**: Focused time input (`HH:MM`), timezone selector, interactive multi-select format buttons with `Select All` shortcut, and serene empty state for new pages.
+
+---
+
+## 27. Production Deployment & Cloud Architecture Reference
 
 For the complete end-to-end operational deployment guide covering step-by-step provisioning and automated GitHub Secrets orchestration across Supabase, Vercel, Cloudflare Workers, Cloudflare R2, and Upstash Redis, consult:
 * **Production Deployment Guide**: [`docs/deployment-guide.md`](./deployment-guide.md)
