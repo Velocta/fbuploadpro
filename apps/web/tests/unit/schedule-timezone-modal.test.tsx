@@ -100,7 +100,7 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     expect(html).toContain('America/New_York');
     expect(html).toContain('Asia/Karachi');
     expect(html).toContain('Recurring Slots');
-    expect(html).toContain('Queued Posts Waiting');
+    expect(html).toContain('Pending Queue Items');
     expect(html).toContain('Apply Timezone Shift');
   });
 
