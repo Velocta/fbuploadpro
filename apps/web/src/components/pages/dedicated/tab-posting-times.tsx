@@ -30,6 +30,7 @@ export interface PageTabPostingTimesProps {
       allowedFormats?: string[];
     }
   ) => Promise<void>;
+  onUpdateTimezone?: (newTimezone: string) => Promise<void>;
   onToggleSlot: (slotId: string, isActive: boolean) => Promise<void>;
   onDeleteSlot: (slotId: string) => Promise<void>;
 }
@@ -43,8 +44,11 @@ export const COMMON_TIMEZONES = [
   'Europe/London',
   'Europe/Paris',
   'Europe/Berlin',
-  'Asia/Tokyo',
+  'Asia/Dubai',
+  'Asia/Karachi',
+  'Asia/Kolkata',
   'Asia/Singapore',
+  'Asia/Tokyo',
   'Australia/Sydney',
 ];
 
@@ -88,9 +92,14 @@ function resolveFormatLabel(formatId: string): string {
 interface HeaderProps {
   activeTimezone: string;
   onOpenAddModal: () => void;
+  onUpdateTimezone?: (newTimezone: string) => Promise<void>;
 }
 
-function PostingTimesHeader({ activeTimezone, onOpenAddModal }: Readonly<HeaderProps>) {
+function PostingTimesHeader({
+  activeTimezone,
+  onOpenAddModal,
+  onUpdateTimezone,
+}: Readonly<HeaderProps>) {
   return (
     <div
       data-testid="posting-times-header"
@@ -155,15 +164,48 @@ function PostingTimesHeader({ activeTimezone, onOpenAddModal }: Readonly<HeaderP
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          <span>Schedule Timezone:</span>
-          <span
+          <label
+            htmlFor="schedule-timezone-select"
             style={{
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
+              fontSize: '0.75rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              cursor: 'pointer',
             }}
           >
-            {activeTimezone}
-          </span>
+            Schedule Timezone:
+          </label>
+          <select
+            id="schedule-timezone-select"
+            data-testid="schedule-timezone-select"
+            aria-label="Schedule Timezone"
+            value={activeTimezone}
+            onChange={(e) => {
+              if (onUpdateTimezone) {
+                void onUpdateTimezone(e.target.value);
+              }
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              fontSize: '0.75rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: 'pointer',
+              outline: 'none',
+              padding: 0,
+            }}
+          >
+            {!COMMON_TIMEZONES.includes(activeTimezone) && (
+              <option value={activeTimezone} style={{ backgroundColor: '#0c0d10', color: '#ffffff' }}>
+                {activeTimezone}
+              </option>
+            )}
+            {COMMON_TIMEZONES.map((tz) => (
+              <option key={tz} value={tz} style={{ backgroundColor: '#0c0d10', color: '#ffffff' }}>
+                {tz}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button
@@ -567,7 +609,6 @@ function AddEditPostingTimeModal({
   onSave,
 }: Readonly<AddEditModalProps>) {
   const [timeInput, setTimeInput] = useState(() => slotToEdit?.slotTime.slice(0, 5) || '09:00');
-  const [tzInput, setTzInput] = useState(() => slotToEdit?.timezone || activeTimezone);
   const [selectedFormats, setSelectedFormats] = useState<string[]>(() => {
     if (slotToEdit?.allowedFormats && slotToEdit.allowedFormats.length > 0) {
       return slotToEdit.allowedFormats;
@@ -620,7 +661,7 @@ function AddEditPostingTimeModal({
     try {
       await onSave({
         slotTime: timeInput,
-        timezone: tzInput,
+        timezone: activeTimezone,
         allowedFormats: selectedFormats,
       });
       onClose();
@@ -723,43 +764,26 @@ function AddEditPostingTimeModal({
             />
           </div>
 
-          {/* Timezone Input */}
-          <div>
-            <label
-              htmlFor="posting-timezone-select"
+          {/* Schedule Timezone Note */}
+          <div
+            data-testid="modal-schedule-timezone-note"
+            style={{
+              fontSize: '0.75rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <span>Active schedule timezone:</span>
+            <span
               style={{
-                display: 'block',
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                marginBottom: '6px',
-              }}
-            >
-              Timezone
-            </label>
-            <select
-              id="posting-timezone-select"
-              data-testid="posting-timezone-select"
-              value={tzInput}
-              onChange={(e) => setTzInput(e.target.value)}
-              style={{
-                width: '100%',
-                height: '38px',
-                padding: `0 ${SPACING.sm}`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
+                fontWeight: TYPOGRAPHY.weights.semibold,
                 color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.875rem',
-                boxSizing: 'border-box',
               }}
             >
-              {COMMON_TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
+              {activeTimezone}
+            </span>
           </div>
 
           {/* Permitted Content Formats Multi-Select */}
@@ -1002,6 +1026,7 @@ export function PageTabPostingTimes({
   isLoading = false,
   onAddSlot,
   onUpdateSlot,
+  onUpdateTimezone,
   onToggleSlot,
   onDeleteSlot,
 }: Readonly<PageTabPostingTimesProps>) {
@@ -1010,8 +1035,16 @@ export function PageTabPostingTimes({
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [slotToDelete, setSlotToDelete] = useState<PageSlotSummary | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [fallbackTimezone, setFallbackTimezone] = useState('UTC');
 
-  const activeTimezone = slots[0]?.timezone || 'UTC';
+  const activeTimezone = slots[0]?.timezone || fallbackTimezone;
+
+  const handleTimezoneChange = async (newTz: string) => {
+    setFallbackTimezone(newTz);
+    if (onUpdateTimezone) {
+      await onUpdateTimezone(newTz);
+    }
+  };
 
   const handleToggle = async (slot: PageSlotSummary) => {
     setTogglingId(slot.id);
@@ -1073,6 +1106,7 @@ export function PageTabPostingTimes({
       <PostingTimesHeader
         activeTimezone={activeTimezone}
         onOpenAddModal={handleOpenAdd}
+        onUpdateTimezone={handleTimezoneChange}
       />
 
       {/* Loading state */}
@@ -1097,71 +1131,25 @@ export function PageTabPostingTimes({
 
       {/* 3. Non-Empty Ledger */}
       {!isLoading && slots.length > 0 && (
-        <>
-          {/* Daily Posting Times Ledger */}
-          <div
-            data-testid="slots-grid"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.sm,
-            }}
-          >
-            {slots.map((slot) => (
-              <PostingTimeRow
-                key={slot.id}
-                slot={slot}
-                isToggling={togglingId === slot.id}
-                onToggle={handleToggle}
-                onEdit={handleOpenEdit}
-                onRemove={setSlotToDelete}
-              />
-            ))}
-          </div>
-
-          {/* Bottom Add Link */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-start',
-              paddingTop: SPACING.xs,
-            }}
-          >
-            <button
-              type="button"
-              onClick={handleOpenAdd}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: PALETTE.primary,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: `${SPACING.xs} 0`,
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>+ Add another posting time</span>
-            </button>
-          </div>
-        </>
+        <div
+          data-testid="slots-grid"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: SPACING.sm,
+          }}
+        >
+          {slots.map((slot) => (
+            <PostingTimeRow
+              key={slot.id}
+              slot={slot}
+              isToggling={togglingId === slot.id}
+              onToggle={handleToggle}
+              onEdit={handleOpenEdit}
+              onRemove={setSlotToDelete}
+            />
+          ))}
+        </div>
       )}
 
       {/* Add / Edit Modal with Format Selection */}

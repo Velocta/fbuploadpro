@@ -37,6 +37,13 @@ export const UpdateQueueSlotRequestSchema = z.object({
 
 export type UpdateQueueSlotRequest = z.infer<typeof UpdateQueueSlotRequestSchema>;
 
+// Update Schedule Timezone Request
+export const UpdateQueueScheduleTimezoneRequestSchema = z.object({
+  timezone: TimezoneSchema,
+});
+
+export type UpdateQueueScheduleTimezoneRequest = z.infer<typeof UpdateQueueScheduleTimezoneRequestSchema>;
+
 // Queue Slot Domain Model
 export const PageQueueSlotSchema = z.object({
   id: z.string().uuid(),

@@ -4,6 +4,7 @@ import {
   TimezoneSchema,
   CreateQueueSlotRequestSchema,
   UpdateQueueSlotRequestSchema,
+  UpdateQueueScheduleTimezoneRequestSchema,
   PageQueueSlotSchema,
   ListQueueSlotsResponseSchema,
   QueueItemStatusSchema,
@@ -96,6 +97,22 @@ describe('Publishing Engine Domain Contracts', () => {
           slotTime: '18:30:00',
         });
         expect(res.success).toBe(true);
+      });
+    });
+
+    describe('UpdateQueueScheduleTimezoneRequestSchema', () => {
+      it('validates schedule timezone updates with valid timezone', () => {
+        const res = UpdateQueueScheduleTimezoneRequestSchema.safeParse({
+          timezone: 'Asia/Karachi',
+        });
+        expect(res.success).toBe(true);
+      });
+
+      it('rejects empty timezone', () => {
+        const res = UpdateQueueScheduleTimezoneRequestSchema.safeParse({
+          timezone: '',
+        });
+        expect(res.success).toBe(false);
       });
     });
 

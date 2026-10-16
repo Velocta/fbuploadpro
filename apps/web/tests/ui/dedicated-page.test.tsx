@@ -508,6 +508,9 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
       // Strict negative constraint: zero bullet point dots
       expect(html).not.toContain('•');
+      // Spec 060: Zero duplicate bottom add button
+      expect(html).not.toContain('+ Add another posting time');
+      expect(hasAttribute('data-testid', 'schedule-timezone-select')).toBe(true);
     });
 
     it('calls onToggleSlot when clicking activate/pause switch', async () => {
@@ -530,6 +533,48 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       await toggleBtn?.props.onClick();
 
       expect(onToggleSlot).toHaveBeenCalledWith('slot-1', false);
+    });
+
+    it('calls onUpdateTimezone when changing schedule timezone selector (Spec 060)', async () => {
+      const onUpdateTimezone = vi.fn().mockResolvedValue(undefined);
+
+      const tree = renderAndCaptureTree(() =>
+        PageTabPostingTimes({
+          page: samplePage,
+          slots: sampleSlots,
+          onAddSlot: vi.fn(),
+          onUpdateTimezone,
+          onToggleSlot: vi.fn(),
+          onDeleteSlot: vi.fn(),
+        })
+      );
+
+      const tzSelect = findElementByTestId(tree, 'schedule-timezone-select');
+      expect(tzSelect).not.toBeNull();
+      expect(tzSelect?.props.value).toBe('UTC');
+      await tzSelect?.props.onChange({ target: { value: 'Asia/Karachi' } });
+
+      expect(onUpdateTimezone).toHaveBeenCalledWith('Asia/Karachi');
+    });
+
+    it('renders Add/Edit modal without timezone selector dropdown (Spec 060)', () => {
+      const tree = renderAndCaptureTree(() =>
+        PageTabPostingTimes({
+          page: samplePage,
+          slots: sampleSlots,
+          onAddSlot: vi.fn(),
+          onToggleSlot: vi.fn(),
+          onDeleteSlot: vi.fn(),
+        })
+      );
+
+      const addBtn = findElementByTestId(tree, 'add-slot-button');
+      expect(addBtn).not.toBeNull();
+      addBtn?.props.onClick();
+
+      // Ensure modal does NOT contain posting-timezone-select
+      const tzModalSelect = findElementByTestId(tree, 'posting-timezone-select');
+      expect(tzModalSelect).toBeNull();
     });
 
     it('renders backwards-compatible PageTabCalendar export seamlessly', () => {

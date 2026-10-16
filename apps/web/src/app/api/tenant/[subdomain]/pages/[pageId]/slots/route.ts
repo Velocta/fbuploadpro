@@ -5,6 +5,7 @@ import {
   getSessionSecret,
   ListQueueSlotsResponseSchema,
   PageQueueSlotSchema,
+  UpdateQueueScheduleTimezoneRequestSchema,
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
@@ -281,6 +282,121 @@ export async function handleCreateQueueSlot(
   }
 }
 
+export async function handleUpdateQueueScheduleTimezone(
+  request: NextRequest,
+  subdomain: string,
+  pageId: string,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): Promise<NextResponse> {
+  const sessionSecret = getSessionSecret();
+
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let session;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch (_e) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch (_e) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'Invalid JSON' },
+      { status: 400 }
+    );
+  }
+
+  const parsed = UpdateQueueScheduleTimezoneRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  const newTimezone = parsed.data.timezone;
+
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    // 1. Verify page exists and belongs to user and workspace
+    const pageRows = (await dbClient.query(
+      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      [pageId, session.userId, workspaceId]
+    )) as any[];
+
+    if (!pageRows || pageRows.length === 0) {
+      return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+    }
+
+    // 2. Update all slots for this page and user
+    const updatedRows = (await dbClient.query(
+      `UPDATE page_queue_slots
+       SET timezone = $1, updated_at = now()
+       WHERE fb_page_id = $2 AND user_id = $3
+       RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at`,
+      [newTimezone, pageId, session.userId]
+    )) as any[];
+
+    return NextResponse.json({
+      success: true,
+      timezone: newTimezone,
+      updatedCount: updatedRows.length,
+    });
+  } else {
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    if (!supabase) {
+      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+    }
+
+    const { data: pageData, error: pageErr } = await supabase
+      .from('facebook_pages')
+      .select('id')
+      .eq('id', pageId)
+      .eq('user_id', session.userId)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle();
+
+    if (pageErr || !pageData) {
+      return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+    }
+
+    const { data: updatedRows, error: updateErr } = await supabase
+      .from('page_queue_slots')
+      .update({
+        timezone: newTimezone,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('fb_page_id', pageId)
+      .eq('user_id', session.userId)
+      .select('id');
+
+    if (updateErr) {
+      return NextResponse.json({ error: 'INTERNAL_ERROR', message: updateErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      timezone: newTimezone,
+      updatedCount: updatedRows?.length ?? 0,
+    });
+  }
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ subdomain: string; pageId: string }> }
@@ -295,4 +411,12 @@ export async function POST(
 ): Promise<NextResponse> {
   const { subdomain, pageId } = await context.params;
   return handleCreateQueueSlot(request, subdomain, pageId);
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ subdomain: string; pageId: string }> }
+): Promise<NextResponse> {
+  const { subdomain, pageId } = await context.params;
+  return handleUpdateQueueScheduleTimezone(request, subdomain, pageId);
 }
