@@ -543,6 +543,9 @@ export function WorkspaceStudioFooter({
       const docTheme = document.documentElement.dataset.theme;
       const activeTheme = storedTheme || docTheme || 'dark';
       setIsThemeDark(activeTheme !== 'light');
+      document.documentElement.dataset.theme = activeTheme;
+      document.documentElement.classList.remove('dark', 'light');
+      document.documentElement.classList.add(activeTheme);
     }
   }, []);
 
@@ -590,9 +593,16 @@ export function WorkspaceStudioFooter({
     if (typeof document === 'undefined') return;
     const newTheme = isThemeDark ? 'light' : 'dark';
     document.documentElement.dataset.theme = newTheme;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('theme', newTheme);
+    document.documentElement.classList.remove('dark', 'light');
+    document.documentElement.classList.add(newTheme);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('theme', newTheme);
+      }
+    } catch {
+      // Ignore storage errors
     }
+    document.cookie = `fbup_theme=${newTheme}; path=/; max-age=31536000; SameSite=Lax`;
     setIsThemeDark(!isThemeDark);
   };
 
