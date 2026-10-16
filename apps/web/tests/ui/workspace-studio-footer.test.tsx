@@ -55,7 +55,7 @@ describe('WorkspaceStudioFooter Component (Spec 056 & Spec 052)', () => {
     expect(hasAttribute('data-testid', 'workspace-switcher-trigger')).toBe(true);
     expect(hasText('acme')).toBe(true);
     expect(hasText('jane@example.com')).toBe(true);
-    expect(hasText('JD')).toBe(true);
+    expect(hasText('AC')).toBe(true);
   });
 
   it('renders collapsed 32x32 geometry when sidebar is collapsed', () => {
