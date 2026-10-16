@@ -18,7 +18,6 @@ import {
   REGION_LABELS,
   REGION_ORDER,
   searchAndGroupTimezones,
-  type TimezoneEntry,
 } from '@/lib/timezones';
 
 export interface ScheduleTimezoneModalProps {
