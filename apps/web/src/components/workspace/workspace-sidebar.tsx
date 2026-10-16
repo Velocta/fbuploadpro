@@ -23,8 +23,7 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
   useSidebar,
-} from '@/components/ui/sidebar';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
 import { WorkspaceStudioFooter } from './workspace-studio-footer';
 import { UPCOMING_PLATFORMS, TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
