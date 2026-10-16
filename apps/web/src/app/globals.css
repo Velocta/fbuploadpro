@@ -418,7 +418,7 @@ body {
     gap: 12px;
   }
   .workspace-name-edit-btn {
-    width: 100% !important;
+    width: 100%;
   }
   .workspace-name-edit-container {
     flex-direction: column;
@@ -429,8 +429,8 @@ body {
     width: 100%;
   }
   .workspace-name-action-btn {
-    flex: 1 1 0 !important;
-    width: 100% !important;
+    flex: 1 1 0;
+    width: 100%;
   }
 }
 

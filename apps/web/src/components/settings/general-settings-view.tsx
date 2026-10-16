@@ -134,6 +134,10 @@ export function GeneralSettingsView({
     }
   };
 
+  const inputBorder = validationError
+    ? `1px solid ${PALETTE.accent3}`
+    : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`;
+
   return (
     <div
       style={{
@@ -146,8 +150,7 @@ export function GeneralSettingsView({
     >
       {/* Success Toast */}
       {toastMessage && (
-        <div
-          role="status"
+        <output
           data-testid="workspace-name-toast"
           style={{
             padding: `${SPACING.sm} ${SPACING.md}`,
@@ -178,7 +181,7 @@ export function GeneralSettingsView({
           >
             Dismiss
           </button>
-        </div>
+        </output>
       )}
 
       {/* Single Card: About this workspace */}
@@ -274,7 +277,6 @@ export function GeneralSettingsView({
                       }
                     }}
                     disabled={isSaving}
-                    autoFocus
                     style={{
                       width: '100%',
                       boxSizing: 'border-box',
@@ -282,7 +284,7 @@ export function GeneralSettingsView({
                       padding: `0 ${SPACING.md}`,
                       fontSize: '0.875rem',
                       borderRadius: RADII.sm,
-                      border: `1px solid ${validationError ? PALETTE.accent3 : `var(--border-subtle, ${THEME.default.borders.hairline})`}`,
+                      border: inputBorder,
                       backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
                       color: `var(--text-main, ${THEME.default.text.primary})`,
                       outline: 'none',
