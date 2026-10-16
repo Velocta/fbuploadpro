@@ -82,6 +82,7 @@ export interface PagesScaleToolbarProps {
   accountFilter: string;
   onAccountFilterChange: (value: string) => void;
   accountOptions: string[];
+  attentionCount?: number | undefined;
 }
 
 const PAGE_FILTER_TABS: Array<{
@@ -107,6 +108,7 @@ export function PagesScaleToolbar({
   accountFilter,
   onAccountFilterChange,
   accountOptions,
+  attentionCount = 0,
 }: Readonly<PagesScaleToolbarProps>) {
   return (
     <div
@@ -116,97 +118,187 @@ export function PagesScaleToolbar({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: SPACING.md,
-        marginBottom: SPACING.lg,
+        paddingBottom: SPACING.md,
+        marginBottom: SPACING.xl,
+        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         flexWrap: 'wrap',
       }}
     >
-      <input
-        type="search"
-        data-testid="pages-search-input"
-        placeholder="Search pages by name or category..."
-        aria-label="Search pages by name or category"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
+      {/* Ghost Search Input with Inset Icon & Clear Affordance */}
+      <div
         style={{
-          ...COMPONENT_STYLES.input(),
-          backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          minWidth: '240px',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          minWidth: '220px',
           flex: '1 1 240px',
-          maxWidth: '340px',
+          maxWidth: '320px',
         }}
-      />
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '10px',
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            pointerEvents: 'none',
+          }}
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
 
+        <input
+          type="search"
+          data-testid="pages-search-input"
+          placeholder="Filter by name or category..."
+          aria-label="Filter pages by name or category"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              onSearchChange('');
+            }
+          }}
+          style={{
+            width: '100%',
+            height: '32px',
+            paddingLeft: '32px',
+            paddingRight: searchQuery ? '28px' : '10px',
+            backgroundColor: 'transparent',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            borderRadius: RADII.sm,
+            fontSize: '0.8125rem',
+            outline: 'none',
+            transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = PALETTE.primary;
+            e.currentTarget.style.boxShadow =
+              '0 0 0 2px rgba(250, 215, 52, 0.15)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        />
+
+        {searchQuery && (
+          <button
+            type="button"
+            aria-label="Clear search query"
+            onClick={() => onSearchChange('')}
+            style={{
+              position: 'absolute',
+              right: '8px',
+              background: 'none',
+              border: 'none',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              fontSize: '14px',
+              lineHeight: 1,
+              padding: '2px',
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      {/* Pure Typographic Flat Filter Tabs & Account Selector */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: SPACING.md,
+          gap: SPACING.lg,
           flexWrap: 'wrap',
         }}
       >
-        <fieldset
+        <div
+          role="tablist"
           aria-label="Filter pages by status"
           style={{
-            margin: 0,
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
-            gap: SPACING.xs,
-            padding: SPACING.xs,
-            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            borderRadius: RADII.sm,
+            gap: SPACING.md,
           }}
         >
           {PAGE_FILTER_TABS.map((tab) => {
             const isActive = statusFilter === tab.value;
+            const isAttention = tab.value === 'needs_attention';
             return (
               <button
                 key={tab.value}
                 type="button"
+                role="tab"
                 data-testid={tab.testId}
-                aria-pressed={isActive}
+                aria-selected={isActive}
                 onClick={() => onStatusFilterChange(tab.value)}
                 style={{
-                  height: '30px',
-                  padding: `0 ${SPACING.md}`,
-                  backgroundColor: isActive
-                    ? `var(--bg-panel, ${THEME.default.surfaces.panel})`
-                    : 'transparent',
-                  color: isActive
-                    ? `var(--text-main, ${THEME.default.text.primary})`
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                  border: isActive
-                    ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
-                    : '1px solid transparent',
-                  borderRadius: RADII.xs,
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: isActive
+                    ? `2px solid ${PALETTE.primary}`
+                    : '2px solid transparent',
+                  padding: `${SPACING.xs} 0`,
                   fontSize: '0.8125rem',
                   fontWeight: isActive
                     ? TYPOGRAPHY.weights.semibold
                     : TYPOGRAPHY.weights.medium,
+                  color: isActive
+                    ? `var(--text-main, ${THEME.default.text.primary})`
+                    : `var(--text-sub, ${THEME.default.text.secondary})`,
                   cursor: 'pointer',
-                  transition: 'all 0.12s ease',
+                  transition: 'color 0.12s ease, border-color 0.12s ease',
+                  marginBottom: '-1px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                {isAttention && attentionCount > 0 && (
+                  <span
+                    style={{
+                      fontSize: '0.6875rem',
+                      fontWeight: TYPOGRAPHY.weights.semibold,
+                      color: PALETTE.accent3,
+                    }}
+                  >
+                    ({attentionCount})
+                  </span>
+                )}
               </button>
             );
           })}
-        </fieldset>
+        </div>
 
+        {/* Account Selector */}
         <select
           data-testid="pages-account-filter"
           aria-label="Filter pages by Facebook account"
           value={accountFilter}
           onChange={(e) => onAccountFilterChange(e.target.value)}
           style={{
-            ...COMPONENT_STYLES.input(),
-            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
+            height: '32px',
+            padding: `0 ${SPACING.sm}`,
+            backgroundColor: 'transparent',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
             border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            minWidth: '180px',
+            borderRadius: RADII.sm,
+            fontSize: '0.8125rem',
             cursor: 'pointer',
+            outline: 'none',
+            transition: 'border-color 0.15s ease',
           }}
         >
           <option value="all">All accounts</option>
@@ -300,6 +392,45 @@ export default function TenantPagesPage({
       filterPagesList(sortedPages, searchQuery, statusFilter, accountFilter),
     [sortedPages, searchQuery, statusFilter, accountFilter]
   );
+
+  const attentionCount = useMemo(
+    () => pages.filter((p) => isPageNeedsAttention(p.status)).length,
+    [pages]
+  );
+
+  const isFiltered =
+    searchQuery.trim().length > 0 ||
+    statusFilter !== 'all' ||
+    accountFilter !== 'all';
+
+  let situationalSubtitle: React.ReactNode;
+  if (pages.length === 0) {
+    situationalSubtitle =
+      'Connect your first Facebook Page to start managing content and tracking follower growth.';
+  } else if (isFiltered) {
+    situationalSubtitle = `Showing ${filteredPages.length} of ${pages.length} ${
+      pages.length === 1 ? 'page' : 'pages'
+    }`;
+  } else if (attentionCount > 0) {
+    situationalSubtitle = (
+      <span>
+        {pages.length} connected {pages.length === 1 ? 'page' : 'pages'} ·{' '}
+        <span
+          style={{
+            color: PALETTE.accent3,
+            fontWeight: TYPOGRAPHY.weights.medium,
+          }}
+        >
+          {attentionCount} {attentionCount === 1 ? 'requires' : 'require'}{' '}
+          reconnecting
+        </span>
+      </span>
+    );
+  } else {
+    situationalSubtitle = `${pages.length} connected ${
+      pages.length === 1 ? 'page' : 'pages'
+    } · All operational`;
+  }
 
   const handleSelectPage = (page: FacebookPageItem) => {
     router.push(`/tenant/${subdomain}/pages/${page.id}`);
@@ -447,14 +578,14 @@ export default function TenantPagesPage({
             Facebook Pages
           </h1>
           <p
+            data-testid="pages-page-subtitle"
             style={{
               margin: 0,
               fontSize: '0.875rem',
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Track follower growth and open any page to manage publishing and
-            automation.
+            {situationalSubtitle}
           </p>
         </div>
 
@@ -463,15 +594,31 @@ export default function TenantPagesPage({
           data-testid="header-add-page-btn"
           onClick={() => setIsAddModalOpen(true)}
           style={{
-            ...COMPONENT_STYLES.primaryButton,
+            height: '34px',
+            padding: `0 ${SPACING.md}`,
+            backgroundColor: PALETTE.primary,
+            color: '#000000',
+            border: `1px solid ${PALETTE.primary}`,
+            borderRadius: RADII.sm,
+            fontSize: '0.8125rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: SPACING.xs,
+            gap: '6px',
+            cursor: 'pointer',
+            boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+            transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
           }}
         >
           <svg
-            width="16"
-            height="16"
+            width="14"
+            height="14"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -533,6 +680,7 @@ export default function TenantPagesPage({
           accountFilter={accountFilter}
           onAccountFilterChange={setAccountFilter}
           accountOptions={accountOptions}
+          attentionCount={attentionCount}
         />
       )}
 
