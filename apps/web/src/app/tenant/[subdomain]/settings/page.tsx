@@ -59,7 +59,7 @@ export default function WorkspaceSettingsPage() {
             letterSpacing: TYPOGRAPHY.tracking.h1,
           }}
         >
-          Workspace Settings
+          Settings
         </h1>
         <p
           style={{
@@ -68,7 +68,7 @@ export default function WorkspaceSettingsPage() {
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          Configure environment preferences and Bring Your Own Credentials (BYOC).
+          Manage Settings
         </p>
       </div>
 

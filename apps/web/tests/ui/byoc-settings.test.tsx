@@ -35,23 +35,28 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
   });
 
   describe('GeneralSettingsView', () => {
-    it('renders workspace overview with name, dedicated subdomain and active status indicator', () => {
+    it('renders single card with About this workspace, exact copy and no legacy metadata', () => {
       const { hasText } = render(
         <GeneralSettingsView
           subdomain="acme"
           workspaceName="Acme Media Holdings"
-          workspaceId="11111111-1111-4111-a111-111111111111"
-          ownerEmail="founder@acme.com"
-          createdAt="2026-10-10T12:00:00Z"
         />
       );
 
-      expect(hasText('Workspace Overview')).toBe(true);
+      expect(hasText('About this workspace')).toBe(true);
+      expect(hasText('Name your workspace.')).toBe(true);
+      expect(hasText('WORKSPACE NAME')).toBe(true);
       expect(hasText('Acme Media Holdings')).toBe(true);
-      expect(hasText('acme.fbuploadpro.com')).toBe(true);
-      expect(hasText('Active')).toBe(true);
-      expect(hasText('founder@acme.com')).toBe(true);
-      expect(hasText('Copy')).toBe(true);
+      expect(hasText('Edit')).toBe(true);
+      expect(hasText('Rename it any time — the new name shows up everywhere.')).toBe(true);
+
+      // Verify complete absence of legacy metadata
+      expect(hasText('Workspace Overview')).toBe(false);
+      expect(hasText('Dedicated Subdomain')).toBe(false);
+      expect(hasText('acme.fbuploadpro.com')).toBe(false);
+      expect(hasText('Status')).toBe(false);
+      expect(hasText('Active')).toBe(false);
+      expect(hasText('Created')).toBe(false);
     });
   });
 
