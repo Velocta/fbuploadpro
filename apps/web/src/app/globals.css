@@ -151,11 +151,6 @@ body {
   .desktop-only {
     display: none !important;
   }
-
-  /* Mobile workspace canvas gutter so floating trigger never overlaps content */
-  .workspace-mobile-gutter {
-    padding-left: 56px !important;
-  }
 }
 
 /* ============================================================================

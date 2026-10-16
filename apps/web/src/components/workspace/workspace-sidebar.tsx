@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Sidebar,
@@ -23,9 +24,8 @@ import {
   CollapsibleContent,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import { WorkspaceUserMenu } from './workspace-user-menu';
-import { WorkspaceSwitcher } from './workspace-switcher';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { WorkspaceStudioFooter } from './workspace-studio-footer';
 import { UPCOMING_PLATFORMS, TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
 
 export interface WorkspaceSidebarProps {
@@ -44,36 +44,127 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const isCollapsed = !isMobile && state === 'collapsed';
   const [isFacebookOpen, setIsFacebookOpen] = useState(true);
   const [openPlatforms, setOpenPlatforms] = useState<Record<string, boolean>>({});
+  const [optimisticPathname, setOptimisticPathname] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOptimisticPathname(null);
+  }, [pathname]);
+
+  const effectivePath = optimisticPathname ?? (pathname || '');
 
   const homeHref = `/tenant/${subdomain}`;
   const mediaHref = `/tenant/${subdomain}/media`;
   const downloaderHref = `/tenant/${subdomain}/downloader`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
   const pagesHref = `/tenant/${subdomain}/pages`;
-  const settingsHref = `/tenant/${subdomain}/settings`;
 
-  const isHomeActive = pathname === homeHref;
-  const isMediaActive = pathname ? pathname.startsWith(mediaHref) : false;
-  const isDownloaderActive = pathname ? pathname.startsWith(downloaderHref) : false;
-  const isAccountsActive = pathname ? pathname.startsWith(accountsHref) : false;
-  const isPagesActive = pathname ? pathname.startsWith(pagesHref) : false;
-  const isSettingsActive = pathname ? pathname.startsWith(settingsHref) : false;
+  const isHomeActive = effectivePath === homeHref;
+  const isMediaActive = effectivePath.startsWith(mediaHref);
+  const isDownloaderActive = effectivePath.startsWith(downloaderHref);
+  const isAccountsActive = effectivePath.startsWith(accountsHref);
+  const isPagesActive = effectivePath.startsWith(pagesHref);
 
   const handleNavigate = (href: string) => {
+    setOptimisticPathname(href);
     if (isMobile) {
       setOpenMobile(false);
     }
     router.push(href);
   };
 
+  const handlePrefetch = (href: string) => {
+    try {
+      router.prefetch(href);
+    } catch {
+      // Ignore prefetch errors
+    }
+  };
+
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      {/* Workspace Identity Header (Shadcn TeamSwitcher Pattern) */}
+      {/* Top Section: Official FBUploadPro Logo & Branding */}
       <SidebarHeader>
-        <WorkspaceSwitcher currentSubdomain={subdomain} />
+        <Link
+          href={homeHref}
+          onClick={(e) => {
+            e.preventDefault();
+            handleNavigate(homeHref);
+          }}
+          onMouseEnter={() => handlePrefetch(homeHref)}
+          data-slot="sidebar-header-branding"
+          data-testid="sidebar-branding-link"
+          aria-label="FBUploadPro Studio"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.sm,
+            padding: isCollapsed ? '6px 0' : `${SPACING.xs} ${SPACING.sm}`,
+            justifyContent: isCollapsed ? 'center' : 'flex-start',
+            textDecoration: 'none',
+            borderRadius: RADII.md,
+            transition: 'background-color 0.15s ease',
+            outline: 'none',
+          }}
+        >
+          {/* Geometric Gold Brand Mark */}
+          <div
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: RADII.sm,
+              backgroundColor: '#12141a',
+              border: '1px solid #1f242d',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 32 32"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                d="M8 22L16 6L24 22H19L16 16L13 22H8Z"
+                fill={PALETTE.primary}
+              />
+              <circle cx="16" cy="11" r="2" fill="#000000" />
+            </svg>
+          </div>
+
+          {/* Logotype & Studio Subtitle */}
+          {!isCollapsed && (
+            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+              <span
+                style={{
+                  fontSize: '0.9375rem',
+                  fontWeight: TYPOGRAPHY.weights.bold,
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                  letterSpacing: TYPOGRAPHY.tracking.caption,
+                  lineHeight: 1.2,
+                }}
+              >
+                FBUploadPro
+              </span>
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  lineHeight: 1.2,
+                }}
+              >
+                Studio
+              </span>
+            </div>
+          )}
+        </Link>
       </SidebarHeader>
 
-      {/* Primary Navigation Content */}
+      {/* Primary Navigation Content (Order Strictly Preserved) */}
       <SidebarContent>
         {/* Top Primary Navigation Group (Home, Media Library & Downloader) */}
         <SidebarGroup>
@@ -84,6 +175,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   isActive={isHomeActive}
                   tooltip="Home"
                   onClick={() => handleNavigate(homeHref)}
+                  onMouseEnter={() => handlePrefetch(homeHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -110,6 +202,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   isActive={isMediaActive}
                   tooltip="Media Library"
                   onClick={() => handleNavigate(mediaHref)}
+                  onMouseEnter={() => handlePrefetch(mediaHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -136,6 +229,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   isActive={isDownloaderActive}
                   tooltip="Downloader"
                   onClick={() => handleNavigate(downloaderHref)}
+                  onMouseEnter={() => handlePrefetch(downloaderHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -164,7 +258,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
         {/* Separator Line Between Primary Navigation & Platform */}
         <SidebarSeparator />
 
-        {/* Collapsible Facebook -> Accounts Hierarchy (Shadcn NavMain Pattern) */}
+        {/* Collapsible Facebook -> Accounts Hierarchy */}
         <SidebarGroup>
           <SidebarGroupLabel>Platform</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -184,6 +278,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                           handleNavigate(accountsHref);
                         }
                       }}
+                      onMouseEnter={() => handlePrefetch(accountsHref)}
                     >
                       <svg
                         width="16"
@@ -238,6 +333,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                         <SidebarMenuSubButton
                           isActive={isAccountsActive}
                           onClick={() => handleNavigate(accountsHref)}
+                          onMouseEnter={() => handlePrefetch(accountsHref)}
                         >
                           Accounts
                         </SidebarMenuSubButton>
@@ -246,6 +342,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                         <SidebarMenuSubButton
                           isActive={isPagesActive}
                           onClick={() => handleNavigate(pagesHref)}
+                          onMouseEnter={() => handlePrefetch(pagesHref)}
                         >
                           Pages
                         </SidebarMenuSubButton>
@@ -255,11 +352,11 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* Upcoming Supported Platforms (Being Tested) */}
+              {/* Upcoming Supported Platforms */}
               {UPCOMING_PLATFORMS.map((platform) => {
                 const platformAccountsHref = `/tenant/${subdomain}/${platform.routeSlug}/accounts`;
-                const isPlatformActive = pathname ? pathname.startsWith(`/tenant/${subdomain}/${platform.routeSlug}`) : false;
-                const isAccountsSubActive = pathname ? pathname.startsWith(platformAccountsHref) : false;
+                const isPlatformActive = effectivePath.startsWith(`/tenant/${subdomain}/${platform.routeSlug}`);
+                const isAccountsSubActive = effectivePath.startsWith(platformAccountsHref);
                 const isOpen = openPlatforms[platform.key] ?? (isPlatformActive ? true : false);
 
                 return (
@@ -281,6 +378,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                               handleNavigate(platformAccountsHref);
                             }
                           }}
+                          onMouseEnter={() => handlePrefetch(platformAccountsHref)}
                         >
                           <span
                             style={{
@@ -331,6 +429,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                             <SidebarMenuSubButton
                               isActive={isAccountsSubActive}
                               onClick={() => handleNavigate(platformAccountsHref)}
+                              onMouseEnter={() => handlePrefetch(platformAccountsHref)}
                             >
                               Accounts
                             </SidebarMenuSubButton>
@@ -359,48 +458,15 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-
-        {/* Separator Line */}
-        <SidebarSeparator />
-
-        {/* Configuration Group (Settings) */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isSettingsActive}
-                  tooltip="Settings"
-                  onClick={() => handleNavigate(settingsHref)}
-                  leftIcon={
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <circle cx="12" cy="12" r="3" />
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                    </svg>
-                  }
-                >
-                  Settings
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
 
-      {/* User Menu Footer (Shadcn NavUser Pattern) */}
+      {/* Option A Unified Studio Footer (Workspace + Settings + User) */}
       <SidebarFooter>
-        <WorkspaceUserMenu user={user} subdomain={subdomain} />
+        <WorkspaceStudioFooter
+          subdomain={subdomain}
+          user={user}
+          onNavigate={handleNavigate}
+        />
       </SidebarFooter>
 
       {/* Interactive Edge Rail */}
