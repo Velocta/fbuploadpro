@@ -312,6 +312,7 @@ flowchart LR
 - **Spec 058 (Completed & Verified)**: **Facebook Page Posting Times Redesign (Minimalist Editorial Ledger & Format Selection)** (Purged legacy power-tool "Calendar & Slots" view and replaced with serene, typography-forward `PageTabPostingTimes` in `apps/web/src/components/pages/dedicated/tab-posting-times.tsx`; renamed tab in dedicated page workspace to **Posting Times**; features unified schedule timezone header, unboxed 6px luminous status dots, clean tabular numeric 12h/24h time display, permitted content format badges with granular format filtering per window, tactile accessible active/pause switches (`role="switch"`), quiet hover-only remove actions, interactive multi-select format buttons with `Select All` shortcut in Add/Edit modal, and serene empty state; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
 - **Spec 059 (Completed & Verified)**: **Theme-Reactive Cards & Placeholder Surfaces** (Resolved light/dark mode color switching issues in `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` by replacing undefined `--bg-surface` and `--text-muted` variables and hardcoded dark shadows with canonical `--bg-panel`, `--shadow-card`, and `--text-sub` tokens; added global fallback aliases to `globals.css` for system-wide resilience; verified with UI unit tests).
 - **Spec 060 (Completed & Verified)**: **Facebook Page Schedule Timezone Decoupling & Posting Times Cleanup** (Decoupled timezone configuration from individual posting slot dialogs to an interactive schedule timezone selector in the header; eliminated redundant bottom `+ Add another posting time` button in favor of the primary header action; simplified Add/Edit modal to prompt only for Time of Day (`HH:MM`) and Permitted Content Formats while automatically inheriting the page's schedule timezone; implemented atomic `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots` batch timezone updating that preserves all daily clock times while adjusting their dispatch timezone; added explicit support for Pakistan (`Asia/Karachi`) and other key global regions; verified via UI tests in `apps/web/tests/ui/dedicated-page.test.tsx` and contract tests in `packages/contracts/tests/publishing-contracts.test.ts`).
+- **Spec 061 (Completed & Verified)**: **Login Showcase Panel Redesign & Multi-Platform Welcome Alignment** (Redesigned the right-side showcase panel on `/login` with an airy, minimal, unboxed layout featuring the brand row with tagline `Content automation for creators`, uppercase unboxed eyebrow label `CREATE · SCHEDULE · GROW`, three-line headline with accent highlight on `100% on the cloud.`, max-420px subtext detailing multi-platform cloud publishing across Facebook, Instagram, TikTok, YouTube, Threads, and X, three hairline-divided feature rows with clock, 2x2 grid, and padlock line icons, supported platforms row, and encrypted trust footer; aligned left sign-in card description to `Welcome back! Sign in to keep your content flowing across every platform.`; enabled responsive mobile stacking above the sign-in form; verified via `apps/web/tests/ui/login-showcase-panel.test.tsx` and `apps/web/tests/components/auth-pages.test.tsx`).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -780,4 +781,39 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 For the complete end-to-end operational deployment guide covering step-by-step provisioning and automated GitHub Secrets orchestration across Supabase, Vercel, Cloudflare Workers, Cloudflare R2, and Upstash Redis, consult:
 * **Production Deployment Guide**: [`docs/deployment-guide.md`](./deployment-guide.md)
 * **Production Secrets & Deployment Checklist**: [`docs/secrets-checklist.md`](./secrets-checklist.md)
+
+---
+
+## 28. Spec 061 Login Showcase Panel Redesign & Multi-Platform Welcome Alignment
+
+Spec 061 executes a comprehensive redesign of the `/login` authentication showcase panel and aligns the sign-in card subtext with the unified multi-platform vision:
+
+### 28.1 Architectural Scope & Isolation
+* **Right-Side Showcase Panel Redesign**: Implemented as `LoginShowcasePanel` (`apps/web/src/components/auth/login-showcase-panel.tsx`), replacing legacy Meta-only pillars with an airy, minimal, unboxed layout.
+* **Sign-In Card Subtext Alignment**: Updated the description prop in `apps/web/src/app/login/page.tsx` to verbatim: `"Welcome back! Sign in to keep your content flowing across every platform."`.
+* **Zero Auth Mutation**: Zero alterations to authentication logic, input forms, password fields, validation rules, route handlers, cookies, or non-login pages.
+
+### 28.2 Visual Hierarchy & Content Specification
+* **Brand Row**: Official `BrandMark` SVG mark (`size={24}` inside 36x36px themed container) paired with bold `"FBUploadPro"` and muted tagline `"Content automation for creators"`.
+* **Eyebrow Label**: Unboxed uppercase label `"CREATE · SCHEDULE · GROW"` rendered in `PALETTE.primary` (`#fad734`) with wide letter-spacing (`0.12em`), strictly without card borders or background pill chips.
+* **Three-Line Headline**: Preserves line breaks:
+  ```
+  Your pages,
+  posting themselves —
+  100% on the cloud.
+  ```
+  The third line is highlighted in `PALETTE.primary`; the preceding lines use primary foreground text.
+* **Subtext**: Constrained to `maxWidth: '420px'` in secondary text (`var(--text-sub, #9ca3af)`):
+  `"Schedule reels and posts across Facebook, Instagram, TikTok, YouTube, Threads, and X — they go live while you sleep, even when your laptop is closed."`
+* **Feature List**: Three rows separated by subtle hairline theme dividers (`1px solid var(--border-subtle)` / `#1f242d`):
+  1. Clock icon (`stroke={PALETTE.primary}`, `fill="none"`) | `"Post from anywhere"` | `"Schedule from your phone or laptop — your posts publish from the cloud."`
+  2. 2x2 Grid icon (`stroke={PALETTE.primary}`, `fill="none"`) | `"Every platform, one dashboard"` | `"Connect each account once, then run everything from a single place."`
+  3. Padlock icon (`stroke={PALETTE.primary}`, `fill="none"`) | `"Your accounts stay yours"` | `"You sign in through each platform directly — your passwords never leave them."`
+* **Platform Line**: Muted small text (`fontSize: '0.75rem'`, `color: var(--text-dim)`):
+  `"Facebook · Instagram · TikTok · YouTube · Threads · X"`.
+* **Trust Footer**: Left-aligned `"Official platform logins · Encrypted end-to-end"` with strictly zero external links and zero emojis.
+
+### 28.3 Responsive Behavior
+* **Narrow Screen Stacking (<1024px)**: When viewport width is under 1024px, the showcase panel stacks vertically above the sign-in form (`order: 1` showcase, `order: 2` form) with reduced padding (`36px 20px`), while feature rows stay full-width.
+
 

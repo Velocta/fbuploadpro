@@ -43,7 +43,7 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
       const { hasText, hasAttribute, html } = render(<LoginPage />);
 
       expect(hasText('Sign In')).toBe(true);
-      expect(hasText('Welcome back! Sign in to manage and publish your content across Facebook and Instagram.')).toBe(true);
+      expect(hasText('Welcome back! Sign in to keep your content flowing across every platform.')).toBe(true);
       expect(hasText('Email Address')).toBe(true);
       expect(hasText('Password')).toBe(true);
       expect(hasAttribute('type', 'email')).toBe(true);

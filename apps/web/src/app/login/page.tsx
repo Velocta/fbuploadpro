@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
+import { LoginShowcasePanel } from '@/components/auth/login-showcase-panel';
 import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
@@ -153,7 +154,8 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
   return (
     <AuthSplitLayout
       title="Sign In"
-      description="Welcome back! Sign in to manage and publish your content across Facebook and Instagram."
+      description="Welcome back! Sign in to keep your content flowing across every platform."
+      showcase={<LoginShowcasePanel />}
       footer={
         <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
           Don&apos;t have an account?{' '}
