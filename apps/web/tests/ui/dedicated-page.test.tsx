@@ -264,6 +264,63 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       addBtn?.props.onClick();
       expect(onOpenAddQueue).toHaveBeenCalledTimes(1);
     });
+
+    it('enforces Option A standards: no bullet dots, 1.5px avatar ring, and 34px uniform buttons', () => {
+      const tree = renderAndCaptureTree(() =>
+        DedicatedPageHeader({
+          page: samplePage,
+          subdomain: 'cyberdyne',
+          onStatusToggle: vi.fn(),
+          onOpenAddQueue: vi.fn(),
+          onDisconnectRequest: vi.fn(),
+        })
+      );
+
+      // 1. Verify Avatar 1.5px ring border
+      const avatar = findElementByTestId(tree, 'dedicated-page-avatar');
+      expect(avatar?.props.style?.border).toBe('1.5px solid #2ebd85');
+      expect(avatar?.props.style?.width).toBe('44px');
+      expect(avatar?.props.style?.height).toBe('44px');
+
+      // 2. Verify 34px action button heights
+      const toggleBtn = findElementByTestId(tree, 'header-status-toggle-btn');
+      expect(toggleBtn?.props.style?.height).toBe('34px');
+
+      const queueBtn = findElementByTestId(tree, 'header-add-queue-btn');
+      expect(queueBtn?.props.style?.height).toBe('34px');
+
+      const dropdownBtn = findElementByTestId(tree, 'header-settings-dropdown-btn');
+      expect(dropdownBtn?.props.style?.height).toBe('34px');
+      expect(dropdownBtn?.props.style?.width).toBe('34px');
+
+      // 3. Verify render does not contain bullet dots
+      const { html } = render(
+        <DedicatedPageHeader
+          page={samplePage}
+          subdomain="cyberdyne"
+          onStatusToggle={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+          onDisconnectRequest={vi.fn()}
+        />
+      );
+      expect(html).not.toContain('•');
+    });
+
+    it('provides page actions menu toggle button with proper accessibility attributes', () => {
+      const tree = renderAndCaptureTree(() =>
+        DedicatedPageHeader({
+          page: samplePage,
+          subdomain: 'cyberdyne',
+          onStatusToggle: vi.fn(),
+          onOpenAddQueue: vi.fn(),
+          onDisconnectRequest: vi.fn(),
+        })
+      );
+
+      const dropdownBtn = findElementByTestId(tree, 'header-settings-dropdown-btn');
+      expect(dropdownBtn).not.toBeNull();
+      expect(dropdownBtn?.props['aria-label']).toBe('Page actions menu');
+    });
   });
 
   /* ====================================================================
