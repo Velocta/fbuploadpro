@@ -21,6 +21,7 @@ export interface CredentialsState {
   workspaceId: string;
   subdomain: string;
   fbAppId: string;
+  fbAppSecret?: string | null | undefined;
   hasSecret: boolean;
   status: BYOCStatus;
   lastTestedAt: string | null;
@@ -277,9 +278,7 @@ function FacebookNotConnectedForm({
                 id="fb-app-secret-input"
                 data-testid="fb-app-secret-input"
                 type={showSecret ? 'text' : 'password'}
-                placeholder={
-                  isEditMode && hasExistingSecret ? '••••••••••••••••••••••••' : 'Enter your App Secret'
-                }
+                placeholder="Enter your App Secret"
                 value={appSecret}
                 onChange={(e) => onAppSecretChange(e.target.value)}
                 disabled={isConnecting}
@@ -303,10 +302,17 @@ function FacebookNotConnectedForm({
                   background: 'none',
                   border: 'none',
                   padding: `0 ${SPACING.md}`,
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   cursor: 'pointer',
                   fontSize: '0.8125rem',
                   fontWeight: TYPOGRAPHY.weights.medium,
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
                 }}
               >
                 {showSecret ? 'Hide' : 'Show'}
@@ -383,6 +389,7 @@ function FacebookNotConnectedForm({
 
 interface FacebookConnectedViewProps {
   fbAppId: string;
+  fbAppSecret?: string | null | undefined;
   connectedAt?: string | null | undefined;
   copiedKey: string | null;
   showSecretState2: boolean;
@@ -394,6 +401,7 @@ interface FacebookConnectedViewProps {
 
 function FacebookConnectedView({
   fbAppId,
+  fbAppSecret,
   connectedAt,
   copiedKey,
   showSecretState2,
@@ -445,10 +453,17 @@ function FacebookConnectedView({
             style={{
               background: 'none',
               border: 'none',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               cursor: 'pointer',
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
             {copiedKey === 'appId' ? 'Copied' : 'Copy'}
@@ -486,10 +501,10 @@ function FacebookConnectedView({
               fontFamily: 'monospace',
               fontSize: '0.875rem',
               color: `var(--text-main, ${THEME.default.text.primary})`,
-              letterSpacing: '0.15em',
+              letterSpacing: showSecretState2 ? 'normal' : '0.15em',
             }}
           >
-            ••••••••••••••••••••••••
+            {showSecretState2 ? (fbAppSecret || '••••••••••••••••••••••••') : '••••••••••••••••••••••••'}
           </span>
           <button
             type="button"
@@ -498,10 +513,17 @@ function FacebookConnectedView({
             style={{
               background: 'none',
               border: 'none',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               cursor: 'pointer',
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
             {showSecretState2 ? 'Hide' : 'Show'}
@@ -676,12 +698,19 @@ function FacebookSetupCard({
             style={{
               background: 'none',
               border: 'none',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               cursor: 'pointer',
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
               flexShrink: 0,
               marginLeft: SPACING.sm,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
             {copiedKey === 'callback' ? 'Copied' : 'Copy'}
@@ -840,7 +869,7 @@ export function BYOCSettingsView({
 
   // Form field state
   const [appId, setAppId] = useState(initialCredentials?.fbAppId || '');
-  const [appSecret, setAppSecret] = useState('');
+  const [appSecret, setAppSecret] = useState(initialCredentials?.fbAppSecret || '');
   const [showSecret, setShowSecret] = useState(false);
   const [showSecretState2, setShowSecretState2] = useState(false);
   const [appIdError, setAppIdError] = useState<string | null>(null);
@@ -879,6 +908,9 @@ export function BYOCSettingsView({
             setCredentials(data);
             if (data.fbAppId) {
               setAppId(data.fbAppId);
+            }
+            if (data.fbAppSecret) {
+              setAppSecret(data.fbAppSecret);
             }
           }
         }
@@ -961,13 +993,14 @@ export function BYOCSettingsView({
         workspaceId: prev?.workspaceId || '',
         subdomain,
         fbAppId: trimmedId,
+        fbAppSecret: trimmedSecret || prev?.fbAppSecret || '',
         hasSecret: true,
         status: data.status || 'unverified',
         lastTestedAt: data.lastTestedAt || null,
         connectedAt: data.connectedAt || prev?.connectedAt || new Date().toISOString(),
       }));
 
-      setAppSecret('');
+      setAppSecret(trimmedSecret || '');
       setIsEditMode(false);
       showToast('Facebook connected.', 'success');
     } catch {
@@ -1143,7 +1176,7 @@ export function BYOCSettingsView({
             onCancelEdit={() => {
               setIsEditMode(false);
               setAppId(credentials?.fbAppId || '');
-              setAppSecret('');
+              setAppSecret(credentials?.fbAppSecret || '');
               setAppIdError(null);
               setAppSecretError(null);
             }}
@@ -1154,6 +1187,7 @@ export function BYOCSettingsView({
         {isConnectedState && (
           <FacebookConnectedView
             fbAppId={credentials?.fbAppId || ''}
+            fbAppSecret={credentials?.fbAppSecret || ''}
             connectedAt={credentials?.connectedAt ?? null}
             copiedKey={copiedKey}
             showSecretState2={showSecretState2}
@@ -1161,7 +1195,7 @@ export function BYOCSettingsView({
             onToggleSecret={() => setShowSecretState2((prev) => !prev)}
             onEditDetails={() => {
               setAppId(credentials?.fbAppId || '');
-              setAppSecret('');
+              setAppSecret(credentials?.fbAppSecret || '');
               setAppIdError(null);
               setAppSecretError(null);
               setIsEditMode(true);

@@ -6,6 +6,7 @@ import {
   verifySessionToken,
   canAccessTenant,
   encryptToken,
+  decryptToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
@@ -53,10 +54,20 @@ export async function GET(
       .eq('workspace_id', workspaceId)
       .maybeSingle();
 
+    let decryptedSecret = '';
+    if (byoc?.encrypted_fb_app_secret) {
+      try {
+        decryptedSecret = await decryptToken(byoc.encrypted_fb_app_secret, getTokenEncryptionKey());
+      } catch (err) {
+        console.error('[BYOC Settings API] Failed to decrypt app secret for settings view:', err);
+      }
+    }
+
     return NextResponse.json({
       workspaceId,
       subdomain,
       fbAppId: byoc?.fb_app_id || '',
+      fbAppSecret: decryptedSecret,
       hasSecret: Boolean(byoc?.encrypted_fb_app_secret),
       status: byoc?.status || 'unverified',
       lastTestedAt: byoc?.last_tested_at || null,
