@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 const UpdatePageRequestSchema = z.object({
   status: z.enum(['active', 'paused']).optional(),
+  timezone: z.string().min(1).max(50).optional(),
 });
 
 function formatPageRow(row: any) {
@@ -40,6 +41,7 @@ function formatPageRow(row: any) {
     pageName: row.page_name || row.pageName,
     profilePictureUrl: row.profile_picture_url ?? null,
     category: row.category ?? null,
+    timezone: row.timezone ?? 'UTC',
     startingFollowers,
     currentFollowers,
     followersGained,
@@ -88,6 +90,7 @@ async function fetchActivePageById(
         p.page_name,
         p.profile_picture_url,
         p.category,
+        p.timezone,
         p.starting_followers,
         p.current_followers,
         p.status,
@@ -299,15 +302,16 @@ export async function handleUpdatePage(
   }
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    if (parsed.data.status) {
+    if (parsed.data.status || parsed.data.timezone) {
       await dbClient.query(
         `UPDATE facebook_pages
-         SET status = $1,
+         SET status = COALESCE($1, status),
+             timezone = COALESCE($2, timezone),
              rate_limited_at = CASE WHEN $1 = 'active' THEN NULL ELSE rate_limited_at END,
              next_allowed_publish_at = CASE WHEN $1 = 'active' THEN NULL ELSE next_allowed_publish_at END,
              updated_at = now()
-         WHERE id = $2 AND user_id = $3 AND workspace_id = $4 AND status != 'disconnected'`,
-        [parsed.data.status, pageId, session.userId, workspaceId]
+         WHERE id = $3 AND user_id = $4 AND workspace_id = $5 AND status != 'disconnected'`,
+        [parsed.data.status ?? null, parsed.data.timezone ?? null, pageId, session.userId, workspaceId]
       );
     }
   } else {
@@ -315,14 +319,19 @@ export async function handleUpdatePage(
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
-    if (parsed.data.status) {
+    if (parsed.data.status || parsed.data.timezone) {
       const updates: Record<string, any> = {
-        status: parsed.data.status,
         updated_at: new Date().toISOString(),
       };
-      if (parsed.data.status === 'active') {
-        updates.rate_limited_at = null;
-        updates.next_allowed_publish_at = null;
+      if (parsed.data.status) {
+        updates.status = parsed.data.status;
+        if (parsed.data.status === 'active') {
+          updates.rate_limited_at = null;
+          updates.next_allowed_publish_at = null;
+        }
+      }
+      if (parsed.data.timezone) {
+        updates.timezone = parsed.data.timezone;
       }
       await supabase
         .from('facebook_pages')

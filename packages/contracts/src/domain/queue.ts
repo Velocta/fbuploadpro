@@ -17,7 +17,7 @@ export const TimezoneSchema = z.string().min(1).max(50).default('UTC');
 export const CreateQueueSlotRequestSchema = z.object({
   pageId: z.string().uuid(),
   slotTime: SlotTimeSchema,
-  timezone: TimezoneSchema,
+  timezone: TimezoneSchema.optional(),
   allowedFormats: z
     .array(PostFormatSchema)
     .min(1)
@@ -37,13 +37,20 @@ export const UpdateQueueSlotRequestSchema = z.object({
 
 export type UpdateQueueSlotRequest = z.infer<typeof UpdateQueueSlotRequestSchema>;
 
+// Update Schedule Timezone Request
+export const UpdateQueueScheduleTimezoneRequestSchema = z.object({
+  timezone: TimezoneSchema,
+});
+
+export type UpdateQueueScheduleTimezoneRequest = z.infer<typeof UpdateQueueScheduleTimezoneRequestSchema>;
+
 // Queue Slot Domain Model
 export const PageQueueSlotSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   pageId: z.string().uuid(),
   slotTime: z.string(),
-  timezone: z.string(),
+  timezone: z.string().default('UTC'),
   isActive: z.boolean(),
   allowedFormats: z
     .array(PostFormatSchema)

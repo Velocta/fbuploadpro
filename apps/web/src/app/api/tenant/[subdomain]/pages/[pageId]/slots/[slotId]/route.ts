@@ -57,28 +57,27 @@ export async function handleUpdateQueueSlot(
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     // 1. Verify page exists and belongs to user
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
+      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2',
       [pageId, session.userId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    const pageTimezone = String(pageRows[0].timezone || 'UTC');
 
     // 2. Update slot scoped to user, page, and slot id
     try {
       const updateRows = (await dbClient.query(
         `UPDATE page_queue_slots
          SET slot_time = COALESCE($1, slot_time),
-             timezone = COALESCE($2, timezone),
-             is_active = COALESCE($3, is_active),
-             allowed_formats = COALESCE($4, allowed_formats),
+             is_active = COALESCE($2, is_active),
+             allowed_formats = COALESCE($3, allowed_formats),
              updated_at = now()
-         WHERE id = $5 AND fb_page_id = $6 AND user_id = $7
-         RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at`,
+         WHERE id = $4 AND fb_page_id = $5 AND user_id = $6
+         RETURNING id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at`,
         [
           parsed.data.slotTime ?? null,
-          parsed.data.timezone ?? null,
           parsed.data.isActive ?? null,
           parsed.data.allowedFormats ?? null,
           slotId,
@@ -97,7 +96,7 @@ export async function handleUpdateQueueSlot(
         userId: row.user_id,
         pageId: row.fb_page_id,
         slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
-        timezone: row.timezone,
+        timezone: pageTimezone,
         isActive: Boolean(row.is_active),
         allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
         createdAt: new Date(row.created_at).toISOString(),
@@ -128,7 +127,7 @@ export async function handleUpdateQueueSlot(
 
     const { data: pageData, error: pageErr } = await supabase
       .from('facebook_pages')
-      .select('id')
+      .select('id, timezone')
       .eq('id', pageId)
       .eq('user_id', session.userId)
       .maybeSingle();
@@ -136,12 +135,12 @@ export async function handleUpdateQueueSlot(
     if (pageErr || !pageData) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    const pageTimezone = String(pageData.timezone || 'UTC');
 
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
     if (parsed.data.slotTime !== undefined) updatePayload.slot_time = parsed.data.slotTime;
-    if (parsed.data.timezone !== undefined) updatePayload.timezone = parsed.data.timezone;
     if (parsed.data.isActive !== undefined) updatePayload.is_active = parsed.data.isActive;
     if (parsed.data.allowedFormats !== undefined) updatePayload.allowed_formats = parsed.data.allowedFormats;
 
@@ -151,7 +150,7 @@ export async function handleUpdateQueueSlot(
       .eq('id', slotId)
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
-      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at')
+      .select('id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at')
       .maybeSingle();
 
     if (updateErr) {
@@ -179,7 +178,7 @@ export async function handleUpdateQueueSlot(
       userId: updated.user_id,
       pageId: updated.fb_page_id,
       slotTime: typeof updated.slot_time === 'string' ? updated.slot_time : String(updated.slot_time),
-      timezone: updated.timezone,
+      timezone: pageTimezone,
       isActive: Boolean(updated.is_active),
       allowedFormats: Array.isArray(updated.allowed_formats) ? updated.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
       createdAt: new Date(updated.created_at).toISOString(),

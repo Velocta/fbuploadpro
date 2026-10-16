@@ -247,7 +247,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: userB.pageId }]);
+            return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('UPDATE page_queue_slots')) {
             // WHERE id = $4 AND fb_page_id = $5 AND user_id = $6
@@ -288,7 +288,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: userB.pageId }]);
+            return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('DELETE FROM page_queue_slots')) {
             // WHERE id = $1 AND fb_page_id = $2 AND user_id = $3
@@ -365,7 +365,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
           }
           if (sql.includes('FROM facebook_pages')) {
             if (params && params[0] === userB.pageId && params[1] === userB.id) {
-              return Promise.resolve([{ id: userB.pageId }]);
+              return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
             }
           }
           if (sql.includes('FROM media_items')) {
@@ -400,7 +400,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
             return Promise.resolve([{ id: 'ws_b' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: userB.pageId }]);
+            return Promise.resolve([{ id: userB.pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('FROM media_items')) {
             return Promise.resolve([

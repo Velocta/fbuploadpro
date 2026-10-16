@@ -5,6 +5,7 @@ import {
   getSessionSecret,
   ListQueueSlotsResponseSchema,
   PageQueueSlotSchema,
+  UpdateQueueScheduleTimezoneRequestSchema,
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
@@ -43,21 +44,23 @@ export async function handleListQueueSlots(
   }
 
   let slotRows: any[] = [];
+  let pageTimezone = 'UTC';
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     // 1. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    pageTimezone = String(pageRows[0].timezone || 'UTC');
 
     // 2. Fetch slots for this page and user
     slotRows = (await dbClient.query(
-      `SELECT id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at
+      `SELECT id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at
        FROM page_queue_slots
        WHERE fb_page_id = $1 AND user_id = $2
        ORDER BY slot_time ASC`,
@@ -71,7 +74,7 @@ export async function handleListQueueSlots(
 
     const { data: pageData, error: pageErr } = await supabase
       .from('facebook_pages')
-      .select('id')
+      .select('id, timezone')
       .eq('id', pageId)
       .eq('user_id', session.userId)
       .eq('workspace_id', workspaceId)
@@ -80,10 +83,11 @@ export async function handleListQueueSlots(
     if (pageErr || !pageData) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    pageTimezone = String(pageData.timezone || 'UTC');
 
     const { data: slotsData, error: slotsErr } = await supabase
       .from('page_queue_slots')
-      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at')
+      .select('id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at')
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
       .order('slot_time', { ascending: true });
@@ -99,7 +103,7 @@ export async function handleListQueueSlots(
     userId: row.user_id,
     pageId: row.fb_page_id,
     slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
-    timezone: row.timezone,
+    timezone: pageTimezone,
     isActive: Boolean(row.is_active),
     allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
     createdAt: new Date(row.created_at).toISOString(),
@@ -170,22 +174,23 @@ export async function handleCreateQueueSlot(
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     // 1. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    const pageTimezone = String(pageRows[0].timezone || 'UTC');
 
     // 2. Insert slot
     try {
       const allowedFormats = parsed.data.allowedFormats ?? ['text', 'image', 'reel', 'video', 'story'];
       const rows = (await dbClient.query(
-        `INSERT INTO page_queue_slots (user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, true, $5, now(), now())
-         RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at`,
-        [session.userId, pageId, parsed.data.slotTime, parsed.data.timezone ?? 'UTC', allowedFormats]
+        `INSERT INTO page_queue_slots (user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at)
+         VALUES ($1, $2, $3, true, $4, now(), now())
+         RETURNING id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at`,
+        [session.userId, pageId, parsed.data.slotTime, allowedFormats]
       )) as any[];
 
       const row = rows[0];
@@ -194,7 +199,7 @@ export async function handleCreateQueueSlot(
         userId: row.user_id,
         pageId: row.fb_page_id,
         slotTime: typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time),
-        timezone: row.timezone,
+        timezone: pageTimezone,
         isActive: Boolean(row.is_active),
         allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : allowedFormats,
         createdAt: new Date(row.created_at).toISOString(),
@@ -225,7 +230,7 @@ export async function handleCreateQueueSlot(
 
     const { data: pageData, error: pageErr } = await supabase
       .from('facebook_pages')
-      .select('id')
+      .select('id, timezone')
       .eq('id', pageId)
       .eq('user_id', session.userId)
       .eq('workspace_id', workspaceId)
@@ -234,6 +239,7 @@ export async function handleCreateQueueSlot(
     if (pageErr || !pageData) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    const pageTimezone = String(pageData.timezone || 'UTC');
 
     const allowedFormats = parsed.data.allowedFormats ?? ['text', 'image', 'reel', 'video', 'story'];
     const { data: inserted, error: insertErr } = await supabase
@@ -242,11 +248,10 @@ export async function handleCreateQueueSlot(
         user_id: session.userId,
         fb_page_id: pageId,
         slot_time: parsed.data.slotTime,
-        timezone: parsed.data.timezone ?? 'UTC',
         is_active: true,
         allowed_formats: allowedFormats,
       })
-      .select('id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at')
+      .select('id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at')
       .single();
 
     if (insertErr) {
@@ -270,7 +275,7 @@ export async function handleCreateQueueSlot(
       userId: inserted.user_id,
       pageId: inserted.fb_page_id,
       slotTime: typeof inserted.slot_time === 'string' ? inserted.slot_time : String(inserted.slot_time),
-      timezone: inserted.timezone,
+      timezone: pageTimezone,
       isActive: Boolean(inserted.is_active),
       allowedFormats: Array.isArray(inserted.allowed_formats) ? inserted.allowed_formats : allowedFormats,
       createdAt: new Date(inserted.created_at).toISOString(),
@@ -279,6 +284,166 @@ export async function handleCreateQueueSlot(
 
     return NextResponse.json(responsePayload, { status: 201 });
   }
+}
+
+async function updateScheduleTimezonePostgres(
+  dbClient: DatabaseClient,
+  pageId: string,
+  userId: string,
+  workspaceId: string,
+  newTimezone: string
+): Promise<{ notFound?: boolean; updatedCount?: number }> {
+  const updatedPages = (await dbClient.query(
+    `UPDATE facebook_pages
+     SET timezone = $1, updated_at = now()
+     WHERE id = $2 AND user_id = $3 AND workspace_id = $4
+     RETURNING id`,
+    [newTimezone, pageId, userId, workspaceId]
+  )) as any[];
+
+  if (!updatedPages || updatedPages.length === 0) {
+    return { notFound: true };
+  }
+
+  const slotRows = (await dbClient.query(
+    'SELECT count(*)::int as count FROM page_queue_slots WHERE fb_page_id = $1 AND user_id = $2',
+    [pageId, userId]
+  )) as any[];
+
+  return { updatedCount: slotRows[0]?.count ?? 0 };
+}
+
+async function updateScheduleTimezoneSupabase(
+  supabase: SupabaseClient<any>,
+  pageId: string,
+  userId: string,
+  workspaceId: string,
+  newTimezone: string
+): Promise<{ notFound?: boolean; error?: string; updatedCount?: number }> {
+  const { data: updatedPage, error: updateErr } = await supabase
+    .from('facebook_pages')
+    .update({
+      timezone: newTimezone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', pageId)
+    .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
+    .select('id')
+    .maybeSingle();
+
+  if (updateErr) {
+    return { error: updateErr.message };
+  }
+
+  if (!updatedPage) {
+    return { notFound: true };
+  }
+
+  const { count } = await supabase
+    .from('page_queue_slots')
+    .select('id', { count: 'exact', head: true })
+    .eq('fb_page_id', pageId)
+    .eq('user_id', userId);
+
+  return { updatedCount: count ?? 0 };
+}
+
+export async function handleUpdateQueueScheduleTimezone(
+  request: NextRequest,
+  subdomain: string,
+  pageId: string,
+  dbClient?: DatabaseClient | SupabaseClient<any>
+): Promise<NextResponse> {
+  const sessionSecret = getSessionSecret();
+
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let session;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch (_e) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch (_e) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', message: 'Invalid JSON' },
+      { status: 400 }
+    );
+  }
+
+  const parsed = UpdateQueueScheduleTimezoneRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'INVALID_REQUEST', details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  if (!workspaceId) {
+    return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+  }
+
+  const newTimezone = parsed.data.timezone;
+
+  if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
+    const result = await updateScheduleTimezonePostgres(
+      dbClient as DatabaseClient,
+      pageId,
+      session.userId,
+      workspaceId,
+      newTimezone
+    );
+
+    if (result.notFound) {
+      return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      timezone: newTimezone,
+      updatedCount: result.updatedCount ?? 0,
+    });
+  }
+
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
+
+  const result = await updateScheduleTimezoneSupabase(
+    supabase,
+    pageId,
+    session.userId,
+    workspaceId,
+    newTimezone
+  );
+
+  if (result.notFound) {
+    return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+  }
+  if (result.error) {
+    return NextResponse.json({ error: 'INTERNAL_ERROR', message: result.error }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    timezone: newTimezone,
+    updatedCount: result.updatedCount ?? 0,
+  });
 }
 
 export async function GET(
@@ -295,4 +460,12 @@ export async function POST(
 ): Promise<NextResponse> {
   const { subdomain, pageId } = await context.params;
   return handleCreateQueueSlot(request, subdomain, pageId);
+}
+
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ subdomain: string; pageId: string }> }
+): Promise<NextResponse> {
+  const { subdomain, pageId } = await context.params;
+  return handleUpdateQueueScheduleTimezone(request, subdomain, pageId);
 }

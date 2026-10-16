@@ -118,6 +118,7 @@ export default function TenantDedicatedPageView({
           currentFollowers: 0,
           followersGained: 0,
           status: 'active',
+          timezone: 'UTC',
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
@@ -137,6 +138,7 @@ export default function TenantDedicatedPageView({
           currentFollowers: 0,
           followersGained: 0,
           status: 'active',
+          timezone: 'UTC',
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
@@ -273,6 +275,33 @@ export default function TenantDedicatedPageView({
     }
     setNotification({ type: 'success', message: 'Recurring publishing slot added.' });
     await fetchSlots();
+  };
+
+  // Update Schedule Timezone Handler
+  const handleUpdateTimezone = async (newTimezone: string) => {
+    try {
+      const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}/slots`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: newTimezone }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to update schedule timezone');
+      }
+      setSlots((prev) => prev.map((s) => ({ ...s, timezone: newTimezone })));
+      setPage((prev) => (prev ? { ...prev, timezone: newTimezone } : null));
+      setNotification({
+        type: 'success',
+        message: `Schedule timezone updated to ${newTimezone}.`,
+      });
+      void fetchSlots();
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: err.message || 'Failed to update schedule timezone',
+      });
+    }
   };
 
   // Toggle Slot Handler
@@ -564,6 +593,7 @@ export default function TenantDedicatedPageView({
                 slots={slots}
                 isLoading={isLoadingSlots}
                 onAddSlot={handleAddSlot}
+                onUpdateTimezone={handleUpdateTimezone}
                 onToggleSlot={handleToggleSlot}
                 onDeleteSlot={handleDeleteSlot}
               />
