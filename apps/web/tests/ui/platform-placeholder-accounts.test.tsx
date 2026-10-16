@@ -40,6 +40,18 @@ describe('PlatformPlaceholderAccounts Component (Spec 047)', () => {
     expect(hasText(TESTING_PLACEHOLDER_TEXT)).toBe(true);
     expect(hasText('Return to Overview')).toBe(true);
     expect(hasAttribute('data-slot', 'platform-icon-container')).toBe(true);
+
+    // Verify theme-reactive CSS variables
+    const { html } = render(
+      <PlatformPlaceholderAccounts
+        platformName="Instagram"
+        subdomain="acme"
+        icon={<InstagramIcon />}
+      />
+    );
+    expect(html).toContain('var(--bg-panel');
+    expect(html).toContain('var(--shadow-card');
+    expect(html).toContain('var(--text-sub');
   });
 
   it('renders correctly for Threads with ThreadsIcon', () => {

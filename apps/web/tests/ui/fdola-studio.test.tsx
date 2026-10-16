@@ -41,18 +41,28 @@ describe('FdolaStudioGate Component (Web Browser)', () => {
     expect(html).not.toContain('<a');
     expect(html).not.toContain('href');
     expect(html).not.toContain('<button');
+
+    // Verify theme-reactive CSS variables
+    expect(html).toContain('var(--bg-panel');
+    expect(html).toContain('var(--shadow-card');
+    expect(html).toContain('var(--text-sub');
   });
 });
 
 describe('FdolaStudioWorkspace Component (Desktop App Empty View)', () => {
-  it('renders empty desktop workspace placeholder', () => {
-    const { hasAttribute, hasText } = render(
+  it('renders empty desktop workspace placeholder with theme-reactive styles', () => {
+    const { hasAttribute, hasText, html } = render(
       <FdolaStudioWorkspace subdomain="acme" />
     );
 
     expect(hasAttribute('data-testid', 'fdola-studio-workspace')).toBe(true);
     expect(hasText('Fdola Studio')).toBe(true);
     expect(hasAttribute('data-testid', 'fdola-desktop-workspace-empty')).toBe(true);
+
+    // Verify theme-reactive CSS variables
+    expect(html).toContain('var(--bg-panel');
+    expect(html).toContain('var(--shadow-card');
+    expect(html).toContain('var(--text-sub');
   });
 });
 
