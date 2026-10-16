@@ -6,9 +6,11 @@ import {
   PALETTE,
   RADII,
   SPACING,
+  STATUS_SIGNALS,
   TYPOGRAPHY,
 } from '@/lib/theme';
 import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
+import { ScheduleTimezoneModal } from './schedule-timezone-modal';
 import type { FacebookPageItem } from '../page-card';
 import type { PageSlotSummary } from './tab-dashboard';
 
@@ -16,6 +18,7 @@ export interface PageTabPostingTimesProps {
   page: FacebookPageItem;
   slots: PageSlotSummary[];
   isLoading?: boolean;
+  pendingQueueCount?: number;
   onAddSlot: (data: {
     slotTime: string;
     timezone: string;
@@ -92,13 +95,13 @@ function resolveFormatLabel(formatId: string): string {
 interface HeaderProps {
   activeTimezone: string;
   onOpenAddModal: () => void;
-  onUpdateTimezone?: (newTimezone: string) => Promise<void>;
+  onOpenTimezoneModal: () => void;
 }
 
 function PostingTimesHeader({
   activeTimezone,
   onOpenAddModal,
-  onUpdateTimezone,
+  onOpenTimezoneModal,
 }: Readonly<HeaderProps>) {
   return (
     <div
@@ -135,78 +138,50 @@ function PostingTimesHeader({
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
-        <div
-          data-testid="active-timezone-badge"
+        <button
+          type="button"
+          data-testid="schedule-timezone-trigger"
+          onClick={onOpenTimezoneModal}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px',
+            gap: '8px',
             padding: `0 ${SPACING.sm}`,
             height: '34px',
             backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
             border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
             borderRadius: RADII.sm,
             fontSize: '0.75rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            cursor: 'pointer',
           }}
         >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </svg>
-          <label
-            htmlFor="schedule-timezone-select"
+          <div
             style={{
-              fontSize: '0.75rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              cursor: 'pointer',
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: STATUS_SIGNALS.operational.dot,
+              boxShadow: STATUS_SIGNALS.operational.halo,
             }}
-          >
-            Schedule Timezone:
-          </label>
-          <select
-            id="schedule-timezone-select"
-            data-testid="schedule-timezone-select"
-            aria-label="Schedule Timezone"
-            value={activeTimezone}
-            onChange={(e) => {
-              if (onUpdateTimezone) {
-                void onUpdateTimezone(e.target.value);
-              }
-            }}
+          />
+          <span style={{ color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+            Timezone:
+          </span>
+          <span style={{ fontWeight: TYPOGRAPHY.weights.semibold }}>
+            {activeTimezone}
+          </span>
+          <span
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              fontSize: '0.75rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              cursor: 'pointer',
-              outline: 'none',
-              padding: 0,
+              fontSize: '0.6875rem',
+              color: PALETTE.primary,
+              textDecoration: 'underline',
+              marginLeft: '2px',
             }}
           >
-            {!COMMON_TIMEZONES.includes(activeTimezone) && (
-              <option value={activeTimezone} style={{ backgroundColor: '#0c0d10', color: '#ffffff' }}>
-                {activeTimezone}
-              </option>
-            )}
-            {COMMON_TIMEZONES.map((tz) => (
-              <option key={tz} value={tz} style={{ backgroundColor: '#0c0d10', color: '#ffffff' }}>
-                {tz}
-              </option>
-            ))}
-          </select>
-        </div>
+            Change
+          </span>
+        </button>
 
         <button
           type="button"
@@ -1024,6 +999,7 @@ export function PageTabPostingTimes({
   page,
   slots,
   isLoading = false,
+  pendingQueueCount = 0,
   onAddSlot,
   onUpdateSlot,
   onUpdateTimezone,
@@ -1031,6 +1007,7 @@ export function PageTabPostingTimes({
   onDeleteSlot,
 }: Readonly<PageTabPostingTimesProps>) {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTimezoneModalOpen, setIsTimezoneModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<PageSlotSummary | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [slotToDelete, setSlotToDelete] = useState<PageSlotSummary | null>(null);
@@ -1106,7 +1083,7 @@ export function PageTabPostingTimes({
       <PostingTimesHeader
         activeTimezone={activeTimezone}
         onOpenAddModal={handleOpenAdd}
-        onUpdateTimezone={handleTimezoneChange}
+        onOpenTimezoneModal={() => setIsTimezoneModalOpen(true)}
       />
 
       {/* Loading state */}
@@ -1167,6 +1144,16 @@ export function PageTabPostingTimes({
         onClose={() => setSlotToDelete(null)}
         onConfirmDelete={handleConfirmDelete}
         isDeleting={isDeleting}
+      />
+
+      {/* 2-Step Schedule Timezone Modal */}
+      <ScheduleTimezoneModal
+        isOpen={isTimezoneModalOpen}
+        activeTimezone={activeTimezone}
+        slotsCount={slots.length}
+        pendingQueueCount={pendingQueueCount}
+        onClose={() => setIsTimezoneModalOpen(false)}
+        onConfirmTimezone={handleTimezoneChange}
       />
     </div>
   );

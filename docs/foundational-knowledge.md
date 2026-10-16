@@ -794,6 +794,12 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **Past-Time Protection & Collision Avoidance**: Handled via `recomputeSlotScheduledTime` in `apps/web/src/lib/slot-scheduler.ts`. If shifting a post's slot time into the new timezone causes the resulting time on the post's calendar date to fall in the past (`<= now()`), the post automatically advances day-by-day until strictly in the future (`> now()`). Furthermore, timestamps already allocated to earlier items in the queue are skipped to avoid post collisions.
 * **API & UI Synchronization**: `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots` updates `facebook_pages.timezone`, realigns the pending queue items in both PostgreSQL and Supabase backends, and returns `realignedQueueCount`. The page management UI refreshes both slots and queue tables while surfacing a professional toast confirming the exact count of realigned posts.
 
+### 26.6 Two-Step Professional Schedule Timezone Modal (Spec 062)
+* **Dedicated Two-Step Workflow**: Replaced the single raw native HTML select with a professional modal (`ScheduleTimezoneModal`) triggered by an unboxed luminous timezone badge in the Posting Times header.
+* **Step 1 (Searchable Global Timezone Directory)**: Provides an organized registry (`apps/web/src/lib/timezones.ts`) of world timezones categorized by geographical region (Americas, Europe, Asia, Australia & Pacific, Africa, Universal UTC). Features real-time search filtering across city, country, region, and IANA identifiers, with live UTC offsets and local clock previews.
+* **Step 2 (Schedule Impact Review & Confirmation)**: Previews the timezone transition (`Current Timezone -> Proposed Timezone`), explicitly guarantees that recurring posting slot clock times remain intact (e.g. 10:00 AM stays 10:00 AM in the new geographic location), and surfaces quantitative impact badges showing the exact count of recurring slots and queued posts that will be realigned.
+* **Atomic State & Notification Update**: Submitting applies the change via `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots`, refreshes slots and queue records in real time, and triggers a clean toast notification.
+
 ---
 
 ## 27. Production Deployment & Cloud Architecture Reference

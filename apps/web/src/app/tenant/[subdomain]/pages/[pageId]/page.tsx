@@ -600,6 +600,7 @@ export default function TenantDedicatedPageView({
                 page={page}
                 slots={slots}
                 isLoading={isLoadingSlots}
+                pendingQueueCount={queuedCount}
                 onAddSlot={handleAddSlot}
                 onUpdateTimezone={handleUpdateTimezone}
                 onToggleSlot={handleToggleSlot}
