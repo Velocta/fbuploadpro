@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 
 export interface FacebookAccountLinkedPageItem {
@@ -24,12 +25,14 @@ export interface FacebookAccountItem {
   updatedAt?: string | undefined;
 }
 
-interface AccountCardProps {
+export interface AccountCardProps {
   account: FacebookAccountItem;
-  onReconnect?: (account: FacebookAccountItem) => void;
-  onDisconnect?: (account: FacebookAccountItem) => void;
-  defaultPagesExpanded?: boolean;
-  forceAvatarError?: boolean;
+  subdomain?: string | undefined;
+  onReconnect?: ((account: FacebookAccountItem) => void) | undefined;
+  onDisconnect?: ((account: FacebookAccountItem) => void) | undefined;
+  onViewPages?: ((account: FacebookAccountItem) => void) | undefined;
+  defaultPagesExpanded?: boolean | undefined;
+  forceAvatarError?: boolean | undefined;
 }
 
 export function getInitials(name: string, fallback = 'FB'): string {
@@ -40,6 +43,15 @@ export function getInitials(name: string, fallback = 'FB'): string {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+}
+
+export function getAccountRingColor(
+  status: FacebookAccountItem['status'],
+  isExpiringSoon: boolean
+): string {
+  if (status === 'expired') return PALETTE.accent3; // #f6465d
+  if (isExpiringSoon) return PALETTE.primary; // #fad734
+  return PALETTE.accent4; // #2ebd85
 }
 
 function LinkedPageRow({ page }: Readonly<{ page: FacebookAccountLinkedPageItem }>) {
@@ -135,12 +147,14 @@ function AccountAvatar({
   displayName,
   showAvatarImg,
   initials,
+  ringColor,
   onAvatarError,
 }: Readonly<{
   profilePictureUrl?: string | null | undefined;
   displayName: string;
   showAvatarImg: boolean;
   initials: string;
+  ringColor: string;
   onAvatarError: () => void;
 }>) {
   if (showAvatarImg && profilePictureUrl) {
@@ -151,11 +165,12 @@ function AccountAvatar({
         data-testid="account-avatar-img"
         onError={onAvatarError}
         style={{
-          width: '48px',
-          height: '48px',
+          width: '42px',
+          height: '42px',
           borderRadius: RADII.full,
           objectFit: 'cover',
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          border: `1.5px solid ${ringColor}`,
+          boxShadow: `0 0 0 2px ${ringColor}22`,
           flexShrink: 0,
         }}
       />
@@ -165,17 +180,18 @@ function AccountAvatar({
     <div
       data-testid="account-avatar-initials"
       style={{
-        width: '48px',
-        height: '48px',
+        width: '42px',
+        height: '42px',
         borderRadius: RADII.full,
         backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        border: `1.5px solid ${ringColor}`,
+        boxShadow: `0 0 0 2px ${ringColor}22`,
         color: `var(--text-main, ${THEME.default.text.primary})`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontWeight: TYPOGRAPHY.weights.bold,
-        fontSize: '1rem',
+        fontSize: '0.875rem',
         flexShrink: 0,
       }}
     >
@@ -184,180 +200,95 @@ function AccountAvatar({
   );
 }
 
-function AccountStatusAlerts({
-  isExpired,
-  isExpiringSoon,
-  daysRemaining,
-}: Readonly<{
-  isExpired: boolean;
-  isExpiringSoon: boolean;
-  daysRemaining: number | null;
-}>) {
-  if (isExpired) {
-    return (
-      <div
-        data-testid="account-expired-alert"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.xs,
-          padding: '8px 10px',
-          backgroundColor: 'rgba(246, 70, 93, 0.10)',
-          border: '1px solid rgba(246, 70, 93, 0.25)',
-          borderRadius: RADII.sm,
-          fontSize: '0.75rem',
-          color: PALETTE.accent3,
-          fontWeight: TYPOGRAPHY.weights.medium,
-          marginBottom: SPACING.md,
-        }}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-        <span>Session expired — reconnect to resume publishing</span>
-      </div>
-    );
-  }
-
-  if (isExpiringSoon) {
-    return (
-      <div
-        data-testid="account-expiring-soon-alert"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.xs,
-          padding: '8px 10px',
-          backgroundColor: 'rgba(250, 215, 52, 0.10)',
-          border: '1px solid rgba(250, 215, 52, 0.25)',
-          borderRadius: RADII.sm,
-          fontSize: '0.75rem',
-          color: PALETTE.primary,
-          fontWeight: TYPOGRAPHY.weights.medium,
-          marginBottom: SPACING.md,
-        }}
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="8" x2="12" y2="12" />
-          <line x1="12" y1="16" x2="12.01" y2="16" />
-        </svg>
-        <span>Access token expires in {daysRemaining} day{daysRemaining === 1 ? '' : 's'} — reconnect soon</span>
-      </div>
-    );
-  }
-
-  return null;
-}
-
-function AccountMetadataStats({
+function AccountLinkedPagesAffordance({
   connectedPagesCount,
   pagesCountLabel,
-  isPagesExpanded,
-  onTogglePagesExpanded,
-  formattedGender,
+  onNavigateToPages,
 }: Readonly<{
   connectedPagesCount: number;
   pagesCountLabel: string;
-  isPagesExpanded: boolean;
-  onTogglePagesExpanded: () => void;
-  formattedGender: string | null;
+  onNavigateToPages: () => void;
 }>) {
+  if (connectedPagesCount > 0) {
+    return (
+      <button
+        type="button"
+        data-testid="account-pages-toggle"
+        onClick={onNavigateToPages}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '4px 8px',
+          margin: 0,
+          backgroundColor: 'transparent',
+          border: '1px solid transparent',
+          borderRadius: RADII.xs,
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          fontSize: '0.8125rem',
+          fontFamily: 'inherit',
+          cursor: 'pointer',
+          transition: 'background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = `var(--bg-subtle, ${THEME.default.surfaces.subtle})`;
+          e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+          e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
+          e.currentTarget.style.borderColor = 'transparent';
+        }}
+      >
+        <span data-testid="account-pages-count">{pagesCountLabel}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{ opacity: 0.7 }}
+        >
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </button>
+    );
+  }
+
   return (
-    <div
+    <span
+      data-testid="account-pages-count"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.md,
-        padding: `${SPACING.sm} 0`,
-        borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         fontSize: '0.8125rem',
-        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        marginBottom: SPACING.md,
+        color: `var(--text-dim, ${THEME.default.text.muted})`,
+        padding: '4px 8px',
       }}
     >
-      {connectedPagesCount > 0 ? (
-        <button
-          type="button"
-          data-testid="account-pages-toggle"
-          aria-expanded={isPagesExpanded}
-          onClick={onTogglePagesExpanded}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            padding: 0,
-            background: 'none',
-            border: 'none',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            fontSize: '0.8125rem',
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-          }}
-        >
-          <span data-testid="account-pages-count">{pagesCountLabel}</span>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            style={{
-              transform: isPagesExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.15s ease',
-            }}
-          >
-            <polyline points="6 9 12 15 18 9" />
-          </svg>
-        </button>
-      ) : (
-        <span data-testid="account-pages-count">{pagesCountLabel}</span>
-      )}
-
-      {formattedGender && (
-        <>
-          <span style={{ color: `var(--border-subtle, ${THEME.default.borders.hairline})` }}>•</span>
-          <span data-testid="account-gender">{formattedGender}</span>
-        </>
-      )}
-    </div>
+      {pagesCountLabel}
+    </span>
   );
 }
 
 export function AccountCard({
   account,
+  subdomain,
   onReconnect,
   onDisconnect,
+  onViewPages,
   defaultPagesExpanded = false,
   forceAvatarError = false,
 }: Readonly<AccountCardProps>) {
+  const router = useRouter();
+  const params = useParams();
+  const currentSubdomain = subdomain ?? ((params?.subdomain as string) || '');
+
   const isExpired = account.status === 'expired';
   const daysRemaining = account.tokenExpiresAt
     ? Math.ceil((new Date(account.tokenExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -367,12 +298,14 @@ export function AccountCard({
     daysRemaining !== null &&
     daysRemaining > 0 &&
     daysRemaining <= 7;
+
+  const ringColor = getAccountRingColor(account.status, isExpiringSoon);
+
   const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(
     forceAvatarError ? (account.profilePictureUrl ?? '__forced__') : null
   );
   const [isPagesExpanded, setIsPagesExpanded] = React.useState(defaultPagesExpanded);
 
-  // Format connection date
   const formattedDate = React.useMemo(() => {
     try {
       const d = new Date(account.createdAt);
@@ -382,17 +315,11 @@ export function AccountCard({
         year: 'numeric',
       });
     } catch (_e) {
-      // Ignored because invalid dates safely fallback to recent
       return 'recently';
     }
   }, [account.createdAt]);
 
   const initials = getInitials(account.displayName, 'FB');
-
-  const formattedGender = account.gender
-    ? account.gender.charAt(0).toUpperCase() + account.gender.slice(1)
-    : null;
-
   const showAvatarImg =
     Boolean(account.profilePictureUrl) &&
     !forceAvatarError &&
@@ -402,6 +329,18 @@ export function AccountCard({
   const pagesCountLabel = `${account.connectedPagesCount} ${
     account.connectedPagesCount === 1 ? 'page linked' : 'pages linked'
   }`;
+
+  const handleNavigateToPages = () => {
+    if (onViewPages) {
+      onViewPages(account);
+      return;
+    }
+    if (currentSubdomain) {
+      router.push(`/tenant/${currentSubdomain}/pages?account=${encodeURIComponent(account.displayName)}`);
+    } else {
+      setIsPagesExpanded((prev) => !prev);
+    }
+  };
 
   return (
     <div
@@ -426,16 +365,15 @@ export function AccountCard({
           marginBottom: SPACING.md,
         }}
       >
-        {/* Avatar */}
         <AccountAvatar
           profilePictureUrl={account.profilePictureUrl}
           displayName={account.displayName}
           showAvatarImg={showAvatarImg}
           initials={initials}
+          ringColor={ringColor}
           onAvatarError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
         />
 
-        {/* Identity & Link */}
         <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
@@ -449,7 +387,7 @@ export function AccountCard({
               data-testid="account-name"
               style={{
                 margin: 0,
-                fontSize: '1rem',
+                fontSize: '0.9375rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
                 color: `var(--text-main, ${THEME.default.text.primary})`,
                 overflow: 'hidden',
@@ -477,8 +415,8 @@ export function AccountCard({
                 }}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="13"
+                  height="13"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -507,26 +445,60 @@ export function AccountCard({
         </div>
       </div>
 
-      {/* Account Metadata Stats */}
-      <AccountMetadataStats
-        connectedPagesCount={account.connectedPagesCount}
-        pagesCountLabel={pagesCountLabel}
-        isPagesExpanded={isPagesExpanded}
-        onTogglePagesExpanded={() => setIsPagesExpanded((prev) => !prev)}
-        formattedGender={formattedGender}
-      />
+      {/* Blended Linked Pages Strip */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: `${SPACING.xs} 0`,
+          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          marginBottom: SPACING.md,
+        }}
+      >
+        <AccountLinkedPagesAffordance
+          connectedPagesCount={account.connectedPagesCount}
+          pagesCountLabel={pagesCountLabel}
+          onNavigateToPages={handleNavigateToPages}
+        />
+      </div>
 
-      {/* Expandable Linked Pages List */}
+      {/* Backward-compatible linked pages list when explicitly expanded in tests/props */}
       {isPagesExpanded && linkedPages.length > 0 && (
         <AccountLinkedPagesList pages={linkedPages} />
       )}
 
-      {/* Status Alerts */}
-      <AccountStatusAlerts
-        isExpired={isExpired}
-        isExpiringSoon={isExpiringSoon}
-        daysRemaining={daysRemaining}
-      />
+      {/* Session Expired Alert (Only rendered when expired, zero token validity days) */}
+      {isExpired && (
+        <div
+          data-testid="account-expired-alert"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            padding: '6px 10px',
+            backgroundColor: 'rgba(246, 70, 93, 0.08)',
+            border: '1px solid rgba(246, 70, 93, 0.2)',
+            borderRadius: RADII.sm,
+            fontSize: '0.75rem',
+            color: PALETTE.accent3,
+            fontWeight: TYPOGRAPHY.weights.medium,
+            marginBottom: SPACING.md,
+          }}
+        >
+          <span
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: RADII.full,
+              backgroundColor: PALETTE.accent3,
+              display: 'inline-block',
+            }}
+          />
+          <span>Session expired — reconnect to resume publishing</span>
+        </div>
+      )}
 
       {/* Card Actions */}
       <div
@@ -544,7 +516,7 @@ export function AccountCard({
             data-testid="account-reconnect-button"
             onClick={() => onReconnect?.(account)}
             style={{
-              height: '32px',
+              height: '30px',
               padding: `0 ${SPACING.md}`,
               backgroundColor: isExpired ? PALETTE.primary : 'transparent',
               color: isExpired ? PALETTE.background : `var(--text-main, ${THEME.default.text.primary})`,
@@ -569,16 +541,26 @@ export function AccountCard({
           data-testid="account-disconnect-button"
           onClick={() => onDisconnect?.(account)}
           style={{
-            height: '32px',
+            height: '30px',
             padding: `0 ${SPACING.sm}`,
             backgroundColor: 'transparent',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            border: '1px solid transparent',
             borderRadius: RADII.sm,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.medium,
             cursor: 'pointer',
-            transition: 'color 0.15s ease, border-color 0.15s ease',
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = PALETTE.accent3;
+            e.currentTarget.style.borderColor = 'rgba(246, 70, 93, 0.25)';
+            e.currentTarget.style.backgroundColor = 'rgba(246, 70, 93, 0.08)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
+            e.currentTarget.style.borderColor = 'transparent';
+            e.currentTarget.style.backgroundColor = 'transparent';
           }}
         >
           Disconnect

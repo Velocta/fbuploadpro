@@ -594,3 +594,39 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
   - `WorkspaceBreadcrumb`: Pure client component computing dynamic hierarchical route trails (e.g. `Home`, `Media Library`, `Facebook / Pages`, `Facebook / Pages / Details`, `Instagram / Accounts`) with zero cognitive complexity.
   - Page canvas content mounts flush with zero left margin indentation across all viewport breakpoints.
 
+---
+
+## 19. Spec 053 Facebook Accounts Section Redesign, Open Connection Dialog & Professional SaaS Copy
+
+### 19.1 Accounts Top Section & Scale Toolbar Parity
+* **Visual & Structural Parity with Pages**: Replaced the legacy accounts filter bar with the split-horizon top section from Facebook Pages (`apps/web/src/app/tenant/[subdomain]/pages/page.tsx`).
+* **Situational Subtitle Architecture**: Implemented `computeAccountsSubtitle` (cognitive complexity $\le 4$) calculating real-time dynamic states:
+  - Zero accounts: `"Connect your first Facebook account to manage pages and publish reels."`
+  - Filtered query/status: `"Showing {filtered} of {total} accounts"`
+  - Session attention required: `"{total} connected {accounts} · {attention} requires reconnecting"`
+  - All healthy: `"{total} connected {accounts} · All operational"`
+* **Scale Toolbar**: Ghost search input with inset magnifying glass icon, keyboard Escape dismiss, and `×` clear affordance, accompanied by pure typographic flat filter tabs (`All`, `Active`, `Expiring Soon`, `Expired`) with a 2px luminous gold bottom indicator on the active selection.
+
+### 19.2 Sleek, Uncluttered Account Cards (`AccountCard`)
+* **Removal of Information Overload**: Excised `"Token valid for X days"` and raw Facebook gender display (`• Male/Female`) from the card surface per user mandate.
+* **42px Avatar Status Rings**: Integrated a 1.5px status ring with subtle micro-halo into the avatar geometry:
+  - Active: `#2ebd85` (emerald)
+  - Expiring soon (1–7 days): `#fad734` (gold)
+  - Expired: `#f6465d` (rose)
+* **Blended Linked Pages Affordance**: Replaced the heavy bordered toggle with a transparent, blended button (`[ X pages linked ↗ ]`) that deep-links directly to `/tenant/[subdomain]/pages?account=${encodeURIComponent(account.displayName)}` with pre-filtered pages.
+* **Blended Ghost Disconnect**: Refined the disconnect action into a non-intrusive ghost button that reveals a subtle rose outline only upon user hover.
+
+### 19.3 Open Flat Connection Dialog (`ConnectAccountModal`)
+* **Eradication of "Box-in-a-Box"**: Eliminated nested framed card boxes and inner icon containers within the dialog in favor of an open, flat midnight slate surface.
+* **Plain-English UX for Everyday Users**:
+  - **This Browser**: "If you're already logged into Facebook in this browser window." (Direct OAuth authorization).
+  - **Different Browser or Phone**: "If your Facebook account is open in another browser, private window, or on your mobile device." (Generates a secure link valid for 15 minutes).
+  - **Magic Link View**: Clean, professional guidance reassuring users that the current window will automatically detect and complete connection once approved on their other device.
+
+### 19.4 Professional SaaS Copy (`CreateWorkspaceModal`)
+* **Elimination of Infrastructure Jargon**: Strictly removed all user-facing references to "subdomain" across modal titles, labels, and helper descriptions.
+* **Customer-Centric Framing**:
+  - Subtitle: `"Workspaces keep your social accounts, scheduled posts, and media organized in one dedicated space."`
+  - Helper note: `"Give your workspace a recognizable name, such as your brand, company, or client project."`
+
+

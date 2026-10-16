@@ -165,7 +165,7 @@ export function CreateWorkspaceModal({
             lineHeight: 1.4,
           }}
         >
-          Workspaces isolate your publishing queues, connected Facebook accounts, and media assets.
+          Workspaces keep your social accounts, scheduled posts, and media organized in one dedicated space.
         </p>
 
         {error && (
@@ -199,7 +199,7 @@ export function CreateWorkspaceModal({
             <input
               id="ws-name-input"
               type="text"
-              placeholder="e.g. Acme Media"
+              placeholder="e.g. Acme Media or Brand Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               disabled={isSubmitting}
@@ -224,7 +224,7 @@ export function CreateWorkspaceModal({
                 color: `var(--text-dim, ${THEME.default.text.muted})`,
               }}
             >
-              A unique subdomain will be automatically created under your workspace group.
+              Give your workspace a recognizable name, such as your brand, company, or client project.
             </p>
           </div>
 

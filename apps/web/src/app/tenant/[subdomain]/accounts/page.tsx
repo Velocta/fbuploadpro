@@ -59,11 +59,47 @@ export function filterAccountsList(
   });
 }
 
-interface AccountsFilterBarProps {
+export function computeAccountsSubtitle(
+  totalCount: number,
+  filteredCount: number,
+  attentionCount: number,
+  isFiltered: boolean
+): React.ReactNode {
+  if (totalCount === 0) {
+    return 'Connect your first Facebook account to manage pages and publish reels.';
+  }
+  if (isFiltered) {
+    return `Showing ${filteredCount} of ${totalCount} ${
+      totalCount === 1 ? 'account' : 'accounts'
+    }`;
+  }
+  if (attentionCount > 0) {
+    return (
+      <span>
+        {totalCount} connected {totalCount === 1 ? 'account' : 'accounts'} ·{' '}
+        <span
+          style={{
+            color: PALETTE.accent3,
+            fontWeight: TYPOGRAPHY.weights.medium,
+          }}
+        >
+          {attentionCount} {attentionCount === 1 ? 'requires' : 'require'}{' '}
+          reconnecting
+        </span>
+      </span>
+    );
+  }
+  return `${totalCount} connected ${
+    totalCount === 1 ? 'account' : 'accounts'
+  } · All operational`;
+}
+
+export interface AccountsFilterBarProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
   statusFilter: AccountStatusFilter;
   onStatusFilterChange: (value: AccountStatusFilter) => void;
+  attentionCount?: number | undefined;
 }
 
 const FILTER_TABS: Array<{ value: AccountStatusFilter; label: string; testId: string }> = [
@@ -78,6 +114,7 @@ export function AccountsFilterBar({
   onSearchChange,
   statusFilter,
   onStatusFilterChange,
+  attentionCount = 0,
 }: Readonly<AccountsFilterBarProps>) {
   return (
     <div
@@ -87,74 +124,161 @@ export function AccountsFilterBar({
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: SPACING.md,
-        marginBottom: SPACING.lg,
+        paddingBottom: SPACING.md,
+        marginBottom: SPACING.xl,
+        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         flexWrap: 'wrap',
       }}
     >
-      <input
-        type="search"
-        data-testid="accounts-search-input"
-        placeholder="Search accounts..."
-        aria-label="Search accounts"
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
+      {/* Ghost Search Input with Inset Icon & Clear Affordance */}
+      <div
         style={{
-          ...COMPONENT_STYLES.input(),
-          backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          minWidth: '240px',
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          minWidth: '220px',
           flex: '1 1 240px',
-          maxWidth: '360px',
+          maxWidth: '320px',
         }}
-      />
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '10px',
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            pointerEvents: 'none',
+          }}
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
 
-      <fieldset
+        <input
+          type="search"
+          data-testid="accounts-search-input"
+          placeholder="Search accounts..."
+          aria-label="Search accounts"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              onSearchChange('');
+            }
+          }}
+          style={{
+            width: '100%',
+            height: '32px',
+            paddingLeft: '32px',
+            paddingRight: searchQuery ? '28px' : '10px',
+            backgroundColor: 'transparent',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            borderRadius: RADII.sm,
+            fontSize: '0.8125rem',
+            outline: 'none',
+            transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = PALETTE.primary;
+            e.currentTarget.style.boxShadow = '0 0 0 2px rgba(250, 215, 52, 0.15)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+        />
+
+        {searchQuery && (
+          <button
+            type="button"
+            aria-label="Clear search query"
+            onClick={() => onSearchChange('')}
+            style={{
+              position: 'absolute',
+              right: '8px',
+              background: 'none',
+              border: 'none',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              fontSize: '14px',
+              lineHeight: 1,
+              padding: '2px',
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      {/* Pure Typographic Flat Filter Tabs */}
+      <div
+        role="tablist"
         aria-label="Filter accounts by status"
         style={{
-          margin: 0,
-          display: 'inline-flex',
+          display: 'flex',
           alignItems: 'center',
-          gap: SPACING.xs,
-          padding: SPACING.xs,
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.sm,
+          gap: SPACING.md,
         }}
       >
         {FILTER_TABS.map((tab) => {
           const isActive = statusFilter === tab.value;
+          const isAttention = tab.value === 'expired' || tab.value === 'expiring_soon';
           return (
             <button
               key={tab.value}
               type="button"
+              role="tab"
               data-testid={tab.testId}
+              aria-selected={isActive}
               aria-pressed={isActive}
               onClick={() => onStatusFilterChange(tab.value)}
               style={{
-                height: '30px',
-                padding: `0 ${SPACING.md}`,
-                backgroundColor: isActive
-                  ? `var(--bg-panel, ${THEME.default.surfaces.panel})`
-                  : 'transparent',
+                background: 'none',
+                border: 'none',
+                borderBottom: isActive
+                  ? `2px solid ${PALETTE.primary}`
+                  : '2px solid transparent',
+                padding: `${SPACING.xs} 0`,
+                fontSize: '0.8125rem',
+                fontWeight: isActive
+                  ? TYPOGRAPHY.weights.semibold
+                  : TYPOGRAPHY.weights.medium,
                 color: isActive
                   ? `var(--text-main, ${THEME.default.text.primary})`
                   : `var(--text-sub, ${THEME.default.text.secondary})`,
-                border: isActive
-                  ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
-                  : '1px solid transparent',
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                fontWeight: isActive ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.medium,
                 cursor: 'pointer',
-                transition: 'all 0.12s ease',
+                transition: 'color 0.12s ease, border-color 0.12s ease',
+                marginBottom: '-1px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
               }}
             >
-              {tab.label}
+              <span>{tab.label}</span>
+              {isAttention && tab.value === 'expired' && attentionCount > 0 && (
+                <span
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: PALETTE.accent3,
+                  }}
+                >
+                  ({attentionCount})
+                </span>
+              )}
             </button>
           );
         })}
-      </fieldset>
+      </div>
     </div>
   );
 }
@@ -698,6 +822,22 @@ export default function TenantAccountsPage() {
   );
   const existingAccountIds = useMemo(() => accounts.map((a) => a.id), [accounts]);
 
+  const attentionCount = useMemo(
+    () => accounts.filter((a) => a.status === 'expired').length,
+    [accounts]
+  );
+  const isFiltered = searchQuery.trim().length > 0 || statusFilter !== 'all';
+  const situationalSubtitle = useMemo(
+    () =>
+      computeAccountsSubtitle(
+        accounts.length,
+        filteredAccounts.length,
+        attentionCount,
+        isFiltered
+      ),
+    [accounts.length, filteredAccounts.length, attentionCount, isFiltered]
+  );
+
   let contentNode: React.ReactNode;
   if (isLoading) {
     contentNode = (
@@ -828,13 +968,14 @@ export default function TenantAccountsPage() {
             Facebook Accounts
           </h1>
           <p
+            data-testid="accounts-page-subtitle"
             style={{
               margin: 0,
               fontSize: '0.875rem',
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Connect your Facebook accounts to manage pages
+            {situationalSubtitle}
           </p>
         </div>
 
@@ -845,17 +986,32 @@ export default function TenantAccountsPage() {
             disabled={byocStatus.isLoading}
             onClick={handleOpenNewConnect}
             style={{
-              ...COMPONENT_STYLES.primaryButton,
+              height: '34px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: PALETTE.primary,
+              color: '#000000',
+              border: `1px solid ${PALETTE.primary}`,
+              borderRadius: RADII.sm,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: SPACING.xs,
-              opacity: byocStatus.isLoading ? 0.6 : 1,
+              gap: '6px',
               cursor: byocStatus.isLoading ? 'not-allowed' : 'pointer',
+              opacity: byocStatus.isLoading ? 0.6 : 1,
+              boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+              transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!byocStatus.isLoading) e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <svg
-              width="16"
-              height="16"
+              width="14"
+              height="14"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -867,7 +1023,7 @@ export default function TenantAccountsPage() {
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            <span>Connect Facebook Account</span>
+            <span>Connect Account</span>
           </button>
         )}
       </div>
@@ -924,13 +1080,14 @@ export default function TenantAccountsPage() {
         <ByocRequiredBanner subdomain={subdomain} />
       )}
 
-      {/* Search & Status Filter Bar (> 4 accounts) */}
-      {!isLoading && accounts.length > 4 && (
+      {/* Search & Status Filter Bar */}
+      {!isLoading && accounts.length > 0 && (
         <AccountsFilterBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
+          attentionCount={attentionCount}
         />
       )}
 

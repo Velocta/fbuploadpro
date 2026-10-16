@@ -59,7 +59,7 @@ describe('WorkspaceSwitcher & CreateWorkspaceModal (Spec 037)', () => {
     expect(hasAttribute('aria-modal', 'true')).toBe(true);
     expect(hasText('Create Workspace')).toBe(true);
     expect(hasText('Workspace Name')).toBe(true);
-    expect(hasText('A unique subdomain will be automatically created')).toBe(true);
+    expect(hasText('Give your workspace a recognizable name')).toBe(true);
     expect(hasAttribute('data-testid', 'create-workspace-submit')).toBe(true);
     expect(html).toContain('Cancel');
   });

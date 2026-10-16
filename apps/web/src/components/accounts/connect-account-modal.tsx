@@ -176,6 +176,7 @@ interface ConnectOptionButtonProps {
   icon: React.ReactNode;
   title: string;
   description: string;
+  actionHint?: string | undefined;
 }
 
 function ConnectOptionButton({
@@ -185,6 +186,7 @@ function ConnectOptionButton({
   icon,
   title,
   description,
+  actionHint,
 }: Readonly<ConnectOptionButtonProps>) {
   return (
     <button
@@ -194,25 +196,33 @@ function ConnectOptionButton({
       onClick={onClick}
       style={{
         display: 'flex',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         gap: SPACING.md,
-        padding: SPACING.lg,
-        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+        padding: `${SPACING.md} ${SPACING.lg}`,
+        backgroundColor: 'transparent',
         border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         borderRadius: RADII.md,
         cursor: disabled ? 'not-allowed' : 'pointer',
         textAlign: 'left',
         transition: 'border-color 0.15s ease, background-color 0.15s ease',
         width: '100%',
+        boxSizing: 'border-box',
+      }}
+      onMouseEnter={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.backgroundColor = `var(--bg-subtle, ${THEME.default.surfaces.subtle})`;
+          e.currentTarget.style.borderColor = PALETTE.primary;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!disabled) {
+          e.currentTarget.style.backgroundColor = 'transparent';
+          e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
+        }
       }}
     >
       <div
         style={{
-          width: '36px',
-          height: '36px',
-          borderRadius: RADII.sm,
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -223,13 +233,13 @@ function ConnectOptionButton({
         {icon}
       </div>
 
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
             fontWeight: TYPOGRAPHY.weights.semibold,
             fontSize: '0.9375rem',
             color: `var(--text-main, ${THEME.default.text.primary})`,
-            marginBottom: '4px',
+            marginBottom: '2px',
           }}
         >
           {title}
@@ -243,7 +253,36 @@ function ConnectOptionButton({
         >
           {description}
         </div>
+        {actionHint && (
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              marginTop: '4px',
+            }}
+          >
+            {actionHint}
+          </div>
+        )}
       </div>
+
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        style={{
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+          flexShrink: 0,
+        }}
+      >
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
     </button>
   );
 }
@@ -269,8 +308,8 @@ export function MagicLinkView({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-      <p style={{ margin: 0, fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.4 }}>
-        copy and Open this link in the browser where you&apos;re signed into Facebook:
+      <p style={{ margin: 0, fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.5 }}>
+        Open this link in the browser or mobile window where your Facebook account is currently logged in. Once you approve access there, this window will update automatically.
       </p>
 
       {isExpired ? (
@@ -630,7 +669,7 @@ export function ConnectAccountModal({
           <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription>
             {view === 'choose' && 'Choose where your Facebook account is currently logged in:'}
-            {view === 'magic' && 'Open this link in the browser where your Facebook profile is active.'}
+            {view === 'magic' && 'Open this link in the browser or mobile device where you are logged into Facebook.'}
             {view === 'success' && 'Account connected successfully!'}
           </DialogDescription>
         </DialogHeader>
@@ -658,10 +697,11 @@ export function ConnectAccountModal({
                 testId="connect-option-direct"
                 disabled={isDirectConnecting}
                 onClick={handleDirectConnect}
-                title={isDirectConnecting ? 'Redirecting to Facebook...' : 'This browser'}
-                description="Choose this if you are already logged into Facebook in this browser."
+                title={isDirectConnecting ? 'Redirecting to Facebook...' : 'This Browser'}
+                description="Choose this if you are already logged into Facebook in this browser window."
+                actionHint="Direct Facebook authorization in this window"
                 icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                     <line x1="8" y1="21" x2="16" y2="21" />
                     <line x1="12" y1="17" x2="12" y2="21" />
@@ -675,10 +715,11 @@ export function ConnectAccountModal({
                 onClick={() => {
                   void handleStartMagicLink();
                 }}
-                title={isGeneratingMagic ? 'Generating Magic Link...' : 'Different browser or device (Magic Link)'}
-                description="Generates a secure link you can paste into another browser or window (valid for 15 minutes)."
+                title={isGeneratingMagic ? 'Generating Secure Link...' : 'Different Browser or Phone'}
+                description="Choose this if your Facebook account is open in another browser, private window, or on your mobile device."
+                actionHint="Generates a secure link you can open on any device (valid for 15 minutes)"
                 icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </svg>
