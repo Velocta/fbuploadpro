@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
-import { StatusDot } from '@/components/ui';
+import { StatusDot, Button } from '@/components/ui';
 import {
   MODAL_BACKDROP_STYLE,
   MODAL_CONTAINER_STYLE,
@@ -21,6 +21,7 @@ export interface CredentialsState {
   workspaceId: string;
   subdomain: string;
   fbAppId: string;
+  fbAppSecret?: string | null | undefined;
   hasSecret: boolean;
   status: BYOCStatus;
   lastTestedAt: string | null;
@@ -54,7 +55,6 @@ interface FacebookNotConnectedFormProps {
   appSecretError: string | null;
   isConnecting: boolean;
   isEditMode: boolean;
-  hasExistingSecret: boolean;
   onAppIdChange: (value: string) => void;
   onAppSecretChange: (value: string) => void;
   onToggleSecret: () => void;
@@ -70,7 +70,6 @@ function FacebookNotConnectedForm({
   appSecretError,
   isConnecting,
   isEditMode,
-  hasExistingSecret,
   onAppIdChange,
   onAppSecretChange,
   onToggleSecret,
@@ -277,9 +276,7 @@ function FacebookNotConnectedForm({
                 id="fb-app-secret-input"
                 data-testid="fb-app-secret-input"
                 type={showSecret ? 'text' : 'password'}
-                placeholder={
-                  isEditMode && hasExistingSecret ? '••••••••••••••••••••••••' : 'Enter your App Secret'
-                }
+                placeholder="Enter your App Secret"
                 value={appSecret}
                 onChange={(e) => onAppSecretChange(e.target.value)}
                 disabled={isConnecting}
@@ -303,10 +300,17 @@ function FacebookNotConnectedForm({
                   background: 'none',
                   border: 'none',
                   padding: `0 ${SPACING.md}`,
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   cursor: 'pointer',
                   fontSize: '0.8125rem',
                   fontWeight: TYPOGRAPHY.weights.medium,
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
                 }}
               >
                 {showSecret ? 'Hide' : 'Show'}
@@ -352,17 +356,14 @@ function FacebookNotConnectedForm({
                 {isConnecting ? 'Connecting...' : 'Connect Facebook'}
               </button>
               {isEditMode && (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   data-testid="fb-cancel-edit-btn"
                   onClick={onCancelEdit}
-                  style={{
-                    ...COMPONENT_STYLES.secondaryButton(),
-                    cursor: 'pointer',
-                  }}
                 >
                   Cancel
-                </button>
+                </Button>
               )}
             </div>
             <span
@@ -386,6 +387,7 @@ function FacebookNotConnectedForm({
 
 interface FacebookConnectedViewProps {
   fbAppId: string;
+  fbAppSecret?: string | null | undefined;
   connectedAt?: string | null | undefined;
   copiedKey: string | null;
   showSecretState2: boolean;
@@ -397,6 +399,7 @@ interface FacebookConnectedViewProps {
 
 function FacebookConnectedView({
   fbAppId,
+  fbAppSecret,
   connectedAt,
   copiedKey,
   showSecretState2,
@@ -448,10 +451,17 @@ function FacebookConnectedView({
             style={{
               background: 'none',
               border: 'none',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               cursor: 'pointer',
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
             {copiedKey === 'appId' ? 'Copied' : 'Copy'}
@@ -489,10 +499,10 @@ function FacebookConnectedView({
               fontFamily: 'monospace',
               fontSize: '0.875rem',
               color: `var(--text-main, ${THEME.default.text.primary})`,
-              letterSpacing: '0.15em',
+              letterSpacing: showSecretState2 ? 'normal' : '0.15em',
             }}
           >
-            ••••••••••••••••••••••••
+            {showSecretState2 ? (fbAppSecret || '••••••••••••••••••••••••') : '••••••••••••••••••••••••'}
           </span>
           <button
             type="button"
@@ -501,10 +511,17 @@ function FacebookConnectedView({
             style={{
               background: 'none',
               border: 'none',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               cursor: 'pointer',
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
             {showSecretState2 ? 'Hide' : 'Show'}
@@ -530,17 +547,14 @@ function FacebookConnectedView({
           flexWrap: 'wrap',
         }}
       >
-        <button
+        <Button
           type="button"
+          variant="secondary"
           data-testid="fb-edit-details-btn"
           onClick={onEditDetails}
-          style={{
-            ...COMPONENT_STYLES.secondaryButton(),
-            cursor: 'pointer',
-          }}
         >
           Edit details
-        </button>
+        </Button>
         <button
           type="button"
           data-testid="fb-disconnect-btn"
@@ -682,12 +696,19 @@ function FacebookSetupCard({
             style={{
               background: 'none',
               border: 'none',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               cursor: 'pointer',
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
               flexShrink: 0,
               marginLeft: SPACING.sm,
+              transition: 'color 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
             {copiedKey === 'callback' ? 'Copied' : 'Copy'}
@@ -788,18 +809,15 @@ function FacebookDisconnectModal({
             marginTop: SPACING.sm,
           }}
         >
-          <button
+          <Button
             type="button"
+            variant="secondary"
             data-testid="fb-disconnect-keep-btn"
             onClick={onClose}
             disabled={isDisconnecting}
-            style={{
-              ...COMPONENT_STYLES.secondaryButton(),
-              cursor: isDisconnecting ? 'not-allowed' : 'pointer',
-            }}
           >
             Keep connected
-          </button>
+          </Button>
           <button
             type="button"
             data-testid="fb-disconnect-confirm-btn"
@@ -849,7 +867,7 @@ export function BYOCSettingsView({
 
   // Form field state
   const [appId, setAppId] = useState(initialCredentials?.fbAppId || '');
-  const [appSecret, setAppSecret] = useState('');
+  const [appSecret, setAppSecret] = useState(initialCredentials?.fbAppSecret || '');
   const [showSecret, setShowSecret] = useState(false);
   const [showSecretState2, setShowSecretState2] = useState(false);
   const [appIdError, setAppIdError] = useState<string | null>(null);
@@ -888,6 +906,9 @@ export function BYOCSettingsView({
             setCredentials(data);
             if (data.fbAppId) {
               setAppId(data.fbAppId);
+            }
+            if (data.fbAppSecret) {
+              setAppSecret(data.fbAppSecret);
             }
           }
         }
@@ -970,13 +991,14 @@ export function BYOCSettingsView({
         workspaceId: prev?.workspaceId || '',
         subdomain,
         fbAppId: trimmedId,
+        fbAppSecret: trimmedSecret || prev?.fbAppSecret || '',
         hasSecret: true,
         status: data.status || 'unverified',
         lastTestedAt: data.lastTestedAt || null,
         connectedAt: data.connectedAt || prev?.connectedAt || new Date().toISOString(),
       }));
 
-      setAppSecret('');
+      setAppSecret(trimmedSecret || '');
       setIsEditMode(false);
       showToast('Facebook connected.', 'success');
     } catch {
@@ -1138,7 +1160,6 @@ export function BYOCSettingsView({
             appSecretError={appSecretError}
             isConnecting={isConnecting}
             isEditMode={isEditMode}
-            hasExistingSecret={Boolean(credentials?.hasSecret)}
             onAppIdChange={(val) => {
               setAppId(val);
               if (appIdError) setAppIdError(null);
@@ -1152,7 +1173,7 @@ export function BYOCSettingsView({
             onCancelEdit={() => {
               setIsEditMode(false);
               setAppId(credentials?.fbAppId || '');
-              setAppSecret('');
+              setAppSecret(credentials?.fbAppSecret || '');
               setAppIdError(null);
               setAppSecretError(null);
             }}
@@ -1163,6 +1184,7 @@ export function BYOCSettingsView({
         {isConnectedState && (
           <FacebookConnectedView
             fbAppId={credentials?.fbAppId || ''}
+            fbAppSecret={credentials?.fbAppSecret || ''}
             connectedAt={credentials?.connectedAt ?? null}
             copiedKey={copiedKey}
             showSecretState2={showSecretState2}
@@ -1170,7 +1192,7 @@ export function BYOCSettingsView({
             onToggleSecret={() => setShowSecretState2((prev) => !prev)}
             onEditDetails={() => {
               setAppId(credentials?.fbAppId || '');
-              setAppSecret('');
+              setAppSecret(credentials?.fbAppSecret || '');
               setAppIdError(null);
               setAppSecretError(null);
               setIsEditMode(true);
@@ -1201,238 +1223,3 @@ export function BYOCSettingsView({
   );
 }
 
-// ============================================================================
-// Backwards Compatibility Exports (Legacy Helpers)
-// ============================================================================
-
-export interface SaveAndTestResult {
-  saveError?: string;
-  testSuccess?: boolean;
-  testMessage?: string;
-  testedAt?: string;
-}
-
-export async function saveAndTestBYOC(
-  subdomain: string,
-  appId: string,
-  appSecret: string
-): Promise<SaveAndTestResult> {
-  const saveRes = await fetch(`/api/tenant/${subdomain}/settings/byoc`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      fbAppId: appId.trim(),
-      fbAppSecret: appSecret.trim() || undefined,
-    }),
-  });
-
-  const saveData = await saveRes.json();
-  if (!saveRes.ok) {
-    return { saveError: saveData.error || 'Failed to save credentials.' };
-  }
-
-  const testRes = await fetch(`/api/tenant/${subdomain}/settings/byoc/test`, {
-    method: 'POST',
-  });
-  const testData = await testRes.json();
-
-  return {
-    testSuccess: Boolean(testRes.ok && testData.success),
-    testMessage: testData.message,
-    testedAt: testData.testedAt,
-  };
-}
-
-export function MetaAppSetupSection({
-  redirectUri,
-  copiedKey,
-  onCopy,
-}: Readonly<{
-  redirectUri: string;
-  copiedKey: string | null;
-  onCopy: (key: string, value: string) => void;
-}>) {
-  return (
-    <div
-      style={{
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        padding: SPACING.xl,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: SPACING.lg,
-      }}
-    >
-      <div>
-        <h4
-          style={{
-            margin: 0,
-            fontSize: '0.9375rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          One more step
-        </h4>
-        <p
-          style={{
-            margin: `${SPACING.xs} 0 0 0`,
-            fontSize: '0.8125rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          Add this address to your Meta app so Facebook can bring you back here after you sign in.
-        </p>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-            SIGN-IN ADDRESS
-          </span>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: `${SPACING.sm} ${SPACING.md}`,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              borderRadius: RADII.sm,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            }}
-          >
-            <span
-              style={{
-                fontFamily: 'monospace',
-                fontSize: '0.75rem',
-                color: PALETTE.accent1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {redirectUri}
-            </span>
-            <button
-              type="button"
-              onClick={() => onCopy('redirect', redirectUri)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-              }}
-            >
-              {copiedKey === 'redirect' ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function ByocTestFailedModal({
-  open,
-  message,
-  onClose,
-}: Readonly<{
-  open: boolean;
-  message: string;
-  onClose: () => void;
-}>) {
-  if (!open) return null;
-
-  return (
-    <div
-      aria-hidden="true"
-      data-testid="byoc-test-failed-modal"
-      style={MODAL_BACKDROP_STYLE}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
-      <button
-        type="button"
-        aria-label="Close dialog"
-        tabIndex={-1}
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          cursor: 'default',
-        }}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="byoc-test-failed-title"
-        style={{
-          ...MODAL_CONTAINER_STYLE,
-          maxWidth: '480px',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        <h2
-          id="byoc-test-failed-title"
-          data-testid="byoc-test-failed-title"
-          style={{
-            margin: 0,
-            fontSize: '1.125rem',
-            fontWeight: TYPOGRAPHY.weights.bold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          Meta Connection Test Failed
-        </h2>
-        <div
-          data-testid="byoc-test-failed-message"
-          style={{
-            padding: `${SPACING.sm} ${SPACING.md}`,
-            backgroundColor: 'rgba(246, 70, 93, 0.08)',
-            border: '1px solid rgba(246, 70, 93, 0.25)',
-            borderRadius: RADII.sm,
-            fontSize: '0.875rem',
-            lineHeight: 1.4,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          {message}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: SPACING.sm,
-            marginTop: SPACING.xs,
-          }}
-        >
-          <button
-            type="button"
-            data-testid="byoc-test-failed-dismiss-btn"
-            onClick={onClose}
-            style={{
-              padding: `${SPACING.sm} ${SPACING.lg}`,
-              backgroundColor: PALETTE.primary,
-              border: 'none',
-              borderRadius: RADII.sm,
-              color: PALETTE.background,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              cursor: 'pointer',
-            }}
-          >
-            Review Credentials
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
