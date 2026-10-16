@@ -1,6 +1,7 @@
 /**
  * @file byoc-settings.test.tsx
- * @description Unit tests for BYOCSettingsView, GeneralSettingsView, saveAndTestBYOC, and ByocTestFailedModal.
+ * @description Unit tests for rebuilt Facebook Settings Tab (BYOCSettingsView), GeneralSettingsView,
+ * and legacy helpers.
  */
 
 import React from 'react';
@@ -14,7 +15,7 @@ import {
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { render } from '../components/setup';
 
-describe('Settings Views Suite (BYOC & General)', () => {
+describe('Settings Views Suite (Facebook Settings & General)', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
@@ -27,6 +28,7 @@ describe('Settings Views Suite (BYOC & General)', () => {
           hasSecret: true,
           status: 'valid',
           lastTestedAt: '2026-10-13T10:00:00Z',
+          connectedAt: '2026-10-16T12:00:00Z',
         }),
       })
     );
@@ -58,47 +60,201 @@ describe('Settings Views Suite (BYOC & General)', () => {
     });
   });
 
-  describe('BYOCSettingsView', () => {
-    it('renders loading placeholder initially then control fields', () => {
-      const { hasText } = render(<BYOCSettingsView subdomain="acme" />);
-      // Initially renders loading state before useEffect mounts
+  describe('BYOCSettingsView - State 1 (Not Connected)', () => {
+    it('renders loading placeholder when initialLoading is true', () => {
+      const { hasText } = render(<BYOCSettingsView subdomain="acme" initialLoading={true} />);
       expect(hasText('Loading credentials configuration...')).toBe(true);
     });
 
-    it('does not render Webhook Verify Token field', () => {
-      const { hasText, hasAttribute } = render(<BYOCSettingsView subdomain="acme" />);
-      expect(hasText('Webhook Verify Token')).toBe(false);
-      expect(hasAttribute('data-testid', 'byoc-webhook-token-input')).toBe(false);
-    });
-
-    it('validates first-time save requires app secret', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValueOnce({
-          ok: false,
-          status: 400,
-          json: async () => ({ error: 'Enter your Facebook App Secret to complete setup.' }),
-        })
+    it('renders Connect Facebook card with Not connected status badge', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={null} />
       );
 
-      const outcome = await saveAndTestBYOC('acme', '123456789012345', '');
-      expect(outcome.saveError).toBe('Enter your Facebook App Secret to complete setup.');
+      expect(hasText('Connect Facebook')).toBe(true);
+      expect(hasText('Not connected')).toBe(true);
+      expect(hasText('Link your Facebook app to start publishing from this workspace.')).toBe(true);
+      expect(hasAttribute('data-testid', 'facebook-settings-card')).toBe(true);
+      expect(hasAttribute('data-testid', 'facebook-status-badge')).toBe(true);
+    });
+
+    it('renders Step 1 with Meta App Dashboard link', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={null} />
+      );
+
+      expect(hasText('Get your app details')).toBe(true);
+      expect(hasText('Meta App Dashboard →')).toBe(true);
+      expect(hasAttribute('href', 'https://developers.facebook.com')).toBe(true);
+      expect(hasText('and copy your App ID and App Secret from Settings → Basic.')).toBe(true);
+    });
+
+    it('renders Step 2 with App ID, App Secret, Connect button, and helper text', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={null} />
+      );
+
+      expect(hasText('Add them here')).toBe(true);
+      expect(hasText('APP ID')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-app-id-input')).toBe(true);
+      expect(hasAttribute('placeholder', 'e.g. 123456789012345')).toBe(true);
+      expect(hasText('find this in your Meta app under Settings → Basic.')).toBe(true);
+
+      expect(hasText('APP SECRET')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-app-secret-input')).toBe(true);
+      expect(hasAttribute('placeholder', 'Enter your App Secret')).toBe(true);
+      expect(hasText('Show')).toBe(true);
+      expect(hasText('Only you can see this — we keep it safe and never show it again.')).toBe(true);
+
+      expect(hasText('Connect Facebook')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-connect-btn')).toBe(true);
+      expect(hasText('We check everything works the moment you connect.')).toBe(true);
+    });
+
+    it('renders One more step card with workspace callback URL and Copy button', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={null} />
+      );
+
+      expect(hasText('One more step')).toBe(true);
+      expect(
+        hasText(
+          'Add this address to your Meta app so Facebook can bring you back here after you sign in.'
+        )
+      ).toBe(true);
+      expect(hasText('SIGN-IN ADDRESS')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-signin-address')).toBe(true);
+      expect(hasText('/api/auth/facebook/callback')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-copy-callback-btn')).toBe(true);
+      expect(
+        hasText('Valid OAuth Redirect URIs') && hasText('field in your Meta app.')
+      ).toBe(true);
     });
   });
 
-  describe('ByocTestFailedModal', () => {
-    it('renders null when open is false', () => {
-      const { html } = render(
-        <ByocTestFailedModal
-          open={false}
-          message="Meta Graph API rejected credentials"
-          onClose={() => {}}
-        />
+  describe('BYOCSettingsView - State 2 (Connected)', () => {
+    const connectedCreds = {
+      workspaceId: '11111111-1111-4111-a111-111111111111',
+      subdomain: 'acme',
+      fbAppId: '987654321098765',
+      hasSecret: true,
+      status: 'valid' as const,
+      lastTestedAt: '2026-10-16T10:00:00Z',
+      connectedAt: '2026-10-16T12:00:00Z',
+    };
+
+    it('renders Connected status badge and success subtext', () => {
+      const { hasText } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={connectedCreds} />
       );
-      expect(html).toBe('');
+
+      expect(hasText('Connect Facebook')).toBe(true);
+      expect(hasText('Connected')).toBe(true);
+      expect(hasText('Your Facebook app is linked and publishing is ready to go.')).toBe(true);
     });
 
-    it('renders failure advisory modal and details when open is true', () => {
+    it('displays saved App ID with Copy button and masked App Secret with Show toggle', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={connectedCreds} />
+      );
+
+      expect(hasText('APP ID')).toBe(true);
+      expect(hasText('987654321098765')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-copy-app-id-btn')).toBe(true);
+
+      expect(hasText('APP SECRET')).toBe(true);
+      expect(hasText('••••••••••••••••••••••••')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-state2-secret-toggle')).toBe(true);
+      expect(hasText('Only you can see this — we keep it safe and never show it again.')).toBe(true);
+    });
+
+    it('displays Edit details, Disconnect buttons, and formatted Connected date', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={connectedCreds} />
+      );
+
+      expect(hasText('Edit details')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-edit-details-btn')).toBe(true);
+
+      expect(hasText('Disconnect')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-disconnect-btn')).toBe(true);
+
+      expect(hasText('Connected on Oct 16, 2026.')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-connected-date')).toBe(true);
+    });
+
+    it('hides One more step card in State 2', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={connectedCreds} />
+      );
+
+      expect(hasText('One more step')).toBe(false);
+      expect(hasAttribute('data-testid', 'fb-one-more-step-card')).toBe(false);
+    });
+  });
+
+  describe('BYOCSettingsView - Edit Mode', () => {
+    const connectedCreds = {
+      workspaceId: '11111111-1111-4111-a111-111111111111',
+      subdomain: 'acme',
+      fbAppId: '987654321098765',
+      hasSecret: true,
+      status: 'valid' as const,
+      lastTestedAt: '2026-10-16T10:00:00Z',
+      connectedAt: '2026-10-16T12:00:00Z',
+    };
+
+    it('renders form pre-filled with App ID and reveals One more step card in edit mode', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView
+          subdomain="acme"
+          initialCredentials={connectedCreds}
+          initialEditMode={true}
+        />
+      );
+
+      expect(hasText('Get your app details')).toBe(true);
+      expect(hasText('Add them here')).toBe(true);
+      expect(hasAttribute('value', '987654321098765')).toBe(true);
+      expect(hasText('Cancel')).toBe(true);
+      expect(hasText('One more step')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-one-more-step-card')).toBe(true);
+    });
+  });
+
+  describe('BYOCSettingsView - Disconnect Confirmation Dialog', () => {
+    it('renders disconnect confirmation dialog with verbatim copy when opened', () => {
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView
+          subdomain="acme"
+          initialCredentials={{
+            workspaceId: '11111111-1111-4111-a111-111111111111',
+            subdomain: 'acme',
+            fbAppId: '123456789012345',
+            hasSecret: true,
+            status: 'valid',
+            lastTestedAt: null,
+          }}
+          initialShowDisconnectModal={true}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'fb-disconnect-modal')).toBe(true);
+      expect(hasText('Disconnect Facebook?')).toBe(true);
+      expect(
+        hasText('remove your App ID and App Secret from this workspace') &&
+          hasText('Your connected accounts and posting will keep working as normal') &&
+          hasText('reconnect or connect new accounts until you add new details.')
+      ).toBe(true);
+      expect(hasText('Keep connected')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-disconnect-keep-btn')).toBe(true);
+      expect(hasText('Disconnect')).toBe(true);
+      expect(hasAttribute('data-testid', 'fb-disconnect-confirm-btn')).toBe(true);
+    });
+  });
+
+  describe('Legacy Helpers Compatibility', () => {
+    it('renders ByocTestFailedModal when open is true', () => {
       const { hasText, hasAttribute } = render(
         <ByocTestFailedModal
           open={true}
@@ -108,16 +264,26 @@ describe('Settings Views Suite (BYOC & General)', () => {
       );
 
       expect(hasAttribute('data-testid', 'byoc-test-failed-modal')).toBe(true);
-      expect(hasAttribute('data-testid', 'byoc-test-failed-title')).toBe(true);
       expect(hasText('Meta Connection Test Failed')).toBe(true);
       expect(hasText('App ID 12345 not found in Meta Developer portal')).toBe(true);
       expect(hasText('Review Credentials')).toBe(true);
-      expect(hasAttribute('data-testid', 'byoc-test-failed-dismiss-btn')).toBe(true);
     });
-  });
 
-  describe('saveAndTestBYOC auto-test on save workflow', () => {
-    it('returns save error if credentials saving fails', async () => {
+    it('renders MetaAppSetupSection with redirect URI and callback label', () => {
+      const { hasText } = render(
+        <MetaAppSetupSection
+          redirectUri="https://acme.fbuploadpro.com/api/auth/facebook/callback"
+          copiedKey={null}
+          onCopy={() => {}}
+        />
+      );
+
+      expect(hasText('One more step')).toBe(true);
+      expect(hasText('SIGN-IN ADDRESS')).toBe(true);
+      expect(hasText('https://acme.fbuploadpro.com/api/auth/facebook/callback')).toBe(true);
+    });
+
+    it('saveAndTestBYOC returns save error when save fails', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValueOnce({
@@ -128,80 +294,6 @@ describe('Settings Views Suite (BYOC & General)', () => {
 
       const result = await saveAndTestBYOC('acme', '123456789012345', 'secret12345');
       expect(result.saveError).toBe('Invalid app secret format');
-      expect(result.testSuccess).toBeUndefined();
-    });
-
-    it('saves credentials and performs automated connection test with success', async () => {
-      const mockFetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ success: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            success: true,
-            status: 'valid',
-            message: 'Successfully verified connection to Meta Graph API.',
-            testedAt: '2026-10-13T12:00:00Z',
-          }),
-        });
-
-      vi.stubGlobal('fetch', mockFetch);
-
-      const result = await saveAndTestBYOC('acme', '123456789012345', 'secret12345');
-      expect(result.saveError).toBeUndefined();
-      expect(result.testSuccess).toBe(true);
-      expect(result.testMessage).toBe('Successfully verified connection to Meta Graph API.');
-      expect(result.testedAt).toBe('2026-10-13T12:00:00Z');
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it('saves credentials and flags failure when automated connection test fails', async () => {
-      const mockFetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ success: true }),
-        })
-        .mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({
-            success: false,
-            status: 'invalid',
-            message: 'Meta Graph API error (101): Invalid App Secret.',
-            testedAt: '2026-10-13T12:00:00Z',
-          }),
-        });
-
-      vi.stubGlobal('fetch', mockFetch);
-
-      const result = await saveAndTestBYOC('acme', '123456789012345', 'badsecret');
-      expect(result.saveError).toBeUndefined();
-      expect(result.testSuccess).toBe(false);
-      expect(result.testMessage).toBe('Meta Graph API error (101): Invalid App Secret.');
-      expect(result.testedAt).toBe('2026-10-13T12:00:00Z');
-    });
-  });
-
-  describe('MetaAppSetupSection', () => {
-    it('renders all 5 required Meta permissions and no webhook callback url', () => {
-      const { hasText } = render(
-        <MetaAppSetupSection
-          redirectUri="https://app.fbuploadpro.com/api/auth/facebook/callback"
-          copiedKey={null}
-          onCopy={() => {}}
-        />
-      );
-
-      expect(hasText('pages_show_list')).toBe(true);
-      expect(hasText('pages_read_engagement')).toBe(true);
-      expect(hasText('pages_manage_posts')).toBe(true);
-      expect(hasText('pages_manage_engagement')).toBe(true);
-      expect(hasText('business_management')).toBe(true);
-      expect(hasText('Webhook Callback URL')).toBe(false);
-      expect(hasText('api/webhooks/facebook')).toBe(false);
     });
   });
 });

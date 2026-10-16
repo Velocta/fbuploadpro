@@ -415,32 +415,38 @@ fbuploadpro/
 ### 12.2 Dedicated Settings Hub (`/tenant/[subdomain]/settings`)
 * Dedicated layout and sub-navigation with two core sections:
   1. `General`: Workspace name, subdomain display, created timestamp, owner details.
-  2. `BYOC Facebook App`: Bring Your Own Credentials control center.
+  2. `Facebook`: Facebook App credentials and connection control center (renamed from "Facebook BYOC" in Spec 061).
 * Accessible via the workspace sidebar navigation, workspace switcher menu, and user menu.
 
-### 12.3 Strict BYOC (Bring Your Own Credentials) Facebook Architecture
-* **Per-Workspace Isolation**: Workspaces must configure their own Facebook App credentials before connecting Facebook accounts or publishing pages.
+### 12.3 Strict BYOC (Bring Your Own Credentials) Facebook Architecture & Redesigned Facebook Tab (Spec 061)
+* **Per-Workspace Isolation**: Workspaces configure their own Facebook App credentials before connecting Facebook accounts or publishing pages.
 * **Security & Encryption**:
   * `fb_app_id` stored in cleartext.
   * `fb_app_secret` symmetrically encrypted at rest via AES-256-GCM using `FB_ENCRYPTION_MASTER_KEY` / `TOKEN_ENCRYPTION_KEY`.
   * Raw secret is NEVER returned over client-facing APIs (`hasSecret: boolean`).
-  * Secret field in settings UI is masked (`••••••••`) with a show/hide toggle.
-* **Developer Setup Assistance & Canonical Workspace Subdomain OAuth (Spec 047)**:
-  * 1-click copy helper for authorized OAuth Redirect URIs (`https://{subdomain}.{rootDomain}/api/auth/facebook/callback`).
-  * **Strict Subdomain URI Alignment**: In both direct OAuth (`/api/auth/facebook`) and Magic Link OAuth (`/connect/facebook`), `redirect_uri` is dynamically generated using `buildSubdomainOAuthRedirectUri` to match the initiating workspace's canonical subdomain (`https://{subdomain}.{rootDomain}/api/auth/facebook/callback`), signed into the `state` envelope (`OAuthStatePayload.redirectUri`), and supplied identically during token exchange in `/api/auth/facebook/callback`.
-  * Clear, user-friendly guidance for configuring Meta Developer App settings and required Graph API v26.0 permissions:
-    * `pages_show_list`: Discover and enumerate Facebook Pages managed by the operator.
-    * `pages_read_engagement`: Read Page metadata and post engagement.
-    * `pages_manage_posts`: Create, schedule, and publish posts, photos, videos, and reels.
-    * `pages_manage_engagement`: Publish automated first comments (`POST /{post-id}/comments`) as the Page without permission errors.
-    * `business_management`: Manage Business assets and associate Page tokens.
-* **Connection Diagnostics & Automated Verification**:
-  * Automatically tests App ID and Secret validity on save against Meta Graph API `https://graph.facebook.com/v26.0/{app_id}?access_token={app_id}|{app_secret}`.
-  * Prompts operator with a failure advisory dialog (`ByocTestFailedModal`) if Graph API validation fails, highlighting credential issues immediately.
-  * Direct manual "Test Connection" button for on-demand verification.
-  * Live status indicator dot (`valid`, `invalid`, `unverified`) with micro-halos.
+  * Secret field in settings UI is masked (`••••••••••••••••••••••••`) with a show/hide toggle.
+* **Two-State Minimalist UX (Spec 061)**:
+  * **STATE 1 — Not Connected**:
+    * Status badge: unboxed amber luminous dot ("Not connected").
+    * Subtext: "Link your Facebook app to start publishing from this workspace."
+    * Step 1 ("Get your app details"): Direct link to Meta App Dashboard (`https://developers.facebook.com`) and guidance to copy App ID and App Secret from Settings → Basic.
+    * Step 2 ("Add them here"): Text input for APP ID, masked password input for APP SECRET with Show toggle, and primary "Connect Facebook" button with inline validation (App ID numeric 10–20 digits; App Secret non-empty) and success toast "Facebook connected."
+    * "One more step" Card: Displays the read-only workspace OAuth callback URL (`https://{subdomain}.{rootDomain}/api/auth/facebook/callback`) in accent color with a 1-click Copy button and guidance for Meta App settings.
+  * **STATE 2 — Connected**:
+    * Status badge: unboxed green luminous dot ("Connected").
+    * Subtext: "Your Facebook app is linked and publishing is ready to go."
+    * Displays active APP ID with Copy button.
+    * Displays masked APP SECRET dots with Show toggle.
+    * Action buttons: Secondary "Edit details" (reopens State 1 form pre-filled and reveals the "One more step" card) and danger-outline "Disconnect".
+    * Timestamp line: "Connected on <date>." (formatted e.g. "Connected on Oct 16, 2026.").
+    * "One more step" card is completely hidden in State 2.
+* **Safe Disconnect Flow (`DELETE /api/tenant/[subdomain]/settings/byoc`)**:
+  * Clicking "Disconnect" opens a confirmation dialog: "Disconnect Facebook?"
+  * Explains that removing credentials will not affect existing connected accounts or queued posting, only preventing new account connections until new details are added.
+  * Secondary button "Keep connected" dismisses; danger button "Disconnect" confirms.
+  * On confirm: Deletes ONLY the `workspace_byoc_credentials` row for the workspace. All Facebook accounts, pages, media items, and scheduled posts remain 100% intact. Displays toast "Facebook disconnected." and returns the tab to State 1.
 * **Zero Upsert Fallbacks**:
-  * All BYOC endpoints (`GET`, `PUT`, `POST .../test`) query workspace records strictly by `subdomain` and return 404 when absent. They never execute blind upserts or backfills on `workspaces` (`workspaces.upsert({ ... }, { onConflict: 'subdomain' })`), completely eliminating cross-tenant workspace ownership hijacking vulnerabilities.
+  * All BYOC endpoints (`GET`, `PUT`, `DELETE`, `POST .../test`) query workspace records strictly by `subdomain` and return 404 when absent. They never execute blind upserts or backfills on `workspaces` (`workspaces.upsert({ ... }, { onConflict: 'subdomain' })`), completely eliminating cross-tenant workspace ownership hijacking vulnerabilities.
 
 ---
 
