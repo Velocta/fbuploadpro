@@ -38,6 +38,9 @@ export function computeBreadcrumbs(pathname: string, subdomain: string): Breadcr
   if (first === 'downloader') {
     return [{ label: 'Downloader' }];
   }
+  if (first === 'fdola-studio') {
+    return [{ label: 'Fdola Studio' }];
+  }
   if (first === 'settings') {
     return [{ label: 'Settings' }];
   }
