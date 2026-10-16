@@ -161,8 +161,8 @@ function PostingTimesHeader({
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              backgroundColor: STATUS_SIGNALS.emerald.dot,
-              boxShadow: `0 0 6px ${STATUS_SIGNALS.emerald.glow}`,
+              backgroundColor: STATUS_SIGNALS.operational.dot,
+              boxShadow: STATUS_SIGNALS.operational.halo,
             }}
           />
           <span style={{ color: `var(--text-sub, ${THEME.default.text.secondary})` }}>

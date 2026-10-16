@@ -116,8 +116,8 @@ function Step1TimezoneSelector({
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: STATUS_SIGNALS.emerald.dot,
-              boxShadow: `0 0 8px ${STATUS_SIGNALS.emerald.glow}`,
+              backgroundColor: STATUS_SIGNALS.operational.dot,
+              boxShadow: STATUS_SIGNALS.operational.halo,
             }}
           />
           <div>
@@ -303,7 +303,7 @@ function Step1TimezoneSelector({
                                   marginLeft: SPACING.xs,
                                   fontSize: '0.6875rem',
                                   color: PALETTE.primary,
-                                  fontWeight: TYPOGRAPHY.weights.normal,
+                                  fontWeight: TYPOGRAPHY.weights.regular,
                                 }}
                               >
                                 (Current)
@@ -366,7 +366,7 @@ function Step1TimezoneSelector({
           type="button"
           onClick={onCancel}
           style={{
-            ...COMPONENT_STYLES.buttonSecondary,
+            ...COMPONENT_STYLES.secondaryButton(),
             height: '36px',
             padding: `0 ${SPACING.md}`,
             fontSize: '0.8125rem',
@@ -730,7 +730,7 @@ function Step2ReviewImpact({
           disabled={isSubmitting}
           onClick={onBack}
           style={{
-            ...COMPONENT_STYLES.buttonSecondary,
+            ...COMPONENT_STYLES.secondaryButton(),
             height: '36px',
             padding: `0 ${SPACING.md}`,
             fontSize: '0.8125rem',
