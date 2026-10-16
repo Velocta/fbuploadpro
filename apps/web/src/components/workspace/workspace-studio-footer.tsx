@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import {
@@ -294,18 +294,20 @@ function PopoverWorkspacesList({
   );
 }
 
-interface PopoverActionsListProps {
+export interface PopoverActionsListProps {
   currentSubdomain: string;
   isThemeDark: boolean;
   isSettingsActive: boolean;
+  isSigningOut?: boolean;
   onOpenSettings: () => void;
   onToggleTheme: () => void;
   onSignOut: () => void;
 }
 
-function PopoverActionsList({
+export function PopoverActionsList({
   isThemeDark,
   isSettingsActive,
+  isSigningOut = false,
   onOpenSettings,
   onToggleTheme,
   onSignOut,
@@ -427,6 +429,8 @@ function PopoverActionsList({
         role="menuitem"
         data-testid="logout-button"
         onClick={onSignOut}
+        disabled={isSigningOut}
+        aria-disabled={isSigningOut ? 'true' : undefined}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -437,7 +441,8 @@ function PopoverActionsList({
           border: 'none',
           backgroundColor: 'transparent',
           color: `var(--signal-critical, ${PALETTE.accent3})`,
-          cursor: 'pointer',
+          cursor: isSigningOut ? 'not-allowed' : 'pointer',
+          opacity: isSigningOut ? 0.6 : 1,
           textAlign: 'left',
           fontSize: '0.8125rem',
           outline: 'none',
@@ -458,7 +463,7 @@ function PopoverActionsList({
           <polyline points="16 17 21 12 16 7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
-        <span>Sign Out</span>
+        <span>{isSigningOut ? 'Signing out...' : 'Sign Out'}</span>
       </button>
     </div>
   );
@@ -481,6 +486,7 @@ export function WorkspaceStudioFooter({
   const [isOpen, setIsOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const [isThemeDark, setIsThemeDark] = useState(true);
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([
     {
@@ -606,11 +612,31 @@ export function WorkspaceStudioFooter({
     setIsThemeDark(!isThemeDark);
   };
 
-  const handleSignOut = () => {
-    clearClientSessionCookies();
-    broadcastLogout();
-    redirectToLogout();
-  };
+  const handleSignOut = useCallback(async () => {
+    let targetRedirectUrl: string | null = null;
+    try {
+      setIsSigningOut(true);
+      clearClientSessionCookies();
+      broadcastLogout();
+      try {
+        const res = await fetch('/api/auth/logout', { method: 'POST', keepalive: true });
+        if (res.ok) {
+          const data = await res.json().catch(() => null);
+          if (data?.redirectUrl) {
+            targetRedirectUrl = data.redirectUrl;
+          }
+        }
+      } catch {
+        // Continue even if network is degraded or offline
+      }
+    } finally {
+      if (targetRedirectUrl && typeof window !== 'undefined') {
+        window.location.href = targetRedirectUrl;
+      } else {
+        redirectToLogout();
+      }
+    }
+  }, []);
 
   return (
     <>
@@ -675,6 +701,7 @@ export function WorkspaceStudioFooter({
                 currentSubdomain={subdomain}
                 isThemeDark={isThemeDark}
                 isSettingsActive={isSettingsActive}
+                isSigningOut={isSigningOut}
                 onOpenSettings={handleOpenSettings}
                 onToggleTheme={handleToggleTheme}
                 onSignOut={handleSignOut}

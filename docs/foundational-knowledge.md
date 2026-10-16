@@ -676,6 +676,24 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **React Hydration Consistency**: Enabled `suppressHydrationWarning` on `<html lang="en">`, preventing SSR hydration mismatch warnings while allowing dynamic client theme classes.
 * **Persistent Cookie & Storage Synchronization**: `WorkspaceStudioFooter` ensures that theme changes simultaneously update `document.documentElement.dataset.theme`, `localStorage.setItem('theme', ...)`, and cookie `fbup_theme=${newTheme}; max-age=31536000; SameSite=Lax`.
 
+---
+
+## 22. Spec 056 Sidebar Sign-Out Resilience & Cross-Environment Logout Gateway
+
+### 22.1 Complete Server-Side Session Invalidation (`/api/auth/logout`)
+* **Asynchronous Handler Overhaul**: Upgraded `handleSignOut` in `WorkspaceStudioFooter` from a synchronous client-only stub to an asynchronous handler that issues a `POST /api/auth/logout` request with `keepalive: true`.
+* **httpOnly Cookie Expiration**: Resolves the root cause where client-side JavaScript (`document.cookie`) was unable to clear `httpOnly` session cookies (`fbup_session`). The server-side logout route revokes the Supabase backend session (`supabase.auth.signOut()`) and returns authoritative `Set-Cookie` headers expiring `fbup_session` across apex and host-only cookie domains.
+* **Resilient Fallback Redirection**: Gracefully handles offline or network-degraded scenarios by falling back to canonical client-side gateway redirection if the network request fails, ensuring users are never trapped inside an active workspace.
+
+### 22.2 Impeccable Asynchronous UI State & Race Condition Prevention
+* **Dynamic Feedback**: Introduced `isSigningOut` state to `WorkspaceStudioFooter` and passed it down to `PopoverActionsList`.
+* **Accessible Loading State**: The sign-out button transitions text to `"Signing out..."`, disables itself (`disabled={isSigningOut}`, `aria-disabled="true"`), sets `cursor: not-allowed`, and reduces opacity to 0.6 to prevent duplicate clicks and visual stutter.
+
+### 22.3 Cross-Environment Gateway URL Resolution (`packages/contracts`)
+* **Elimination of Invalid Hybrid Gateway Hosts**: Hardened `resolveRequestGatewayBase` in `packages/contracts/src/domain/routing.ts` to detect local hostnames (`localhost`, `127.0.0.1`, `*.localhost`). When `cleanHost` is local and `cleanRoot` is default non-local (`fbuploadpro.com`), it adapts `effectiveRoot` to `'localhost'`, permanently eradicating unresolvable hosts like `app.fbuploadpro.com:3000` that caused `ERR_NAME_NOT_RESOLVED` browser errors.
+* **Server Fallback Parity**: Aligned `apps/web/src/app/api/auth/logout/route.ts` fallback `rootDomain` to `'localhost:3000'` for complete parity with application middleware and other authentication routes.
+
+
 
 
 

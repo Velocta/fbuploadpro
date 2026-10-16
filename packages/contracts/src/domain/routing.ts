@@ -182,7 +182,11 @@ function resolveRequestGatewayBase(
     port = '3000';
   }
 
-  const host = resolveGatewayHost(cleanRoot, isLocal, port);
+  // Prevent invalid hybrid host creation (e.g. app.fbuploadpro.com:3000) when running on localhost
+  // but cleanRoot defaulted to non-local 'fbuploadpro.com'
+  const effectiveRoot = isLocalHost && !isLocalRoot ? 'localhost' : cleanRoot;
+
+  const host = resolveGatewayHost(effectiveRoot, isLocal, port);
   return `${protocol}//${host}`;
 }
 

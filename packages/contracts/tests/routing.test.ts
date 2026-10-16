@@ -211,6 +211,18 @@ describe('Tenant Subdomain Routing Contracts', () => {
       const url = buildCentralAppUrl('/login?logout=success', undefined, 'localhost');
       expect(url.toString()).toBe('http://app.localhost/login?logout=success');
     });
+
+    it('adapts cleanRoot to localhost when requestUrl is local and rootDomain is omitted (Spec 056)', () => {
+      const url = buildCentralAppUrl('/login?logout=success', 'http://localhost:3000/tenant/acme');
+      expect(url.toString()).toBe('http://app.localhost:3000/login?logout=success');
+      expect(url.toString()).not.toContain('fbuploadpro.com:3000');
+    });
+
+    it('adapts cleanRoot to localhost when requestUrl has .localhost subdomain and rootDomain is omitted (Spec 056)', () => {
+      const url = buildCentralAppUrl('/login?logout=success', 'http://tenant.localhost:3000/api/auth/logout');
+      expect(url.toString()).toBe('http://app.localhost:3000/login?logout=success');
+      expect(url.toString()).not.toContain('fbuploadpro.com:3000');
+    });
   });
 
   describe('buildSubdomainOAuthRedirectUri', () => {
