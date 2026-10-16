@@ -161,15 +161,15 @@ export interface ThemeTokens {
 export const DARK_THEME: ThemeTokens = {
   mode: 'dark',
   surfaces: {
-    canvas: '#000000',
-    panel: '#0c0d10',
-    subtle: '#121419',
-    hover: '#1f242d',
-    active: '#262c37',
+    canvas: '#0a0c10',
+    panel: '#12151c',
+    subtle: '#181c26',
+    hover: '#1f2430',
+    active: '#272d3d',
   },
   borders: {
-    hairline: '#1f242d',
-    strong: '#2b323c',
+    hairline: '#222735',
+    strong: '#2d3444',
     focus: 'rgba(250, 215, 52, 0.35)',
   },
   text: {

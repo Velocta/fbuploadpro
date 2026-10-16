@@ -29,17 +29,17 @@
   --neutral: #1f242d;
 
   /* Default (Dark Mode) Tokens */
-  --bg-canvas: #000000;
-  --bg-panel: #0c0d10;
-  --bg-subtle: #121419;
-  --bg-hover: #1f242d;
-  --bg-active: #262c37;
+  --bg-canvas: #0a0c10;
+  --bg-panel: #12151c;
+  --bg-subtle: #181c26;
+  --bg-hover: #1f2430;
+  --bg-active: #272d3d;
   --text-main: #ffffff;
   --text-sub: #9ca3af;
   --text-dim: #6b7280;
   --text-on-primary: #000000;
-  --border-subtle: #1f242d;
-  --border-strong: #2b323c;
+  --border-subtle: #222735;
+  --border-strong: #2d3444;
   --ring-focus: rgba(250, 215, 52, 0.35);
 
   /* Spacing Scale */
