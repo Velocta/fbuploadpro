@@ -239,7 +239,6 @@ export function AccountsFilterBar({
               role="tab"
               data-testid={tab.testId}
               aria-selected={isActive}
-              aria-pressed={isActive}
               onClick={() => onStatusFilterChange(tab.value)}
               style={{
                 background: 'none',
