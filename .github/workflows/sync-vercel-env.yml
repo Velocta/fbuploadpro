@@ -5,9 +5,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - '.github/workflows/sync-vercel-env.yml'
-      - '.github/scripts/sync-vercel-env.mjs'
 
 jobs:
   sync:

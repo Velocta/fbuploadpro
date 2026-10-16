@@ -134,10 +134,13 @@ Go to **GitHub Repo** → **Settings** → **Secrets and variables** → **Actio
 - *(If deploying Next.js to Vercel)*: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
 
 ### 2. In Cloudflare Workers (Production Worker)
-Run via Wrangler CLI or add under Cloudflare Dashboard → Workers & Pages → `fbuploadpro-worker` → **Settings** → **Variables and Secrets**:
+Secrets are automatically injected during deployment via [`.github/workflows/deploy-worker.yml`](../.github/workflows/deploy-worker.yml). The workflow reads `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `TOKEN_ENCRYPTION_KEY` directly from your GitHub Repository Secrets and sets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `FB_ENCRYPTION_MASTER_KEY` on the worker automatically using Wrangler.
+
+You do **not** need to manually configure secrets in the Cloudflare Dashboard. If manual CLI injection is ever needed for local testing:
 ```bash
-npx wrangler secret put DATABASE_URL
 npx wrangler secret put FB_ENCRYPTION_MASTER_KEY
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
 
 ### 3. In Web Host (Vercel)
@@ -145,5 +148,5 @@ Instead of manually inputting secrets in the Vercel Dashboard, synchronize them 
 
 1. Ensure `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are set in GitHub Repository Secrets.
 2. Ensure application secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SESSION_SECRET`, etc.) are configured in GitHub Repository Secrets.
-3. Trigger the **Sync Secrets to Vercel** workflow via GitHub Actions (`workflow_dispatch` or push to `main`).
+3. The workflow runs automatically on every merge or push to `main` (and can also be triggered on demand via `gh workflow run sync-vercel-env.yml` or `workflow_dispatch`).
 4. The workflow will automatically upsert all variables into Vercel production and preview environments via the Vercel REST API.
