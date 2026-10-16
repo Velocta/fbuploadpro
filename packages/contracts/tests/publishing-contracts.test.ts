@@ -5,6 +5,7 @@ import {
   CreateQueueSlotRequestSchema,
   UpdateQueueSlotRequestSchema,
   UpdateQueueScheduleTimezoneRequestSchema,
+  UpdateQueueScheduleTimezoneResponseSchema,
   PageQueueSlotSchema,
   ListQueueSlotsResponseSchema,
   QueueItemStatusSchema,
@@ -111,6 +112,28 @@ describe('Publishing Engine Domain Contracts', () => {
       it('rejects empty timezone', () => {
         const res = UpdateQueueScheduleTimezoneRequestSchema.safeParse({
           timezone: '',
+        });
+        expect(res.success).toBe(false);
+      });
+    });
+
+    describe('UpdateQueueScheduleTimezoneResponseSchema', () => {
+      it('validates successful response with realignedQueueCount', () => {
+        const res = UpdateQueueScheduleTimezoneResponseSchema.safeParse({
+          success: true,
+          timezone: 'America/New_York',
+          updatedCount: 3,
+          realignedQueueCount: 5,
+        });
+        expect(res.success).toBe(true);
+      });
+
+      it('rejects negative realignedQueueCount', () => {
+        const res = UpdateQueueScheduleTimezoneResponseSchema.safeParse({
+          success: true,
+          timezone: 'America/New_York',
+          updatedCount: 3,
+          realignedQueueCount: -1,
         });
         expect(res.success).toBe(false);
       });

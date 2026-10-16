@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { calculateNextVacantSlot, type SlotSchedulerParams } from '../../src/lib/slot-scheduler';
+import {
+  calculateNextVacantSlot,
+  recomputeSlotScheduledTime,
+  type SlotSchedulerParams,
+} from '../../src/lib/slot-scheduler';
 
 describe('calculateNextVacantSlot (T124)', () => {
   describe('empty or inactive slots', () => {
@@ -358,6 +362,71 @@ describe('calculateNextVacantSlot (T124)', () => {
 
       expect(result).toBeNull();
     });
+  });
+});
+
+describe('recomputeSlotScheduledTime (Spec 061)', () => {
+  it('recomputes scheduled time to the same local slot time in new timezone when still in the future', () => {
+    // 10:00 AM in Asia/Karachi (UTC+5) was scheduled for 2026-10-20T05:00:00.000Z
+    const originalTime = new Date('2026-10-20T05:00:00.000Z');
+    // Now is 08:00 UTC (which is 04:00 EDT in New York)
+    const now = new Date('2026-10-20T08:00:00.000Z');
+
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime: '10:00:00',
+      newTimezone: 'America/New_York',
+      now,
+    });
+
+    // In America/New_York (EDT, UTC-4), 10:00 AM on 2026-10-20 is 14:00:00 UTC
+    expect(result.toISOString()).toBe('2026-10-20T14:00:00.000Z');
+  });
+
+  it('advances to the next day when slot time in new timezone has already passed (past-time protection)', () => {
+    const originalTime = new Date('2026-10-20T05:00:00.000Z');
+    // Now is 15:00 UTC (11:00 AM EDT, so 10:00 AM today has already passed)
+    const now = new Date('2026-10-20T15:00:00.000Z');
+
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime: '10:00:00',
+      newTimezone: 'America/New_York',
+      now,
+    });
+
+    // 10:00 AM EDT on next day (2026-10-21) is 14:00:00 UTC
+    expect(result.toISOString()).toBe('2026-10-21T14:00:00.000Z');
+  });
+
+  it('avoids colliding with occupied timestamps by advancing to next vacant day', () => {
+    const originalTime = new Date('2026-10-20T05:00:00.000Z');
+    const now = new Date('2026-10-20T08:00:00.000Z');
+    const occupiedTimes = new Set<number>([
+      new Date('2026-10-20T14:00:00.000Z').getTime(),
+    ]);
+
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime: '10:00:00',
+      newTimezone: 'America/New_York',
+      now,
+      occupiedTimes,
+    });
+
+    // Next day (2026-10-21) at 10:00 AM EDT
+    expect(result.toISOString()).toBe('2026-10-21T14:00:00.000Z');
+  });
+
+  it('returns original scheduled time unchanged if slot time is invalid', () => {
+    const originalTime = new Date('2026-10-20T05:00:00.000Z');
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime: 'invalid-time',
+      newTimezone: 'America/New_York',
+    });
+
+    expect(result).toBe(originalTime);
   });
 });
 

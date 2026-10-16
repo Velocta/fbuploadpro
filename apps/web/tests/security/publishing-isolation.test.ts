@@ -4,6 +4,7 @@ import { signSessionToken } from '@fbuploadpro/contracts';
 import {
   handleListQueueSlots,
   handleCreateQueueSlot,
+  handleUpdateQueueScheduleTimezone,
 } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route';
 import {
   handleUpdateQueueSlot,
@@ -81,6 +82,19 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
         }
       );
       const res = await handleCreateQueueSlot(req, 'tenant-a', userA.pageId);
+      expect(res.status).toBe(403);
+    });
+
+    it('blocks User B from updating User A page schedule timezone via tenant-a route with 403 Forbidden', async () => {
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/tenant-a/pages/${userA.pageId}/slots`,
+        {
+          method: 'PATCH',
+          headers: { cookie: tokenCookieUserB, 'content-type': 'application/json' },
+          body: JSON.stringify({ timezone: 'Asia/Karachi' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(req, 'tenant-a', userA.pageId);
       expect(res.status).toBe(403);
     });
 
