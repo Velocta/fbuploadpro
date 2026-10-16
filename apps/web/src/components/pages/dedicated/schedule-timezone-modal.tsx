@@ -3,7 +3,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   COMPONENT_STYLES,
-  EFFECTS,
   PALETTE,
   RADII,
   SPACING,
@@ -11,6 +10,7 @@ import {
   THEME,
   TYPOGRAPHY,
 } from '@/lib/theme';
+import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import {
   findTimezoneEntry,
   getTimezoneCurrentTime,
@@ -810,28 +810,15 @@ export function ScheduleTimezoneModal({
       aria-modal="true"
       aria-labelledby="timezone-modal-title"
       data-testid="schedule-timezone-modal"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: EFFECTS.blur.md,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 50,
-        padding: SPACING.md,
-      }}
+      style={MODAL_BACKDROP_STYLE}
     >
       <div
         style={{
-          width: '100%',
+          ...MODAL_CONTAINER_STYLE,
           maxWidth: '560px',
-          backgroundColor: `var(--bg-card, ${THEME.default.surfaces.card})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.lg,
-          boxShadow: EFFECTS.shadows.float,
+          maxHeight: '90vh',
+          overflowY: 'auto',
           padding: SPACING.lg,
-          boxSizing: 'border-box',
         }}
       >
         {step === 1 ? (
