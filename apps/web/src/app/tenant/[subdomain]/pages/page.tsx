@@ -312,6 +312,41 @@ export function PagesScaleToolbar({
   );
 }
 
+export function computeSituationalSubtitle(
+  totalCount: number,
+  filteredCount: number,
+  attentionCount: number,
+  isFiltered: boolean
+): React.ReactNode {
+  if (totalCount === 0) {
+    return 'Connect your first Facebook Page to start managing content and tracking follower growth.';
+  }
+  if (isFiltered) {
+    return `Showing ${filteredCount} of ${totalCount} ${
+      totalCount === 1 ? 'page' : 'pages'
+    }`;
+  }
+  if (attentionCount > 0) {
+    return (
+      <span>
+        {totalCount} connected {totalCount === 1 ? 'page' : 'pages'} ·{' '}
+        <span
+          style={{
+            color: PALETTE.accent3,
+            fontWeight: TYPOGRAPHY.weights.medium,
+          }}
+        >
+          {attentionCount} {attentionCount === 1 ? 'requires' : 'require'}{' '}
+          reconnecting
+        </span>
+      </span>
+    );
+  }
+  return `${totalCount} connected ${
+    totalCount === 1 ? 'page' : 'pages'
+  } · All operational`;
+}
+
 export interface TenantPagesPageProps {
   initialPages?: FacebookPageItem[] | undefined;
   initialAccounts?: FacebookAccountItem[] | undefined;
@@ -402,34 +437,16 @@ export default function TenantPagesPage({
     statusFilter !== 'all' ||
     accountFilter !== 'all';
 
-  let situationalSubtitle: React.ReactNode;
-  if (pages.length === 0) {
-    situationalSubtitle =
-      'Connect your first Facebook Page to start managing content and tracking follower growth.';
-  } else if (isFiltered) {
-    situationalSubtitle = `Showing ${filteredPages.length} of ${pages.length} ${
-      pages.length === 1 ? 'page' : 'pages'
-    }`;
-  } else if (attentionCount > 0) {
-    situationalSubtitle = (
-      <span>
-        {pages.length} connected {pages.length === 1 ? 'page' : 'pages'} ·{' '}
-        <span
-          style={{
-            color: PALETTE.accent3,
-            fontWeight: TYPOGRAPHY.weights.medium,
-          }}
-        >
-          {attentionCount} {attentionCount === 1 ? 'requires' : 'require'}{' '}
-          reconnecting
-        </span>
-      </span>
-    );
-  } else {
-    situationalSubtitle = `${pages.length} connected ${
-      pages.length === 1 ? 'page' : 'pages'
-    } · All operational`;
-  }
+  const situationalSubtitle = useMemo(
+    () =>
+      computeSituationalSubtitle(
+        pages.length,
+        filteredPages.length,
+        attentionCount,
+        isFiltered
+      ),
+    [pages.length, filteredPages.length, attentionCount, isFiltered]
+  );
 
   const handleSelectPage = (page: FacebookPageItem) => {
     router.push(`/tenant/${subdomain}/pages/${page.id}`);
