@@ -303,7 +303,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
           onDisconnectRequest={vi.fn()}
         />
       );
-      expect(html.includes('•')).toBe(false);
+      expect(html).not.toContain('•');
     });
 
     it('provides page actions menu toggle button with proper accessibility attributes', () => {
