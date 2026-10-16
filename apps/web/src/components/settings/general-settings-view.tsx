@@ -10,6 +10,9 @@ export interface GeneralSettingsViewProps {
   workspaceId?: string | undefined;
   ownerEmail?: string | undefined;
   createdAt?: string | undefined;
+  initialIsEditing?: boolean | undefined;
+  initialError?: string | undefined;
+  initialToast?: string | undefined;
 }
 
 export function validateWorkspaceName(val: string): string | null {
@@ -25,13 +28,16 @@ export function validateWorkspaceName(val: string): string | null {
 export function GeneralSettingsView({
   subdomain,
   workspaceName,
+  initialIsEditing = false,
+  initialError,
+  initialToast,
 }: Readonly<GeneralSettingsViewProps>) {
   const [currentName, setCurrentName] = useState<string>(workspaceName || subdomain);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [isEditing, setIsEditing] = useState<boolean>(initialIsEditing);
   const [editValue, setEditValue] = useState<string>(workspaceName || subdomain);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(initialError || null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(initialToast || null);
 
   // Fetch workspace name on mount to ensure synchronization
   useEffect(() => {
