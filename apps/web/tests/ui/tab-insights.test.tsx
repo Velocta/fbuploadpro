@@ -71,7 +71,7 @@ describe('PageTabInsights Client-Side LocalStorage Caching (Spec 062)', () => {
 
   beforeEach(() => {
     localStorageMock = {};
-    vi.stubGlobal('localStorage', {
+    const mockStorage = {
       getItem: vi.fn((key: string) => localStorageMock[key] ?? null),
       setItem: vi.fn((key: string, value: string) => {
         localStorageMock[key] = value;
@@ -82,7 +82,9 @@ describe('PageTabInsights Client-Side LocalStorage Caching (Spec 062)', () => {
       clear: vi.fn(() => {
         localStorageMock = {};
       }),
-    });
+    };
+    vi.stubGlobal('localStorage', mockStorage);
+    vi.stubGlobal('window', { localStorage: mockStorage });
   });
 
   afterEach(() => {
@@ -145,7 +147,7 @@ describe('PageTabInsights Client-Side LocalStorage Caching (Spec 062)', () => {
     });
 
     it('handles localStorage quota or security exception gracefully without throwing', () => {
-      vi.stubGlobal('localStorage', {
+      const failingStorage = {
         getItem: vi.fn(() => {
           throw new Error('QuotaExceededError');
         }),
@@ -153,7 +155,9 @@ describe('PageTabInsights Client-Side LocalStorage Caching (Spec 062)', () => {
           throw new Error('QuotaExceededError');
         }),
         removeItem: vi.fn(),
-      });
+      };
+      vi.stubGlobal('localStorage', failingStorage);
+      vi.stubGlobal('window', { localStorage: failingStorage });
 
       expect(() => setCachedInsights(mockPage.id, '28d', mockInsightsData)).not.toThrow();
       expect(() => getCachedInsights(mockPage.id, '28d')).not.toThrow();

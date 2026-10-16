@@ -28,14 +28,25 @@ export interface StoredInsightsCacheEntry {
   expiresAt: number;
 }
 
+function getLocalStorage(): Storage | null {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage;
+  }
+  if (typeof localStorage !== 'undefined') {
+    return localStorage;
+  }
+  return null;
+}
+
 export function getCachedInsights(pageId: string, range: PageInsightsRange): PageInsightsResponse | null {
-  if (typeof window === 'undefined') return null;
+  const storage = getLocalStorage();
+  if (!storage) return null;
   try {
-    const raw = window.localStorage.getItem(`insights:${pageId}:${range}`);
+    const raw = storage.getItem(`insights:${pageId}:${range}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredInsightsCacheEntry;
     if (!parsed || typeof parsed !== 'object' || !parsed.data || !parsed.expiresAt) {
-      window.localStorage.removeItem(`insights:${pageId}:${range}`);
+      storage.removeItem(`insights:${pageId}:${range}`);
       return null;
     }
     if (Date.now() >= parsed.expiresAt) {
@@ -43,19 +54,25 @@ export function getCachedInsights(pageId: string, range: PageInsightsRange): Pag
     }
     return parsed.data;
   } catch {
+    try {
+      storage.removeItem(`insights:${pageId}:${range}`);
+    } catch {
+      // Ignore removal failure in restricted environments
+    }
     return null;
   }
 }
 
 export function setCachedInsights(pageId: string, range: PageInsightsRange, data: PageInsightsResponse): void {
-  if (typeof window === 'undefined') return;
+  const storage = getLocalStorage();
+  if (!storage) return;
   try {
     const entry: StoredInsightsCacheEntry = {
       data,
       cachedAt: Date.now(),
       expiresAt: Date.now() + INSIGHTS_CACHE_TTL_MS,
     };
-    window.localStorage.setItem(`insights:${pageId}:${range}`, JSON.stringify(entry));
+    storage.setItem(`insights:${pageId}:${range}`, JSON.stringify(entry));
   } catch {
     // Graceful fallback for quota restrictions or private browsing
   }
