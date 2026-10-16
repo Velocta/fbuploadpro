@@ -7,7 +7,6 @@ import {
   RADII,
   SPACING,
   TYPOGRAPHY,
-  COMPONENT_STYLES,
 } from '@/lib/theme';
 import { getInitials } from '@/components/accounts/account-card';
 
@@ -85,6 +84,32 @@ export function getPageAttentionMessage(
   }
 }
 
+export function getPageStatusColor(status: FacebookPageStatus): string {
+  if (isPageNeedsAttention(status)) {
+    return PALETTE.accent3;
+  }
+  if (status === 'paused') {
+    return PALETTE.primary;
+  }
+  if (status === 'active') {
+    return PALETTE.accent4;
+  }
+  return `var(--text-dim, ${THEME.default.text.muted})`;
+}
+
+export function getPageStatusRingBorder(status: FacebookPageStatus): string {
+  if (isPageNeedsAttention(status)) {
+    return `1.5px solid ${PALETTE.accent3}`;
+  }
+  if (status === 'paused') {
+    return `1.5px solid ${PALETTE.primary}`;
+  }
+  if (status === 'active') {
+    return `1.5px solid ${PALETTE.accent4}`;
+  }
+  return `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`;
+}
+
 export function computeFollowersGained(
   page: Pick<FacebookPageItem, 'currentFollowers' | 'startingFollowers'> & {
     followersGained?: number | undefined;
@@ -121,6 +146,8 @@ export function PageCard({
   const needsAttention = isPageNeedsAttention(page.status);
   const attentionMessage = getPageAttentionMessage(page.status);
   const statusLabel = getPageStatusLabel(page.status);
+  const statusColor = getPageStatusColor(page.status);
+  const statusRingBorder = getPageStatusRingBorder(page.status);
 
   const currentFollowers = page.currentFollowers ?? 0;
   const gained = computeFollowersGained(page);
@@ -131,20 +158,6 @@ export function PageCard({
     gainedColor = PALETTE.accent4;
   } else if (gained < 0) {
     gainedColor = PALETTE.accent3;
-  }
-
-  let statusColor: string = PALETTE.accent4;
-  let statusDotType: 'operational' | 'queued' | 'critical' | 'idle' =
-    'operational';
-  if (needsAttention) {
-    statusColor = PALETTE.accent3;
-    statusDotType = 'critical';
-  } else if (page.status === 'paused') {
-    statusColor = PALETTE.primary;
-    statusDotType = 'queued';
-  } else if (page.status === 'disconnected') {
-    statusColor = `var(--text-dim, ${THEME.default.text.muted})`;
-    statusDotType = 'idle';
   }
 
   const initials = getInitials(page.pageName, 'PG');
@@ -181,9 +194,38 @@ export function PageCard({
       aria-label={`Open ${page.pageName} page details`}
       onClick={handleActivate}
       onKeyDown={handleKeyDown}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.borderColor = needsAttention
+          ? PALETTE.accent3
+          : 'rgba(46, 189, 133, 0.4)';
+        e.currentTarget.style.boxShadow = '0 8px 24px -4px rgba(0, 0, 0, 0.35)';
+        const arrow = e.currentTarget.querySelector(
+          '.page-card-arrow'
+        ) as HTMLElement | null;
+        if (arrow) {
+          arrow.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+          arrow.style.transform = 'translate(2px, -2px)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.borderColor = needsAttention
+          ? PALETTE.accent3
+          : `var(--border-subtle, ${THEME.default.borders.hairline})`;
+        e.currentTarget.style.boxShadow = `var(--shadow-card, ${THEME.default.shadows.card})`;
+        const arrow = e.currentTarget.querySelector(
+          '.page-card-arrow'
+        ) as HTMLElement | null;
+        if (arrow) {
+          arrow.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
+          arrow.style.transform = 'translate(0, 0)';
+        }
+      }}
       style={{
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'space-between',
         backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
         border: needsAttention
           ? `1px solid ${PALETTE.accent3}`
@@ -192,228 +234,247 @@ export function PageCard({
         boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
         padding: SPACING.lg,
         cursor: 'pointer',
-        transition: 'border-color 0.15s ease, background-color 0.15s ease',
+        transition:
+          'transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
         outline: 'none',
+        minHeight: '154px',
       }}
     >
-      {/* Page Identity Header */}
+      {/* Top Section: Avatar with Dynamic Status Ring + Identity + Affordance */}
+      <div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: SPACING.md,
+            marginBottom: SPACING.md,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.md,
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {showAvatarImg ? (
+              <img
+                src={page.profilePictureUrl!}
+                alt={page.pageName}
+                data-testid="page-avatar-img"
+                onError={() =>
+                  setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')
+                }
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: RADII.full,
+                  objectFit: 'cover',
+                  border: statusRingBorder,
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div
+                data-testid="page-avatar-initials"
+                style={{
+                  width: '42px',
+                  height: '42px',
+                  borderRadius: RADII.full,
+                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                  border: statusRingBorder,
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: TYPOGRAPHY.weights.bold,
+                  fontSize: '0.9375rem',
+                  flexShrink: 0,
+                }}
+              >
+                {initials}
+              </div>
+            )}
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h3
+                data-testid="page-name"
+                style={{
+                  margin: 0,
+                  fontSize: '0.9375rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {page.pageName}
+              </h3>
+              <span
+                data-testid="page-category"
+                style={{
+                  display: 'block',
+                  fontSize: '0.75rem',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  marginTop: '2px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {page.category || 'Facebook Page'}
+              </span>
+            </div>
+          </div>
+
+          <div
+            aria-hidden="true"
+            className="page-card-arrow"
+            style={{
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              fontSize: '1rem',
+              lineHeight: 1,
+              transition: 'color 0.15s ease, transform 0.15s ease',
+              flexShrink: 0,
+            }}
+          >
+            ↗
+          </div>
+        </div>
+
+        {/* Rose Attention Standout Banner (if needs attention) */}
+        {needsAttention && attentionMessage && (
+          <div
+            data-testid="page-attention-banner"
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: SPACING.xs,
+              padding: '8px 10px',
+              backgroundColor: 'rgba(246, 70, 93, 0.08)',
+              border: '1px solid rgba(246, 70, 93, 0.28)',
+              borderRadius: RADII.sm,
+              fontSize: '0.75rem',
+              lineHeight: 1.4,
+              color: PALETTE.accent3,
+              fontWeight: TYPOGRAPHY.weights.medium,
+              marginBottom: SPACING.sm,
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              style={{ flexShrink: 0, marginTop: '1px' }}
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>{attentionMessage}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Symmetrical Two-Column Data Row (Precision Editorial) */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
+          justifyContent: 'space-between',
           gap: SPACING.md,
-          marginBottom: SPACING.md,
+          marginTop: SPACING.md,
+          paddingTop: SPACING.xs,
         }}
       >
-        {showAvatarImg ? (
-          <img
-            src={page.profilePictureUrl!}
-            alt={page.pageName}
-            data-testid="page-avatar-img"
-            onError={() =>
-              setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')
-            }
-            style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: RADII.full,
-              objectFit: 'cover',
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              flexShrink: 0,
-            }}
-          />
-        ) : (
+        {/* Left Column: Followers Count & Gain */}
+        <div style={{ minWidth: 0 }}>
           <div
-            data-testid="page-avatar-initials"
             style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: RADII.full,
-              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              fontSize: '1rem',
-              flexShrink: 0,
+              alignItems: 'baseline',
+              gap: '6px',
             }}
           >
-            {initials}
+            <span
+              data-testid="page-current-followers"
+              style={{
+                fontSize: '1.0625rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
+            >
+              {currentFollowers.toLocaleString('en-US')}
+            </span>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              followers
+            </span>
           </div>
-        )}
 
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <h3
-            data-testid="page-name"
-            style={{
-              margin: 0,
-              fontSize: '1rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {page.pageName}
-          </h3>
-          <span
-            data-testid="page-category"
-            style={{
-              display: 'block',
-              fontSize: '0.75rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              marginTop: '2px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {page.category || 'Facebook Page'}
-          </span>
-        </div>
-      </div>
-
-      {/* Followers Metrics Box */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: SPACING.md,
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.sm,
-          marginBottom: SPACING.md,
-        }}
-      >
-        <div>
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              marginBottom: '2px',
-            }}
-          >
-            Current followers
-          </div>
-          <div
-            data-testid="page-current-followers"
-            style={{
-              fontSize: '0.9375rem',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            {currentFollowers.toLocaleString('en-US')}
-          </div>
-        </div>
-
-        <div>
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              marginBottom: '2px',
-            }}
-          >
-            Followers gained
-          </div>
           <div
             data-testid="page-followers-gained"
             style={{
-              fontSize: '0.9375rem',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              fontVariantNumeric: TYPOGRAPHY.tabularNums,
+              fontSize: '0.75rem',
               color: gainedColor,
+              fontVariantNumeric: TYPOGRAPHY.tabularNums,
+              marginTop: '2px',
             }}
           >
             {formattedGained}
           </div>
         </div>
-      </div>
 
-      {/* Rose Attention Standout Banner */}
-      {needsAttention && attentionMessage && (
+        {/* Right Column: Pure Typographic Status (NO DOT) & Parent Account */}
         <div
-          data-testid="page-attention-banner"
           style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: SPACING.xs,
-            padding: '8px 10px',
-            backgroundColor: 'rgba(246, 70, 93, 0.08)',
-            border: '1px solid rgba(246, 70, 93, 0.28)',
-            borderRadius: RADII.sm,
-            fontSize: '0.75rem',
-            lineHeight: 1.4,
-            color: PALETTE.accent3,
-            fontWeight: TYPOGRAPHY.weights.medium,
-            marginBottom: SPACING.md,
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            style={{ flexShrink: 0, marginTop: '1px' }}
-          >
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <span>{attentionMessage}</span>
-        </div>
-      )}
-
-      {/* Footer: Parent Facebook Account & Unboxed Status Signal */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: SPACING.sm,
-          marginTop: 'auto',
-          paddingTop: SPACING.xs,
-          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          fontSize: '0.75rem',
-        }}
-      >
-        <span
-          data-testid="page-parent-account"
-          style={{
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Account: {page.accountDisplayName || 'Connected Account'}
-        </span>
-
-        <span
-          data-testid="page-status"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            color: statusColor,
-            fontWeight: TYPOGRAPHY.weights.semibold,
+            textAlign: 'right',
+            minWidth: 0,
             flexShrink: 0,
           }}
         >
-          <span style={COMPONENT_STYLES.statusDot(statusDotType)} />
-          <span>{statusLabel}</span>
-        </span>
+          <div
+            data-testid="page-status"
+            style={{
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              color: statusColor,
+              letterSpacing: '0.02em',
+            }}
+          >
+            {statusLabel}
+          </div>
+
+          <div
+            data-testid="page-parent-account"
+            style={{
+              fontSize: '0.75rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              marginTop: '2px',
+              maxWidth: '180px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Account: {page.accountDisplayName || 'Connected Account'}
+          </div>
+        </div>
       </div>
     </div>
   );
