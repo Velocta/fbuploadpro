@@ -5,7 +5,11 @@
 
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { AccountCard, type FacebookAccountItem } from '@/components/accounts/account-card';
+import {
+  AccountCard,
+  getAccountRingColor,
+  type FacebookAccountItem,
+} from '@/components/accounts/account-card';
 import { AccountsEmptyState } from '@/components/accounts/accounts-empty-state';
 import { DisconnectAccountDialog } from '@/components/accounts/disconnect-account-dialog';
 import {
@@ -19,6 +23,7 @@ import {
   AccountsFilterBar,
   ByocConfigPromptModal,
   ByocRequiredBanner,
+  computeAccountsSubtitle,
   filterAccountsList,
   resolveOAuthRedirectNotice,
   sortAccountsExpiredFirst,
@@ -28,6 +33,15 @@ import {
   getConnectErrorCopy,
 } from '@/app/connect/facebook/error/page';
 import { render } from '../components/setup';
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+  }),
+  useParams: () => ({ subdomain: 'acme' }),
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () => {
   const mockActiveAccount: FacebookAccountItem = {
@@ -68,14 +82,15 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
   };
 
   describe('AccountCard', () => {
-    it('renders clean active profile with avatar, display name, gender, profile link, and pages count with zero status badges/dots', () => {
+    it('renders clean active profile with avatar, display name, profile link, and pages count with zero gender or token expiration clutter', () => {
       const { hasText, hasAttribute, html } = render(
         <AccountCard account={mockActiveAccount} />
       );
 
       expect(hasText('Sarah Connor')).toBe(true);
       expect(hasText('3 pages linked')).toBe(true);
-      expect(hasText('Female')).toBe(true);
+      expect(hasText('Female')).toBe(false); // Gender eliminated for sleek experience
+      expect(hasText('Token valid')).toBe(false); // Token validity eliminated
       expect(hasAttribute('data-testid', 'account-avatar-img')).toBe(true);
       expect(hasAttribute('data-testid', 'account-profile-link')).toBe(true);
       expect(hasAttribute('data-testid', 'account-disconnect-button')).toBe(true);
@@ -95,12 +110,18 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
 
       expect(hasText('John Doe')).toBe(true);
       expect(hasText('1 page linked')).toBe(true);
-      expect(hasText('Male')).toBe(true);
+      expect(hasText('Male')).toBe(false); // Gender eliminated
       expect(hasText('JD')).toBe(true); // Fallback initials
       expect(hasText('Session expired — reconnect to resume publishing')).toBe(true);
       expect(hasText('Reconnect account')).toBe(true);
       expect(hasAttribute('data-testid', 'account-reconnect-button')).toBe(true);
       expect(hasAttribute('data-testid', 'account-disconnect-button')).toBe(true);
+    });
+
+    it('computes correct avatar status ring color based on status and expiration', () => {
+      expect(getAccountRingColor('active', false)).toBe('#2ebd85');
+      expect(getAccountRingColor('active', true)).toBe('#fad734');
+      expect(getAccountRingColor('expired', false)).toBe('#f6465d');
     });
 
     it('falls back to monogram initials avatar when forceAvatarError is true (Spec 031)', () => {
@@ -260,8 +281,8 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       );
 
       expect(hasText('Connect Facebook Account')).toBe(true);
-      expect(hasText('This browser')).toBe(true);
-      expect(hasText('Different browser or device (Magic Link)')).toBe(true);
+      expect(hasText('This Browser')).toBe(true);
+      expect(hasText('Different Browser or Phone')).toBe(true);
       expect(hasAttribute('data-testid', 'connect-option-direct')).toBe(true);
       expect(hasAttribute('data-testid', 'connect-option-magic')).toBe(true);
     });
@@ -520,6 +541,16 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(hasText('All')).toBe(true);
       expect(hasText('Active')).toBe(true);
       expect(hasText('Expired')).toBe(true);
+    });
+
+    it('computeAccountsSubtitle generates contextual subtitles across states', () => {
+      expect(computeAccountsSubtitle(0, 0, 0, false)).toBe(
+        'Connect your first Facebook account to manage pages and publish reels.'
+      );
+      expect(computeAccountsSubtitle(5, 2, 0, true)).toBe('Showing 2 of 5 accounts');
+      expect(computeAccountsSubtitle(1, 1, 0, true)).toBe('Showing 1 of 1 account');
+      expect(computeAccountsSubtitle(3, 3, 0, false)).toBe('3 connected accounts · All operational');
+      expect(computeAccountsSubtitle(1, 1, 0, false)).toBe('1 connected account · All operational');
     });
   });
 
