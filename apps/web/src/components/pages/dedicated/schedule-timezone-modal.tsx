@@ -230,7 +230,11 @@ export function Step1TimezoneSelector({
             if (entries.length === 0) return null;
 
             return (
-              <div key={region} style={{ marginBottom: SPACING.sm }}>
+              <div
+                key={region}
+                data-testid={`timezone-region-group-${region}`}
+                style={{ marginBottom: SPACING.sm }}
+              >
                 <div
                   style={{
                     padding: `${SPACING.xs} ${SPACING.sm}`,
