@@ -33,7 +33,7 @@ export default function WorkspaceSettingsPage() {
 
   const tabs: Array<{ id: SettingsTab; label: string }> = [
     { id: 'general', label: 'General' },
-    { id: 'byoc', label: 'Facebook BYOC' },
+    { id: 'byoc', label: 'Facebook' },
   ];
 
   return (

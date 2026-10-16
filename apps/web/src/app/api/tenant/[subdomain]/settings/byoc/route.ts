@@ -49,7 +49,7 @@ export async function GET(
 
     const { data: byoc } = await supabase
       .from('workspace_byoc_credentials')
-      .select('workspace_id, fb_app_id, encrypted_fb_app_secret, status, last_tested_at')
+      .select('workspace_id, fb_app_id, encrypted_fb_app_secret, status, last_tested_at, created_at, updated_at')
       .eq('workspace_id', workspaceId)
       .maybeSingle();
 
@@ -60,6 +60,7 @@ export async function GET(
       hasSecret: Boolean(byoc?.encrypted_fb_app_secret),
       status: byoc?.status || 'unverified',
       lastTestedAt: byoc?.last_tested_at || null,
+      connectedAt: byoc?.created_at || byoc?.updated_at || null,
     });
   } catch (err) {
     console.error('[BYOC Settings API] Unhandled GET exception:', err);
@@ -181,9 +182,58 @@ export async function PUT(
       success: true,
       hasSecret: true,
       status: 'unverified',
+      connectedAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error('[BYOC Settings API] Unhandled PUT exception:', err);
     return NextResponse.json({ error: 'Failed to save BYOC credentials' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ subdomain: string }> }
+): Promise<NextResponse> {
+  const { subdomain } = await context.params;
+  const session = await extractSession(request);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
+  }
+
+  try {
+    const workspaceId = await resolveTenantWorkspaceId(supabase, subdomain, session.userId);
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
+    }
+
+    // Delete ONLY the App ID and App Secret (workspace_byoc_credentials row)
+    // Connected accounts, Facebook pages, media items, and scheduled posts remain 100% intact.
+    const { error: deleteErr } = await supabase
+      .from('workspace_byoc_credentials')
+      .delete()
+      .eq('workspace_id', workspaceId);
+
+    if (deleteErr) {
+      console.error('[BYOC Settings API] Delete credentials error:', deleteErr);
+      return NextResponse.json({ error: 'Failed to disconnect Facebook' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      disconnected: true,
+    });
+  } catch (err) {
+    console.error('[BYOC Settings API] Unhandled DELETE exception:', err);
+    return NextResponse.json({ error: 'Failed to disconnect Facebook' }, { status: 500 });
   }
 }
