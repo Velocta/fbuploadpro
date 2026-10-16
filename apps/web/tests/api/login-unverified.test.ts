@@ -11,7 +11,6 @@ describe('Login Unverified Registration Recovery (Spec 021 US1)', () => {
     _resetRateLimiter();
     process.env.SESSION_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
     process.env.NEXT_PUBLIC_ROOT_DOMAIN = 'localhost:3000';
-    delete process.env.DATABASE_URL;
   });
 
   it('detects unverified pending registration with correct password, issues fresh OTP, and returns 403 requiresOtp', async () => {

@@ -308,7 +308,9 @@ flowchart LR
 - **Spec 055 (Completed & Verified)**: **Pitch Black Dark Mode Standardization & Initial Load Synchronization** (Restored canonical Binance Pure Pitch Black dark mode across `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` with canvas `#000000`, panels `#0c0d10`, subtle wells `#121419`, hover `#1f242d`, active `#262c37`, and hairline borders `#1f242d` / `#2b323c` in 100% compliance with `DESIGN.md`; synchronized `:root` default tokens with `[data-theme="dark"], .dark` to permanently eliminate the uninitialized midnight slate blue tint; added pre-hydration theme evaluation script in `apps/web/src/app/layout.tsx` to prevent FOUC and ensure immediate theme stability from frame 0; updated `WorkspaceStudioFooter` to synchronize `data-theme` on mount and persist the `fbup_theme` cookie upon theme toggling; updated UI unit tests in `apps/web/tests/ui/pages.test.tsx`).
 - **Spec 056 (Completed & Verified)**: **Sidebar Sign-Out Resilience & Cross-Environment Logout Gateway** (Upgraded `handleSignOut` in `WorkspaceStudioFooter` to issue asynchronous `POST /api/auth/logout` with `keepalive: true` to clear `httpOnly` session cookies via server-side `Set-Cookie` expiration; added resilient fallback redirection; introduced `isSigningOut` state with disabled loading affordance; hardened `resolveRequestGatewayBase` in `@fbuploadpro/contracts` to adapt local hostnames and prevent unresolvable hybrid domains; aligned route fallback rootDomain to `localhost:3000`).
 - **Spec 057 (Completed & Verified)**: **Facebook Page Detail Top Section & Action Buttons Redesign** (Redesigned the dedicated Facebook Page view top section in `apps/web/src/components/pages/dedicated/page-header.tsx` and tab bar in `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx` following Option A Mirror Studio Header; implemented 44x44px avatar with 1.5px status-colored ring border matching `PageCard`, quiet back link `← Facebook Pages`, pure human copy subtitle with strictly zero bullet point dots (`•`) using 12px vertical hairline dividers, uniform 34px action buttons `Pause / Resume Automation`, signature yellow `+ Queue Post`, 34x34px `···` More Options dropdown with outside-click closing, and flat typographic tabs with 2px brand yellow underline and quiet numeric count chip; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
+- **Spec 057b (Completed & Merged)**: **Fdola Studio Desktop-Only Section & Native Shell Scaffolding** (Introduced `Fdola Studio` in primary navigation directly below Downloader; rendered environment-adaptive gate `FdolaStudioGate` for web browsers informing users that the feature is desktop-only with strictly zero external URLs or buttons, alongside `FdolaStudioWorkspace` for native desktop runtime; merged via PR #573).
 - **Spec 058 (Completed & Verified)**: **Facebook Page Posting Times Redesign (Minimalist Editorial Ledger & Format Selection)** (Purged legacy power-tool "Calendar & Slots" view and replaced with serene, typography-forward `PageTabPostingTimes` in `apps/web/src/components/pages/dedicated/tab-posting-times.tsx`; renamed tab in dedicated page workspace to **Posting Times**; features unified schedule timezone header, unboxed 6px luminous status dots, clean tabular numeric 12h/24h time display, permitted content format badges with granular format filtering per window, tactile accessible active/pause switches (`role="switch"`), quiet hover-only remove actions, interactive multi-select format buttons with `Select All` shortcut in Add/Edit modal, and serene empty state; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
+- **Spec 059 (Completed & Verified)**: **Theme-Reactive Cards & Placeholder Surfaces** (Resolved light/dark mode color switching issues in `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` by replacing undefined `--bg-surface` and `--text-muted` variables and hardcoded dark shadows with canonical `--bg-panel`, `--shadow-card`, and `--text-sub` tokens; added global fallback aliases to `globals.css` for system-wide resilience; verified with UI unit tests).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -588,7 +590,7 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 
 ### 18.2 Information Architecture Rebalance & Option A Studio Footer
 * **Dedicated Top Branding Anchor**: `SidebarHeader` displays the official geometric gold FBUploadPro brand mark (`#fad734`), wordmark, and "Studio" subtitle, linking to `/tenant/[subdomain]`. When collapsed, it contracts gracefully to the brand mark centered in the icon rail.
-* **Strict Navigation Preservation**: Middle section (`SidebarContent`) preserves 100% of the collapsible platform hierarchy and ordering: `Home` -> `Media Library` -> `Downloader` -> `SidebarSeparator` -> `Platform` (`Facebook` -> `Accounts`, `Pages`) -> Upcoming platforms (`Instagram`, `Threads`, `X (Twitter)`, `TikTok`, `YouTube`).
+* **Strict Navigation Preservation**: Middle section (`SidebarContent`) preserves 100% of the collapsible platform hierarchy and ordering: `Home` -> `Media Library` -> `Downloader` -> `Fdola Studio` -> `SidebarSeparator` -> `Platform` (`Facebook` -> `Accounts`, `Pages`) -> Upcoming platforms (`Instagram`, `Threads`, `X (Twitter)`, `TikTok`, `YouTube`).
 * **Option A Unified Studio Footer**: Rebalances secondary platform administration by consolidating Workspace Switching, User Profile identity, Platform Settings, Theme Toggling, and Sign Out into a single unified card in `SidebarFooter` (`WorkspaceStudioFooter`). Clicking opens an upward popover menu with full support for `CreateWorkspaceModal`.
 
 ### 18.3 Canonical Shadcn Topbar & Zero-Shift Canvas Alignment
@@ -710,24 +712,60 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
     - `+ Queue Post`: Signature brand-yellow (`#fad734`) primary button with dark text and subtle hover lift.
     - `···` More Options: 34x34px icon button opening an elevated dropdown (Copy Page ID, Open on Facebook, Disconnect Page) with outside-click closing.
   - **Flat Typographic Tab Navigation**: Tab bar features flat typographic tabs with a 2px solid `#fad734` active bottom border and a quiet numeric chip for queued posts without capsule pill badges.
+ 
+---
+ 
+## 24. Spec 057 Fdola Studio Desktop-Only Section & Native Shell Scaffolding
+ 
+### 24.1 Primary Navigation Integration & Ordering
+* **Primary Sidebar Sibling**: Positioned directly below **Downloader** in the top primary `SidebarGroup` of `WorkspaceSidebar`:
+  `Home` -> `Media Library` -> `Downloader` -> `Fdola Studio` -> `SidebarSeparator` -> `Platform`.
+* **Dynamic Breadcrumb Mapping**: In `computeBreadcrumbs` (`apps/web/src/components/workspace/workspace-breadcrumb.tsx`), the route `/tenant/[subdomain]/fdola-studio` resolves to `Fdola Studio`.
+ 
+### 24.2 Web Browser Desktop Gate View
+* **Environment Detection Guard**: Uses `@fbuploadpro/contracts` `isDesktopApp()` to detect whether the application is running inside the native Tauri v2 desktop shell or a standard web browser.
+* **Focused Desktop Requirement Notice**: In web browsers, navigating to `/tenant/[subdomain]/fdola-studio` renders `FdolaStudioGate`, an authoritative midnight-slate container stating: *"This feature is only available on desktop. Please download the desktop app."*
+* **Zero Premature Download Links & Buttons**: Explicitly excludes download links, external URLs, and action buttons until the desktop binary release pipeline is finalized.
+ 
+### 24.3 Empty Desktop App Workspace Placeholder
+* **Dedicated Desktop View**: When running inside the desktop shell (`isDesktopApp() === true`), `/tenant/[subdomain]/fdola-studio` renders `FdolaStudioWorkspace` as a clean, empty workspace placeholder ready for future native desktop features.
 
 ---
 
-## 24. Spec 058 Facebook Page Posting Times Redesign (Option A: Minimalist Editorial Ledger)
+## 25. Spec 059 Theme-Reactive Cards & Placeholder Surfaces
 
-### 24.1 De-Cluttering & Renaming "Calendar & Slots"
+### 25.1 Token Standardization Across Surfaces
+* **Dynamic Variable Binding**: All standalone cards, placeholder screens, and gates—including `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` (powering Instagram, TikTok, YouTube, Threads, and X)—must strictly consume dynamic CSS custom properties:
+  - Background surface: `var(--bg-panel, ${THEME.default.surfaces.panel})`
+  - Container border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+  - Elevation shadow: `var(--shadow-card, ${THEME.default.shadows.card})`
+  - Primary headline: `var(--text-main, ${THEME.default.text.primary})`
+  - Informative body copy: `var(--text-sub, ${THEME.default.text.secondary})`
+  - Secondary / muted text: `var(--text-dim, ${THEME.default.text.muted})`
+  - Active button / icon container: `var(--bg-active, ${THEME.default.surfaces.active})`
+  - Hover background: `var(--bg-hover, ${THEME.default.surfaces.hover})`
+* **Defensive Aliases in `globals.css`**: Provides resilient fallback aliases in `:root`, `[data-theme="light"], .light`, and `[data-theme="dark"], .dark` (`--bg-surface: var(--bg-panel);`, `--text-muted: var(--text-sub);`, `--border-focus: rgba(250, 215, 52, 0.35);`), ensuring seamless theme toggling even if third-party or legacy references appear.
+
+---
+
+## 26. Spec 058 Facebook Page Posting Times Redesign (Minimalist Editorial Ledger)
+
+### 26.1 De-Cluttering & Renaming "Calendar & Slots"
 * **Evolution into Posting Times**: Completely purges the dense, box-in-a-box "Calendar & Slots" view and 7-day "Weekly Schedule Preview" showing repetitive "None" cells. Replaces it with a serene, typography-forward **Posting Times** section (`apps/web/src/components/pages/dedicated/tab-posting-times.tsx`).
 * **Calm Header & Timezone Indicator**: Features a quiet page title, a professional executive subtitle (*"Daily publishing windows and permitted content formats for automated dispatch."*), and a unified schedule timezone indicator (`America/New_York (EST)`).
 
-### 24.2 Minimalist Editorial Ledger & Permitted Format Architecture
+### 26.2 Minimalist Editorial Ledger & Permitted Format Architecture
 * **Tabular Typography & Format Display**: Each posting time row features large, crisp numbers (e.g. `09:00 AM (09:00)`), an unboxed 6px luminous status dot, and active format tags (`Reels`, `Photos`, `Videos`, `Stories`, `Text Updates` or `All Formats Allowed`). Strictly ZERO bullet point dots (`•`) and ZERO capsule pill badges are used anywhere in the view.
 * **Permitted Content Format Filtering**: Provides granular format configuration per posting time via an inline `Edit Formats` button and dedicated format selection in the Add/Edit dialog, ensuring queued content dispatches strictly into appropriate media windows.
 * **Tactile Active/Pause Switch**: Accessible switch control (`role="switch"`, `aria-checked={slot.isActive}`) allowing creators to pause or resume posting times with a single tactile click without entering sub-menus.
 * **Quiet Hover-Only Actions**: Replace harsh red delete trash cans with an understated, hover-only `Remove` link with a gentle, professional confirmation modal.
 * **Frictionless Add/Edit Dialog**: Focused time input (`HH:MM`), timezone selector, interactive multi-select format buttons with `Select All` shortcut, and serene empty state for new pages.
 
+---
 
+## 27. Production Deployment & Cloud Architecture Reference
 
-
-
+For the complete end-to-end operational deployment guide covering step-by-step provisioning and automated GitHub Secrets orchestration across Supabase, Vercel, Cloudflare Workers, Cloudflare R2, and Upstash Redis, consult:
+* **Production Deployment Guide**: [`docs/deployment-guide.md`](./deployment-guide.md)
+* **Production Secrets & Deployment Checklist**: [`docs/secrets-checklist.md`](./secrets-checklist.md)
 

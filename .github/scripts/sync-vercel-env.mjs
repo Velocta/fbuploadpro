@@ -14,7 +14,6 @@ const VERCEL_ORG_ID = process.env.VERCEL_ORG_ID;
 const isDryRun = process.argv.includes('--dry-run');
 
 const SYNC_KEYS = [
-  'DATABASE_URL',
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
