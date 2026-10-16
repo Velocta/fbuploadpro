@@ -264,7 +264,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(activeAccountsBtnOnDetail).toBeUndefined();
   });
 
-  it('renders user details and avatar initials in footer using NavUser pattern', () => {
+  it('renders user details and active workspace in studio footer (Spec 052)', () => {
     mockPathname = '/tenant/acme';
     const { hasText, hasAttribute } = render(
       <SidebarProvider>
@@ -276,9 +276,9 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     );
 
     expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
-    expect(hasText('Jane Doe')).toBe(true);
+    expect(hasText('acme')).toBe(true);
     expect(hasText('jane@example.com')).toBe(true);
-    expect(hasText('JD')).toBe(true);
+    expect(hasText('AC')).toBe(true);
   });
 
   it('renders all upcoming platforms (Instagram, Threads, X (Twitter), TikTok, YouTube) in the Platform group below Facebook', () => {
