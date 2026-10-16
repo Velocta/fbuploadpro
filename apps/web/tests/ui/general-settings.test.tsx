@@ -57,10 +57,10 @@ describe('Spec 061: Workspace Settings General Tab Redesign', () => {
       expect(hasText('Manage Settings')).toBe(true);
     });
 
-    it('preserves existing General and Facebook BYOC tabs', () => {
+    it('preserves General and Facebook tabs', () => {
       const { hasText, hasAttribute } = render(<WorkspaceSettingsPage />);
       expect(hasText('General')).toBe(true);
-      expect(hasText('Facebook BYOC')).toBe(true);
+      expect(hasText('Facebook')).toBe(true);
       expect(hasAttribute('data-testid', 'settings-tab-general')).toBe(true);
       expect(hasAttribute('data-testid', 'settings-tab-byoc')).toBe(true);
     });
