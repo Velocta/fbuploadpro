@@ -10,6 +10,13 @@ export interface BreadcrumbSegment {
   href?: string;
 }
 
+const SIMPLE_TOP_LEVEL_LABELS: Record<string, string> = {
+  media: 'Media Library',
+  downloader: 'Downloader',
+  'fdola-studio': 'Fdola Studio',
+  settings: 'Settings',
+};
+
 const PLATFORM_LABELS: Record<string, string> = {
   instagram: 'Instagram',
   threads: 'Threads',
@@ -32,17 +39,8 @@ export function computeBreadcrumbs(pathname: string, subdomain: string): Breadcr
   }
 
   const first = segments[0]?.toLowerCase();
-  if (first === 'media') {
-    return [{ label: 'Media Library' }];
-  }
-  if (first === 'downloader') {
-    return [{ label: 'Downloader' }];
-  }
-  if (first === 'fdola-studio') {
-    return [{ label: 'Fdola Studio' }];
-  }
-  if (first === 'settings') {
-    return [{ label: 'Settings' }];
+  if (first && SIMPLE_TOP_LEVEL_LABELS[first]) {
+    return [{ label: SIMPLE_TOP_LEVEL_LABELS[first] }];
   }
   if (first === 'accounts') {
     return [{ label: 'Facebook' }, { label: 'Accounts' }];
