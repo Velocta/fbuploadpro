@@ -207,7 +207,7 @@ function Step1TimezoneSelector({
           overflowY: 'auto',
           border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           borderRadius: RADII.md,
-          backgroundColor: `var(--bg-main, ${THEME.default.surfaces.main})`,
+          backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
           padding: SPACING.xs,
           marginBottom: SPACING.lg,
         }}
