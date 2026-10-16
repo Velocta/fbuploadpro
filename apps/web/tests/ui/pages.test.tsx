@@ -800,15 +800,14 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(LIGHT_THEME.surfaces.canvas).not.toBe(LIGHT_THEME.surfaces.panel);
     });
 
-    it('validates dark mode canvas and surface calibration tokens for Midnight Slate (Spec 051)', () => {
-      expect(DARK_THEME.surfaces.canvas).toBe('#0a0c10');
-      expect(DARK_THEME.surfaces.panel).toBe('#12151c');
-      expect(DARK_THEME.surfaces.subtle).toBe('#181c26');
-      expect(DARK_THEME.surfaces.hover).toBe('#1f2430');
-      expect(DARK_THEME.surfaces.active).toBe('#272d3d');
-      expect(DARK_THEME.borders.hairline).toBe('#222735');
-      expect(DARK_THEME.borders.strong).toBe('#2d3444');
-      expect(DARK_THEME.surfaces.canvas).not.toBe('#000000');
+    it('validates dark mode canvas and surface calibration tokens for Pure Pitch Black (Spec 055)', () => {
+      expect(DARK_THEME.surfaces.canvas).toBe('#000000');
+      expect(DARK_THEME.surfaces.panel).toBe('#0c0d10');
+      expect(DARK_THEME.surfaces.subtle).toBe('#121419');
+      expect(DARK_THEME.surfaces.hover).toBe('#1f242d');
+      expect(DARK_THEME.surfaces.active).toBe('#262c37');
+      expect(DARK_THEME.borders.hairline).toBe('#1f242d');
+      expect(DARK_THEME.borders.strong).toBe('#2b323c');
       expect(DARK_THEME.surfaces.panel).not.toBe(DARK_THEME.surfaces.canvas);
     });
   });
