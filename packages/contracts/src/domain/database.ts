@@ -54,7 +54,7 @@ export interface DatabaseFacebookPageRow {
   facebook_account_id: string;
   fb_page_id: string;
   page_name: string;
-  timezone: string;
+  timezone?: string;
   status: 'active' | 'paused' | 'fb_rate_limited' | 'page_checkpoint' | 'invalid_token' | 'disconnected';
   encrypted_access_token: string;
   category: string | null;

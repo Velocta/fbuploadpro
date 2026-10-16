@@ -45,6 +45,7 @@ describe('ISSUE-46: Multi-Workspace Resource Isolation & Foreign Key Enforcement
       facebook_account_id: mockAccount.id,
       fb_page_id: 'fb-page-456',
       page_name: 'Test Page',
+      timezone: 'UTC',
       status: 'active',
       encrypted_access_token: 'enc-token',
       category: null,
