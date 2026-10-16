@@ -284,8 +284,7 @@ async function findWorkspaceSubdomainByOwner(
 /**
  * Resilient multi-runtime user lookup:
  * 1. Checks Supabase PostgREST over HTTPS when Supabase client is available.
- * 2. Checks PostgreSQL database client ONLY if DATABASE_URL is explicitly configured.
- * 3. Falls back to in-memory test store without throwing unhandled network exceptions.
+ * 2. Falls back to in-memory test store without throwing unhandled network exceptions in test environments.
  */
 export async function findUserByEmail(emailInput: string): Promise<AuthUser | null> {
   let canonicalEmail: string;

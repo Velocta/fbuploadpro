@@ -8,11 +8,9 @@ This document details every required secret, environment variable, and credentia
 
 | Secret Key | Format / Constraint | Local `.env` | Cloudflare Worker Secret | Vercel / Web Host | GitHub Actions Secrets |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| `DATABASE_URL` | PostgreSQL URI with SSL (Supabase Pooler) | ✅ | ✅ | ✅ | ✅ |
-| `DATABASE_DIRECT_URL` | Unpooled PostgreSQL URI (Supabase Direct) | ❌ | ❌ | ❌ | ✅ |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL (`https://...`) | ✅ | ❌ | ✅ | ❌ |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`| Supabase Public Anon JWT | ✅ | ❌ | ✅ | ❌ |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Admin Service Key | ✅ | ❌ | ✅ | ❌ |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Project URL (`https://...`) | ✅ | ✅ | ✅ | ✅ |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`| Supabase Public Anon JWT | ✅ | ❌ | ✅ | ✅ |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Admin Service Key | ✅ | ✅ | ✅ | ✅ |
 | `NEXT_PUBLIC_ROOT_DOMAIN` | Apex domain (`fbuploadpro.com`) | ✅ | ❌ | ✅ | ❌ |
 | `NEXT_PUBLIC_APP_URL` | SaaS portal gateway (`https://app.fbuploadpro.com`) | ✅ | ❌ | ✅ | ❌ |
 | `NEXT_PUBLIC_MARKETING_URL` | Marketing site URL (`https://fbuploadpro.com`) | ✅ | ❌ | ✅ | ❌ |
@@ -31,19 +29,22 @@ This document details every required secret, environment variable, and credentia
 
 ## 2. Detailed Specifications & Generation Commands
 
-### Category A: Database Substrate (PostgreSQL)
+### Category A: Database & Identity Substrate (Pure Supabase PostgREST)
 
-#### `DATABASE_URL`
-* **Purpose**: Primary Supabase connection URI or REST endpoint configuration used by the Next.js Web App and Edge Worker dispatcher via `@supabase/supabase-js`.
-* **Format**: Standard PostgreSQL connection URI with SSL enforcement.
-  ```text
-  postgresql://[user]:[password]@[host]:[port]/[dbname]?sslmode=require
-  ```
-* **Notes**: If using connection pooling (e.g. Supabase PgBouncer or Neon connection pooler on port 6543), set this to the pooled connection string.
+FBUploadPro operates on a pure HTTPS REST database architecture via `@supabase/supabase-js`. Traditional PostgreSQL connection URIs (`DATABASE_URL`, `DATABASE_DIRECT_URL`) and direct TCP socket pooling are permanently eliminated.
 
-#### `DATABASE_DIRECT_URL`
-* **Purpose**: Dedicated unpooled direct connection string used by CI/CD migrations runner to execute schema DDL without pooler limitations.
-* **Format**: Standard direct PostgreSQL connection URI (e.g. port 5432).
+#### `NEXT_PUBLIC_SUPABASE_URL`
+* **Purpose**: HTTPS REST endpoint for Supabase PostgREST, Auth (GoTrue), and Storage APIs.
+* **Format**: Fully qualified HTTPS URL (e.g. `https://[project-ref].supabase.co`).
+* **Source**: Supabase Project Dashboard $\rightarrow$ Project Settings $\rightarrow$ API.
+
+#### `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+* **Purpose**: Public anonymous client JWT for browser-initiated authentication flows.
+* **Source**: Supabase Project Dashboard $\rightarrow$ Project Settings $\rightarrow$ API $\rightarrow$ Project API Keys.
+
+#### `SUPABASE_SERVICE_ROLE_KEY`
+* **Purpose**: Elevated administrative key used by server-side route handlers and the Cloudflare Worker to bypass RLS for authorized tenant operations.
+* **Source**: Supabase Project Dashboard $\rightarrow$ Project Settings $\rightarrow$ API $\rightarrow$ Project API Keys.
 
 ---
 
@@ -126,11 +127,13 @@ To deploy `apps/worker` via GitHub Actions (`wrangler deploy`):
 
 ### 1. In GitHub Repository Secrets (for CI/CD Deployments)
 Go to **GitHub Repo** → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
-- `DATABASE_URL`
-- `DATABASE_DIRECT_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
-- `FB_ENCRYPTION_MASTER_KEY`
+- `SESSION_SECRET`
+- `TOKEN_ENCRYPTION_KEY`
 - *(If deploying Next.js to Vercel)*: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
 
 ### 2. In Cloudflare Workers (Production Worker)
@@ -147,7 +150,7 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 Instead of manually inputting secrets in the Vercel Dashboard, synchronize them directly from GitHub Secrets using the automated workflow [`.github/workflows/sync-vercel-env.yml`](../.github/workflows/sync-vercel-env.yml).
 
 1. Ensure `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are set in GitHub Repository Secrets.
-2. Ensure application secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SESSION_SECRET`, etc.) are configured in GitHub Repository Secrets.
+2. Ensure application secrets (`NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`, etc.) are configured in GitHub Repository Secrets.
 3. The workflow runs automatically on every merge or push to `main` (and can also be triggered on demand via `gh workflow run sync-vercel-env.yml` or `workflow_dispatch`).
 4. The workflow will automatically upsert all variables into Vercel production and preview environments via the Vercel REST API.
 

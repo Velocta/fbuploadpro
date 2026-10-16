@@ -38,21 +38,16 @@ Supabase serves as the relational database substrate, authentication provider, a
 2. Select your Organization, name the project (e.g. `fbuploadpro-prod`), set a strong database password, and choose a region close to your primary audience (e.g. `East US (North Virginia)`).
 3. Wait for the database provisioning to complete.
 
-### 1.2 Collect API Keys & Connection Strings
-Navigate to **Project Settings** in the left sidebar:
-1. **API Keys** (**Project Settings** $\rightarrow$ **API**):
-   - **Project URL**: Copy the URL (`https://[project-ref].supabase.co`).
-     *This maps to `NEXT_PUBLIC_SUPABASE_URL`.*
-   - **Project API Keys** $\rightarrow$ `anon` / `public`: Copy the public anon JWT.
-     *This maps to `NEXT_PUBLIC_SUPABASE_ANON_KEY`.*
-   - **Project API Keys** $\rightarrow$ `service_role` / `secret`: Reveal and copy the service role key.
-     *This maps to `SUPABASE_SERVICE_ROLE_KEY`.*
-2. **Database Connection URI** (**Project Settings** $\rightarrow$ **Database** $\rightarrow$ **Connection String**):
-   - Select the **URI** tab with **Session** or **Transaction** pooler (port 6543) and copy the string:
-     ```text
-     postgresql://postgres.[project-ref]:[YOUR-PASSWORD]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require
-     ```
-     *This maps to `DATABASE_URL`.*
+### 1.2 Collect API Keys (Pure HTTPS PostgREST Architecture)
+FBUploadPro operates on a pure HTTPS REST database architecture via `@supabase/supabase-js`. Traditional PostgreSQL connection URIs (`DATABASE_URL`) and direct TCP sockets are **not** used or required.
+
+Navigate to **Project Settings** $\rightarrow$ **API**:
+- **Project URL**: Copy the URL (`https://[project-ref].supabase.co`).
+  *This maps to `NEXT_PUBLIC_SUPABASE_URL`.*
+- **Project API Keys** $\rightarrow$ `anon` / `public`: Copy the public anon JWT.
+  *This maps to `NEXT_PUBLIC_SUPABASE_ANON_KEY`.*
+- **Project API Keys** $\rightarrow$ `service_role` / `secret`: Reveal and copy the service role key.
+  *This maps to `SUPABASE_SERVICE_ROLE_KEY`.*
 
 ### 1.3 Configure Authentication & URL Allowlist
 Navigate to **Authentication** $\rightarrow$ **URL Configuration**:
@@ -238,11 +233,10 @@ gh secret set VERCEL_PROJECT_ID
 gh secret set CLOUDFLARE_API_TOKEN
 gh secret set CLOUDFLARE_ACCOUNT_ID
 
-# Supabase Database & Auth
+# Supabase Database & Auth (Pure HTTPS REST)
 gh secret set NEXT_PUBLIC_SUPABASE_URL
 gh secret set NEXT_PUBLIC_SUPABASE_ANON_KEY
 gh secret set SUPABASE_SERVICE_ROLE_KEY
-gh secret set DATABASE_URL
 
 # Cryptography & Security
 gh secret set SESSION_SECRET
