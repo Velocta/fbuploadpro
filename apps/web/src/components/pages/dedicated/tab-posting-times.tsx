@@ -632,6 +632,14 @@ function AddEditPostingTimeModal({
     }
   };
 
+  const modalTitleText = isEditing ? 'Edit Posting Time' : 'Add Daily Posting Time';
+  let submitButtonText = 'Save Posting Time';
+  if (isSubmitting) {
+    submitButtonText = 'Saving...';
+  } else if (isEditing) {
+    submitButtonText = 'Update Posting Time';
+  }
+
   return (
     <div style={MODAL_BACKDROP_STYLE}>
       <div
@@ -651,7 +659,7 @@ function AddEditPostingTimeModal({
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
-            {isEditing ? 'Edit Posting Time' : 'Add Daily Posting Time'}
+            {modalTitleText}
           </h3>
           <p
             style={{
@@ -757,7 +765,8 @@ function AddEditPostingTimeModal({
           {/* Permitted Content Formats Multi-Select */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <label
+              <span
+                id="permitted-formats-heading"
                 style={{
                   fontSize: '0.75rem',
                   fontWeight: TYPOGRAPHY.weights.medium,
@@ -765,7 +774,7 @@ function AddEditPostingTimeModal({
                 }}
               >
                 Permitted Content Formats
-              </label>
+              </span>
               <button
                 type="button"
                 onClick={handleSelectAll}
@@ -784,6 +793,8 @@ function AddEditPostingTimeModal({
 
             <div
               data-testid="modal-format-selection-group"
+              role="group"
+              aria-labelledby="permitted-formats-heading"
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -880,7 +891,7 @@ function AddEditPostingTimeModal({
                 cursor: isSubmitting ? 'not-allowed' : 'pointer',
               }}
             >
-              {isSubmitting ? 'Saving...' : isEditing ? 'Update Posting Time' : 'Save Posting Time'}
+              {submitButtonText}
             </button>
           </div>
         </form>
