@@ -26,6 +26,7 @@ export interface FacebookPageItem {
   pageName: string;
   profilePictureUrl?: string | null | undefined;
   category?: string | null | undefined;
+  timezone?: string | undefined;
   startingFollowers: number;
   currentFollowers: number;
   followersGained: number;

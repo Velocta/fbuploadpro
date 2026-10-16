@@ -150,7 +150,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('FROM media_items')) {
             return Promise.resolve([{
@@ -192,7 +192,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('FROM media_items')) {
             return Promise.resolve([{
@@ -282,7 +282,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('FROM media_items')) {
             return Promise.resolve([{

@@ -1021,7 +1021,7 @@ function DeleteSlotConfirmModal({
 }
 
 export function PageTabPostingTimes({
-  page: _page,
+  page,
   slots,
   isLoading = false,
   onAddSlot,
@@ -1037,7 +1037,7 @@ export function PageTabPostingTimes({
   const [isDeleting, setIsDeleting] = useState(false);
   const [fallbackTimezone, setFallbackTimezone] = useState('UTC');
 
-  const activeTimezone = slots[0]?.timezone || fallbackTimezone;
+  const activeTimezone = page.timezone || slots[0]?.timezone || fallbackTimezone;
 
   const handleTimezoneChange = async (newTz: string) => {
     setFallbackTimezone(newTz);

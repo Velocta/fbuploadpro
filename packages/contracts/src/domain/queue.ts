@@ -17,7 +17,7 @@ export const TimezoneSchema = z.string().min(1).max(50).default('UTC');
 export const CreateQueueSlotRequestSchema = z.object({
   pageId: z.string().uuid(),
   slotTime: SlotTimeSchema,
-  timezone: TimezoneSchema,
+  timezone: TimezoneSchema.optional(),
   allowedFormats: z
     .array(PostFormatSchema)
     .min(1)
@@ -50,7 +50,7 @@ export const PageQueueSlotSchema = z.object({
   userId: z.string().uuid(),
   pageId: z.string().uuid(),
   slotTime: z.string(),
-  timezone: z.string(),
+  timezone: z.string().default('UTC'),
   isActive: z.boolean(),
   allowedFormats: z
     .array(PostFormatSchema)

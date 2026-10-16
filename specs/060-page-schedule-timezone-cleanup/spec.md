@@ -46,6 +46,18 @@ This specification decouples timezone selection from individual slots into an in
 
 ---
 
+### User Story 4 (P1): Normalized Page-Level Timezone Schema
+**As a** system architect and database engineer,  
+**I want** `timezone` stored directly on `facebook_pages` and dropped from `page_queue_slots`,  
+**So that** there is strictly 1 canonical timezone per Facebook page, and updating the page's timezone immediately governs all posting times slots for that page without data anomalies.
+
+- **Acceptance Criteria 4.1**: Forward database migration `20261020010000_page_level_schedule_timezone_normalization.sql` adds `timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'` to `facebook_pages` and drops `timezone` from `page_queue_slots`.
+- **Acceptance Criteria 4.2**: Database contracts (`DatabaseFacebookPageRow`, `FacebookPageSchema`, `FacebookPageViewSchema`) include `timezone: string` with default `'UTC'`.
+- **Acceptance Criteria 4.3**: `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots` updates `facebook_pages.timezone`.
+- **Acceptance Criteria 4.4**: `GET` and `POST` slots endpoints retrieve the canonical timezone from `facebook_pages` and return `timezone: pageTimezone` on every slot.
+
+---
+
 ## 3. Strict Quality & Anti-Slop Constraints
 - **Zero Bullet Dots**: Strictly 0 instances of bullet point characters (`•`) anywhere in copy or markup.
 - **Zero Capsule Pill Badges**: Strictly 0 capsule pill badges.

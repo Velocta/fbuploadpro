@@ -768,6 +768,11 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **Slot Time Invariance on Timezone Change**: When an operator updates the page schedule timezone (e.g. from `America/New_York` to `Asia/Karachi`), all scheduled slot times (e.g., `10:00 AM`, `12:00 PM`) remain untouched and invariant, while their active execution timezone updates atomically across all records via `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots`.
 * **Streamlined Add/Edit Dialog**: The Timezone dropdown is removed from `AddEditPostingTimeModal`. The dialog focuses strictly on `Time of Day (24-Hour)` (`posting-time-input`) and `Permitted Content Formats` (`modal-format-selection-group`), with a quiet contextual indicator displaying the active schedule timezone. New slots automatically inherit the page schedule timezone.
 
+### 26.4 Page-Level Schedule Timezone Database Normalization (Migration 20261020010000)
+* **Canonical Page Timezone in `facebook_pages`**: Enforces strictly 1 timezone per Facebook Page by adding `timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'` to the `public.facebook_pages` table and dropping `timezone` from `public.page_queue_slots`.
+* **Zero Schema Inconsistency**: Slot dispatch schedules derive their active timezone directly from the parent Facebook page. Changing the page's timezone updates all recurring slots for that page immediately while preserving clock times (`10:00 AM`, `12:00 PM`).
+* **Contract and API Synchronization**: Updated `@fbuploadpro/contracts` (`DatabaseFacebookPageRow`, `FacebookPageSchema`, `PageQueueSlotSchema`), API routes (`/api/tenant/[subdomain]/pages/[pageId]`, `/api/tenant/[subdomain]/pages/[pageId]/slots`, `/api/tenant/[subdomain]/publishing/queue`), and UI components (`tab-posting-times.tsx`).
+
 ---
 
 ## 27. Production Deployment & Cloud Architecture Reference

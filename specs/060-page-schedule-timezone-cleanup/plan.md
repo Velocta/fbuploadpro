@@ -22,13 +22,14 @@ flowchart TD
     end
 
     subgraph DB ["PostgreSQL / Supabase"]
-        SlotsTable["page_queue_slots\n(slot_time preserved, timezone updated)"]
+        PagesTable["facebook_pages\n(timezone VARCHAR(50) NOT NULL DEFAULT 'UTC')"]
+        SlotsTable["page_queue_slots\n(slot_time, is_active, allowed_formats - NO timezone)"]
     end
 
     H -->|"1. User changes timezone (e.g. Asia/Karachi)"| Page
     Page -->|"2. PATCH { timezone: 'Asia/Karachi' }"| SlotsRoute
-    SlotsRoute -->|"3. UPDATE page_queue_slots SET timezone = $1"| SlotsTable
-    M -->|"4. Saves slot using page active timezone"| Page
+    SlotsRoute -->|"3. UPDATE facebook_pages SET timezone = $1"| PagesTable
+    M -->|"4. Saves slot inheriting page timezone"| Page
     Page -->|"5. Reloads or updates local slot state"| Grid
 ```
 
@@ -36,21 +37,30 @@ flowchart TD
 
 ## 3. Detailed Changes by Package
 
-### 3.1 `@fbuploadpro/contracts`
-- **File**: `packages/contracts/src/domain/queue.ts`
-- **Schema**: Add `UpdateQueueScheduleTimezoneRequestSchema = z.object({ timezone: TimezoneSchema })`.
-- Export `UpdateQueueScheduleTimezoneRequest`.
+### 3.0 Database Migration
+- **File**: `supabase/migrations/20261020010000_page_level_schedule_timezone_normalization.sql`
+- Adds `timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'` to `facebook_pages`.
+- Backfills `facebook_pages.timezone` from `page_queue_slots.timezone` where available.
+- Drops `timezone` column from `page_queue_slots`.
 
-### 3.2 Backend Route (`apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route.ts`)
-- Add `handleUpdateQueueScheduleTimezone` function:
-  - Validates session and checks tenant permission (`canAccessTenant`).
-  - Validates `{ timezone }` against `UpdateQueueScheduleTimezoneRequestSchema`.
-  - Resolves workspace and validates page ownership.
-  - Executes atomic update across all slots for the page and user:
-    - Postgres: `UPDATE page_queue_slots SET timezone = $1, updated_at = now() WHERE fb_page_id = $2 AND user_id = $3 RETURNING ...`
-    - Supabase: `.from('page_queue_slots').update({ timezone, updated_at }).eq('fb_page_id', pageId).eq('user_id', session.userId)`.
-  - Returns `NextResponse.json({ success: true, timezone, updatedCount })`.
-- Export `PATCH` route handler calling `handleUpdateQueueScheduleTimezone`.
+### 3.1 `@fbuploadpro/contracts`
+- **File**: `packages/contracts/src/domain/database.ts`: Add `timezone: string` to `DatabaseFacebookPageRow`.
+- **File**: `packages/contracts/src/domain/facebook.ts`: Add `timezone: z.string().default('UTC')` to `FacebookPageSchema` and `FacebookPageViewSchema`.
+- **File**: `packages/contracts/src/domain/queue.ts`:
+  - Add `UpdateQueueScheduleTimezoneRequestSchema = z.object({ timezone: TimezoneSchema })`.
+  - Export `UpdateQueueScheduleTimezoneRequest`.
+  - `timezone` optional on `CreateQueueSlotRequestSchema` and `UpdateQueueSlotRequestSchema` for backward compatibility.
+  - `PageQueueSlotSchema` defaults `timezone: 'UTC'`.
+
+### 3.2 Backend Routes
+- `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route.ts`:
+  - `handleListQueueSlots`: Queries `facebook_pages.timezone` and attaches it to returned slots.
+  - `handleCreateQueueSlot`: Queries `facebook_pages.timezone`, inserts slot into `page_queue_slots` (without timezone column), returns slot with `page.timezone`.
+  - `handleUpdateQueueScheduleTimezone`: Executes `UPDATE facebook_pages SET timezone = $1, updated_at = now() WHERE id = $2 AND user_id = $3`.
+- `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/slots/[slotId]/route.ts`:
+  - `handleUpdateQueueSlot`: Excludes `timezone` from `page_queue_slots` update query, returns `page.timezone`.
+- `apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts`:
+  - Queries `facebook_pages.timezone` and maps it onto slots passed to `calculateNextVacantSlot`.
 
 ### 3.3 UI Component (`apps/web/src/components/pages/dedicated/tab-posting-times.tsx`)
 - Update `PageTabPostingTimesProps`:

@@ -4,6 +4,7 @@ import { signSessionToken } from '@fbuploadpro/contracts';
 import {
   handleListQueueSlots,
   handleCreateQueueSlot,
+  handleUpdateQueueScheduleTimezone,
 } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/slots/route';
 import {
   handleUpdateQueueSlot,
@@ -93,7 +94,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'America/New_York' }]);
           }
           if (sql.includes('FROM page_queue_slots')) {
             return Promise.resolve([
@@ -215,7 +216,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('INSERT INTO page_queue_slots')) {
             return Promise.resolve([
@@ -265,7 +266,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
             return Promise.resolve([{ id: 'ws_123' }]);
           }
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('INSERT INTO page_queue_slots')) {
             const err: any = new Error('duplicate key value');
@@ -359,7 +360,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('UPDATE page_queue_slots')) {
             return Promise.resolve([]);
@@ -392,7 +393,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('UPDATE page_queue_slots')) {
             return Promise.resolve([
@@ -438,7 +439,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM facebook_pages')) {
-            return Promise.resolve([{ id: pageId }]);
+            return Promise.resolve([{ id: pageId, timezone: 'UTC' }]);
           }
           if (sql.includes('UPDATE page_queue_slots')) {
             const err: any = new Error('duplicate key value');
@@ -589,6 +590,144 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.slotId).toBe(slotId);
+    });
+  });
+
+  describe('PATCH /api/tenant/[subdomain]/pages/[pageId]/slots (Schedule Timezone)', () => {
+    it('returns 401 Unauthorized when unauthenticated', async () => {
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/pages/${pageId}/slots`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ timezone: 'Asia/Karachi' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(req, 'acme', pageId);
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 Forbidden on tenant mismatch', async () => {
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/othercorp/pages/${pageId}/slots`,
+        {
+          method: 'PATCH',
+          headers: { cookie: validSessionCookie },
+          body: JSON.stringify({ timezone: 'Asia/Karachi' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(req, 'othercorp', pageId);
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 400 on invalid payload', async () => {
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/pages/${pageId}/slots`,
+        {
+          method: 'PATCH',
+          headers: { cookie: validSessionCookie },
+          body: JSON.stringify({ timezone: '' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(req, 'acme', pageId);
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 404 when workspace not found', async () => {
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([]);
+          }
+          return Promise.resolve([]);
+        }),
+      };
+
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/pages/${pageId}/slots`,
+        {
+          method: 'PATCH',
+          headers: { cookie: validSessionCookie },
+          body: JSON.stringify({ timezone: 'Asia/Karachi' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(
+        req,
+        'acme',
+        pageId,
+        mockDb as DatabaseClient
+      );
+      expect(res.status).toBe(404);
+      const data = await res.json();
+      expect(data.error).toBe('Workspace not found');
+    });
+
+    it('returns 404 when page not found on timezone update', async () => {
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('UPDATE facebook_pages')) {
+            return Promise.resolve([]);
+          }
+          return Promise.resolve([]);
+        }),
+      };
+
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/pages/${pageId}/slots`,
+        {
+          method: 'PATCH',
+          headers: { cookie: validSessionCookie },
+          body: JSON.stringify({ timezone: 'Asia/Karachi' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(
+        req,
+        'acme',
+        pageId,
+        mockDb as DatabaseClient
+      );
+      expect(res.status).toBe(404);
+      const data = await res.json();
+      expect(data.error).toBe('Page not found');
+    });
+
+    it('returns 200 with { success: true, timezone, updatedCount } when updating timezone on facebook_pages', async () => {
+      const mockDb: Partial<DatabaseClient> = {
+        query: vi.fn().mockImplementation((sql: string) => {
+          if (sql.includes('FROM workspaces')) {
+            return Promise.resolve([{ id: 'ws_123' }]);
+          }
+          if (sql.includes('UPDATE facebook_pages')) {
+            return Promise.resolve([{ id: pageId }]);
+          }
+          if (sql.includes('SELECT count(*)::int as count FROM page_queue_slots')) {
+            return Promise.resolve([{ count: 3 }]);
+          }
+          return Promise.resolve([]);
+        }),
+      };
+
+      const req = new NextRequest(
+        `http://localhost:3000/api/tenant/acme/pages/${pageId}/slots`,
+        {
+          method: 'PATCH',
+          headers: { cookie: validSessionCookie },
+          body: JSON.stringify({ timezone: 'Asia/Karachi' }),
+        }
+      );
+      const res = await handleUpdateQueueScheduleTimezone(
+        req,
+        'acme',
+        pageId,
+        mockDb as DatabaseClient
+      );
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.timezone).toBe('Asia/Karachi');
+      expect(data.updatedCount).toBe(3);
     });
   });
 });

@@ -101,6 +101,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     currentFollowers: 54200,
     followersGained: 4200,
     status: 'active',
+    timezone: 'UTC',
     tasks: ['CREATE_CONTENT', 'MANAGE'],
     createdAt: '2026-10-01T00:00:00.000Z',
   };

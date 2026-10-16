@@ -118,6 +118,7 @@ export default function TenantDedicatedPageView({
           currentFollowers: 0,
           followersGained: 0,
           status: 'active',
+          timezone: 'UTC',
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
@@ -137,6 +138,7 @@ export default function TenantDedicatedPageView({
           currentFollowers: 0,
           followersGained: 0,
           status: 'active',
+          timezone: 'UTC',
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
@@ -288,6 +290,7 @@ export default function TenantDedicatedPageView({
         throw new Error(err.message || 'Failed to update schedule timezone');
       }
       setSlots((prev) => prev.map((s) => ({ ...s, timezone: newTimezone })));
+      setPage((prev) => (prev ? { ...prev, timezone: newTimezone } : null));
       setNotification({
         type: 'success',
         message: `Schedule timezone updated to ${newTimezone}.`,

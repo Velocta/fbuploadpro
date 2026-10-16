@@ -2,6 +2,12 @@
 
 ## Task List
 
+- [x] **Task 0: Database Migration & Schema Normalization**
+  - [x] Create forward DDL migration `supabase/migrations/20261020010000_page_level_schedule_timezone_normalization.sql`.
+  - [x] Add `timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'` to `facebook_pages`.
+  - [x] Drop `timezone` column from `page_queue_slots`.
+  - [x] Update database contracts in `packages/contracts/src/domain/database.ts` and `packages/contracts/src/domain/facebook.ts`.
+
 - [x] **Task 1: Contracts & API Route Implementation**
   - [x] Add `UpdateQueueScheduleTimezoneRequestSchema` and `UpdateQueueScheduleTimezoneRequest` in `packages/contracts/src/domain/queue.ts`.
   - [x] Re-export if needed and update contract tests in `packages/contracts/tests/publishing-contracts.test.ts`.

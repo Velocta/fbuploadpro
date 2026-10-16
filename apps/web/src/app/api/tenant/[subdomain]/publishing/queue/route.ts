@@ -80,13 +80,14 @@ export async function handleEnqueueMedia(
   if (isLegacyClient(dbClient)) {
     // 4. Verify page exists and belongs to user and workspace
     const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+      'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [pageId, session.userId, workspaceId]
     )) as any[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
+    const pageTimezone = String(pageRows[0].timezone || 'UTC');
 
     let finalPostFormat: PostFormat;
     let mediaRecord: any = null;
@@ -151,7 +152,7 @@ export async function handleEnqueueMedia(
 
     if (requestedSlotId) {
       const slotRows = (await dbClient.query(
-        `SELECT id, slot_time, timezone, is_active, allowed_formats
+        `SELECT id, slot_time, is_active, allowed_formats
          FROM page_queue_slots
          WHERE id = $1 AND fb_page_id = $2 AND user_id = $3`,
         [requestedSlotId, pageId, session.userId]
@@ -183,7 +184,7 @@ export async function handleEnqueueMedia(
                 typeof slot.slot_time === 'string'
                   ? slot.slot_time
                   : String(slot.slot_time),
-              timezone: slot.timezone,
+              timezone: pageTimezone,
               isActive: Boolean(slot.is_active),
               allowedFormats: slot.allowed_formats ?? null,
             },
@@ -210,7 +211,7 @@ export async function handleEnqueueMedia(
       finalScheduledTime = new Date(requestedScheduledTime).toISOString();
     } else {
       const activeSlots = (await dbClient.query(
-        `SELECT id, slot_time, timezone, is_active, allowed_formats
+        `SELECT id, slot_time, is_active, allowed_formats
          FROM page_queue_slots
          WHERE fb_page_id = $1 AND user_id = $2 AND is_active = true
          ORDER BY slot_time ASC`,
@@ -238,7 +239,7 @@ export async function handleEnqueueMedia(
           id: s.id,
           slotTime:
             typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
-          timezone: s.timezone,
+          timezone: pageTimezone,
           isActive: Boolean(s.is_active),
           allowedFormats: s.allowed_formats ?? null,
         })),
@@ -362,7 +363,7 @@ export async function handleEnqueueMedia(
   // 4. Verify page exists and belongs to user and workspace
   const { data: pageRow } = await supabase
     .from('facebook_pages')
-    .select('id')
+    .select('id, timezone')
     .eq('id', pageId)
     .eq('user_id', session.userId)
     .eq('workspace_id', workspaceId)
@@ -371,6 +372,7 @@ export async function handleEnqueueMedia(
   if (!pageRow) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
   }
+  const pageTimezone = String(pageRow.timezone || 'UTC');
 
   let finalPostFormat: PostFormat;
   let mediaRecord: any = null;
@@ -436,7 +438,7 @@ export async function handleEnqueueMedia(
   if (requestedSlotId) {
     const { data: slot } = await supabase
       .from('page_queue_slots')
-      .select('id, slot_time, timezone, is_active, allowed_formats')
+      .select('id, slot_time, is_active, allowed_formats')
       .eq('id', requestedSlotId)
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
@@ -469,7 +471,7 @@ export async function handleEnqueueMedia(
               typeof slot.slot_time === 'string'
                 ? slot.slot_time
                 : String(slot.slot_time),
-            timezone: slot.timezone,
+            timezone: pageTimezone,
             isActive: Boolean(slot.is_active),
             allowedFormats: (slot as any).allowed_formats ?? null,
           },
@@ -497,7 +499,7 @@ export async function handleEnqueueMedia(
   } else {
     const { data: activeSlots } = await supabase
       .from('page_queue_slots')
-      .select('id, slot_time, timezone, is_active, allowed_formats')
+      .select('id, slot_time, is_active, allowed_formats')
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
       .eq('is_active', true)
@@ -526,7 +528,7 @@ export async function handleEnqueueMedia(
         id: s.id,
         slotTime:
           typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
-        timezone: s.timezone,
+        timezone: pageTimezone,
         isActive: Boolean(s.is_active),
         allowedFormats: s.allowed_formats ?? null,
       })),
