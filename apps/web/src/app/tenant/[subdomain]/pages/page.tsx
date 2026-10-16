@@ -8,7 +8,6 @@ import {
   RADII,
   SPACING,
   TYPOGRAPHY,
-  COMPONENT_STYLES,
 } from '@/lib/theme';
 import {
   PageCard,
