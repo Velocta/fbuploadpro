@@ -150,3 +150,9 @@ Instead of manually inputting secrets in the Vercel Dashboard, synchronize them 
 2. Ensure application secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SESSION_SECRET`, etc.) are configured in GitHub Repository Secrets.
 3. The workflow runs automatically on every merge or push to `main` (and can also be triggered on demand via `gh workflow run sync-vercel-env.yml` or `workflow_dispatch`).
 4. The workflow will automatically upsert all variables into Vercel production and preview environments via the Vercel REST API.
+
+---
+
+## 4. End-to-End Deployment Guide
+For a comprehensive step-by-step walkthrough covering service provisioning across Supabase, Vercel, Cloudflare, Upstash, and GitHub Secrets, see [`docs/deployment-guide.md`](./deployment-guide.md).
+

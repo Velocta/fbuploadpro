@@ -711,6 +711,9 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
   - **Flat Typographic Tab Navigation**: Tab bar features flat typographic tabs with a 2px solid `#fad734` active bottom border and a quiet numeric chip for queued posts without capsule pill badges.
 
 
+## 23. Production Deployment & Cloud Architecture Reference
 
-
+For the complete end-to-end operational deployment guide covering step-by-step provisioning and automated GitHub Secrets orchestration across Supabase, Vercel, Cloudflare Workers, Cloudflare R2, and Upstash Redis, consult:
+* **Production Deployment Guide**: [`docs/deployment-guide.md`](./deployment-guide.md)
+* **Production Secrets & Deployment Checklist**: [`docs/secrets-checklist.md`](./secrets-checklist.md)
 
