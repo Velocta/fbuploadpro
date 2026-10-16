@@ -570,3 +570,27 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 ### 17.2 Meta App Settings UI & Resolver Streamlining
 * **Concise App Setup Guidance**: Excised the "Webhook Callback URL" input box, copy helper, and webhook instructions from `MetaAppSetupSection` in `apps/web/src/components/settings/byoc-settings-view.tsx`. The setup card now focuses strictly and exclusively on the OAuth Redirect URI and required Meta App Permissions.
 * **Edge & Route Resolver Cleanliness**: Removed `webhook_verify_token` from SQL queries and payloads in `apps/web/src/app/api/tenant/[subdomain]/settings/byoc/route.ts` and `apps/web/src/lib/server/byoc-resolver.ts`.
+
+---
+
+## 18. Spec 052 Workspace Sidebar Redesign, Option A Studio Footer & Canonical Shadcn Topbar
+
+### 18.1 Zero-Latency Navigation Feedback (0ms Response)
+* **Optimistic Path Highlight**: Next.js App Router navigates asynchronously via `router.push()`, creating perceived selection lag before route transitions resolve. Spec 052 introduces synchronous optimistic state (`optimisticPathname`), ensuring active selection bar and surface highlights snap instantaneously in **0ms**.
+* **Pre-emptive Chunk Prefetching**: Navigation triggers attach `onMouseEnter={() => router.prefetch(href)}` to warm upcoming page bundles before clicks occur.
+* **Auto-Reset Transition Lifecycle**: Synchronizes with React effect cycles on `pathname` changes to clear optimistic overrides without visual flickering.
+
+### 18.2 Information Architecture Rebalance & Option A Studio Footer
+* **Dedicated Top Branding Anchor**: `SidebarHeader` displays the official geometric gold FBUploadPro brand mark (`#fad734`), wordmark, and "Studio" subtitle, linking to `/tenant/[subdomain]`. When collapsed, it contracts gracefully to the brand mark centered in the icon rail.
+* **Strict Navigation Preservation**: Middle section (`SidebarContent`) preserves 100% of the collapsible platform hierarchy and ordering: `Home` -> `Media Library` -> `Downloader` -> `SidebarSeparator` -> `Platform` (`Facebook` -> `Accounts`, `Pages`) -> Upcoming platforms (`Instagram`, `Threads`, `X (Twitter)`, `TikTok`, `YouTube`).
+* **Option A Unified Studio Footer**: Rebalances secondary platform administration by consolidating Workspace Switching, User Profile identity, Platform Settings, Theme Toggling, and Sign Out into a single unified card in `SidebarFooter` (`WorkspaceStudioFooter`). Clicking opens an upward popover menu with full support for `CreateWorkspaceModal`.
+
+### 18.3 Canonical Shadcn Topbar & Zero-Shift Canvas Alignment
+* **Purge of Layout Hack**: Permanently removed the legacy `@media (max-width: 767px) { .workspace-mobile-gutter { padding-left: 56px !important; } }` CSS rule that forced mobile viewports to indent 56px to the right.
+* **Elimination of Floating Controls**: Excised `MobileNavTrigger` and the empty 48px desktop header from `TenantLayout`.
+* **Universal 44px Shadcn Topbar**: Embedded directly within `<SidebarInset>`:
+  - `<SidebarTrigger />`: Universally accessible across mobile (toggles mobile drawer sheet) and desktop (collapses/expands sidebar rail).
+  - Vertical hairline divider.
+  - `WorkspaceBreadcrumb`: Pure client component computing dynamic hierarchical route trails (e.g. `Home`, `Media Library`, `Facebook / Pages`, `Facebook / Pages / Details`, `Instagram / Accounts`) with zero cognitive complexity.
+  - Page canvas content mounts flush with zero left margin indentation across all viewport breakpoints.
+

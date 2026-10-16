@@ -21,10 +21,10 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
-describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029 & Spec 037)', () => {
-  it('renders workspace identity header using shadcn TeamSwitcher pattern with monogram, subdomain, and ChevronsUpDown toggle', () => {
+describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & Spec 052)', () => {
+  it('renders FBUploadPro branding in SidebarHeader and Option A studio footer card in SidebarFooter (Spec 052)', () => {
     mockPathname = '/tenant/acme';
-    const { hasText, hasAttribute, html, findTags } = render(
+    const { hasText, hasAttribute, html } = render(
       <SidebarProvider>
         <WorkspaceSidebar
           subdomain="acme"
@@ -33,23 +33,26 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029 & Spec 037)',
       </SidebarProvider>
     );
 
+    // Top Section: FBUploadPro Logo & Branding
     expect(hasAttribute('data-slot', 'sidebar-header')).toBe(true);
+    expect(hasAttribute('data-testid', 'sidebar-branding-link')).toBe(true);
+    expect(hasText('FBUploadPro')).toBe(true);
+    expect(hasText('Studio')).toBe(true);
+    expect(html).toContain(PALETTE.primary);
+
+    // Bottom Section: Option A Unified Studio Footer
+    expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
     expect(hasAttribute('data-size', 'lg')).toBe(true);
     expect(hasAttribute('data-testid', 'workspace-switcher-trigger')).toBe(true);
     expect(hasText('acme')).toBe(true);
     expect(hasText('AC')).toBe(true);
-    expect(html).toContain(PALETTE.primary);
-
-    // Multi-workspace switcher: header includes ChevronsUpDown toggle
-    const headers = findTags('header');
-    expect(headers.length).toBeGreaterThanOrEqual(1);
-    expect(headers[0]?.outerHtml).toContain('m7 15 5 5 5-5');
-    expect(headers[0]?.outerHtml).toContain('m7 9 5-5 5 5');
+    expect(html).toContain('m7 15 5 5 5-5');
+    expect(html).toContain('m7 9 5-5 5 5');
   });
 
-  it('renders Settings in navigation content and marks it active on /tenant/acme/settings', () => {
-    mockPathname = '/tenant/acme/settings';
-    const { hasText, html } = render(
+  it('integrates Option A studio footer at bottom with workspace identity and user profile (Spec 052)', () => {
+    mockPathname = '/tenant/acme';
+    const { hasText, hasAttribute } = render(
       <SidebarProvider>
         <WorkspaceSidebar
           subdomain="acme"
@@ -58,8 +61,10 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029 & Spec 037)',
       </SidebarProvider>
     );
 
-    expect(hasText('Settings')).toBe(true);
-    expect(html).toContain('aria-current="page"');
+    expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
+    expect(hasText('acme')).toBe(true);
+    expect(hasText('jane@example.com')).toBe(true);
+    expect(hasText('AC')).toBe(true);
   });
 
   it('renders Home, Media Library, and Downloader in the primary top group above SidebarSeparator, followed by Collapsible Facebook section', () => {
