@@ -763,18 +763,25 @@ function AddEditPostingTimeModal({
           </div>
 
           {/* Permitted Content Formats Multi-Select */}
-          <div>
+          <fieldset
+            style={{
+              border: 'none',
+              margin: 0,
+              padding: 0,
+            }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span
-                id="permitted-formats-heading"
+              <legend
                 style={{
                   fontSize: '0.75rem',
                   fontWeight: TYPOGRAPHY.weights.medium,
                   color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  padding: 0,
+                  margin: 0,
                 }}
               >
                 Permitted Content Formats
-              </span>
+              </legend>
               <button
                 type="button"
                 onClick={handleSelectAll}
@@ -793,8 +800,6 @@ function AddEditPostingTimeModal({
 
             <div
               data-testid="modal-format-selection-group"
-              role="group"
-              aria-labelledby="permitted-formats-heading"
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -847,7 +852,7 @@ function AddEditPostingTimeModal({
             >
               Only queued items matching the selected formats will be dispatched during this window.
             </p>
-          </div>
+          </fieldset>
 
           {/* Action Buttons */}
           <div
