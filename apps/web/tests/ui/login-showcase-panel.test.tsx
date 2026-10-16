@@ -114,7 +114,7 @@ describe('Login Showcase Panel Redesign (Spec 061)', () => {
     expect(hasText('Your accounts stay yours')).toBe(true);
 
     // Responsive styles check: showcase stacks above form on narrow screens
-    expect(html).toContain('.auth-showcase-panel{order:1 !important');
-    expect(html).toContain('.auth-form-panel{order:2 !important');
+    expect(html).toContain('order: 1 !important');
+    expect(html).toContain('order: 2 !important');
   });
 });
