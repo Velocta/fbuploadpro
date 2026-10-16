@@ -508,45 +508,23 @@ Because `if (!pollRes.ok) continue;` ignores the HTTP status code, a permanent `
 
 ## Module 6: Page Insights & Analytics (Frontend & Backend)
 
-**Scope:** `apps/web/src/components/pages/dedicated/tab-insights.tsx`, `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts`, `apps/web/src/lib/insights/facebook-insights-client.ts`, `apps/web/src/lib/insights/insights-cache.ts`, `apps/worker/src/insights-sync.ts`
+**Scope:** `apps/web/src/components/pages/dedicated/tab-insights.tsx`, `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts`, `apps/web/src/lib/insights/facebook-insights-client.ts`
 
-### Code & Logic Bugs
+> [!NOTE]
+> **Resolved & Architecture Superseded by Spec 062**: The legacy Upstash Redis insights cache (`insights-cache.ts`), database snapshots table (`page_insights_daily_snapshots`), and Cloudflare Worker sync cron (`insights-sync.ts`) have been completely eradicated from the repository. The architecture now fetches live from Facebook Graph API v26.0 through a secure server-side proxy route and caches data directly in the browser's `localStorage` for 15 minutes, with instant cached render on mount and manual sync bypass.
 
-* **[CRITICAL] `InsightsCache` is an In-Memory Stub Despite Requiring Upstash Redis Env Vars**
+### Historical Resolved Issues
+* **[RESOLVED - Spec 062] `InsightsCache` & Upstash Redis Dependency Eradicated**
+* **Location:** Formerly `apps/web/src/lib/insights/insights-cache.ts` (deleted).
+* **Resolution:** Removed `InsightsCache` and Upstash Redis dependencies completely for insights. Live proxy routes now stream directly from Facebook Graph API v26.0, and caching is handled on the client in `localStorage`.
 
-* **Location:** `apps/web/src/lib/insights/insights-cache.ts` (`InsightsCache`).
+* **[RESOLVED - Spec 062] `page_insights_daily_snapshots` Table Dropped**
+* **Location:** Formerly `public.page_insights_daily_snapshots` (dropped via migration `20261021000000_drop_page_insights_daily_snapshots.sql`).
+* **Resolution:** Eradicated snapshot table and queries. Live metrics are retrieved on demand from Facebook Graph API v26.0.
 
-
-* **Bug:** `insights-cache.ts` validates `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` in production, yet only reads and writes an in-memory `Map` (`this.cache`) and never makes REST calls to Upstash Redis. Across Vercel serverless instances, cache entries are not shared and vanish on cold starts.
-
-
-* **Exact Fix:** Implement actual Upstash Redis REST pipeline (`GET` / `SET ... EX`) calls in `InsightsCache` when `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are configured, using the in-memory `Map` strictly as an L1 fallback.
-
-
-
-
-* **[HIGH] Live Insights API Route Ignores `page_insights_daily_snapshots` Table**
-
-* **Location:** `apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route.ts` (`handleGetInsights`).
-
-
-* **Bug:** On a cache miss, `GET /api/tenant/[subdomain]/pages/[pageId]/insights` always queries the live Facebook Graph API instead of reading persisted daily metrics from `page_insights_daily_snapshots`, burning Page BUC (`80001`) quota needed for publishing.
-
-
-* **Exact Fix:** Query `page_insights_daily_snapshots` for the requested date window (`7d`, `14d`, `28d`, `90d`) first, and only fall back to live Graph API fetching when snapshots are missing or the user explicitly triggers a manual refresh (`?refresh=true`).
-
-
-
-
-* **[HIGH] Unpaginated Active Page Scan in `syncDailyPageInsights**`
-
-* **Location:** `apps/worker/src/insights-sync.ts` (`syncDailyPageInsights`).
-
-
-* **Bug:** `syncDailyPageInsights` fetches all active pages in a single unpaginated query, which truncates at 1,000 rows in PostgREST and exhausts Cloudflare Worker subrequest limits above ~300 pages.
-
-
-* **Exact Fix:** Paginate the active pages query using cursor/range batches (e.g., 50–100 pages per batch) and process page insights with bounded concurrency.
+* **[RESOLVED - Spec 062] Worker `syncDailyPageInsights` Removed**
+* **Location:** Formerly `apps/worker/src/insights-sync.ts` (deleted).
+* **Resolution:** Excised worker insights cron and synchronization routines entirely from Cloudflare Worker runtime.
 
 
 
@@ -559,7 +537,7 @@ Because `if (!pollRes.ok) continue;` ignores the HTTP status code, a permanent `
 * **Bug:** `FacebookInsightsClient` catches network and Graph API errors and returns `0` metrics with `healthStatus: 'active'`, which `handleGetInsights` then caches for 15 minutes (`Cache-Control: s-maxage=900`). Users see `0` followers, `0` views, and `0` engagements for 15 minutes instead of an error banner or stale snapshot.
 
 
-* **Exact Fix:** Propagate Graph API / network errors from `FacebookInsightsClient` (or mark `healthStatus` as degraded/error) and prevent `handleGetInsights` from writing failed/zeroed fallback responses into `InsightsCache` or setting `s-maxage=900`.
+* **Exact Fix:** Propagate Graph API / network errors from `FacebookInsightsClient` (or mark `healthStatus` as degraded/error) and prevent `handleGetInsights` from returning unhandled zeroed responses.
 
 
 
