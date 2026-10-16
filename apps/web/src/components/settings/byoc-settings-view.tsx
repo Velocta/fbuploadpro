@@ -55,7 +55,6 @@ interface FacebookNotConnectedFormProps {
   appSecretError: string | null;
   isConnecting: boolean;
   isEditMode: boolean;
-  hasExistingSecret: boolean;
   onAppIdChange: (value: string) => void;
   onAppSecretChange: (value: string) => void;
   onToggleSecret: () => void;
@@ -71,7 +70,6 @@ function FacebookNotConnectedForm({
   appSecretError,
   isConnecting,
   isEditMode,
-  hasExistingSecret,
   onAppIdChange,
   onAppSecretChange,
   onToggleSecret,
@@ -1162,7 +1160,6 @@ export function BYOCSettingsView({
             appSecretError={appSecretError}
             isConnecting={isConnecting}
             isEditMode={isEditMode}
-            hasExistingSecret={Boolean(credentials?.hasSecret)}
             onAppIdChange={(val) => {
               setAppId(val);
               if (appIdError) setAppIdError(null);
