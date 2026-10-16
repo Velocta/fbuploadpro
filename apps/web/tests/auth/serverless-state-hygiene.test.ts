@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { validateOtpServiceConfig, createPendingSignup, getPendingSignup } from '../../src/lib/otp-service';
-import { validateInsightsCacheConfig, globalInsightsCache } from '../../src/lib/insights/insights-cache';
 import { handleGetInsights } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route';
 import { signSessionToken, encryptToken, type DatabaseClient } from '@fbuploadpro/contracts';
 
@@ -68,28 +67,7 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
     });
   });
 
-  describe('Insights Cache Serverless Configuration & SWR Cache-Control', () => {
-    it('throws in production when Upstash Redis credentials are missing', () => {
-      process.env = { ...process.env, NODE_ENV: 'production' };
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
-
-      expect(() => validateInsightsCacheConfig()).toThrow(
-        /Upstash Redis credentials .* are strictly required for distributed insights caching in production/
-      );
-    });
-
-    it('passes in production when Upstash Redis credentials are configured', () => {
-      process.env = {
-        ...process.env,
-        NODE_ENV: 'production',
-        UPSTASH_REDIS_REST_URL: 'https://upstash.io',
-        UPSTASH_REDIS_REST_TOKEN: 'test-token',
-      };
-
-      expect(() => validateInsightsCacheConfig()).not.toThrow();
-    });
-
+  describe('Insights Live Proxy Serverless Execution (Spec 062)', () => {
     it('returns Cache-Control with no-cache headers in GET insights live proxy response (Spec 062)', async () => {
       process.env.SESSION_SECRET = TEST_SECRET;
       process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
@@ -157,44 +135,6 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       expect(cacheControl).toBeDefined();
       expect(cacheControl).toContain('no-cache');
       expect(cacheControl).toContain('no-store');
-    });
-
-    it('warns when get and set are called in production without Upstash credentials', () => {
-      process.env = { ...process.env, NODE_ENV: 'production' };
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      globalInsightsCache.set('test-key', { sample: 123 }, 60);
-      const cached = globalInsightsCache.get('test-key');
-
-      expect(cached).not.toBeNull();
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[InsightsCache] Upstash Redis credentials not configured'),
-        expect.stringContaining('Upstash Redis credentials')
-      );
-
-      warnSpy.mockRestore();
-    });
-
-    it('does not warn when get and set are called in production with Upstash credentials configured', () => {
-      process.env = {
-        ...process.env,
-        NODE_ENV: 'production',
-        UPSTASH_REDIS_REST_URL: 'https://upstash.io',
-        UPSTASH_REDIS_REST_TOKEN: 'token-ok',
-      };
-
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      globalInsightsCache.set('prod-key', { sample: 456 }, 60);
-      const cached = globalInsightsCache.get('prod-key');
-
-      expect(cached).not.toBeNull();
-      expect(warnSpy).not.toHaveBeenCalled();
-
-      warnSpy.mockRestore();
     });
   });
 

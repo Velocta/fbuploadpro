@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { handleDisconnectPage } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/route';
 import { handleDisconnectAccount } from '../../src/app/api/tenant/[subdomain]/accounts/[accountId]/route';
-import { globalInsightsCache } from '../../src/lib/insights/insights-cache';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -137,44 +136,6 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
         expect.objectContaining({ status: 'skipped' })
       );
       expect(queueEqMock).toHaveBeenCalledWith('fb_page_id', pageId);
-    });
-
-    it('evicts cached insights entries from globalInsightsCache on page disconnect (ISSUE-48)', async () => {
-      // Pre-seed cache with entries matching pageId and fb_page_id
-      const fbPageId = 'page_1001';
-      globalInsightsCache.set(`insights:${userId}:${fbPageId}:28d`, { metrics: { impressions: 100 } });
-      globalInsightsCache.set(`insights:${userId}:${pageId}:7d`, { metrics: { impressions: 50 } });
-      globalInsightsCache.set(`insights:${userId}:unrelated_page:28d`, { metrics: { impressions: 999 } });
-
-      const mockDb = {
-        query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM workspaces')) {
-            return Promise.resolve([{ id: 'ws_123' }]);
-          }
-          if (sql.includes('UPDATE facebook_pages')) {
-            return Promise.resolve([{ id: pageId, fb_page_id: fbPageId }]);
-          }
-          return Promise.resolve([]);
-        }),
-      } as unknown as DatabaseClient;
-
-      const req = new NextRequest(
-        `http://localhost:3000/api/tenant/acme/pages/${pageId}`,
-        {
-          method: 'DELETE',
-          headers: { cookie: validSessionCookie },
-        }
-      );
-
-      const res = await handleDisconnectPage(req, 'acme', pageId, mockDb);
-      expect(res.status).toBe(200);
-
-      // Verify cached insights entries for this page are evicted
-      expect(globalInsightsCache.get(`insights:${userId}:${fbPageId}:28d`)).toBeNull();
-      expect(globalInsightsCache.get(`insights:${userId}:${pageId}:7d`)).toBeNull();
-
-      // Unrelated page cache must remain intact
-      expect(globalInsightsCache.get(`insights:${userId}:unrelated_page:28d`)).not.toBeNull();
     });
 
     it('returns 404 when page does not exist or belongs to another user', async () => {
