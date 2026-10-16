@@ -76,7 +76,7 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     );
 
     expect(html).toContain('data-testid="proceed-to-step2-button"');
-    expect(html).toContain('Next: Review Schedule Shift');
+    expect(html).toContain('Next: Review Shift');
   });
 
   it('renders Step 2 review with comparison card, impact metrics, and clock-time note', () => {
