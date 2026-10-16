@@ -238,16 +238,13 @@ export function recomputeSlotScheduledTime(params: {
 
   // Extract year, month, day of the scheduled post in the target timezone
   const parts = getZonedDateParts(params.originalScheduledTime, safeTimezone);
-  const year = parts.year;
-  const month = parts.month;
-  const day = parts.day;
 
   // Try candidate dates starting from current day
-  for (let dayOffset = 0; dayOffset < 365; dayOffset++) {
+  for (let dayOffset = 0; dayOffset <= 365; dayOffset++) {
     const candidate = makeZonedDate(
-      year,
-      month,
-      day + dayOffset,
+      parts.year,
+      parts.month,
+      parts.day + dayOffset,
       parsedTime.hour,
       parsedTime.minute,
       parsedTime.second,
@@ -262,15 +259,5 @@ export function recomputeSlotScheduledTime(params: {
     }
   }
 
-  // Fallback to 1 day after effectiveNow at slot time if loop finishes
-  const nowParts = getZonedDateParts(effectiveNow, safeTimezone);
-  return makeZonedDate(
-    nowParts.year,
-    nowParts.month,
-    nowParts.day + 1,
-    parsedTime.hour,
-    parsedTime.minute,
-    parsedTime.second,
-    safeTimezone
-  );
+  return params.originalScheduledTime;
 }

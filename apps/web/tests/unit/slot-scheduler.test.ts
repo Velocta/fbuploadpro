@@ -428,5 +428,44 @@ describe('recomputeSlotScheduledTime (Spec 061)', () => {
 
     expect(result).toBe(originalTime);
   });
+
+  it('uses current time when now parameter is omitted', () => {
+    const futureTime = new Date('2099-06-15T05:00:00.000Z');
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: futureTime,
+      slotTime: '10:00:00',
+      newTimezone: 'America/New_York',
+    });
+    expect(result.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('handles invalid Date object in now parameter by falling back to current time', () => {
+    const futureTime = new Date('2099-06-15T05:00:00.000Z');
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: futureTime,
+      slotTime: '10:00:00',
+      newTimezone: 'America/New_York',
+      now: new Date('invalid'),
+    });
+    expect(result.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('falls back to originalScheduledTime if all 365 candidate days are occupied', () => {
+    const originalTime = new Date('2026-10-20T05:00:00.000Z');
+    const now = new Date('2026-10-20T08:00:00.000Z');
+    const allOccupiedSet = {
+      has: () => true,
+    } as unknown as Set<number>;
+
+    const result = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime: '10:00:00',
+      newTimezone: 'America/New_York',
+      now,
+      occupiedTimes: allOccupiedSet,
+    });
+
+    expect(result).toBe(originalTime);
+  });
 });
 

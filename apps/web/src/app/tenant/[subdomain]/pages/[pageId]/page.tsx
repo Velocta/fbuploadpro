@@ -293,10 +293,11 @@ export default function TenantDedicatedPageView({
       const realignedCount = Number(data?.realignedQueueCount ?? 0);
       setSlots((prev) => prev.map((s) => ({ ...s, timezone: newTimezone })));
       setPage((prev) => (prev ? { ...prev, timezone: newTimezone } : null));
-      const realignedMsg =
-        realignedCount > 0
-          ? ` (${realignedCount} pending post${realignedCount > 1 ? 's' : ''} realigned)`
-          : '';
+      let realignedMsg = '';
+      if (realignedCount > 0) {
+        const pluralSuffix = realignedCount > 1 ? 's' : '';
+        realignedMsg = ` (${realignedCount} pending post${pluralSuffix} realigned)`;
+      }
       setNotification({
         type: 'success',
         message: `Schedule timezone updated to ${newTimezone}${realignedMsg}.`,
