@@ -399,9 +399,8 @@ fbuploadpro/
   * Switching workspaces invokes `POST /api/workspaces/switch`, securely re-signing the `fbup_session` cookie to point to the selected workspace subdomain.
 
 ### 12.2 Dedicated Settings Hub (`/tenant/[subdomain]/settings`)
-* Dedicated layout and sub-navigation with two core sections:
-  1. `General`: Workspace name, subdomain display, created timestamp, owner details.
-  2. `BYOC Facebook App`: Bring Your Own Credentials control center.
+* Dedicated workspace settings page focused directly on **Meta / Facebook BYOC** configuration (Spec 048 removed the legacy non-functional General placeholder).
+* Provides comprehensive Bring Your Own Credentials management with live diagnostics, copyable callback URIs, and permission checklists.
 * Accessible via the workspace sidebar navigation, workspace switcher menu, and user menu.
 
 ### 12.3 Strict BYOC (Bring Your Own Credentials) Facebook Architecture
