@@ -214,7 +214,7 @@ function PostingTimesHeader({ activeTimezone, onOpenAddModal }: Readonly<HeaderP
   );
 }
 
-interface RowProps {
+export interface PostingTimeRowProps {
   slot: PageSlotSummary;
   isToggling: boolean;
   onToggle: (slot: PageSlotSummary) => void;
@@ -222,7 +222,7 @@ interface RowProps {
   onRemove: (slot: PageSlotSummary) => void;
 }
 
-function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }: Readonly<RowProps>) {
+export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }: Readonly<PostingTimeRowProps>) {
   const formatted = formatSlotDisplay(slot.slotTime);
   const statusColor = slot.isActive ? PALETTE.accent4 : `var(--text-dim, ${THEME.default.text.muted})`;
   const formats = slot.allowedFormats && slot.allowedFormats.length > 0

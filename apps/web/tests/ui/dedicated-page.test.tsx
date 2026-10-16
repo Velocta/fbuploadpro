@@ -52,7 +52,17 @@ function findElementByTestId(
       return node as React.ReactElement<Record<string, any>>;
     }
     if (props.children) {
-      return findElementByTestId(props.children, testId);
+      const found = findElementByTestId(props.children, testId);
+      if (found) return found;
+    }
+    if (typeof node.type === 'function') {
+      try {
+        const rendered = (node.type as (p: any) => React.ReactNode)(props);
+        const found = findElementByTestId(rendered, testId);
+        if (found) return found;
+      } catch {
+        // Ignore unrenderable nodes
+      }
     }
   }
   return null;
