@@ -122,7 +122,7 @@ describe('Spec 061: Workspace Settings General Tab Redesign', () => {
       expect(hasAttribute('data-testid', 'workspace-name-cancel-btn')).toBe(true);
       expect(hasText('Save')).toBe(true);
       expect(hasText('Cancel')).toBe(true);
-      expect(html).not.toContain('workspace-name-edit-btn');
+      expect(hasAttribute('data-testid', 'workspace-name-edit-btn')).toBe(false);
     });
 
     it('renders validation error message when error is present', () => {
