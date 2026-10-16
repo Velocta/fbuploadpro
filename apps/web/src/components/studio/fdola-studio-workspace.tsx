@@ -26,7 +26,7 @@ export function FdolaStudioWorkspace({ subdomain: _subdomain }: Readonly<FdolaSt
         style={{
           width: '100%',
           maxWidth: '480px',
-          backgroundColor: `var(--bg-surface, ${THEME.default.surfaces.panel})`,
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
           border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           borderRadius: RADII.md,
           padding: `${SPACING.xxl} ${SPACING.xl}`,
@@ -35,7 +35,7 @@ export function FdolaStudioWorkspace({ subdomain: _subdomain }: Readonly<FdolaSt
           alignItems: 'center',
           gap: SPACING.xs,
           textAlign: 'center',
-          boxShadow: THEME.default.shadows.card,
+          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
         }}
       >
         <h1
@@ -54,7 +54,7 @@ export function FdolaStudioWorkspace({ subdomain: _subdomain }: Readonly<FdolaSt
           style={{
             margin: 0,
             fontSize: '0.875rem',
-            color: `var(--text-muted, ${THEME.default.text.secondary})`,
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
           Desktop Workspace

@@ -308,6 +308,8 @@ flowchart LR
 - **Spec 055 (Completed & Verified)**: **Pitch Black Dark Mode Standardization & Initial Load Synchronization** (Restored canonical Binance Pure Pitch Black dark mode across `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` with canvas `#000000`, panels `#0c0d10`, subtle wells `#121419`, hover `#1f242d`, active `#262c37`, and hairline borders `#1f242d` / `#2b323c` in 100% compliance with `DESIGN.md`; synchronized `:root` default tokens with `[data-theme="dark"], .dark` to permanently eliminate the uninitialized midnight slate blue tint; added pre-hydration theme evaluation script in `apps/web/src/app/layout.tsx` to prevent FOUC and ensure immediate theme stability from frame 0; updated `WorkspaceStudioFooter` to synchronize `data-theme` on mount and persist the `fbup_theme` cookie upon theme toggling; updated UI unit tests in `apps/web/tests/ui/pages.test.tsx`).
 - **Spec 056 (Completed & Verified)**: **Sidebar Sign-Out Resilience & Cross-Environment Logout Gateway** (Upgraded `handleSignOut` in `WorkspaceStudioFooter` to issue asynchronous `POST /api/auth/logout` with `keepalive: true` to clear `httpOnly` session cookies via server-side `Set-Cookie` expiration; added resilient fallback redirection; introduced `isSigningOut` state with disabled loading affordance; hardened `resolveRequestGatewayBase` in `@fbuploadpro/contracts` to adapt local hostnames and prevent unresolvable hybrid domains; aligned route fallback rootDomain to `localhost:3000`).
 - **Spec 057 (Completed & Verified)**: **Facebook Page Detail Top Section & Action Buttons Redesign** (Redesigned the dedicated Facebook Page view top section in `apps/web/src/components/pages/dedicated/page-header.tsx` and tab bar in `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx` following Option A Mirror Studio Header; implemented 44x44px avatar with 1.5px status-colored ring border matching `PageCard`, quiet back link `← Facebook Pages`, pure human copy subtitle with strictly zero bullet point dots (`•`) using 12px vertical hairline dividers, uniform 34px action buttons `Pause / Resume Automation`, signature yellow `+ Queue Post`, 34x34px `···` More Options dropdown with outside-click closing, and flat typographic tabs with 2px brand yellow underline and quiet numeric count chip; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
+- **Spec 057b (Completed & Merged)**: **Fdola Studio Desktop-Only Section & Native Shell Scaffolding** (Introduced `Fdola Studio` in primary navigation directly below Downloader; rendered environment-adaptive gate `FdolaStudioGate` for web browsers informing users that the feature is desktop-only with strictly zero external URLs or buttons, alongside `FdolaStudioWorkspace` for native desktop runtime; merged via PR #573).
+- **Spec 059 (Completed & Verified)**: **Theme-Reactive Cards & Placeholder Surfaces** (Resolved light/dark mode color switching issues in `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` by replacing undefined `--bg-surface` and `--text-muted` variables and hardcoded dark shadows with canonical `--bg-panel`, `--shadow-card`, and `--text-sub` tokens; added global fallback aliases to `globals.css` for system-wide resilience; verified with UI unit tests).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -727,9 +729,25 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 ### 24.3 Empty Desktop App Workspace Placeholder
 * **Dedicated Desktop View**: When running inside the desktop shell (`isDesktopApp() === true`), `/tenant/[subdomain]/fdola-studio` renders `FdolaStudioWorkspace` as a clean, empty workspace placeholder ready for future native desktop features.
 
+---
 
+## 25. Spec 059 Theme-Reactive Cards & Placeholder Surfaces
 
-## 23. Production Deployment & Cloud Architecture Reference
+### 25.1 Token Standardization Across Surfaces
+* **Dynamic Variable Binding**: All standalone cards, placeholder screens, and gates—including `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` (powering Instagram, TikTok, YouTube, Threads, and X)—must strictly consume dynamic CSS custom properties:
+  - Background surface: `var(--bg-panel, ${THEME.default.surfaces.panel})`
+  - Container border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
+  - Elevation shadow: `var(--shadow-card, ${THEME.default.shadows.card})`
+  - Primary headline: `var(--text-main, ${THEME.default.text.primary})`
+  - Informative body copy: `var(--text-sub, ${THEME.default.text.secondary})`
+  - Secondary / muted text: `var(--text-dim, ${THEME.default.text.muted})`
+  - Active button / icon container: `var(--bg-active, ${THEME.default.surfaces.active})`
+  - Hover background: `var(--bg-hover, ${THEME.default.surfaces.hover})`
+* **Defensive Aliases in `globals.css`**: Provides resilient fallback aliases in `:root`, `[data-theme="light"], .light`, and `[data-theme="dark"], .dark` (`--bg-surface: var(--bg-panel);`, `--text-muted: var(--text-sub);`, `--border-focus: rgba(250, 215, 52, 0.35);`), ensuring seamless theme toggling even if third-party or legacy references appear.
+
+---
+
+## 26. Production Deployment & Cloud Architecture Reference
 
 For the complete end-to-end operational deployment guide covering step-by-step provisioning and automated GitHub Secrets orchestration across Supabase, Vercel, Cloudflare Workers, Cloudflare R2, and Upstash Redis, consult:
 * **Production Deployment Guide**: [`docs/deployment-guide.md`](./deployment-guide.md)
