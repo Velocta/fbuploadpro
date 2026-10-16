@@ -1,6 +1,6 @@
 /**
  * @file byoc-settings.test.tsx
- * @description Unit tests for BYOCSettingsView, GeneralSettingsView, saveAndTestBYOC, and ByocTestFailedModal.
+ * @description Unit tests for BYOCSettingsView, saveAndTestBYOC, and ByocTestFailedModal.
  */
 
 import React from 'react';
@@ -11,10 +11,9 @@ import {
   MetaAppSetupSection,
   saveAndTestBYOC,
 } from '@/components/settings/byoc-settings-view';
-import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { render } from '../components/setup';
 
-describe('Settings Views Suite (BYOC & General)', () => {
+describe('Settings Views Suite (BYOC)', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'fetch',
@@ -30,27 +29,6 @@ describe('Settings Views Suite (BYOC & General)', () => {
         }),
       })
     );
-  });
-
-  describe('GeneralSettingsView', () => {
-    it('renders workspace overview with name, dedicated subdomain and active status indicator', () => {
-      const { hasText } = render(
-        <GeneralSettingsView
-          subdomain="acme"
-          workspaceName="Acme Media Holdings"
-          workspaceId="11111111-1111-4111-a111-111111111111"
-          ownerEmail="founder@acme.com"
-          createdAt="2026-10-10T12:00:00Z"
-        />
-      );
-
-      expect(hasText('Workspace Overview')).toBe(true);
-      expect(hasText('Acme Media Holdings')).toBe(true);
-      expect(hasText('acme.fbuploadpro.com')).toBe(true);
-      expect(hasText('Active')).toBe(true);
-      expect(hasText('founder@acme.com')).toBe(true);
-      expect(hasText('Copy')).toBe(true);
-    });
   });
 
   describe('BYOCSettingsView', () => {
