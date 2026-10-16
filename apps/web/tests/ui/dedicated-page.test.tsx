@@ -541,7 +541,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
       const { hasAttribute, hasText } = render(
         <PageTabPostingTimes
-          page={samplePage}
+          page={{ ...samplePage, timezone: 'Asia/Karachi' }}
           slots={sampleSlots}
           onAddSlot={vi.fn()}
           onUpdateTimezone={onUpdateTimezone}

@@ -38,8 +38,8 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     expect(html).toContain('data-testid="current-timezone-banner"');
     expect(html).toContain('data-testid="timezone-search-input"');
     expect(html).toContain('data-testid="proceed-to-step2-button"');
-    expect(html).toContain('Change Schedule Timezone');
-    expect(html).toContain('Select Target Timezone');
+    expect(html).toContain('Select Schedule Timezone');
+    expect(html).toContain('Current Active Timezone');
   });
 
   it('renders Step 1 directory grouped by regions with matching timezone options', () => {
