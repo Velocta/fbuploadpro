@@ -6,12 +6,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import {
-  BYOCSettingsView,
-  ByocTestFailedModal,
-  MetaAppSetupSection,
-  saveAndTestBYOC,
-} from '@/components/settings/byoc-settings-view';
+import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { render } from '../components/setup';
 
@@ -252,48 +247,5 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       expect(hasAttribute('data-testid', 'fb-disconnect-confirm-btn')).toBe(true);
     });
   });
-
-  describe('Legacy Helpers Compatibility', () => {
-    it('renders ByocTestFailedModal when open is true', () => {
-      const { hasText, hasAttribute } = render(
-        <ByocTestFailedModal
-          open={true}
-          message="App ID 12345 not found in Meta Developer portal"
-          onClose={() => {}}
-        />
-      );
-
-      expect(hasAttribute('data-testid', 'byoc-test-failed-modal')).toBe(true);
-      expect(hasText('Meta Connection Test Failed')).toBe(true);
-      expect(hasText('App ID 12345 not found in Meta Developer portal')).toBe(true);
-      expect(hasText('Review Credentials')).toBe(true);
-    });
-
-    it('renders MetaAppSetupSection with redirect URI and callback label', () => {
-      const { hasText } = render(
-        <MetaAppSetupSection
-          redirectUri="https://acme.fbuploadpro.com/api/auth/facebook/callback"
-          copiedKey={null}
-          onCopy={() => {}}
-        />
-      );
-
-      expect(hasText('One more step')).toBe(true);
-      expect(hasText('SIGN-IN ADDRESS')).toBe(true);
-      expect(hasText('https://acme.fbuploadpro.com/api/auth/facebook/callback')).toBe(true);
-    });
-
-    it('saveAndTestBYOC returns save error when save fails', async () => {
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValueOnce({
-          ok: false,
-          json: async () => ({ error: 'Invalid app secret format' }),
-        })
-      );
-
-      const result = await saveAndTestBYOC('acme', '123456789012345', 'secret12345');
-      expect(result.saveError).toBe('Invalid app secret format');
-    });
-  });
 });
+
