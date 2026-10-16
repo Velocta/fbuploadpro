@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   getSessionSecret,
   CreateWorkspaceRequestSchema,
+  UpdateWorkspaceRequestSchema,
   generateWorkspaceSubdomain,
   verifySessionToken,
   signSessionToken,
@@ -254,3 +255,75 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 }
+
+export async function PATCH(request: NextRequest): Promise<NextResponse> {
+  const session = await extractSession(request);
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+  }
+
+  const parseResult = UpdateWorkspaceRequestSchema.safeParse(body);
+  if (!parseResult.success) {
+    return NextResponse.json(
+      { error: parseResult.error.errors[0]?.message || 'Validation failed' },
+      { status: 400 }
+    );
+  }
+
+  const targetSubdomain = parseResult.data.subdomain || session.subdomain;
+  if (!targetSubdomain) {
+    return NextResponse.json({ error: 'Target workspace subdomain is required' }, { status: 400 });
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
+  }
+
+  try {
+    const { data: updated, error } = await supabase
+      .from('workspaces')
+      .update({ name: parseResult.data.name })
+      .eq('owner_id', session.userId)
+      .eq('subdomain', targetSubdomain)
+      .select('id, owner_id, name, subdomain, created_at, updated_at')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Workspaces API] Failed to update workspace:', error);
+      return NextResponse.json({ error: error.message || 'Failed to update workspace' }, { status: 500 });
+    }
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Workspace not found or unauthorized' }, { status: 404 });
+    }
+
+    const updatedWorkspace = {
+      id: updated.id as string,
+      ownerId: updated.owner_id as string,
+      name: updated.name as string,
+      subdomain: updated.subdomain as string,
+      createdAt: updated.created_at as string | undefined,
+      updatedAt: updated.updated_at as string | undefined,
+    };
+
+    return NextResponse.json({
+      success: true,
+      workspace: updatedWorkspace,
+    });
+  } catch (err) {
+    console.error('[Workspaces API] Unhandled PATCH exception:', err);
+    return NextResponse.json(
+      { error: 'An unexpected server error occurred while updating workspace' },
+      { status: 500 }
+    );
+  }
+}
+

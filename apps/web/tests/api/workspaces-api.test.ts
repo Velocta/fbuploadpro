@@ -6,7 +6,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken, verifySessionToken } from '@fbuploadpro/contracts';
-import { GET as listWorkspaces, POST as createWorkspace } from '../../src/app/api/workspaces/route';
+import { GET as listWorkspaces, POST as createWorkspace, PATCH as updateWorkspace } from '../../src/app/api/workspaces/route';
 import { POST as switchWorkspace } from '../../src/app/api/workspaces/switch/route';
 import { authenticateTenantRoute } from '../../src/lib/route-auth';
 import * as authModule from '@/lib/supabase-auth';
@@ -245,5 +245,122 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
     const authResult = await authenticateTenantRoute(req, 'acme-two');
     expect(authResult.errorResponse).toBeUndefined();
     expect(authResult.session?.userId).toBe(userId);
+  });
+
+  describe('PATCH /api/workspaces (Workspace Renaming)', () => {
+    it('rejects unauthenticated PATCH requests with 401', async () => {
+      const req = new NextRequest('http://localhost:3000/api/workspaces', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'New Name' }),
+      });
+      const res = await updateWorkspace(req);
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects invalid inputs (< 3 chars, > 40 chars, leading/trailing spaces) with 400', async () => {
+      // Short name
+      const shortReq = new NextRequest('http://localhost:3000/api/workspaces', {
+        method: 'PATCH',
+        headers: {
+          cookie: validSessionCookie,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'ab' }),
+      });
+      const shortRes = await updateWorkspace(shortReq);
+      expect(shortRes.status).toBe(400);
+
+      // Trailing whitespace
+      const spaceReq = new NextRequest('http://localhost:3000/api/workspaces', {
+        method: 'PATCH',
+        headers: {
+          cookie: validSessionCookie,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: 'ValidName ' }),
+      });
+      const spaceRes = await updateWorkspace(spaceReq);
+      expect(spaceRes.status).toBe(400);
+      const data = await spaceRes.json();
+      expect(data.error).toContain('spaces');
+    });
+
+    it('returns 404 when workspace not found or not owned by user', async () => {
+      const mockSupabase = {
+        from: vi.fn(() => ({
+          update: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          })),
+        })),
+      };
+      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+
+      const req = new NextRequest('http://localhost:3000/api/workspaces', {
+        method: 'PATCH',
+        headers: {
+          cookie: validSessionCookie,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ subdomain: 'nonexistent', name: 'Valid Name' }),
+      });
+
+      const res = await updateWorkspace(req);
+      expect(res.status).toBe(404);
+    });
+
+    it('successfully updates workspace name and returns updated workspace', async () => {
+      const mockUpdated = {
+        id: '11111111-2222-3333-4444-555555555555',
+        owner_id: userId,
+        name: 'Updated Workspace Name',
+        subdomain: 'acme',
+        created_at: '2026-10-10T12:00:00Z',
+        updated_at: '2026-10-16T12:00:00Z',
+      };
+
+      const mockSupabase = {
+        from: vi.fn(() => ({
+          update: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  maybeSingle: vi.fn().mockResolvedValue({
+                    data: mockUpdated,
+                    error: null,
+                  }),
+                })),
+              })),
+            })),
+          })),
+        })),
+      };
+      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+
+      const req = new NextRequest('http://localhost:3000/api/workspaces', {
+        method: 'PATCH',
+        headers: {
+          cookie: validSessionCookie,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ subdomain: 'acme', name: 'Updated Workspace Name' }),
+      });
+
+      const res = await updateWorkspace(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.workspace.name).toBe('Updated Workspace Name');
+      expect(data.workspace.subdomain).toBe('acme');
+    });
   });
 });
