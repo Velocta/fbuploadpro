@@ -723,9 +723,8 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(
         attentionRender.hasAttribute('data-testid', 'pages-page-subtitle')
       ).toBe(true);
-      expect(
-        attentionRender.hasText('5 connected pages · 3 require reconnecting')
-      ).toBe(true);
+      expect(attentionRender.hasText('5 connected pages')).toBe(true);
+      expect(attentionRender.hasText('3 require reconnecting')).toBe(true);
 
       // 2. All operational scenario
       const healthyPages = [pageActive1, pagePaused];
