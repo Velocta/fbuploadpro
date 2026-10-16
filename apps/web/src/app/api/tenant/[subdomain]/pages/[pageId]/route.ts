@@ -8,7 +8,6 @@ import {
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
-import { globalInsightsCache } from '@/lib/insights/insights-cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
@@ -391,8 +390,6 @@ export async function handleDisconnectPage(
        WHERE user_id = $1 AND fb_page_id = $2 AND status = 'queued'`,
       [session.userId, pageId]
     );
-
-    globalInsightsCache.deletePageInsights(session.userId, pageId, result[0]?.fb_page_id);
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
     if (!supabase) {

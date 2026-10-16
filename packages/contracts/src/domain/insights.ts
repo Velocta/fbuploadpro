@@ -80,22 +80,3 @@ export const PageInsightsQuerySchema = z.object({
 });
 export type PageInsightsQuery = z.infer<typeof PageInsightsQuerySchema>;
 
-export interface PageInsightsDailySnapshot {
-  id?: string;
-  userId: string;
-  fbPageId: string;
-  snapshotDate: string;
-  fanCount: number;
-  followersCount: number;
-  dailyFollows?: number;
-  dailyUnfollows?: number;
-  mediaViews?: number;
-  videoViews?: number;
-  videoCompleteViews30s?: number;
-  videoViewTimeSeconds?: number;
-  reactionsSummary?: Record<string, number>;
-  demographicsSummary?: {
-    topCountries?: Array<{ name: string; count: number; percentage: number }>;
-    topCities?: Array<{ name: string; count: number; percentage: number }>;
-  };
-}

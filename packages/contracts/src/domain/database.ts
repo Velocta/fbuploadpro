@@ -139,28 +139,6 @@ export interface DatabasePublishLogRow {
   created_at: string;
 }
 
-export interface DatabasePageInsightsDailySnapshotRow {
-  id: string;
-  user_id: string;
-  fb_page_id: string;
-  snapshot_date: string;
-  fan_count: number | string;
-  followers_count: number | string;
-  daily_follows: number;
-  daily_unfollows: number;
-  media_views: number;
-  video_views: number;
-  video_complete_views_30s: number;
-  video_view_time_seconds: number | string;
-  reactions_summary: Record<string, number>;
-  demographics_summary: {
-    topCountries?: Array<{ name: string; count: number; percentage: number }>;
-    topCities?: Array<{ name: string; count: number; percentage: number }>;
-  };
-  created_at: string;
-  updated_at: string;
-}
-
 export interface ClaimedQueueItemRpcResult {
   id: string;
   user_id: string;
@@ -275,15 +253,6 @@ export interface Database {
         };
         Update: Partial<DatabasePublishLogRow>;
       };
-      page_insights_daily_snapshots: {
-        Row: DatabasePageInsightsDailySnapshotRow;
-        Insert: Partial<DatabasePageInsightsDailySnapshotRow> & {
-          user_id: string;
-          fb_page_id: string;
-          snapshot_date: string;
-        };
-        Update: Partial<DatabasePageInsightsDailySnapshotRow>;
-      };
     };
     Functions: {
       claim_due_queue_items: {
@@ -298,7 +267,5 @@ export interface DatabaseClient {
   query<T = unknown>(text: string, params?: unknown[]): Promise<T[]>;
   queryOne<T = unknown>(text: string, params?: unknown[]): Promise<T | null>;
   withTransaction?<T>(callback: (client: any) => Promise<T>): Promise<T>;
-  upsertPageInsightsSnapshot?(snapshot: import('./insights.js').PageInsightsDailySnapshot): Promise<void>;
-  getPageInsightsSnapshots?(userId: string, fbPageId: string, sinceDate: string, untilDate: string): Promise<DatabasePageInsightsDailySnapshotRow[]>;
   close?(): Promise<void>;
 }

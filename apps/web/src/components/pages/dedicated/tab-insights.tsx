@@ -20,6 +20,64 @@ import {
 import type { FacebookPageItem } from '../page-card';
 import type { PageInsightsResponse, PageInsightsRange } from '@fbuploadpro/contracts';
 
+export const INSIGHTS_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+
+export interface StoredInsightsCacheEntry {
+  data: PageInsightsResponse;
+  cachedAt: number;
+  expiresAt: number;
+}
+
+function getLocalStorage(): Storage | null {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    return window.localStorage;
+  }
+  if (typeof localStorage !== 'undefined') {
+    return localStorage;
+  }
+  return null;
+}
+
+export function getCachedInsights(pageId: string, range: PageInsightsRange): PageInsightsResponse | null {
+  const storage = getLocalStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(`insights:${pageId}:${range}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredInsightsCacheEntry;
+    if (!parsed || typeof parsed !== 'object' || !parsed.data || !parsed.expiresAt) {
+      storage.removeItem(`insights:${pageId}:${range}`);
+      return null;
+    }
+    if (Date.now() >= parsed.expiresAt) {
+      return null;
+    }
+    return parsed.data;
+  } catch {
+    try {
+      storage.removeItem(`insights:${pageId}:${range}`);
+    } catch {
+      // Ignore removal failure in restricted environments
+    }
+    return null;
+  }
+}
+
+export function setCachedInsights(pageId: string, range: PageInsightsRange, data: PageInsightsResponse): void {
+  const storage = getLocalStorage();
+  if (!storage) return;
+  try {
+    const entry: StoredInsightsCacheEntry = {
+      data,
+      cachedAt: Date.now(),
+      expiresAt: Date.now() + INSIGHTS_CACHE_TTL_MS,
+    };
+    storage.setItem(`insights:${pageId}:${range}`, JSON.stringify(entry));
+  } catch {
+    // Graceful fallback for quota restrictions or private browsing
+  }
+}
+
 export interface PageTabInsightsProps {
   page: FacebookPageItem;
   subdomain: string;
@@ -41,12 +99,24 @@ export function PageTabInsights({
   }, []);
 
   const fetchInsights = async (rangeValue: PageInsightsRange, forceRefresh = false) => {
+    if (!page.id || !subdomain) return;
+    setError(null);
+
+    // 1. Check client-side 15-minute localStorage cache if not a manual forced sync
+    if (!forceRefresh) {
+      const cached = getCachedInsights(page.id, rangeValue);
+      if (cached) {
+        setData(cached);
+        setIsLoading(false);
+        return;
+      }
+    }
+
     if (forceRefresh) {
       setIsRefreshing(true);
     } else {
       setIsLoading(true);
     }
-    setError(null);
 
     try {
       const url = `/api/tenant/${subdomain}/pages/${page.id}/insights?range=${rangeValue}${
@@ -59,6 +129,8 @@ export function PageTabInsights({
       }
       const responseJson: PageInsightsResponse = await res.json();
       setData(responseJson);
+      // Persist in localStorage with 15-minute expiration
+      setCachedInsights(page.id, rangeValue, responseJson);
     } catch (err: any) {
       setError(err.message || 'Failed to load insights data');
     } finally {

@@ -30,9 +30,7 @@ export interface Env {
 export * from './fb-client.js';
 export * from './dispatcher.js';
 export * from './settlement.js';
-export * from './insights-sync.js';
 export * from './services/downloader-engine.js';
-import { syncDailyPageInsights } from './insights-sync.js';
 import {
   EnqueueDownloadJobRequestSchema,
   validateSafeRemoteUrl,
@@ -45,8 +43,6 @@ export interface ScheduledOptions {
   db?: DispatcherDbClient;
   fbClient?: IFacebookPublishClient;
   limit?: number;
-  syncInsights?: boolean;
-  insightsFetchImpl?: typeof fetch;
 }
 
 export interface QueueMessage {
@@ -223,17 +219,6 @@ export async function handleScheduled(
         masterKey,
         limit: options?.limit ?? 10,
         concurrency,
-      });
-    }
-
-    // 3. Daily Page Insights Snapshot Sync
-    const isDailyInsightsCron = controller.cron === '0 2 * * *' || controller.cron === '0 0 * * *';
-    if (options?.syncInsights || isDailyInsightsCron) {
-      await syncDailyPageInsights({
-        db,
-        masterKey,
-        fbApiUrl: env.FB_GRAPH_API_URL,
-        fetchImpl: options?.insightsFetchImpl,
       });
     }
   } finally {
