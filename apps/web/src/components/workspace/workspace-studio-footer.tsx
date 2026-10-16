@@ -436,7 +436,7 @@ function PopoverActionsList({
           borderRadius: RADII.sm,
           border: 'none',
           backgroundColor: 'transparent',
-          color: `var(--signal-critical, ${THEME.default.signals.critical})`,
+          color: `var(--signal-critical, ${PALETTE.accent3})`,
           cursor: 'pointer',
           textAlign: 'left',
           fontSize: '0.8125rem',
