@@ -12,6 +12,7 @@ import {
   PageTabDashboard,
   PageTabQueue,
   PageTabCalendar,
+  PageTabPostingTimes,
   PageTabSettings,
   EnqueueModal,
   type PageSlotSummary,
@@ -472,10 +473,56 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
   });
 
   /* ====================================================================
-   * Phase 4: PageTabCalendar (T005)
+   * Phase 4: PageTabPostingTimes (Spec 058)
    * ==================================================================== */
-  describe('PageTabCalendar Component', () => {
-    it('renders recurring slots list, slot times, and weekly schedule preview', () => {
+  describe('PageTabPostingTimes Component', () => {
+    it('renders daily posting times list, times, format containers, and enforces zero bullet dots', () => {
+      const { hasText, hasAttribute, html } = render(
+        <PageTabPostingTimes
+          page={samplePage}
+          slots={sampleSlots}
+          onAddSlot={vi.fn()}
+          onToggleSlot={vi.fn()}
+          onDeleteSlot={vi.fn()}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'page-tab-calendar')).toBe(true);
+      expect(hasText('Posting Times')).toBe(true);
+      expect(hasText('09:00')).toBe(true);
+      expect(hasText('15:00')).toBe(true);
+      expect(hasText('21:00')).toBe(true);
+      expect(hasAttribute('data-testid', 'slots-grid')).toBe(true);
+      expect(hasAttribute('data-testid', 'slot-format-container-slot-1')).toBe(true);
+      expect(hasAttribute('data-testid', 'edit-slot-btn-slot-1')).toBe(true);
+
+      // Strict negative constraint: zero bullet point dots
+      expect(html).not.toContain('•');
+    });
+
+    it('calls onToggleSlot when clicking activate/pause switch', async () => {
+      const onToggleSlot = vi.fn().mockResolvedValue(undefined);
+
+      const tree = renderAndCaptureTree(() =>
+        PageTabPostingTimes({
+          page: samplePage,
+          slots: sampleSlots,
+          onAddSlot: vi.fn(),
+          onToggleSlot,
+          onDeleteSlot: vi.fn(),
+        })
+      );
+
+      const toggleBtn = findElementByTestId(tree, 'toggle-slot-btn-slot-1');
+      expect(toggleBtn).not.toBeNull();
+      expect(toggleBtn?.props.role).toBe('switch');
+      expect(toggleBtn?.props['aria-checked']).toBe(true);
+      await toggleBtn?.props.onClick();
+
+      expect(onToggleSlot).toHaveBeenCalledWith('slot-1', false);
+    });
+
+    it('renders backwards-compatible PageTabCalendar export seamlessly', () => {
       const { hasText, hasAttribute } = render(
         <PageTabCalendar
           page={samplePage}
@@ -487,30 +534,24 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       );
 
       expect(hasAttribute('data-testid', 'page-tab-calendar')).toBe(true);
-      expect(hasText('09:00')).toBe(true);
-      expect(hasText('15:00')).toBe(true);
-      expect(hasText('21:00')).toBe(true);
-      expect(hasAttribute('data-testid', 'weekly-schedule-view')).toBe(true);
-      expect(hasText('Weekly Schedule Preview')).toBe(true);
+      expect(hasText('Posting Times')).toBe(true);
+      expect(hasAttribute('data-testid', 'slots-grid')).toBe(true);
     });
 
-    it('calls onToggleSlot when clicking activate/pause slot button', async () => {
-      const onToggleSlot = vi.fn().mockResolvedValue(undefined);
-
-      const tree = renderAndCaptureTree(() =>
-        PageTabCalendar({
-          page: samplePage,
-          slots: sampleSlots,
-          onAddSlot: vi.fn(),
-          onToggleSlot,
-          onDeleteSlot: vi.fn(),
-        })
+    it('renders calm empty state when no posting times are scheduled', () => {
+      const { hasText, hasAttribute } = render(
+        <PageTabPostingTimes
+          page={samplePage}
+          slots={[]}
+          onAddSlot={vi.fn()}
+          onToggleSlot={vi.fn()}
+          onDeleteSlot={vi.fn()}
+        />
       );
 
-      const toggleBtn = findElementByTestId(tree, 'toggle-slot-btn-slot-1');
-      await toggleBtn?.props.onClick();
-
-      expect(onToggleSlot).toHaveBeenCalledWith('slot-1', false);
+      expect(hasAttribute('data-testid', 'calendar-empty-state')).toBe(true);
+      expect(hasText('No daily posting times set yet')).toBe(true);
+      expect(hasAttribute('data-testid', 'empty-add-slot-button')).toBe(true);
     });
   });
 

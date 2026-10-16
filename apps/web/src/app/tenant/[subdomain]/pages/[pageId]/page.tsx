@@ -324,7 +324,7 @@ export default function TenantDedicatedPageView({
   const TAB_ITEMS: Array<{ id: DedicatedPageTab; label: string; count?: number }> = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'queue', label: 'Queue', count: queuedCount },
-    { id: 'calendar', label: 'Calendar & Slots' },
+    { id: 'calendar', label: 'Posting Times' },
     { id: 'insights', label: 'Insights' },
     { id: 'settings', label: 'Settings' },
   ];

@@ -308,6 +308,7 @@ flowchart LR
 - **Spec 055 (Completed & Verified)**: **Pitch Black Dark Mode Standardization & Initial Load Synchronization** (Restored canonical Binance Pure Pitch Black dark mode across `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` with canvas `#000000`, panels `#0c0d10`, subtle wells `#121419`, hover `#1f242d`, active `#262c37`, and hairline borders `#1f242d` / `#2b323c` in 100% compliance with `DESIGN.md`; synchronized `:root` default tokens with `[data-theme="dark"], .dark` to permanently eliminate the uninitialized midnight slate blue tint; added pre-hydration theme evaluation script in `apps/web/src/app/layout.tsx` to prevent FOUC and ensure immediate theme stability from frame 0; updated `WorkspaceStudioFooter` to synchronize `data-theme` on mount and persist the `fbup_theme` cookie upon theme toggling; updated UI unit tests in `apps/web/tests/ui/pages.test.tsx`).
 - **Spec 056 (Completed & Verified)**: **Sidebar Sign-Out Resilience & Cross-Environment Logout Gateway** (Upgraded `handleSignOut` in `WorkspaceStudioFooter` to issue asynchronous `POST /api/auth/logout` with `keepalive: true` to clear `httpOnly` session cookies via server-side `Set-Cookie` expiration; added resilient fallback redirection; introduced `isSigningOut` state with disabled loading affordance; hardened `resolveRequestGatewayBase` in `@fbuploadpro/contracts` to adapt local hostnames and prevent unresolvable hybrid domains; aligned route fallback rootDomain to `localhost:3000`).
 - **Spec 057 (Completed & Verified)**: **Facebook Page Detail Top Section & Action Buttons Redesign** (Redesigned the dedicated Facebook Page view top section in `apps/web/src/components/pages/dedicated/page-header.tsx` and tab bar in `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx` following Option A Mirror Studio Header; implemented 44x44px avatar with 1.5px status-colored ring border matching `PageCard`, quiet back link `← Facebook Pages`, pure human copy subtitle with strictly zero bullet point dots (`•`) using 12px vertical hairline dividers, uniform 34px action buttons `Pause / Resume Automation`, signature yellow `+ Queue Post`, 34x34px `···` More Options dropdown with outside-click closing, and flat typographic tabs with 2px brand yellow underline and quiet numeric count chip; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
+- **Spec 058 (Completed & Verified)**: **Facebook Page Posting Times Redesign (Minimalist Editorial Ledger & Format Selection)** (Purged legacy power-tool "Calendar & Slots" view and replaced with serene, typography-forward `PageTabPostingTimes` in `apps/web/src/components/pages/dedicated/tab-posting-times.tsx`; renamed tab in dedicated page workspace to **Posting Times**; features unified schedule timezone header, unboxed 6px luminous status dots, clean tabular numeric 12h/24h time display, permitted content format badges with granular format filtering per window, tactile accessible active/pause switches (`role="switch"`), quiet hover-only remove actions, interactive multi-select format buttons with `Select All` shortcut in Add/Edit modal, and serene empty state; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -709,6 +710,22 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
     - `+ Queue Post`: Signature brand-yellow (`#fad734`) primary button with dark text and subtle hover lift.
     - `···` More Options: 34x34px icon button opening an elevated dropdown (Copy Page ID, Open on Facebook, Disconnect Page) with outside-click closing.
   - **Flat Typographic Tab Navigation**: Tab bar features flat typographic tabs with a 2px solid `#fad734` active bottom border and a quiet numeric chip for queued posts without capsule pill badges.
+
+---
+
+## 24. Spec 058 Facebook Page Posting Times Redesign (Option A: Minimalist Editorial Ledger)
+
+### 24.1 De-Cluttering & Renaming "Calendar & Slots"
+* **Evolution into Posting Times**: Completely purges the dense, box-in-a-box "Calendar & Slots" view and 7-day "Weekly Schedule Preview" showing repetitive "None" cells. Replaces it with a serene, typography-forward **Posting Times** section (`apps/web/src/components/pages/dedicated/tab-posting-times.tsx`).
+* **Calm Header & Timezone Indicator**: Features a quiet page title, a professional executive subtitle (*"Daily publishing windows and permitted content formats for automated dispatch."*), and a unified schedule timezone indicator (`America/New_York (EST)`).
+
+### 24.2 Minimalist Editorial Ledger & Permitted Format Architecture
+* **Tabular Typography & Format Display**: Each posting time row features large, crisp numbers (e.g. `09:00 AM (09:00)`), an unboxed 6px luminous status dot, and active format tags (`Reels`, `Photos`, `Videos`, `Stories`, `Text Updates` or `All Formats Allowed`). Strictly ZERO bullet point dots (`•`) and ZERO capsule pill badges are used anywhere in the view.
+* **Permitted Content Format Filtering**: Provides granular format configuration per posting time via an inline `Edit Formats` button and dedicated format selection in the Add/Edit dialog, ensuring queued content dispatches strictly into appropriate media windows.
+* **Tactile Active/Pause Switch**: Accessible switch control (`role="switch"`, `aria-checked={slot.isActive}`) allowing creators to pause or resume posting times with a single tactile click without entering sub-menus.
+* **Quiet Hover-Only Actions**: Replace harsh red delete trash cans with an understated, hover-only `Remove` link with a gentle, professional confirmation modal.
+* **Frictionless Add/Edit Dialog**: Focused time input (`HH:MM`), timezone selector, interactive multi-select format buttons with `Select All` shortcut, and serene empty state for new pages.
+
 
 
 
