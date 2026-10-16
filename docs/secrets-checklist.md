@@ -148,5 +148,5 @@ Instead of manually inputting secrets in the Vercel Dashboard, synchronize them 
 
 1. Ensure `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` are set in GitHub Repository Secrets.
 2. Ensure application secrets (`DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_*`, `SESSION_SECRET`, etc.) are configured in GitHub Repository Secrets.
-3. Trigger the **Sync Secrets to Vercel** workflow via GitHub Actions (`workflow_dispatch` or push to `main`).
+3. The workflow runs automatically on every merge or push to `main` (and can also be triggered on demand via `gh workflow run sync-vercel-env.yml` or `workflow_dispatch`).
 4. The workflow will automatically upsert all variables into Vercel production and preview environments via the Vercel REST API.
