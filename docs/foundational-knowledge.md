@@ -587,7 +587,7 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 
 ### 18.2 Information Architecture Rebalance & Option A Studio Footer
 * **Dedicated Top Branding Anchor**: `SidebarHeader` displays the official geometric gold FBUploadPro brand mark (`#fad734`), wordmark, and "Studio" subtitle, linking to `/tenant/[subdomain]`. When collapsed, it contracts gracefully to the brand mark centered in the icon rail.
-* **Strict Navigation Preservation**: Middle section (`SidebarContent`) preserves 100% of the collapsible platform hierarchy and ordering: `Home` -> `Media Library` -> `Downloader` -> `SidebarSeparator` -> `Platform` (`Facebook` -> `Accounts`, `Pages`) -> Upcoming platforms (`Instagram`, `Threads`, `X (Twitter)`, `TikTok`, `YouTube`).
+* **Strict Navigation Preservation**: Middle section (`SidebarContent`) preserves 100% of the collapsible platform hierarchy and ordering: `Home` -> `Media Library` -> `Downloader` -> `Fdola Studio` -> `SidebarSeparator` -> `Platform` (`Facebook` -> `Accounts`, `Pages`) -> Upcoming platforms (`Instagram`, `Threads`, `X (Twitter)`, `TikTok`, `YouTube`).
 * **Option A Unified Studio Footer**: Rebalances secondary platform administration by consolidating Workspace Switching, User Profile identity, Platform Settings, Theme Toggling, and Sign Out into a single unified card in `SidebarFooter` (`WorkspaceStudioFooter`). Clicking opens an upward popover menu with full support for `CreateWorkspaceModal`.
 
 ### 18.3 Canonical Shadcn Topbar & Zero-Shift Canvas Alignment
@@ -709,6 +709,24 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
     - `+ Queue Post`: Signature brand-yellow (`#fad734`) primary button with dark text and subtle hover lift.
     - `···` More Options: 34x34px icon button opening an elevated dropdown (Copy Page ID, Open on Facebook, Disconnect Page) with outside-click closing.
   - **Flat Typographic Tab Navigation**: Tab bar features flat typographic tabs with a 2px solid `#fad734` active bottom border and a quiet numeric chip for queued posts without capsule pill badges.
+ 
+---
+ 
+## 24. Spec 057 Fdola Studio Desktop-Only Section & Native Shell Scaffolding
+ 
+### 24.1 Primary Navigation Integration & Ordering
+* **Primary Sidebar Sibling**: Positioned directly below **Downloader** in the top primary `SidebarGroup` of `WorkspaceSidebar`:
+  `Home` -> `Media Library` -> `Downloader` -> `Fdola Studio` -> `SidebarSeparator` -> `Platform`.
+* **Dynamic Breadcrumb Mapping**: In `computeBreadcrumbs` (`apps/web/src/components/workspace/workspace-breadcrumb.tsx`), the route `/tenant/[subdomain]/fdola-studio` resolves to `Fdola Studio`.
+ 
+### 24.2 Web Browser Desktop Gate View
+* **Environment Detection Guard**: Uses `@fbuploadpro/contracts` `isDesktopApp()` to detect whether the application is running inside the native Tauri v2 desktop shell or a standard web browser.
+* **Focused Desktop Requirement Notice**: In web browsers, navigating to `/tenant/[subdomain]/fdola-studio` renders `FdolaStudioGate`, an authoritative midnight-slate container stating: *"This feature is only available on desktop. Please download the desktop app."*
+* **Zero Premature Download Links & Buttons**: Explicitly excludes download links, external URLs, and action buttons until the desktop binary release pipeline is finalized.
+ 
+### 24.3 Empty Desktop App Workspace Placeholder
+* **Dedicated Desktop View**: When running inside the desktop shell (`isDesktopApp() === true`), `/tenant/[subdomain]/fdola-studio` renders `FdolaStudioWorkspace` as a clean, empty workspace placeholder ready for future native desktop features.
+
 
 
 ## 23. Production Deployment & Cloud Architecture Reference

@@ -23,6 +23,7 @@ describe('WorkspaceBreadcrumb (Spec 052)', () => {
     expect(computeBreadcrumbs('/tenant/acme/', 'acme')).toEqual([{ label: 'Home' }]);
     expect(computeBreadcrumbs('/tenant/acme/media', 'acme')).toEqual([{ label: 'Media Library' }]);
     expect(computeBreadcrumbs('/tenant/acme/downloader', 'acme')).toEqual([{ label: 'Downloader' }]);
+    expect(computeBreadcrumbs('/tenant/acme/fdola-studio', 'acme')).toEqual([{ label: 'Fdola Studio' }]);
     expect(computeBreadcrumbs('/tenant/acme/settings', 'acme')).toEqual([{ label: 'Settings' }]);
     expect(computeBreadcrumbs('/tenant/acme/accounts', 'acme')).toEqual([
       { label: 'Facebook' },

@@ -56,12 +56,14 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
   const homeHref = `/tenant/${subdomain}`;
   const mediaHref = `/tenant/${subdomain}/media`;
   const downloaderHref = `/tenant/${subdomain}/downloader`;
+  const fdolaStudioHref = `/tenant/${subdomain}/fdola-studio`;
   const accountsHref = `/tenant/${subdomain}/accounts`;
   const pagesHref = `/tenant/${subdomain}/pages`;
 
   const isHomeActive = effectivePath === homeHref;
   const isMediaActive = effectivePath.startsWith(mediaHref);
   const isDownloaderActive = effectivePath.startsWith(downloaderHref);
+  const isFdolaStudioActive = effectivePath.startsWith(fdolaStudioHref);
   const isAccountsActive = effectivePath.startsWith(accountsHref);
   const isPagesActive = effectivePath.startsWith(pagesHref);
 
@@ -237,6 +239,34 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
                   }
                 >
                   Downloader
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={isFdolaStudioActive}
+                  tooltip="Fdola Studio"
+                  onClick={() => handleNavigate(fdolaStudioHref)}
+                  onMouseEnter={() => handlePrefetch(fdolaStudioHref)}
+                  leftIcon={
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="2" y="3" width="20" height="14" rx="2" />
+                      <line x1="8" x2="16" y1="21" y2="21" />
+                      <line x1="12" x2="12" y1="17" y2="21" />
+                    </svg>
+                  }
+                >
+                  Fdola Studio
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
