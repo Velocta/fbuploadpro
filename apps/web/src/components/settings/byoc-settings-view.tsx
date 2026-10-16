@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
-import { StatusDot } from '@/components/ui';
+import { StatusDot, Button } from '@/components/ui';
 import {
   MODAL_BACKDROP_STYLE,
   MODAL_CONTAINER_STYLE,
@@ -352,17 +352,14 @@ function FacebookNotConnectedForm({
                 {isConnecting ? 'Connecting...' : 'Connect Facebook'}
               </button>
               {isEditMode && (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   data-testid="fb-cancel-edit-btn"
                   onClick={onCancelEdit}
-                  style={{
-                    ...COMPONENT_STYLES.secondaryButton(),
-                    cursor: 'pointer',
-                  }}
                 >
                   Cancel
-                </button>
+                </Button>
               )}
             </div>
             <span
@@ -530,17 +527,14 @@ function FacebookConnectedView({
           flexWrap: 'wrap',
         }}
       >
-        <button
+        <Button
           type="button"
+          variant="secondary"
           data-testid="fb-edit-details-btn"
           onClick={onEditDetails}
-          style={{
-            ...COMPONENT_STYLES.secondaryButton(),
-            cursor: 'pointer',
-          }}
         >
           Edit details
-        </button>
+        </Button>
         <button
           type="button"
           data-testid="fb-disconnect-btn"
@@ -788,18 +782,15 @@ function FacebookDisconnectModal({
             marginTop: SPACING.sm,
           }}
         >
-          <button
+          <Button
             type="button"
+            variant="secondary"
             data-testid="fb-disconnect-keep-btn"
             onClick={onClose}
             disabled={isDisconnecting}
-            style={{
-              ...COMPONENT_STYLES.secondaryButton(),
-              cursor: isDisconnecting ? 'not-allowed' : 'pointer',
-            }}
           >
             Keep connected
-          </button>
+          </Button>
           <button
             type="button"
             data-testid="fb-disconnect-confirm-btn"
