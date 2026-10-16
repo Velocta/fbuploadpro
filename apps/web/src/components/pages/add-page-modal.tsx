@@ -70,6 +70,104 @@ export function toggleSelectAllPages(
   return allSelected ? [] : selectableIds;
 }
 
+export function computeConfirmButtonText(
+  isSubmitting: boolean,
+  selectedCount: number
+): string {
+  if (isSubmitting) return 'Adding Pages...';
+  if (selectedCount === 0) return 'Add Selected Pages';
+  const unit = selectedCount === 1 ? 'Page' : 'Pages';
+  return `Import ${selectedCount} ${unit}`;
+}
+
+export function computeHeaderSubtitle(
+  step: 'select-account' | 'select-pages',
+  accountName?: string | null,
+  pagesCount = 0
+): string {
+  if (step === 'select-account') {
+    return 'Choose which connected Facebook account you want to import pages from.';
+  }
+  const name = accountName || 'Connected Account';
+  const unit = pagesCount === 1 ? 'page available' : 'pages available';
+  return `${name} · ${pagesCount} ${unit}`;
+}
+
+export function filterDiscoveredPages(
+  pages: DiscoveredPageItem[],
+  query: string
+): DiscoveredPageItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return pages;
+  return pages.filter(
+    (p) =>
+      p.pageName.toLowerCase().includes(q) ||
+      Boolean(p.category?.toLowerCase().includes(q))
+  );
+}
+
+async function executeDiscoverPages(subdomain: string, accountId: string) {
+  try {
+    const res = await fetch(
+      `/api/tenant/${subdomain}/accounts/${accountId}/pages/discover`
+    );
+    if (!res.ok) {
+      return {
+        success: false,
+        pages: [] as DiscoveredPageItem[],
+        error:
+          "Couldn't load pages from this Facebook account. Please check the account connection and try again.",
+      };
+    }
+    const data = await res.json();
+    return {
+      success: true,
+      pages: (data.pages || []) as DiscoveredPageItem[],
+      error: null,
+    };
+  } catch {
+    return {
+      success: false,
+      pages: [] as DiscoveredPageItem[],
+      error:
+        'An error occurred while loading pages from Facebook. Please try again.',
+    };
+  }
+}
+
+async function executeImportPages(
+  subdomain: string,
+  accountId: string,
+  selectedPageIds: string[]
+) {
+  try {
+    const res = await fetch(`/api/tenant/${subdomain}/pages/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId, selectedPageIds }),
+    });
+    if (!res.ok) {
+      return {
+        success: false,
+        importedCount: 0,
+        error: "Couldn't add the selected pages. Please try again.",
+      };
+    }
+    const data = await res.json();
+    const importedCount =
+      typeof data.importedCount === 'number'
+        ? data.importedCount
+        : selectedPageIds.length;
+    return { success: true, importedCount, error: null };
+  } catch {
+    return {
+      success: false,
+      importedCount: 0,
+      error: 'An error occurred while adding your pages. Please try again.',
+    };
+  }
+}
+
 function ArrowLeftIcon() {
   return (
     <svg
@@ -258,25 +356,13 @@ export function AddPageModal({
     setErrorMessage(null);
     setIsDiscovering(true);
 
-    try {
-      const res = await fetch(
-        `/api/tenant/${subdomain}/accounts/${account.id}/pages/discover`
-      );
-      if (!res.ok) {
-        setErrorMessage(
-          "Couldn't load pages from this Facebook account. Please check the account connection and try again."
-        );
-        return;
-      }
-      const data = await res.json();
-      setDiscoveredPages(data.pages || []);
-    } catch (_err) {
-      setErrorMessage(
-        'An error occurred while loading pages from Facebook. Please try again.'
-      );
-    } finally {
-      setIsDiscovering(false);
+    const result = await executeDiscoverPages(subdomain, account.id);
+    if (!result.success) {
+      setErrorMessage(result.error);
+    } else {
+      setDiscoveredPages(result.pages);
     }
+    setIsDiscovering(false);
   };
 
   const handleBackToAccounts = () => {
@@ -307,38 +393,18 @@ export function AddPageModal({
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    try {
-      const res = await fetch(`/api/tenant/${subdomain}/pages/import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: selectedAccount.id,
-          selectedPageIds,
-        }),
-      });
-
-      if (!res.ok) {
-        setErrorMessage(
-          "Couldn't add the selected pages. Please try again."
-        );
-        return;
-      }
-
-      const data = await res.json();
-      const importedCount =
-        typeof data.importedCount === 'number'
-          ? data.importedCount
-          : selectedPageIds.length;
-
-      onSuccess?.(importedCount);
+    const result = await executeImportPages(
+      subdomain,
+      selectedAccount.id,
+      selectedPageIds
+    );
+    if (!result.success) {
+      setErrorMessage(result.error);
+    } else {
+      onSuccess?.(result.importedCount);
       handleDialogOpenChange(false);
-    } catch (_err) {
-      setErrorMessage(
-        'An error occurred while adding your pages. Please try again.'
-      );
-    } finally {
-      setIsSubmitting(false);
     }
+    setIsSubmitting(false);
   };
 
   const handleGoToAccounts = () => {
@@ -355,23 +421,26 @@ export function AddPageModal({
     selectableIds.length > 0 &&
     selectableIds.every((id) => selectedPageIds.includes(id));
 
-  const filteredDiscoveredPages = useMemo(() => {
-    const q = pageSearchQuery.trim().toLowerCase();
-    if (!q) return discoveredPages;
-    return discoveredPages.filter(
-      (p) =>
-        p.pageName.toLowerCase().includes(q) ||
-        (p.category && p.category.toLowerCase().includes(q))
-    );
-  }, [discoveredPages, pageSearchQuery]);
+  const filteredDiscoveredPages = useMemo(
+    () => filterDiscoveredPages(discoveredPages, pageSearchQuery),
+    [discoveredPages, pageSearchQuery]
+  );
 
-  const confirmButtonText = isSubmitting
-    ? 'Adding Pages...'
-    : selectedPageIds.length > 0
-      ? `Import ${selectedPageIds.length} ${
-          selectedPageIds.length === 1 ? 'Page' : 'Pages'
-        }`
-      : 'Add Selected Pages';
+  const confirmButtonText = computeConfirmButtonText(
+    isSubmitting,
+    selectedPageIds.length
+  );
+
+  const headerTitle =
+    step === 'select-account'
+      ? 'Select a Facebook Account'
+      : 'Select Facebook Pages to Add';
+
+  const headerSubtitle = computeHeaderSubtitle(
+    step,
+    selectedAccount?.displayName,
+    discoveredPages.length
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
@@ -415,22 +484,8 @@ export function AddPageModal({
             )}
 
             <div style={{ flex: 1, minWidth: 0 }}>
-              <DialogTitle>
-                {step === 'select-account'
-                  ? 'Select a Facebook Account'
-                  : 'Select Facebook Pages to Add'}
-              </DialogTitle>
-              <DialogDescription>
-                {step === 'select-account'
-                  ? 'Choose which connected Facebook account you want to import pages from.'
-                  : `${selectedAccount?.displayName || 'Connected Account'} · ${
-                      discoveredPages.length
-                    } ${
-                      discoveredPages.length === 1
-                        ? 'page available'
-                        : 'pages available'
-                    }`}
-              </DialogDescription>
+              <DialogTitle>{headerTitle}</DialogTitle>
+              <DialogDescription>{headerSubtitle}</DialogDescription>
             </div>
           </div>
         </DialogHeader>
@@ -455,7 +510,7 @@ export function AddPageModal({
 
           {step === 'select-account' && (
             <div>
-              {isLoadingAccounts ? (
+              {isLoadingAccounts && (
                 <div
                   data-testid="loading-accounts-state"
                   style={{
@@ -467,7 +522,9 @@ export function AddPageModal({
                 >
                   Loading connected Facebook accounts...
                 </div>
-              ) : activeAccounts.length === 0 ? (
+              )}
+
+              {!isLoadingAccounts && activeAccounts.length === 0 && (
                 <div
                   data-testid="no-active-accounts-notice"
                   style={{
@@ -514,7 +571,9 @@ export function AddPageModal({
                     Go to Facebook Accounts
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {!isLoadingAccounts && activeAccounts.length > 0 && (
                 <div
                   data-testid="select-account-list"
                   style={{
@@ -652,7 +711,7 @@ export function AddPageModal({
                 gap: SPACING.sm,
               }}
             >
-              {isDiscovering ? (
+              {isDiscovering && (
                 <div
                   data-testid="discovering-pages-state"
                   style={{
@@ -664,7 +723,9 @@ export function AddPageModal({
                 >
                   Finding Facebook Pages on this account...
                 </div>
-              ) : discoveredPages.length === 0 ? (
+              )}
+
+              {!isDiscovering && discoveredPages.length === 0 && (
                 <div
                   data-testid="no-discovered-pages-state"
                   style={{
@@ -676,7 +737,9 @@ export function AddPageModal({
                 >
                   No Facebook Pages were found on this account.
                 </div>
-              ) : (
+              )}
+
+              {!isDiscovering && discoveredPages.length > 0 && (
                 <>
                   <div
                     style={{
