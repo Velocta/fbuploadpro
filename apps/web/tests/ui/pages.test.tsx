@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PALETTE } from '@/lib/theme';
+import { THEME, PALETTE } from '@/lib/theme';
 import {
   PageCard,
   computeFollowersGained,
@@ -304,8 +304,8 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
         },
         {
           status: 'disconnected',
-          expectedColor: 'var(--text-dim, #7E8B9B)',
-          expectedRing: '1px solid var(--border-subtle, #202B3E)',
+          expectedColor: `var(--text-dim, ${THEME.default.text.muted})`,
+          expectedRing: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         },
       ];
 
