@@ -93,7 +93,7 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
       />
     );
 
-    expect(html).toContain('data-testid="timezone-comparison-card"');
+    expect(html).toContain('data-testid="timezone-transition-card"');
     expect(html).toContain('data-testid="timezone-impact-metrics"');
     expect(html).toContain('data-testid="confirm-timezone-update-button"');
     expect(html).toContain('data-testid="back-to-step1-button"');
@@ -118,7 +118,7 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
       />
     );
 
-    expect(html).toContain('data-testid="timezone-error-alert"');
+    expect(html).toContain('data-testid="timezone-update-error"');
     expect(html).toContain('Network error updating schedule timezone');
   });
 });
