@@ -257,7 +257,9 @@ export function DedicatedPageHeader({
               boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
             }}
           >
-            {isUpdatingStatus ? 'Reactivating...' : 'Verify & Reactivate'}
+            {isUpdatingStatus
+              ? 'Reactivating...'
+              : 'Mark Verified & Reactivate Page'}
           </button>
         </div>
       )}
