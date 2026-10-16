@@ -14,6 +14,17 @@ import {
 } from '@/components/workspace/workspace-studio-footer';
 import { render } from '../components/setup';
 
+let mockPathname = '/tenant/acme';
+const mockPush = vi.fn();
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => mockPathname,
+  useRouter: () => ({
+    push: mockPush,
+    replace: vi.fn(),
+  }),
+}));
+
 describe('WorkspaceStudioFooter Component (Spec 056 & Spec 052)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -21,9 +32,9 @@ describe('WorkspaceStudioFooter Component (Spec 056 & Spec 052)', () => {
 
   it('computes monograms accurately for single and multi-word names', () => {
     expect(getMonogram('Alex Mercer')).toBe('AM');
-    expect(getMonogram('SingleWord')).toBe('S');
+    expect(getMonogram('SingleWord')).toBe('SI');
     expect(getMonogram('Three Word Name')).toBe('TW');
-    expect(getMonogram('')).toBe('W');
+    expect(getMonogram('')).toBe('WS');
   });
 
   it('renders studio footer trigger with workspace identity, email, and user avatar', () => {
