@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +70,62 @@ export function toggleSelectAllPages(
   return allSelected ? [] : selectableIds;
 }
 
+function ArrowLeftIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  );
+}
+
 function DiscoveredPageAvatar({
   pageName,
   profilePictureUrl,
@@ -106,7 +162,7 @@ function DiscoveredPageAvatar({
         width: '36px',
         height: '36px',
         borderRadius: RADII.full,
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
         border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         color: `var(--text-main, ${THEME.default.text.primary})`,
         display: 'flex',
@@ -118,6 +174,334 @@ function DiscoveredPageAvatar({
       }}
     >
       {initials}
+    </div>
+  );
+}
+
+function AccountOptionItem({
+  account,
+  onSelect,
+}: Readonly<{
+  account: FacebookAccountItem;
+  onSelect: (account: FacebookAccountItem) => void;
+}>) {
+  const initials = getInitials(account.displayName, 'FB');
+  const pagesLabel = `${account.connectedPagesCount} ${
+    account.connectedPagesCount === 1 ? 'page linked' : 'pages linked'
+  }`;
+
+  return (
+    <button
+      key={account.id}
+      type="button"
+      data-testid={`select-account-${account.id}`}
+      onClick={() => onSelect(account)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: SPACING.md,
+        padding: '12px 14px',
+        backgroundColor: 'transparent',
+        border: 'none',
+        borderRadius: RADII.sm,
+        cursor: 'pointer',
+        textAlign: 'left',
+        width: '100%',
+        transition: 'background-color 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = 'transparent';
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+          minWidth: 0,
+        }}
+      >
+        {account.profilePictureUrl ? (
+          <img
+            src={account.profilePictureUrl}
+            alt={account.displayName}
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: RADII.full,
+              objectFit: 'cover',
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: RADII.full,
+              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: TYPOGRAPHY.weights.bold,
+              fontSize: '0.8125rem',
+              flexShrink: 0,
+            }}
+          >
+            {initials}
+          </div>
+        )}
+
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              fontSize: '0.9375rem',
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {account.displayName}
+          </div>
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              marginTop: '2px',
+            }}
+          >
+            {pagesLabel}
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
+        <ChevronRightIcon />
+      </div>
+    </button>
+  );
+}
+
+function DiscoveredPageRowItem({
+  page,
+  isChecked,
+  onToggle,
+}: Readonly<{
+  page: DiscoveredPageItem;
+  isChecked: boolean;
+  onToggle: (fbPageId: string) => void;
+}>) {
+  const followers = page.currentFollowers ?? page.followersCount ?? 0;
+  const isSelected = !page.isImported && isChecked;
+
+  return (
+    <label
+      key={page.fbPageId}
+      data-testid={`discovered-page-row-${page.fbPageId}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACING.md,
+        padding: '10px 12px',
+        backgroundColor: isSelected
+          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
+          : 'transparent',
+        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        borderRadius: RADII.xs,
+        cursor: page.isImported ? 'default' : 'pointer',
+        opacity: page.isImported ? 0.6 : 1,
+        transition: 'background-color 0.15s ease',
+      }}
+      onMouseEnter={(e) => {
+        if (!page.isImported && !isSelected) {
+          e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!page.isImported && !isSelected) {
+          e.currentTarget.style.backgroundColor = 'transparent';
+        }
+      }}
+    >
+      <input
+        type="checkbox"
+        data-testid={`discovered-page-checkbox-${page.fbPageId}`}
+        checked={isChecked}
+        disabled={page.isImported}
+        onChange={() => {
+          if (!page.isImported) {
+            onToggle(page.fbPageId);
+          }
+        }}
+        style={{
+          width: '16px',
+          height: '16px',
+          accentColor: PALETTE.primary,
+          cursor: page.isImported ? 'not-allowed' : 'pointer',
+          flexShrink: 0,
+        }}
+      />
+
+      <DiscoveredPageAvatar
+        pageName={page.pageName}
+        profilePictureUrl={page.profilePictureUrl}
+      />
+
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            fontSize: '0.875rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {page.pageName}
+        </div>
+        <div
+          style={{
+            fontSize: '0.75rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            marginTop: '2px',
+          }}
+        >
+          {page.category || 'Facebook Page'} • {followers.toLocaleString('en-US')}{' '}
+          followers
+        </div>
+      </div>
+
+      {page.isImported && (
+        <span
+          data-testid={`already-added-${page.fbPageId}`}
+          style={{
+            fontSize: '0.75rem',
+            fontWeight: TYPOGRAPHY.weights.medium,
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            flexShrink: 0,
+          }}
+        >
+          Already added
+        </span>
+      )}
+    </label>
+  );
+}
+
+function DiscoveredPagesToolbar({
+  searchQuery,
+  onSearchChange,
+  totalFound,
+  selectableCount,
+  allChecked,
+  onToggleSelectAll,
+}: Readonly<{
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  totalFound: number;
+  selectableCount: number;
+  allChecked: boolean;
+  onToggleSelectAll: () => void;
+}>) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: SPACING.md,
+        marginBottom: SPACING.xs,
+        padding: `0 2px`,
+      }}
+    >
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          flex: 1,
+          maxWidth: '240px',
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            left: '9px',
+            color: 'var(--text-dim)',
+            display: 'flex',
+            alignItems: 'center',
+            pointerEvents: 'none',
+          }}
+        >
+          <SearchIcon />
+        </span>
+        <input
+          type="text"
+          data-testid="modal-page-search-input"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Filter pages..."
+          style={{
+            width: '100%',
+            height: '30px',
+            paddingLeft: '28px',
+            paddingRight: '8px',
+            backgroundColor: 'var(--bg-canvas)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: RADII.sm,
+            color: 'var(--text-main)',
+            fontSize: '0.75rem',
+            outline: 'none',
+          }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          {totalFound} {totalFound === 1 ? 'page found' : 'pages found'}
+        </span>
+
+        {selectableCount > 0 && (
+          <button
+            type="button"
+            data-testid="select-all-pages-btn"
+            aria-pressed={allChecked}
+            onClick={onToggleSelectAll}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: PALETTE.primary,
+              fontSize: '0.75rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            {allChecked ? 'Deselect All' : 'Select All'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -147,6 +531,7 @@ export function AddPageModal({
   const [discoveredPages, setDiscoveredPages] = useState<DiscoveredPageItem[]>(
     initialDiscoveredPages
   );
+  const [pageSearchQuery, setPageSearchQuery] = useState('');
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [selectedPageIds, setSelectedPageIds] = useState<string[]>(
     initialSelectedPageIds
@@ -185,6 +570,7 @@ export function AddPageModal({
       setSelectedAccount(null);
       setDiscoveredPages([]);
       setSelectedPageIds([]);
+      setPageSearchQuery('');
       setErrorMessage(null);
       setIsSubmitting(false);
     }
@@ -196,6 +582,7 @@ export function AddPageModal({
     setStep('select-pages');
     setDiscoveredPages([]);
     setSelectedPageIds([]);
+    setPageSearchQuery('');
     setErrorMessage(null);
     setIsDiscovering(true);
 
@@ -225,6 +612,7 @@ export function AddPageModal({
     setSelectedAccount(null);
     setDiscoveredPages([]);
     setSelectedPageIds([]);
+    setPageSearchQuery('');
     setErrorMessage(null);
   };
 
@@ -295,20 +683,84 @@ export function AddPageModal({
     selectableIds.length > 0 &&
     selectableIds.every((id) => selectedPageIds.includes(id));
 
+  const filteredDiscoveredPages = useMemo(() => {
+    const q = pageSearchQuery.trim().toLowerCase();
+    if (!q) return discoveredPages;
+    return discoveredPages.filter(
+      (p) =>
+        p.pageName.toLowerCase().includes(q) ||
+        (p.category && p.category.toLowerCase().includes(q))
+    );
+  }, [discoveredPages, pageSearchQuery]);
+
+  const confirmButtonText = isSubmitting
+    ? 'Adding Pages...'
+    : selectedPageIds.length > 0
+      ? `Import ${selectedPageIds.length} ${
+          selectedPageIds.length === 1 ? 'Page' : 'Pages'
+        }`
+      : 'Add Selected Pages';
+
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent style={{ maxWidth: '540px' }} data-testid="add-page-modal">
         <DialogHeader>
-          <DialogTitle>
-            {step === 'select-account'
-              ? 'Select a Facebook Account'
-              : 'Select Facebook Pages to Add'}
-          </DialogTitle>
-          <DialogDescription>
-            {step === 'select-account'
-              ? 'Choose which connected Facebook account you want to import pages from.'
-              : 'Select one or more pages to add to your workspace.'}
-          </DialogDescription>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: SPACING.sm,
+            }}
+          >
+            {step === 'select-pages' && (
+              <button
+                type="button"
+                data-testid="change-account-btn"
+                onClick={handleBackToAccounts}
+                aria-label="Back to account selection"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-sub)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  marginTop: '2px',
+                  borderRadius: RADII.xs,
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--text-main)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--text-sub)';
+                }}
+              >
+                <ArrowLeftIcon />
+              </button>
+            )}
+
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <DialogTitle>
+                {step === 'select-account'
+                  ? 'Select a Facebook Account'
+                  : 'Select Facebook Pages to Add'}
+              </DialogTitle>
+              <DialogDescription>
+                {step === 'select-account'
+                  ? 'Choose which connected Facebook account you want to import pages from.'
+                  : `${selectedAccount?.displayName || 'Connected Account'} · ${
+                      discoveredPages.length
+                    } ${
+                      discoveredPages.length === 1
+                        ? 'page available'
+                        : 'pages available'
+                    }`}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         <DialogBody>
@@ -352,9 +804,6 @@ export function AddPageModal({
                     alignItems: 'center',
                     textAlign: 'center',
                     padding: SPACING.xl,
-                    backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    borderRadius: RADII.md,
                   }}
                 >
                   <div
@@ -373,6 +822,7 @@ export function AddPageModal({
                       fontSize: '0.8125rem',
                       color: `var(--text-sub, ${THEME.default.text.secondary})`,
                       lineHeight: 1.4,
+                      maxWidth: '320px',
                     }}
                   >
                     Connect a Facebook account first so you can discover and add
@@ -398,126 +848,18 @@ export function AddPageModal({
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: SPACING.sm,
+                    gap: '4px',
                   }}
                 >
-                  {activeAccounts.map((account) => {
-                    const initials = getInitials(account.displayName, 'FB');
-                    const pagesLabel = `${account.connectedPagesCount} ${
-                      account.connectedPagesCount === 1
-                        ? 'page linked'
-                        : 'pages linked'
-                    }`;
-                    return (
-                      <button
-                        key={account.id}
-                        type="button"
-                        data-testid={`select-account-${account.id}`}
-                        onClick={() => {
-                          void handleSelectAccount(account);
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: SPACING.md,
-                          padding: SPACING.md,
-                          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                          borderRadius: RADII.md,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          width: '100%',
-                          transition: 'border-color 0.15s ease',
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: SPACING.md,
-                            minWidth: 0,
-                          }}
-                        >
-                          {account.profilePictureUrl ? (
-                            <img
-                              src={account.profilePictureUrl}
-                              alt={account.displayName}
-                              style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: RADII.full,
-                                objectFit: 'cover',
-                                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                                flexShrink: 0,
-                              }}
-                            />
-                          ) : (
-                            <div
-                              style={{
-                                width: '40px',
-                                height: '40px',
-                                borderRadius: RADII.full,
-                                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                                color: `var(--text-main, ${THEME.default.text.primary})`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: TYPOGRAPHY.weights.bold,
-                                fontSize: '0.8125rem',
-                                flexShrink: 0,
-                              }}
-                            >
-                              {initials}
-                            </div>
-                          )}
-
-                          <div style={{ minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontWeight: TYPOGRAPHY.weights.semibold,
-                                fontSize: '0.9375rem',
-                                color: `var(--text-main, ${THEME.default.text.primary})`,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {account.displayName}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '0.75rem',
-                                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                                marginTop: '2px',
-                              }}
-                            >
-                              {pagesLabel}
-                            </div>
-                          </div>
-                        </div>
-
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden="true"
-                          style={{
-                            color: `var(--text-dim, ${THEME.default.text.muted})`,
-                            flexShrink: 0,
-                          }}
-                        >
-                          <path d="m9 18 6-6-6-6" />
-                        </svg>
-                      </button>
-                    );
-                  })}
+                  {activeAccounts.map((account) => (
+                    <AccountOptionItem
+                      key={account.id}
+                      account={account}
+                      onSelect={(acc) => {
+                        void handleSelectAccount(acc);
+                      }}
+                    />
+                  ))}
                 </div>
               )}
             </div>
@@ -528,53 +870,9 @@ export function AddPageModal({
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: SPACING.md,
+                gap: SPACING.sm,
               }}
             >
-              {/* Selected Account Bar + Change Account Back Action */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: SPACING.sm,
-                  padding: `${SPACING.sm} ${SPACING.md}`,
-                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.sm,
-                  fontSize: '0.8125rem',
-                }}
-              >
-                <span
-                  style={{
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    fontWeight: TYPOGRAPHY.weights.medium,
-                  }}
-                >
-                  Account:{' '}
-                  <strong>
-                    {selectedAccount?.displayName || 'Connected Account'}
-                  </strong>
-                </span>
-
-                <button
-                  type="button"
-                  data-testid="change-account-btn"
-                  onClick={handleBackToAccounts}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: PALETTE.primary,
-                    fontSize: '0.8125rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  Change account
-                </button>
-              </div>
-
               {isDiscovering ? (
                 <div
                   data-testid="discovering-pages-state"
@@ -593,9 +891,6 @@ export function AddPageModal({
                   style={{
                     padding: SPACING.xl,
                     textAlign: 'center',
-                    backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    borderRadius: RADII.md,
                     fontSize: '0.875rem',
                     color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   }}
@@ -604,152 +899,36 @@ export function AddPageModal({
                 </div>
               ) : (
                 <>
-                  {/* Select All Controls */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: `0 ${SPACING.xs}`,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                      }}
-                    >
-                      {discoveredPages.length}{' '}
-                      {discoveredPages.length === 1
-                        ? 'page found'
-                        : 'pages found'}
-                    </span>
+                  <DiscoveredPagesToolbar
+                    searchQuery={pageSearchQuery}
+                    onSearchChange={setPageSearchQuery}
+                    totalFound={discoveredPages.length}
+                    selectableCount={selectableIds.length}
+                    allChecked={allSelectableChecked}
+                    onToggleSelectAll={handleSelectAll}
+                  />
 
-                    {selectableIds.length > 0 && (
-                      <button
-                        type="button"
-                        data-testid="select-all-pages-btn"
-                        aria-pressed={allSelectableChecked}
-                        onClick={handleSelectAll}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: PALETTE.primary,
-                          fontSize: '0.8125rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          cursor: 'pointer',
-                          padding: 0,
-                        }}
-                      >
-                        Select All
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Discovered Pages Multi-Select List */}
                   <div
                     data-testid="discovered-pages-list"
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: SPACING.xs,
+                      maxHeight: '340px',
+                      overflowY: 'auto',
+                      borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                     }}
                   >
-                    {discoveredPages.map((page) => {
-                      const isChecked =
-                        page.isImported ||
-                        selectedPageIds.includes(page.fbPageId);
-                      const followers =
-                        page.currentFollowers ?? page.followersCount ?? 0;
-
-                      return (
-                        <label
-                          key={page.fbPageId}
-                          data-testid={`discovered-page-row-${page.fbPageId}`}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: SPACING.md,
-                            padding: SPACING.sm,
-                            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                            border:
-                              !page.isImported && isChecked
-                                ? `1px solid ${PALETTE.primary}`
-                                : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                            borderRadius: RADII.sm,
-                            cursor: page.isImported
-                              ? 'default'
-                              : 'pointer',
-                            opacity: page.isImported ? 0.65 : 1,
-                          }}
-                        >
-                          <input
-                            type="checkbox"
-                            data-testid={`discovered-page-checkbox-${page.fbPageId}`}
-                            checked={isChecked}
-                            disabled={page.isImported}
-                            onChange={() => {
-                              if (!page.isImported) {
-                                handleTogglePage(page.fbPageId);
-                              }
-                            }}
-                            style={{
-                              width: '16px',
-                              height: '16px',
-                              accentColor: PALETTE.primary,
-                              cursor: page.isImported
-                                ? 'not-allowed'
-                                : 'pointer',
-                              flexShrink: 0,
-                            }}
-                          />
-
-                          <DiscoveredPageAvatar
-                            pageName={page.pageName}
-                            profilePictureUrl={page.profilePictureUrl}
-                          />
-
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div
-                              style={{
-                                fontWeight: TYPOGRAPHY.weights.semibold,
-                                fontSize: '0.875rem',
-                                color: `var(--text-main, ${THEME.default.text.primary})`,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {page.pageName}
-                            </div>
-                            <div
-                              style={{
-                                fontSize: '0.75rem',
-                                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                                marginTop: '2px',
-                              }}
-                            >
-                              {page.category || 'Facebook Page'} •{' '}
-                              {followers.toLocaleString('en-US')} followers
-                            </div>
-                          </div>
-
-                          {page.isImported && (
-                            <span
-                              data-testid={`already-added-${page.fbPageId}`}
-                              style={{
-                                fontSize: '0.75rem',
-                                fontWeight: TYPOGRAPHY.weights.medium,
-                                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                                flexShrink: 0,
-                              }}
-                            >
-                              Already added
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
+                    {filteredDiscoveredPages.map((page) => (
+                      <DiscoveredPageRowItem
+                        key={page.fbPageId}
+                        page={page}
+                        isChecked={
+                          page.isImported ||
+                          selectedPageIds.includes(page.fbPageId)
+                        }
+                        onToggle={handleTogglePage}
+                      />
+                    ))}
                   </div>
                 </>
               )}
@@ -795,7 +974,7 @@ export function AddPageModal({
                     : 'pointer',
               }}
             >
-              {isSubmitting ? 'Adding Pages...' : 'Add Selected Pages'}
+              {confirmButtonText}
             </button>
           )}
         </DialogFooter>

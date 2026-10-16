@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { THEME, LIGHT_THEME, PALETTE } from '@/lib/theme';
+import { THEME, DARK_THEME, LIGHT_THEME, PALETTE } from '@/lib/theme';
 import {
   PageCard,
   computeFollowersGained,
@@ -565,6 +565,60 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(onSuccess).toHaveBeenCalledWith(2);
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
+
+    it('Step 2 displays integrated breadcrumb header, ghost page search input, dynamic import button copy, and back navigation', () => {
+      const step2Render = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[sampleActiveAccount]}
+          initialStep="select-pages"
+          initialSelectedAccount={sampleActiveAccount}
+          initialDiscoveredPages={sampleDiscoveredPages}
+          initialSelectedPageIds={['fb_page_202']}
+        />
+      );
+
+      // Header breadcrumb and subtitle
+      expect(step2Render.hasText('Select Facebook Pages to Add')).toBe(true);
+      expect(step2Render.hasText('Sarah Connor · 3 pages available')).toBe(true);
+      expect(step2Render.hasAttribute('data-testid', 'change-account-btn')).toBe(true);
+      expect(step2Render.hasAttribute('data-testid', 'modal-page-search-input')).toBe(true);
+
+      // Dynamic button copy for 1 selected page
+      expect(step2Render.hasText('Import 1 Page')).toBe(true);
+
+      // Dynamic button copy for 2 selected pages
+      const multiSelectRender = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[sampleActiveAccount]}
+          initialStep="select-pages"
+          initialSelectedAccount={sampleActiveAccount}
+          initialDiscoveredPages={sampleDiscoveredPages}
+          initialSelectedPageIds={['fb_page_202', 'fb_page_303']}
+        />
+      );
+      expect(multiSelectRender.hasText('Import 2 Pages')).toBe(true);
+
+      // Button copy for 0 selected pages
+      const emptySelectRender = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[sampleActiveAccount]}
+          initialStep="select-pages"
+          initialSelectedAccount={sampleActiveAccount}
+          initialDiscoveredPages={sampleDiscoveredPages}
+          initialSelectedPageIds={[]}
+        />
+      );
+      expect(emptySelectRender.hasText('Add Selected Pages')).toBe(true);
+    });
   });
 
   describe('TenantPagesPage (/tenant/[subdomain]/pages/page.tsx)', () => {
@@ -744,6 +798,18 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(LIGHT_THEME.surfaces.canvas).toBe('#f6f8fa');
       expect(LIGHT_THEME.surfaces.panel).toBe('#ffffff');
       expect(LIGHT_THEME.surfaces.canvas).not.toBe(LIGHT_THEME.surfaces.panel);
+    });
+
+    it('validates dark mode canvas and surface calibration tokens for Midnight Slate (Spec 051)', () => {
+      expect(DARK_THEME.surfaces.canvas).toBe('#0a0c10');
+      expect(DARK_THEME.surfaces.panel).toBe('#12151c');
+      expect(DARK_THEME.surfaces.subtle).toBe('#181c26');
+      expect(DARK_THEME.surfaces.hover).toBe('#1f2430');
+      expect(DARK_THEME.surfaces.active).toBe('#272d3d');
+      expect(DARK_THEME.borders.hairline).toBe('#222735');
+      expect(DARK_THEME.borders.strong).toBe('#2d3444');
+      expect(DARK_THEME.surfaces.canvas).not.toBe('#000000');
+      expect(DARK_THEME.surfaces.panel).not.toBe(DARK_THEME.surfaces.canvas);
     });
   });
 
