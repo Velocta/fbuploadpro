@@ -101,7 +101,7 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     expect(html).toContain('Asia/Karachi');
     expect(html).toContain('Recurring Slots');
     expect(html).toContain('Pending Queue Items');
-    expect(html).toContain('Apply Timezone Shift');
+    expect(html).toContain('Update Schedule Timezone');
   });
 
   it('displays error message in Step 2 when error is present', () => {
