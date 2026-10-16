@@ -13,376 +13,77 @@ export interface TimezoneEntry {
   label: string;
 }
 
-export const TIMEZONE_REGISTRY: TimezoneEntry[] = [
-  // Global
-  {
-    iana: 'UTC',
-    city: 'Coordinated Universal Time',
-    country: 'Universal',
-    region: 'Global',
-    label: 'UTC (Universal Coordinated Time)',
-  },
-
-  // Americas
-  {
-    iana: 'America/New_York',
-    city: 'New York',
-    country: 'United States',
-    region: 'Americas',
-    label: 'New York (US Eastern)',
-  },
-  {
-    iana: 'America/Chicago',
-    city: 'Chicago',
-    country: 'United States',
-    region: 'Americas',
-    label: 'Chicago (US Central)',
-  },
-  {
-    iana: 'America/Denver',
-    city: 'Denver',
-    country: 'United States',
-    region: 'Americas',
-    label: 'Denver (US Mountain)',
-  },
-  {
-    iana: 'America/Los_Angeles',
-    city: 'Los Angeles',
-    country: 'United States',
-    region: 'Americas',
-    label: 'Los Angeles (US Pacific)',
-  },
-  {
-    iana: 'America/Anchorage',
-    city: 'Anchorage',
-    country: 'United States',
-    region: 'Americas',
-    label: 'Anchorage (Alaska)',
-  },
-  {
-    iana: 'Pacific/Honolulu',
-    city: 'Honolulu',
-    country: 'United States',
-    region: 'Americas',
-    label: 'Honolulu (Hawaii)',
-  },
-  {
-    iana: 'America/Toronto',
-    city: 'Toronto',
-    country: 'Canada',
-    region: 'Americas',
-    label: 'Toronto (Eastern Canada)',
-  },
-  {
-    iana: 'America/Vancouver',
-    city: 'Vancouver',
-    country: 'Canada',
-    region: 'Americas',
-    label: 'Vancouver (Pacific Canada)',
-  },
-  {
-    iana: 'America/Mexico_City',
-    city: 'Mexico City',
-    country: 'Mexico',
-    region: 'Americas',
-    label: 'Mexico City (Central Mexico)',
-  },
-  {
-    iana: 'America/Bogota',
-    city: 'Bogota',
-    country: 'Colombia',
-    region: 'Americas',
-    label: 'Bogota (Colombia, Peru, Ecuador)',
-  },
-  {
-    iana: 'America/Sao_Paulo',
-    city: 'Sao Paulo',
-    country: 'Brazil',
-    region: 'Americas',
-    label: 'Sao Paulo (Brazil Standard)',
-  },
-  {
-    iana: 'America/Buenos_Aires',
-    city: 'Buenos Aires',
-    country: 'Argentina',
-    region: 'Americas',
-    label: 'Buenos Aires (Argentina)',
-  },
-  {
-    iana: 'America/Santiago',
-    city: 'Santiago',
-    country: 'Chile',
-    region: 'Americas',
-    label: 'Santiago (Chile)',
-  },
-
-  // Europe
-  {
-    iana: 'Europe/London',
-    city: 'London',
-    country: 'United Kingdom',
-    region: 'Europe',
-    label: 'London (GMT / British Summer Time)',
-  },
-  {
-    iana: 'Europe/Dublin',
-    city: 'Dublin',
-    country: 'Ireland',
-    region: 'Europe',
-    label: 'Dublin (Irish Standard Time)',
-  },
-  {
-    iana: 'Europe/Paris',
-    city: 'Paris',
-    country: 'France',
-    region: 'Europe',
-    label: 'Paris (Central European Time)',
-  },
-  {
-    iana: 'Europe/Berlin',
-    city: 'Berlin',
-    country: 'Germany',
-    region: 'Europe',
-    label: 'Berlin (Germany)',
-  },
-  {
-    iana: 'Europe/Madrid',
-    city: 'Madrid',
-    country: 'Spain',
-    region: 'Europe',
-    label: 'Madrid (Spain)',
-  },
-  {
-    iana: 'Europe/Rome',
-    city: 'Rome',
-    country: 'Italy',
-    region: 'Europe',
-    label: 'Rome (Italy)',
-  },
-  {
-    iana: 'Europe/Amsterdam',
-    city: 'Amsterdam',
-    country: 'Netherlands',
-    region: 'Europe',
-    label: 'Amsterdam (Netherlands)',
-  },
-  {
-    iana: 'Europe/Stockholm',
-    city: 'Stockholm',
-    country: 'Sweden',
-    region: 'Europe',
-    label: 'Stockholm (Sweden, Norway)',
-  },
-  {
-    iana: 'Europe/Athens',
-    city: 'Athens',
-    country: 'Greece',
-    region: 'Europe',
-    label: 'Athens (Eastern European Time)',
-  },
-  {
-    iana: 'Europe/Istanbul',
-    city: 'Istanbul',
-    country: 'Turkey',
-    region: 'Europe',
-    label: 'Istanbul (Turkey Time)',
-  },
-  {
-    iana: 'Europe/Warsaw',
-    city: 'Warsaw',
-    country: 'Poland',
-    region: 'Europe',
-    label: 'Warsaw (Poland)',
-  },
-  {
-    iana: 'Europe/Bucharest',
-    city: 'Bucharest',
-    country: 'Romania',
-    region: 'Europe',
-    label: 'Bucharest (Romania)',
-  },
-  {
-    iana: 'Europe/Kiev',
-    city: 'Kyiv',
-    country: 'Ukraine',
-    region: 'Europe',
-    label: 'Kyiv (Ukraine)',
-  },
-
-  // Asia & Middle East
-  {
-    iana: 'Asia/Karachi',
-    city: 'Karachi / Islamabad',
-    country: 'Pakistan',
-    region: 'Asia',
-    label: 'Karachi / Islamabad (Pakistan Standard Time)',
-  },
-  {
-    iana: 'Asia/Dubai',
-    city: 'Dubai / Abu Dhabi',
-    country: 'United Arab Emirates',
-    region: 'Asia',
-    label: 'Dubai / Abu Dhabi (Gulf Standard Time)',
-  },
-  {
-    iana: 'Asia/Riyadh',
-    city: 'Riyadh',
-    country: 'Saudi Arabia',
-    region: 'Asia',
-    label: 'Riyadh (Arabia Standard Time)',
-  },
-  {
-    iana: 'Asia/Kolkata',
-    city: 'Mumbai / Delhi / Kolkata',
-    country: 'India',
-    region: 'Asia',
-    label: 'Mumbai / Delhi (India Standard Time)',
-  },
-  {
-    iana: 'Asia/Dhaka',
-    city: 'Dhaka',
-    country: 'Bangladesh',
-    region: 'Asia',
-    label: 'Dhaka (Bangladesh Standard Time)',
-  },
-  {
-    iana: 'Asia/Bangkok',
-    city: 'Bangkok / Jakarta',
-    country: 'Thailand',
-    region: 'Asia',
-    label: 'Bangkok / Jakarta (Indochina Time)',
-  },
-  {
-    iana: 'Asia/Singapore',
-    city: 'Singapore',
-    country: 'Singapore',
-    region: 'Asia',
-    label: 'Singapore (Singapore Standard Time)',
-  },
-  {
-    iana: 'Asia/Hong_Kong',
-    city: 'Hong Kong',
-    country: 'Hong Kong',
-    region: 'Asia',
-    label: 'Hong Kong (Hong Kong Time)',
-  },
-  {
-    iana: 'Asia/Shanghai',
-    city: 'Beijing / Shanghai',
-    country: 'China',
-    region: 'Asia',
-    label: 'Beijing / Shanghai (China Standard Time)',
-  },
-  {
-    iana: 'Asia/Tokyo',
-    city: 'Tokyo',
-    country: 'Japan',
-    region: 'Asia',
-    label: 'Tokyo (Japan Standard Time)',
-  },
-  {
-    iana: 'Asia/Seoul',
-    city: 'Seoul',
-    country: 'South Korea',
-    region: 'Asia',
-    label: 'Seoul (Korea Standard Time)',
-  },
-  {
-    iana: 'Asia/Manila',
-    city: 'Manila',
-    country: 'Philippines',
-    region: 'Asia',
-    label: 'Manila (Philippine Standard Time)',
-  },
-  {
-    iana: 'Asia/Kuala_Lumpur',
-    city: 'Kuala Lumpur',
-    country: 'Malaysia',
-    region: 'Asia',
-    label: 'Kuala Lumpur (Malaysia Time)',
-  },
-
-  // Australia & Pacific
-  {
-    iana: 'Australia/Sydney',
-    city: 'Sydney / Melbourne',
-    country: 'Australia',
-    region: 'Pacific',
-    label: 'Sydney / Melbourne (Eastern Australia)',
-  },
-  {
-    iana: 'Australia/Brisbane',
-    city: 'Brisbane',
-    country: 'Australia',
-    region: 'Pacific',
-    label: 'Brisbane (Queensland, no DST)',
-  },
-  {
-    iana: 'Australia/Adelaide',
-    city: 'Adelaide',
-    country: 'Australia',
-    region: 'Pacific',
-    label: 'Adelaide (Central Australia)',
-  },
-  {
-    iana: 'Australia/Perth',
-    city: 'Perth',
-    country: 'Australia',
-    region: 'Pacific',
-    label: 'Perth (Western Australia)',
-  },
-  {
-    iana: 'Pacific/Auckland',
-    city: 'Auckland / Wellington',
-    country: 'New Zealand',
-    region: 'Pacific',
-    label: 'Auckland / Wellington (New Zealand)',
-  },
-  {
-    iana: 'Pacific/Fiji',
-    city: 'Suva',
-    country: 'Fiji',
-    region: 'Pacific',
-    label: 'Fiji (Fiji Time)',
-  },
-
-  // Africa
-  {
-    iana: 'Africa/Cairo',
-    city: 'Cairo',
-    country: 'Egypt',
-    region: 'Africa',
-    label: 'Cairo (Eastern Africa)',
-  },
-  {
-    iana: 'Africa/Johannesburg',
-    city: 'Johannesburg',
-    country: 'South Africa',
-    region: 'Africa',
-    label: 'Johannesburg (South Africa Standard Time)',
-  },
-  {
-    iana: 'Africa/Lagos',
-    city: 'Lagos',
-    country: 'Nigeria',
-    region: 'Africa',
-    label: 'Lagos (West Africa Time)',
-  },
-  {
-    iana: 'Africa/Nairobi',
-    city: 'Nairobi',
-    country: 'Kenya',
-    region: 'Africa',
-    label: 'Nairobi (East Africa Time)',
-  },
-  {
-    iana: 'Africa/Casablanca',
-    city: 'Casablanca',
-    country: 'Morocco',
-    region: 'Africa',
-    label: 'Casablanca (Morocco Time)',
-  },
+type RawTzTuple = readonly [
+  iana: string,
+  city: string,
+  country: string,
+  region: TimezoneEntry['region'],
+  label: string,
 ];
+
+const RAW_TIMEZONES: readonly RawTzTuple[] = [
+  ['UTC', 'Coordinated Universal Time', 'Universal', 'Global', 'UTC (Universal Coordinated Time)'],
+  ['America/New_York', 'New York', 'United States', 'Americas', 'New York (US Eastern)'],
+  ['America/Chicago', 'Chicago', 'United States', 'Americas', 'Chicago (US Central)'],
+  ['America/Denver', 'Denver', 'United States', 'Americas', 'Denver (US Mountain)'],
+  ['America/Los_Angeles', 'Los Angeles', 'United States', 'Americas', 'Los Angeles (US Pacific)'],
+  ['America/Anchorage', 'Anchorage', 'United States', 'Americas', 'Anchorage (Alaska)'],
+  ['Pacific/Honolulu', 'Honolulu', 'United States', 'Americas', 'Honolulu (Hawaii)'],
+  ['America/Toronto', 'Toronto', 'Canada', 'Americas', 'Toronto (Eastern Canada)'],
+  ['America/Vancouver', 'Vancouver', 'Canada', 'Americas', 'Vancouver (Pacific Canada)'],
+  ['America/Mexico_City', 'Mexico City', 'Mexico', 'Americas', 'Mexico City (Central Mexico)'],
+  ['America/Bogota', 'Bogota', 'Colombia', 'Americas', 'Bogota (Colombia, Peru, Ecuador)'],
+  ['America/Sao_Paulo', 'Sao Paulo', 'Brazil', 'Americas', 'Sao Paulo (Brazil Standard)'],
+  ['America/Buenos_Aires', 'Buenos Aires', 'Argentina', 'Americas', 'Buenos Aires (Argentina)'],
+  ['America/Santiago', 'Santiago', 'Chile', 'Americas', 'Santiago (Chile)'],
+  ['Europe/London', 'London', 'United Kingdom', 'Europe', 'London (GMT / British Summer Time)'],
+  ['Europe/Dublin', 'Dublin', 'Ireland', 'Europe', 'Dublin (Irish Standard Time)'],
+  ['Europe/Paris', 'Paris', 'France', 'Europe', 'Paris (Central European Time)'],
+  ['Europe/Berlin', 'Berlin', 'Germany', 'Europe', 'Berlin (Germany)'],
+  ['Europe/Madrid', 'Madrid', 'Spain', 'Europe', 'Madrid (Spain)'],
+  ['Europe/Rome', 'Rome', 'Italy', 'Europe', 'Rome (Italy)'],
+  ['Europe/Amsterdam', 'Amsterdam', 'Netherlands', 'Europe', 'Amsterdam (Netherlands)'],
+  ['Europe/Stockholm', 'Stockholm', 'Sweden', 'Europe', 'Stockholm (Sweden, Norway)'],
+  ['Europe/Athens', 'Athens', 'Greece', 'Europe', 'Athens (Eastern European Time)'],
+  ['Europe/Istanbul', 'Istanbul', 'Turkey', 'Europe', 'Istanbul (Turkey Time)'],
+  ['Europe/Warsaw', 'Warsaw', 'Poland', 'Europe', 'Warsaw (Poland)'],
+  ['Europe/Bucharest', 'Bucharest', 'Romania', 'Europe', 'Bucharest (Romania)'],
+  ['Europe/Kiev', 'Kyiv', 'Ukraine', 'Europe', 'Kyiv (Ukraine)'],
+  ['Asia/Karachi', 'Karachi / Islamabad', 'Pakistan', 'Asia', 'Karachi / Islamabad (Pakistan Standard Time)'],
+  ['Asia/Dubai', 'Dubai / Abu Dhabi', 'United Arab Emirates', 'Asia', 'Dubai / Abu Dhabi (Gulf Standard Time)'],
+  ['Asia/Riyadh', 'Riyadh', 'Saudi Arabia', 'Asia', 'Riyadh (Arabia Standard Time)'],
+  ['Asia/Kolkata', 'Mumbai / Delhi / Kolkata', 'India', 'Asia', 'Mumbai / Delhi (India Standard Time)'],
+  ['Asia/Dhaka', 'Dhaka', 'Bangladesh', 'Asia', 'Dhaka (Bangladesh Standard Time)'],
+  ['Asia/Bangkok', 'Bangkok / Jakarta', 'Thailand', 'Asia', 'Bangkok / Jakarta (Indochina Time)'],
+  ['Asia/Singapore', 'Singapore', 'Singapore', 'Asia', 'Singapore (Singapore Standard Time)'],
+  ['Asia/Hong_Kong', 'Hong Kong', 'Hong Kong', 'Asia', 'Hong Kong (Hong Kong Time)'],
+  ['Asia/Shanghai', 'Beijing / Shanghai', 'China', 'Asia', 'Beijing / Shanghai (China Standard Time)'],
+  ['Asia/Tokyo', 'Tokyo', 'Japan', 'Asia', 'Tokyo (Japan Standard Time)'],
+  ['Asia/Seoul', 'Seoul', 'South Korea', 'Asia', 'Seoul (Korea Standard Time)'],
+  ['Asia/Manila', 'Manila', 'Philippines', 'Asia', 'Manila (Philippine Standard Time)'],
+  ['Asia/Kuala_Lumpur', 'Kuala Lumpur', 'Malaysia', 'Asia', 'Kuala Lumpur (Malaysia Time)'],
+  ['Australia/Sydney', 'Sydney / Melbourne', 'Australia', 'Pacific', 'Sydney / Melbourne (Eastern Australia)'],
+  ['Australia/Brisbane', 'Brisbane', 'Australia', 'Pacific', 'Brisbane (Queensland, no DST)'],
+  ['Australia/Adelaide', 'Adelaide', 'Australia', 'Pacific', 'Adelaide (Central Australia)'],
+  ['Australia/Perth', 'Perth', 'Australia', 'Pacific', 'Perth (Western Australia)'],
+  ['Pacific/Auckland', 'Auckland / Wellington', 'New Zealand', 'Pacific', 'Auckland / Wellington (New Zealand)'],
+  ['Pacific/Fiji', 'Suva', 'Fiji', 'Pacific', 'Fiji (Fiji Time)'],
+  ['Africa/Cairo', 'Cairo', 'Egypt', 'Africa', 'Cairo (Eastern Africa)'],
+  ['Africa/Johannesburg', 'Johannesburg', 'South Africa', 'Africa', 'Johannesburg (South Africa Standard Time)'],
+  ['Africa/Lagos', 'Lagos', 'Nigeria', 'Africa', 'Lagos (West Africa Time)'],
+  ['Africa/Nairobi', 'Nairobi', 'Kenya', 'Africa', 'Nairobi (East Africa Time)'],
+  ['Africa/Casablanca', 'Casablanca', 'Morocco', 'Africa', 'Casablanca (Morocco Time)'],
+];
+
+export const TIMEZONE_REGISTRY: TimezoneEntry[] = RAW_TIMEZONES.map(
+  ([iana, city, country, region, label]) => ({
+    iana,
+    city,
+    country,
+    region,
+    label,
+  })
+);
 
 export const REGION_ORDER: Array<TimezoneEntry['region']> = [
   'Americas',
@@ -418,7 +119,7 @@ export function getTimezoneUtcOffset(iana: string, date: Date = new Date()): str
     });
     const parts = formatter.formatToParts(date);
     const tzPart = parts.find((p) => p.type === 'timeZoneName');
-    if (tzPart && tzPart.value) {
+    if (tzPart?.value) {
       // Typically returns "GMT+05:00" or "GMT-04:00"
       return tzPart.value.replace('GMT', 'UTC');
     }
@@ -457,7 +158,7 @@ export function findTimezoneEntry(iana: string): TimezoneEntry {
   // Synthesize entry from IANA string (e.g. "Asia/Karachi" -> City: "Karachi", Region: "Asia")
   const parts = iana.split('/');
   const rawRegion = parts[0] || 'Global';
-  const rawCity = (parts[1] || iana).replace(/_/g, ' ');
+  const rawCity = (parts[1] || iana).replaceAll('_', ' ');
 
   let resolvedRegion: TimezoneEntry['region'] = 'Global';
   if (rawRegion === 'America') resolvedRegion = 'Americas';

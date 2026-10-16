@@ -809,12 +809,20 @@ export function ScheduleTimezoneModal({
   };
 
   return (
-    <div
-      role="dialog"
+    <dialog
+      open
       aria-modal="true"
       aria-labelledby="timezone-modal-title"
       data-testid="schedule-timezone-modal"
-      style={MODAL_BACKDROP_STYLE}
+      style={{
+        ...MODAL_BACKDROP_STYLE,
+        border: 'none',
+        margin: 0,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: '100vw',
+        maxHeight: '100vh',
+      }}
     >
       <div
         style={{
@@ -848,6 +856,6 @@ export function ScheduleTimezoneModal({
           />
         )}
       </div>
-    </div>
+    </dialog>
   );
 }

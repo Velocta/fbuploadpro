@@ -93,7 +93,7 @@ describe('Timezone Registry & Helpers (Spec 062)', () => {
     it('filters by city name (e.g. karachi)', () => {
       const grouped = searchAndGroupTimezones('karachi');
       expect(grouped.Asia.some((tz) => tz.iana === 'Asia/Karachi')).toBe(true);
-      expect(grouped.Americas.length).toBe(0);
+      expect(grouped.Americas).toHaveLength(0);
     });
 
     it('filters by country name (e.g. pakistan)', () => {
@@ -104,14 +104,14 @@ describe('Timezone Registry & Helpers (Spec 062)', () => {
     it('filters by IANA name (e.g. New_York)', () => {
       const grouped = searchAndGroupTimezones('New_York');
       expect(grouped.Americas.some((tz) => tz.iana === 'America/New_York')).toBe(true);
-      expect(grouped.Europe.length).toBe(0);
+      expect(grouped.Europe).toHaveLength(0);
     });
 
     it('returns all empty groups when search matches nothing', () => {
       const grouped = searchAndGroupTimezones('nonexistent_city_xyz');
-      expect(grouped.Americas.length).toBe(0);
-      expect(grouped.Asia.length).toBe(0);
-      expect(grouped.Europe.length).toBe(0);
+      expect(grouped.Americas).toHaveLength(0);
+      expect(grouped.Asia).toHaveLength(0);
+      expect(grouped.Europe).toHaveLength(0);
     });
   });
 });
