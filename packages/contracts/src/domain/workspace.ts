@@ -86,3 +86,16 @@ export const TestBYOCResponseSchema = z.object({
   appName: z.string().optional(),
 });
 export type TestBYOCResponse = z.infer<typeof TestBYOCResponseSchema>;
+
+export const UpdateWorkspaceRequestSchema = z.object({
+  subdomain: SubdomainSchema.optional(),
+  name: z
+    .string()
+    .min(3, 'Workspace name must be at least 3 characters')
+    .max(40, 'Workspace name cannot exceed 40 characters')
+    .refine((val) => val === val.trim(), {
+      message: 'Workspace name must not contain leading or trailing spaces',
+    }),
+});
+export type UpdateWorkspaceRequest = z.infer<typeof UpdateWorkspaceRequestSchema>;
+

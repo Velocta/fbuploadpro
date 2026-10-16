@@ -518,8 +518,25 @@ export function WorkspaceStudioFooter({
       }
     }
     void loadWorkspaces();
+
+    const handleWorkspaceUpdated = (e: Event) => {
+      const customEvent = e as CustomEvent<{ subdomain?: string; name?: string }>;
+      if (customEvent.detail?.name && customEvent.detail?.subdomain) {
+        setWorkspaces((prev) =>
+          prev.map((w) =>
+            w.subdomain.toLowerCase() === customEvent.detail?.subdomain?.toLowerCase()
+              ? { ...w, name: customEvent.detail.name! }
+              : w
+          )
+        );
+      }
+      void loadWorkspaces();
+    };
+
+    window.addEventListener('workspace-updated', handleWorkspaceUpdated);
     return () => {
       isMounted = false;
+      window.removeEventListener('workspace-updated', handleWorkspaceUpdated);
     };
   }, [subdomain]);
 

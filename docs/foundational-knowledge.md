@@ -313,6 +313,7 @@ flowchart LR
 - **Spec 059 (Completed & Verified)**: **Theme-Reactive Cards & Placeholder Surfaces** (Resolved light/dark mode color switching issues in `FdolaStudioGate`, `FdolaStudioWorkspace`, and `PlatformPlaceholderAccounts` by replacing undefined `--bg-surface` and `--text-muted` variables and hardcoded dark shadows with canonical `--bg-panel`, `--shadow-card`, and `--text-sub` tokens; added global fallback aliases to `globals.css` for system-wide resilience; verified with UI unit tests).
 - **Spec 060 (Completed & Verified)**: **Facebook Page Schedule Timezone Decoupling & Posting Times Cleanup** (Decoupled timezone configuration from individual posting slot dialogs to an interactive schedule timezone selector in the header; eliminated redundant bottom `+ Add another posting time` button in favor of the primary header action; simplified Add/Edit modal to prompt only for Time of Day (`HH:MM`) and Permitted Content Formats while automatically inheriting the page's schedule timezone; implemented atomic `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots` batch timezone updating that preserves all daily clock times while adjusting their dispatch timezone; added explicit support for Pakistan (`Asia/Karachi`) and other key global regions; verified via UI tests in `apps/web/tests/ui/dedicated-page.test.tsx` and contract tests in `packages/contracts/tests/publishing-contracts.test.ts`).
 - **Spec 061 (Completed & Verified)**: **Login Showcase Panel Redesign & Multi-Platform Welcome Alignment** (Redesigned the right-side showcase panel on `/login` with an airy, minimal, unboxed layout featuring the brand row with tagline `Content automation for creators`, uppercase unboxed eyebrow label `CREATE · SCHEDULE · GROW`, three-line headline with accent highlight on `100% on the cloud.`, max-420px subtext detailing multi-platform cloud publishing across Facebook, Instagram, TikTok, YouTube, Threads, and X, three hairline-divided feature rows with clock, 2x2 grid, and padlock line icons, supported platforms row, and encrypted trust footer; aligned left sign-in card description to `Welcome back! Sign in to keep your content flowing across every platform.`; enabled responsive mobile stacking above the sign-in form; verified via `apps/web/tests/ui/login-showcase-panel.test.tsx` and `apps/web/tests/components/auth-pages.test.tsx`).
+- **Spec 061b (Completed & Verified)**: **Workspace Settings General Tab Redesign** (Redesigned the Workspace Settings General tab into a focused single-card surface titled "About this workspace" with subtext "Name your workspace."; replaced legacy metadata with an inline rename field featuring 3–40 character validation without leading/trailing spaces, "Save" and "Cancel" buttons, instant cross-shell synchronization to sidebar footer and workspace switcher via custom events, success toast "Workspace name updated.", responsive mobile stacking, and exact copy with complete removal of legacy subdomain, status dot, and creation metadata).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -772,7 +773,12 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 ### 26.4 Page-Level Schedule Timezone Database Normalization (Migration 20261020010000)
 * **Canonical Page Timezone in `facebook_pages`**: Enforces strictly 1 timezone per Facebook Page by adding `timezone VARCHAR(50) NOT NULL DEFAULT 'UTC'` to the `public.facebook_pages` table and dropping `timezone` from `public.page_queue_slots`.
 * **Zero Schema Inconsistency**: Slot dispatch schedules derive their active timezone directly from the parent Facebook page. Changing the page's timezone updates all recurring slots for that page immediately while preserving clock times (`10:00 AM`, `12:00 PM`).
-* **Contract and API Synchronization**: Updated `@fbuploadpro/contracts` (`DatabaseFacebookPageRow`, `FacebookPageSchema`, `PageQueueSlotSchema`), API routes (`/api/tenant/[subdomain]/pages/[pageId]`, `/api/tenant/[subdomain]/pages/[pageId]/slots`, `/api/tenant/[subdomain]/publishing/queue`), and UI components (`tab-posting-times.tsx`).
+### 26.5 Spec 061 Workspace Settings General Tab Redesign
+* **Single-Card Workspace Identity**: Streamlined the General settings tab into strictly ONE card titled "About this workspace" with subtext "Name your workspace.", completely purging legacy subdomain displays, simulated operational status dots, creation dates, plan/storage info, and danger zones.
+* **Inline Name Editing & Validation**: Provides an inline edit experience via an "Edit" button that transitions the name into an input with primary "Save" and secondary "Cancel" actions. Enforces 3–40 character length with no leading or trailing whitespace.
+* **Everywhere Shell Synchronization**: Saving persists the updated name via `PATCH /api/workspaces` and emits a `workspace-updated` event that synchronously updates the active workspace name in `WorkspaceStudioFooter` and `WorkspaceSwitcher` without page reloads or layout shift.
+* **Success Toast & Verbatim Copy**: Displays a clean success toast "Workspace name updated." upon save and strictly adheres to exact verbatim copy across all UI elements with zero emojis.
+* **Responsive Mobile Adaptation**: On narrow viewports (<640px), the card remains full-width and the name row stacks vertically with the Edit button spanning full-width below the name.
 
 ### 26.5 Queued Items Timezone Realignment (Spec 061)
 * **Automatic Queue Timezone Translation**: When a user changes a Facebook page's schedule timezone (e.g. from Pakistan `Asia/Karachi` to American `America/New_York`), all pending queued posts linked to recurring slots (`status = 'queued'` and `slot_id IS NOT NULL`) are automatically realigned to match their slot times in the new timezone.
@@ -821,5 +827,16 @@ Spec 061 executes a comprehensive redesign of the `/login` authentication showca
 
 ### 28.3 Responsive Behavior
 * **Narrow Screen Stacking (<1024px)**: When viewport width is under 1024px, the showcase panel stacks vertically above the sign-in form (`order: 1` showcase, `order: 2` form) with reduced padding (`36px 20px`), while feature rows stay full-width.
+
+---
+
+## 29. Spec 061b Workspace Settings General Tab Redesign
+
+* **Single-Card Workspace Identity**: Streamlined the General settings tab into strictly ONE card titled "About this workspace" with subtext "Name your workspace.", completely purging legacy subdomain displays, simulated operational status dots, creation dates, plan/storage info, and danger zones.
+* **Inline Name Editing & Validation**: Provides an inline edit experience via an "Edit" button that transitions the name into an input with primary "Save" and secondary "Cancel" actions. Enforces 3–40 character length with no leading or trailing whitespace.
+* **Everywhere Shell Synchronization**: Saving persists the updated name via `PATCH /api/workspaces` and emits a `workspace-updated` event that synchronously updates the active workspace name in `WorkspaceStudioFooter` and `WorkspaceSwitcher` without page reloads or layout shift.
+* **Success Toast & Verbatim Copy**: Displays a clean success toast "Workspace name updated." upon save and strictly adheres to exact verbatim copy across all UI elements with zero emojis.
+* **Responsive Mobile Adaptation**: On narrow viewports (<640px), the card remains full-width and the name row stacks vertically with the Edit button spanning full-width below the name.
+
 
 
