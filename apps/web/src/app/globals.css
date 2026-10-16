@@ -83,11 +83,11 @@
 
 [data-theme="light"],
 .light {
-  --bg-canvas: #ffffff;
+  --bg-canvas: #f6f8fa;
   --bg-panel: #ffffff;
-  --bg-subtle: #f8f9fa;
-  --bg-hover: #f1f3f5;
-  --bg-active: #e9ecef;
+  --bg-subtle: #f1f3f5;
+  --bg-hover: #eaecef;
+  --bg-active: #e2e8f0;
   --text-main: #000000;
   --text-sub: #474d57;
   --text-dim: #848e9c;

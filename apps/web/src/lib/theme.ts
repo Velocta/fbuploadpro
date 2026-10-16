@@ -193,11 +193,11 @@ export const DARK_THEME: ThemeTokens = {
 export const LIGHT_THEME: ThemeTokens = {
   mode: 'light',
   surfaces: {
-    canvas: '#ffffff',
+    canvas: '#f6f8fa',
     panel: '#ffffff',
-    subtle: '#f8f9fa',
-    hover: '#f1f3f5',
-    active: '#e9ecef',
+    subtle: '#f1f3f5',
+    hover: '#eaecef',
+    active: '#e2e8f0',
   },
   borders: {
     hairline: '#eaecef',

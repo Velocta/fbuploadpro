@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { THEME, PALETTE } from '@/lib/theme';
+import { THEME, LIGHT_THEME, PALETTE } from '@/lib/theme';
 import {
   PageCard,
   computeFollowersGained,
@@ -27,6 +27,7 @@ import {
   type DiscoveredPageItem,
 } from '@/components/pages/add-page-modal';
 import TenantPagesPage, {
+  PagesScaleToolbar,
   filterPagesList,
   sortPagesAttentionFirst,
 } from '@/app/tenant/[subdomain]/pages/page';
@@ -701,6 +702,48 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(
         filterPagesList(fivePages, '', 'all', 'Marcus Wright').map((p) => p.id)
       ).toEqual(['p-rate-limited']);
+    });
+
+    it('renders live situational subtitle based on page operational health and active filter states (Spec 050)', () => {
+      // 1. Attention needed scenario (3 of 5 require reconnecting)
+      const fivePages = [
+        pageActive1,
+        pagePaused,
+        pageInvalidToken,
+        pageCheckpoint,
+        pageRateLimited,
+      ];
+      const attentionRender = render(
+        <TenantPagesPage
+          subdomainProp="acme"
+          initialPages={fivePages}
+          initialAccounts={[sampleActiveAccount]}
+        />
+      );
+      expect(
+        attentionRender.hasAttribute('data-testid', 'pages-page-subtitle')
+      ).toBe(true);
+      expect(attentionRender.hasText('5 connected pages')).toBe(true);
+      expect(attentionRender.hasText('3 require reconnecting')).toBe(true);
+
+      // 2. All operational scenario
+      const healthyPages = [pageActive1, pagePaused];
+      const healthyRender = render(
+        <TenantPagesPage
+          subdomainProp="acme"
+          initialPages={healthyPages}
+          initialAccounts={[sampleActiveAccount]}
+        />
+      );
+      expect(
+        healthyRender.hasText('2 connected pages · All operational')
+      ).toBe(true);
+    });
+
+    it('validates light mode canvas contrast token is #f6f8fa and panel is #ffffff (Spec 050)', () => {
+      expect(LIGHT_THEME.surfaces.canvas).toBe('#f6f8fa');
+      expect(LIGHT_THEME.surfaces.panel).toBe('#ffffff');
+      expect(LIGHT_THEME.surfaces.canvas).not.toBe(LIGHT_THEME.surfaces.panel);
     });
   });
 
