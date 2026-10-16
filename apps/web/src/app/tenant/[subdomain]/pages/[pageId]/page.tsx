@@ -289,13 +289,21 @@ export default function TenantDedicatedPageView({
         const err = await res.json().catch(() => ({}));
         throw new Error(err.message || 'Failed to update schedule timezone');
       }
+      const data = await res.json().catch(() => ({}));
+      const realignedCount = Number(data?.realignedQueueCount ?? 0);
       setSlots((prev) => prev.map((s) => ({ ...s, timezone: newTimezone })));
       setPage((prev) => (prev ? { ...prev, timezone: newTimezone } : null));
+      let realignedMsg = '';
+      if (realignedCount > 0) {
+        const pluralSuffix = realignedCount > 1 ? 's' : '';
+        realignedMsg = ` (${realignedCount} pending post${pluralSuffix} realigned)`;
+      }
       setNotification({
         type: 'success',
-        message: `Schedule timezone updated to ${newTimezone}.`,
+        message: `Schedule timezone updated to ${newTimezone}${realignedMsg}.`,
       });
       void fetchSlots();
+      void fetchQueue();
     } catch (err: any) {
       setNotification({
         type: 'error',

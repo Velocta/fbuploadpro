@@ -774,6 +774,12 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **Zero Schema Inconsistency**: Slot dispatch schedules derive their active timezone directly from the parent Facebook page. Changing the page's timezone updates all recurring slots for that page immediately while preserving clock times (`10:00 AM`, `12:00 PM`).
 * **Contract and API Synchronization**: Updated `@fbuploadpro/contracts` (`DatabaseFacebookPageRow`, `FacebookPageSchema`, `PageQueueSlotSchema`), API routes (`/api/tenant/[subdomain]/pages/[pageId]`, `/api/tenant/[subdomain]/pages/[pageId]/slots`, `/api/tenant/[subdomain]/publishing/queue`), and UI components (`tab-posting-times.tsx`).
 
+### 26.5 Queued Items Timezone Realignment (Spec 061)
+* **Automatic Queue Timezone Translation**: When a user changes a Facebook page's schedule timezone (e.g. from Pakistan `Asia/Karachi` to American `America/New_York`), all pending queued posts linked to recurring slots (`status = 'queued'` and `slot_id IS NOT NULL`) are automatically realigned to match their slot times in the new timezone.
+* **One-Off Custom Post Preservation**: Queue items with `slot_id IS NULL` (one-off specific datetime schedules configured by the user) are strictly preserved at their existing scheduled timestamp and never altered by recurring timezone shifts.
+* **Past-Time Protection & Collision Avoidance**: Handled via `recomputeSlotScheduledTime` in `apps/web/src/lib/slot-scheduler.ts`. If shifting a post's slot time into the new timezone causes the resulting time on the post's calendar date to fall in the past (`<= now()`), the post automatically advances day-by-day until strictly in the future (`> now()`). Furthermore, timestamps already allocated to earlier items in the queue are skipped to avoid post collisions.
+* **API & UI Synchronization**: `PATCH /api/tenant/[subdomain]/pages/[pageId]/slots` updates `facebook_pages.timezone`, realigns the pending queue items in both PostgreSQL and Supabase backends, and returns `realignedQueueCount`. The page management UI refreshes both slots and queue tables while surfacing a professional toast confirming the exact count of realigned posts.
+
 ---
 
 ## 27. Production Deployment & Cloud Architecture Reference

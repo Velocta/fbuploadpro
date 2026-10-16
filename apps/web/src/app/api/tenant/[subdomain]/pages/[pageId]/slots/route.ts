@@ -6,11 +6,13 @@ import {
   ListQueueSlotsResponseSchema,
   PageQueueSlotSchema,
   UpdateQueueScheduleTimezoneRequestSchema,
+  UpdateQueueScheduleTimezoneResponseSchema,
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import { recomputeSlotScheduledTime } from '@/lib/slot-scheduler';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleListQueueSlots(
@@ -286,13 +288,125 @@ export async function handleCreateQueueSlot(
   }
 }
 
+async function realignPendingQueueItemsPostgres(
+  dbClient: DatabaseClient,
+  pageId: string,
+  userId: string,
+  newTimezone: string
+): Promise<number> {
+  const pendingRows = (await dbClient.query(
+    `SELECT qi.id, qi.scheduled_time, s.slot_time
+     FROM queue_items qi
+     JOIN page_queue_slots s ON s.id = qi.slot_id
+     WHERE qi.fb_page_id = $1 AND qi.user_id = $2 AND qi.status = 'queued'
+     ORDER BY qi.scheduled_time ASC`,
+    [pageId, userId]
+  )) as any[];
+
+  if (!pendingRows || pendingRows.length === 0) {
+    return 0;
+  }
+
+  const occupiedTimes = new Set<number>();
+  const now = new Date();
+  let realignedCount = 0;
+
+  for (const row of pendingRows) {
+    const originalTime = new Date(row.scheduled_time);
+    const slotTimeStr = typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time);
+    const newScheduledTime = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime: slotTimeStr,
+      newTimezone,
+      now,
+      occupiedTimes,
+    });
+    occupiedTimes.add(newScheduledTime.getTime());
+
+    await dbClient.query(
+      `UPDATE queue_items
+       SET scheduled_time = $1, updated_at = now()
+       WHERE id = $2`,
+      [newScheduledTime.toISOString(), row.id]
+    );
+    realignedCount++;
+  }
+
+  return realignedCount;
+}
+
+async function realignPendingQueueItemsSupabase(
+  supabase: SupabaseClient<any>,
+  pageId: string,
+  userId: string,
+  newTimezone: string
+): Promise<number> {
+  const { data: queueData, error: queueErr } = await supabase
+    .from('queue_items')
+    .select('id, scheduled_time, slot_id')
+    .eq('fb_page_id', pageId)
+    .eq('user_id', userId)
+    .eq('status', 'queued')
+    .not('slot_id', 'is', null)
+    .order('scheduled_time', { ascending: true });
+
+  if (queueErr || !queueData || queueData.length === 0) {
+    return 0;
+  }
+
+  const slotIds = [...new Set(queueData.map((item) => item.slot_id).filter(Boolean))];
+  const { data: slotsData, error: slotsErr } = await supabase
+    .from('page_queue_slots')
+    .select('id, slot_time')
+    .in('id', slotIds);
+
+  if (slotsErr || !slotsData || slotsData.length === 0) {
+    return 0;
+  }
+
+  const slotMap = new Map<string, string>();
+  for (const s of slotsData) {
+    slotMap.set(s.id, typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time));
+  }
+
+  const occupiedTimes = new Set<number>();
+  const now = new Date();
+  let realignedCount = 0;
+
+  for (const item of queueData) {
+    const slotTime = slotMap.get(item.slot_id);
+    if (!slotTime) continue;
+
+    const originalTime = new Date(item.scheduled_time);
+    const newScheduledTime = recomputeSlotScheduledTime({
+      originalScheduledTime: originalTime,
+      slotTime,
+      newTimezone,
+      now,
+      occupiedTimes,
+    });
+    occupiedTimes.add(newScheduledTime.getTime());
+
+    await supabase
+      .from('queue_items')
+      .update({
+        scheduled_time: newScheduledTime.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .eq('id', item.id);
+    realignedCount++;
+  }
+
+  return realignedCount;
+}
+
 async function updateScheduleTimezonePostgres(
   dbClient: DatabaseClient,
   pageId: string,
   userId: string,
   workspaceId: string,
   newTimezone: string
-): Promise<{ notFound?: boolean; updatedCount?: number }> {
+): Promise<{ notFound?: boolean; updatedCount?: number; realignedQueueCount?: number }> {
   const updatedPages = (await dbClient.query(
     `UPDATE facebook_pages
      SET timezone = $1, updated_at = now()
@@ -310,7 +424,17 @@ async function updateScheduleTimezonePostgres(
     [pageId, userId]
   )) as any[];
 
-  return { updatedCount: slotRows[0]?.count ?? 0 };
+  const realignedQueueCount = await realignPendingQueueItemsPostgres(
+    dbClient,
+    pageId,
+    userId,
+    newTimezone
+  );
+
+  return {
+    updatedCount: slotRows[0]?.count ?? 0,
+    realignedQueueCount,
+  };
 }
 
 async function updateScheduleTimezoneSupabase(
@@ -319,7 +443,7 @@ async function updateScheduleTimezoneSupabase(
   userId: string,
   workspaceId: string,
   newTimezone: string
-): Promise<{ notFound?: boolean; error?: string; updatedCount?: number }> {
+): Promise<{ notFound?: boolean; error?: string; updatedCount?: number; realignedQueueCount?: number }> {
   const { data: updatedPage, error: updateErr } = await supabase
     .from('facebook_pages')
     .update({
@@ -346,7 +470,17 @@ async function updateScheduleTimezoneSupabase(
     .eq('fb_page_id', pageId)
     .eq('user_id', userId);
 
-  return { updatedCount: count ?? 0 };
+  const realignedQueueCount = await realignPendingQueueItemsSupabase(
+    supabase,
+    pageId,
+    userId,
+    newTimezone
+  );
+
+  return {
+    updatedCount: count ?? 0,
+    realignedQueueCount,
+  };
 }
 
 export async function handleUpdateQueueScheduleTimezone(
@@ -412,11 +546,13 @@ export async function handleUpdateQueueScheduleTimezone(
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
 
-    return NextResponse.json({
+    const responsePayload = UpdateQueueScheduleTimezoneResponseSchema.parse({
       success: true,
       timezone: newTimezone,
       updatedCount: result.updatedCount ?? 0,
+      realignedQueueCount: result.realignedQueueCount ?? 0,
     });
+    return NextResponse.json(responsePayload);
   }
 
   const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
@@ -439,11 +575,13 @@ export async function handleUpdateQueueScheduleTimezone(
     return NextResponse.json({ error: 'INTERNAL_ERROR', message: result.error }, { status: 500 });
   }
 
-  return NextResponse.json({
+  const responsePayload = UpdateQueueScheduleTimezoneResponseSchema.parse({
     success: true,
     timezone: newTimezone,
     updatedCount: result.updatedCount ?? 0,
+    realignedQueueCount: result.realignedQueueCount ?? 0,
   });
+  return NextResponse.json(responsePayload);
 }
 
 export async function GET(
