@@ -306,6 +306,7 @@ flowchart LR
 - **Spec 052 (Completed & Verified)**: **Workspace Sidebar Redesign, Option A Studio Footer & Canonical Shadcn Topbar** (Redesigned workspace sidebar into an airy single-tier architecture with instantaneous 0ms optimistic route snapping, de-boxed SectionHeader dividers, collapsed secondary platforms by default, full-width Studio Footer with quick-access icon row, and canonical shadcn top navigation bar).
 - **Spec 053 (Completed & Verified)**: **Facebook Accounts Section Redesign, Open Connection Dialog & Professional SaaS Copy** (Redesigned Facebook Accounts top section with Split Horizon alignment, sleek uncluttered `AccountCard` with 42px avatar status rings and blended linked pages deep-links, de-boxed `ConnectAccountModal`, and customer-centric copy across `CreateWorkspaceModal`).
 - **Spec 055 (Completed & Verified)**: **Pitch Black Dark Mode Standardization & Initial Load Synchronization** (Restored canonical Binance Pure Pitch Black dark mode across `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` with canvas `#000000`, panels `#0c0d10`, subtle wells `#121419`, hover `#1f242d`, active `#262c37`, and hairline borders `#1f242d` / `#2b323c` in 100% compliance with `DESIGN.md`; synchronized `:root` default tokens with `[data-theme="dark"], .dark` to permanently eliminate the uninitialized midnight slate blue tint; added pre-hydration theme evaluation script in `apps/web/src/app/layout.tsx` to prevent FOUC and ensure immediate theme stability from frame 0; updated `WorkspaceStudioFooter` to synchronize `data-theme` on mount and persist the `fbup_theme` cookie upon theme toggling; updated UI unit tests in `apps/web/tests/ui/pages.test.tsx`).
+- **Spec 056 (Completed & Verified)**: **Facebook Page Detail Top Section & Action Buttons Redesign** (Redesigned the dedicated Facebook Page view top section in `apps/web/src/components/pages/dedicated/page-header.tsx` and tab bar in `apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx` following Option A Mirror Studio Header; implemented 44x44px avatar with 1.5px status-colored ring border matching `PageCard`, quiet back link `← Facebook Pages`, pure human copy subtitle with strictly zero bullet point dots (`•`) using 12px vertical hairline dividers, uniform 34px action buttons `Pause / Resume Automation`, signature yellow `+ Queue Post`, 34x34px `···` More Options dropdown with outside-click closing, and flat typographic tabs with 2px brand yellow underline and quiet numeric count chip; verified with UI tests in `apps/web/tests/ui/dedicated-page.test.tsx`).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -675,6 +676,22 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **FOUC Prevention via Inline Evaluation**: `apps/web/src/app/layout.tsx` injects an immediate inline script in `<head>` that parses `localStorage.getItem('theme')` or cookie `fbup_theme` before the first browser paint. If no preference exists, it defaults to `'dark'`, immediately setting `document.documentElement.dataset.theme = 'dark'` and `.dark` class.
 * **React Hydration Consistency**: Enabled `suppressHydrationWarning` on `<html lang="en">`, preventing SSR hydration mismatch warnings while allowing dynamic client theme classes.
 * **Persistent Cookie & Storage Synchronization**: `WorkspaceStudioFooter` ensures that theme changes simultaneously update `document.documentElement.dataset.theme`, `localStorage.setItem('theme', ...)`, and cookie `fbup_theme=${newTheme}; max-age=31536000; SameSite=Lax`.
+
+---
+
+## 22. Spec 056 Facebook Page Detail Top Section & Action Buttons Redesign
+
+### 22.1 Visual Alignment with the Pages Directory Standard
+* **Option A Mirror Studio Architecture**: The Page Detail top section (`apps/web/src/components/pages/dedicated/page-header.tsx`) and tab bar (`apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx`) are harmonized with the visual language of the main Facebook Pages directory:
+  - **Quiet Back Affordance**: A minimal, understated `← Facebook Pages` text link above the title smoothly navigates back to `/tenant/[subdomain]/pages`.
+  - **44x44px Avatar with Status Ring**: Directly implements `getPageStatusRingBorder(page.status)` matching `PageCard` (`1.5px solid #10b981` active, `1.5px solid #fad734` paused, `1.5px solid #ef4444` checkpoint/error) with high-fidelity monogram fallback.
+  - **Strict Elimination of Bullet Point Dots**: Metadata elements in the subtitle row (Live status, Connected parent account, Follower count, Category) are separated exclusively with subtle 12px vertical hairline dividers (`<span aria-hidden="true" style={{ width: '1px', height: '12px', backgroundColor: 'var(--border-subtle)', flexShrink: 0 }} />`), with strictly ZERO bullet point dots (`•`).
+  - **Uniform 34px Button Height Standard**: All action buttons on the right side share the 34px height standard:
+    - `Pause / Resume Automation`: Ghost panel secondary button with pause `⏸` / play `▶` icon.
+    - `+ Queue Post`: Signature brand-yellow (`#fad734`) primary button with dark text and subtle hover lift.
+    - `···` More Options: 34x34px icon button opening an elevated dropdown (Copy Page ID, Open on Facebook, Disconnect Page) with outside-click closing.
+  - **Flat Typographic Tab Navigation**: Tab bar features flat typographic tabs with a 2px solid `#fad734` active bottom border and a quiet numeric chip for queued posts without capsule pill badges.
+
 
 
 

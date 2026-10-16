@@ -319,9 +319,11 @@ export default function TenantDedicatedPageView({
 
   const pagesListHref = `/tenant/${subdomain}/pages`;
 
-  const TAB_ITEMS: Array<{ id: DedicatedPageTab; label: string }> = [
+  const queuedCount = queueItems.filter((i) => i.status === 'queued').length;
+
+  const TAB_ITEMS: Array<{ id: DedicatedPageTab; label: string; count?: number }> = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'queue', label: `Queue (${queueItems.filter((i) => i.status === 'queued').length})` },
+    { id: 'queue', label: 'Queue', count: queuedCount },
     { id: 'calendar', label: 'Calendar & Slots' },
     { id: 'insights', label: 'Insights' },
     { id: 'settings', label: 'Settings' },
@@ -458,14 +460,15 @@ export default function TenantDedicatedPageView({
             onDisconnectRequest={handleDisconnectPage}
           />
 
-          {/* Tab Navigation Bar */}
+          {/* Flat Typographic Tab Navigation Bar */}
           <div
             data-testid="dedicated-tabs-nav"
             style={{
               display: 'flex',
+              alignItems: 'center',
               borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
               marginBottom: SPACING.xl,
-              gap: SPACING.md,
+              gap: SPACING.xl,
               overflowX: 'auto',
             }}
           >
@@ -478,7 +481,7 @@ export default function TenantDedicatedPageView({
                   data-testid={`tab-${tab.id}-btn`}
                   onClick={() => setActiveTab(tab.id)}
                   style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
+                    padding: `${SPACING.sm} 0`,
                     background: 'none',
                     border: 'none',
                     borderBottom: isSelected
@@ -487,16 +490,44 @@ export default function TenantDedicatedPageView({
                     color: isSelected
                       ? `var(--text-main, ${THEME.default.text.primary})`
                       : `var(--text-sub, ${THEME.default.text.secondary})`,
-                    fontSize: '0.875rem',
+                    fontSize: '0.8125rem',
                     fontWeight: isSelected
                       ? TYPOGRAPHY.weights.semibold
                       : TYPOGRAPHY.weights.medium,
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
-                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'color 0.15s ease, border-color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
+                    }
                   }}
                 >
-                  {tab.label}
+                  <span>{tab.label}</span>
+                  {typeof tab.count === 'number' && (
+                    <span
+                      style={{
+                        fontSize: '0.6875rem',
+                        fontWeight: TYPOGRAPHY.weights.medium,
+                        padding: '1px 5px',
+                        borderRadius: RADII.xs,
+                        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                        color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                      }}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
                 </button>
               );
             })}

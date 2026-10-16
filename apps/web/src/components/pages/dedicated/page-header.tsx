@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   THEME,
@@ -8,10 +8,12 @@ import {
   RADII,
   SPACING,
   TYPOGRAPHY,
-  COMPONENT_STYLES,
   STATUS_SIGNALS,
 } from '@/lib/theme';
-import type { FacebookPageItem } from '../page-card';
+import {
+  type FacebookPageItem,
+  getPageStatusRingBorder,
+} from '../page-card';
 
 export interface DedicatedPageHeaderProps {
   page: FacebookPageItem;
@@ -31,7 +33,9 @@ export function DedicatedPageHeader({
   const router = useRouter();
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [hasCopiedId, setHasCopiedId] = useState(false);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const isPaused = page.status === 'paused';
   const isNeedsAttention =
@@ -39,7 +43,8 @@ export function DedicatedPageHeader({
     page.status === 'page_checkpoint' ||
     page.status === 'fb_rate_limited';
 
-  let statusSignal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS] = STATUS_SIGNALS.operational;
+  let statusSignal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS] =
+    STATUS_SIGNALS.operational;
   if (isNeedsAttention) {
     statusSignal = STATUS_SIGNALS.critical;
   } else if (isPaused) {
@@ -50,10 +55,35 @@ export function DedicatedPageHeader({
   if (isNeedsAttention) {
     statusLabel = 'Needs Attention';
   } else if (isPaused) {
-    statusLabel = 'Automation Paused';
+    statusLabel = 'Paused';
   }
 
   const fbPageUrl = `https://facebook.com/${page.fbPageId}`;
+  const statusRingBorder = getPageStatusRingBorder(page.status);
+
+  // Close dropdown on click outside or Escape
+  useEffect(() => {
+    if (!isDropdownOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isDropdownOpen]);
 
   const handleToggle = async () => {
     setIsUpdatingStatus(true);
@@ -64,9 +94,18 @@ export function DedicatedPageHeader({
     }
   };
 
-  const monogram = (page.pageName || 'P')
-    .slice(0, 2)
-    .toUpperCase();
+  const handleCopyId = async () => {
+    try {
+      await navigator.clipboard.writeText(page.fbPageId);
+      setHasCopiedId(true);
+      setTimeout(() => setHasCopiedId(false), 2000);
+    } catch {
+      // Clipboard fallback
+    }
+    setIsDropdownOpen(false);
+  };
+
+  const monogram = (page.pageName || 'P').slice(0, 2).toUpperCase();
 
   return (
     <div
@@ -75,7 +114,7 @@ export function DedicatedPageHeader({
         marginBottom: SPACING.xl,
       }}
     >
-      {/* Breadcrumb Back Link */}
+      {/* Quiet Back Link (Option A) */}
       <div style={{ marginBottom: SPACING.md }}>
         <button
           type="button"
@@ -92,6 +131,13 @@ export function DedicatedPageHeader({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
             cursor: 'pointer',
             padding: 0,
+            transition: 'color 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
           }}
         >
           <svg
@@ -107,12 +153,13 @@ export function DedicatedPageHeader({
           >
             <path d="m15 18-6-6 6-6" />
           </svg>
-          <span>Back to Facebook Pages</span>
+          <span>Facebook Pages</span>
         </button>
       </div>
 
       {/* Checkpoint Reactivation Banner */}
-      {(page.status === 'page_checkpoint' || (page.status as string) === 'checkpoint_required') && (
+      {(page.status === 'page_checkpoint' ||
+        (page.status as string) === 'checkpoint_required') && (
         <div
           data-testid="checkpoint-reactivation-banner"
           style={{
@@ -129,7 +176,14 @@ export function DedicatedPageHeader({
             flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flex: '1 1 300px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.sm,
+              flex: '1 1 300px',
+            }}
+          >
             <svg
               width="20"
               height="20"
@@ -147,10 +201,20 @@ export function DedicatedPageHeader({
               <line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <div>
-              <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '0.875rem' }}>
+              <div
+                style={{
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  fontSize: '0.875rem',
+                }}
+              >
                 Facebook Checkpoint Verification Required
               </div>
-              <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+              <div
+                style={{
+                  fontSize: '0.8125rem',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                }}
+              >
                 Facebook requires verification in the mobile app or browser before automated publishing can resume.
               </div>
             </div>
@@ -162,11 +226,14 @@ export function DedicatedPageHeader({
             onClick={async () => {
               setIsUpdatingStatus(true);
               try {
-                const res = await fetch(`/api/tenant/${subdomain}/pages/${page.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ status: 'active' }),
-                });
+                const res = await fetch(
+                  `/api/tenant/${subdomain}/pages/${page.id}`,
+                  {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'active' }),
+                  }
+                );
                 if (res.ok) {
                   await onStatusToggle('active');
                 }
@@ -177,15 +244,20 @@ export function DedicatedPageHeader({
               }
             }}
             style={{
-              ...COMPONENT_STYLES.primaryButton,
-              padding: `${SPACING.xs} ${SPACING.md}`,
+              height: '34px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: PALETTE.primary,
+              color: '#000000',
+              border: `1px solid ${PALETTE.primary}`,
+              borderRadius: RADII.sm,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
+              boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
             }}
           >
-            {isUpdatingStatus ? 'Reactivating...' : 'Mark Verified & Reactivate Page'}
+            {isUpdatingStatus ? 'Reactivating...' : 'Verify & Reactivate'}
           </button>
         </div>
       )}
@@ -210,18 +282,21 @@ export function DedicatedPageHeader({
             minWidth: 0,
           }}
         >
-          {page.profilePictureUrl && failedAvatarUrl !== page.profilePictureUrl ? (
+          {page.profilePictureUrl &&
+          failedAvatarUrl !== page.profilePictureUrl ? (
             <img
               src={page.profilePictureUrl}
               alt={page.pageName}
               data-testid="dedicated-page-avatar"
-              onError={() => setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')}
+              onError={() =>
+                setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')
+              }
               style={{
-                width: '56px',
-                height: '56px',
+                width: '44px',
+                height: '44px',
                 borderRadius: RADII.md,
                 objectFit: 'cover',
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                border: statusRingBorder,
                 flexShrink: 0,
               }}
             />
@@ -229,17 +304,17 @@ export function DedicatedPageHeader({
             <div
               data-testid="dedicated-page-avatar-fallback"
               style={{
-                width: '56px',
-                height: '56px',
+                width: '44px',
+                height: '44px',
                 borderRadius: RADII.md,
                 backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                border: statusRingBorder,
                 color: PALETTE.primary,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontWeight: TYPOGRAPHY.weights.bold,
-                fontSize: '1.125rem',
+                fontSize: '0.9375rem',
                 flexShrink: 0,
               }}
             >
@@ -248,7 +323,14 @@ export function DedicatedPageHeader({
           )}
 
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.sm,
+                flexWrap: 'wrap',
+              }}
+            >
               <h1
                 data-testid="dedicated-page-heading"
                 style={{
@@ -277,6 +359,13 @@ export function DedicatedPageHeader({
                   alignItems: 'center',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                   textDecoration: 'none',
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
                 }}
               >
                 <svg
@@ -297,12 +386,12 @@ export function DedicatedPageHeader({
               </a>
             </div>
 
-            {/* Sub-row: Unboxed Status Signal + Account info */}
+            {/* Sub-row: Unboxed Status Signal + Account info + Followers (Zero bullet dots) */}
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: SPACING.md,
+                gap: SPACING.sm,
                 marginTop: '4px',
                 fontSize: '0.8125rem',
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
@@ -328,21 +417,67 @@ export function DedicatedPageHeader({
                     flexShrink: 0,
                   }}
                 />
-                <span style={{ color: statusSignal.color, fontWeight: TYPOGRAPHY.weights.medium }}>
+                <span
+                  style={{
+                    color: statusSignal.color,
+                    fontWeight: TYPOGRAPHY.weights.medium,
+                  }}
+                >
                   {statusLabel}
                 </span>
               </div>
 
               {page.accountDisplayName && (
-                <span>Connected via {page.accountDisplayName}</span>
+                <>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: '1px',
+                      height: '12px',
+                      backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>Connected via {page.accountDisplayName}</span>
+                </>
               )}
 
-              {page.category && <span>• {page.category}</span>}
+              {typeof page.currentFollowers === 'number' && (
+                <>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: '1px',
+                      height: '12px',
+                      backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>
+                    {page.currentFollowers.toLocaleString('en-US')} followers
+                  </span>
+                </>
+              )}
+
+              {page.category && (
+                <>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: '1px',
+                      height: '12px',
+                      backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{page.category}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Right Side: Primary Actions */}
+        {/* Right Side: Uniform 34px Action Buttons Cluster */}
         <div
           style={{
             display: 'flex',
@@ -351,60 +486,96 @@ export function DedicatedPageHeader({
             flexWrap: 'wrap',
           }}
         >
-          {/* Pause / Resume Automation Button */}
+          {/* Pause / Resume Automation Button (34px height) */}
           <button
             type="button"
             data-testid="header-status-toggle-btn"
             disabled={isUpdatingStatus || isNeedsAttention}
             onClick={handleToggle}
             style={{
-              ...COMPONENT_STYLES.secondaryButton(THEME.default),
               display: 'inline-flex',
               alignItems: 'center',
-              gap: SPACING.xs,
-              height: '36px',
+              gap: '6px',
+              height: '34px',
               padding: `0 ${SPACING.md}`,
               backgroundColor: isPaused
-                ? 'rgba(250, 215, 52, 0.12)'
-                : `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                ? 'rgba(250, 215, 52, 0.1)'
+                : `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
               color: isPaused
                 ? PALETTE.primary
                 : `var(--text-main, ${THEME.default.text.primary})`,
-              borderColor: isPaused
-                ? 'rgba(250, 215, 52, 0.35)'
-                : `var(--border-subtle, ${THEME.default.borders.hairline})`,
+              border: `1px solid ${
+                isPaused
+                  ? 'rgba(250, 215, 52, 0.3)'
+                  : `var(--border-subtle, ${THEME.default.borders.hairline})`
+              }`,
+              borderRadius: RADII.sm,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              cursor:
+                isUpdatingStatus || isNeedsAttention
+                  ? 'not-allowed'
+                  : 'pointer',
+              transition:
+                'background-color 0.12s ease, border-color 0.12s ease',
             }}
           >
             {isPaused ? (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>
-                <span>Resume Automation</span>
+                <span>{isUpdatingStatus ? 'Resuming...' : 'Resume Automation'}</span>
               </>
             ) : (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
                   <rect x="6" y="4" width="4" height="16" />
                   <rect x="14" y="4" width="4" height="16" />
                 </svg>
-                <span>Pause Automation</span>
+                <span>{isUpdatingStatus ? 'Pausing...' : 'Pause Automation'}</span>
               </>
             )}
           </button>
 
-          {/* Add to Queue Button */}
+          {/* Primary Action: Queue Post (34px height) */}
           <button
             type="button"
             data-testid="header-add-queue-btn"
             onClick={onOpenAddQueue}
             style={{
-              ...COMPONENT_STYLES.primaryButton,
+              height: '34px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: PALETTE.primary,
+              color: '#000000',
+              border: `1px solid ${PALETTE.primary}`,
+              borderRadius: RADII.sm,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: SPACING.xs,
-              height: '36px',
-              padding: `0 ${SPACING.md}`,
+              gap: '6px',
+              cursor: 'pointer',
+              boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+              transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
             <svg
@@ -421,11 +592,11 @@ export function DedicatedPageHeader({
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            <span>Add to Queue</span>
+            <span>Queue Post</span>
           </button>
 
-          {/* Settings / Overflow Dropdown */}
-          <div style={{ position: 'relative' }}>
+          {/* More Actions Dropdown (34x34px) */}
+          <div ref={dropdownRef} style={{ position: 'relative' }}>
             <button
               type="button"
               data-testid="header-settings-dropdown-btn"
@@ -433,18 +604,31 @@ export function DedicatedPageHeader({
               aria-expanded={isDropdownOpen}
               onClick={() => setIsDropdownOpen((prev) => !prev)}
               style={{
-                ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                width: '36px',
-                height: '36px',
+                width: '34px',
+                height: '34px',
                 padding: 0,
+                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.sm,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'color 0.12s ease, border-color 0.12s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+                e.currentTarget.style.borderColor = `var(--border-strong, ${THEME.default.borders.strong})`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
+                e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
               }}
             >
               <svg
-                width="16"
-                height="16"
+                width="15"
+                height="15"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -465,7 +649,7 @@ export function DedicatedPageHeader({
                 style={{
                   position: 'absolute',
                   right: 0,
-                  top: '42px',
+                  top: '40px',
                   zIndex: 50,
                   minWidth: '180px',
                   backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
@@ -475,6 +659,102 @@ export function DedicatedPageHeader({
                   padding: SPACING.xs,
                 }}
               >
+                <button
+                  type="button"
+                  data-testid="header-menu-copy-id-btn"
+                  onClick={handleCopyId}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: `${SPACING.sm} ${SPACING.md}`,
+                    fontSize: '0.8125rem',
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    borderRadius: RADII.xs,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: SPACING.xs,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  <span>{hasCopiedId ? 'Page ID Copied' : 'Copy Page ID'}</span>
+                </button>
+
+                <a
+                  href={fbPageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsDropdownOpen(false)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: `${SPACING.sm} ${SPACING.md}`,
+                    fontSize: '0.8125rem',
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    borderRadius: RADII.xs,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: SPACING.xs,
+                    textDecoration: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                  <span>Open on Facebook</span>
+                </a>
+
+                <div
+                  style={{
+                    height: '1px',
+                    backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
+                    margin: `${SPACING.xs} 0`,
+                  }}
+                />
+
                 <button
                   type="button"
                   data-testid="header-menu-disconnect-btn"
@@ -497,15 +777,16 @@ export function DedicatedPageHeader({
                     gap: SPACING.xs,
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(246, 70, 93, 0.12)';
+                    e.currentTarget.style.backgroundColor =
+                      'rgba(246, 70, 93, 0.12)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }}
                 >
                   <svg
-                    width="14"
-                    height="14"
+                    width="13"
+                    height="13"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
