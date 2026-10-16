@@ -23,7 +23,7 @@ describe('DesktopTitleBar Component (Spec 035)', () => {
     expect(hasAttribute('data-testid', 'desktop-titlebar')).toBe(true);
     expect(hasAttribute('data-tauri-drag-region')).toBe(true);
     expect(hasText('FBUploadPro')).toBe(true);
-    expect(hasText('FB')).toBe(true);
+    expect(hasAttribute('aria-label', 'FBUploadPro')).toBe(true);
 
     // Controls
     expect(hasAttribute('data-testid', 'desktop-minimize-btn')).toBe(true);

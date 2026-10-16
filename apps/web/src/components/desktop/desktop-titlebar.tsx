@@ -8,6 +8,7 @@ import {
   openExternalUrl,
 } from '@fbuploadpro/contracts';
 import { PALETTE, TYPOGRAPHY } from '@/lib/theme';
+import { BrandMark } from '@/components/brand';
 
 export interface DesktopTitleBarProps {
   /** Optional override for testing or manual preview */
@@ -202,22 +203,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               letterSpacing: '0.02em',
             }}
           >
-            <div
-              style={{
-                width: '16px',
-                height: '16px',
-                backgroundColor: PALETTE.primary,
-                color: PALETTE.background,
-                fontSize: '10px',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderRadius: '3px',
-              }}
-            >
-              FB
-            </div>
+            <BrandMark size={16} />
             <span>FBUploadPro</span>
           </div>
 

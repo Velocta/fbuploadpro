@@ -39,6 +39,8 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(hasText('FBUploadPro')).toBe(true);
     expect(hasText('Studio')).toBe(true);
     expect(html).toContain(PALETTE.primary);
+    expect(html).toContain(PALETTE.accent1);
+    expect(html).toContain('fill-opacity="0.35"');
 
     // Bottom Section: Option A Unified Studio Footer
     expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);

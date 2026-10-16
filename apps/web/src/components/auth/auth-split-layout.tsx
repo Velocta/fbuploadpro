@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { BrandMark } from '@/components/brand';
 
 export interface AuthSplitLayoutProps {
   title: string;
@@ -13,22 +14,21 @@ export interface AuthSplitLayoutProps {
 }
 
 const BrandLogo = () => (
-  <svg
-    width="28"
-    height="28"
-    viewBox="0 0 32 32"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    style={{ flexShrink: 0 }}
-    aria-hidden="true"
+  <div
+    style={{
+      width: '32px',
+      height: '32px',
+      borderRadius: RADII.sm,
+      backgroundColor: '#12141a',
+      border: '1px solid #1f242d',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    }}
   >
-    <rect width="32" height="32" rx="8" fill="#12141a" stroke="#1f242d" strokeWidth="1" />
-    <path
-      d="M8 22L16 6L24 22H19L16 16L13 22H8Z"
-      fill={PALETTE.primary}
-    />
-    <circle cx="16" cy="11" r="2" fill="#000000" />
-  </svg>
+    <BrandMark size={22} />
+  </div>
 );
 
 const ShieldCheckIcon = () => (
