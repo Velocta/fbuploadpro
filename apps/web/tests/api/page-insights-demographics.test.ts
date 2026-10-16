@@ -5,7 +5,6 @@ import {
   signSessionToken,
 } from '@fbuploadpro/contracts';
 import { handleGetInsights } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route';
-import { globalInsightsCache } from '../../src/lib/insights/insights-cache';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -22,8 +21,6 @@ describe('Facebook Page Insights Reactions & Demographics API (User Story 3 - T1
   beforeEach(async () => {
     process.env.SESSION_SECRET = TEST_SECRET;
     process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
-
-    globalInsightsCache.clear();
 
     const token = await signSessionToken(
       {

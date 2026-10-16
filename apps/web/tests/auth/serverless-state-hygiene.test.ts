@@ -90,7 +90,7 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       expect(() => validateInsightsCacheConfig()).not.toThrow();
     });
 
-    it('returns Cache-Control with stale-while-revalidate headers in GET insights response', async () => {
+    it('returns Cache-Control with no-cache headers in GET insights live proxy response (Spec 062)', async () => {
       process.env.SESSION_SECRET = TEST_SECRET;
       process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
 
@@ -155,8 +155,8 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       expect(res.status).toBe(200);
       const cacheControl = res.headers.get('Cache-Control');
       expect(cacheControl).toBeDefined();
-      expect(cacheControl).toContain('s-maxage=900');
-      expect(cacheControl).toContain('stale-while-revalidate=86400');
+      expect(cacheControl).toContain('no-cache');
+      expect(cacheControl).toContain('no-store');
     });
 
     it('warns when get and set are called in production without Upstash credentials', () => {

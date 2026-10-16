@@ -500,13 +500,15 @@ fbuploadpro/
 * **Server-Side Queue Counts**:
   * `get_page_queue_status_counts` returns exact counts for queued, publishing, published, failed, skipped, and cancelled items directly from PostgreSQL.
 
-### 13.5 Hybrid Insights Architecture
-* **Upstash Redis REST Integration**:
-  * `InsightsCache` supports `getAsync` and `setAsync` with Upstash Redis REST endpoints and fallback to L1 in-memory `Map`.
-* **Database-First Snapshot Serving**:
-  * Serves cached insights from `page_insights_daily_snapshots` for non-refresh requests and transient rate limits, conserving Graph API BUC quota for 200k/day publishing.
-* **Paginated Worker Insights Sync**:
-  * `syncDailyPageInsights` accepts configurable `batchSize` and paginates through active pages to prevent subrequest or row limits.
+### 13.5 Live Facebook Insights & 15-Minute Client LocalStorage Caching (Spec 062)
+* **Direct Server-Side Graph API v26.0 Proxy**:
+  * Insights are queried live from Facebook Graph API v26.0 through a secure server-side proxy route with zero client-side token exposure.
+* **15-Minute Client LocalStorage Caching**:
+  * The client stores fetched insights in browser `localStorage` keyed by `insights:${pageId}:${range}` with a 15-minute TTL (`expiresAt`).
+  * On page refresh or revisitation within 15 minutes, data loads instantly from `localStorage` without skeleton flash or network delays.
+  * Fresh network fetches occur only after 15 minutes have elapsed or when the operator manually clicks the "Sync" button.
+* **Complete Removal of Upstash Redis Insights, DB Snapshots & Worker Cron**:
+  * The `page_insights_daily_snapshots` table, Upstash Redis insights caching, and Cloudflare Worker scheduled insights sync cron are completely eradicated from the system, eliminating unnecessary infrastructure dependencies.
 
 ---
 

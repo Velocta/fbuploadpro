@@ -6,7 +6,6 @@ import {
 } from '@fbuploadpro/contracts';
 import { handleGetInsights } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
-import { globalInsightsCache } from '../../src/lib/insights/insights-cache';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -24,7 +23,6 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
   beforeEach(async () => {
     process.env.SESSION_SECRET = TEST_SECRET;
     process.env.TOKEN_ENCRYPTION_KEY = TEST_KEY;
-    globalInsightsCache.clear();
 
     const tokenA = await signSessionToken(
       {
@@ -225,7 +223,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
     expect(body.error).toBe('Unauthorized');
   });
 
-  it('cached responses also maintain zero token leakage', async () => {
+  it('repeated live proxy responses maintain zero token leakage and private headers', async () => {
     const mockDb = {
       query: vi.fn().mockImplementation(async (_sql: string, params: any[]) => {
         if (params[1] === userIdA) {
@@ -259,14 +257,14 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
       { headers: { cookie: validSessionCookieUserA } }
     );
 
-    // Call 1: cold cache
+    // Call 1
     const res1 = await handleGetInsights(req1, 'acme', pageId, {
       dbClient: mockDb,
       fetchImpl: mockFetch as any,
     });
     expect(res1.status).toBe(200);
 
-    // Call 2: cache hit
+    // Call 2
     const req2 = new NextRequest(
       'http://localhost:3000/api/tenant/acme/pages/33333333-3333-4333-a333-333333333333/insights?range=28d',
       { headers: { cookie: validSessionCookieUserA } }
@@ -278,7 +276,7 @@ describe('Security Audit: Insights Zero Token Leakage & Compound Isolation (T179
     expect(res2.status).toBe(200);
 
     const body2Text = await res2.text();
-    expect(body2Text).toContain('"cacheHit":true');
+    expect(body2Text).toContain('"cacheHit":false');
     expect(body2Text).not.toContain(rawToken);
     expect(body2Text).not.toContain(sampleCiphertext);
   });

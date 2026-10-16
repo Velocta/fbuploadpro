@@ -5,7 +5,6 @@ import {
   signSessionToken,
 } from '@fbuploadpro/contracts';
 import { handleGetInsights } from '../../src/app/api/tenant/[subdomain]/pages/[pageId]/insights/route';
-import { globalInsightsCache } from '../../src/lib/insights/insights-cache';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -22,8 +21,6 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
   beforeEach(async () => {
     process.env.SESSION_SECRET = TEST_SECRET;
     process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
-
-    globalInsightsCache.clear();
 
     const token = await signSessionToken(
       {
@@ -125,7 +122,7 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     expect(bodyString).not.toContain('token');
   });
 
-  it('serves cached metrics on repeated calls within TTL', async () => {
+  it('executes direct live proxy fetch on each call returning no-store headers', async () => {
     const mockDb = {
       query: vi.fn().mockResolvedValue([
         {
@@ -158,11 +155,12 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
       fetchImpl: mockFetch as unknown as typeof fetch,
     });
     expect(res1.status).toBe(200);
+    expect(res1.headers.get('Cache-Control')).toContain('no-cache');
     const body1 = await res1.json();
     expect(body1.cacheHit).toBe(false);
     expect(mockFetch).toHaveBeenCalledTimes(3);
 
-    // Call again - should hit cache
+    // Call again - executes direct live fetch without server cache
     const req2 = new NextRequest(
       `https://acme.fbuploadpro.com/api/tenant/acme/pages/${pageId}/insights?range=28d`,
       { headers: { cookie: validSessionCookie } }
@@ -173,11 +171,11 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
     });
     expect(res2.status).toBe(200);
     const body2 = await res2.json();
-    expect(body2.cacheHit).toBe(true);
-    expect(mockFetch).toHaveBeenCalledTimes(3); // not called again
+    expect(body2.cacheHit).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(6);
   });
 
-  it('bypasses cache when refresh=true query parameter is present', async () => {
+  it('handles refresh=true query parameter cleanly', async () => {
     const mockDb = {
       query: vi.fn().mockResolvedValue([
         {
@@ -201,29 +199,18 @@ describe('Facebook Page Insights Overview API (User Story 1 - T154, T158)', () =
         }),
     });
 
-    const req1 = new NextRequest(
-      `https://acme.fbuploadpro.com/api/tenant/acme/pages/${pageId}/insights?range=28d`,
-      { headers: { cookie: validSessionCookie } }
-    );
-    await handleGetInsights(req1, 'acme', pageId, {
-      dbClient: mockDb,
-      fetchImpl: mockFetch as unknown as typeof fetch,
-    });
-    expect(mockFetch).toHaveBeenCalledTimes(3);
-
-    // Call with refresh=true
-    const req2 = new NextRequest(
+    const req = new NextRequest(
       `https://acme.fbuploadpro.com/api/tenant/acme/pages/${pageId}/insights?range=28d&refresh=true`,
       { headers: { cookie: validSessionCookie } }
     );
-    const res2 = await handleGetInsights(req2, 'acme', pageId, {
+    const res = await handleGetInsights(req, 'acme', pageId, {
       dbClient: mockDb,
       fetchImpl: mockFetch as unknown as typeof fetch,
     });
-    expect(res2.status).toBe(200);
-    const body2 = await res2.json();
-    expect(body2.cacheHit).toBe(false);
-    expect(mockFetch).toHaveBeenCalledTimes(6);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.cacheHit).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
   });
 
   it('rejects unauthorized requests missing valid session cookie with 401', async () => {
