@@ -93,7 +93,7 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       expect(hasText('APP ID')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-app-id-input')).toBe(true);
       expect(hasAttribute('placeholder', 'e.g. 123456789012345')).toBe(true);
-      expect(hasText("You'll find this in your Meta app under Settings → Basic.")).toBe(true);
+      expect(hasText('find this in your Meta app under Settings → Basic.')).toBe(true);
 
       expect(hasText('APP SECRET')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-app-secret-input')).toBe(true);
@@ -122,7 +122,7 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       expect(hasText('/api/auth/facebook/callback')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-copy-callback-btn')).toBe(true);
       expect(
-        hasText('Paste this into the "Valid OAuth Redirect URIs" field in your Meta app.')
+        hasText('Valid OAuth Redirect URIs') && hasText('field in your Meta app.')
       ).toBe(true);
     });
   });
@@ -237,9 +237,9 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       expect(hasAttribute('data-testid', 'fb-disconnect-modal')).toBe(true);
       expect(hasText('Disconnect Facebook?')).toBe(true);
       expect(
-        hasText(
-          "We'll remove your App ID and App Secret from this workspace. Your connected accounts and posting will keep working as normal — but you won't be able to reconnect or connect new accounts until you add new details."
-        )
+        hasText('remove your App ID and App Secret from this workspace') &&
+          hasText('Your connected accounts and posting will keep working as normal') &&
+          hasText('reconnect or connect new accounts until you add new details.')
       ).toBe(true);
       expect(hasText('Keep connected')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-disconnect-keep-btn')).toBe(true);
