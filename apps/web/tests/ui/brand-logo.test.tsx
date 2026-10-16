@@ -51,11 +51,11 @@ describe('BrandLogo Component (Spec 054 / US1)', () => {
   });
 
   it('hides wordmark when showWordmark is false', () => {
-    const { hasText, hasTag } = render(
+    const { hasTag } = render(
       <BrandLogo markSize={20} showWordmark={false} />
     );
 
     expect(hasTag('svg')).toBe(true);
-    expect(hasText('FBUploadPro')).toBe(false);
+    expect(hasTag('span')).toBe(false);
   });
 });
