@@ -282,6 +282,69 @@ export async function handleCreateQueueSlot(
   }
 }
 
+async function updateScheduleTimezonePostgres(
+  dbClient: DatabaseClient,
+  pageId: string,
+  userId: string,
+  workspaceId: string,
+  newTimezone: string
+): Promise<{ notFound?: boolean; updatedCount?: number }> {
+  const pageRows = (await dbClient.query(
+    'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
+    [pageId, userId, workspaceId]
+  )) as any[];
+
+  if (!pageRows || pageRows.length === 0) {
+    return { notFound: true };
+  }
+
+  const updatedRows = (await dbClient.query(
+    `UPDATE page_queue_slots
+     SET timezone = $1, updated_at = now()
+     WHERE fb_page_id = $2 AND user_id = $3
+     RETURNING id`,
+    [newTimezone, pageId, userId]
+  )) as any[];
+
+  return { updatedCount: updatedRows.length };
+}
+
+async function updateScheduleTimezoneSupabase(
+  supabase: SupabaseClient<any>,
+  pageId: string,
+  userId: string,
+  workspaceId: string,
+  newTimezone: string
+): Promise<{ notFound?: boolean; error?: string; updatedCount?: number }> {
+  const { data: pageData, error: pageErr } = await supabase
+    .from('facebook_pages')
+    .select('id')
+    .eq('id', pageId)
+    .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+
+  if (pageErr || !pageData) {
+    return { notFound: true };
+  }
+
+  const { data: updatedRows, error: updateErr } = await supabase
+    .from('page_queue_slots')
+    .update({
+      timezone: newTimezone,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('fb_page_id', pageId)
+    .eq('user_id', userId)
+    .select('id');
+
+  if (updateErr) {
+    return { error: updateErr.message };
+  }
+
+  return { updatedCount: updatedRows?.length ?? 0 };
+}
+
 export async function handleUpdateQueueScheduleTimezone(
   request: NextRequest,
   subdomain: string,
@@ -333,68 +396,50 @@ export async function handleUpdateQueueScheduleTimezone(
   const newTimezone = parsed.data.timezone;
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    // 1. Verify page exists and belongs to user and workspace
-    const pageRows = (await dbClient.query(
-      'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
-      [pageId, session.userId, workspaceId]
-    )) as any[];
+    const result = await updateScheduleTimezonePostgres(
+      dbClient as DatabaseClient,
+      pageId,
+      session.userId,
+      workspaceId,
+      newTimezone
+    );
 
-    if (!pageRows || pageRows.length === 0) {
+    if (result.notFound) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
-    }
-
-    // 2. Update all slots for this page and user
-    const updatedRows = (await dbClient.query(
-      `UPDATE page_queue_slots
-       SET timezone = $1, updated_at = now()
-       WHERE fb_page_id = $2 AND user_id = $3
-       RETURNING id, user_id, fb_page_id, slot_time, timezone, is_active, allowed_formats, created_at, updated_at`,
-      [newTimezone, pageId, session.userId]
-    )) as any[];
-
-    return NextResponse.json({
-      success: true,
-      timezone: newTimezone,
-      updatedCount: updatedRows.length,
-    });
-  } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
-    }
-
-    const { data: pageData, error: pageErr } = await supabase
-      .from('facebook_pages')
-      .select('id')
-      .eq('id', pageId)
-      .eq('user_id', session.userId)
-      .eq('workspace_id', workspaceId)
-      .maybeSingle();
-
-    if (pageErr || !pageData) {
-      return NextResponse.json({ error: 'Page not found' }, { status: 404 });
-    }
-
-    const { data: updatedRows, error: updateErr } = await supabase
-      .from('page_queue_slots')
-      .update({
-        timezone: newTimezone,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('fb_page_id', pageId)
-      .eq('user_id', session.userId)
-      .select('id');
-
-    if (updateErr) {
-      return NextResponse.json({ error: 'INTERNAL_ERROR', message: updateErr.message }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
       timezone: newTimezone,
-      updatedCount: updatedRows?.length ?? 0,
+      updatedCount: result.updatedCount ?? 0,
     });
   }
+
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+  if (!supabase) {
+    return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
+  }
+
+  const result = await updateScheduleTimezoneSupabase(
+    supabase,
+    pageId,
+    session.userId,
+    workspaceId,
+    newTimezone
+  );
+
+  if (result.notFound) {
+    return NextResponse.json({ error: 'Page not found' }, { status: 404 });
+  }
+  if (result.error) {
+    return NextResponse.json({ error: 'INTERNAL_ERROR', message: result.error }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    timezone: newTimezone,
+    updatedCount: result.updatedCount ?? 0,
+  });
 }
 
 export async function GET(
