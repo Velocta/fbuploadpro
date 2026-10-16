@@ -14,7 +14,7 @@ import {
 } from '@/components/workspace/workspace-studio-footer';
 import { render } from '../components/setup';
 
-let mockPathname = '/tenant/acme';
+const mockPathname = '/tenant/acme';
 const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
