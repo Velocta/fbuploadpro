@@ -64,7 +64,7 @@ export function computeBreadcrumbs(pathname: string, subdomain: string): Breadcr
   }
 
   return segments.map((seg) => ({
-    label: seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' '),
+    label: seg.charAt(0).toUpperCase() + seg.slice(1).replaceAll('-', ' '),
   }));
 }
 

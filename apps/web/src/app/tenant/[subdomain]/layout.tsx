@@ -45,12 +45,12 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
           }}
         >
           <SidebarTrigger />
-          <div
-            role="separator"
+          <hr
             aria-orientation="vertical"
             style={{
               width: '1px',
               height: '16px',
+              border: 'none',
               backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
               margin: `0 ${SPACING.xs}`,
               flexShrink: 0,
