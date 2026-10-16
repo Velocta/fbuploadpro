@@ -11,6 +11,7 @@ export interface AuthSplitLayoutProps {
   children: React.ReactNode;
   footer?: React.ReactNode;
   formPosition?: 'left' | 'right';
+  showcase?: React.ReactNode;
 }
 
 const BrandLogo = () => (
@@ -130,6 +131,7 @@ export function AuthSplitLayout({
   children,
   footer,
   formPosition = 'left',
+  showcase,
 }: Readonly<AuthSplitLayoutProps>) {
   const isFormLeft = formPosition === 'left';
 
@@ -138,7 +140,9 @@ export function AuthSplitLayout({
       className={`auth-showcase-panel${isFormLeft ? ' auth-showcase-right' : ''}`}
       aria-label="FBUploadPro Showcase"
     >
-      <div>
+      {showcase ?? (
+        <>
+          <div>
         <Link
           href="/login"
           style={{
@@ -244,6 +248,8 @@ export function AuthSplitLayout({
         <span>Official Meta OAuth Security</span>
         <span>Zero Password Access</span>
       </div>
+        </>
+      )}
     </section>
   );
 
@@ -368,20 +374,28 @@ export function AuthSplitLayout({
           display: none;
         }
         @media (max-width: 1023px) {
+          .auth-split-wrapper {
+            flex-direction: column;
+          }
           .auth-showcase-panel {
-            display: none !important;
+            display: flex !important;
+            order: 1 !important;
+            flex: 1 1 100% !important;
+            max-width: 100% !important;
+            min-height: auto !important;
+            padding: 36px 20px !important;
+            border-right: none !important;
+            border-left: none !important;
+            border-bottom: 1px solid var(--border-subtle, #1f242d) !important;
           }
           .auth-form-panel {
+            order: 2 !important;
             flex: 1 1 100% !important;
             max-width: 100% !important;
             padding: 32px 16px !important;
           }
           .auth-mobile-header {
-            display: flex !important;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 24px;
+            display: none !important;
           }
         }
       `}</style>
