@@ -39,7 +39,7 @@ interface Step1Props {
   onProceed: () => void;
 }
 
-function Step1TimezoneSelector({
+export function Step1TimezoneSelector({
   activeTimezone,
   selectedTimezone,
   searchQuery,
@@ -411,7 +411,7 @@ interface Step2Props {
   onConfirm: () => void;
 }
 
-function Step2ReviewImpact({
+export function Step2ReviewImpact({
   activeTimezone,
   selectedTimezone,
   slotsCount,
