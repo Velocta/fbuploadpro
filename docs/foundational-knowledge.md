@@ -605,10 +605,11 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
   - Filtered query/status: `"Showing {filtered} of {total} accounts"`
   - Session attention required: `"{total} connected {accounts} · {attention} requires reconnecting"`
   - All healthy: `"{total} connected {accounts} · All operational"`
-* **Scale Toolbar**: Ghost search input with inset magnifying glass icon, keyboard Escape dismiss, and `×` clear affordance, accompanied by pure typographic flat filter tabs (`All`, `Active`, `Expiring Soon`, `Expired`) with a 2px luminous gold bottom indicator on the active selection.
+* **Scale Toolbar**: Ghost search input with inset magnifying glass icon, keyboard Escape dismiss, and `×` clear affordance, accompanied by pure typographic flat filter tabs (`All`, `Active`, `Expired`) with a 2px luminous gold bottom indicator on the active selection.
 
 ### 19.2 Sleek, Uncluttered Account Cards (`AccountCard`)
-* **Removal of Information Overload**: Excised `"Token valid for X days"` and raw Facebook gender display (`• Male/Female`) from the card surface per user mandate.
+* **Removal of Information Overload & Line Dividers**: Excised `"Token valid for X days"` and raw Facebook gender display (`• Male/Female`) from the card surface. Permanently removed the top and bottom divider lines around the linked pages strip to maintain an open, seamless surface.
+* **Hover Glow & Elevation Parity with Page Cards**: Calibrated `AccountCard` to match `PageCard` behavior with smooth elevation (`translateY(-2px)`), deep luminous shadow (`0 8px 24px -4px rgba(0, 0, 0, 0.35)`), and dynamic glowing borders (`rgba(46, 189, 133, 0.45)` for active, `PALETTE.accent3` for expired).
 * **42px Avatar Status Rings**: Integrated a 1.5px status ring with subtle micro-halo into the avatar geometry:
   - Active: `#2ebd85` (emerald)
   - Expiring soon (1–7 days): `#fad734` (gold)

@@ -105,7 +105,6 @@ export interface AccountsFilterBarProps {
 const FILTER_TABS: Array<{ value: AccountStatusFilter; label: string; testId: string }> = [
   { value: 'all', label: 'All', testId: 'accounts-filter-all' },
   { value: 'active', label: 'Active', testId: 'accounts-filter-active' },
-  { value: 'expiring_soon', label: 'Expiring Soon', testId: 'accounts-filter-expiring-soon' },
   { value: 'expired', label: 'Expired', testId: 'accounts-filter-expired' },
 ];
 
@@ -231,7 +230,7 @@ export function AccountsFilterBar({
       >
         {FILTER_TABS.map((tab) => {
           const isActive = statusFilter === tab.value;
-          const isAttention = tab.value === 'expired' || tab.value === 'expiring_soon';
+          const isAttention = tab.value === 'expired';
           return (
             <button
               key={tab.value}

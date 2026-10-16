@@ -345,15 +345,35 @@ export function AccountCard({
   return (
     <div
       data-testid={`account-card-${account.id}`}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.borderColor = isExpired
+          ? PALETTE.accent3
+          : 'rgba(46, 189, 133, 0.45)';
+        e.currentTarget.style.boxShadow = isExpired
+          ? '0 8px 24px -4px rgba(246, 70, 93, 0.25), 0 0 0 1px rgba(246, 70, 93, 0.2)'
+          : '0 8px 24px -4px rgba(0, 0, 0, 0.35)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.borderColor = isExpired
+          ? PALETTE.accent3
+          : `var(--border-subtle, ${THEME.default.borders.hairline})`;
+        e.currentTarget.style.boxShadow = `var(--shadow-card, ${THEME.default.shadows.card})`;
+      }}
       style={{
         display: 'flex',
         flexDirection: 'column',
+        justifyContent: 'space-between',
         backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        border: isExpired
+          ? `1px solid ${PALETTE.accent3}`
+          : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         borderRadius: RADII.md,
         boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
         padding: SPACING.lg,
-        transition: 'border-color 0.15s ease',
+        minHeight: '154px',
+        transition: 'transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
       }}
     >
       {/* Profile Header */}
@@ -451,9 +471,6 @@ export function AccountCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: `${SPACING.xs} 0`,
-          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           marginBottom: SPACING.md,
         }}
       >
