@@ -17,7 +17,6 @@ export interface Env {
   SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
-  DATABASE_URL?: string;
   DISPATCH_BATCH_SIZE?: string;
   DISPATCH_MAX_BATCHES_PER_TICK?: string;
   DISPATCH_CONCURRENCY?: string;
