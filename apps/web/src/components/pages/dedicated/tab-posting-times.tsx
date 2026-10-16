@@ -1170,3 +1170,4 @@ export function PageTabPostingTimes({
 
 // Backwards-compatible alias for existing imports
 export const PageTabCalendar = PageTabPostingTimes;
+export type PageTabCalendarProps = PageTabPostingTimesProps;
