@@ -694,6 +694,9 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 * **Server Fallback Parity**: Aligned `apps/web/src/app/api/auth/logout/route.ts` fallback `rootDomain` to `'localhost:3000'` for complete parity with application middleware and other authentication routes.
 
 
+## 23. Production Deployment & Cloud Architecture Reference
 
-
+For the complete end-to-end operational deployment guide covering step-by-step provisioning and automated GitHub Secrets orchestration across Supabase, Vercel, Cloudflare Workers, Cloudflare R2, and Upstash Redis, consult:
+* **Production Deployment Guide**: [`docs/deployment-guide.md`](./deployment-guide.md)
+* **Production Secrets & Deployment Checklist**: [`docs/secrets-checklist.md`](./secrets-checklist.md)
 
