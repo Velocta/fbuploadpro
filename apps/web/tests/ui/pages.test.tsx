@@ -6,13 +6,15 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PALETTE } from '@/lib/theme';
+import { THEME, PALETTE } from '@/lib/theme';
 import {
   PageCard,
   computeFollowersGained,
   formatFollowersGained,
   getPageAttentionMessage,
   getPageStatusLabel,
+  getPageStatusColor,
+  getPageStatusRingBorder,
   isPageNeedsAttention,
   type FacebookPageItem,
 } from '@/components/pages/page-card';
@@ -266,6 +268,65 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
         expect(hasText(item.expectedLabel)).toBe(true);
         expect(hasText(item.expectedBannerSnippet)).toBe(true);
         expect(hasStyle('border', `1px solid ${PALETTE.accent3}`)).toBe(true);
+      }
+    });
+
+    it('renders pure typographic status without bullet dot and applies dynamic status ring to avatar across all statuses', () => {
+      const allStatuses: Array<{
+        status: FacebookPageItem['status'];
+        expectedColor: string;
+        expectedRing: string;
+      }> = [
+        {
+          status: 'active',
+          expectedColor: PALETTE.accent4,
+          expectedRing: `1.5px solid ${PALETTE.accent4}`,
+        },
+        {
+          status: 'paused',
+          expectedColor: PALETTE.primary,
+          expectedRing: `1.5px solid ${PALETTE.primary}`,
+        },
+        {
+          status: 'invalid_token',
+          expectedColor: PALETTE.accent3,
+          expectedRing: `1.5px solid ${PALETTE.accent3}`,
+        },
+        {
+          status: 'page_checkpoint',
+          expectedColor: PALETTE.accent3,
+          expectedRing: `1.5px solid ${PALETTE.accent3}`,
+        },
+        {
+          status: 'fb_rate_limited',
+          expectedColor: PALETTE.accent3,
+          expectedRing: `1.5px solid ${PALETTE.accent3}`,
+        },
+        {
+          status: 'disconnected',
+          expectedColor: `var(--text-dim, ${THEME.default.text.muted})`,
+          expectedRing: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        },
+      ];
+
+      for (const item of allStatuses) {
+        expect(getPageStatusColor(item.status)).toBe(item.expectedColor);
+        expect(getPageStatusRingBorder(item.status)).toBe(item.expectedRing);
+
+        const { html, hasText } = render(
+          <PageCard
+            page={{ ...baseActivePage, status: item.status }}
+            subdomain="acme"
+          />
+        );
+
+        // Verify pure typographic status without any bullet/dot character
+        expect(html).not.toContain('●');
+        expect(html).not.toContain('•');
+        expect(hasText(getPageStatusLabel(item.status))).toBe(true);
+
+        // Verify avatar border ring is present in rendered HTML
+        expect(html).toContain(item.expectedRing);
       }
     });
 
