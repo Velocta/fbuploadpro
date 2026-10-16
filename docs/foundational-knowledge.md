@@ -635,9 +635,31 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
 
 ---
 
-## 20. Spec 055 Pitch Black Dark Mode Standardization & Initial Load Synchronization
+## 20. Spec 054 Official FBUploadPro Brand Logo Component & Asset Implementation
 
-### 20.1 Elimination of the "Blue Tint" Dark Mode Discrepancy
+### 20.1 Geometric Brand Anatomy & Theme Alignment
+* **Unified Ascending Vector & Monogram**: The official FBUploadPro mark unites an ascending upload vector, the stylized "F" monogram crown and spine, the middle crossbar, and the queue slot anchor into a unified 64x64 vector geometry.
+* **Palette Token Fidelity**:
+  - **Primary Gold (`#fad734`, `PALETTE.primary`)**: Dominates the upload vector, crown, and vertical spine.
+  - **Specular Top Edge Highlight (`#ffffff` @ 0.35 opacity)**: Implements the pure white specular edge along the ascending top diagonal per `DESIGN.md` Section 7.1.
+  - **Peru Accent Middle Crossbar (`#b29527`, `PALETTE.accent1`)**: Highlights the active stream crossbar wing.
+  - **Bronze Accent Slot Anchor (`#766018`, `PALETTE.accent2`)**: Anchors the recurring queue slot mark.
+
+### 20.2 Reusable Brand Component Suite (`apps/web/src/components/brand/`)
+* **`<BrandMark />`**: Pure SVG vector component supporting dynamic sizing (`size`), responsive scaling, and accessible attributes (`role="img"`, `aria-label="FBUploadPro"`).
+* **`<BrandLogo />`**: Composite component combining `<BrandMark />` with the canonical "FBUploadPro" logotype and optional contextual subtitle (e.g. "Studio").
+
+### 20.3 Platform-Wide Integration & Asset Modernization
+* **Workspace Sidebar**: Replaced the temporary triangle SVG placeholder in `SidebarHeader` with `<BrandMark size={20} />` inside the 32x32 rounded dark container (`#12141a`, border `#1f242d`).
+* **Authentication Split Layout**: Integrated `<BrandMark size={22} />` across desktop and mobile sign-in and registration headers.
+* **Desktop Titlebar & Shell**: Replaced the plain-text "FB" monogram box in `DesktopTitlebar` with `<BrandMark size={16} />` and updated `apps/desktop/public/index.html` with the native SVG mark.
+* **Native Web Favicon**: Generated `apps/web/src/app/icon.svg` (64x64) providing crisp vector tab icons across modern desktop and mobile browsers.
+
+---
+
+## 21. Spec 055 Pitch Black Dark Mode Standardization & Initial Load Synchronization
+
+### 21.1 Elimination of the "Blue Tint" Dark Mode Discrepancy
 * **Root Cause Remediation**: In Spec 051, default `:root` tokens and `DARK_THEME` were tuned to Midnight Slate (`#0a0c10` canvas, `#12151c` panels, `#222735` borders), while explicit selector `[data-theme="dark"], .dark` remained Pitch Black (`#000000` canvas, `#0c0d10` panels, `#1f242d` borders). This produced a visible discrepancy where uninitialized fresh logins displayed a soft blue/slate shade, which abruptly swapped to pure pitch black after toggling light and dark mode.
 * **100% Alignment with `DESIGN.md`**: Spec 055 permanently restores the canonical Binance Pure Pitch Black standard across the entire stack:
   - Base surface canvas: `#000000`
@@ -649,10 +671,11 @@ Spec 045 executes comprehensive remediation across all 42 audit findings documen
   - Control borders: `#2b323c`
 * **Identical `:root` and `[data-theme="dark"]` Definitions**: Eliminates any visual divergence or color jumps when switching themes.
 
-### 20.2 Pre-Hydration Theme Script & Instant Stability
+### 21.2 Pre-Hydration Theme Script & Instant Stability
 * **FOUC Prevention via Inline Evaluation**: `apps/web/src/app/layout.tsx` injects an immediate inline script in `<head>` that parses `localStorage.getItem('theme')` or cookie `fbup_theme` before the first browser paint. If no preference exists, it defaults to `'dark'`, immediately setting `document.documentElement.dataset.theme = 'dark'` and `.dark` class.
 * **React Hydration Consistency**: Enabled `suppressHydrationWarning` on `<html lang="en">`, preventing SSR hydration mismatch warnings while allowing dynamic client theme classes.
 * **Persistent Cookie & Storage Synchronization**: `WorkspaceStudioFooter` ensures that theme changes simultaneously update `document.documentElement.dataset.theme`, `localStorage.setItem('theme', ...)`, and cookie `fbup_theme=${newTheme}; max-age=31536000; SameSite=Lax`.
+
 
 
 

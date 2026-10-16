@@ -25,6 +25,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { BrandMark } from '@/components/brand';
 import { WorkspaceStudioFooter } from './workspace-studio-footer';
 import { UPCOMING_PLATFORMS, TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
 
@@ -120,20 +121,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
               flexShrink: 0,
             }}
           >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 32 32"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <path
-                d="M8 22L16 6L24 22H19L16 16L13 22H8Z"
-                fill={PALETTE.primary}
-              />
-              <circle cx="16" cy="11" r="2" fill="#000000" />
-            </svg>
+            <BrandMark size={20} />
           </div>
 
           {/* Logotype & Studio Subtitle */}

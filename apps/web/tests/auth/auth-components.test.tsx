@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from '../components/setup';
 import { AuthSplitLayout } from '../../src/components/auth/auth-split-layout';
 import { PasswordInput } from '../../src/components/auth/password-input';
+import { PALETTE } from '../../src/lib/theme';
 
 describe('Auth Redesign Components (Spec 010)', () => {
   describe('PasswordInput', () => {
@@ -51,6 +52,8 @@ describe('Auth Redesign Components (Spec 010)', () => {
       expect(hasText('Footer Test')).toBe(true);
       expect(html).toContain('Zero Credential Sharing');
       expect(html).toContain('100% Cloud-Powered Automation');
+      expect(html).toContain(PALETTE.primary);
+      expect(html).toContain('fill-opacity="0.35"');
     });
 
     it('contains no technical plumbing jargon or fake status badges', () => {

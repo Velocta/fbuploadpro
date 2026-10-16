@@ -43,14 +43,10 @@
     .titlebar-monogram {
       width: 16px;
       height: 16px;
-      background-color: #fad734;
-      color: #000000;
-      font-size: 10px;
-      font-weight: 800;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 3px;
+      flex-shrink: 0;
     }
     .titlebar-controls {
       display: flex;
@@ -144,7 +140,14 @@
 <body>
   <header class="titlebar" data-tauri-drag-region>
     <div class="titlebar-brand" data-tauri-drag-region>
-      <div class="titlebar-monogram">FB</div>
+      <div class="titlebar-monogram">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="16" height="16" fill="none" role="img" aria-label="FBUploadPro">
+          <path d="M24 11L12 23L17 28L20 25V51L28 45V23H45L53 15H28L24 11Z" fill="#fad734"/>
+          <path d="M24 11L12 23L13.2 24.2L24 13.4L28 17.4H50.6L53 15H28L24 11Z" fill="#ffffff" fill-opacity="0.35"/>
+          <path d="M32 30H48L40 38H32V30Z" fill="#b29527"/>
+          <path d="M32 43H41L35 49H32V43Z" fill="#766018"/>
+        </svg>
+      </div>
       <span>FBUploadPro</span>
     </div>
     <div class="titlebar-controls" data-tauri-drag-region="false">
