@@ -23,6 +23,7 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
   useSidebar,
+} from '@/components/ui/sidebar';
 import { THEME, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
 import { WorkspaceStudioFooter } from './workspace-studio-footer';
