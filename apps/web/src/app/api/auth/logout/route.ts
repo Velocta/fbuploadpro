@@ -15,7 +15,7 @@ export async function POST(request?: NextRequest) {
 
     const host = request?.headers.get('host');
     const requestUrl = request?.url || (host ? `https://${host}` : undefined);
-    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'fbuploadpro.com';
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
 
     const redirectUrl = buildCentralAppUrl(
       '/login?logout=success',
