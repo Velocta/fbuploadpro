@@ -1402,6 +1402,38 @@ export function MediaLibraryExplorer({
     }
   };
 
+  const handleMoveMediaToTargetFolder = async (
+    mediaId: string,
+    targetFolderId: string | null
+  ) => {
+    const idsToMove =
+      selectedIds.includes(mediaId) && selectedIds.length > 1
+        ? selectedIds
+        : [mediaId];
+
+    const moveSet = new Set(idsToMove);
+    setMediaItems((prev) =>
+      prev.map((m) =>
+        moveSet.has(m.id) ? { ...m, folderId: targetFolderId } : m
+      )
+    );
+    setSelectedIds((prev) => prev.filter((id) => !moveSet.has(id)));
+
+    try {
+      await fetch(`/api/tenant/${subdomain}/media/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'move',
+          mediaIds: idsToMove,
+          folderId: targetFolderId,
+        }),
+      });
+    } catch (_err) {
+      // Ignore network failure
+    }
+  };
+
   // Drag-and-Drop Reparenting onto Subfolder or Breadcrumb
   const handleDropOnTargetFolder = async (
     e: React.DragEvent<HTMLElement>,
@@ -1417,28 +1449,9 @@ export function MediaLibraryExplorer({
     if (mediaPayloadRaw) {
       try {
         const parsed = JSON.parse(mediaPayloadRaw) as { mediaId: string };
-        const idsToMove =
-          selectedIds.includes(parsed.mediaId) && selectedIds.length > 1
-            ? selectedIds
-            : [parsed.mediaId];
-
-        const moveSet = new Set(idsToMove);
-        setMediaItems((prev) =>
-          prev.map((m) =>
-            moveSet.has(m.id) ? { ...m, folderId: targetFolderId } : m
-          )
-        );
-        setSelectedIds((prev) => prev.filter((id) => !moveSet.has(id)));
-
-        await fetch(`/api/tenant/${subdomain}/media/batch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'move',
-            mediaIds: idsToMove,
-            folderId: targetFolderId,
-          }),
-        });
+        if (parsed.mediaId) {
+          await handleMoveMediaToTargetFolder(parsed.mediaId, targetFolderId);
+        }
       } catch (_err) {
         // Ignore malformed drag payload
       }
@@ -1570,10 +1583,10 @@ export function MediaLibraryExplorer({
         onToggleCollapse={() => setIsFolderRailCollapsed((prev) => !prev)}
         onSelectCollection={(col) => setActiveSmartCollection(col)}
         onNavigateFolder={handleNavigateFolder}
-        onCreateFolder={(parentId) => {
+        onCreateFolder={(_parentId) => {
           setFolderFormName('');
           setFolderFormError(null);
-          setFolderModalState({ mode: 'create', parentId });
+          setFolderModalState({ mode: 'create' });
         }}
         onRenameFolder={(f) => {
           setFolderFormName(f.name);
@@ -1586,7 +1599,7 @@ export function MediaLibraryExplorer({
         }}
         onDeleteFolder={(f) => setDeleteFolderTarget(f)}
         onDropMediaOnFolder={(mediaId, targetFolderId) =>
-          void handleDropOnTargetFolder(mediaId, targetFolderId)
+          void handleMoveMediaToTargetFolder(mediaId, targetFolderId)
         }
       />
 

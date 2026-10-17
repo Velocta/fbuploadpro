@@ -589,7 +589,7 @@ export function MediaInspectorPanel({
 
           <a
             href={item.url}
-            download={item.originalFileName || item.name}
+            download={item.name}
             data-testid="inspector-download-btn"
             style={{
               ...COMPONENT_STYLES.secondaryButton(THEME.default),
