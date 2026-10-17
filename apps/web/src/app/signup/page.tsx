@@ -10,7 +10,8 @@ import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
-import { validateClientPhoneNumber } from '@fbuploadpro/contracts';
+import { validateClientPhoneNumber, isSignupEnabled } from '@fbuploadpro/contracts';
+import { SignupPausedCard } from '@/components/auth/signup-paused-card';
 
 interface FieldErrors {
   name?: string | undefined;
@@ -300,16 +301,27 @@ export default function SignupPage() {
     }
   };
 
+  const signupsAllowed = isSignupEnabled();
+  const isPaused = !signupsAllowed && step !== 'otp';
+
   return (
     <AuthSplitLayout
-      title={step === 'details' ? 'Create Account' : 'Verify Your Email'}
+      title={
+        isPaused
+          ? 'Registration Paused'
+          : step === 'details'
+            ? 'Create Account'
+            : 'Verify Your Email'
+      }
       description={
-        step === 'details'
-          ? 'Start scheduling and auto-publishing Facebook Reels in minutes.'
-          : `We've sent a 6-digit confirmation code to ${email}. Enter the code below to activate your account.`
+        isPaused
+          ? 'We are currently not accepting new account registrations.'
+          : step === 'details'
+            ? 'Start scheduling and auto-publishing Facebook Reels in minutes.'
+            : `We've sent a 6-digit confirmation code to ${email}. Enter the code below to activate your account.`
       }
       footer={
-        step === 'details' ? (
+        isPaused || step === 'details' ? (
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
             Already have an account?{' '}
             <Link
@@ -350,19 +362,23 @@ export default function SignupPage() {
         )
       }
     >
-      {successNotice && (
-        <div style={{ marginBottom: SPACING.lg }}>
-          <Alert
-            severity="success"
-            title="Code Sent"
-            message={successNotice}
-            onClose={() => setSuccessNotice(null)}
-          />
-        </div>
-      )}
+      {isPaused ? (
+        <SignupPausedCard />
+      ) : (
+        <>
+          {successNotice && (
+            <div style={{ marginBottom: SPACING.lg }}>
+              <Alert
+                severity="success"
+                title="Code Sent"
+                message={successNotice}
+                onClose={() => setSuccessNotice(null)}
+              />
+            </div>
+          )}
 
-      {step === 'details' ? (
-        <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+          {step === 'details' ? (
+            <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
           <Input
             label="Full Name"
             placeholder="Jane Doe"
@@ -662,6 +678,8 @@ export default function SignupPage() {
             )}
           </div>
         </form>
+      )}
+        </>
       )}
     </AuthSplitLayout>
   );
