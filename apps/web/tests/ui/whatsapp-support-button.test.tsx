@@ -56,8 +56,10 @@ describe('WhatsAppSupportButton Component (Spec 063)', () => {
     ).toBe(true);
   });
 
-  it('contains the WhatsApp SVG icon', () => {
-    const { hasTag, findTags } = render(<WhatsAppSupportButton />);
+  it('contains the WhatsApp SVG icon when rendered', () => {
+    const { hasTag, findTags } = render(
+      <WhatsAppSupportButton phoneNumber="+15551234567" />
+    );
 
     expect(hasTag('svg')).toBe(true);
     const svgs = findTags('svg');
