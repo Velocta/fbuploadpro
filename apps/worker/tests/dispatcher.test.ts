@@ -517,7 +517,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
 
       const env: Env = {
         ENVIRONMENT: 'test',
-        FB_ENCRYPTION_MASTER_KEY: TEST_MASTER_KEY,
+        TOKEN_ENCRYPTION_KEY: TEST_MASTER_KEY,
         FB_GRAPH_API_URL: 'https://graph.facebook.com/v26.0',
       };
 
@@ -533,7 +533,7 @@ describe('Edge Dispatcher & Facebook Graph API Streaming (T132, T133, T134, T135
       );
     });
 
-    it('skips scheduled cycle when FB_ENCRYPTION_MASTER_KEY is not configured', async () => {
+    it('skips scheduled cycle when TOKEN_ENCRYPTION_KEY is not configured', async () => {
       const mockDb = { query: vi.fn() };
       const env: Env = {};
 

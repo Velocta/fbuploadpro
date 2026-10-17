@@ -4,7 +4,7 @@ import worker, { type Env } from '../src/index.js';
 describe('Cloudflare Worker Scheduled Cron Handler', () => {
   const dummyEnv: Env = {
     ENVIRONMENT: 'test',
-    FB_ENCRYPTION_MASTER_KEY: 'test-master-key',
+    TOKEN_ENCRYPTION_KEY: 'test-master-key',
     SUPABASE_URL: 'https://test-project.supabase.co',
     SUPABASE_SERVICE_ROLE_KEY: 'test-service-role-key',
   };
