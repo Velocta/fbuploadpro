@@ -845,7 +845,7 @@ Spec 061 executes a comprehensive redesign of the `/login` authentication showca
 * **Trust Footer**: Left-aligned `"Official platform logins · Encrypted end-to-end"` with strictly zero external links and zero emojis.
 
 ### 28.3 Responsive Behavior
-* **Narrow Screen Stacking (<1024px)**: When viewport width is under 1024px, the showcase panel stacks vertically above the sign-in form (`order: 1` showcase, `order: 2` form) with reduced padding (`36px 20px`), while feature rows stay full-width.
+* **Mobile Viewport Optimization (<1024px)**: When viewport width is under 1024px, the showcase panel is hidden (`display: none !important`) so users can access authentication forms directly without visual clutter or excessive scrolling. A compact brand header (`.auth-mobile-header`) displaying the official logo and brand name is centered cleanly above the form container.
 
 ---
 
@@ -880,6 +880,10 @@ Spec 064 standardizes the modern multi-platform cloud publishing showcase panel 
 ### 31.2 Elimination of Legacy Bloat
 * **Eradicated Legacy Code**: Completely excised `VALUE_PILLARS`, `ShieldCheckIcon`, `CloudIcon`, `CommentIcon`, `LockIcon`, and the old headline/pill badge markup from `apps/web/src/components/auth/auth-split-layout.tsx`.
 * **Zero Auth Logic Drift**: No alterations to authentication forms, inputs, validation schemas, OTP handling, route handlers, session management, or cookies.
+
+### 31.3 Mobile Display Architecture
+* **Hidden Showcase on Mobile**: On mobile and narrow viewports (<1024px), `.auth-showcase-panel` is hidden (`display: none !important`), and the dedicated `.auth-mobile-header` displays the brand logo and application title directly above the centered authentication card, ensuring fast, friction-free login and signup access on handheld devices.
+
 
 
 

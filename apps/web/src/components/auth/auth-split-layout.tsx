@@ -178,24 +178,20 @@ export function AuthSplitLayout({
             flex-direction: column;
           }
           .auth-showcase-panel {
-            display: flex !important;
-            order: 1 !important;
-            flex: 1 1 100% !important;
-            max-width: 100% !important;
-            min-height: auto !important;
-            padding: 36px 20px !important;
-            border-right: none !important;
-            border-left: none !important;
-            border-bottom: 1px solid var(--border-subtle, #1f242d) !important;
+            display: none !important;
           }
           .auth-form-panel {
-            order: 2 !important;
             flex: 1 1 100% !important;
             max-width: 100% !important;
             padding: 32px 16px !important;
+            min-height: 100vh !important;
           }
           .auth-mobile-header {
-            display: none !important;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 24px;
           }
         }
       `}</style>

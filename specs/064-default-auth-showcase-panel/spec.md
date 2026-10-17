@@ -23,7 +23,7 @@ All legacy Meta-exclusive value pillars (`VALUE_PILLARS`), obsolete headline cop
   - Three hairline-divided feature rows (Clock, 2x2 Grid, Padlock)
   - Platform line (`Facebook · Instagram · TikTok · YouTube · Threads · X`)
   - Trust footer (`Official platform logins · Encrypted end-to-end`)
-- **Acceptance Criteria 1.3**: Zero layout shift, zero console errors, and full responsive stacking on narrow viewports (<1024px).
+- **Acceptance Criteria 1.3**: Zero layout shift, zero console errors, and clean responsive mobile display (showcase panel hidden on viewports <1024px with mobile brand header rendered cleanly above auth card).
 
 ---
 
