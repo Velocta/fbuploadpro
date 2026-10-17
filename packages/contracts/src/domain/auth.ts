@@ -291,3 +291,17 @@ export const AuthSuccessResponseSchema = z.object({
 });
 
 export type AuthSuccessResponse = z.infer<typeof AuthSuccessResponseSchema>;
+
+/**
+ * Evaluates whether new account registrations are enabled.
+ * Defaults to true if the environment variable is not set.
+ * Returns false when set to 'false', '0', 'off', or 'disabled'.
+ */
+export function isSignupEnabled(env?: Record<string, string | undefined>): boolean {
+  const globalEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  const envObj = env ?? globalEnv ?? {};
+  const raw = envObj.NEXT_PUBLIC_SIGNUPS_ENABLED ?? envObj.ENABLE_SIGNUPS ?? 'true';
+  const flag = raw.trim().toLowerCase();
+  return flag !== 'false' && flag !== '0' && flag !== 'off' && flag !== 'disabled';
+}
+

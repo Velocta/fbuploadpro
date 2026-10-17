@@ -219,6 +219,7 @@ gh variable set NEXT_PUBLIC_APP_URL --body "https://app.vinsmokemedia.online"
 gh variable set NEXT_PUBLIC_MARKETING_URL --body "https://vinsmokemedia.online"
 gh variable set NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER --body "+15551234567"
 gh variable set NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE --body "Hi! I need assistance with my FBUploadPro account."
+gh variable set NEXT_PUBLIC_SIGNUPS_ENABLED --body "true"
 ```
 
 ### 5.3 Set GitHub Secrets (Sensitive Credentials)

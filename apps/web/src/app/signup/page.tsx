@@ -10,7 +10,9 @@ import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
-import { validateClientPhoneNumber } from '@fbuploadpro/contracts';
+import { validateClientPhoneNumber, isSignupEnabled } from '@fbuploadpro/contracts';
+import { SignupPausedCard } from '@/components/auth/signup-paused-card';
+import { SignupOtpStep } from '@/components/auth/signup-otp-step';
 
 interface FieldErrors {
   name?: string | undefined;
@@ -21,6 +23,104 @@ interface FieldErrors {
   otp?: string | undefined;
 }
 
+interface SignupDetailsInput {
+  name: string;
+  phone: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export function validateSignupDetails(input: SignupDetailsInput): FieldErrors {
+  const errors: FieldErrors = {};
+
+  if (!input.name.trim()) {
+    errors.name = 'Full name is required.';
+  } else if (input.name.trim().length > 100) {
+    errors.name = 'Full name cannot exceed 100 characters.';
+  }
+
+  const phoneValidation = validateClientPhoneNumber(input.phone);
+  if (!phoneValidation.isValid) {
+    errors.phone = phoneValidation.error || 'Please enter a valid international phone number.';
+  }
+
+  const cleanEmail = input.email.trim().toLowerCase();
+  if (!cleanEmail.includes('@')) {
+    errors.email = 'A valid email address is required.';
+  } else {
+    const domain = cleanEmail.split('@')[1];
+    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+      errors.email = 'Registration is limited to @gmail.com (or @googlemail.com) accounts.';
+    }
+  }
+
+  if (!input.password) {
+    errors.password = 'Password is required.';
+  } else if (input.password.length < 8) {
+    errors.password = 'Password must be at least 8 characters long.';
+  }
+
+  if (!input.confirmPassword) {
+    errors.confirmPassword = 'Please confirm your password.';
+  } else if (input.password !== input.confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
+  }
+
+  return errors;
+}
+
+export function getSignupLayoutMeta(
+  isPaused: boolean,
+  step: 'details' | 'otp',
+  email: string
+): { title: string; description: string } {
+  if (isPaused) {
+    return {
+      title: 'Registration Paused',
+      description: 'We are currently not accepting new account registrations.',
+    };
+  }
+  if (step === 'details') {
+    return {
+      title: 'Create Account',
+      description: 'Start scheduling and auto-publishing Facebook Reels in minutes.',
+    };
+  }
+  return {
+    title: 'Verify Your Email',
+    description: `We've sent a 6-digit confirmation code to ${email}. Enter the code below to activate your account.`,
+  };
+}
+
+export function mapApiFieldErrors(details: unknown): FieldErrors {
+  const mappedErrors: FieldErrors = {};
+  if (!details || typeof details !== 'object') return mappedErrors;
+  for (const [key, msgs] of Object.entries(details as Record<string, unknown>)) {
+    if (Array.isArray(msgs) && msgs.length > 0 && typeof msgs[0] === 'string') {
+      mappedErrors[key as keyof FieldErrors] = msgs[0];
+    }
+  }
+  return mappedErrors;
+}
+
+export function parseInitialQueryParams(search: string) {
+  const params = new URLSearchParams(search);
+  const ret = params.get('returnUrl');
+  const initialStep = params.get('step');
+  const emailParam = params.get('email');
+  const noticeParam = params.get('notice');
+  return {
+    returnUrl: ret ? sanitizeAuthRedirectUrl(ret) : undefined,
+    step: initialStep === 'otp' ? ('otp' as const) : undefined,
+    email: emailParam || undefined,
+    successNotice:
+      noticeParam === 'pending_verification'
+        ? 'We sent a fresh 6-digit verification code. Please confirm your email to complete registration.'
+        : undefined,
+  };
+}
+
 export default function SignupPage() {
   const [step, setStep] = useState<'details' | 'otp'>('details');
   const [name, setName] = useState('');
@@ -28,10 +128,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [otp, setOtp] = useState('');
   const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
   // Field-specific validation errors for inline red border and helper error display
@@ -42,24 +140,12 @@ export default function SignupPage() {
   const [isEmailConflict, setIsEmailConflict] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const ret = params.get('returnUrl');
-      if (ret) {
-        setReturnUrl(sanitizeAuthRedirectUrl(ret));
-      }
-      const initialStep = params.get('step');
-      const emailParam = params.get('email');
-      if (emailParam) {
-        setEmail(emailParam);
-      }
-      if (initialStep === 'otp') {
-        setStep('otp');
-      }
-      if (params.get('notice') === 'pending_verification') {
-        setSuccessNotice('We sent a fresh 6-digit verification code. Please confirm your email to complete registration.');
-      }
-    }
+    if (typeof window === 'undefined') return;
+    const initial = parseInitialQueryParams(window.location.search);
+    if (initial.returnUrl) setReturnUrl(initial.returnUrl);
+    if (initial.email) setEmail(initial.email);
+    if (initial.step) setStep(initial.step);
+    if (initial.successNotice) setSuccessNotice(initial.successNotice);
   }, []);
 
   // Cooldown countdown timer for OTP resend
@@ -93,45 +179,13 @@ export default function SignupPage() {
     setSuccessNotice(null);
     setIsEmailConflict(false);
 
-    const errors: FieldErrors = {};
-
-    // 1. Full name validation
-    if (!name.trim()) {
-      errors.name = 'Full name is required.';
-    } else if (name.trim().length > 100) {
-      errors.name = 'Full name cannot exceed 100 characters.';
-    }
-
-    // 2. Comprehensive phone validation with libphonenumber-js
-    const phoneValidation = validateClientPhoneNumber(phone);
-    if (!phoneValidation.isValid) {
-      errors.phone = phoneValidation.error || 'Please enter a valid international phone number.';
-    }
-
-    // 3. Gmail restriction & validation
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail.includes('@')) {
-      errors.email = 'A valid email address is required.';
-    } else {
-      const domain = cleanEmail.split('@')[1];
-      if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
-        errors.email = 'Registration is limited to @gmail.com (or @googlemail.com) accounts.';
-      }
-    }
-
-    // 4. Password validation
-    if (!password) {
-      errors.password = 'Password is required.';
-    } else if (password.length < 8) {
-      errors.password = 'Password must be at least 8 characters long.';
-    }
-
-    // 5. Confirm password validation
-    if (!confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password.';
-    } else if (password !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
-    }
+    const errors = validateSignupDetails({
+      name,
+      phone,
+      email,
+      password,
+      confirmPassword,
+    });
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -157,12 +211,7 @@ export default function SignupPage() {
 
       if (!res.ok) {
         if (res.status === 400 && data.details) {
-          const mappedErrors: FieldErrors = {};
-          for (const [key, msgs] of Object.entries(data.details)) {
-            if (Array.isArray(msgs) && msgs.length > 0 && typeof msgs[0] === 'string') {
-              mappedErrors[key as keyof FieldErrors] = msgs[0];
-            }
-          }
+          const mappedErrors = mapApiFieldErrors(data.details);
           if (Object.keys(mappedErrors).length > 0) {
             setFieldErrors(mappedErrors);
             setIsSubmitting(false);
@@ -206,7 +255,6 @@ export default function SignupPage() {
       if (data.requiresOtp) {
         setStep('otp');
         setResendCooldown(data.cooldownSecondsRemaining ?? 60);
-        setOtp('');
         setFieldErrors({});
         setIsSubmitting(false);
         return;
@@ -221,109 +269,44 @@ export default function SignupPage() {
     }
   };
 
-  const handleOtpSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setGeneralError(null);
-    setSuccessNotice(null);
+  const signupsAllowed = isSignupEnabled();
+  const isPaused = !signupsAllowed && step !== 'otp';
+  const layoutMeta = getSignupLayoutMeta(isPaused, step, email);
 
-    const cleanOtp = otp.replace(/\D/g, '').trim();
-    if (cleanOtp.length !== 6) {
-      setFieldErrors({ otp: 'Please enter the complete 6-digit verification code.' });
-      return;
-    }
+  const signInFooter = (
+    <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+      Already have an account?{' '}
+      <Link
+        href={returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'}
+        style={{
+          color: PALETTE.primary,
+          textDecoration: 'none',
+          fontWeight: TYPOGRAPHY.weights.semibold,
+        }}
+      >
+        Sign in
+      </Link>
+    </span>
+  );
 
-    setFieldErrors({});
-    setIsSubmitting(true);
+  if (isPaused) {
+    return (
+      <AuthSplitLayout
+        title={layoutMeta.title}
+        description={layoutMeta.description}
+        footer={signInFooter}
+      >
+        <SignupPausedCard />
+      </AuthSplitLayout>
+    );
+  }
 
-    try {
-      const res = await fetch('/api/auth/signup/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          otp: cleanOtp,
-          returnUrl: returnUrl ? sanitizeAuthRedirectUrl(returnUrl) : undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setFieldErrors({
-          otp: sanitizeAuthErrorMessage(data.error, 'Invalid or expired verification code. Please try again.'),
-        });
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (data.redirectUrl) {
-        completeAuthRedirect(data.redirectUrl, data.user);
-      }
-    } catch {
-      setGeneralError('Unable to verify code at this moment. Please check your connection and try again.');
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0 || isResending) return;
-
-    setGeneralError(null);
-    setSuccessNotice(null);
-    setFieldErrors({});
-    setIsResending(true);
-
-    try {
-      const res = await fetch('/api/auth/signup/resend-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setGeneralError(sanitizeAuthErrorMessage(data.error, 'Unable to resend code right now.'));
-        if (data.cooldownSecondsRemaining) {
-          setResendCooldown(data.cooldownSecondsRemaining);
-        }
-        setIsResending(false);
-        return;
-      }
-
-      setSuccessNotice('A fresh 6-digit verification code has been dispatched to your email.');
-      setResendCooldown(60);
-      setIsResending(false);
-    } catch {
-      setGeneralError('Failed to resend verification code. Please check your connection.');
-      setIsResending(false);
-    }
-  };
-
-  return (
-    <AuthSplitLayout
-      title={step === 'details' ? 'Create Account' : 'Verify Your Email'}
-      description={
-        step === 'details'
-          ? 'Start scheduling and auto-publishing Facebook Reels in minutes.'
-          : `We've sent a 6-digit confirmation code to ${email}. Enter the code below to activate your account.`
-      }
-      footer={
-        step === 'details' ? (
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
-            Already have an account?{' '}
-            <Link
-              href={returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'}
-              style={{
-                color: PALETTE.primary,
-                textDecoration: 'none',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-              }}
-            >
-              Sign in
-            </Link>
-          </span>
-        ) : (
+  if (step === 'otp') {
+    return (
+      <AuthSplitLayout
+        title={layoutMeta.title}
+        description={layoutMeta.description}
+        footer={
           <button
             type="button"
             onClick={() => {
@@ -347,8 +330,28 @@ export default function SignupPage() {
           >
             Need to change your details? Return to form
           </button>
-        )
-      }
+        }
+      >
+        <SignupOtpStep
+          email={email}
+          returnUrl={returnUrl}
+          initialCooldown={resendCooldown}
+          onBack={() => {
+            setStep('details');
+            setGeneralError(null);
+            setSuccessNotice(null);
+            setFieldErrors({});
+          }}
+        />
+      </AuthSplitLayout>
+    );
+  }
+
+  return (
+    <AuthSplitLayout
+      title={layoutMeta.title}
+      description={layoutMeta.description}
+      footer={signInFooter}
     >
       {successNotice && (
         <div style={{ marginBottom: SPACING.lg }}>
@@ -361,21 +364,20 @@ export default function SignupPage() {
         </div>
       )}
 
-      {step === 'details' ? (
-        <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          <Input
-            label="Full Name"
-            placeholder="Jane Doe"
-            autoComplete="name"
-            value={name}
-            error={fieldErrors.name}
-            onChange={(e) => {
-              setName(e.target.value);
-              clearFieldError('name');
-            }}
-            disabled={isSubmitting}
-            required
-          />
+      <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <Input
+          label="Full Name"
+          placeholder="Jane Doe"
+          autoComplete="name"
+          value={name}
+          error={fieldErrors.name}
+          onChange={(e) => {
+            setName(e.target.value);
+            clearFieldError('name');
+          }}
+          disabled={isSubmitting}
+          required
+        />
 
           <Input
             label="Phone Number"
@@ -526,143 +528,6 @@ export default function SignupPage() {
             </a>.
           </p>
         </form>
-      ) : (
-        <form onSubmit={handleOtpSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '10px 14px',
-              backgroundColor: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-              borderRadius: '8px',
-            }}
-          >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim, #6b7280)' }}>
-                Verification code sent to
-              </span>
-              <span style={{ fontSize: '0.875rem', fontWeight: TYPOGRAPHY.weights.medium, color: 'var(--text-main, #f3f4f6)' }}>
-                {email}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setStep('details');
-                setGeneralError(null);
-                setSuccessNotice(null);
-                setFieldErrors({});
-              }}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: PALETTE.primary,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                padding: '4px 8px',
-                textDecoration: 'underline',
-              }}
-            >
-              Wrong email? Edit
-            </button>
-          </div>
-
-          <div>
-            <Input
-              label="6-Digit Verification Code"
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={6}
-              placeholder="••••••"
-              autoFocus
-              value={otp}
-              error={fieldErrors.otp}
-              onChange={(e) => {
-                setOtp(e.target.value.replace(/\D/g, '').slice(0, 6));
-                clearFieldError('otp');
-              }}
-              disabled={isSubmitting}
-              required
-              helperText="Check your spam folder if you do not see the email in your inbox."
-              style={{
-                textAlign: 'center',
-                letterSpacing: '0.4em',
-                fontSize: '1.25rem',
-                fontWeight: TYPOGRAPHY.weights.bold,
-              }}
-            />
-            {fieldErrors.otp && fieldErrors.otp.toLowerCase().includes('expired') && (
-              <div style={{ marginTop: '8px', textAlign: 'center' }}>
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={isResending || resendCooldown > 0}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: PALETTE.primary,
-                    fontSize: '0.8125rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    cursor: 'pointer',
-                    padding: 0,
-                    textDecoration: 'underline',
-                  }}
-                >
-                  Send fresh code
-                </button>
-              </div>
-            )}
-          </div>
-
-          <FormErrorCallout message={generalError} />
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            isLoading={isSubmitting}
-            style={{ width: '100%' }}
-          >
-            Verify & Activate Account
-          </Button>
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              paddingTop: SPACING.xs,
-            }}
-          >
-            {resendCooldown > 0 ? (
-              <span style={{ fontSize: '0.8125rem', color: 'var(--text-dim, #6b7280)' }}>
-                Resend code in {resendCooldown}s
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={handleResendOtp}
-                disabled={isResending}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: PALETTE.primary,
-                  fontSize: '0.8125rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  cursor: 'pointer',
-                  padding: 0,
-                }}
-              >
-                {isResending ? 'Sending...' : 'Resend verification code'}
-              </button>
-            )}
-          </div>
-        </form>
-      )}
     </AuthSplitLayout>
   );
 }
