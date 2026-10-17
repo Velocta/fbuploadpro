@@ -72,11 +72,10 @@ Navigate to **Authentication** $\rightarrow$ **SMTP Settings**:
    - **Port**: `587`
    - **Username** & **Password**: Your SMTP API credentials.
 3. In **Authentication** $\rightarrow$ **Email Templates**:
-   - Ensure the confirmation and magic link templates include the 6-digit numeric token:
-     ```html
-     <h2>Your Verification Code</h2>
-     <p>Your one-time authentication code is: <strong>{{ .Token }}</strong></p>
-     ```
+   - Configure the production email templates located in [`docs/email-templates/`](email-templates/README.md):
+     - **Confirm signup**: Use [`docs/email-templates/otp-verification.html`](email-templates/otp-verification.html) with subject `{{ .Token }} is your FBUploadPro verification code`.
+     - **Reset password**: Use [`docs/email-templates/forgot-email-otp.html`](email-templates/forgot-email-otp.html) with subject `{{ .Token }} is your FBUploadPro password reset code`.
+   - See [`docs/email-templates/README.md`](email-templates/README.md) for full configuration instructions and plain-text fallbacks.
 
 ### 1.5 Connect Supabase GitHub Integration (Automated Migrations)
 1. In Supabase Dashboard, navigate to **Project Settings** $\rightarrow$ **Integrations** $\rightarrow$ **GitHub**.
