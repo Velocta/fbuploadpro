@@ -25,6 +25,13 @@ import {
   type UploadBatchState,
 } from './upload-queue-banner';
 import { MediaAssetCard } from './media-asset-card';
+import { MediaFolderRail } from './media-folder-rail';
+import { MediaInspectorPanel } from './media-inspector-panel';
+import {
+  type SmartCollectionKey,
+  filterMediaByCollection,
+  computeCollectionCounts,
+} from './smart-collections';
 import { MediaTableRow } from './media-table-row';
 import { MediaPreviewModal, type CapturedVideoFrame } from './media-preview-modal';
 import { BatchActionBar } from './batch-action-bar';
@@ -450,6 +457,10 @@ export function MediaLibraryExplorer({
     return null;
   });
   const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
+  const [activeSmartCollection, setActiveSmartCollection] =
+    useState<SmartCollectionKey>('all');
+  const [isFolderRailCollapsed, setIsFolderRailCollapsed] = useState(false);
+  const [inspectedMediaId, setInspectedMediaId] = useState<string | null>(null);
   const lastSelectedIdRef = useRef<string | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -796,7 +807,7 @@ export function MediaLibraryExplorer({
     })
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 
-  const displayedMediaItems = hasInitialData
+  const baseDisplayed = hasInitialData
     ? filterAndSortMediaItems(mediaItems, {
         currentFolderId,
         mediaTypeFilter,
@@ -806,6 +817,21 @@ export function MediaLibraryExplorer({
         sortOption,
       })
     : mediaItems;
+
+  const displayedMediaItems = filterMediaByCollection(
+    baseDisplayed,
+    activeSmartCollection
+  );
+
+  const smartCounts = computeCollectionCounts(mediaItems);
+  const inspectedItem =
+    mediaItems.find((m) => m.id === inspectedMediaId) ??
+    (selectedIds.length === 1
+      ? mediaItems.find((m) => m.id === selectedIds[0]) ?? null
+      : null);
+  const selectedMediaObjects = mediaItems.filter((m) =>
+    selectedIds.includes(m.id)
+  );
 
   const hasMoreMedia = nextCursor !== null || displayedMediaItems.length < totalMediaCount;
 
@@ -1485,38 +1511,16 @@ export function MediaLibraryExplorer({
   return (
     <div
       data-testid="media-library-explorer"
-      onDragOver={(e) => {
-        e.preventDefault();
-        if (!isDropzoneActive) {
-          setIsDropzoneActive(true);
-        }
-      }}
-      onDragLeave={(e) => {
-        if (e.currentTarget === e.target) {
-          setIsDropzoneActive(false);
-        }
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDropzoneActive(false);
-        void (async () => {
-          const entries = await extractDroppedFileEntries(e.dataTransfer);
-          if (entries.length > 0) {
-            await handleStartUploadBatch(entries);
-          }
-        })();
-      }}
       style={{
         width: '100%',
-        maxWidth: '1280px',
-        margin: '0 auto',
-        padding: SPACING.xl,
+        minHeight: 'calc(100vh - 64px)',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'stretch',
+        backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
         boxSizing: 'border-box',
-        border: isDropzoneActive
-          ? `1px dashed ${PALETTE.primary}`
-          : '1px solid transparent',
-        borderRadius: RADII.md,
-        transition: 'border-color 0.15s ease',
+        overflow: 'hidden',
+        position: 'relative',
       }}
     >
       {/* Hidden File & Directory Picker Inputs */}
@@ -1555,6 +1559,75 @@ export function MediaLibraryExplorer({
         }}
         style={{ display: 'none' }}
       />
+
+      {/* 1. Left Folder Rail (Sidebar) */}
+      <MediaFolderRail
+        folders={folders}
+        currentFolderId={currentFolderId}
+        activeSmartCollection={activeSmartCollection}
+        counts={smartCounts}
+        isCollapsed={isFolderRailCollapsed}
+        onToggleCollapse={() => setIsFolderRailCollapsed((prev) => !prev)}
+        onSelectCollection={(col) => setActiveSmartCollection(col)}
+        onNavigateFolder={handleNavigateFolder}
+        onCreateFolder={(parentId) => {
+          setFolderFormName('');
+          setFolderFormError(null);
+          setFolderModalState({ mode: 'create', parentId });
+        }}
+        onRenameFolder={(f) => {
+          setFolderFormName(f.name);
+          setFolderFormError(null);
+          setFolderModalState({ mode: 'rename', folder: f });
+        }}
+        onMoveFolder={(f) => {
+          setSelectedMoveDestinationId(f.parentId ?? null);
+          setMoveModalState({ targetType: 'folder', folder: f });
+        }}
+        onDeleteFolder={(f) => setDeleteFolderTarget(f)}
+        onDropMediaOnFolder={(mediaId, targetFolderId) =>
+          void handleDropOnTargetFolder(mediaId, targetFolderId)
+        }
+      />
+
+      {/* 2. Fluid Center Media Stage */}
+      <main
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!isDropzoneActive) {
+            setIsDropzoneActive(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) {
+            setIsDropzoneActive(false);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDropzoneActive(false);
+          void (async () => {
+            const entries = await extractDroppedFileEntries(e.dataTransfer);
+            if (entries.length > 0) {
+              await handleStartUploadBatch(entries);
+            }
+          })();
+        }}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          overflowY: 'auto',
+          padding: SPACING.lg,
+          boxSizing: 'border-box',
+          border: isDropzoneActive
+            ? `1px dashed ${PALETTE.primary}`
+            : '1px solid transparent',
+          transition: 'border-color 0.15s ease',
+        }}
+      >
 
       {/* Page Header */}
       <header
@@ -1788,7 +1861,7 @@ export function MediaLibraryExplorer({
         }
       />
 
-      {/* Top Breadcrumb Path Bar (Google Drive-Style) */}
+      {/* Top Breadcrumb Path Bar */}
       <nav
         data-testid="folder-breadcrumbs"
         aria-label="Folder path navigation"
@@ -1796,12 +1869,11 @@ export function MediaLibraryExplorer({
           display: 'flex',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: SPACING.xs,
-          padding: `${SPACING.sm} ${SPACING.md}`,
+          gap: '6px',
+          padding: 0,
           marginBottom: SPACING.md,
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
+          background: 'transparent',
+          border: 'none',
         }}
       >
         <button
@@ -2734,6 +2806,40 @@ export function MediaLibraryExplorer({
           </>
         )}
       </section>
+      </main>
+
+      {/* 3. Right Inspector Panel */}
+      <MediaInspectorPanel
+        item={inspectedItem}
+        selectedCount={selectedIds.length}
+        selectedItems={selectedMediaObjects}
+        folders={folders}
+        isOpen={Boolean(inspectedItem || selectedIds.length > 1)}
+        onClose={() => {
+          setInspectedMediaId(null);
+          setSelectedIds([]);
+        }}
+        onPreview={(target) => setPreviewItem(target)}
+        onUpdateCaption={(mediaId, captionText) =>
+          handleUpdateMediaItem(mediaId, { captionText })
+        }
+        onSchedule={(target) => handleScheduleMedia(target)}
+        onMove={(target) => {
+          setSelectedMoveDestinationId(target.folderId ?? null);
+          setMoveModalState({ targetType: 'media', mediaItem: target });
+        }}
+        onDelete={(target) => void handleDeleteMediaItem(target.id)}
+        onBatchMove={() => {
+          setSelectedMoveDestinationId(currentFolderId);
+          setMoveModalState({ targetType: 'batch' });
+        }}
+        onBatchCaption={() => {
+          setBatchCaptionDraft('');
+          setBatchCaptionModalOpen(true);
+        }}
+        onBatchSchedule={handleBatchSchedule}
+        onBatchDelete={() => void handleBatchDelete()}
+      />
 
       {/* Media Preview & Caption Modal */}
       {(() => {
