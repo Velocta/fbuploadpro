@@ -41,7 +41,7 @@ describe('Signup Paused Notice UI (Spec 064)', () => {
     it('renders WhatsApp support link when support number is configured', () => {
       const { hasText, html } = render(<SignupPausedCard />);
 
-      expect(hasText('Contact Support')).toBe(true);
+      expect(hasText('Contact customer support')).toBe(true);
       expect(html).toContain('https://wa.me/15551234567');
       expect(html).toContain('target="_blank"');
       expect(html).toContain('rel="noopener noreferrer"');
@@ -51,7 +51,7 @@ describe('Signup Paused Notice UI (Spec 064)', () => {
       delete process.env.NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER;
       const { hasText, html } = render(<SignupPausedCard />);
 
-      expect(hasText('Contact Support')).toBe(false);
+      expect(hasText('Contact customer support')).toBe(false);
       expect(html).not.toContain('https://wa.me');
     });
   });
