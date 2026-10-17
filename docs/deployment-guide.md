@@ -281,7 +281,7 @@ Verify the worker deployment:
 ```bash
 gh run list --workflow=deploy-worker.yml --limit 1
 ```
-*Result*: Cloudflare Wrangler deploys `apps/worker`, uploads `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `FB_ENCRYPTION_MASTER_KEY` secrets, and activates crons at `* * * * *` and `0 2 * * *`.
+*Result*: Cloudflare Wrangler deploys `apps/worker`, uploads `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `TOKEN_ENCRYPTION_KEY` secrets, and activates crons at `* * * * *` and `0 2 * * *`.
 
 ### 6.3 Deploy the Web Application on Vercel
 Because Vercel is linked to your GitHub repository:

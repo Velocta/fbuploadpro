@@ -424,7 +424,7 @@ fbuploadpro/
 * **Per-Workspace Isolation**: Workspaces configure their own Facebook App credentials before connecting Facebook accounts or publishing pages.
 * **Security & Encryption**:
   * `fb_app_id` stored in cleartext.
-  * `fb_app_secret` symmetrically encrypted at rest via AES-256-GCM using `FB_ENCRYPTION_MASTER_KEY` / `TOKEN_ENCRYPTION_KEY`.
+  * `fb_app_secret` symmetrically encrypted at rest via AES-256-GCM using `TOKEN_ENCRYPTION_KEY` (with legacy fallback to `FB_ENCRYPTION_MASTER_KEY`).
   * Raw secret is NEVER returned over client-facing APIs (`hasSecret: boolean`).
   * Secret field in settings UI is masked (`••••••••••••••••••••••••`) with a show/hide toggle.
 * **Two-State Minimalist UX (Spec 061)**:

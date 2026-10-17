@@ -11,6 +11,7 @@ import type { ClaimedQueueItem } from '@fbuploadpro/contracts';
 
 export interface Env {
   ENVIRONMENT?: string;
+  TOKEN_ENCRYPTION_KEY?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
   MASTER_ENCRYPTION_KEY?: string;
   FB_GRAPH_API_URL?: string;
@@ -181,9 +182,9 @@ export async function handleScheduled(
   _ctx?: ExecutionContext,
   options?: ScheduledOptions
 ): Promise<void> {
-  const masterKey = env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
+  const masterKey = env.TOKEN_ENCRYPTION_KEY || env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
   if (!masterKey) {
-    console.warn('[Scheduled] Encryption master key is not configured; skipping cycle');
+    console.warn('[Scheduled] TOKEN_ENCRYPTION_KEY is not configured; skipping cycle');
     return;
   }
 
@@ -231,9 +232,9 @@ export async function handleQueueBatch(
   env: Env,
   _ctx?: ExecutionContext
 ): Promise<void> {
-  const masterKey = env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
+  const masterKey = env.TOKEN_ENCRYPTION_KEY || env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
   if (!masterKey) {
-    console.error('[QueueConsumer] Encryption master key is missing');
+    console.error('[QueueConsumer] TOKEN_ENCRYPTION_KEY is missing');
     return;
   }
 

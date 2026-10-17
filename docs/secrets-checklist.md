@@ -15,8 +15,7 @@ This document details every required secret, environment variable, and credentia
 | `NEXT_PUBLIC_APP_URL` | SaaS portal gateway (`https://app.fbuploadpro.com`) | ✅ | ❌ | ✅ | ❌ |
 | `NEXT_PUBLIC_MARKETING_URL` | Marketing site URL (`https://fbuploadpro.com`) | ✅ | ❌ | ✅ | ❌ |
 | `SESSION_SECRET` | String, $\ge 32$ chars | ✅ | ❌ | ✅ | ❌ |
-| `TOKEN_ENCRYPTION_KEY` | Exactly 64 hex chars (32 bytes) | ✅ | ❌ | ✅ | ❌ |
-| `FB_ENCRYPTION_MASTER_KEY` | Identical to `TOKEN_ENCRYPTION_KEY` | ❌ | ✅ | ❌ | ❌ |
+| `TOKEN_ENCRYPTION_KEY` | Exactly 64 hex chars (32 bytes) | ✅ | ✅ | ✅ | ✅ |
 | `R2_ACCOUNT_ID` | Cloudflare Account Hex ID | ✅ | ❌ | ✅ | ❌ |
 | `R2_ACCESS_KEY_ID` | R2 S3 Access Key ID | ✅ | ❌ | ✅ | ❌ |
 | `R2_SECRET_ACCESS_KEY` | R2 S3 Secret Access Key | ✅ | ❌ | ✅ | ❌ |
@@ -60,10 +59,9 @@ FBUploadPro operates on a pure HTTPS REST database architecture via `@supabase/s
   openssl rand -base64 32
   ```
 
-#### `TOKEN_ENCRYPTION_KEY` & `FB_ENCRYPTION_MASTER_KEY`
-* **Purpose**: Symmetric key used for AES-256-GCM authenticated encryption of sensitive Facebook Page OAuth tokens stored in PostgreSQL.
+#### `TOKEN_ENCRYPTION_KEY`
+* **Purpose**: Unified 256-bit symmetric key used for AES-256-GCM authenticated encryption and decryption of sensitive Facebook Page OAuth tokens stored in PostgreSQL across both the Web App (`apps/web`) and the Edge Worker (`apps/worker`).
 * **Format**: **Strictly 64 hexadecimal characters** (representing 32 raw bytes / 256 bits).
-* **Important**: `TOKEN_ENCRYPTION_KEY` (Web App) and `FB_ENCRYPTION_MASTER_KEY` (Worker) **must match exactly** so the worker can decrypt tokens claimed from the database during scheduled dispatch cycles.
 * **Generation Command**:
   ```bash
   openssl rand -hex 32
@@ -139,11 +137,11 @@ Go to **GitHub Repo** → **Settings** → **Secrets and variables** → **Actio
 - *(If deploying Next.js to Vercel)*: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
 
 ### 2. In Cloudflare Workers (Production Worker)
-Secrets are automatically injected during deployment via [`.github/workflows/deploy-worker.yml`](../.github/workflows/deploy-worker.yml). The workflow reads `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `TOKEN_ENCRYPTION_KEY` directly from your GitHub Repository Secrets and sets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `FB_ENCRYPTION_MASTER_KEY` on the worker automatically using Wrangler.
+Secrets are automatically injected during deployment via [`.github/workflows/deploy-worker.yml`](../.github/workflows/deploy-worker.yml). The workflow reads `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `TOKEN_ENCRYPTION_KEY` directly from your GitHub Repository Secrets and sets `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `TOKEN_ENCRYPTION_KEY` on the worker automatically using Wrangler.
 
 You do **not** need to manually configure secrets in the Cloudflare Dashboard. If manual CLI injection is ever needed for local testing:
 ```bash
-npx wrangler secret put FB_ENCRYPTION_MASTER_KEY
+npx wrangler secret put TOKEN_ENCRYPTION_KEY
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 ```
