@@ -31,7 +31,11 @@ import {
   formatDuration,
 } from '@/components/media/media-asset-card';
 import { MediaTableRow } from '@/components/media/media-table-row';
-import { MediaPreviewModal, type CapturedVideoFrame } from '@/components/media/media-preview-modal';
+import {
+  MediaPreviewModal,
+  captureVideoFrameAsWebp,
+  type CapturedVideoFrame,
+} from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
 import { MediaAssetTile } from '@/components/media/media-asset-tile';
 import { MediaFolderRail } from '@/components/media/media-folder-rail';
@@ -1279,16 +1283,17 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
   it('Spec 066 US3: filters media by smart collection (Uncaptioned drafts) and computes dynamic collection counts', () => {
     const counts = computeCollectionCounts(SAMPLE_MEDIA_ITEMS);
     expect(counts.all).toBe(SAMPLE_MEDIA_ITEMS.length);
-    expect(counts.video).toBe(1);
-    expect(counts.image).toBe(2);
+    expect(counts.video).toBe(2);
+    expect(counts.image).toBe(1);
 
     const videoOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'video');
-    expect(videoOnly.length).toBe(1);
+    expect(videoOnly.length).toBe(2);
     expect(videoOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[0]!.id);
+    expect(videoOnly[1]!.id).toBe(SAMPLE_MEDIA_ITEMS[2]!.id);
 
     const uncaptionedOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'uncaptioned');
     expect(uncaptionedOnly.length).toBe(1);
-    expect(uncaptionedOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[2]!.id);
+    expect(uncaptionedOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[1]!.id);
   });
 
   it('Spec 066 US5: transitions MediaInspectorPanel to Batch Mode when 2+ assets are selected', () => {

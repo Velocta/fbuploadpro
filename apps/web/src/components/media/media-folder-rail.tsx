@@ -158,9 +158,6 @@ export function MediaFolderRail({
     );
   }
 
-  // Build root and subfolder hierarchy
-  const rootFolders = folders.filter((f) => !f.parentId);
-
   return (
     <aside
       data-testid="media-folder-rail"

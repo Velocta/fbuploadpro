@@ -44,8 +44,8 @@ export function MediaAssetCard({
   onToggleSelect,
   onPreview,
   onUpdateCaption,
-  onMoveRequest,
-  onDeleteRequest,
+  onMoveRequest: _onMoveRequest,
+  onDeleteRequest: _onDeleteRequest,
   onScheduleRequest,
   onDragStartMedia,
 }: Readonly<MediaAssetCardProps>) {
