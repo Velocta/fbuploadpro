@@ -49,6 +49,7 @@ export function AuthSplitLayout({
     <section
       className={`auth-showcase-panel${isFormLeft ? ' auth-showcase-right' : ''}`}
       aria-label="FBUploadPro Showcase"
+    >
       {showcase ?? <AuthShowcasePanel />}
     </section>
   );
