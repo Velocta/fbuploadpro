@@ -24,6 +24,8 @@ This document details every required secret, environment variable, and credentia
 | `R2_PUBLIC_URL` | HTTPS CDN / custom domain | ✅ | ❌ | ✅ | ❌ |
 | `CLOUDFLARE_API_TOKEN` | Bearer Token (Workers + R2) | ❌ | ❌ | ❌ | ✅ |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Account Hex ID | ❌ | ❌ | ❌ | ✅ |
+| `NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER` | WhatsApp Phone (E.164, e.g. `+15551234567`) | ✅ | ❌ | ✅ | ✅ |
+| `NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE` | Default support greeting string | ✅ | ❌ | ✅ | ✅ |
 
 ---
 
