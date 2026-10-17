@@ -8,12 +8,16 @@ describe('Next.js Edge Middleware Subdomain Routing (User Story 1)', () => {
     ['http://www.localhost:3000/about', 'www.localhost:3000', 'www apex requests'],
     ['http://client.localhost:3000/api/health', 'client.localhost:3000', 'system paths like /api/health'],
     ['http://admin.localhost:3000/login', 'admin.localhost:3000', 'reserved subdomains like admin'],
+    ['http://acme.localhost:3000/icon', 'acme.localhost:3000', 'metadata icon route on tenant subdomain'],
+    ['http://acme.localhost:3000/apple-icon', 'acme.localhost:3000', 'metadata apple-icon route on tenant subdomain'],
+    ['http://acme.localhost:3000/favicon.ico', 'acme.localhost:3000', 'root favicon on tenant subdomain'],
   ])('passes %s (%s) through without tenant rewriting', async (url, host) => {
     const req = new NextRequest(url, {
       headers: { host },
     });
     const res = await middleware(req);
     expect(res.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(res.status).toBe(200);
   });
 
   it('rewrites valid tenant subdomain request to /tenant/[subdomain]/* and injects headers', async () => {
@@ -58,5 +62,21 @@ describe('Next.js Edge Middleware Subdomain Routing (User Story 1)', () => {
     const res = await middleware(req);
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toContain('/login');
+  });
+
+  it('allows unauthenticated favicon and icon requests on tenant subdomains without redirecting to /login', async () => {
+    const iconReq = new NextRequest('http://client.localhost:3000/icon?v=1', {
+      headers: { host: 'client.localhost:3000' },
+    });
+    const iconRes = await middleware(iconReq);
+    expect(iconRes.status).toBe(200);
+    expect(iconRes.headers.get('location')).toBeNull();
+
+    const faviconReq = new NextRequest('http://client.localhost:3000/favicon.ico', {
+      headers: { host: 'client.localhost:3000' },
+    });
+    const faviconRes = await middleware(faviconReq);
+    expect(faviconRes.status).toBe(200);
+    expect(faviconRes.headers.get('location')).toBeNull();
   });
 });
