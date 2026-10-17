@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { DesktopTitleBar } from '@/components/desktop';
+import { WhatsAppSupportButton } from '@/components/support';
 
 export const metadata: Metadata = {
   title: 'FBUploadPro',
@@ -40,6 +41,7 @@ export default function RootLayout({
       <body>
         <DesktopTitleBar />
         <main>{children}</main>
+        <WhatsAppSupportButton />
       </body>
     </html>
   );
