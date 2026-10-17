@@ -230,6 +230,9 @@ gh secret set VERCEL_TOKEN
 gh secret set VERCEL_ORG_ID
 gh secret set VERCEL_PROJECT_ID
 
+# Platform Controls
+gh secret set NEXT_PUBLIC_SIGNUPS_ENABLED --body "true"
+
 # Cloudflare Workers & Deployment
 gh secret set CLOUDFLARE_API_TOKEN
 gh secret set CLOUDFLARE_ACCOUNT_ID

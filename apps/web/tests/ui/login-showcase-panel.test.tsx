@@ -113,8 +113,8 @@ describe('Login Showcase Panel Redesign (Spec 061)', () => {
     expect(hasText('Every platform, one dashboard')).toBe(true);
     expect(hasText('Your accounts stay yours')).toBe(true);
 
-    // Responsive styles check: showcase stacks above form on narrow screens
-    expect(html).toContain('order: 1 !important');
-    expect(html).toContain('order: 2 !important');
+    // Responsive styles check: showcase panel is hidden on mobile displays, mobile header shown
+    expect(html).toContain('display: none !important');
+    expect(html).toContain('.auth-mobile-header');
   });
 });

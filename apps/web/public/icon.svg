@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <!-- SQUIRCLE BRAND CONTAINER (--surface-panel: #0c0d10, --border-hairline: #2b323c): High-contrast backing for Light & Dark browser tabs -->
+  <rect width="64" height="64" rx="14" fill="#0c0d10"/>
+  <rect x="0.75" y="0.75" width="62.5" height="62.5" rx="13.25" stroke="#2b323c" stroke-width="1.5"/>
+
   <!-- PRIMARY GOLD (--color-primary: #fad734): Unified Ascending Upload Arrow + "F" Crown & Spine -->
   <path d="M24 11L12 23L17 28L20 25V51L28 45V23H45L53 15H28L24 11Z" fill="#fad734"/>
 

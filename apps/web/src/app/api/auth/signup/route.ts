@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { SignupRequestSchema } from '@fbuploadpro/contracts';
+import { SignupRequestSchema, isSignupEnabled } from '@fbuploadpro/contracts';
 import { signUpTenantUser } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
+    // 0. Server-side registration pause guard
+    if (!isSignupEnabled()) {
+      return NextResponse.json(
+        {
+          error: 'Account registration is temporarily paused. Please check back shortly or sign in to your existing account.',
+        },
+        { status: 403 }
+      );
+    }
+
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 signup OTP requests per 60 seconds)
