@@ -92,6 +92,34 @@ export function getSignupLayoutMeta(
   };
 }
 
+export function mapApiFieldErrors(details: unknown): FieldErrors {
+  const mappedErrors: FieldErrors = {};
+  if (!details || typeof details !== 'object') return mappedErrors;
+  for (const [key, msgs] of Object.entries(details as Record<string, unknown>)) {
+    if (Array.isArray(msgs) && msgs.length > 0 && typeof msgs[0] === 'string') {
+      mappedErrors[key as keyof FieldErrors] = msgs[0];
+    }
+  }
+  return mappedErrors;
+}
+
+export function parseInitialQueryParams(search: string) {
+  const params = new URLSearchParams(search);
+  const ret = params.get('returnUrl');
+  const initialStep = params.get('step');
+  const emailParam = params.get('email');
+  const noticeParam = params.get('notice');
+  return {
+    returnUrl: ret ? sanitizeAuthRedirectUrl(ret) : undefined,
+    step: initialStep === 'otp' ? ('otp' as const) : undefined,
+    email: emailParam || undefined,
+    successNotice:
+      noticeParam === 'pending_verification'
+        ? 'We sent a fresh 6-digit verification code. Please confirm your email to complete registration.'
+        : undefined,
+  };
+}
+
 export default function SignupPage() {
   const [step, setStep] = useState<'details' | 'otp'>('details');
   const [name, setName] = useState('');
@@ -113,24 +141,12 @@ export default function SignupPage() {
   const [isEmailConflict, setIsEmailConflict] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const ret = params.get('returnUrl');
-      if (ret) {
-        setReturnUrl(sanitizeAuthRedirectUrl(ret));
-      }
-      const initialStep = params.get('step');
-      const emailParam = params.get('email');
-      if (emailParam) {
-        setEmail(emailParam);
-      }
-      if (initialStep === 'otp') {
-        setStep('otp');
-      }
-      if (params.get('notice') === 'pending_verification') {
-        setSuccessNotice('We sent a fresh 6-digit verification code. Please confirm your email to complete registration.');
-      }
-    }
+    if (typeof window === 'undefined') return;
+    const initial = parseInitialQueryParams(window.location.search);
+    if (initial.returnUrl) setReturnUrl(initial.returnUrl);
+    if (initial.email) setEmail(initial.email);
+    if (initial.step) setStep(initial.step);
+    if (initial.successNotice) setSuccessNotice(initial.successNotice);
   }, []);
 
   // Cooldown countdown timer for OTP resend
@@ -196,12 +212,7 @@ export default function SignupPage() {
 
       if (!res.ok) {
         if (res.status === 400 && data.details) {
-          const mappedErrors: FieldErrors = {};
-          for (const [key, msgs] of Object.entries(data.details)) {
-            if (Array.isArray(msgs) && msgs.length > 0 && typeof msgs[0] === 'string') {
-              mappedErrors[key as keyof FieldErrors] = msgs[0];
-            }
-          }
+          const mappedErrors = mapApiFieldErrors(data.details);
           if (Object.keys(mappedErrors).length > 0) {
             setFieldErrors(mappedErrors);
             setIsSubmitting(false);
