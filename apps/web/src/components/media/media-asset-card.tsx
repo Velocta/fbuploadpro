@@ -113,10 +113,9 @@ export function MediaAssetCard({
       }}
     >
       {/* Visual Thumbnail Surface */}
-      <button
-        type="button"
+      <div
         data-testid={`media-thumbnail-surface-${item.id}`}
-        onClick={() => onPreview?.(item)}
+        onDoubleClick={() => onPreview?.(item)}
         style={{
           position: 'relative',
           width: '100%',
@@ -133,8 +132,6 @@ export function MediaAssetCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: 0,
-          cursor: 'pointer',
         }}
       >
         {isHoverPlaying && isVideo && item.url ? (
@@ -174,6 +171,7 @@ export function MediaAssetCard({
 
         {/* Multi-Select Checkbox */}
         <label
+          htmlFor={`select-media-${item.id}`}
           style={{
             position: 'absolute',
             top: SPACING.xs,
@@ -195,6 +193,7 @@ export function MediaAssetCard({
           }}
         >
           <input
+            id={`select-media-${item.id}`}
             type="checkbox"
             data-testid={`select-media-${item.id}`}
             checked={selected}
@@ -202,6 +201,7 @@ export function MediaAssetCard({
               lastShiftKeyRef.current = Boolean(e.shiftKey);
             }}
             onClick={(e) => {
+              e.stopPropagation();
               lastShiftKeyRef.current = Boolean(e.shiftKey);
             }}
             onChange={(e) => {
@@ -376,7 +376,6 @@ export function MediaAssetCard({
               onScheduleRequest(item);
             }}
             style={{ display: 'none' }}
-            aria-hidden="true"
             tabIndex={-1}
           >
             Schedule

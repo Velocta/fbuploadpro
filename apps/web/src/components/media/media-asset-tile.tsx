@@ -326,6 +326,7 @@ export function MediaAssetTile({
               lastShiftKeyRef.current = Boolean(e.shiftKey);
             }}
             onClick={(e) => {
+              e.stopPropagation();
               lastShiftKeyRef.current = Boolean(e.shiftKey);
             }}
             onChange={(e) => {
