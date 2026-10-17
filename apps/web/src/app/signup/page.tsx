@@ -22,6 +22,76 @@ interface FieldErrors {
   otp?: string | undefined;
 }
 
+interface SignupDetailsInput {
+  name: string;
+  phone: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export function validateSignupDetails(input: SignupDetailsInput): FieldErrors {
+  const errors: FieldErrors = {};
+
+  if (!input.name.trim()) {
+    errors.name = 'Full name is required.';
+  } else if (input.name.trim().length > 100) {
+    errors.name = 'Full name cannot exceed 100 characters.';
+  }
+
+  const phoneValidation = validateClientPhoneNumber(input.phone);
+  if (!phoneValidation.isValid) {
+    errors.phone = phoneValidation.error || 'Please enter a valid international phone number.';
+  }
+
+  const cleanEmail = input.email.trim().toLowerCase();
+  if (!cleanEmail.includes('@')) {
+    errors.email = 'A valid email address is required.';
+  } else {
+    const domain = cleanEmail.split('@')[1];
+    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
+      errors.email = 'Registration is limited to @gmail.com (or @googlemail.com) accounts.';
+    }
+  }
+
+  if (!input.password) {
+    errors.password = 'Password is required.';
+  } else if (input.password.length < 8) {
+    errors.password = 'Password must be at least 8 characters long.';
+  }
+
+  if (!input.confirmPassword) {
+    errors.confirmPassword = 'Please confirm your password.';
+  } else if (input.password !== input.confirmPassword) {
+    errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
+  }
+
+  return errors;
+}
+
+export function getSignupLayoutMeta(
+  isPaused: boolean,
+  step: 'details' | 'otp',
+  email: string
+): { title: string; description: string } {
+  if (isPaused) {
+    return {
+      title: 'Registration Paused',
+      description: 'We are currently not accepting new account registrations.',
+    };
+  }
+  if (step === 'details') {
+    return {
+      title: 'Create Account',
+      description: 'Start scheduling and auto-publishing Facebook Reels in minutes.',
+    };
+  }
+  return {
+    title: 'Verify Your Email',
+    description: `We've sent a 6-digit confirmation code to ${email}. Enter the code below to activate your account.`,
+  };
+}
+
 export default function SignupPage() {
   const [step, setStep] = useState<'details' | 'otp'>('details');
   const [name, setName] = useState('');
@@ -94,45 +164,13 @@ export default function SignupPage() {
     setSuccessNotice(null);
     setIsEmailConflict(false);
 
-    const errors: FieldErrors = {};
-
-    // 1. Full name validation
-    if (!name.trim()) {
-      errors.name = 'Full name is required.';
-    } else if (name.trim().length > 100) {
-      errors.name = 'Full name cannot exceed 100 characters.';
-    }
-
-    // 2. Comprehensive phone validation with libphonenumber-js
-    const phoneValidation = validateClientPhoneNumber(phone);
-    if (!phoneValidation.isValid) {
-      errors.phone = phoneValidation.error || 'Please enter a valid international phone number.';
-    }
-
-    // 3. Gmail restriction & validation
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail.includes('@')) {
-      errors.email = 'A valid email address is required.';
-    } else {
-      const domain = cleanEmail.split('@')[1];
-      if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
-        errors.email = 'Registration is limited to @gmail.com (or @googlemail.com) accounts.';
-      }
-    }
-
-    // 4. Password validation
-    if (!password) {
-      errors.password = 'Password is required.';
-    } else if (password.length < 8) {
-      errors.password = 'Password must be at least 8 characters long.';
-    }
-
-    // 5. Confirm password validation
-    if (!confirmPassword) {
-      errors.confirmPassword = 'Please confirm your password.';
-    } else if (password !== confirmPassword) {
-      errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
-    }
+    const errors = validateSignupDetails({
+      name,
+      phone,
+      email,
+      password,
+      confirmPassword,
+    });
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -303,23 +341,12 @@ export default function SignupPage() {
 
   const signupsAllowed = isSignupEnabled();
   const isPaused = !signupsAllowed && step !== 'otp';
+  const layoutMeta = getSignupLayoutMeta(isPaused, step, email);
 
   return (
     <AuthSplitLayout
-      title={
-        isPaused
-          ? 'Registration Paused'
-          : step === 'details'
-            ? 'Create Account'
-            : 'Verify Your Email'
-      }
-      description={
-        isPaused
-          ? 'We are currently not accepting new account registrations.'
-          : step === 'details'
-            ? 'Start scheduling and auto-publishing Facebook Reels in minutes.'
-            : `We've sent a 6-digit confirmation code to ${email}. Enter the code below to activate your account.`
-      }
+      title={layoutMeta.title}
+      description={layoutMeta.description}
       footer={
         isPaused || step === 'details' ? (
           <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
