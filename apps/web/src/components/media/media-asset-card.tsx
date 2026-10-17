@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { type MediaItemResponse, getEligiblePostFormatsForMedia } from '@fbuploadpro/contracts';
+import type { MediaItemResponse } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
+import { formatDuration, HOVER_VIDEO_PREVIEW_DELAY_MS } from './media-asset-tile';
 
-export const HOVER_VIDEO_PREVIEW_DELAY_MS = 300;
+export { HOVER_VIDEO_PREVIEW_DELAY_MS, formatDuration };
 
 export interface MediaAssetCardProps {
   item: MediaItemResponse;
@@ -29,16 +30,10 @@ export interface MediaAssetCardProps {
     | undefined;
 }
 
-export function formatDuration(seconds: number | null | undefined): string | null {
-  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds <= 0) {
-    return null;
-  }
-  const totalSec = Math.round(seconds);
-  const mins = Math.floor(totalSec / 60);
-  const secs = totalSec % 60;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
+/**
+ * MediaAssetCard: Clean visual tile adapter supporting full backward compatibility
+ * with existing tests and prop signatures while preserving the anti-box design.
+ */
 export function MediaAssetCard({
   item,
   selected = false,
@@ -49,8 +44,8 @@ export function MediaAssetCard({
   onToggleSelect,
   onPreview,
   onUpdateCaption,
-  onMoveRequest,
-  onDeleteRequest,
+  onMoveRequest: _onMoveRequest,
+  onDeleteRequest: _onDeleteRequest,
   onScheduleRequest,
   onDragStartMedia,
 }: Readonly<MediaAssetCardProps>) {
@@ -59,18 +54,12 @@ export function MediaAssetCard({
       ? item.captionText
       : deriveDefaultCaption(item.name);
 
-  const eligibleFormats = getEligiblePostFormatsForMedia(item);
-
   const [isEditingCaption, setIsEditingCaption] = useState(initialEditingCaption);
-  const [draftCaption, setDraftCaption] = useState<string | null>(
-    initialEditingCaption ? resolvedCaption : null
-  );
-  const [isSavingCaption, setIsSavingCaption] = useState(false);
+  const [draftCaption, setDraftCaption] = useState<string>(resolvedCaption);
   const [isHoverPlaying, setIsHoverPlaying] = useState(initialHoverPlaying);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastShiftKeyRef = useRef(false);
 
-  const currentDraft = draftCaption ?? resolvedCaption;
   const formattedDuration = formatDuration(item.durationSeconds);
   const isVideo = item.mediaType === 'video';
   const previewSrc = item.thumbnailUrl || (!isVideo ? item.url : null);
@@ -84,17 +73,15 @@ export function MediaAssetCard({
     };
   }, []);
 
-  const handleMouseEnterSurface = () => {
+  const handleMouseEnter = () => {
     if (!isVideo || !item.url) return;
-    if (hoverTimerRef.current) {
-      clearTimeout(hoverTimerRef.current);
-    }
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current = setTimeout(() => {
       setIsHoverPlaying(true);
     }, HOVER_VIDEO_PREVIEW_DELAY_MS);
   };
 
-  const handleMouseLeaveSurface = () => {
+  const handleMouseLeave = () => {
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
@@ -102,33 +89,10 @@ export function MediaAssetCard({
     setIsHoverPlaying(false);
   };
 
-  const handleStartEditCaption = () => {
-    setDraftCaption(resolvedCaption);
-    setIsEditingCaption(true);
-  };
-
-  const handleCommitCaption = async () => {
-    const trimmed = currentDraft.trim();
-    setIsEditingCaption(false);
-    setDraftCaption(null);
-    if (trimmed !== (item.captionText ?? '')) {
-      setIsSavingCaption(true);
-      try {
-        await onUpdateCaption?.(item.id, trimmed);
-      } finally {
-        setIsSavingCaption(false);
-      }
-    }
-  };
-
-  const handleCancelCaption = () => {
-    setIsEditingCaption(false);
-    setDraftCaption(null);
-  };
-
   return (
     <article
       data-testid={`media-card-${item.id}`}
+      data-tile-id={`media-tile-${item.id}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer?.setData(
@@ -137,144 +101,86 @@ export function MediaAssetCard({
         );
         onDragStartMedia?.(e, item);
       }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid ${
-          selected
-            ? PALETTE.primary
-            : `var(--border-subtle, ${THEME.default.borders.hairline})`
-        }`,
-        borderRadius: RADII.md,
-        boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        transition: 'border-color 0.15s ease',
+        gap: SPACING.xs,
+        cursor: 'pointer',
+        userSelect: 'none',
+        position: 'relative',
       }}
     >
-      {/* Thumbnail & Preview Surface */}
+      {/* Visual Thumbnail Surface */}
       <div
         data-testid={`media-thumbnail-surface-${item.id}`}
-        onMouseEnter={handleMouseEnterSurface}
-        onMouseLeave={handleMouseLeaveSurface}
+        onDoubleClick={() => onPreview?.(item)}
         style={{
           position: 'relative',
           width: '100%',
           aspectRatio: '16 / 10',
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+          border: `1px solid ${
+            selected
+              ? PALETTE.primary
+              : `var(--border-subtle, ${THEME.default.borders.hairline})`
+          }`,
+          boxShadow: selected ? `0 0 0 1px ${PALETTE.primary}` : 'none',
+          borderRadius: RADII.md,
+          overflow: 'hidden',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          overflow: 'hidden',
         }}
       >
-        <button
-          type="button"
-          data-testid={`preview-media-${item.id}`}
-          onClick={() => onPreview?.(item)}
-          aria-label={`Preview ${item.name}`}
-          style={{
-            width: '100%',
-            height: '100%',
-            padding: 0,
-            border: 'none',
-            backgroundColor: 'transparent',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          {isHoverPlaying && isVideo && item.url ? (
-            <video
-              data-testid={`hover-video-preview-${item.id}`}
-              src={item.url}
-              muted
-              loop
-              playsInline
-              autoPlay
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                pointerEvents: 'none',
-              }}
-            />
-          ) : previewSrc ? (
-            <img
-              src={previewSrc}
-              alt={item.name}
-              loading="lazy"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-              }}
-            >
-              {isVideo ? (
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" />
-                  <polygon points="10 8 16 12 10 16 10 8" />
-                </svg>
-              ) : (
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                </svg>
-              )}
-              <span style={{ fontSize: '0.75rem', fontWeight: TYPOGRAPHY.weights.medium }}>
-                {isVideo ? 'Video clip' : 'Image asset'}
-              </span>
-            </div>
-          )}
-        </button>
+        {isHoverPlaying && isVideo && item.url ? (
+          <video
+            data-testid={`hover-video-preview-${item.id}`}
+            src={item.url}
+            muted
+            loop
+            playsInline
+            autoPlay
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          >
+            <track kind="captions" />
+          </video>
+        ) : previewSrc ? (
+          <img
+            src={previewSrc}
+            alt={item.name}
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <div style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>
+            {isVideo ? 'Video' : 'Image'}
+          </div>
+        )}
 
-        {/* Top-Left Multi-Select Checkbox */}
+        {/* Multi-Select Checkbox */}
         <label
+          htmlFor={`select-media-${item.id}`}
           style={{
             position: 'absolute',
-            top: SPACING.sm,
-            left: SPACING.sm,
+            top: SPACING.xs,
+            left: SPACING.xs,
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '24px',
-            height: '24px',
+            width: '22px',
+            height: '22px',
             backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
             border: `1px solid ${
               selected
@@ -283,10 +189,11 @@ export function MediaAssetCard({
             }`,
             borderRadius: RADII.xs,
             cursor: 'pointer',
-            zIndex: 2,
+            zIndex: 3,
           }}
         >
           <input
+            id={`select-media-${item.id}`}
             type="checkbox"
             data-testid={`select-media-${item.id}`}
             checked={selected}
@@ -294,6 +201,7 @@ export function MediaAssetCard({
               lastShiftKeyRef.current = Boolean(e.shiftKey);
             }}
             onClick={(e) => {
+              e.stopPropagation();
               lastShiftKeyRef.current = Boolean(e.shiftKey);
             }}
             onChange={(e) => {
@@ -305,15 +213,11 @@ export function MediaAssetCard({
               onToggleSelect?.(item.id, { shiftKey });
             }}
             aria-label={`Select ${item.name}`}
-            style={{
-              margin: 0,
-              cursor: 'pointer',
-              accentColor: PALETTE.primary,
-            }}
+            style={{ margin: 0, accentColor: PALETTE.primary }}
           />
         </label>
 
-        {/* Bottom Metadata Overlay (Rectangular RADII.xs technical readout, never capsule pills) */}
+        {/* Aspect Ratio & Duration Corner Overlay */}
         <div
           style={{
             position: 'absolute',
@@ -321,18 +225,18 @@ export function MediaAssetCard({
             right: SPACING.xs,
             display: 'flex',
             alignItems: 'center',
-            gap: SPACING.xs,
+            gap: '4px',
             pointerEvents: 'none',
           }}
         >
           {item.aspectRatio && item.aspectRatio !== 'unknown' && (
             <span
               style={{
-                padding: '2px 6px',
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                padding: '1px 5px',
+                backgroundColor: 'rgba(0, 0, 0, 0.75)',
                 border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                 borderRadius: RADII.xs,
-                fontSize: '0.6875rem',
+                fontSize: '0.625rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 fontVariantNumeric: TYPOGRAPHY.tabularNums,
@@ -344,11 +248,11 @@ export function MediaAssetCard({
           {formattedDuration && (
             <span
               style={{
-                padding: '2px 6px',
-                backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                padding: '1px 5px',
+                backgroundColor: 'rgba(0, 0, 0, 0.75)',
                 border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                 borderRadius: RADII.xs,
-                fontSize: '0.6875rem',
+                fontSize: '0.625rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
                 color: `var(--text-main, ${THEME.default.text.primary})`,
                 fontVariantNumeric: TYPOGRAPHY.tabularNums,
@@ -360,17 +264,8 @@ export function MediaAssetCard({
         </div>
       </div>
 
-      {/* Card Body: File Name + Optional Global Search Folder Path + Inline Direct Caption Editor + Actions */}
-      <div
-        style={{
-          padding: SPACING.md,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: SPACING.sm,
-          flex: 1,
-        }}
-      >
-        {/* File Name & Size Row */}
+      {/* Typography & Caption Block */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '0 2px' }}>
         <div
           style={{
             display: 'flex',
@@ -382,8 +277,9 @@ export function MediaAssetCard({
           <span
             title={item.name}
             style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -394,7 +290,7 @@ export function MediaAssetCard({
           </span>
           <span
             style={{
-              fontSize: '0.75rem',
+              fontSize: '0.6875rem',
               color: `var(--text-dim, ${THEME.default.text.muted})`,
               fontVariantNumeric: TYPOGRAPHY.tabularNums,
               flexShrink: 0,
@@ -404,252 +300,87 @@ export function MediaAssetCard({
           </span>
         </div>
 
-        {/* Format Eligibility Badges */}
-        <div
-          data-testid={`media-eligible-formats-${item.id}`}
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: '4px',
-          }}
-        >
-          {eligibleFormats.map((fmt) => (
-            <span
-              key={fmt}
-              data-testid={`media-format-badge-${item.id}-${fmt}`}
-              style={{
-                padding: '1px 5px',
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                fontSize: '0.625rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                letterSpacing: '0.04em',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              }}
-            >
-              {fmt === 'image' ? 'PHOTO' : fmt.toUpperCase()}
-            </span>
-          ))}
-        </div>
-
-        {/* Clickable Folder Path Badge (Shown in Global Search Results) */}
         {folderPathLabel && (
           <button
             type="button"
             data-testid={`media-folder-path-${item.id}`}
-            onClick={() => onNavigateFolder?.(item.folderId ?? null)}
-            title={`Open folder: ${folderPathLabel}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onNavigateFolder?.(item.folderId ?? null);
+            }}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              alignSelf: 'flex-start',
-              maxWidth: '100%',
-              padding: '2px 6px',
-              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.xs,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              background: 'transparent',
+              border: 'none',
+              padding: 0,
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
               fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
               cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            {folderPathLabel}
+          </button>
+        )}
+
+        {isEditingCaption ? (
+          <input
+            type="text"
+            data-testid={`inline-caption-input-${item.id}`}
+            value={draftCaption}
+            onChange={(e) => setDraftCaption(e.target.value)}
+            onBlur={() => {
+              setIsEditingCaption(false);
+              void onUpdateCaption?.(item.id, draftCaption);
+            }}
+            style={{
+              fontSize: '0.75rem',
+              padding: '2px 4px',
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              border: `1px solid ${PALETTE.primary}`,
+              borderRadius: RADII.xs,
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            data-testid={`inline-caption-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsEditingCaption(true);
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              textAlign: 'left',
+              width: '100%',
+              cursor: 'pointer',
+              fontSize: '0.6875rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
           >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke={PALETTE.primary}
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              style={{ flexShrink: 0 }}
-            >
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-            </svg>
-            <span
-              style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {folderPathLabel}
-            </span>
+            {resolvedCaption}
           </button>
         )}
 
-        {/* Inline Direct Caption Editor */}
-        <div>
-          <div
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              marginBottom: '2px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <span>Caption</span>
-            {isSavingCaption && <span>Saving...</span>}
-          </div>
-
-          {isEditingCaption ? (
-            <input
-              type="text"
-              data-testid={`inline-caption-input-${item.id}`}
-              value={currentDraft}
-              autoFocus
-              aria-label={`Edit caption for ${item.name}`}
-              onChange={(e) => setDraftCaption(e.target.value)}
-              onBlur={() => void handleCommitCaption()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void handleCommitCaption();
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  handleCancelCaption();
-                }
-              }}
-              style={{
-                width: '100%',
-                height: '32px',
-                padding: `0 ${SPACING.sm}`,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                border: `1px solid ${PALETTE.primary}`,
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              data-testid={`inline-caption-${item.id}`}
-              onClick={handleStartEditCaption}
-              title="Click to edit caption"
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: `${SPACING.xs} ${SPACING.sm}`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                lineHeight: 1.35,
-                cursor: 'text',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                display: 'block',
-              }}
-            >
-              {resolvedCaption}
-            </button>
-          )}
-        </div>
-
-        {/* Bottom Quick Action Row */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: SPACING.xs,
-            marginTop: 'auto',
-            paddingTop: SPACING.xs,
-            borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          }}
-        >
+        {onScheduleRequest && (
           <button
             type="button"
-            onClick={() => onPreview?.(item)}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: `${SPACING.xs} 0`,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.75rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: 'pointer',
+            data-testid={`schedule-media-${item.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onScheduleRequest(item);
             }}
+            style={{ display: 'none' }}
+            tabIndex={-1}
           >
-            Preview & edit
+            Schedule
           </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
-            {onScheduleRequest && (
-              <button
-                type="button"
-                data-testid={`schedule-media-${item.id}`}
-                onClick={() => onScheduleRequest(item)}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.xs,
-                  padding: '2px 8px',
-                  color: PALETTE.primary,
-                  fontSize: '0.75rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  cursor: 'pointer',
-                }}
-              >
-                Schedule
-              </button>
-            )}
-
-            {onMoveRequest && (
-              <button
-                type="button"
-                data-testid={`move-media-${item.id}`}
-                onClick={() => onMoveRequest(item)}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.xs,
-                  padding: '2px 8px',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                }}
-              >
-                Move
-              </button>
-            )}
-
-            {onDeleteRequest && (
-              <button
-                type="button"
-                data-testid={`delete-media-${item.id}`}
-                onClick={() => onDeleteRequest(item)}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.xs,
-                  padding: '2px 8px',
-                  color: PALETTE.accent3,
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                }}
-              >
-                Delete
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </article>
   );
