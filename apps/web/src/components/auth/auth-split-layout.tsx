@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
 import { AuthShowcasePanel } from '@/components/auth/login-showcase-panel';
 
