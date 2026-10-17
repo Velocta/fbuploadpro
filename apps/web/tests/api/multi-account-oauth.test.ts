@@ -147,23 +147,27 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
             }),
             update: vi.fn().mockImplementation((updates: Record<string, any>) => {
               let targetPageId = '';
-              const chain = {
+              const applyUpdates = () => {
+                const existingPage = storedPages.get(targetPageId);
+                if (existingPage) {
+                  if (updates.encrypted_access_token) {
+                    existingPage.encryptedPageToken = updates.encrypted_access_token;
+                  }
+                  if (updates.status) {
+                    existingPage.status = updates.status;
+                  }
+                }
+              };
+              const chain: any = {
                 eq: vi.fn().mockImplementation((col: string, val: string) => {
                   if (col === 'id') targetPageId = val;
-                  if (col === 'user_id') {
-                    const existingPage = storedPages.get(targetPageId);
-                    if (existingPage) {
-                      if (updates.encrypted_access_token) {
-                        existingPage.encryptedPageToken = updates.encrypted_access_token;
-                      }
-                      if (updates.status) {
-                        existingPage.status = updates.status;
-                      }
-                    }
-                    return Promise.resolve({ error: null });
-                  }
+                  applyUpdates();
                   return chain;
                 }),
+                then: (resolve: (val: any) => void) => {
+                  applyUpdates();
+                  return Promise.resolve({ error: null }).then(resolve);
+                },
               };
               return chain;
             }),
