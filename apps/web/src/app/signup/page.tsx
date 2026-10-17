@@ -273,26 +273,40 @@ export default function SignupPage() {
   const isPaused = !signupsAllowed && step !== 'otp';
   const layoutMeta = getSignupLayoutMeta(isPaused, step, email);
 
-  return (
-    <AuthSplitLayout
-      title={layoutMeta.title}
-      description={layoutMeta.description}
-      footer={
-        isPaused || step === 'details' ? (
-          <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
-            Already have an account?{' '}
-            <Link
-              href={returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'}
-              style={{
-                color: PALETTE.primary,
-                textDecoration: 'none',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-              }}
-            >
-              Sign in
-            </Link>
-          </span>
-        ) : (
+  const signInFooter = (
+    <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+      Already have an account?{' '}
+      <Link
+        href={returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'}
+        style={{
+          color: PALETTE.primary,
+          textDecoration: 'none',
+          fontWeight: TYPOGRAPHY.weights.semibold,
+        }}
+      >
+        Sign in
+      </Link>
+    </span>
+  );
+
+  if (isPaused) {
+    return (
+      <AuthSplitLayout
+        title={layoutMeta.title}
+        description={layoutMeta.description}
+        footer={signInFooter}
+      >
+        <SignupPausedCard />
+      </AuthSplitLayout>
+    );
+  }
+
+  if (step === 'otp') {
+    return (
+      <AuthSplitLayout
+        title={layoutMeta.title}
+        description={layoutMeta.description}
+        footer={
           <button
             type="button"
             onClick={() => {
@@ -316,12 +330,8 @@ export default function SignupPage() {
           >
             Need to change your details? Return to form
           </button>
-        )
-      }
-    >
-      {isPaused ? (
-        <SignupPausedCard />
-      ) : step === 'otp' ? (
+        }
+      >
         <SignupOtpStep
           email={email}
           returnUrl={returnUrl}
@@ -333,33 +343,41 @@ export default function SignupPage() {
             setFieldErrors({});
           }}
         />
-      ) : (
-        <>
-          {successNotice && (
-            <div style={{ marginBottom: SPACING.lg }}>
-              <Alert
-                severity="success"
-                title="Code Sent"
-                message={successNotice}
-                onClose={() => setSuccessNotice(null)}
-              />
-            </div>
-          )}
+      </AuthSplitLayout>
+    );
+  }
 
-          <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          <Input
-            label="Full Name"
-            placeholder="Jane Doe"
-            autoComplete="name"
-            value={name}
-            error={fieldErrors.name}
-            onChange={(e) => {
-              setName(e.target.value);
-              clearFieldError('name');
-            }}
-            disabled={isSubmitting}
-            required
+  return (
+    <AuthSplitLayout
+      title={layoutMeta.title}
+      description={layoutMeta.description}
+      footer={signInFooter}
+    >
+      {successNotice && (
+        <div style={{ marginBottom: SPACING.lg }}>
+          <Alert
+            severity="success"
+            title="Code Sent"
+            message={successNotice}
+            onClose={() => setSuccessNotice(null)}
           />
+        </div>
+      )}
+
+      <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <Input
+          label="Full Name"
+          placeholder="Jane Doe"
+          autoComplete="name"
+          value={name}
+          error={fieldErrors.name}
+          onChange={(e) => {
+            setName(e.target.value);
+            clearFieldError('name');
+          }}
+          disabled={isSubmitting}
+          required
+        />
 
           <Input
             label="Phone Number"
@@ -510,8 +528,6 @@ export default function SignupPage() {
             </a>.
           </p>
         </form>
-        </>
-      )}
     </AuthSplitLayout>
   );
 }

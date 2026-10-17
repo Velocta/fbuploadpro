@@ -9,10 +9,20 @@ import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
 
 export interface SignupOtpStepProps {
-  email: string;
-  returnUrl?: string | undefined;
-  initialCooldown?: number | undefined;
-  onBack: () => void;
+  readonly email: string;
+  readonly returnUrl?: string | undefined;
+  readonly initialCooldown?: number | undefined;
+  readonly onBack: () => void;
+}
+
+export function getResendButtonText(resendCooldown: number, isResending: boolean): string {
+  if (resendCooldown > 0) {
+    return `Resend code in ${resendCooldown}s`;
+  }
+  if (isResending) {
+    return 'Sending fresh code...';
+  }
+  return 'Did not receive code? Resend';
 }
 
 export function SignupOtpStep({
@@ -20,7 +30,7 @@ export function SignupOtpStep({
   returnUrl,
   initialCooldown = 60,
   onBack,
-}: SignupOtpStepProps) {
+}: Readonly<SignupOtpStepProps>) {
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState<string | null>(null);
   const [generalError, setGeneralError] = useState<string | null>(null);
@@ -255,11 +265,7 @@ export function SignupOtpStep({
             textDecoration: resendCooldown > 0 ? 'none' : 'underline',
           }}
         >
-          {resendCooldown > 0
-            ? `Resend code in ${resendCooldown}s`
-            : isResending
-              ? 'Sending fresh code...'
-              : 'Did not receive code? Resend'}
+          {getResendButtonText(resendCooldown, isResending)}
         </button>
       </div>
     </form>
