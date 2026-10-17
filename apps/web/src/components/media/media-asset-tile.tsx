@@ -27,6 +27,149 @@ export function formatDuration(seconds: number | null | undefined): string | nul
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function getTileBorderColor(isActive: boolean, isHovered: boolean): string {
+  if (isActive) {
+    return PALETTE.primary;
+  }
+  if (isHovered) {
+    return `var(--border-strong, ${THEME.default.borders.strong})`;
+  }
+  return `var(--border-subtle, ${THEME.default.borders.hairline})`;
+}
+
+function getTileBoxShadow(isActive: boolean, isHovered: boolean): string {
+  if (isActive) {
+    return `0 0 0 1px ${PALETTE.primary}`;
+  }
+  if (isHovered) {
+    return `var(--shadow-card, ${THEME.default.shadows.card})`;
+  }
+  return 'none';
+}
+
+interface TileMediaContentProps {
+  item: MediaItemResponse;
+  isHoverPlaying: boolean;
+  previewSrc: string | null;
+  isVideo: boolean;
+}
+
+function TileMediaContent({ item, isHoverPlaying, previewSrc, isVideo }: Readonly<TileMediaContentProps>) {
+  if (isHoverPlaying && isVideo && item.url) {
+    return (
+      <video
+        data-testid={`hover-video-preview-${item.id}`}
+        src={item.url}
+        muted
+        loop
+        playsInline
+        autoPlay
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+          pointerEvents: 'none',
+        }}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+
+  if (previewSrc) {
+    return (
+      <img
+        src={previewSrc}
+        alt={item.name}
+        loading="lazy"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: SPACING.xs,
+        color: `var(--text-dim, ${THEME.default.text.muted})`,
+      }}
+    >
+      {isVideo ? (
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <polygon points="10 8 16 12 10 16 10 8" />
+        </svg>
+      ) : (
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+function TileCaptionSnippet({ hasCaption, captionText }: Readonly<{ hasCaption: boolean; captionText?: string | null }>) {
+  if (hasCaption) {
+    return (
+      <span
+        title={captionText ?? ''}
+        style={{
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          maxWidth: '100%',
+        }}
+      >
+        {captionText}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        color: PALETTE.accent1,
+        fontSize: '0.6875rem',
+        fontStyle: 'italic',
+      }}
+    >
+      No caption set
+    </span>
+  );
+}
+
 export function MediaAssetTile({
   item,
   isSelected = false,
@@ -76,7 +219,7 @@ export function MediaAssetTile({
   };
 
   const handleTileClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('input[type="checkbox"]')) {
+    if ((e.target as HTMLElement).closest('input[type="checkbox"], label, button')) {
       return;
     }
     onInspect?.(item);
@@ -91,6 +234,9 @@ export function MediaAssetTile({
 
   return (
     <article
+      role="button"
+      tabIndex={0}
+      aria-label={`Inspect ${item.name}`}
       data-testid={`media-card-${item.id}`}
       data-tile-id={`media-tile-${item.id}`}
       draggable
@@ -102,6 +248,12 @@ export function MediaAssetTile({
         onDragStartMedia?.(e, item);
       }}
       onClick={handleTileClick}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onInspect?.(item);
+        }
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       style={{
@@ -123,18 +275,8 @@ export function MediaAssetTile({
           width: '100%',
           aspectRatio: '16 / 10',
           backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid ${
-            isActiveBorder
-              ? PALETTE.primary
-              : isHovered
-                ? `var(--border-strong, ${THEME.default.borders.strong})`
-                : `var(--border-subtle, ${THEME.default.borders.hairline})`
-          }`,
-          boxShadow: isActiveBorder
-            ? `0 0 0 1px ${PALETTE.primary}`
-            : isHovered
-              ? `var(--shadow-card, ${THEME.default.shadows.card})`
-              : 'none',
+          border: `1px solid ${getTileBorderColor(isActiveBorder, isHovered)}`,
+          boxShadow: getTileBoxShadow(isActiveBorder, isHovered),
           borderRadius: RADII.md,
           overflow: 'hidden',
           display: 'flex',
@@ -143,82 +285,16 @@ export function MediaAssetTile({
           transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
         }}
       >
-        {isHoverPlaying && isVideo && item.url ? (
-          <video
-            data-testid={`hover-video-preview-${item.id}`}
-            src={item.url}
-            muted
-            loop
-            playsInline
-            autoPlay
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-              pointerEvents: 'none',
-            }}
-          />
-        ) : previewSrc ? (
-          <img
-            src={previewSrc}
-            alt={item.name}
-            loading="lazy"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-            }}
-          >
-            {isVideo ? (
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect width="18" height="18" x="3" y="3" rx="2" />
-                <polygon points="10 8 16 12 10 16 10 8" />
-              </svg>
-            ) : (
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                <circle cx="9" cy="9" r="2" />
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-              </svg>
-            )}
-          </div>
-        )}
+        <TileMediaContent
+          item={item}
+          isHoverPlaying={isHoverPlaying}
+          previewSrc={previewSrc}
+          isVideo={isVideo}
+        />
 
         {/* Top-Left Selection Checkbox */}
         <label
-          onClick={(e) => e.stopPropagation()}
+          htmlFor={`select-media-${item.id}`}
           style={{
             position: 'absolute',
             top: SPACING.xs,
@@ -242,6 +318,7 @@ export function MediaAssetTile({
           }}
         >
           <input
+            id={`select-media-${item.id}`}
             type="checkbox"
             data-testid={`select-media-${item.id}`}
             checked={isSelected}
@@ -416,30 +493,7 @@ export function MediaAssetTile({
             fontSize: '0.6875rem',
           }}
         >
-          {hasCaption ? (
-            <span
-              title={item.captionText ?? ''}
-              style={{
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: '100%',
-              }}
-            >
-              {item.captionText}
-            </span>
-          ) : (
-            <span
-              style={{
-                color: PALETTE.accent1,
-                fontSize: '0.6875rem',
-                fontStyle: 'italic',
-              }}
-            >
-              No caption set
-            </span>
-          )}
+          <TileCaptionSnippet hasCaption={hasCaption} captionText={item.captionText} />
         </div>
       </div>
     </article>

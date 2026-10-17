@@ -1287,12 +1287,12 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(counts.image).toBe(1);
 
     const videoOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'video');
-    expect(videoOnly.length).toBe(2);
+    expect(videoOnly).toHaveLength(2);
     expect(videoOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[0]!.id);
     expect(videoOnly[1]!.id).toBe(SAMPLE_MEDIA_ITEMS[2]!.id);
 
     const uncaptionedOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'uncaptioned');
-    expect(uncaptionedOnly.length).toBe(1);
+    expect(uncaptionedOnly).toHaveLength(1);
     expect(uncaptionedOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[1]!.id);
   });
 

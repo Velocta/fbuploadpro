@@ -113,7 +113,8 @@ export function MediaAssetCard({
       }}
     >
       {/* Visual Thumbnail Surface */}
-      <div
+      <button
+        type="button"
         data-testid={`media-thumbnail-surface-${item.id}`}
         onClick={() => onPreview?.(item)}
         style={{
@@ -132,6 +133,8 @@ export function MediaAssetCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          padding: 0,
+          cursor: 'pointer',
         }}
       >
         {isHoverPlaying && isVideo && item.url ? (
@@ -148,7 +151,9 @@ export function MediaAssetCard({
               objectFit: 'cover',
               display: 'block',
             }}
-          />
+          >
+            <track kind="captions" />
+          </video>
         ) : previewSrc ? (
           <img
             src={previewSrc}
@@ -169,7 +174,6 @@ export function MediaAssetCard({
 
         {/* Multi-Select Checkbox */}
         <label
-          onClick={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             top: SPACING.xs,
@@ -338,13 +342,20 @@ export function MediaAssetCard({
             }}
           />
         ) : (
-          <div
+          <button
+            type="button"
             data-testid={`inline-caption-${item.id}`}
             onClick={(e) => {
               e.stopPropagation();
               setIsEditingCaption(true);
             }}
             style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              textAlign: 'left',
+              width: '100%',
+              cursor: 'pointer',
               fontSize: '0.6875rem',
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
               overflow: 'hidden',
@@ -353,7 +364,7 @@ export function MediaAssetCard({
             }}
           >
             {resolvedCaption}
-          </div>
+          </button>
         )}
 
         {onScheduleRequest && (
@@ -366,6 +377,7 @@ export function MediaAssetCard({
             }}
             style={{ display: 'none' }}
             aria-hidden="true"
+            tabIndex={-1}
           >
             Schedule
           </button>

@@ -21,6 +21,17 @@ export interface MediaFolderRailProps {
   onDropMediaOnFolder: (mediaId: string, targetFolderId: string | null) => Promise<void> | void;
 }
 
+function getCollectionIconColor(isActive: boolean, key: string, count: number): string {
+  if (isActive) return PALETTE.primary;
+  if (key === 'uncaptioned' && count > 0) return PALETTE.accent1;
+  return 'inherit';
+}
+
+function getCollectionBadgeColor(key: string, count: number): string {
+  if (key === 'uncaptioned' && count > 0) return PALETTE.accent1;
+  return `var(--text-dim, ${THEME.default.text.muted})`;
+}
+
 export function MediaFolderRail({
   folders,
   currentFolderId,
@@ -286,7 +297,7 @@ export function MediaFolderRail({
             label: 'All Media',
             count: counts.all,
             icon: (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="7" height="7" x="3" y="3" rx="1" />
                 <rect width="7" height="7" x="14" y="3" rx="1" />
                 <rect width="7" height="7" x="14" y="14" rx="1" />
@@ -299,7 +310,7 @@ export function MediaFolderRail({
             label: 'Videos',
             count: counts.video,
             icon: (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polygon points="23 7 16 12 23 17 23 7" />
                 <rect width="14" height="14" x="1" y="5" rx="2" ry="2" />
               </svg>
@@ -310,7 +321,7 @@ export function MediaFolderRail({
             label: 'Images',
             count: counts.image,
             icon: (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
                 <circle cx="9" cy="9" r="2" />
                 <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
@@ -322,7 +333,7 @@ export function MediaFolderRail({
             label: 'Uncaptioned',
             count: counts.uncaptioned,
             icon: (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -360,11 +371,9 @@ export function MediaFolderRail({
                 border: isDragOver
                   ? `1px solid ${PALETTE.primary}`
                   : '1px solid transparent',
-                backgroundColor: isDragOver
+                backgroundColor: (isDragOver || isActive)
                   ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                  : isActive
-                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                    : 'transparent',
+                  : 'transparent',
                 color: isActive
                   ? `var(--text-main, ${THEME.default.text.primary})`
                   : `var(--text-sub, ${THEME.default.text.secondary})`,
@@ -381,11 +390,7 @@ export function MediaFolderRail({
               <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
                 <span
                   style={{
-                    color: isActive
-                      ? PALETTE.primary
-                      : col.key === 'uncaptioned' && col.count > 0
-                        ? PALETTE.accent1
-                        : 'inherit',
+                    color: getCollectionIconColor(isActive, col.key, col.count),
                     display: 'inline-flex',
                   }}
                 >
@@ -396,10 +401,7 @@ export function MediaFolderRail({
               <span
                 style={{
                   fontSize: '0.6875rem',
-                  color:
-                    col.key === 'uncaptioned' && col.count > 0
-                      ? PALETTE.accent1
-                      : `var(--text-dim, ${THEME.default.text.muted})`,
+                  color: getCollectionBadgeColor(col.key, col.count),
                   fontVariantNumeric: TYPOGRAPHY.tabularNums,
                 }}
               >
@@ -466,11 +468,9 @@ export function MediaFolderRail({
                     border: isDragOver
                       ? `1px solid ${PALETTE.primary}`
                       : '1px solid transparent',
-                    backgroundColor: isDragOver
+                    backgroundColor: (isDragOver || isSelected)
                       ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                      : isSelected
-                        ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                        : 'transparent',
+                      : 'transparent',
                     transition: 'border-color 0.15s ease, background-color 0.15s ease',
                   }}
                 >

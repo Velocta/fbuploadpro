@@ -28,6 +28,47 @@ export interface MediaInspectorPanelProps {
   onBatchDelete?: () => void;
 }
 
+function renderInspectorPreview(item: MediaItemResponse, isVideo: boolean): React.ReactNode {
+  if (isVideo && item.url) {
+    return (
+      <video
+        data-testid="inspector-video-player"
+        src={item.url}
+        controls
+        playsInline
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          backgroundColor: '#000000',
+        }}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+
+  if (item.url) {
+    return (
+      <img
+        src={item.url}
+        alt={item.name}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>
+      Preview unavailable
+    </div>
+  );
+}
+
 export function MediaInspectorPanel({
   item,
   selectedCount,
@@ -447,34 +488,7 @@ export function MediaInspectorPanel({
             justifyContent: 'center',
           }}
         >
-          {isVideo && item.url ? (
-            <video
-              data-testid="inspector-video-player"
-              src={item.url}
-              controls
-              playsInline
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                backgroundColor: '#000000',
-              }}
-            />
-          ) : item.url ? (
-            <img
-              src={item.url}
-              alt={item.name}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-              }}
-            />
-          ) : (
-            <div style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-              Preview unavailable
-            </div>
-          )}
+          {renderInspectorPreview(item, isVideo)}
 
           {/* Fullscreen Modal trigger button */}
           <button
