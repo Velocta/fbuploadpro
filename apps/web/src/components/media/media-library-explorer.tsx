@@ -1376,6 +1376,66 @@ export function MediaLibraryExplorer({
     }
   };
 
+  const handleMediaDropPayload = async (
+    mediaPayloadRaw: string,
+    targetFolderId: string | null
+  ) => {
+    try {
+      const parsed = JSON.parse(mediaPayloadRaw) as { mediaId: string };
+      const idsToMove =
+        selectedIds.includes(parsed.mediaId) && selectedIds.length > 1
+          ? selectedIds
+          : [parsed.mediaId];
+
+      const moveSet = new Set(idsToMove);
+      setMediaItems((prev) =>
+        prev.map((m) =>
+          moveSet.has(m.id) ? { ...m, folderId: targetFolderId } : m
+        )
+      );
+      setSelectedIds((prev) => prev.filter((id) => !moveSet.has(id)));
+
+      await fetch(`/api/tenant/${subdomain}/media/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'move',
+          mediaIds: idsToMove,
+          folderId: targetFolderId,
+        }),
+      });
+    } catch {
+      // Ignore malformed drag payload
+    }
+  };
+
+  const handleFolderDropPayload = async (
+    folderPayloadRaw: string,
+    targetFolderId: string | null
+  ) => {
+    try {
+      const parsed = JSON.parse(folderPayloadRaw) as { folderId: string };
+      if (parsed.folderId && parsed.folderId !== targetFolderId) {
+        const res = await fetch(
+          `/api/tenant/${subdomain}/media/folders/${parsed.folderId}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parentId: targetFolderId }),
+          }
+        );
+        if (res.ok) {
+          const updated = (await res.json()) as MediaFolder;
+          setFolders((prev) =>
+            prev.map((f) => (f.id === updated.id ? updated : f))
+          );
+        }
+      }
+    } catch {
+      // Ignore malformed drag payload
+    }
+  };
+
   // Drag-and-Drop Reparenting onto Subfolder or Breadcrumb
   const handleDropOnTargetFolder = async (
     e: React.DragEvent<HTMLElement>,
@@ -1389,33 +1449,7 @@ export function MediaLibraryExplorer({
       'application/x-fbuploadpro-media'
     );
     if (mediaPayloadRaw) {
-      try {
-        const parsed = JSON.parse(mediaPayloadRaw) as { mediaId: string };
-        const idsToMove =
-          selectedIds.includes(parsed.mediaId) && selectedIds.length > 1
-            ? selectedIds
-            : [parsed.mediaId];
-
-        const moveSet = new Set(idsToMove);
-        setMediaItems((prev) =>
-          prev.map((m) =>
-            moveSet.has(m.id) ? { ...m, folderId: targetFolderId } : m
-          )
-        );
-        setSelectedIds((prev) => prev.filter((id) => !moveSet.has(id)));
-
-        await fetch(`/api/tenant/${subdomain}/media/batch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'move',
-            mediaIds: idsToMove,
-            folderId: targetFolderId,
-          }),
-        });
-      } catch (_err) {
-        // Ignore malformed drag payload
-      }
+      await handleMediaDropPayload(mediaPayloadRaw, targetFolderId);
       return;
     }
 
@@ -1423,27 +1457,7 @@ export function MediaLibraryExplorer({
       'application/x-fbuploadpro-folder'
     );
     if (folderPayloadRaw) {
-      try {
-        const parsed = JSON.parse(folderPayloadRaw) as { folderId: string };
-        if (parsed.folderId && parsed.folderId !== targetFolderId) {
-          const res = await fetch(
-            `/api/tenant/${subdomain}/media/folders/${parsed.folderId}`,
-            {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ parentId: targetFolderId }),
-            }
-          );
-          if (res.ok) {
-            const updated = (await res.json()) as MediaFolder;
-            setFolders((prev) =>
-              prev.map((f) => (f.id === updated.id ? updated : f))
-            );
-          }
-        }
-      } catch (_err) {
-        // Ignore malformed drag payload
-      }
+      await handleFolderDropPayload(folderPayloadRaw, targetFolderId);
       return;
     }
 

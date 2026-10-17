@@ -39,6 +39,106 @@ export function formatDuration(seconds: number | null | undefined): string | nul
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+interface MediaCardThumbnailProps {
+  item: MediaItemResponse;
+  isVideo: boolean;
+  isHoverPlaying: boolean;
+  previewSrc: string | null;
+}
+
+function MediaCardThumbnail({
+  item,
+  isVideo,
+  isHoverPlaying,
+  previewSrc,
+}: Readonly<MediaCardThumbnailProps>) {
+  if (isHoverPlaying && isVideo && item.url) {
+    return (
+      <video
+        data-testid={`hover-video-preview-${item.id}`}
+        src={item.url}
+        muted
+        loop
+        playsInline
+        autoPlay
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+          pointerEvents: 'none',
+        }}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  }
+
+  if (previewSrc) {
+    return (
+      <img
+        src={previewSrc}
+        alt={item.name}
+        loading="lazy"
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: SPACING.xs,
+        color: `var(--text-dim, ${THEME.default.text.muted})`,
+      }}
+    >
+      {isVideo ? (
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <polygon points="10 8 16 12 10 16 10 8" />
+        </svg>
+      ) : (
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </svg>
+      )}
+      <span style={{ fontSize: '0.75rem', fontWeight: TYPOGRAPHY.weights.medium }}>
+        {isVideo ? 'Video clip' : 'Image asset'}
+      </span>
+    </div>
+  );
+}
+
 export function MediaAssetCard({
   item,
   selected = false,
@@ -187,81 +287,12 @@ export function MediaAssetCard({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          {isHoverPlaying && isVideo && item.url ? (
-            <video
-              data-testid={`hover-video-preview-${item.id}`}
-              src={item.url}
-              muted
-              loop
-              playsInline
-              autoPlay
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                pointerEvents: 'none',
-              }}
-            />
-          ) : previewSrc ? (
-            <img
-              src={previewSrc}
-              alt={item.name}
-              loading="lazy"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-              }}
-            >
-              {isVideo ? (
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" />
-                  <polygon points="10 8 16 12 10 16 10 8" />
-                </svg>
-              ) : (
-                <svg
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.75"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-                  <circle cx="9" cy="9" r="2" />
-                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                </svg>
-              )}
-              <span style={{ fontSize: '0.75rem', fontWeight: TYPOGRAPHY.weights.medium }}>
-                {isVideo ? 'Video clip' : 'Image asset'}
-              </span>
-            </div>
-          )}
+          <MediaCardThumbnail
+            item={item}
+            isVideo={isVideo}
+            isHoverPlaying={isHoverPlaying}
+            previewSrc={previewSrc}
+          />
         </button>
 
         {/* Top-Left Multi-Select Checkbox */}
@@ -507,7 +538,6 @@ export function MediaAssetCard({
               type="text"
               data-testid={`inline-caption-input-${item.id}`}
               value={currentDraft}
-              autoFocus
               aria-label={`Edit caption for ${item.name}`}
               onChange={(e) => setDraftCaption(e.target.value)}
               onBlur={() => void handleCommitCaption()}
