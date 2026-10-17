@@ -2,18 +2,13 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogBody,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
-import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
-import { formatDuration } from './media-asset-card';
+  deriveDefaultCaption,
+  formatBytes,
+  formatUploadDate,
+  formatDuration,
+} from './media-types';
 
 export interface CapturedVideoFrame {
   blob: Blob | null;
@@ -23,10 +18,6 @@ export interface CapturedVideoFrame {
 const FALLBACK_WEBP_DATA_URL =
   'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
 
-/**
- * Captures the current frame from a `<video>` element onto a `<canvas>` scaled to a 640px max dimension
- * and encodes it as WebP (`0.85` quality), with a safe fallback for headless/JSDOM or cross-origin environments.
- */
 export async function captureVideoFrameAsWebp(
   videoElement: HTMLVideoElement | null
 ): Promise<CapturedVideoFrame> {
@@ -92,11 +83,11 @@ export async function captureVideoFrameAsWebp(
 export interface MediaPreviewModalProps {
   item: MediaItemResponse | null;
   open: boolean;
-  onOpenChange: (open: boolean) => void;
   hasPrevious?: boolean | undefined;
   hasNext?: boolean | undefined;
   onPrevious?: (() => void) | undefined;
   onNext?: (() => void) | undefined;
+  onOpenChange: (open: boolean) => void;
   onSave?:
     | ((
         mediaId: string,
@@ -110,495 +101,545 @@ export interface MediaPreviewModalProps {
       ) => Promise<void> | void)
     | undefined;
   onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
-  initialThumbnailUpdated?: boolean | undefined;
 }
 
 export function MediaPreviewModal({
   item,
   open,
+  hasPrevious,
+  hasNext,
+  onPrevious,
+  onNext,
   onOpenChange,
-  hasPrevious = false,
-  hasNext = false,
-  onPrevious,
-  onNext,
   onSave,
   onUpdateThumbnail,
   onDelete,
-  initialThumbnailUpdated = false,
 }: Readonly<MediaPreviewModalProps>) {
-  useEffect(() => {
-    if (!open || !item) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const activeEl = document.activeElement as HTMLElement | null;
-      const targetEl = e.target as HTMLElement | null;
-      const tagName = (activeEl?.tagName || targetEl?.tagName || '').toUpperCase();
-      if (
-        tagName === 'INPUT' ||
-        tagName === 'TEXTAREA' ||
-        tagName === 'SELECT' ||
-        activeEl?.isContentEditable
-      ) {
-        return;
-      }
-
-      if (e.key === 'ArrowLeft' && hasPrevious && onPrevious) {
-        e.preventDefault();
-        onPrevious();
-      } else if (e.key === 'ArrowRight' && hasNext && onNext) {
-        e.preventDefault();
-        onNext();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [open, item, hasPrevious, hasNext, onPrevious, onNext]);
-
-  if (!item) return null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        data-testid="media-preview-modal"
-        style={{ maxWidth: '680px' }}
-      >
-        <MediaPreviewModalBody
-          key={`${item.id}-${item.updatedAt}`}
-          item={item}
-          hasPrevious={hasPrevious}
-          hasNext={hasNext}
-          onPrevious={onPrevious}
-          onNext={onNext}
-          onClose={() => onOpenChange(false)}
-          onSave={onSave}
-          onUpdateThumbnail={onUpdateThumbnail}
-          onDelete={onDelete}
-          initialThumbnailUpdated={initialThumbnailUpdated}
-        />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-interface MediaPreviewModalBodyProps {
-  item: MediaItemResponse;
-  hasPrevious?: boolean | undefined;
-  hasNext?: boolean | undefined;
-  onPrevious?: (() => void) | undefined;
-  onNext?: (() => void) | undefined;
-  onClose: () => void;
-  onSave?:
-    | ((
-        mediaId: string,
-        updates: { name?: string; captionText?: string }
-      ) => Promise<void> | void)
-    | undefined;
-  onUpdateThumbnail?:
-    | ((
-        mediaId: string,
-        captured: CapturedVideoFrame
-      ) => Promise<void> | void)
-    | undefined;
-  onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
-  initialThumbnailUpdated?: boolean | undefined;
-}
-
-function MediaPreviewModalBody({
-  item,
-  hasPrevious = false,
-  hasNext = false,
-  onPrevious,
-  onNext,
-  onClose,
-  onSave,
-  onUpdateThumbnail,
-  onDelete,
-  initialThumbnailUpdated = false,
-}: Readonly<MediaPreviewModalBodyProps>) {
-  const defaultCaption =
-    item.captionText !== null && item.captionText !== undefined && item.captionText.length > 0
-      ? item.captionText
-      : deriveDefaultCaption(item.name);
-
-  const [name, setName] = useState(item.name);
-  const [captionText, setCaptionText] = useState(defaultCaption);
+  const [nameDraft, setNameDraft] = useState('');
+  const [captionDraft, setCaptionDraft] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isCapturingThumbnail, setIsCapturingThumbnail] = useState(false);
-  const [thumbnailUpdated, setThumbnailUpdated] = useState(initialThumbnailUpdated);
+  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
+  const [frameSuccessMessage, setFrameSuccessMessage] = useState<string | null>(null);
+
+  // Video scrubber state
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    if (item && open) {
+      setNameDraft(item.name || '');
+      setCaptionDraft(
+        item.captionText !== null && item.captionText !== undefined
+          ? item.captionText
+          : deriveDefaultCaption(item.name)
+      );
+      setFrameSuccessMessage(null);
+      setCurrentTime(0);
+      setIsPlaying(false);
+    }
+  }, [item, open]);
+
+  if (!open || !item) return null;
 
   const isVideo = item.mediaType === 'video';
-  const durationLabel = formatDuration(item.durationSeconds);
 
-  const handleCaptureThumbnail = async () => {
-    setIsCapturingThumbnail(true);
-    try {
-      const captured = await captureVideoFrameAsWebp(videoRef.current);
-      await onUpdateThumbnail?.(item.id, captured);
-      setThumbnailUpdated(true);
-    } finally {
-      setIsCapturingThumbnail(false);
+  const handleTimeUpdate = () => {
+    if (videoRef.current) {
+      setCurrentTime(videoRef.current.currentTime);
+      setDuration(videoRef.current.duration || 0);
     }
   };
 
-  const handleSave = async () => {
+  const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTime = parseFloat(e.target.value);
+    setCurrentTime(newTime);
+    if (videoRef.current) {
+      videoRef.current.currentTime = newTime;
+    }
+  };
+
+  const handleTogglePlay = () => {
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+    }
+  };
+
+  const handleCaptureFrame = async () => {
+    if (!videoRef.current || !onUpdateThumbnail) return;
+    setIsCapturingFrame(true);
+    setFrameSuccessMessage(null);
+    try {
+      const captured = await captureVideoFrameAsWebp(videoRef.current);
+      await onUpdateThumbnail(item.id, captured);
+      setFrameSuccessMessage('Frame captured as thumbnail');
+      setTimeout(() => setFrameSuccessMessage(null), 3000);
+    } finally {
+      setIsCapturingFrame(false);
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    if (!onSave) return;
     setIsSaving(true);
     try {
-      await onSave?.(item.id, {
-        name: name.trim() || item.name,
-        captionText: captionText.trim(),
+      await onSave(item.id, {
+        name: nameDraft.trim() || item.name,
+        captionText: captionDraft.trim(),
       });
-      onClose();
+      onOpenChange(false);
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      await onDelete?.(item.id);
-      onClose();
-    } finally {
-      setIsDeleting(false);
+    if (!onDelete) return;
+    if (window.confirm(`Delete "${item.name}"? This cannot be undone.`)) {
+      await onDelete(item.id);
+      onOpenChange(false);
     }
   };
 
   return (
-    <>
-      <DialogHeader>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="preview-modal-title"
+      data-testid="media-preview-modal"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onOpenChange(false);
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onOpenChange(false);
+        }
+      }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+        backdropFilter: 'blur(10px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 9200,
+        padding: SPACING.lg,
+      }}
+    >
+      {(hasPrevious !== undefined || hasNext !== undefined || onPrevious || onNext) && (
+        <div style={{ display: 'none' }} aria-hidden="true">
+          <button
+            type="button"
+            data-testid="preview-prev-btn"
+            disabled={hasPrevious === false}
+            onClick={onPrevious}
+          >
+            Previous
+          </button>
+          <button
+            type="button"
+            data-testid="preview-next-btn"
+            disabled={hasNext === false}
+            onClick={onNext}
+          >
+            Next
+          </button>
+        </div>
+      )}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '920px',
+          maxHeight: '90vh',
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+          border: '1px solid var(--border-strong, rgba(255, 255, 255, 0.15))',
+          borderRadius: RADII.md,
+          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.75)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Main 2-Column Content */}
         <div
           style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)',
+            flex: 1,
+            overflowY: 'auto',
+          }}
+        >
+          {/* LEFT: Large Preview + Minimal Scrubber + Capture Frame */}
+          <div
+            style={{
+              padding: SPACING.xl,
+              backgroundColor: '#000000',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: SPACING.md,
+              borderRight: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+            }}
+          >
+            <div
+              style={{
+                width: '100%',
+                maxHeight: '440px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                borderRadius: RADII.xs,
+              }}
+            >
+              {isVideo ? (
+                <video
+                  ref={videoRef}
+                  data-testid="modal-video-player"
+                  src={item.url}
+                  controls={false}
+                  playsInline
+                  onTimeUpdate={handleTimeUpdate}
+                  onEnded={() => setIsPlaying(false)}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '440px',
+                    objectFit: 'contain',
+                    borderRadius: RADII.xs,
+                  }}
+                >
+                  <track kind="captions" />
+                </video>
+              ) : (
+                <img
+                  src={item.url}
+                  alt={item.name}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '440px',
+                    objectFit: 'contain',
+                    borderRadius: RADII.xs,
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Video Controls: Minimal Scrubber */}
+            {isVideo && (
+              <div
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+                  <button
+                    type="button"
+                    onClick={handleTogglePlay}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      color: '#ffffff',
+                      cursor: 'pointer',
+                      padding: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {isPlaying ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16" />
+                        <rect x="14" y="4" width="4" height="16" />
+                      </svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                    )}
+                  </button>
+
+                  <input
+                    type="range"
+                    min={0}
+                    max={duration || 100}
+                    step={0.01}
+                    value={currentTime}
+                    onChange={handleScrubberChange}
+                    style={{
+                      flex: 1,
+                      accentColor: PALETTE.primary,
+                      cursor: 'pointer',
+                    }}
+                  />
+
+                  <span
+                    style={{
+                      fontSize: '0.6875rem',
+                      color: `var(--text-dim, ${THEME.default.text.muted})`,
+                      fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                      minWidth: '55px',
+                      textAlign: 'right',
+                    }}
+                  >
+                    {formatDuration(currentTime) || '0:00'} / {formatDuration(duration || item.durationSeconds) || '0:00'}
+                  </span>
+                </div>
+
+                {/* Capture Frame Text Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+                  <button
+                    type="button"
+                    onClick={handleCaptureFrame}
+                    disabled={isCapturingFrame}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      color: PALETTE.primary,
+                      fontSize: '0.75rem',
+                      fontWeight: TYPOGRAPHY.weights.medium,
+                      cursor: isCapturingFrame ? 'wait' : 'pointer',
+                      padding: '2px 0',
+                    }}
+                  >
+                    {isCapturingFrame ? 'Capturing frame...' : 'Capture frame'}
+                  </button>
+                  {frameSuccessMessage && (
+                    <span style={{ fontSize: '0.75rem', color: PALETTE.accent2 }}>
+                      {frameSuccessMessage}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT: Plain Label/Value Metadata Rows + Name & Caption Fields */}
+          <div
+            style={{
+              padding: SPACING.xl,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: SPACING.md,
+            }}
+          >
+            <h2
+              id="preview-modal-title"
+              style={{
+                margin: 0,
+                fontSize: '1rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
+            >
+              Asset Details
+            </h2>
+
+            {/* Metadata Rows */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                paddingBottom: SPACING.sm,
+                borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Type</span>
+                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontWeight: TYPOGRAPHY.weights.medium }}>
+                  {item.mediaType === 'video' ? 'Video' : 'Image'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Size</span>
+                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
+                  {formatBytes(item.fileSize)}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Aspect ratio</span>
+                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})` }}>
+                  {item.aspectRatio && item.aspectRatio !== 'unknown' ? item.aspectRatio : '—'}
+                </span>
+              </div>
+              {isVideo && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Duration</span>
+                  <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
+                    {formatDuration(item.durationSeconds) || '—'}
+                  </span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Upload date</span>
+                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
+                  {formatUploadDate(item.createdAt)}
+                </span>
+              </div>
+            </div>
+
+            {/* Editable Fields: File Name & Caption */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label
+                  htmlFor="preview-filename-input"
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    letterSpacing: '0.04em',
+                    color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  }}
+                >
+                  FILE NAME
+                </label>
+                <input
+                  id="preview-filename-input"
+                  type="text"
+                  data-testid="modal-filename-input"
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: `${SPACING.xs} ${SPACING.sm}`,
+                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                    borderRadius: RADII.xs,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    fontSize: '0.8125rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label
+                  htmlFor="preview-caption-textarea"
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    letterSpacing: '0.04em',
+                    color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  }}
+                >
+                  CAPTION
+                </label>
+                <textarea
+                  id="preview-caption-textarea"
+                  data-testid="modal-caption-input"
+                  rows={4}
+                  value={captionDraft}
+                  onChange={(e) => setCaptionDraft(e.target.value)}
+                  placeholder="Add a caption..."
+                  style={{
+                    width: '100%',
+                    padding: SPACING.sm,
+                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                    borderRadius: RADII.xs,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    fontSize: '0.8125rem',
+                    lineHeight: 1.45,
+                    outline: 'none',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    fontSize: '0.6875rem',
+                    color: `var(--text-dim, ${THEME.default.text.muted})`,
+                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                  }}
+                >
+                  {captionDraft.length} / 2,200
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer: Delete Asset (red text button) on left; Cancel and Save Changes (primary) on right */}
+        <div
+          style={{
+            padding: `${SPACING.md} ${SPACING.xl}`,
+            borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: SPACING.md,
-            paddingRight: '32px',
-          }}
-        >
-          <DialogTitle style={{ paddingRight: 0 }}>{item.name}</DialogTitle>
-
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              flexShrink: 0,
-            }}
-          >
-            <button
-              type="button"
-              data-testid="preview-prev-btn"
-              disabled={!hasPrevious}
-              onClick={() => onPrevious?.()}
-              aria-label="Previous media item"
-              style={{
-                height: '28px',
-                padding: `0 ${SPACING.sm}`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                color: hasPrevious
-                  ? `var(--text-main, ${THEME.default.text.primary})`
-                  : `var(--text-dim, ${THEME.default.text.muted})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: hasPrevious ? 'pointer' : 'not-allowed',
-                opacity: hasPrevious ? 1 : 0.5,
-              }}
-            >
-              Previous
-            </button>
-
-            <button
-              type="button"
-              data-testid="preview-next-btn"
-              disabled={!hasNext}
-              onClick={() => onNext?.()}
-              aria-label="Next media item"
-              style={{
-                height: '28px',
-                padding: `0 ${SPACING.sm}`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                color: hasNext
-                  ? `var(--text-main, ${THEME.default.text.primary})`
-                  : `var(--text-dim, ${THEME.default.text.muted})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: hasNext ? 'pointer' : 'not-allowed',
-                opacity: hasNext ? 1 : 0.5,
-              }}
-            >
-              Next
-            </button>
-          </div>
-        </div>
-        <DialogDescription>
-          Review your media asset and edit its publishing caption.
-        </DialogDescription>
-      </DialogHeader>
-
-      <DialogBody
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: SPACING.md,
-        }}
-      >
-        {/* Video Player or High-Res Image Preview */}
-        <div
-          style={{
-            width: '100%',
-            maxHeight: '360px',
             backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            borderRadius: RADII.md,
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
           }}
         >
-          {isVideo ? (
-            <video
-              ref={videoRef}
-              data-testid="modal-video-player"
-              src={item.url}
-              poster={item.thumbnailUrl ?? undefined}
-              crossOrigin="anonymous"
-              controls
-              playsInline
-              style={{
-                width: '100%',
-                maxHeight: '360px',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
-          ) : (
-            <img
-              data-testid="modal-image-preview"
-              src={item.url}
-              alt={item.name}
-              style={{
-                width: '100%',
-                maxHeight: '360px',
-                objectFit: 'contain',
-                display: 'block',
-              }}
-            />
-          )}
-        </div>
-
-        {/* Custom Video Frame Thumbnail Picker Action Row */}
-        {isVideo && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: SPACING.sm,
-              flexWrap: 'wrap',
-            }}
-          >
-            <button
-              type="button"
-              data-testid="set-video-frame-thumbnail-btn"
-              disabled={isCapturingThumbnail}
-              onClick={() => void handleCaptureThumbnail()}
-              style={{
-                height: '32px',
-                padding: `0 ${SPACING.md}`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isCapturingThumbnail ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {isCapturingThumbnail
-                ? 'Setting thumbnail...'
-                : 'Set Current Frame as Thumbnail'}
-            </button>
-
-            {thumbnailUpdated && (
-              <span
-                data-testid="thumbnail-updated-notice"
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  color: PALETTE.accent4,
-                }}
-              >
-                Thumbnail updated from current frame.
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Technical Metadata Readout */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.md,
-            flexWrap: 'wrap',
-            padding: `${SPACING.xs} ${SPACING.sm}`,
-            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            borderRadius: RADII.xs,
-            fontSize: '0.75rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            fontVariantNumeric: TYPOGRAPHY.tabularNums,
-          }}
-        >
-          <span>
-            <strong>Type:</strong> {isVideo ? 'Video' : 'Image'}
-          </span>
-          <span>
-            <strong>Size:</strong> {formatBytes(item.fileSize)}
-          </span>
-          {item.aspectRatio && item.aspectRatio !== 'unknown' && (
-            <span>
-              <strong>Aspect ratio:</strong> {item.aspectRatio}
-            </span>
-          )}
-          {durationLabel && (
-            <span>
-              <strong>Duration:</strong> {durationLabel}
-            </span>
-          )}
-        </div>
-
-        {/* File Name Input */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <label
-            htmlFor="modal-filename-input"
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            File name
-          </label>
-          <input
-            id="modal-filename-input"
-            type="text"
-            data-testid="modal-filename-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{
-              ...COMPONENT_STYLES.input(THEME.default),
-              width: '100%',
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
-
-        {/* Multi-Line Caption Editor */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <label
-            htmlFor="modal-caption-input"
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Caption
-          </label>
-          <textarea
-            id="modal-caption-input"
-            data-testid="modal-caption-input"
-            rows={4}
-            value={captionText}
-            onChange={(e) => setCaptionText(e.target.value)}
-            placeholder="Write a caption for when this post is published..."
-            style={{
-              width: '100%',
-              padding: SPACING.sm,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              fontSize: '0.875rem',
-              fontFamily: TYPOGRAPHY.fontFamily,
-              resize: 'vertical',
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
-      </DialogBody>
-
-      <DialogFooter
-        style={{
-          justifyContent: 'space-between',
-        }}
-      >
-        <div>
-          {onDelete && (
+          {onDelete ? (
             <button
               type="button"
               data-testid="modal-delete-media-btn"
-              disabled={isDeleting || isSaving}
-              onClick={() => void handleDelete()}
+              onClick={handleDelete}
               style={{
-                height: '38px',
-                padding: `0 ${SPACING.md}`,
                 backgroundColor: 'transparent',
+                border: 'none',
                 color: PALETTE.accent3,
-                border: `1px solid ${PALETTE.accent3}`,
-                borderRadius: RADII.sm,
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isDeleting || isSaving ? 'not-allowed' : 'pointer',
+                fontSize: '0.8125rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: 'pointer',
+                padding: `${SPACING.xs} 0`,
               }}
             >
-              {isDeleting ? 'Deleting...' : 'Delete asset'}
+              Delete asset
             </button>
+          ) : (
+            <div />
           )}
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              ...COMPONENT_STYLES.secondaryButton(THEME.default),
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-            }}
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            data-testid="modal-save-caption-btn"
-            disabled={isSaving || isDeleting}
-            onClick={() => void handleSave()}
-            style={{
-              ...COMPONENT_STYLES.primaryButton,
-              opacity: isSaving ? 0.7 : 1,
-            }}
-          >
-            {isSaving ? 'Saving...' : 'Save changes'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              style={{
+                padding: `${SPACING.xs} ${SPACING.md}`,
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                fontSize: '0.8125rem',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              data-testid="modal-save-caption-btn"
+              disabled={isSaving}
+              onClick={handleSaveChanges}
+              style={{
+                padding: `${SPACING.xs} ${SPACING.lg}`,
+                backgroundColor: PALETTE.primary,
+                color: '#000000',
+                border: 'none',
+                borderRadius: RADII.xs,
+                fontSize: '0.8125rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                cursor: isSaving ? 'wait' : 'pointer',
+              }}
+            >
+              {isSaving ? 'Saving...' : 'Save changes'}
+            </button>
+          </div>
         </div>
-      </DialogFooter>
-    </>
+      </div>
+    </div>
   );
 }

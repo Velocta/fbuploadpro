@@ -884,6 +884,35 @@ Spec 064 standardizes the modern multi-platform cloud publishing showcase panel 
 ### 31.3 Mobile Display Architecture
 * **Hidden Showcase on Mobile**: On mobile and narrow viewports (<1024px), `.auth-showcase-panel` is hidden (`display: none !important`), and the dedicated `.auth-mobile-header` displays the brand logo and application title directly above the centered authentication card, ensuring fast, friction-free login and signup access on handheld devices.
 
+---
+
+## 32. Spec 067 Media Library Layout, View Modes & Import Flow Redesign
+
+Spec 067 comprehensively redesigns the Media Library (`/tenant/[subdomain]/media`, component `MediaLibraryExplorer`) in the FBUploadPro Next.js web application, establishing an unboxed flat studio workspace, intuitive view modes, hover-revealed interactions, and a robust 2-step staged ingestion engine:
+
+### 32.1 Architecture & Unboxed Layout Principles
+* **Flat Unboxed Canvas & Zero Box-in-Box Architecture**: Eradicated all nested card boxes and bordered panels inside bordered panels. Page sections, toolbars, subfolder lists, and grids are demarcated solely by generous whitespace and subtle hairline dividers (`border-subtle`).
+* **Universal Plain-Language Microcopy**: All user-visible strings strictly use plain, conversational language (e.g., "Import media", "Upload, organize, and caption your media for publishing queues.", "Caption added", "Missing caption"). Internal backend architecture, database mechanics, storage protocols, and regex/sanitization jargon are permanently barred from view models and labels.
+* **Hover-Revealed Secondary Controls**: Infrequently accessed actions (Rename, Move, Delete) across folders, asset tiles, and table rows remain concealed until user hover, preserving visual calmness and zero-clutter density across large asset libraries.
+* **Permanent Removal of Scheduling CTAs & Eligibility Badges**: 1-click Schedule / Add to Queue CTAs are permanently deleted from `MediaAssetCard`, `MediaTableRow`, `BatchActionBar`, and `MediaPreviewModal`. Scheduling belongs strictly to the publishing queue section. Format eligibility badges (Reels, Feed Video, Story, Photo) are permanently removed from library asset tiles and table views.
+* **Strict Decoupling from Downloader**: The Media Library and Cloud Downloader are completely decoupled. The Media Library contains zero downloader panels, tabs, or background scraper triggers.
+
+### 32.2 View Modes & Component Hierarchy
+* **Subfolder Rows**: Rendered as clean, single-level horizontal rows under section label `FOLDERS (n)` displaying folder icon, name, and secondary text (e.g. `"1 subfolder · 0 files"`). Rows and breadcrumb ancestors act as interactive drop targets for moving assets or subfolders.
+* **Asset Grid**: Rounded thumbnail tiles with metadata rendered directly underneath on the page canvas (file name, size · upload date from `created_at` e.g. `"10.3 KB · Oct 18, 2026"`, caption status line), top-left hover checkbox, bottom-right aspect ratio badge, hover Preview and overflow menu (Move, Delete), and a 300ms hover muted video preview.
+* **Table View**: Unboxed plain table with sticky header, merged Details column (`ratio · duration`), dedicated Upload Date column, click-to-edit caption, and hover actions (Preview, Move, Delete).
+* **Breadcrumbs & Reparenting**: Plain-text breadcrumbs row with clickable ancestors and drag-and-drop drop targets for folder reparenting.
+* **Floating Batch Action Pill**: Selecting 1+ assets reveals a floating bottom-center pill ("n selected · Move · Set caption · Delete · Clear") without highlighted primary action.
+* **Batch Set Caption Modal**: Supports "Replace existing captions" and "Add to the end of existing captions" (inserting after a newline, or setting directly on empty captions) with character counter validation (0 / 2,200).
+* **Studio Preview Modal**: Centered two-column modal: left large preview (video player with scrubber and "Capture frame" button / full image) and right metadata rows (Type, Size, Aspect ratio, Duration, Upload date) + editable Name and Caption; footer with red "Delete asset" on left, Cancel and Save changes on right.
+* **New Folder Modal**: Centered modal with autofocused name input, parent folder selector, and inline duplicate name validation.
+
+### 32.3 Two-Step Staged Ingestion & Concurrency Engine
+* **Step 1: Pre-Upload Staging**: Native file picker and drag-and-drop open `MediaImportModal` in staging mode. Validates file formats, sizes (500MB cap), and rejects 0-byte files; pre-screens intra-batch and server-side duplicate detection (`POST /api/tenant/[subdomain]/media/check-duplicates`) with per-row Skip / Upload anyway actions.
+* **Step 2: Upload Execution**: Strict 3-concurrency worker engine with automatic queue advancement, per-file pause/resume/cancel/retry with exponential backoff, overall batch progress, completion summary, and minimized dock mode permitting background ingestion while browsing.
+* **Leave-Page Upload Protection**: During active in-flight uploads, in-app navigation triggers a protective confirmation dialog (`LeavePageGuardDialog`) displaying furthest-along upload progress, and native browser `beforeunload` is armed until all uploads complete, preventing accidental cancellation and ghost partial storage objects.
+
+
 
 
 

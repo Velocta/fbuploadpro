@@ -1,9 +1,8 @@
 <!--
 Sync Impact Report:
-- Version change: 2.33.0 -> 2.34.0 (MINOR: Codified Spec 062 Live Facebook Insights, 15-minute client localStorage caching, eradication of DB snapshots, Upstash Redis insights caching, and Cloudflare Worker insights sync)
+- Version change: 2.34.0 -> 2.35.0 (MINOR: Codified Spec 067 Media Library Layout, View Modes, Staged Ingestion & Boundary Separation Governance)
 - List of modified principles:
-  - Principle 27 & 28: Removed page_insights_daily_snapshots from multi-tenant and RLS table lists.
-  - Principle 30 (Live Facebook Insights with 15-Minute LocalStorage Caching - Spec 062): Codified live Facebook Graph API v26.0 server-side proxy execution, 15-minute client localStorage caching, and permanent removal of page_insights_daily_snapshots, Upstash Redis insights caching, and Cloudflare Worker insights cron.
+  - Principle 31 (Media Library Layout, View Modes, Staged Ingestion & Boundary Separation Governance - Spec 067): Codified unboxed flat canvas, plain language copy, hover-revealed action controls, permanent removal of Schedule CTAs and Facebook format eligibility badges from media library views, folder rows with drag-and-drop reparenting, rounded thumbnail tiles with unboxed metadata and upload date, unboxed table view with merged details and upload date columns, floating batch action pill, two-step staged import modal with strict 3-concurrency worker loop, pause/resume/cancel/retry resilience, leave-page protection, and complete separation from Downloader.
 - Follow-up TODOs: None.
 -->
 
@@ -209,6 +208,19 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Keyset Cursor Pagination & Pre-Upload Duplicate Detection**: Media library queries support keyset pagination (`createdAt|id`) for $O(1)$ database index scans at scale. Upload workflows pre-screen files via `POST /api/tenant/[subdomain]/media/check-duplicates` to detect duplicates across libraries with 10,000+ files before initiating cloud storage ingestion.
     - **High-Throughput 200,000 Posts/Day Edge Architecture**: The edge publishing runtime (`apps/worker`) claims items using fair per-page partitioned RPC (`claim_due_queue_items(p_limit, p_max_per_page)`), recovers stuck items via `recover_stuck_publishing_items`, executes atomic settlement via `settle_queue_item_outcome`, proactively paces rate limits using Graph API `X-Business-Use-Case-Usage` telemetry headers (`next_allowed_publish_at`, `buc_usage_pct`), and fans out large batches across Cloudflare Queues (`PUBLISH_QUEUE`).
     - **Live Facebook Graph API Proxy & 15-Minute Client LocalStorage Caching (Spec 062)**: Page insights are fetched live from Facebook Graph API v26.0 through a secure server-side proxy route (with zero client token exposure). The legacy `page_insights_daily_snapshots` table, Upstash Redis insights caching, and Cloudflare Worker insights cron sync are permanently abolished and removed. Insights responses are cached directly in the browser's `localStorage` for 15 minutes per page and range, serving instant cached data across page refreshes and re-fetching from Facebook only when 15 minutes have elapsed or when the operator explicitly clicks the 'Sync' button.
+31. **Media Library Layout, View Modes, Staged Ingestion & Boundary Separation Governance (Spec 067)**:
+    - **Flat Unboxed Canvas & Zero Box-in-Box Architecture**: The Media Library (`/tenant/[subdomain]/media`) is architected as an unboxed, breathing canvas. Bordered panels inside outer bordered panels are strictly prohibited. Page sections, toolbars, subfolder lists, and grids are demarcated solely by generous whitespace and subtle hairline dividers (`border-subtle`).
+    - **Universal Plain-Language Microcopy**: All user-visible strings must strictly use plain, conversational language (e.g., "Import media", "Upload, organize, and caption your media for publishing queues.", "Caption added", "Missing caption"). Internal backend architecture, database mechanics, storage protocols, and regex/sanitization jargon are permanently barred from view models and labels.
+    - **Hover-Revealed Secondary Controls**: Infrequently accessed actions (Rename, Move, Delete) across folders, asset tiles, and table rows MUST remain concealed until user hover, preserving visual calmness and zero-clutter density across large asset libraries.
+    - **Permanent Removal of Scheduling CTAs & Eligibility Badges**: 1-click Schedule / Add to Queue CTAs are permanently deleted from `MediaAssetCard`, `MediaTableRow`, `BatchActionBar`, and `MediaPreviewModal`. Scheduling belongs strictly to the publishing queue section. Format eligibility badges (Reels, Feed Video, Story, Photo) are permanently removed from library asset tiles and table views.
+    - **Folder Rows & Drag-and-Drop Reparenting**: Folders are rendered as clean, single-level horizontal rows under section label `FOLDERS (n)` displaying folder name and subfolder/file counts. Rows and breadcrumb ancestors act as interactive drop targets for moving assets or subfolders.
+    - **Asset Grid & Table Views with Direct Canvas Metadata**: Asset grid tiles use rounded thumbnails with metadata rendered directly underneath on the page canvas (file name, size · upload date from `created_at`, caption status line), top-left hover checkbox, bottom-right aspect ratio badge, hover Preview and overflow menu (Move, Delete), and a 300ms hover muted video preview. Table view features an unboxed plain table with sticky header, merged Details column (`ratio · duration`), dedicated Upload Date column, click-to-edit caption, and hover actions.
+    - **Floating Batch Pill & Multi-File Captioning**: Selecting 1+ assets reveals a floating bottom-center pill ("n selected · Move · Set caption · Delete · Clear") without highlighted primary action. Batch captioning supports both "Replace existing captions" and "Add to the end of existing captions" with character counter validation.
+    - **Two-Step Staged Ingestion & 3-Concurrency Worker Queue**: File uploads operate via a two-step modal (`MediaImportModal`):
+      1. Pre-upload staging: validates file formats, sizes (500MB cap), and 0-byte rejections, and performs duplicate detection (intra-batch and pre-upload hash/name/size pre-screening) with per-row Skip / Upload anyway actions.
+      2. Upload execution: enforces a strict 3-concurrency worker engine with automatic queue advancement, per-file pause/resume/cancel/retry with exponential backoff, overall batch progress, completion summary, and minimized dock mode permitting background ingestion while browsing.
+    - **Leave-Page Upload Protection**: During active in-flight uploads, in-app navigation triggers a protective confirmation dialog displaying furthest-along upload progress, and native browser `beforeunload` is armed until all uploads complete, preventing accidental cancellation and ghost partial storage objects.
+    - **Strict Domain Boundary Isolation from Downloader**: The Media Library and Downloader are completely decoupled. The Media Library MUST contain zero downloader panels, tabs, or background scraper triggers.
 
 ## Development Workflow & Quality Gates
 
@@ -234,6 +246,6 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.34.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-16
+**Version**: 2.35.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-18
 
 
