@@ -218,13 +218,6 @@ export function MediaAssetTile({
     setIsHoverPlaying(false);
   };
 
-  const handleTileClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('input[type="checkbox"], label, button')) {
-      return;
-    }
-    onInspect?.(item);
-  };
-
   const handleThumbnailDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     onPreview?.(item);
@@ -234,9 +227,6 @@ export function MediaAssetTile({
 
   return (
     <article
-      role="button"
-      tabIndex={0}
-      aria-label={`Inspect ${item.name}`}
       data-testid={`media-card-${item.id}`}
       data-tile-id={`media-tile-${item.id}`}
       draggable
@@ -247,20 +237,12 @@ export function MediaAssetTile({
         );
         onDragStartMedia?.(e, item);
       }}
-      onClick={handleTileClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onInspect?.(item);
-        }
-      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       style={{
         display: 'flex',
         flexDirection: 'column',
         gap: SPACING.xs,
-        cursor: 'pointer',
         userSelect: 'none',
         position: 'relative',
         transition: 'transform 0.15s ease',
@@ -269,7 +251,6 @@ export function MediaAssetTile({
       {/* Visual Thumbnail Surface */}
       <div
         data-testid={`media-tile-surface-${item.id}`}
-        onDoubleClick={handleThumbnailDoubleClick}
         style={{
           position: 'relative',
           width: '100%',
@@ -285,12 +266,35 @@ export function MediaAssetTile({
           transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
         }}
       >
-        <TileMediaContent
-          item={item}
-          isHoverPlaying={isHoverPlaying}
-          previewSrc={previewSrc}
-          isVideo={isVideo}
-        />
+        {/* Native Interactive Surface: Triggers Inspect & Fullscreen Preview */}
+        <button
+          type="button"
+          data-testid={`media-tile-inspect-btn-${item.id}`}
+          aria-label={`Inspect ${item.name}`}
+          onClick={() => onInspect?.(item)}
+          onDoubleClick={handleThumbnailDoubleClick}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1,
+          }}
+        >
+          <TileMediaContent
+            item={item}
+            isHoverPlaying={isHoverPlaying}
+            previewSrc={previewSrc}
+            isVideo={isVideo}
+          />
+        </button>
 
         {/* Top-Left Selection Checkbox */}
         <label
@@ -457,9 +461,17 @@ export function MediaAssetTile({
             gap: SPACING.xs,
           }}
         >
-          <span
+          <button
+            type="button"
+            onClick={() => onInspect?.(item)}
             title={item.name}
             style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              font: 'inherit',
+              textAlign: 'left',
+              cursor: 'pointer',
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.medium,
               color: isInspected
@@ -472,7 +484,7 @@ export function MediaAssetTile({
             }}
           >
             {item.name}
-          </span>
+          </button>
           <span
             style={{
               fontSize: '0.6875rem',
