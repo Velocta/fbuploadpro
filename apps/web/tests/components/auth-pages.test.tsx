@@ -36,6 +36,19 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
       expect(html).not.toContain('Deploy your automated');
       expect(hasText('Ready')).toBe(false);
     });
+
+    it('renders the canonical multi-platform showcase panel by default (Spec 064)', () => {
+      const { hasText, html } = render(<SignupPage />);
+      expect(hasText('CREATE · SCHEDULE · GROW')).toBe(true);
+      expect(hasText('Your pages,')).toBe(true);
+      expect(hasText('posting themselves —')).toBe(true);
+      expect(hasText('100% on the cloud.')).toBe(true);
+      expect(hasText('Post from anywhere')).toBe(true);
+      expect(hasText('Every platform, one dashboard')).toBe(true);
+      expect(hasText('Your accounts stay yours')).toBe(true);
+      expect(hasText('Facebook · Instagram · TikTok · YouTube · Threads · X')).toBe(true);
+      expect(hasText('Official platform logins · Encrypted end-to-end')).toBe(true);
+    });
   });
 
   describe('LoginPage', () => {

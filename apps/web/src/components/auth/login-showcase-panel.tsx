@@ -85,7 +85,7 @@ const FEATURES: readonly FeatureItem[] = [
   },
 ] as const;
 
-export function LoginShowcasePanel() {
+export function AuthShowcasePanel() {
   return (
     <div
       style={{
@@ -267,3 +267,5 @@ export function LoginShowcasePanel() {
     </div>
   );
 }
+export const LoginShowcasePanel = AuthShowcasePanel;
+

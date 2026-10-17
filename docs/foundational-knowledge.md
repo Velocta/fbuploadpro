@@ -316,6 +316,7 @@ flowchart LR
 - **Spec 061b (Completed & Verified)**: **Workspace Settings General Tab Redesign** (Redesigned the Workspace Settings General tab into a focused single-card surface titled "About this workspace" with subtext "Name your workspace."; replaced legacy metadata with an inline rename field featuring 3–40 character validation without leading/trailing spaces, "Save" and "Cancel" buttons, instant cross-shell synchronization to sidebar footer and workspace switcher via custom events, success toast "Workspace name updated.", responsive mobile stacking, and exact copy with complete removal of legacy subdomain, status dot, and creation metadata).
 - **Spec 062 (Completed & Verified)**: **Live Facebook Insights & Two-Step Schedule Timezone Modal** (Migrated Facebook Page insights to live server-side Graph API proxying with 15-minute client localStorage caching, completely purging database snapshot persistence, Upstash Redis caching, and edge worker insights crons; introduced two-step schedule timezone modal with regional search, clock time preservation guarantee, and queue impact review).
 - **Spec 063 (Completed & Verified)**: **Global WhatsApp Customer Support Floating Action Button** (Implemented a universal, floating WhatsApp support button anchored at the bottom-right of every page via `apps/web/src/app/layout.tsx`. Configured through `NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER` and `NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE` with automatic E.164 phone sanitization, direct link activation to `https://wa.me/` with URL-encoded greeting, theme-compliant accessible tooltips, and responsive coordinates).
+- **Spec 064 (Completed & Verified)**: **Canonical Default Auth Showcase Panel Standardization & Legacy Purge** (Established `AuthShowcasePanel` as the universal default showcase across all authentication layouts in `AuthSplitLayout` (`/login`, `/signup`, `/forgot-password`, `/reset-password`), completely purging legacy Meta-only value pillars (`VALUE_PILLARS`), obsolete headline copy, and unused icon components from `auth-split-layout.tsx`; updated unit tests in `auth-components.test.tsx` and verified `/signup` renders the modern multi-platform showcase).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
 - **Future Specifications**: All subsequent features and specifications will be created strictly on demand as directed by the user.
@@ -863,6 +864,21 @@ Spec 061 executes a comprehensive redesign of the `/login` authentication showca
 * **Zero-Trust E.164 Phone Sanitization**: The utility `sanitizePhoneNumber` in `apps/web/src/lib/whatsapp.ts` strips all formatting (spaces, plus signs, dashes, parentheses) to ensure strict compatibility with the WhatsApp `wa.me` URL standard. If no valid phone number is configured, the component degrades gracefully without rendering or throwing errors.
 * **Environment-Driven Configuration**: The contact number and default greeting are configured via `NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER` and `NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE` (with default greeting `"Hi! I need assistance with my FBUploadPro account."`). If no phone number is configured, the button does not render, ensuring zero phantom/dummy links are shown.
 * **Design System & Accessibility**: Utilizes official WhatsApp brand green (`#25D366`) with pure white vector SVG glyph, accessible `aria-label="Contact WhatsApp Support"`, keyboard focus ring, and an unboxed left-aligned hover tooltip (`Chat on WhatsApp`) conforming strictly to `apps/web/src/lib/theme.ts`.
+
+---
+
+## 31. Spec 064 Canonical Default Auth Showcase Panel Standardization & Legacy Purge
+
+Spec 064 standardizes the modern multi-platform cloud publishing showcase panel as the global default across all authentication views and completely purges legacy Meta-exclusive code:
+
+### 31.1 Universal Default Binding
+* **Canonical Default in `AuthSplitLayout`**: `AuthSplitLayout` imports `AuthShowcasePanel` from `@/components/auth/login-showcase-panel` and assigns it as the fallback whenever the `showcase` prop is not explicitly passed (`{showcase ?? <AuthShowcasePanel />}`).
+* **Every Auth Page Unified**: `/login`, `/signup`, `/forgot-password`, and `/reset-password` all automatically render the multi-platform cloud publishing showcase (`CREATE · SCHEDULE · GROW`, 3-line headline with `"100% on the cloud."`, max-420px subtext, Clock / 2x2 Grid / Padlock feature rows, platforms line, and encrypted trust footer).
+
+### 31.2 Elimination of Legacy Bloat
+* **Eradicated Legacy Code**: Completely excised `VALUE_PILLARS`, `ShieldCheckIcon`, `CloudIcon`, `CommentIcon`, `LockIcon`, and the old headline/pill badge markup from `apps/web/src/components/auth/auth-split-layout.tsx`.
+* **Zero Auth Logic Drift**: No alterations to authentication forms, inputs, validation schemas, OTP handling, route handlers, session management, or cookies.
+
 
 
 

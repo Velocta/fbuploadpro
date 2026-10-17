@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import Link from 'next/link';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
+import { AuthShowcasePanel } from '@/components/auth/login-showcase-panel';
 
 export interface AuthSplitLayoutProps {
   title: string;
@@ -32,98 +32,7 @@ const BrandLogo = () => (
   </div>
 );
 
-const ShieldCheckIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={PALETTE.primary}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ flexShrink: 0, marginTop: '2px' }}
-    aria-hidden="true"
-  >
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    <path d="m9 12 2 2 4-4" />
-  </svg>
-);
 
-const CloudIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={PALETTE.primary}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ flexShrink: 0, marginTop: '2px' }}
-    aria-hidden="true"
-  >
-    <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-  </svg>
-);
-
-const CommentIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={PALETTE.primary}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ flexShrink: 0, marginTop: '2px' }}
-    aria-hidden="true"
-  >
-    <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z" />
-  </svg>
-);
-
-const LockIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke={PALETTE.primary}
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    style={{ flexShrink: 0, marginTop: '2px' }}
-    aria-hidden="true"
-  >
-    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-  </svg>
-);
-
-const VALUE_PILLARS = [
-  {
-    icon: <LockIcon />,
-    title: 'Zero Credential Sharing',
-    desc: 'You never give away your password. Connect safely through Meta’s official authorization without risk.',
-  },
-  {
-    icon: <CloudIcon />,
-    title: '100% Cloud-Powered Automation',
-    desc: 'Your scheduled reels and posts publish on time around the clock, even when your computer is turned off.',
-  },
-  {
-    icon: <CommentIcon />,
-    title: 'Automated First Comments',
-    desc: 'Engage audience and share links instantly with automated first comments posted the second your content goes live.',
-  },
-  {
-    icon: <ShieldCheckIcon />,
-    title: 'Safe & Ban-Protected',
-    desc: 'Uses Meta-approved official publishing standards to keep your Facebook Pages and Instagram accounts fully protected.',
-  },
-];
 
 export function AuthSplitLayout({
   title,
@@ -140,116 +49,7 @@ export function AuthSplitLayout({
       className={`auth-showcase-panel${isFormLeft ? ' auth-showcase-right' : ''}`}
       aria-label="FBUploadPro Showcase"
     >
-      {showcase ?? (
-        <>
-          <div>
-        <Link
-          href="/login"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: SPACING.md,
-            textDecoration: 'none',
-            color: 'var(--text-main, #ffffff)',
-          }}
-        >
-          <BrandLogo />
-          <span
-            style={{
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              letterSpacing: TYPOGRAPHY.tracking.h3,
-            }}
-          >
-            FBUploadPro
-          </span>
-        </Link>
-
-        <div style={{ marginTop: '48px' }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              padding: '4px 10px',
-              borderRadius: RADII.xs,
-              backgroundColor: 'rgba(250, 215, 52, 0.10)',
-              border: `1px solid rgba(250, 215, 52, 0.25)`,
-              fontSize: '0.75rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: PALETTE.primary,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              marginBottom: SPACING.md,
-            }}
-          >
-            Secure Cloud Automation
-          </div>
-
-          {/* User Mandated Headline */}
-          <h1
-            style={{
-              fontSize: '1.875rem',
-              lineHeight: 1.3,
-              fontWeight: TYPOGRAPHY.weights.heavy,
-              letterSpacing: TYPOGRAPHY.tracking.h1,
-              margin: `0 0 ${SPACING.lg} 0`,
-              color: '#ffffff',
-            }}
-          >
-            Automate Facebook and Instagram <span style={{ color: PALETTE.primary }}>100% on the cloud</span> without ever giving away your credentials, making this the most secure way of automation.
-          </h1>
-
-          {/* Feature Pillars (Zero Technical Jargon) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg, marginTop: SPACING.xl }}>
-            {VALUE_PILLARS.map((item) => (
-              <div key={item.title} style={{ display: 'flex', alignItems: 'flex-start', gap: SPACING.md }}>
-                {item.icon}
-                <div>
-                  <div
-                    style={{
-                      fontSize: '0.875rem',
-                      fontWeight: TYPOGRAPHY.weights.semibold,
-                      color: '#ffffff',
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {item.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '0.8125rem',
-                      color: 'var(--text-sub, #9ca3af)',
-                      marginTop: '3px',
-                      lineHeight: 1.45,
-                    }}
-                  >
-                    {item.desc}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Clean Trust & Security Footer */}
-      <div
-        style={{
-          paddingTop: SPACING.lg,
-          borderTop: '1px solid var(--border-subtle, #1f242d)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          fontSize: '0.75rem',
-          color: 'var(--text-dim, #6b7280)',
-        }}
-      >
-        <span>Official Meta OAuth Security</span>
-        <span>Zero Password Access</span>
-      </div>
-        </>
-      )}
+      {showcase ?? <AuthShowcasePanel />}
     </section>
   );
 

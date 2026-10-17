@@ -44,14 +44,15 @@ describe('Auth Redesign Components (Spec 010)', () => {
       );
 
       expect(hasText('FBUploadPro')).toBe(true);
-      expect(hasText('Automate Facebook and Instagram')).toBe(true);
-      expect(hasText('without ever giving away your credentials')).toBe(true);
+      expect(hasText('CREATE · SCHEDULE · GROW')).toBe(true);
+      expect(hasText('100% on the cloud.')).toBe(true);
       expect(hasText('Sign In')).toBe(true);
       expect(hasText('Enter your credentials.')).toBe(true);
       expect(hasText('Form Content')).toBe(true);
       expect(hasText('Footer Test')).toBe(true);
-      expect(html).toContain('Zero Credential Sharing');
-      expect(html).toContain('100% Cloud-Powered Automation');
+      expect(html).toContain('Post from anywhere');
+      expect(html).toContain('Every platform, one dashboard');
+      expect(html).toContain('Your accounts stay yours');
       expect(html).toContain(PALETTE.primary);
       expect(html).toContain('fill-opacity="0.35"');
     });
