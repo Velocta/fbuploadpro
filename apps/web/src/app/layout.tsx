@@ -6,7 +6,15 @@ import { WhatsAppSupportButton } from '@/components/support';
 
 export const metadata: Metadata = {
   title: 'FBUploadPro',
-  description: 'Enterprise multi-tenant Facebook publishing automation platform',
+  description: 'publishing automation platform',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
+    shortcut: '/favicon.ico',
+    apple: '/icon.svg',
+  },
 };
 
 const themeInitScript = `

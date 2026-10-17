@@ -14,9 +14,9 @@ export const config = {
     /*
      * Match all request paths except:
      * 1. /_next (Next.js internals)
-     * 2. /favicon.ico, /robots.txt, static files with extensions (.svg, .png, etc.)
+     * 2. /favicon.ico, /icon, /apple-icon, /robots.txt, /sitemap.xml, static files with extensions (.svg, .png, .ico, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon|apple-icon|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };
 
@@ -187,7 +187,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
   // System API routes and public static bypass tenant rewriting
-  if (pathname.startsWith('/api') || pathname === '/account-suspended') {
+  if (
+    pathname.startsWith('/api') ||
+    pathname === '/account-suspended' ||
+    pathname === '/icon' ||
+    pathname === '/apple-icon' ||
+    pathname === '/favicon.ico' ||
+    pathname.endsWith('.ico')
+  ) {
     return NextResponse.next({
       request: {
         headers: stripUserHeaders(request),
