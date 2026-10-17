@@ -218,6 +218,8 @@ Run these commands in your local terminal using the GitHub CLI:
 gh variable set NEXT_PUBLIC_ROOT_DOMAIN --body "vinsmokemedia.online"
 gh variable set NEXT_PUBLIC_APP_URL --body "https://app.vinsmokemedia.online"
 gh variable set NEXT_PUBLIC_MARKETING_URL --body "https://vinsmokemedia.online"
+gh variable set NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER --body "+15551234567"
+gh variable set NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE --body "Hi! I need assistance with my FBUploadPro account."
 ```
 
 ### 5.3 Set GitHub Secrets (Sensitive Credentials)
@@ -303,3 +305,5 @@ After the initial deployment is complete, verify each core subsystem:
 - [ ] **Facebook BYOC Configuration**: In the tenant workspace, navigate to **Settings** $\rightarrow$ **Facebook BYOC**, enter your Meta App ID & App Secret, and click **Test Credentials** to verify AES-256-GCM encryption and Meta API connectivity.
 - [ ] **Media Library Upload (R2)**: Upload an image or video in the Media Library. Confirm that the file is stored in Cloudflare R2 and served via your custom CDN URL.
 - [ ] **Worker Health**: Inspect worker invocation logs in the Cloudflare Dashboard under **Workers & Pages** $\rightarrow$ `fbuploadpro-worker` $\rightarrow$ **Logs** to confirm that the 1-minute queue poller runs with 0 errors.
+- [ ] **WhatsApp Support Button**: Verify that the floating green WhatsApp support button is visible at the bottom-right corner of all public and tenant pages, and clicking it opens WhatsApp with the pre-filled support message.
+
