@@ -74,7 +74,7 @@ Navigate to **Authentication** $\rightarrow$ **SMTP Settings**:
 3. In **Authentication** $\rightarrow$ **Email Templates**:
    - Configure the production email templates located in [`docs/email-templates/`](email-templates/README.md):
      - **Confirm signup**: Use [`docs/email-templates/otp-verification.html`](email-templates/otp-verification.html) with subject `{{ .Token }} is your FBUploadPro verification code`.
-     - **Reset password**: Use [`docs/email-templates/forgot-email-otp.html`](email-templates/forgot-email-otp.html) with subject `{{ .Token }} is your FBUploadPro password reset code`.
+     - **Reset password**: Use [`docs/email-templates/forgot-password-otp.html`](email-templates/forgot-password-otp.html) with subject `{{ .Token }} is your FBUploadPro password reset code`.
    - See [`docs/email-templates/README.md`](email-templates/README.md) for full configuration instructions and plain-text fallbacks.
 
 ### 1.5 Connect Supabase GitHub Integration (Automated Migrations)
