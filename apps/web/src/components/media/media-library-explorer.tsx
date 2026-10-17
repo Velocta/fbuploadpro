@@ -5,7 +5,7 @@ import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { MediaAssetCard } from './media-asset-card';
 import { MediaTableRow } from './media-table-row';
-import { MediaPreviewModal, type CapturedVideoFrame } from './media-preview-modal';
+import { MediaPreviewModal } from './media-preview-modal';
 import { BatchActionBar } from './batch-action-bar';
 import { BatchSetCaptionModal } from './batch-set-caption-modal';
 import { MediaImportModal } from './media-import-modal';
@@ -1949,7 +1949,7 @@ export function MediaLibraryExplorer({
           showToast('Changes saved');
           await refreshLibraryData();
         }}
-        onUpdateThumbnail={async (id, captured) => {
+        onUpdateThumbnail={async (_id, _captured) => {
           // If update thumbnail API exists or update local preview
           showToast('Thumbnail updated');
           await refreshLibraryData();

@@ -299,7 +299,6 @@ export function MediaImportModal({
   const activeUploadingItems = queue.filter((item) => item.status === 'uploading');
   const queuedItems = queue.filter((item) => item.status === 'queued');
   const completedItems = queue.filter((item) => item.status === 'completed');
-  const failedItems = queue.filter((item) => item.status === 'failed');
 
   // Furthest along progress
   const furthestAlong = activeUploadingItems.reduce<
@@ -676,9 +675,6 @@ export function MediaImportModal({
             totalInBatch
         )
       : 0;
-
-  const destinationFolderName =
-    folders.find((f) => f.id === selectedFolderId)?.name || 'All Media';
 
   return (
     <div

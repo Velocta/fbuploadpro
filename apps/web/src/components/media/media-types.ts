@@ -1,6 +1,6 @@
 'use client';
 
-import { deriveDefaultCaptionFromFilename, type MediaItemResponse, type MediaFolder } from '@fbuploadpro/contracts';
+import { deriveDefaultCaptionFromFilename, type MediaItemResponse } from '@fbuploadpro/contracts';
 
 export type UploadStatus =
   | 'staged'

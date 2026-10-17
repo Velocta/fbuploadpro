@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, PALETTE, RADII, TYPOGRAPHY } from '@/lib/theme';
 
 export interface BatchActionBarProps {
   selectedIds: string[];
@@ -16,7 +16,7 @@ export interface BatchActionBarProps {
 
 export function BatchActionBar({
   selectedIds,
-  totalAvailableCount,
+  totalAvailableCount: _totalAvailableCount,
   onSelectAll,
   onClearSelection,
   onBatchMove,
