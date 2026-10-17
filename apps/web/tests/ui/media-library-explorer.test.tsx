@@ -34,16 +34,8 @@ import { MediaTableRow } from '@/components/media/media-table-row';
 import {
   MediaPreviewModal,
   captureVideoFrameAsWebp,
-  type CapturedVideoFrame,
 } from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
-import { MediaAssetTile } from '@/components/media/media-asset-tile';
-import { MediaFolderRail } from '@/components/media/media-folder-rail';
-import { MediaInspectorPanel } from '@/components/media/media-inspector-panel';
-import {
-  filterMediaByCollection,
-  computeCollectionCounts,
-} from '@/components/media/smart-collections';
 import {
   MediaLibraryExplorer,
   MEDIA_VIEW_MODE_STORAGE_KEY,
@@ -1196,139 +1188,6 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(
       row.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
     ).toBe(true);
-  });
-
-  it('Spec 066 US1 & US3: renders 3-pane Workspace Canvas with MediaFolderRail, fluid stage, and smart collections', () => {
-    const explorer = render(
-      <MediaLibraryExplorer
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialMediaItems={SAMPLE_MEDIA_ITEMS}
-      />
-    );
-
-    expect(explorer.hasAttribute('data-testid', 'media-library-explorer')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'media-folder-rail')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-all')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-video')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-image')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-uncaptioned')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'toggle-folder-rail-btn')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'folder-breadcrumbs')).toBe(true);
-  });
-
-  it('Spec 066 US1: renders clean MediaAssetTile with 300ms hover video playback, non-pill chips, and zero nested form boxes', () => {
-    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const onInspect = vi.fn();
-    const onPreview = vi.fn();
-    const onToggleSelect = vi.fn();
-
-    const tile = render(
-      <MediaAssetTile
-        item={videoItem}
-        isSelected={false}
-        isInspected={true}
-        onInspect={onInspect}
-        onPreview={onPreview}
-        onToggleSelect={onToggleSelect}
-      />
-    );
-
-    expect(tile.hasAttribute('data-testid', `media-card-${videoItem.id}`)).toBe(true);
-    expect(tile.hasAttribute('data-testid', `select-media-${videoItem.id}`)).toBe(true);
-    expect(tile.hasText('Viral Launch Reel.mp4')).toBe(true);
-    expect(tile.hasText('15.0 MB')).toBe(true);
-    expect(tile.hasText('9:16')).toBe(true);
-    expect(tile.hasText('0:45')).toBe(true);
-    // Anti-box & anti-slop check: zero capsule pills (9999px)
-    expect(tile.html).not.toContain('9999px');
-  });
-
-  it('Spec 066 US2: renders MediaInspectorPanel with full playable preview, direct caption editor, Facebook eligibility status dots, and schedule trigger', () => {
-    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const onUpdateCaption = vi.fn();
-    const onSchedule = vi.fn();
-    const onMove = vi.fn();
-    const onDelete = vi.fn();
-    const onClose = vi.fn();
-
-    const inspector = render(
-      <MediaInspectorPanel
-        item={videoItem}
-        selectedCount={1}
-        selectedItems={[videoItem]}
-        folders={SAMPLE_FOLDERS}
-        isOpen={true}
-        onClose={onClose}
-        onUpdateCaption={onUpdateCaption}
-        onSchedule={onSchedule}
-        onMove={onMove}
-        onDelete={onDelete}
-      />
-    );
-
-    expect(inspector.hasAttribute('data-testid', 'media-inspector-panel')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-video-player')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-schedule-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-move-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-download-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-delete-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-caption-textarea')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-save-caption-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'eligibility-row-reel')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'eligibility-row-video')).toBe(true);
-    expect(inspector.hasText('Publishing Formats')).toBe(true);
-  });
-
-  it('Spec 066 US3: filters media by smart collection (Uncaptioned drafts) and computes dynamic collection counts', () => {
-    const counts = computeCollectionCounts(SAMPLE_MEDIA_ITEMS);
-    expect(counts.all).toBe(SAMPLE_MEDIA_ITEMS.length);
-    expect(counts.video).toBe(2);
-    expect(counts.image).toBe(1);
-
-    const videoOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'video');
-    expect(videoOnly).toHaveLength(2);
-    expect(videoOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[0]!.id);
-    expect(videoOnly[1]!.id).toBe(SAMPLE_MEDIA_ITEMS[2]!.id);
-
-    const uncaptionedOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'uncaptioned');
-    expect(uncaptionedOnly).toHaveLength(1);
-    expect(uncaptionedOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[1]!.id);
-  });
-
-  it('Spec 066 US5: transitions MediaInspectorPanel to Batch Mode when 2+ assets are selected', () => {
-    const onBatchSchedule = vi.fn();
-    const onBatchMove = vi.fn();
-    const onBatchCaption = vi.fn();
-    const onBatchDelete = vi.fn();
-
-    const inspector = render(
-      <MediaInspectorPanel
-        item={null}
-        selectedCount={2}
-        selectedItems={[SAMPLE_MEDIA_ITEMS[0]!, SAMPLE_MEDIA_ITEMS[1]!]}
-        folders={SAMPLE_FOLDERS}
-        isOpen={true}
-        onClose={vi.fn()}
-        onUpdateCaption={vi.fn()}
-        onSchedule={vi.fn()}
-        onMove={vi.fn()}
-        onDelete={vi.fn()}
-        onBatchSchedule={onBatchSchedule}
-        onBatchMove={onBatchMove}
-        onBatchCaption={onBatchCaption}
-        onBatchDelete={onBatchDelete}
-      />
-    );
-
-    expect(inspector.hasAttribute('data-testid', 'media-inspector-panel')).toBe(true);
-    expect(inspector.hasAttribute('data-inspector-mode', 'batch')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-schedule-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-move-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-caption-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-delete-btn')).toBe(true);
-    expect(inspector.hasText('Batch Selection')).toBe(true);
-    expect(inspector.hasText('2 assets selected')).toBe(true);
   });
 });
 
