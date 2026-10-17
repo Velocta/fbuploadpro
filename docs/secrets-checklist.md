@@ -130,7 +130,7 @@ To deploy `apps/worker` via GitHub Actions (`wrangler deploy`):
 * **Purpose**: Toggles registration availability across both the web UI and server API endpoints.
 * **Format**: Boolean string (`"true"` / `"false"`).
 * **Behavior**: When set to `"false"`, `/signup` displays a pause notice directing users to `/login` or support, and `POST /api/auth/signup` returns HTTP 403 Forbidden. Defaults to `"true"` if unset.
-* **Provisioning**: Configured in GitHub Variables (`gh variable set NEXT_PUBLIC_SIGNUPS_ENABLED --body "true"`) and synced to Vercel via `.github/workflows/sync-vercel-env.yml`.
+* **Provisioning**: Configured in GitHub Secrets (`gh secret set NEXT_PUBLIC_SIGNUPS_ENABLED --body "true"`) and synced to Vercel via `.github/workflows/sync-vercel-env.yml`.
 
 ---
 
@@ -145,9 +145,8 @@ Go to **GitHub Repo** → **Settings** → **Secrets and variables** → **Actio
 - `NEXT_PUBLIC_MARKETING_URL`
 - `NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER`
 - `NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE`
-- `NEXT_PUBLIC_SIGNUPS_ENABLED`
 
-**Repository Secrets** (Sensitive credentials):
+**Repository Secrets** (Sensitive credentials & platform controls):
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -155,6 +154,7 @@ Go to **GitHub Repo** → **Settings** → **Secrets and variables** → **Actio
 - `CLOUDFLARE_ACCOUNT_ID`
 - `SESSION_SECRET`
 - `TOKEN_ENCRYPTION_KEY`
+- `NEXT_PUBLIC_SIGNUPS_ENABLED`
 - *(If deploying Next.js to Vercel)*: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
 
 ### 2. In Cloudflare Workers (Production Worker)

@@ -219,7 +219,6 @@ gh variable set NEXT_PUBLIC_APP_URL --body "https://app.vinsmokemedia.online"
 gh variable set NEXT_PUBLIC_MARKETING_URL --body "https://vinsmokemedia.online"
 gh variable set NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER --body "+15551234567"
 gh variable set NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE --body "Hi! I need assistance with my FBUploadPro account."
-gh variable set NEXT_PUBLIC_SIGNUPS_ENABLED --body "true"
 ```
 
 ### 5.3 Set GitHub Secrets (Sensitive Credentials)
@@ -230,6 +229,9 @@ Run each command and paste the corresponding credential when prompted (or use `-
 gh secret set VERCEL_TOKEN
 gh secret set VERCEL_ORG_ID
 gh secret set VERCEL_PROJECT_ID
+
+# Platform Controls
+gh secret set NEXT_PUBLIC_SIGNUPS_ENABLED --body "true"
 
 # Cloudflare Workers & Deployment
 gh secret set CLOUDFLARE_API_TOKEN
