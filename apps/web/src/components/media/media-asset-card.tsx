@@ -16,7 +16,7 @@ export interface MediaAssetCardProps {
   folderPathLabel?: string | null | undefined;
   onNavigateFolder?: ((folderId: string | null) => void) | undefined;
   onToggleSelect?:
-    | ((mediaId: string, options?: { shiftKey?: boolean }) => void)
+    | ((mediaId: string, options?: { shiftKey?: boolean | undefined } | undefined) => void)
     | undefined;
   onPreview?: ((item: MediaItemResponse) => void) | undefined;
   onUpdateCaption?:

@@ -306,6 +306,8 @@ export interface MediaLibraryExplorerProps {
   initialViewMode?: MediaViewMode;
   initialSearchQuery?: string;
   initialAspectRatioFilter?: AspectRatioFilterKey;
+  initialCaptionStatusFilter?: CaptionStatusFilterKey;
+  initialSortOption?: SortOptionKey;
   initialTotalMediaCount?: number;
   initialPendingDuplicateUpload?: any;
   initialDeleteFolderTarget?: MediaFolder | null;
@@ -319,6 +321,8 @@ export function MediaLibraryExplorer({
   initialViewMode,
   initialSearchQuery = '',
   initialAspectRatioFilter = 'all',
+  initialCaptionStatusFilter = 'all',
+  initialSortOption = 'created_at:desc',
   initialTotalMediaCount,
   initialPendingDuplicateUpload,
   initialDeleteFolderTarget = null,
@@ -361,8 +365,10 @@ export function MediaLibraryExplorer({
   const [aspectRatioFilter, setAspectRatioFilter] = useState<AspectRatioFilterKey>(
     initialAspectRatioFilter
   );
-  const [captionStatusFilter, setCaptionStatusFilter] = useState<CaptionStatusFilterKey>('all');
-  const [sortOption, setSortOption] = useState<SortOptionKey>('created_at:desc');
+  const [captionStatusFilter, setCaptionStatusFilter] = useState<CaptionStatusFilterKey>(
+    initialCaptionStatusFilter
+  );
+  const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
 
   // Custom Dropdowns state (prevents mouse click swallowing)
   const [activeDropdown, setActiveDropdown] = useState<'ratio' | 'caption' | 'sort' | null>(null);
@@ -561,7 +567,10 @@ export function MediaLibraryExplorer({
   ]);
 
   // Selection handlers
-  const handleToggleSelect = (mediaId: string, options?: { shiftKey?: boolean }) => {
+  const handleToggleSelect = (
+    mediaId: string,
+    options?: { shiftKey?: boolean | undefined } | undefined
+  ) => {
     setSelectedIds((prev) => {
       if (options?.shiftKey && prev.length > 0) {
         const lastId = prev[prev.length - 1];
