@@ -120,6 +120,7 @@ export function MediaPreviewModal({
     () => item?.captionText ?? (item ? deriveDefaultCaption(item.name) : '')
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [frameSuccessMessage, setFrameSuccessMessage] = useState<string | null>(null);
 
@@ -169,7 +170,7 @@ export function MediaPreviewModal({
   };
 
   const handleCaptureFrame = async () => {
-    if (!videoRef.current || !onUpdateThumbnail) return;
+    if (!videoRef.current || !onUpdateThumbnail || isCapturingFrame || isSaving || isDeleting) return;
     setIsCapturingFrame(true);
     setFrameSuccessMessage(null);
     try {
@@ -183,7 +184,7 @@ export function MediaPreviewModal({
   };
 
   const handleSaveChanges = async () => {
-    if (!onSave) return;
+    if (!onSave || isSaving || isDeleting) return;
     setIsSaving(true);
     try {
       await onSave(item.id, {
@@ -197,10 +198,15 @@ export function MediaPreviewModal({
   };
 
   const handleDelete = async () => {
-    if (!onDelete) return;
+    if (!onDelete || isDeleting || isSaving) return;
     if (window.confirm(`Delete "${item.name}"? This cannot be undone.`)) {
-      await onDelete(item.id);
-      onOpenChange(false);
+      setIsDeleting(true);
+      try {
+        await onDelete(item.id);
+        onOpenChange(false);
+      } finally {
+        setIsDeleting(false);
+      }
     }
   };
 
@@ -210,12 +216,12 @@ export function MediaPreviewModal({
       aria-labelledby="preview-modal-title"
       data-testid="media-preview-modal"
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) {
+        if (!isSaving && !isDeleting && e.target === e.currentTarget) {
           onOpenChange(false);
         }
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') {
+        if (!isSaving && !isDeleting && e.key === 'Escape') {
           onOpenChange(false);
         }
       }}
@@ -515,6 +521,7 @@ export function MediaPreviewModal({
                   id="preview-filename-input"
                   type="text"
                   data-testid="modal-filename-input"
+                  disabled={isSaving || isDeleting}
                   value={nameDraft}
                   onChange={(e) => setNameDraft(e.target.value)}
                   style={{
@@ -527,6 +534,7 @@ export function MediaPreviewModal({
                     fontSize: '0.8125rem',
                     outline: 'none',
                     boxSizing: 'border-box',
+                    opacity: isSaving || isDeleting ? 0.6 : 1,
                   }}
                 />
               </div>
@@ -547,6 +555,7 @@ export function MediaPreviewModal({
                   id="preview-caption-textarea"
                   data-testid="modal-caption-input"
                   rows={4}
+                  disabled={isSaving || isDeleting}
                   value={captionDraft}
                   onChange={(e) => setCaptionDraft(e.target.value)}
                   placeholder="Add a caption..."
@@ -562,6 +571,7 @@ export function MediaPreviewModal({
                     outline: 'none',
                     resize: 'vertical',
                     boxSizing: 'border-box',
+                    opacity: isSaving || isDeleting ? 0.6 : 1,
                   }}
                 />
                 <div
@@ -595,6 +605,7 @@ export function MediaPreviewModal({
             <button
               type="button"
               data-testid="modal-delete-media-btn"
+              disabled={isDeleting || isSaving}
               onClick={handleDelete}
               style={{
                 backgroundColor: 'transparent',
@@ -602,11 +613,12 @@ export function MediaPreviewModal({
                 color: PALETTE.accent3,
                 fontSize: '0.8125rem',
                 fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
+                cursor: isDeleting || isSaving ? 'not-allowed' : 'pointer',
+                opacity: isDeleting || isSaving ? 0.6 : 1,
                 padding: `${SPACING.xs} 0`,
               }}
             >
-              Delete asset
+              {isDeleting ? 'Deleting...' : 'Delete asset'}
             </button>
           ) : (
             <div />
@@ -615,6 +627,7 @@ export function MediaPreviewModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
             <button
               type="button"
+              disabled={isSaving || isDeleting}
               onClick={() => onOpenChange(false)}
               style={{
                 padding: `${SPACING.xs} ${SPACING.md}`,
@@ -622,7 +635,8 @@ export function MediaPreviewModal({
                 border: 'none',
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 fontSize: '0.8125rem',
-                cursor: 'pointer',
+                cursor: isSaving || isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isSaving || isDeleting ? 0.6 : 1,
               }}
             >
               Cancel
@@ -630,7 +644,7 @@ export function MediaPreviewModal({
             <button
               type="button"
               data-testid="modal-save-caption-btn"
-              disabled={isSaving}
+              disabled={isSaving || isDeleting}
               onClick={handleSaveChanges}
               style={{
                 padding: `${SPACING.xs} ${SPACING.lg}`,
@@ -640,7 +654,8 @@ export function MediaPreviewModal({
                 borderRadius: RADII.xs,
                 fontSize: '0.8125rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isSaving ? 'wait' : 'pointer',
+                cursor: isSaving || isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.6 : 1,
               }}
             >
               {isSaving ? 'Saving...' : 'Save changes'}

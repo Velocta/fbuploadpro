@@ -196,7 +196,14 @@ export function MediaImportModal({
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId);
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
   const [userInitiatedCancel, setUserInitiatedCancel] = useState(false);
+  const [isStartingImport, setIsStartingImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsStartingImport(false);
+    }
+  }, [isOpen]);
 
   // Synchronize initial files into staging queue
   useEffect(() => {
@@ -530,6 +537,8 @@ export function MediaImportModal({
 
   // Actions
   const handleStartImport = () => {
+    if (isStartingImport) return;
+    setIsStartingImport(true);
     setUserInitiatedCancel(false);
     console.info('[upload-engine] Starting import batch');
     setQueue((prev) =>
@@ -1317,18 +1326,23 @@ export function MediaImportModal({
                   </button>
                   <button
                     type="button"
-                    disabled={validStagedItems.length === 0}
+                    disabled={validStagedItems.length === 0 || isStartingImport}
                     onClick={handleStartImport}
                     style={{
                       padding: `${SPACING.xs} ${SPACING.lg}`,
                       backgroundColor:
-                        validStagedItems.length > 0 ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
+                        validStagedItems.length > 0 && !isStartingImport
+                          ? PALETTE.primary
+                          : 'rgba(250, 215, 52, 0.3)',
                       color: '#000000',
                       border: 'none',
                       borderRadius: RADII.xs,
                       fontSize: '0.8125rem',
                       fontWeight: TYPOGRAPHY.weights.semibold,
-                      cursor: validStagedItems.length > 0 ? 'pointer' : 'not-allowed',
+                      cursor:
+                        validStagedItems.length > 0 && !isStartingImport
+                          ? 'pointer'
+                          : 'not-allowed',
                     }}
                   >
                     Start import ({validStagedItems.length})

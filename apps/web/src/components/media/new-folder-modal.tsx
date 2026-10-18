@@ -67,12 +67,12 @@ export function NewFolderModal({
       open
       aria-labelledby="new-folder-title"
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) {
+        if (!isSubmitting && e.target === e.currentTarget) {
           onClose();
         }
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') {
+        if (!isSubmitting && e.key === 'Escape') {
           onClose();
         }
       }}
@@ -152,6 +152,7 @@ export function NewFolderModal({
               ref={inputRef}
               type="text"
               data-testid="new-folder-name-input"
+              disabled={isSubmitting}
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               placeholder="e.g. Summer Campaign"
@@ -167,6 +168,7 @@ export function NewFolderModal({
                 fontSize: '0.875rem',
                 outline: 'none',
                 boxSizing: 'border-box',
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             />
             {isDuplicate && (
@@ -198,6 +200,7 @@ export function NewFolderModal({
             <select
               id="place-inside-select"
               data-testid="place-inside-select"
+              disabled={isSubmitting}
               value={parentId || ''}
               onChange={(e) => setParentId(e.target.value || null)}
               style={{
@@ -209,8 +212,9 @@ export function NewFolderModal({
                 color: `var(--text-main, ${THEME.default.text.primary})`,
                 fontSize: '0.8125rem',
                 outline: 'none',
-                cursor: 'pointer',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
                 boxSizing: 'border-box',
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
               <option value="">Library</option>
@@ -234,6 +238,7 @@ export function NewFolderModal({
           >
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={onClose}
               style={{
                 padding: `${SPACING.xs} ${SPACING.md}`,
@@ -241,7 +246,8 @@ export function NewFolderModal({
                 border: 'none',
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 fontSize: '0.8125rem',
-                cursor: 'pointer',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
               Cancel

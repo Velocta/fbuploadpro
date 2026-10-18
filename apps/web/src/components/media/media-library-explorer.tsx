@@ -1227,209 +1227,7 @@ function MediaToolbar({
   );
 }
 
-interface MediaViewsRailProps {
-  activeSmartView: MediaSmartViewKey | null;
-  currentFolderId: string | null;
-  folders: MediaFolder[];
-  onSelectSmartView: (view: MediaSmartViewKey) => void;
-  onSelectRootLibrary: () => void;
-  onSelectFolder: (folderId: string) => void;
-  onOpenNewFolder: () => void;
-}
 
-function MediaViewsRail({
-  activeSmartView,
-  currentFolderId,
-  folders,
-  onSelectSmartView,
-  onSelectRootLibrary,
-  onSelectFolder,
-  onOpenNewFolder,
-}: Readonly<MediaViewsRailProps>) {
-  const rootFolders = folders.filter((f) => !f.parentId);
-  const isRootSelected = activeSmartView === null && currentFolderId === null;
-
-  return (
-    <aside
-      data-testid="media-views-rail"
-      style={{
-        width: '180px',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: SPACING.lg,
-        paddingTop: SPACING.md,
-      }}
-    >
-      {/* Section: VIEWS */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span
-          style={{
-            fontSize: '0.6875rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            letterSpacing: '0.04em',
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-            marginBottom: '4px',
-          }}
-        >
-          VIEWS
-        </span>
-
-        <button
-          type="button"
-          data-testid="smart-view-everything"
-          onClick={() => onSelectSmartView('everything')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            backgroundColor: 'transparent',
-            border: 'none',
-            padding: '4px 0',
-            fontSize: '0.8125rem',
-            fontWeight:
-              activeSmartView === 'everything'
-                ? TYPOGRAPHY.weights.semibold
-                : TYPOGRAPHY.weights.regular,
-            color:
-              activeSmartView === 'everything'
-                ? PALETTE.primary
-                : `var(--text-sub, ${THEME.default.text.secondary})`,
-            cursor: 'pointer',
-            textAlign: 'left',
-          }}
-        >
-          Everything
-        </button>
-
-        <button
-          type="button"
-          data-testid="smart-view-needs-caption"
-          onClick={() => onSelectSmartView('needs_caption')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            backgroundColor: 'transparent',
-            border: 'none',
-            padding: '4px 0',
-            fontSize: '0.8125rem',
-            fontWeight:
-              activeSmartView === 'needs_caption'
-                ? TYPOGRAPHY.weights.semibold
-                : TYPOGRAPHY.weights.regular,
-            color:
-              activeSmartView === 'needs_caption'
-                ? PALETTE.primary
-                : `var(--text-sub, ${THEME.default.text.secondary})`,
-            cursor: 'pointer',
-            textAlign: 'left',
-          }}
-        >
-          Needs caption
-        </button>
-      </div>
-
-      {/* Section: FOLDERS */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '4px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              letterSpacing: '0.04em',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-            }}
-          >
-            FOLDERS
-          </span>
-          <button
-            type="button"
-            data-testid="rail-new-folder-btn"
-            onClick={onOpenNewFolder}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              cursor: 'pointer',
-            }}
-          >
-            + New
-          </button>
-        </div>
-
-        <button
-          type="button"
-          data-testid="rail-root-library"
-          onClick={onSelectRootLibrary}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            backgroundColor: 'transparent',
-            border: 'none',
-            padding: '4px 0',
-            fontSize: '0.8125rem',
-            fontWeight: isRootSelected
-              ? TYPOGRAPHY.weights.semibold
-              : TYPOGRAPHY.weights.regular,
-            color: isRootSelected
-              ? PALETTE.primary
-              : `var(--text-sub, ${THEME.default.text.secondary})`,
-            cursor: 'pointer',
-            textAlign: 'left',
-          }}
-        >
-          Library
-        </button>
-
-        {rootFolders.map((f) => {
-          const isSelected = activeSmartView === null && currentFolderId === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              data-testid={`rail-folder-${f.id}`}
-              onClick={() => onSelectFolder(f.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: '4px 0 4px 8px',
-                fontSize: '0.8125rem',
-                fontWeight: isSelected
-                  ? TYPOGRAPHY.weights.semibold
-                  : TYPOGRAPHY.weights.regular,
-                color: isSelected
-                  ? PALETTE.primary
-                  : `var(--text-sub, ${THEME.default.text.secondary})`,
-                cursor: 'pointer',
-                textAlign: 'left',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {f.name}
-            </button>
-          );
-        })}
-      </div>
-    </aside>
-  );
-}
 
 function getInitialViewMode(initialMode?: MediaViewMode): MediaViewMode {
   if (initialMode) return initialMode;
@@ -1590,6 +1388,14 @@ export function MediaLibraryExplorer({
     initialDeleteFolderTarget
   );
 
+  // Action Busy States (Prevents multi-click / double submission)
+  const [isRenamingFolder, setIsRenamingFolder] = useState(false);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
+  const [isMoving, setIsMoving] = useState(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [isBatchCaptioning, setIsBatchCaptioning] = useState(false);
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+
   // Active uploads state & Leave page protection
   const [activeUploadsCount, setActiveUploadsCount] = useState(0);
   const [furthestAlongUpload, setFurthestAlongUpload] = useState<{
@@ -1710,29 +1516,41 @@ export function MediaLibraryExplorer({
   };
 
   const handleRenameFolder = async (folderId: string, newName: string) => {
-    const res = await fetch(`/api/tenant/${subdomain}/media/folders/${folderId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName }),
-    });
-    if (res.ok) {
-      showToast(`Folder renamed to '${newName}'`);
-      setRenameFolderTarget(null);
-      await refreshLibraryData();
+    if (isRenamingFolder || !newName.trim()) return;
+    setIsRenamingFolder(true);
+    try {
+      const res = await fetch(`/api/tenant/${subdomain}/media/folders/${folderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName }),
+      });
+      if (res.ok) {
+        showToast(`Folder renamed to '${newName}'`);
+        setRenameFolderTarget(null);
+        await refreshLibraryData();
+      }
+    } finally {
+      setIsRenamingFolder(false);
     }
   };
 
   const handleDeleteFolder = async (folderId: string) => {
-    const res = await fetch(`/api/tenant/${subdomain}/media/folders/${folderId}`, {
-      method: 'DELETE',
-    });
-    if (res.ok) {
-      showToast('Folder deleted');
-      setDeleteFolderTarget(null);
-      if (currentFolderId === folderId) {
-        setCurrentFolderId(null);
+    if (isDeletingFolder) return;
+    setIsDeletingFolder(true);
+    try {
+      const res = await fetch(`/api/tenant/${subdomain}/media/folders/${folderId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        showToast('Folder deleted');
+        setDeleteFolderTarget(null);
+        if (currentFolderId === folderId) {
+          setCurrentFolderId(null);
+        }
+        await refreshLibraryData();
       }
-      await refreshLibraryData();
+    } finally {
+      setIsDeletingFolder(false);
     }
   };
 
@@ -1741,82 +1559,101 @@ export function MediaLibraryExplorer({
     targetFolderId: string | null,
     payload: { mediaId?: string; folderId?: string }
   ) => {
-    if (payload.mediaId) {
-      await fetch(`/api/tenant/${subdomain}/media/${payload.mediaId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderId: targetFolderId }),
-      });
-      showToast('Item moved');
-      await refreshLibraryData();
-      return;
-    }
-    if (payload.folderId && payload.folderId !== targetFolderId) {
-      await fetch(`/api/tenant/${subdomain}/media/folders/${payload.folderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentId: targetFolderId }),
-      });
-      showToast('Folder moved');
-      await refreshLibraryData();
+    if (isMoving) return;
+    setIsMoving(true);
+    try {
+      if (payload.mediaId) {
+        await fetch(`/api/tenant/${subdomain}/media/${payload.mediaId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderId: targetFolderId }),
+        });
+        showToast('Item moved');
+        await refreshLibraryData();
+        return;
+      }
+      if (payload.folderId && payload.folderId !== targetFolderId) {
+        await fetch(`/api/tenant/${subdomain}/media/folders/${payload.folderId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ parentId: targetFolderId }),
+        });
+        showToast('Folder moved');
+        await refreshLibraryData();
+      }
+    } finally {
+      setIsMoving(false);
     }
   };
 
   // Batch Operations
   const handleBatchCaptionApply = async (text: string, mode: BatchCaptionMode) => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || isBatchCaptioning) return;
+    setIsBatchCaptioning(true);
+    try {
+      // Apply via API batch or individual updates
+      const updates = selectedIds.map(async (id) => {
+        const existing = mediaItems.find((m) => m.id === id);
+        const newCaption =
+          mode === 'append' && existing?.captionText
+            ? `${existing.captionText}\n${text}`
+            : text;
 
-    // Apply via API batch or individual updates
-    const updates = selectedIds.map(async (id) => {
-      const existing = mediaItems.find((m) => m.id === id);
-      const newCaption =
-        mode === 'append' && existing?.captionText
-          ? `${existing.captionText}\n${text}`
-          : text;
-
-      return fetch(`/api/tenant/${subdomain}/media/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ captionText: newCaption }),
+        return fetch(`/api/tenant/${subdomain}/media/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ captionText: newCaption }),
+        });
       });
-    });
 
-    await Promise.all(updates);
-    showToast(`Caption updated on ${selectedIds.length} files`);
-    setSelectedIds([]);
-    await refreshLibraryData();
+      await Promise.all(updates);
+      showToast(`Caption updated on ${selectedIds.length} files`);
+      setSelectedIds([]);
+      await refreshLibraryData();
+    } finally {
+      setIsBatchCaptioning(false);
+    }
   };
 
   const handleBatchDelete = async () => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || isBatchDeleting) return;
     if (!window.confirm(`Delete ${selectedIds.length} assets? This cannot be undone.`)) {
       return;
     }
 
-    await fetch(`/api/tenant/${subdomain}/media/batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete', mediaIds: selectedIds }),
-    });
+    setIsBatchDeleting(true);
+    try {
+      await fetch(`/api/tenant/${subdomain}/media/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', mediaIds: selectedIds }),
+      });
 
-    showToast(`Deleted ${selectedIds.length} files`);
-    setSelectedIds([]);
-    await refreshLibraryData();
+      showToast(`Deleted ${selectedIds.length} files`);
+      setSelectedIds([]);
+      await refreshLibraryData();
+    } finally {
+      setIsBatchDeleting(false);
+    }
   };
 
   const handleBatchMoveSubmit = async (destinationId: string | null) => {
-    if (selectedIds.length === 0) return;
+    if (selectedIds.length === 0 || isMoving) return;
+    setIsMoving(true);
+    try {
+      await fetch(`/api/tenant/${subdomain}/media/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move', mediaIds: selectedIds, folderId: destinationId }),
+      });
 
-    await fetch(`/api/tenant/${subdomain}/media/batch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'move', mediaIds: selectedIds, folderId: destinationId }),
-    });
-
-    showToast(`Moved ${selectedIds.length} files`);
-    setSelectedIds([]);
-    setMoveTarget(null);
-    await refreshLibraryData();
+      showToast(`Moved ${selectedIds.length} files`);
+      setSelectedIds([]);
+      setMoveTarget(null);
+      await refreshLibraryData();
+    } finally {
+      setIsMoving(false);
+    }
   };
 
   // Single Item Operations
@@ -1832,11 +1669,17 @@ export function MediaLibraryExplorer({
   };
 
   const handleDeleteItem = async (mediaId: string) => {
-    await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
-      method: 'DELETE',
-    });
-    showToast('Asset deleted');
-    setMediaItems((prev) => prev.filter((m) => m.id !== mediaId));
+    if (deletingAssetId === mediaId) return;
+    setDeletingAssetId(mediaId);
+    try {
+      await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
+        method: 'DELETE',
+      });
+      showToast('Asset deleted');
+      setMediaItems((prev) => prev.filter((m) => m.id !== mediaId));
+    } finally {
+      setDeletingAssetId(null);
+    }
   };
 
   // Global Drag and drop onto page to open Import Modal
@@ -2050,38 +1893,15 @@ export function MediaLibraryExplorer({
         }}
       />
 
-      {/* 3. Main Explorer Body: Left Rail (VIEWS + FOLDERS) and Right Canvas */}
-      <div
+      {/* 3. Main Explorer Canvas (Full Width) */}
+      <main
         data-testid="media-explorer-body"
         style={{
-          display: 'flex',
-          gap: SPACING.xl,
-          alignItems: 'flex-start',
           width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
-        {/* Navigation Rail */}
-        <MediaViewsRail
-          activeSmartView={activeSmartView}
-          currentFolderId={currentFolderId}
-          folders={folders}
-          onSelectSmartView={(view) => {
-            setActiveSmartView(view);
-            setCurrentFolderId(null);
-          }}
-          onSelectRootLibrary={() => {
-            setActiveSmartView(null);
-            setCurrentFolderId(null);
-          }}
-          onSelectFolder={(folderId) => {
-            setActiveSmartView(null);
-            setCurrentFolderId(folderId);
-          }}
-          onOpenNewFolder={() => setIsNewFolderOpen(true)}
-        />
-
-        {/* Right Canvas */}
-        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {/* Slim Context Row: Breadcrumb in Plain Text on Left, "Select all" on Right */}
           <div
             data-testid="context-row"
@@ -2397,8 +2217,10 @@ export function MediaLibraryExplorer({
                           type="button"
                           data-testid={`rename-folder-${folder.id}`}
                           aria-label={`Rename ${folder.name}`}
+                          disabled={isRenamingFolder || isDeletingFolder || isMoving}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isRenamingFolder || isDeletingFolder || isMoving) return;
                             setRenameFolderTarget(folder);
                             setRenameDraft(folder.name);
                           }}
@@ -2406,7 +2228,8 @@ export function MediaLibraryExplorer({
                             backgroundColor: 'transparent',
                             border: 'none',
                             color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                            cursor: 'pointer',
+                            cursor: isRenamingFolder || isDeletingFolder || isMoving ? 'not-allowed' : 'pointer',
+                            opacity: isRenamingFolder || isDeletingFolder || isMoving ? 0.6 : 1,
                             padding: '4px',
                           }}
                         >
@@ -2419,8 +2242,10 @@ export function MediaLibraryExplorer({
                           type="button"
                           data-testid={`move-folder-${folder.id}`}
                           aria-label={`Move ${folder.name}`}
+                          disabled={isRenamingFolder || isDeletingFolder || isMoving}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isRenamingFolder || isDeletingFolder || isMoving) return;
                             setMoveTarget({ type: 'folder', folder });
                             setMoveDestinationFolderId(folder.parentId);
                           }}
@@ -2428,7 +2253,8 @@ export function MediaLibraryExplorer({
                             backgroundColor: 'transparent',
                             border: 'none',
                             color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                            cursor: 'pointer',
+                            cursor: isRenamingFolder || isDeletingFolder || isMoving ? 'not-allowed' : 'pointer',
+                            opacity: isRenamingFolder || isDeletingFolder || isMoving ? 0.6 : 1,
                             padding: '4px',
                           }}
                         >
@@ -2444,15 +2270,18 @@ export function MediaLibraryExplorer({
                           type="button"
                           data-testid={`delete-folder-${folder.id}`}
                           aria-label={`Delete ${folder.name}`}
+                          disabled={isRenamingFolder || isDeletingFolder || isMoving}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isRenamingFolder || isDeletingFolder || isMoving) return;
                             setDeleteFolderTarget(folder);
                           }}
                           style={{
                             backgroundColor: 'transparent',
                             border: 'none',
                             color: PALETTE.accent3,
-                            cursor: 'pointer',
+                            cursor: isRenamingFolder || isDeletingFolder || isMoving ? 'not-allowed' : 'pointer',
+                            opacity: isRenamingFolder || isDeletingFolder || isMoving ? 0.6 : 1,
                             padding: '4px',
                           }}
                         >
@@ -2492,17 +2321,24 @@ export function MediaLibraryExplorer({
             onDeleteRequest={handleDeleteItem}
           />
         </main>
-      </div>
 
       {/* 6. Floating Batch Action Pill (Bottom Center) */}
       <BatchActionBar
         selectedIds={selectedIds}
-        onClearSelection={() => setSelectedIds([])}
+        isBusy={isBatchDeleting || isBatchCaptioning || isMoving}
+        onClearSelection={() => {
+          if (isBatchDeleting || isBatchCaptioning || isMoving) return;
+          setSelectedIds([]);
+        }}
         onBatchMove={() => {
+          if (isBatchDeleting || isBatchCaptioning || isMoving) return;
           setMoveTarget({ type: 'batch_media' });
           setMoveDestinationFolderId(currentFolderId);
         }}
-        onBatchCaption={() => setIsBatchCaptionOpen(true)}
+        onBatchCaption={() => {
+          if (isBatchDeleting || isBatchCaptioning || isMoving) return;
+          setIsBatchCaptionOpen(true);
+        }}
         onBatchDelete={handleBatchDelete}
       />
 
@@ -2652,6 +2488,7 @@ export function MediaLibraryExplorer({
               </label>
               <select
                 id="move-destination-folder-select"
+                disabled={isMoving}
                 value={moveDestinationFolderId || ''}
                 onChange={(e) => setMoveDestinationFolderId(e.target.value || null)}
                 style={{
@@ -2663,7 +2500,8 @@ export function MediaLibraryExplorer({
                   color: `var(--text-main, ${THEME.default.text.primary})`,
                   fontSize: '0.8125rem',
                   outline: 'none',
-                  cursor: 'pointer',
+                  cursor: isMoving ? 'not-allowed' : 'pointer',
+                  opacity: isMoving ? 0.6 : 1,
                 }}
               >
                 <option value="">Library</option>
@@ -2682,6 +2520,7 @@ export function MediaLibraryExplorer({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
               <button
                 type="button"
+                disabled={isMoving}
                 onClick={() => setMoveTarget(null)}
                 style={{
                   padding: `${SPACING.xs} ${SPACING.md}`,
@@ -2689,14 +2528,17 @@ export function MediaLibraryExplorer({
                   border: 'none',
                   color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   fontSize: '0.8125rem',
-                  cursor: 'pointer',
+                  cursor: isMoving ? 'not-allowed' : 'pointer',
+                  opacity: isMoving ? 0.6 : 1,
                 }}
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isMoving}
                 onClick={async () => {
+                  if (isMoving) return;
                   if (moveTarget.type === 'single_media' && moveTarget.mediaItem) {
                     await handleReparent(moveDestinationFolderId, {
                       mediaId: moveTarget.mediaItem.id,
@@ -2713,16 +2555,17 @@ export function MediaLibraryExplorer({
                 }}
                 style={{
                   padding: `${SPACING.xs} ${SPACING.lg}`,
-                  backgroundColor: PALETTE.primary,
+                  backgroundColor: isMoving ? 'rgba(250, 215, 52, 0.3)' : PALETTE.primary,
                   color: '#000000',
                   border: 'none',
                   borderRadius: RADII.xs,
                   fontSize: '0.8125rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
-                  cursor: 'pointer',
+                  cursor: isMoving ? 'not-allowed' : 'pointer',
+                  opacity: isMoving ? 0.6 : 1,
                 }}
               >
-                Move
+                {isMoving ? 'Moving...' : 'Move'}
               </button>
             </div>
           </div>
@@ -2779,6 +2622,7 @@ export function MediaLibraryExplorer({
             </h2>
             <input
               type="text"
+              disabled={isRenamingFolder}
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
               style={{
@@ -2791,11 +2635,13 @@ export function MediaLibraryExplorer({
                 fontSize: '0.875rem',
                 outline: 'none',
                 boxSizing: 'border-box',
+                opacity: isRenamingFolder ? 0.6 : 1,
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
               <button
                 type="button"
+                disabled={isRenamingFolder}
                 onClick={() => setRenameFolderTarget(null)}
                 style={{
                   padding: `${SPACING.xs} ${SPACING.md}`,
@@ -2803,27 +2649,33 @@ export function MediaLibraryExplorer({
                   border: 'none',
                   color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   fontSize: '0.8125rem',
-                  cursor: 'pointer',
+                  cursor: isRenamingFolder ? 'not-allowed' : 'pointer',
+                  opacity: isRenamingFolder ? 0.6 : 1,
                 }}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={!renameDraft.trim()}
+                disabled={isRenamingFolder || !renameDraft.trim()}
                 onClick={() => handleRenameFolder(renameFolderTarget.id, renameDraft.trim())}
                 style={{
                   padding: `${SPACING.xs} ${SPACING.lg}`,
-                  backgroundColor: renameDraft.trim() ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
+                  backgroundColor:
+                    renameDraft.trim() && !isRenamingFolder
+                      ? PALETTE.primary
+                      : 'rgba(250, 215, 52, 0.3)',
                   color: '#000000',
                   border: 'none',
                   borderRadius: RADII.xs,
                   fontSize: '0.8125rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
-                  cursor: renameDraft.trim() ? 'pointer' : 'not-allowed',
+                  cursor:
+                    renameDraft.trim() && !isRenamingFolder ? 'pointer' : 'not-allowed',
+                  opacity: isRenamingFolder ? 0.6 : 1,
                 }}
               >
-                Save
+                {isRenamingFolder ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
@@ -2901,6 +2753,7 @@ export function MediaLibraryExplorer({
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
               <button
                 type="button"
+                disabled={isDeletingFolder}
                 onClick={() => setDeleteFolderTarget(null)}
                 style={{
                   padding: `${SPACING.xs} ${SPACING.md}`,
@@ -2908,13 +2761,15 @@ export function MediaLibraryExplorer({
                   border: 'none',
                   color: `var(--text-sub, ${THEME.default.text.secondary})`,
                   fontSize: '0.8125rem',
-                  cursor: 'pointer',
+                  cursor: isDeletingFolder ? 'not-allowed' : 'pointer',
+                  opacity: isDeletingFolder ? 0.6 : 1,
                 }}
               >
                 Cancel
               </button>
               <button
                 type="button"
+                disabled={isDeletingFolder}
                 onClick={() => handleDeleteFolder(deleteFolderTarget.id)}
                 style={{
                   padding: `${SPACING.xs} ${SPACING.lg}`,
@@ -2924,10 +2779,11 @@ export function MediaLibraryExplorer({
                   borderRadius: RADII.xs,
                   fontSize: '0.8125rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
-                  cursor: 'pointer',
+                  cursor: isDeletingFolder ? 'not-allowed' : 'pointer',
+                  opacity: isDeletingFolder ? 0.6 : 1,
                 }}
               >
-                Delete
+                {isDeletingFolder ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

@@ -990,6 +990,31 @@ Spec 070 rebuilds the Media Library toolbar and navigation architecture into an 
 * **Library-Wide Search**: Any query entered into Zone 1 searches the entire repository across all folders and smart views.
 * **Folder Path Badges**: Every search result card and table row displays its folder path attribution (e.g. `"in asdf / sdafd"` or `"in Library"`), providing instant location context and one-click navigation directly to the enclosing folder.
 
+---
+
+## 36. Spec 071 Media Library Views Sidebar Cleanup & Double-Click Action State Hardening
+
+Spec 071 restores the Media Library to a full-width explorer canvas by removing the redundant left sidebar rail, while hardening every user interaction across the library with robust loading/disabled states and double-click protection:
+
+### 36.1 Full-Width Explorer Canvas & Sidebar Rail Removal
+* **Sidebar Rail Deprecation**: Completely eliminated `<aside data-testid="media-views-rail">` and the `MediaViewsRail` component, returning the Media Library to a full-width canvas.
+* **Unified Folder Navigation**: Folder ancestry navigation is cleanly consolidated into the breadcrumb context row (`Library / Subfolder`) and inline subfolder rows (`FOLDERS (n)`), eliminating visual duplication and maximizing horizontal screen real estate for asset grids and tables.
+
+### 36.2 Comprehensive Action State Hardening & Double-Click Protection
+* **Folder Operations**:
+  - **New Folder Creation (`NewFolderModal`)**: Submit button displays `"Creating..."` and disables during submission; form inputs, select dropdowns, and Cancel button are disabled to prevent duplicate submissions or race conditions.
+  - **Folder Renaming (`handleRenameFolder`)**: Action button displays `"Saving..."` and disables during request; input and Cancel button are disabled with immediate multi-click suppression.
+  - **Folder Deletion (`handleDeleteFolder`)**: Action button displays `"Deleting..."` and disables during request; Cancel button is disabled.
+  - **Folder & Media Reparenting (`handleReparent` / `handleBatchMoveSubmit`)**: Move button displays `"Moving..."` and disables during request; select dropdown and Cancel button are locked.
+* **Batch Operations**:
+  - `BatchActionBar` connects to compound `isBusy={isBatchDeleting || isBatchCaptioning || isMoving}` state, immediately disabling all batch controls ("Move", "Set caption", "Delete", "Clear") with `cursor: 'not-allowed'`.
+  - `BatchSetCaptionModal`: Submit button displays `"Applying..."` and disables during submission; textarea, mode radio buttons, and Cancel button are locked.
+* **Asset Operations**:
+  - `MediaPreviewModal`: Dedicated `isDeleting` state alongside `isSaving`. Delete button displays `"Deleting..."` and locks out Save and Cancel buttons; Save button displays `"Saving..."` and locks out Delete and Cancel buttons.
+  - `MediaImportModal`: Start import button guarded with `isStartingImport` to suppress rapid double clicks prior to queue progress transition.
+  - Single Asset Deletion: Guarded by `deletingAssetId` to prevent duplicate parallel DELETE requests.
+
+
 
 
 
