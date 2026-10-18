@@ -577,7 +577,7 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     );
     expect(trail.map((f) => f.name)).toEqual(['Campaign A', 'Reels', 'Week 1']);
 
-    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('All Media');
+    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('Library');
     expect(
       formatFolderAncestryPath(
         '22222222-2222-4222-8222-222222222222',

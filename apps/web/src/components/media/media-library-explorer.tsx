@@ -190,10 +190,10 @@ function matchesMediaFilters(
   if (trimmedSearch.length > 0) {
     const matchName = item.name.toLowerCase().includes(trimmedSearch);
     const matchCaption = (item.captionText || '').toLowerCase().includes(trimmedSearch);
-    return matchName || matchCaption;
-  }
-
-  if (activeSmartView === 'everything') {
+    if (!matchName && !matchCaption) {
+      return false;
+    }
+  } else if (activeSmartView === 'everything') {
     // Cross-folder smart view: show all items
   } else if (activeSmartView === 'needs_caption') {
     if (item.captionText && item.captionText.trim().length > 0) {
@@ -1297,7 +1297,15 @@ export function MediaLibraryExplorer({
             type="search"
             data-testid="media-search-input"
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchInput(val);
+              if (val.trim().length > 0) {
+                setMediaTypeFilter('all');
+                setAspectRatioFilter('all');
+                setCaptionStatusFilter('all');
+              }
+            }}
             placeholder="Search files and captions…"
             aria-label="Search files and captions"
             style={{
