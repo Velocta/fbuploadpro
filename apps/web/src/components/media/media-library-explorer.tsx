@@ -1,54 +1,80 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogBody,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
-import {
-  UploadQueueBanner,
-  SUPPORTED_MEDIA_ACCEPT,
-  buildQueuedEntriesFromFileList,
-  extractDroppedFileEntries,
-  executeBoundedUploadBatch,
-  detectDuplicateUploadEntries,
-  resolveFolderPathSegments,
-  type QueuedUploadEntry,
-  type UploadBatchState,
-} from './upload-queue-banner';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { MediaAssetCard } from './media-asset-card';
-import { MediaFolderRail } from './media-folder-rail';
-import { MediaInspectorPanel } from './media-inspector-panel';
-import {
-  type SmartCollectionKey,
-  filterMediaByCollection,
-  computeCollectionCounts,
-} from './smart-collections';
 import { MediaTableRow } from './media-table-row';
-import { MediaPreviewModal, type CapturedVideoFrame } from './media-preview-modal';
+import { MediaPreviewModal } from './media-preview-modal';
 import { BatchActionBar } from './batch-action-bar';
+import { BatchSetCaptionModal } from './batch-set-caption-modal';
+import { MediaImportModal } from './media-import-modal';
+import { NewFolderModal } from './new-folder-modal';
+import { LeavePageGuardDialog } from './leave-page-guard-dialog';
+import { type BatchCaptionMode } from './media-types';
 
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
 
 export type MediaViewMode = 'grid' | 'table';
-
+export type MediaTypeFilterKey = 'all' | 'video' | 'image';
 export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1' | '4:5';
-
 export type CaptionStatusFilterKey = 'all' | 'has_caption' | 'empty_caption';
-
 export type SortOptionKey =
   | 'created_at:desc'
   | 'created_at:asc'
   | 'name:asc'
   | 'file_size:desc';
+
+export type MediaSmartViewKey = 'everything' | 'needs_caption';
+
+export const MEDIA_TYPE_LABELS: Record<MediaTypeFilterKey, string> = {
+  all: 'All',
+  video: 'Videos',
+  image: 'Images',
+};
+
+export const ASPECT_RATIO_LABELS: Record<AspectRatioFilterKey, string> = {
+  all: 'All ratios',
+  '9:16': '9:16 Vertical',
+  '16:9': '16:9 Landscape',
+  '1:1': '1:1 Square',
+  '4:5': '4:5 Portrait',
+};
+
+export const ASPECT_RATIO_SHORT_VALUES: Record<AspectRatioFilterKey, string> = {
+  all: 'All',
+  '9:16': '9:16',
+  '16:9': '16:9',
+  '1:1': '1:1',
+  '4:5': '4:5',
+};
+
+export const CAPTION_STATUS_LABELS: Record<CaptionStatusFilterKey, string> = {
+  all: 'All captions',
+  has_caption: 'Has caption',
+  empty_caption: 'Missing caption',
+};
+
+export const CAPTION_STATUS_SHORT_VALUES: Record<CaptionStatusFilterKey, string> = {
+  all: 'All',
+  has_caption: 'Has caption',
+  empty_caption: 'Missing caption',
+};
+
+export const SORT_OPTION_LABELS: Record<SortOptionKey, string> = {
+  'created_at:desc': 'Newest first',
+  'created_at:asc': 'Oldest first',
+  'name:asc': 'Name (A–Z)',
+  'file_size:desc': 'Largest size',
+};
+
+export const SORT_OPTION_SHORT_VALUES: Record<SortOptionKey, string> = {
+  'created_at:desc': 'Newest',
+  'created_at:asc': 'Oldest',
+  'name:asc': 'Name A–Z',
+  'file_size:desc': 'Largest',
+};
+
 
 export interface FolderSubtreeImpact {
   descendantFolderIds: string[];
@@ -56,9 +82,6 @@ export interface FolderSubtreeImpact {
   totalMediaCount: number;
 }
 
-/**
- * Builds the ordered ancestor breadcrumb trail from root up to `currentFolderId`.
- */
 export function buildFolderBreadcrumbs(
   currentFolderId: string | null,
   folders: MediaFolder[]
@@ -84,52 +107,16 @@ export function buildFolderBreadcrumbs(
   return trail;
 }
 
-/**
- * Formats the full ancestry path label for a media item's folder (e.g. "Reels / Q4 / Fitness" or "Root").
- */
 export function formatFolderAncestryPath(
   folderId: string | null,
   folders: MediaFolder[]
 ): string {
-  if (!folderId) return 'All Media';
+  if (!folderId) return 'Library';
   const trail = buildFolderBreadcrumbs(folderId, folders);
-  if (trail.length === 0) return 'All Media';
+  if (trail.length === 0) return 'Library';
   return trail.map((f) => f.name).join(' / ');
 }
 
-/**
- * Computes updated multi-selection IDs supporting `Shift + Click` range selection.
- */
-export function computeRangeSelection(
-  displayedIds: string[],
-  currentSelectedIds: string[],
-  targetId: string,
-  lastSelectedId: string | null,
-  shiftKey: boolean
-): string[] {
-  if (shiftKey && lastSelectedId && lastSelectedId !== targetId) {
-    const startIdx = displayedIds.indexOf(lastSelectedId);
-    const endIdx = displayedIds.indexOf(targetId);
-    if (startIdx !== -1 && endIdx !== -1) {
-      const low = Math.min(startIdx, endIdx);
-      const high = Math.max(startIdx, endIdx);
-      const rangeIds = displayedIds.slice(low, high + 1);
-      const nextSet = new Set(currentSelectedIds);
-      for (const id of rangeIds) {
-        nextSet.add(id);
-      }
-      return Array.from(nextSet);
-    }
-  }
-
-  return currentSelectedIds.includes(targetId)
-    ? currentSelectedIds.filter((id) => id !== targetId)
-    : [...currentSelectedIds, targetId];
-}
-
-/**
- * Computes the recursive count of nested subfolders and media items inside `folderId`.
- */
 export function computeFolderSubtreeImpact(
   folderId: string,
   folders: MediaFolder[]
@@ -148,7 +135,7 @@ export function computeFolderSubtreeImpact(
 
   const rootFolder = folderById.get(folderId);
   const descendantFolderIds: string[] = [];
-  let totalMediaCount = rootFolder ? rootFolder.itemCount : 0;
+  let totalMediaCount = rootFolder ? rootFolder.itemCount || 0 : 0;
 
   const queue: string[] = [folderId];
   const visited = new Set<string>([folderId]);
@@ -160,7 +147,7 @@ export function computeFolderSubtreeImpact(
       if (!visited.has(child.id)) {
         visited.add(child.id);
         descendantFolderIds.push(child.id);
-        totalMediaCount += child.itemCount;
+        totalMediaCount += child.itemCount || 0;
         queue.push(child.id);
       }
     }
@@ -173,14 +160,101 @@ export function computeFolderSubtreeImpact(
   };
 }
 
-/**
- * Filters and sorts media items for the active folder view or global search across all folders.
- */
+export function computeRangeSelection(
+  allIds: string[],
+  currentSelection: string[],
+  targetId: string,
+  anchorId: string | null,
+  shiftKey: boolean
+): string[] {
+  if (shiftKey && anchorId && allIds.includes(anchorId) && allIds.includes(targetId)) {
+    const start = Math.min(allIds.indexOf(anchorId), allIds.indexOf(targetId));
+    const end = Math.max(allIds.indexOf(anchorId), allIds.indexOf(targetId));
+    const range = allIds.slice(start, end + 1);
+    return Array.from(new Set([...currentSelection, ...range]));
+  }
+  return currentSelection.includes(targetId)
+    ? currentSelection.filter((id) => id !== targetId)
+    : [...currentSelection, targetId];
+}
+
+function matchesSearch(item: MediaItemResponse, query: string): boolean {
+  if (!query) return true;
+  const matchName = item.name.toLowerCase().includes(query);
+  const matchCaption = (item.captionText || '').toLowerCase().includes(query);
+  return matchName || matchCaption;
+}
+
+function matchesSmartViewOrFolder(
+  item: MediaItemResponse,
+  currentFolderId: string | null,
+  activeSmartView: MediaSmartViewKey | null | undefined
+): boolean {
+  if (activeSmartView === 'everything') return true;
+  if (activeSmartView === 'needs_caption') {
+    return !item.captionText || item.captionText.trim().length === 0;
+  }
+  return (item.folderId ?? null) === currentFolderId;
+}
+
+function matchesMediaType(item: MediaItemResponse, filter: MediaTypeFilterKey): boolean {
+  return filter === 'all' || item.mediaType === filter;
+}
+
+function matchesAspectRatio(item: MediaItemResponse, filter: AspectRatioFilterKey): boolean {
+  return filter === 'all' || item.aspectRatio === filter;
+}
+
+function matchesCaptionStatus(item: MediaItemResponse, filter: CaptionStatusFilterKey): boolean {
+  if (filter === 'all') return true;
+  const hasCaption = Boolean(item.captionText && item.captionText.trim().length > 0);
+  return filter === 'has_caption' ? hasCaption : !hasCaption;
+}
+
+function matchesMediaFilters(
+  item: MediaItemResponse,
+  currentFolderId: string | null,
+  activeSmartView: MediaSmartViewKey | null | undefined,
+  mediaTypeFilter: MediaTypeFilterKey,
+  aspectRatioFilter: AspectRatioFilterKey,
+  captionStatusFilter: CaptionStatusFilterKey,
+  trimmedSearch: string
+): boolean {
+  if (trimmedSearch.length > 0) {
+    if (!matchesSearch(item, trimmedSearch)) return false;
+  } else if (!matchesSmartViewOrFolder(item, currentFolderId, activeSmartView)) {
+    return false;
+  }
+
+  return (
+    matchesMediaType(item, mediaTypeFilter) &&
+    matchesAspectRatio(item, aspectRatioFilter) &&
+    matchesCaptionStatus(item, captionStatusFilter)
+  );
+}
+
+function sortMediaItems(a: MediaItemResponse, b: MediaItemResponse, sortOption: SortOptionKey): number {
+  if (sortOption === 'created_at:desc') {
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  }
+  if (sortOption === 'created_at:asc') {
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  }
+  if (sortOption === 'name:asc') {
+    return a.name.localeCompare(b.name);
+  }
+  if (sortOption === 'file_size:desc') {
+    return b.fileSize - a.fileSize;
+  }
+  return 0;
+}
+
 export function filterAndSortMediaItems(
   items: MediaItemResponse[],
   options: {
     currentFolderId: string | null;
-    mediaTypeFilter: 'all' | 'video' | 'image';
+    activeSmartView?: MediaSmartViewKey | null | undefined;
+    mediaTypeFilter: MediaTypeFilterKey;
     aspectRatioFilter?: AspectRatioFilterKey | undefined;
     captionStatusFilter?: CaptionStatusFilterKey | undefined;
     searchQuery: string;
@@ -189,6 +263,7 @@ export function filterAndSortMediaItems(
 ): MediaItemResponse[] {
   const {
     currentFolderId,
+    activeSmartView,
     mediaTypeFilter,
     aspectRatioFilter = 'all',
     captionStatusFilter = 'all',
@@ -197,63 +272,79 @@ export function filterAndSortMediaItems(
   } = options;
   const trimmedSearch = searchQuery.trim().toLowerCase();
 
-  const filtered = items.filter((item) => {
-    // When searchQuery is empty, scope to currentFolderId; when searching, match globally across all nested folders
-    if (trimmedSearch.length === 0 && (item.folderId ?? null) !== currentFolderId) {
-      return false;
-    }
-    if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
-      return false;
-    }
-    if (aspectRatioFilter !== 'all' && item.aspectRatio !== aspectRatioFilter) {
-      return false;
-    }
-    if (captionStatusFilter === 'has_caption') {
-      if (!item.captionText || item.captionText.trim().length === 0) {
-        return false;
-      }
-    } else if (captionStatusFilter === 'empty_caption') {
-      if (item.captionText && item.captionText.trim().length > 0) {
-        return false;
-      }
-    }
-    if (trimmedSearch.length > 0) {
-      const nameMatch = item.name.toLowerCase().includes(trimmedSearch);
-      const captionMatch = (item.captionText ?? '')
-        .toLowerCase()
-        .includes(trimmedSearch);
-      if (!nameMatch && !captionMatch) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  const sorted = [...filtered];
-  sorted.sort((a, b) => {
-    if (sortOption === 'name:asc') {
-      return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-    }
-    if (sortOption === 'file_size:desc') {
-      return b.fileSize - a.fileSize;
-    }
-    const timeA = new Date(a.createdAt).getTime();
-    const timeB = new Date(b.createdAt).getTime();
-    return sortOption === 'created_at:asc' ? timeA - timeB : timeB - timeA;
-  });
-
-  return sorted;
+  return items
+    .filter((item) =>
+      matchesMediaFilters(
+        item,
+        currentFolderId,
+        activeSmartView,
+        mediaTypeFilter,
+        aspectRatioFilter,
+        captionStatusFilter,
+        trimmedSearch
+      )
+    )
+    .sort((a, b) => sortMediaItems(a, b, sortOption));
 }
 
+export function getScopeTagLabel(
+  debouncedSearch: string,
+  activeSmartView: MediaSmartViewKey | null,
+  currentFolderId: string | null,
+  folders: MediaFolder[]
+): string {
+  if (debouncedSearch.length > 0) {
+    return 'In: Library';
+  }
+  if (activeSmartView === 'everything') {
+    return 'In: Everything';
+  }
+  if (activeSmartView === 'needs_caption') {
+    return 'In: Needs caption';
+  }
+  if (!currentFolderId) {
+    return 'In: Library';
+  }
+  const folder = folders.find((f) => f.id === currentFolderId);
+  return folder ? `In: ${folder.name}` : 'In: Library';
+}
+
+export function getEmptyStateInfo(
+  activeSmartView: MediaSmartViewKey | null,
+  debouncedSearch: string
+): { title: string; subtext: string } {
+  if (activeSmartView === 'needs_caption') {
+    return {
+      title: 'All files have captions',
+      subtext: 'Upload new files or organize existing folders.',
+    };
+  }
+  if (debouncedSearch) {
+    return {
+      title: 'No matching files found',
+      subtext: 'Try a different search term or clear filters.',
+    };
+  }
+  return {
+    title: 'No media in this folder',
+    subtext: 'Upload files or drag them anywhere into this folder to get started.',
+  };
+}
 
 export function resolveTargetFolderIdForEntry(
-  entry: QueuedUploadEntry,
+  entry: any,
   existingFolders: MediaFolder[],
   baseFolderId: string | null
 ): string | null | undefined {
-  const segments =
-    entry.relativeSubfolderPath ??
-    resolveFolderPathSegments(entry.relativePath || entry.file.name);
+  const segments: string[] = entry.relativeSubfolderPath ?? (entry.relativePath
+    ? entry.relativePath
+        .replaceAll('\\', '/')
+        .trim()
+        .split('/')
+        .map((p: string) => p.trim())
+        .filter((p: string) => p.length > 0 && p !== '.')
+        .slice(0, -1)
+    : []);
 
   if (segments.length === 0) {
     return baseFolderId ?? null;
@@ -268,7 +359,6 @@ export function resolveTargetFolderIdForEntry(
         f.name.trim().toLowerCase() === segmentLower
     );
     if (!matched) {
-      // Subfolder does not exist yet on server; newly uploaded files inside it cannot duplicate existing server items
       return undefined;
     }
     currentParentId = matched.id;
@@ -279,9 +369,9 @@ export function resolveTargetFolderIdForEntry(
 export async function checkServerDuplicateEntries(
   subdomain: string,
   folderId: string | null | undefined,
-  entries: QueuedUploadEntry[],
+  entries: any[],
   existingFolders: MediaFolder[] = []
-): Promise<{ duplicates: QueuedUploadEntry[]; uniqueEntries: QueuedUploadEntry[] } | null> {
+): Promise<{ duplicates: any[]; uniqueEntries: any[] } | null> {
   try {
     const checkableEntries: Array<{
       clientKey: string;
@@ -329,14 +419,14 @@ export async function checkServerDuplicateEntries(
     }
 
     const dupKeySet = new Set(checkData.duplicates.map((d) => d.clientKey));
-    const duplicates: QueuedUploadEntry[] = [];
-    const uniqueEntries: QueuedUploadEntry[] = [];
+    const duplicates: any[] = [];
+    const uniqueEntries: any[] = [];
 
-    entries.forEach((entry, idx) => {
+    entries.forEach((e, idx) => {
       if (dupKeySet.has(String(idx))) {
-        duplicates.push(entry);
+        duplicates.push(e);
       } else {
-        uniqueEntries.push(entry);
+        uniqueEntries.push(e);
       }
     });
 
@@ -346,189 +436,287 @@ export async function checkServerDuplicateEntries(
   }
 }
 
-export interface MediaLibraryExplorerProps {
-  subdomain: string;
-  initialFolders?: MediaFolder[];
-  initialMediaItems?: MediaItemResponse[];
-  initialTotalMediaCount?: number;
-  initialCurrentFolderId?: string | null;
-  initialSelectedIds?: string[];
-  initialViewMode?: MediaViewMode;
-  initialSearchQuery?: string;
-  initialMediaTypeFilter?: 'all' | 'video' | 'image';
-  initialAspectRatioFilter?: AspectRatioFilterKey;
-  initialCaptionStatusFilter?: CaptionStatusFilterKey;
-  initialSortOption?: SortOptionKey;
-  initialUploadState?: UploadBatchState;
-  initialPreviewItem?: MediaItemResponse | null;
-  initialFolderModalState?: {
-    mode: 'create' | 'rename';
-    folder?: MediaFolder;
-  } | null;
-  initialMoveModalState?: {
-    targetType: 'media' | 'folder' | 'batch';
-    folder?: MediaFolder;
-    mediaItem?: MediaItemResponse;
-  } | null;
-  initialDeleteFolderTarget?: MediaFolder | null;
-  initialBatchCaptionModalOpen?: boolean;
-  initialPendingDuplicateUpload?: {
-    allEntries: QueuedUploadEntry[];
-    uniqueEntries: QueuedUploadEntry[];
-    duplicates: QueuedUploadEntry[];
-  } | null;
+interface MediaCanvasProps {
+  displayedMediaItems: MediaItemResponse[];
+  viewMode: MediaViewMode;
+  isLoading: boolean;
+  selectedIds: string[];
+  debouncedSearch: string;
+  folders: MediaFolder[];
+  activeSmartView: MediaSmartViewKey | null;
+  onNavigateFolder: (folderId: string | null) => void;
+  onToggleSelect: (mediaId: string, options?: { shiftKey?: boolean | undefined }) => void;
+  onPreview: (item: MediaItemResponse) => void;
+  onUpdateCaption: (mediaId: string, captionText: string) => void;
+  onMoveRequest: (item: MediaItemResponse) => void;
+  onDeleteRequest: (mediaId: string) => void;
 }
 
-const MEDIA_PAGE_LIMIT = 100;
-
-export function MediaLibraryExplorer({
-  subdomain,
-  initialFolders,
-  initialMediaItems,
-  initialTotalMediaCount,
-  initialCurrentFolderId,
-  initialSelectedIds = [],
-  initialViewMode,
-  initialSearchQuery = '',
-  initialMediaTypeFilter = 'all',
-  initialAspectRatioFilter = 'all',
-  initialCaptionStatusFilter = 'all',
-  initialSortOption = 'created_at:desc',
-  initialUploadState,
-  initialPreviewItem = null,
-  initialFolderModalState = null,
-  initialMoveModalState = null,
-  initialDeleteFolderTarget = null,
-  initialBatchCaptionModalOpen = false,
-  initialPendingDuplicateUpload = null,
-}: Readonly<MediaLibraryExplorerProps>) {
-  const hasInitialData =
-    initialFolders !== undefined || initialMediaItems !== undefined;
-  const isFirstMountWithInitialDataRef = useRef(hasInitialData);
-  const router = useRouter();
-
-  const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
-  const [mediaItems, setMediaItems] = useState<MediaItemResponse[]>(
-    initialMediaItems ?? []
-  );
-  const [totalMediaCount, setTotalMediaCount] = useState<number>(
-    initialTotalMediaCount ?? (initialMediaItems?.length ?? 0)
-  );
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-
-  const [viewMode, setViewMode] = useState<MediaViewMode>(() => {
-    if (initialViewMode !== undefined) {
-      return initialViewMode;
+function MediaCanvas({
+  displayedMediaItems,
+  viewMode,
+  isLoading,
+  selectedIds,
+  debouncedSearch,
+  folders,
+  activeSmartView,
+  onNavigateFolder,
+  onToggleSelect,
+  onPreview,
+  onUpdateCaption,
+  onMoveRequest,
+  onDeleteRequest,
+}: Readonly<MediaCanvasProps>) {
+  if (displayedMediaItems.length > 0) {
+    if (viewMode === 'grid') {
+      return (
+        <div
+          data-testid="media-assets-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+            gap: SPACING.lg,
+            marginTop: SPACING.xs,
+          }}
+        >
+          {displayedMediaItems.map((item) => (
+            <MediaAssetCard
+              key={item.id}
+              item={item}
+              selected={selectedIds.includes(item.id)}
+              folderPathLabel={
+                debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
+              }
+              onNavigateFolder={onNavigateFolder}
+              onToggleSelect={onToggleSelect}
+              onPreview={onPreview}
+              onUpdateCaption={onUpdateCaption}
+              onMoveRequest={onMoveRequest}
+              onDeleteRequest={() => onDeleteRequest(item.id)}
+            />
+          ))}
+        </div>
+      );
     }
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
-        if (stored === 'grid' || stored === 'table') {
-          return stored;
-        }
-      } catch (_err) {
-        // Ignore storage read errors in restricted environments
-      }
-    }
-    return 'grid';
-  });
 
-  const handleChangeViewMode = (nextMode: MediaViewMode) => {
-    setViewMode(nextMode);
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        window.localStorage.setItem(MEDIA_VIEW_MODE_STORAGE_KEY, nextMode);
-      } catch (_err) {
-        // Ignore storage write errors
-      }
-    }
-  };
-
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(() => {
-    if (initialCurrentFolderId !== undefined) {
-      return initialCurrentFolderId;
-    }
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const folderParam = params.get('folder');
-      if (folderParam) return folderParam;
-    }
-    return null;
-  });
-  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds);
-  const [activeSmartCollection, setActiveSmartCollection] =
-    useState<SmartCollectionKey>('all');
-  const [isFolderRailCollapsed, setIsFolderRailCollapsed] = useState(false);
-  const [inspectedMediaId, setInspectedMediaId] = useState<string | null>(null);
-  const lastSelectedIdRef = useRef<string | null>(null);
-  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
-  const [mediaTypeFilter, setMediaTypeFilter] = useState<'all' | 'video' | 'image'>(
-    initialMediaTypeFilter
-  );
-  const [aspectRatioFilter, setAspectRatioFilter] = useState<AspectRatioFilterKey>(
-    initialAspectRatioFilter
-  );
-  const [captionStatusFilter, setCaptionStatusFilter] =
-    useState<CaptionStatusFilterKey>(initialCaptionStatusFilter);
-  const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
-  const [isLoading, setIsLoading] = useState(!hasInitialData);
-  const [feedbackBanner, setFeedbackBanner] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  // Upload Queue State
-  const [uploadState, setUploadState] = useState<UploadBatchState>(
-    initialUploadState ?? {
-      status: 'idle',
-      totalFiles: 0,
-      completedFiles: 0,
-      failedFiles: 0,
-      skippedFiles: 0,
-      totalBytes: 0,
-      transferredBytes: 0,
-      currentFileName: null,
-    }
-  );
-  const [pendingDuplicateUpload, setPendingDuplicateUpload] = useState<{
-    allEntries: QueuedUploadEntry[];
-    uniqueEntries: QueuedUploadEntry[];
-    duplicates: QueuedUploadEntry[];
-  } | null>(initialPendingDuplicateUpload);
-  const cancelUploadRef = useRef(false);
-  const pauseUploadRef = useRef(false);
-  const pauseWaitersRef = useRef<Array<() => void>>([]);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const folderInputRef = useRef<HTMLInputElement | null>(null);
-
-  const releasePauseWaiters = useCallback(() => {
-    const waiters = pauseWaitersRef.current.splice(
-      0,
-      pauseWaitersRef.current.length
+    return (
+      <div
+        data-testid="media-table-view"
+        style={{
+          width: '100%',
+          overflowX: 'auto',
+          marginTop: SPACING.xs,
+        }}
+      >
+        <table
+          data-testid="media-table"
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            textAlign: 'left',
+          }}
+        >
+          <thead
+            style={{
+              position: 'sticky',
+              top: 0,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              zIndex: 2,
+            }}
+          >
+            <tr>
+              <th style={{ width: '40px', padding: `${SPACING.sm} ${SPACING.md}` }}>
+                <span className="sr-only">Select</span>
+              </th>
+              <th style={{ width: '48px', padding: `${SPACING.sm} 0` }}>
+                <span className="sr-only">Thumbnail</span>
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                FILE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                CAPTION
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                DETAILS
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                SIZE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                DATE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  textAlign: 'right',
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                ACTIONS
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayedMediaItems.map((item) => (
+              <MediaTableRow
+                key={item.id}
+                item={item}
+                selected={selectedIds.includes(item.id)}
+                folderPathLabel={
+                  debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
+                }
+                onNavigateFolder={onNavigateFolder}
+                onToggleSelect={onToggleSelect}
+                onPreview={onPreview}
+                onUpdateCaption={onUpdateCaption}
+                onMoveRequest={onMoveRequest}
+                onDeleteRequest={() => onDeleteRequest(item.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
     );
-    for (const resolve of waiters) {
-      resolve();
-    }
-  }, []);
+  }
 
-  const waitIfUploadPaused = useCallback(async () => {
-    while (pauseUploadRef.current && !cancelUploadRef.current) {
-      await new Promise<void>((resolve) => {
-        pauseWaitersRef.current.push(resolve);
-      });
-    }
-  }, []);
+  if (!isLoading) {
+    const { title: emptyTitle, subtext: emptySubtext } = getEmptyStateInfo(
+      activeSmartView,
+      debouncedSearch
+    );
 
-  // Tab-Close Protection (beforeunload) when an upload batch is active or paused
+    return (
+      <div
+        data-testid="media-empty-state"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: `${SPACING.xxl} 0`,
+          gap: SPACING.md,
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+        }}
+      >
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </svg>
+        <div style={{ textAlign: 'center' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.9375rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+            }}
+          >
+            {emptyTitle}
+          </p>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.8125rem' }}>
+            {emptySubtext}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function computeNextSelection(
+  prev: string[],
+  mediaId: string,
+  allDisplayedIds: string[],
+  shiftKey?: boolean
+): string[] {
+  if (shiftKey && prev.length > 0) {
+    const lastId = prev.at(-1)!;
+    const lastIdx = allDisplayedIds.indexOf(lastId);
+    const currIdx = allDisplayedIds.indexOf(mediaId);
+    if (lastIdx !== -1 && currIdx !== -1) {
+      const start = Math.min(lastIdx, currIdx);
+      const end = Math.max(lastIdx, currIdx);
+      const slice = allDisplayedIds.slice(start, end + 1);
+      return Array.from(new Set([...prev, ...slice]));
+    }
+  }
+  return prev.includes(mediaId)
+    ? prev.filter((id) => id !== mediaId)
+    : [...prev, mediaId];
+}
+
+export type ActiveDropdownKey = 'type' | 'ratio' | 'caption' | 'sort' | null;
+
+function isPointerInsideDropdown(
+  activeDropdown: ActiveDropdownKey,
+  target: Node | null,
+  refs: Record<'type' | 'ratio' | 'caption' | 'sort', React.RefObject<HTMLDivElement | null>>
+): boolean {
+  if (!activeDropdown || !target) return false;
+  return Boolean(refs[activeDropdown]?.current?.contains(target));
+}
+
+function useUploadNavigationGuard(
+  activeUploadsCount: number,
+  onInterceptNavigation: (href: string) => void
+) {
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (uploadState.status !== 'uploading' && uploadState.status !== 'paused') {
-      return;
-    }
+    if (activeUploadsCount <= 0) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault();
@@ -537,1130 +725,1221 @@ export function MediaLibraryExplorer({
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [uploadState.status]);
+  }, [activeUploadsCount]);
 
-  // Drag-and-drop state
-  const [isDropzoneActive, setIsDropzoneActive] = useState(false);
-  const [dragOverFolderId, setDragOverFolderId] = useState<string | 'root' | null>(
-    null
-  );
+  useEffect(() => {
+    if (activeUploadsCount <= 0) return;
 
-  // Modals state
-  const [previewItem, setPreviewItem] = useState<MediaItemResponse | null>(
-    initialPreviewItem
-  );
-  const [folderModalState, setFolderModalState] = useState<{
-    mode: 'create' | 'rename';
-    folder?: MediaFolder;
-  } | null>(initialFolderModalState);
-  const [folderFormName, setFolderFormName] = useState(
-    initialFolderModalState?.folder?.name ?? ''
-  );
-  const [folderFormError, setFolderFormError] = useState<string | null>(null);
-  const [isSubmittingFolder, setIsSubmittingFolder] = useState(false);
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (!target) return;
+      const href = target.getAttribute('href');
+      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        e.preventDefault();
+        e.stopPropagation();
+        onInterceptNavigation(href);
+      }
+    };
 
-  const [moveModalState, setMoveModalState] = useState<{
-    targetType: 'media' | 'folder' | 'batch';
-    folder?: MediaFolder;
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => document.removeEventListener('click', handleDocumentClick, true);
+  }, [activeUploadsCount, onInterceptNavigation]);
+}
+
+const TYPE_DROPDOWN_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'video', label: 'Videos' },
+  { key: 'image', label: 'Images' },
+] as const;
+
+const RATIO_DROPDOWN_OPTIONS = [
+  { key: 'all', label: 'All ratios' },
+  { key: '9:16', label: '9:16 Vertical' },
+  { key: '16:9', label: '16:9 Landscape' },
+  { key: '1:1', label: '1:1 Square' },
+  { key: '4:5', label: '4:5 Portrait' },
+] as const;
+
+const CAPTION_DROPDOWN_OPTIONS = [
+  { key: 'all', label: 'All captions' },
+  { key: 'has_caption', label: 'Has caption' },
+  { key: 'empty_caption', label: 'Missing caption' },
+] as const;
+
+const SORT_DROPDOWN_OPTIONS = [
+  { key: 'created_at:desc', label: 'Newest first' },
+  { key: 'created_at:asc', label: 'Oldest first' },
+  { key: 'name:asc', label: 'Name (A–Z)' },
+  { key: 'file_size:desc', label: 'Largest size' },
+] as const;
+
+interface ToolbarDropdownItem<T extends string> {
+  key: T;
+  label: string;
+}
+
+interface ToolbarDropdownProps<T extends string> {
+  testId: string;
+  label: string;
+  displayValue: string;
+  isUnderlined?: boolean;
+  isOpen: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  options: readonly ToolbarDropdownItem<T>[];
+  selectedKey: T;
+  optionTestIdPrefix: string;
+  onToggle: () => void;
+  onSelect: (key: T) => void;
+  onClose: () => void;
+}
+
+function ToolbarDropdown<T extends string>({
+  testId,
+  label,
+  displayValue,
+  isUnderlined = false,
+  isOpen,
+  containerRef,
+  options,
+  selectedKey,
+  optionTestIdPrefix,
+  onToggle,
+  onSelect,
+  onClose,
+}: Readonly<ToolbarDropdownProps<T>>) {
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        data-testid={testId}
+        aria-haspopup="true"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          } else if (e.key === 'Escape') {
+            onClose();
+          }
+        }}
+        style={{
+          backgroundColor: 'transparent',
+          border: 'none',
+          padding: 0,
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          fontSize: '0.8125rem',
+          fontWeight: TYPOGRAPHY.weights.medium,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+        }}
+      >
+        <span>{label}</span>
+        <span
+          style={{
+            color: isUnderlined ? `var(--text-main, ${THEME.default.text.primary})` : 'inherit',
+            borderBottom: isUnderlined ? `2px solid ${PALETTE.primary}` : 'none',
+            paddingBottom: '2px',
+          }}
+        >
+          {displayValue}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '26px',
+            left: 0,
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+            borderRadius: RADII.xs,
+            padding: '4px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 30,
+            minWidth: '120px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+          }}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              role="menuitem"
+              data-testid={`${optionTestIdPrefix}-option-${opt.key}`}
+              tabIndex={0}
+              onClick={() => {
+                onSelect(opt.key);
+                onClose();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(opt.key);
+                  onClose();
+                } else if (e.key === 'Escape') {
+                  onClose();
+                }
+              }}
+              style={{
+                padding: '6px 10px',
+                textAlign: 'left',
+                backgroundColor:
+                  selectedKey === opt.key
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : 'transparent',
+                border: 'none',
+                borderRadius: RADII.xs,
+                color:
+                  selectedKey === opt.key
+                    ? `var(--text-main, ${THEME.default.text.primary})`
+                    : `var(--text-sub, ${THEME.default.text.secondary})`,
+                fontSize: '0.8125rem',
+                fontWeight:
+                  selectedKey === opt.key
+                    ? TYPOGRAPHY.weights.medium
+                    : TYPOGRAPHY.weights.regular,
+                cursor: 'pointer',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface MediaToolbarProps {
+  searchInput: string;
+  onSearchChange: (value: string) => void;
+  scopeTagLabel: string;
+  mediaTypeFilter: MediaTypeFilterKey;
+  onMediaTypeChange: (type: MediaTypeFilterKey) => void;
+  aspectRatioFilter: AspectRatioFilterKey;
+  onAspectRatioChange: (ratio: AspectRatioFilterKey) => void;
+  captionStatusFilter: CaptionStatusFilterKey;
+  onCaptionStatusChange: (status: CaptionStatusFilterKey) => void;
+  activeFilterCount: number;
+  onClearFilters: () => void;
+  sortOption: SortOptionKey;
+  onSortChange: (sort: SortOptionKey) => void;
+  viewMode: MediaViewMode;
+  onChangeViewMode: (mode: MediaViewMode) => void;
+  activeDropdown: ActiveDropdownKey;
+  onToggleDropdown: (dropdown: NonNullable<ActiveDropdownKey>) => void;
+  onCloseDropdown: () => void;
+  dropdownRefs: Record<NonNullable<ActiveDropdownKey>, React.RefObject<HTMLDivElement | null>>;
+}
+
+function MediaToolbar({
+  searchInput,
+  onSearchChange,
+  scopeTagLabel,
+  mediaTypeFilter,
+  onMediaTypeChange,
+  aspectRatioFilter,
+  onAspectRatioChange,
+  captionStatusFilter,
+  onCaptionStatusChange,
+  activeFilterCount,
+  onClearFilters,
+  sortOption,
+  onSortChange,
+  viewMode,
+  onChangeViewMode,
+  activeDropdown,
+  onToggleDropdown,
+  onCloseDropdown,
+  dropdownRefs,
+}: Readonly<MediaToolbarProps>) {
+  return (
+    <div
+      data-testid="media-explorer-toolbar"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: SPACING.md,
+        paddingBottom: SPACING.md,
+        borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+        flexWrap: 'wrap',
+      }}
+    >
+      {/* Zone 1 — GLOBAL (left): the search field only */}
+      <div
+        data-testid="media-toolbar-zone-1"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.xs,
+          flex: '1 1 240px',
+          maxWidth: '360px',
+        }}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+          style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="search"
+          data-testid="media-search-input"
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search files and captions…"
+          aria-label="Search files and captions"
+          style={{
+            width: '100%',
+            backgroundColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: '0.875rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            padding: '4px 0',
+          }}
+        />
+      </div>
+
+      {/* Divider 1: Between Zone 1 (Global Search) and Zone 2 (Local Scoped Controls) */}
+      <hr
+        data-testid="media-toolbar-divider-1"
+        aria-orientation="vertical"
+        style={{
+          width: '1px',
+          height: '16px',
+          backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+          border: 'none',
+          margin: 0,
+          flexShrink: 0,
+        }}
+      />
+
+      {/* Zone 2 — LOCAL (middle): controls that apply ONLY to the current view */}
+      <div
+        data-testid="media-toolbar-zone-2"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Scope Tag Anchor */}
+        <span
+          data-testid="media-scope-tag"
+          style={{
+            fontSize: '0.8125rem',
+            fontWeight: TYPOGRAPHY.weights.medium,
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            paddingRight: '4px',
+          }}
+        >
+          {scopeTagLabel}
+        </span>
+
+        {/* Labeled Dropdown 1: Type */}
+        <ToolbarDropdown
+          testId="media-type-select"
+          label="Type: "
+          displayValue={MEDIA_TYPE_LABELS[mediaTypeFilter]}
+          isUnderlined={mediaTypeFilter !== 'all'}
+          isOpen={activeDropdown === 'type'}
+          containerRef={dropdownRefs.type}
+          options={TYPE_DROPDOWN_OPTIONS}
+          selectedKey={mediaTypeFilter}
+          optionTestIdPrefix="type"
+          onToggle={() => onToggleDropdown('type')}
+          onSelect={onMediaTypeChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Labeled Dropdown 2: Ratio */}
+        <ToolbarDropdown
+          testId="media-aspect-ratio-select"
+          label="Ratio: "
+          displayValue={ASPECT_RATIO_SHORT_VALUES[aspectRatioFilter]}
+          isUnderlined={aspectRatioFilter !== 'all'}
+          isOpen={activeDropdown === 'ratio'}
+          containerRef={dropdownRefs.ratio}
+          options={RATIO_DROPDOWN_OPTIONS}
+          selectedKey={aspectRatioFilter}
+          optionTestIdPrefix="aspect-ratio"
+          onToggle={() => onToggleDropdown('ratio')}
+          onSelect={onAspectRatioChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Labeled Dropdown 3: Captions */}
+        <ToolbarDropdown
+          testId="media-caption-status-select"
+          label="Captions: "
+          displayValue={CAPTION_STATUS_SHORT_VALUES[captionStatusFilter]}
+          isUnderlined={captionStatusFilter !== 'all'}
+          isOpen={activeDropdown === 'caption'}
+          containerRef={dropdownRefs.caption}
+          options={CAPTION_DROPDOWN_OPTIONS}
+          selectedKey={captionStatusFilter}
+          optionTestIdPrefix="caption-status"
+          onToggle={() => onToggleDropdown('caption')}
+          onSelect={onCaptionStatusChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Dynamic Filter Clear Badge */}
+        {activeFilterCount > 0 && (
+          <button
+            type="button"
+            data-testid="clear-filters-btn"
+            onClick={onClearFilters}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '2px 6px',
+              fontSize: '0.75rem',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <span>
+              {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filters'} · Clear
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/* Divider 2: Between Zone 2 (Local Filters) and Zone 3 (Sort & View Mode) */}
+      <hr
+        data-testid="media-toolbar-divider-2"
+        aria-orientation="vertical"
+        style={{
+          width: '1px',
+          height: '16px',
+          backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+          border: 'none',
+          margin: 0,
+          flexShrink: 0,
+        }}
+      />
+
+      {/* Zone 3 — SORT + VIEW (right) */}
+      <div
+        data-testid="media-toolbar-zone-3"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+        }}
+      >
+        {/* Labeled Sort Dropdown */}
+        <ToolbarDropdown
+          testId="media-sort-select"
+          label="Sort: "
+          displayValue={SORT_OPTION_SHORT_VALUES[sortOption]}
+          isOpen={activeDropdown === 'sort'}
+          containerRef={dropdownRefs.sort}
+          options={SORT_DROPDOWN_OPTIONS}
+          selectedKey={sortOption}
+          optionTestIdPrefix="sort"
+          onToggle={() => onToggleDropdown('sort')}
+          onSelect={onSortChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Bare Grid/Table Toggle Icons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            data-testid="view-mode-grid-btn"
+            aria-label="Grid view"
+            onClick={() => onChangeViewMode('grid')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '4px',
+              color:
+                viewMode === 'grid'
+                  ? PALETTE.primary
+                  : `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            data-testid="view-mode-table-btn"
+            aria-label="Table view"
+            onClick={() => onChangeViewMode('table')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '4px',
+              color:
+                viewMode === 'table'
+                  ? PALETTE.primary
+                  : `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface MediaViewsRailProps {
+  activeSmartView: MediaSmartViewKey | null;
+  currentFolderId: string | null;
+  folders: MediaFolder[];
+  onSelectSmartView: (view: MediaSmartViewKey) => void;
+  onSelectRootLibrary: () => void;
+  onSelectFolder: (folderId: string) => void;
+  onOpenNewFolder: () => void;
+}
+
+function MediaViewsRail({
+  activeSmartView,
+  currentFolderId,
+  folders,
+  onSelectSmartView,
+  onSelectRootLibrary,
+  onSelectFolder,
+  onOpenNewFolder,
+}: Readonly<MediaViewsRailProps>) {
+  const rootFolders = folders.filter((f) => !f.parentId);
+  const isRootSelected = activeSmartView === null && currentFolderId === null;
+
+  return (
+    <aside
+      data-testid="media-views-rail"
+      style={{
+        width: '180px',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SPACING.lg,
+        paddingTop: SPACING.md,
+      }}
+    >
+      {/* Section: VIEWS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span
+          style={{
+            fontSize: '0.6875rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            letterSpacing: '0.04em',
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            marginBottom: '4px',
+          }}
+        >
+          VIEWS
+        </span>
+
+        <button
+          type="button"
+          data-testid="smart-view-everything"
+          onClick={() => onSelectSmartView('everything')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight:
+              activeSmartView === 'everything'
+                ? TYPOGRAPHY.weights.semibold
+                : TYPOGRAPHY.weights.regular,
+            color:
+              activeSmartView === 'everything'
+                ? PALETTE.primary
+                : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Everything
+        </button>
+
+        <button
+          type="button"
+          data-testid="smart-view-needs-caption"
+          onClick={() => onSelectSmartView('needs_caption')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight:
+              activeSmartView === 'needs_caption'
+                ? TYPOGRAPHY.weights.semibold
+                : TYPOGRAPHY.weights.regular,
+            color:
+              activeSmartView === 'needs_caption'
+                ? PALETTE.primary
+                : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Needs caption
+        </button>
+      </div>
+
+      {/* Section: FOLDERS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '4px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              letterSpacing: '0.04em',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+            }}
+          >
+            FOLDERS
+          </span>
+          <button
+            type="button"
+            data-testid="rail-new-folder-btn"
+            onClick={onOpenNewFolder}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0,
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+            }}
+          >
+            + New
+          </button>
+        </div>
+
+        <button
+          type="button"
+          data-testid="rail-root-library"
+          onClick={onSelectRootLibrary}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight: isRootSelected
+              ? TYPOGRAPHY.weights.semibold
+              : TYPOGRAPHY.weights.regular,
+            color: isRootSelected
+              ? PALETTE.primary
+              : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Library
+        </button>
+
+        {rootFolders.map((f) => {
+          const isSelected = activeSmartView === null && currentFolderId === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              data-testid={`rail-folder-${f.id}`}
+              onClick={() => onSelectFolder(f.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.xs,
+                backgroundColor: 'transparent',
+                border: 'none',
+                padding: '4px 0 4px 8px',
+                fontSize: '0.8125rem',
+                fontWeight: isSelected
+                  ? TYPOGRAPHY.weights.semibold
+                  : TYPOGRAPHY.weights.regular,
+                color: isSelected
+                  ? PALETTE.primary
+                  : `var(--text-sub, ${THEME.default.text.secondary})`,
+                cursor: 'pointer',
+                textAlign: 'left',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {f.name}
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function getInitialViewMode(initialMode?: MediaViewMode): MediaViewMode {
+  if (initialMode) return initialMode;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
+    if (stored === 'grid' || stored === 'table') return stored;
+  }
+  return 'grid';
+}
+
+function computeActiveFilterCount(
+  mediaType: MediaTypeFilterKey,
+  ratio: AspectRatioFilterKey,
+  captionStatus: CaptionStatusFilterKey
+): number {
+  return (
+    (mediaType !== 'all' ? 1 : 0) +
+    (ratio !== 'all' ? 1 : 0) +
+    (captionStatus !== 'all' ? 1 : 0)
+  );
+}
+
+export interface MediaLibraryExplorerProps {
+  subdomain: string;
+  initialFolders?: MediaFolder[];
+  initialMediaItems?: MediaItemResponse[];
+  initialCurrentFolderId?: string | null;
+  initialActiveSmartView?: MediaSmartViewKey | null;
+  initialViewMode?: MediaViewMode;
+  initialSearchQuery?: string;
+  initialMediaTypeFilter?: MediaTypeFilterKey;
+  initialAspectRatioFilter?: AspectRatioFilterKey;
+  initialCaptionStatusFilter?: CaptionStatusFilterKey;
+  initialSortOption?: SortOptionKey;
+  initialTotalMediaCount?: number;
+  initialPendingDuplicateUpload?: any;
+  initialDeleteFolderTarget?: MediaFolder | null;
+}
+
+export function MediaLibraryExplorer({
+  subdomain,
+  initialFolders,
+  initialMediaItems,
+  initialCurrentFolderId = null,
+  initialActiveSmartView = null,
+  initialViewMode,
+  initialSearchQuery = '',
+  initialMediaTypeFilter = 'all',
+  initialAspectRatioFilter = 'all',
+  initialCaptionStatusFilter = 'all',
+  initialSortOption = 'created_at:desc',
+  initialTotalMediaCount,
+  initialPendingDuplicateUpload,
+  initialDeleteFolderTarget = null,
+}: Readonly<MediaLibraryExplorerProps>) {
+  const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
+  const [mediaItems, setMediaItems] = useState<MediaItemResponse[]>(
+    initialMediaItems ?? []
+  );
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(
+    initialCurrentFolderId
+  );
+  const [activeSmartView, setActiveSmartView] = useState<MediaSmartViewKey | null>(
+    initialActiveSmartView
+  );
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(!initialMediaItems);
+
+  // View mode
+  const [viewMode, setViewMode] = useState<MediaViewMode>(() => getInitialViewMode(initialViewMode));
+
+  const handleChangeViewMode = (mode: MediaViewMode) => {
+    setViewMode(mode);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(MEDIA_VIEW_MODE_STORAGE_KEY, mode);
+      } catch {}
+    }
+  };
+
+  // Search & Filters
+  const [searchInput, setSearchInput] = useState(initialSearchQuery);
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    initialSearchQuery.trim().toLowerCase()
+  );
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilterKey>(
+    initialMediaTypeFilter
+  );
+  const [aspectRatioFilter, setAspectRatioFilter] = useState<AspectRatioFilterKey>(
+    initialAspectRatioFilter
+  );
+  const [captionStatusFilter, setCaptionStatusFilter] = useState<CaptionStatusFilterKey>(
+    initialCaptionStatusFilter
+  );
+  const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
+
+  // Custom Dropdowns state & container refs (prevents mouse click swallowing)
+  const [activeDropdown, setActiveDropdown] = useState<ActiveDropdownKey>(null);
+  const typeDropdownRef = useRef<HTMLDivElement | null>(null);
+  const ratioDropdownRef = useRef<HTMLDivElement | null>(null);
+  const captionDropdownRef = useRef<HTMLDivElement | null>(null);
+  const sortDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // Debounce search with 250ms (0ms if cleared immediately)
+  useEffect(() => {
+    if (!searchInput.trim()) {
+      setDebouncedSearch('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput.trim().toLowerCase());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    if (!activeDropdown) return;
+    const dropdownRefs = {
+      type: typeDropdownRef,
+      ratio: ratioDropdownRef,
+      caption: captionDropdownRef,
+      sort: sortDropdownRef,
+    };
+    const handleOutsideClick = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as Node | null;
+      if (isPointerInsideDropdown(activeDropdown, target, dropdownRefs)) {
+        return;
+      }
+      setActiveDropdown(null);
+    };
+    document.addEventListener('pointerdown', handleOutsideClick);
+    return () => document.removeEventListener('pointerdown', handleOutsideClick);
+  }, [activeDropdown]);
+
+  // Modals
+  const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [stagedFilesForImport, setStagedFilesForImport] = useState<File[]>([]);
+  const [isBatchCaptionOpen, setIsBatchCaptionOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<MediaItemResponse | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Move Modal State
+  const [moveTarget, setMoveTarget] = useState<{
+    type: 'single_media' | 'batch_media' | 'folder';
     mediaItem?: MediaItemResponse;
-  } | null>(initialMoveModalState);
-  const [selectedMoveDestinationId, setSelectedMoveDestinationId] = useState<
-    string | null
-  >(null);
-  const [isSubmittingMove, setIsSubmittingMove] = useState(false);
+    folder?: MediaFolder;
+  } | null>(null);
+  const [moveDestinationFolderId, setMoveDestinationFolderId] = useState<string | null>(null);
 
+  // Rename Folder State
+  const [renameFolderTarget, setRenameFolderTarget] = useState<MediaFolder | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
+
+  // Delete Folder Confirmation State
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<MediaFolder | null>(
     initialDeleteFolderTarget
   );
-  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
 
-  const [batchCaptionModalOpen, setBatchCaptionModalOpen] = useState(
-    initialBatchCaptionModalOpen
-  );
-  const [batchCaptionDraft, setBatchCaptionDraft] = useState('');
-  const [isBatchBusy, setIsBatchBusy] = useState(false);
+  // Active uploads state & Leave page protection
+  const [activeUploadsCount, setActiveUploadsCount] = useState(0);
+  const [furthestAlongUpload, setFurthestAlongUpload] = useState<{
+    name: string;
+    progressPercent: number;
+  } | null>(null);
+  const [isLeaveGuardOpen, setIsLeaveGuardOpen] = useState(false);
+  const [pendingNavigationUrl, setPendingNavigationUrl] = useState<string | null>(null);
 
-  const isGlobalSearch = searchQuery.trim().length > 0;
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Browser back/forward button synchronization for ?folder=<id>
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handlePopState = () => {
-      const params = new URLSearchParams(window.location.search);
-      const folderParam = params.get('folder');
-      setCurrentFolderId(folderParam || null);
-      setSelectedIds([]);
-      lastSelectedIdRef.current = null;
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+  const handleInterceptNavigation = useCallback((href: string) => {
+    setPendingNavigationUrl(href);
+    setIsLeaveGuardOpen(true);
   }, []);
 
-  // Escape key clears active selection when no modal is open
-  useEffect(() => {
-    if (
-      selectedIds.length === 0 ||
-      previewItem ||
-      folderModalState ||
-      moveModalState ||
-      deleteFolderTarget ||
-      batchCaptionModalOpen ||
-      pendingDuplicateUpload
-    ) {
-      return;
-    }
+  useUploadNavigationGuard(activeUploadsCount, handleInterceptNavigation);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedIds([]);
-        lastSelectedIdRef.current = null;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    selectedIds.length,
-    previewItem,
-    folderModalState,
-    moveModalState,
-    deleteFolderTarget,
-    batchCaptionModalOpen,
-    pendingDuplicateUpload,
-  ]);
-
-  // Fetch folders and current directory (or global search) media items
+  // Data Fetching
   const refreshLibraryData = useCallback(async () => {
-    if (!subdomain) return;
-    if (isFirstMountWithInitialDataRef.current) {
-      isFirstMountWithInitialDataRef.current = false;
-      return;
-    }
-
-    setLoadError(null);
-    setIsLoading(true);
-
-    const [sortBy, sortOrder] = sortOption.split(':') as [
-      'created_at' | 'name' | 'file_size',
-      'asc' | 'desc',
-    ];
-    const query = new URLSearchParams();
-    const trimmedSearch = searchQuery.trim();
-    if (trimmedSearch.length > 0) {
-      query.set('search', trimmedSearch);
-    } else {
-      query.set('folderId', currentFolderId ?? 'unorganized');
-    }
-    if (mediaTypeFilter !== 'all') {
-      query.set('mediaType', mediaTypeFilter);
-    }
-    if (aspectRatioFilter !== 'all') {
-      query.set('aspectRatio', aspectRatioFilter);
-    }
-    if (captionStatusFilter !== 'all') {
-      query.set('captionStatus', captionStatusFilter);
-    }
-    query.set('sortBy', sortBy);
-    query.set('sortOrder', sortOrder);
-    query.set('limit', String(MEDIA_PAGE_LIMIT));
-    query.set('offset', '0');
-
     try {
       const [foldersRes, mediaRes] = await Promise.all([
         fetch(`/api/tenant/${subdomain}/media/folders`),
-        fetch(`/api/tenant/${subdomain}/media?${query.toString()}`),
+        fetch(`/api/tenant/${subdomain}/media?limit=500`),
       ]);
 
-      if (!foldersRes.ok || !mediaRes.ok) {
-        setLoadError('Unable to load media items. Please check your connection and try again.');
-        return;
+      if (foldersRes.ok) {
+        const fData = await foldersRes.json();
+        setFolders(fData.folders || []);
       }
-
-      const foldersData = (await foldersRes.json()) as {
-        folders: MediaFolder[];
-      };
-      setFolders(foldersData.folders || []);
-
-      const mediaData = (await mediaRes.json()) as {
-        items: MediaItemResponse[];
-        total?: number;
-        nextCursor?: string | null;
-      };
-      const fetchedItems = mediaData.items || [];
-      setMediaItems(fetchedItems);
-      setTotalMediaCount(
-        typeof mediaData.total === 'number' ? mediaData.total : fetchedItems.length
-      );
-      setNextCursor(mediaData.nextCursor ?? null);
-    } catch (_err) {
-      setLoadError('Unable to load media items. Please check your connection and try again.');
+      if (mediaRes.ok) {
+        const mData = await mediaRes.json();
+        setMediaItems(mData.items || []);
+      }
+    } catch {
+      // Network load error
     } finally {
       setIsLoading(false);
     }
-  }, [
-    subdomain,
-    currentFolderId,
-    mediaTypeFilter,
-    aspectRatioFilter,
-    captionStatusFilter,
-    searchQuery,
-    sortOption,
-  ]);
+  }, [subdomain]);
 
   useEffect(() => {
-    void refreshLibraryData();
-  }, [refreshLibraryData]);
-
-  useEffect(() => {
-    const handleDownloadComplete = () => {
+    if (!initialMediaItems) {
       void refreshLibraryData();
-    };
-    if (typeof window !== 'undefined') {
-      window.addEventListener('fbuploadpro:download-completed', handleDownloadComplete);
-      return () => {
-        window.removeEventListener('fbuploadpro:download-completed', handleDownloadComplete);
-      };
     }
-  }, [refreshLibraryData]);
+  }, [refreshLibraryData, initialMediaItems]);
 
-  // Load next page of media items (infinite scroll / load more)
-  const handleLoadMoreMedia = useCallback(async () => {
-    if (!subdomain || isLoadingMore) return;
-    setIsLoadingMore(true);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
-    const [sortBy, sortOrder] = sortOption.split(':') as [
-      'created_at' | 'name' | 'file_size',
-      'asc' | 'desc',
-    ];
-    const query = new URLSearchParams();
-    const trimmedSearch = searchQuery.trim();
-    if (trimmedSearch.length > 0) {
-      query.set('search', trimmedSearch);
-    } else {
-      query.set('folderId', currentFolderId ?? 'unorganized');
-    }
-    if (mediaTypeFilter !== 'all') {
-      query.set('mediaType', mediaTypeFilter);
-    }
-    if (aspectRatioFilter !== 'all') {
-      query.set('aspectRatio', aspectRatioFilter);
-    }
-    if (captionStatusFilter !== 'all') {
-      query.set('captionStatus', captionStatusFilter);
-    }
-    query.set('sortBy', sortBy);
-    query.set('sortOrder', sortOrder);
-    query.set('limit', String(MEDIA_PAGE_LIMIT));
-    if (nextCursor) {
-      query.set('cursor', nextCursor);
-    } else {
-      query.set('offset', String(mediaItems.length));
-    }
+  // Breadcrumbs
+  const breadcrumbs = useMemo(
+    () => buildFolderBreadcrumbs(currentFolderId, folders),
+    [currentFolderId, folders]
+  );
 
-    try {
-      const mediaRes = await fetch(
-        `/api/tenant/${subdomain}/media?${query.toString()}`
-      );
-      if (mediaRes.ok) {
-        const mediaData = (await mediaRes.json()) as {
-          items: MediaItemResponse[];
-          total?: number;
-          nextCursor?: string | null;
-        };
-        const nextItems = mediaData.items || [];
-        setMediaItems((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const deduped = nextItems.filter((m) => !existingIds.has(m.id));
-          return [...prev, ...deduped];
-        });
-        if (typeof mediaData.total === 'number') {
-          setTotalMediaCount(mediaData.total);
-        }
-        setNextCursor(mediaData.nextCursor ?? null);
-      }
-    } catch (_err) {
-      // Retain existing items on transient failure
-    } finally {
-      setIsLoadingMore(false);
-    }
+  // Subfolders under current folder (enforces real nesting)
+  const currentSubfolders = useMemo(() => {
+    return folders.filter((f) => (f.parentId ?? null) === (currentFolderId ?? null));
+  }, [folders, currentFolderId]);
+
+  // Filtered & Sorted Media Items
+  const displayedMediaItems = useMemo(() => {
+    return filterAndSortMediaItems(mediaItems, {
+      currentFolderId,
+      activeSmartView,
+      searchQuery: debouncedSearch,
+      mediaTypeFilter,
+      aspectRatioFilter,
+      captionStatusFilter,
+      sortOption,
+    });
   }, [
-    subdomain,
-    isLoadingMore,
-    nextCursor,
-    sortOption,
-    searchQuery,
+    mediaItems,
     currentFolderId,
+    activeSmartView,
+    debouncedSearch,
     mediaTypeFilter,
     aspectRatioFilter,
     captionStatusFilter,
-    mediaItems.length,
+    sortOption,
   ]);
 
-  // Derived Explorer Hierarchy
-  const breadcrumbs = buildFolderBreadcrumbs(currentFolderId, folders);
-  const currentSubfolders = folders
-    .filter((f) => {
-      if (isGlobalSearch) {
-        return f.name.toLowerCase().includes(searchQuery.trim().toLowerCase());
-      }
-      return (f.parentId ?? null) === currentFolderId;
-    })
-    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
-
-  const baseDisplayed = hasInitialData
-    ? filterAndSortMediaItems(mediaItems, {
-        currentFolderId,
-        mediaTypeFilter,
-        aspectRatioFilter,
-        captionStatusFilter,
-        searchQuery,
-        sortOption,
-      })
-    : mediaItems;
-
-  const displayedMediaItems = filterMediaByCollection(
-    baseDisplayed,
-    activeSmartCollection
-  );
-
-  const smartCounts = computeCollectionCounts(mediaItems);
-  const inspectedItem =
-    mediaItems.find((m) => m.id === inspectedMediaId) ??
-    (selectedIds.length === 1
-      ? mediaItems.find((m) => m.id === selectedIds[0]) ?? null
-      : null);
-  const selectedMediaObjects = mediaItems.filter((m) =>
-    selectedIds.includes(m.id)
-  );
-
-  const hasMoreMedia = nextCursor !== null || displayedMediaItems.length < totalMediaCount;
-
-  // IntersectionObserver for automatic infinite scroll
-  useEffect(() => {
-    const sentinel = loadMoreSentinelRef.current;
-    if (
-      !sentinel ||
-      !hasMoreMedia ||
-      isLoading ||
-      isLoadingMore ||
-      typeof IntersectionObserver === 'undefined'
-    ) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          void handleLoadMoreMedia();
-        }
-      },
-      { rootMargin: '240px' }
-    );
-
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [hasMoreMedia, isLoading, isLoadingMore, handleLoadMoreMedia]);
-
-  // Navigation handler with URL ?folder=<id> synchronization
-  const handleNavigateFolder = (targetFolderId: string | null) => {
-    setCurrentFolderId(targetFolderId);
-    setSelectedIds([]);
-    lastSelectedIdRef.current = null;
-
-    if (typeof window !== 'undefined' && window.history?.pushState) {
-      try {
-        const url = new URL(window.location.href);
-        if (targetFolderId) {
-          url.searchParams.set('folder', targetFolderId);
-        } else {
-          url.searchParams.delete('folder');
-        }
-        window.history.pushState({ folderId: targetFolderId }, '', url.toString());
-      } catch (_err) {
-        // Ignore URL construction errors in isolated test environments
-      }
-    }
-  };
-
-  // Pause / Resume / Retry Upload Controls
-  const handlePauseUpload = () => {
-    pauseUploadRef.current = true;
-    setUploadState((prev) =>
-      prev.status === 'uploading' ? { ...prev, status: 'paused' } : prev
-    );
-  };
-
-  const handleResumeUpload = () => {
-    pauseUploadRef.current = false;
-    setUploadState((prev) =>
-      prev.status === 'paused' ? { ...prev, status: 'uploading' } : prev
-    );
-    releasePauseWaiters();
-  };
-
-  // Execute bounded upload batch (after duplicate check or user confirmation)
-  const runUploadBatch = async (
-    entries: QueuedUploadEntry[],
-    initialSkippedCount = 0
+  // Selection handlers
+  const handleToggleSelect = (
+    mediaId: string,
+    options?: { shiftKey?: boolean | undefined } | undefined
   ) => {
-    if (entries.length === 0) {
-      if (initialSkippedCount > 0) {
-        setUploadState({
-          status: 'completed',
-          totalFiles: initialSkippedCount,
-          completedFiles: 0,
-          failedFiles: 0,
-          skippedFiles: initialSkippedCount,
-          totalBytes: 0,
-          transferredBytes: 0,
-          currentFileName: null,
-          failedEntries: [],
-        });
-      }
-      return;
+    const allIds = displayedMediaItems.map((m) => m.id);
+    setSelectedIds((prev) => computeNextSelection(prev, mediaId, allIds, options?.shiftKey));
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === displayedMediaItems.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(displayedMediaItems.map((item) => item.id));
     }
-    cancelUploadRef.current = false;
-    pauseUploadRef.current = false;
-    releasePauseWaiters();
+  };
 
-    const result = await executeBoundedUploadBatch({
-      subdomain,
-      baseFolderId: currentFolderId,
-      rawEntries: entries,
-      existingFolders: folders,
-      initialSkippedCount,
-      onStateChange: setUploadState,
-      onFoldersUpdated: (updated) => setFolders(updated),
-      onItemUploaded: (item) => {
-        setMediaItems((prev) => [item, ...prev]);
-        setTotalMediaCount((prev) => prev + 1);
-      },
-      isCancelled: () => cancelUploadRef.current,
-      isPaused: () => pauseUploadRef.current,
-      waitIfPaused: waitIfUploadPaused,
+  // Folder Actions
+  const handleCreateFolder = async (name: string, parentId: string | null) => {
+    const res = await fetch(`/api/tenant/${subdomain}/media/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, parentId }),
     });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`Folder '${name}' created`);
+      await refreshLibraryData();
+      if (data.folder?.id) {
+        setCurrentFolderId(data.folder.id);
+      }
+    }
+  };
 
-    if (result.uploadedItems.length > 0) {
+  const handleRenameFolder = async (folderId: string, newName: string) => {
+    const res = await fetch(`/api/tenant/${subdomain}/media/folders/${folderId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName }),
+    });
+    if (res.ok) {
+      showToast(`Folder renamed to '${newName}'`);
+      setRenameFolderTarget(null);
       await refreshLibraryData();
     }
   };
 
-  const handleRetryFailedUploads = (failedEntries: QueuedUploadEntry[]) => {
-    if (failedEntries.length === 0) return;
-    void runUploadBatch(failedEntries, 0);
+  const handleDeleteFolder = async (folderId: string) => {
+    const res = await fetch(`/api/tenant/${subdomain}/media/folders/${folderId}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      showToast('Folder deleted');
+      setDeleteFolderTarget(null);
+      if (currentFolderId === folderId) {
+        setCurrentFolderId(null);
+      }
+      await refreshLibraryData();
+    }
   };
 
-  // 1-Click Publishing Schedule Actions
-  const handleScheduleMedia = (item: MediaItemResponse) => {
-    router.push(`/tenant/${subdomain}/pages?mediaId=${encodeURIComponent(item.id)}`);
+  // Reparenting via Drag and Drop
+  const handleReparent = async (
+    targetFolderId: string | null,
+    payload: { mediaId?: string; folderId?: string }
+  ) => {
+    if (payload.mediaId) {
+      await fetch(`/api/tenant/${subdomain}/media/${payload.mediaId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId: targetFolderId }),
+      });
+      showToast('Item moved');
+      await refreshLibraryData();
+      return;
+    }
+    if (payload.folderId && payload.folderId !== targetFolderId) {
+      await fetch(`/api/tenant/${subdomain}/media/folders/${payload.folderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: targetFolderId }),
+      });
+      showToast('Folder moved');
+      await refreshLibraryData();
+    }
   };
 
-  const handleBatchSchedule = () => {
+  // Batch Operations
+  const handleBatchCaptionApply = async (text: string, mode: BatchCaptionMode) => {
     if (selectedIds.length === 0) return;
-    router.push(`/tenant/${subdomain}/pages?mediaIds=${encodeURIComponent(selectedIds.join(','))}`);
-  };
 
-  // Multi-file & Folder Upload Trigger with Pre-Upload Duplicate Detection
-  const handleStartUploadBatch = async (entries: QueuedUploadEntry[]) => {
-    if (entries.length === 0) return;
+    // Apply via API batch or individual updates
+    const updates = selectedIds.map(async (id) => {
+      const existing = mediaItems.find((m) => m.id === id);
+      const newCaption =
+        mode === 'append' && existing?.captionText
+          ? `${existing.captionText}\n${text}`
+          : text;
 
-    if (subdomain) {
-      const serverResult = await checkServerDuplicateEntries(
-        subdomain,
-        currentFolderId,
-        entries,
-        folders
-      );
-      if (serverResult) {
-        if (serverResult.duplicates.length > 0) {
-          setPendingDuplicateUpload({
-            allEntries: entries,
-            uniqueEntries: serverResult.uniqueEntries,
-            duplicates: serverResult.duplicates,
-          });
-          return;
-        }
-        await runUploadBatch(entries, 0);
-        return;
-      }
-    }
-
-    const detection = detectDuplicateUploadEntries(
-      entries,
-      mediaItems,
-      folders,
-      currentFolderId
-    );
-
-    if (detection.duplicates.length > 0) {
-      setPendingDuplicateUpload({
-        allEntries: entries,
-        uniqueEntries: detection.uniqueEntries,
-        duplicates: detection.duplicates,
-      });
-      return;
-    }
-
-    await runUploadBatch(entries, 0);
-  };
-
-  // Custom Video Frame Thumbnail Update Handler
-  const handleUpdateVideoThumbnail = async (
-    mediaId: string,
-    captured: CapturedVideoFrame
-  ) => {
-    const targetItem = mediaItems.find((m) => m.id === mediaId) ?? previewItem;
-    let nextThumbnailKey: string | null | undefined = undefined;
-    let nextThumbnailUrl: string = captured.dataUrl;
-
-    if (captured.blob && targetItem) {
-      try {
-        const urlRes = await fetch(
-          `/api/tenant/${subdomain}/media/upload-url`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileName: targetItem.name,
-              fileSize: targetItem.fileSize,
-              mimeType: targetItem.mimeType,
-              thumbnailMimeType: 'image/webp',
-            }),
-          }
-        );
-        if (urlRes.ok) {
-          const presigned = (await urlRes.json()) as {
-            thumbnailKey: string;
-            thumbnailUploadUrl: string;
-            publicThumbnailUrl: string;
-          };
-          const isMockStorageUrl = presigned.thumbnailUploadUrl.includes(
-            'mock-r2.fbuploadpro.com'
-          );
-          if (!isMockStorageUrl) {
-            await fetch(presigned.thumbnailUploadUrl, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'image/webp' },
-              body: captured.blob,
-            });
-          }
-          nextThumbnailKey = presigned.thumbnailKey;
-          nextThumbnailUrl = presigned.publicThumbnailUrl;
-        }
-      } catch (_err) {
-        // Fallback to captured dataUrl when presigned storage is unavailable
-      }
-    }
-
-    const patchPayload: {
-      thumbnailKey?: string | null;
-      thumbnailUrl: string;
-    } = {
-      thumbnailUrl: nextThumbnailUrl,
-      ...(nextThumbnailKey !== undefined
-        ? { thumbnailKey: nextThumbnailKey }
-        : {}),
-    };
-
-    setMediaItems((prev) =>
-      prev.map((item) =>
-        item.id === mediaId
-          ? {
-              ...item,
-              thumbnailUrl: nextThumbnailUrl,
-              ...(nextThumbnailKey !== undefined
-                ? { thumbnailKey: nextThumbnailKey }
-                : {}),
-            }
-          : item
-      )
-    );
-    setPreviewItem((prev) =>
-      prev && prev.id === mediaId
-        ? {
-            ...prev,
-            thumbnailUrl: nextThumbnailUrl,
-            ...(nextThumbnailKey !== undefined
-              ? { thumbnailKey: nextThumbnailKey }
-              : {}),
-          }
-        : prev
-    );
-
-    try {
-      const res = await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
+      return fetch(`/api/tenant/${subdomain}/media/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patchPayload),
+        body: JSON.stringify({ captionText: newCaption }),
       });
-      if (res.ok) {
-        const updated = (await res.json()) as MediaItemResponse;
-        setMediaItems((prev) =>
-          prev.map((item) => (item.id === updated.id ? updated : item))
-        );
-        setPreviewItem((prev) =>
-          prev && prev.id === updated.id ? updated : prev
-        );
-      }
-    } catch (_err) {
-      // Keep optimistic thumbnail update
-    }
+    });
+
+    await Promise.all(updates);
+    showToast(`Caption updated on ${selectedIds.length} files`);
+    setSelectedIds([]);
+    await refreshLibraryData();
   };
 
-  // Create or Rename Folder submission
-  const handleSubmitFolderForm = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmedName = folderFormName.trim();
-    if (!trimmedName) {
-      setFolderFormError('Please enter a folder name.');
-      return;
-    }
-
-    setIsSubmittingFolder(true);
-    setFolderFormError(null);
-
-    try {
-      if (folderModalState?.mode === 'create') {
-        const res = await fetch(`/api/tenant/${subdomain}/media/folders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: trimmedName,
-            parentId: currentFolderId,
-          }),
-        });
-
-        if (res.status === 409) {
-          setFolderFormError(
-            'A folder with this name already exists in this location.'
-          );
-          return;
-        }
-        if (!res.ok) {
-          setFolderFormError('Couldn’t create folder. Please try again.');
-          return;
-        }
-
-        const created = (await res.json()) as MediaFolder;
-        setFolders((prev) => [...prev, created]);
-        setFolderModalState(null);
-        setFolderFormName('');
-      } else if (folderModalState?.mode === 'rename' && folderModalState.folder) {
-        const target = folderModalState.folder;
-        const res = await fetch(
-          `/api/tenant/${subdomain}/media/folders/${target.id}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: trimmedName }),
-          }
-        );
-
-        if (res.status === 409) {
-          setFolderFormError(
-            'A folder with this name already exists in this location.'
-          );
-          return;
-        }
-        if (!res.ok) {
-          setFolderFormError('Couldn’t rename folder. Please try again.');
-          return;
-        }
-
-        const updated = (await res.json()) as MediaFolder;
-        setFolders((prev) =>
-          prev.map((f) => (f.id === updated.id ? updated : f))
-        );
-        setFolderModalState(null);
-        setFolderFormName('');
-      }
-    } catch (_err) {
-      setFolderFormError('Couldn’t save folder changes. Please try again.');
-    } finally {
-      setIsSubmittingFolder(false);
-    }
-  };
-
-  // Delete Folder Cascade Handler
-  const handleConfirmDeleteFolder = async () => {
-    if (!deleteFolderTarget) return;
-    setIsDeletingFolder(true);
-
-    try {
-      const targetId = deleteFolderTarget.id;
-      const impact = computeFolderSubtreeImpact(targetId, folders);
-      const removedFolderSet = new Set([targetId, ...impact.descendantFolderIds]);
-
-      const res = await fetch(
-        `/api/tenant/${subdomain}/media/folders/${targetId}`,
-        { method: 'DELETE' }
-      );
-
-      if (res.ok) {
-        setFolders((prev) => prev.filter((f) => !removedFolderSet.has(f.id)));
-        setMediaItems((prev) =>
-          prev.filter((m) => !m.folderId || !removedFolderSet.has(m.folderId))
-        );
-        if (currentFolderId && removedFolderSet.has(currentFolderId)) {
-          setCurrentFolderId(deleteFolderTarget.parentId ?? null);
-        }
-        setDeleteFolderTarget(null);
-        setFeedbackBanner({
-          type: 'success',
-          message: `Deleted "${deleteFolderTarget.name}" and its contents.`,
-        });
-      } else {
-        setFeedbackBanner({
-          type: 'error',
-          message: 'Couldn’t delete folder. Please try again.',
-        });
-      }
-    } catch (err: unknown) {
-      console.error('Failed to delete folder:', err);
-      setFeedbackBanner({
-        type: 'error',
-        message: 'Couldn’t delete folder. Please try again.',
-      });
-    } finally {
-      setIsDeletingFolder(false);
-    }
-  };
-
-  // Inline or Modal Caption / Name Update
-  const handleUpdateMediaItem = async (
-    mediaId: string,
-    updates: { name?: string; captionText?: string; folderId?: string | null }
-  ) => {
-    // Optimistic update
-    setMediaItems((prev) =>
-      prev.map((item) =>
-        item.id === mediaId
-          ? {
-              ...item,
-              ...(updates.name !== undefined ? { name: updates.name } : {}),
-              ...(updates.captionText !== undefined
-                ? { captionText: updates.captionText }
-                : {}),
-              ...(updates.folderId !== undefined
-                ? { folderId: updates.folderId }
-                : {}),
-            }
-          : item
-      )
-    );
-
-    try {
-      const res = await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-      if (res.ok) {
-        const updated = (await res.json()) as MediaItemResponse;
-        setMediaItems((prev) =>
-          prev.map((item) => (item.id === updated.id ? updated : item))
-        );
-      }
-    } catch (_err) {
-      // Keep optimistic state or refresh on next load
-    }
-  };
-
-  // Single Media Item Delete
-  const handleDeleteMediaItem = async (mediaId: string) => {
-    setMediaItems((prev) => prev.filter((item) => item.id !== mediaId));
-    setSelectedIds((prev) => prev.filter((id) => id !== mediaId));
-
-    try {
-      await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
-        method: 'DELETE',
-      });
-    } catch (_err) {
-      // Ignore network error after optimistic removal
-    }
-  };
-
-  // Move Folder or Media Items to Destination Folder
-  const executeMoveToDestination = async (destinationFolderId: string | null) => {
-    if (!moveModalState) return;
-    setIsSubmittingMove(true);
-
-    try {
-      if (moveModalState.targetType === 'folder' && moveModalState.folder) {
-        const folderToMove = moveModalState.folder;
-        const res = await fetch(
-          `/api/tenant/${subdomain}/media/folders/${folderToMove.id}`,
-          {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ parentId: destinationFolderId }),
-          }
-        );
-
-        if (res.ok) {
-          const updated = (await res.json()) as MediaFolder;
-          setFolders((prev) =>
-            prev.map((f) => (f.id === updated.id ? updated : f))
-          );
-          setMoveModalState(null);
-        } else {
-          setFeedbackBanner({
-            type: 'error',
-            message: 'Couldn’t move folder to the selected destination.',
-          });
-        }
-      } else if (
-        moveModalState.targetType === 'media' &&
-        moveModalState.mediaItem
-      ) {
-        await handleUpdateMediaItem(moveModalState.mediaItem.id, {
-          folderId: destinationFolderId,
-        });
-        setMoveModalState(null);
-      } else if (moveModalState.targetType === 'batch' && selectedIds.length > 0) {
-        const res = await fetch(`/api/tenant/${subdomain}/media/batch`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'move',
-            mediaIds: selectedIds,
-            folderId: destinationFolderId,
-          }),
-        });
-
-        if (res.ok) {
-          const movedSet = new Set(selectedIds);
-          setMediaItems((prev) =>
-            prev.map((item) =>
-              movedSet.has(item.id)
-                ? { ...item, folderId: destinationFolderId }
-                : item
-            )
-          );
-          setSelectedIds([]);
-          setMoveModalState(null);
-        }
-      }
-    } finally {
-      setIsSubmittingMove(false);
-    }
-  };
-
-  // Batch Delete Handler
   const handleBatchDelete = async () => {
     if (selectedIds.length === 0) return;
-    setIsBatchBusy(true);
-    const idsToDelete = [...selectedIds];
-    const deleteSet = new Set(idsToDelete);
+    if (!window.confirm(`Delete ${selectedIds.length} assets? This cannot be undone.`)) {
+      return;
+    }
 
-    setMediaItems((prev) => prev.filter((item) => !deleteSet.has(item.id)));
+    await fetch(`/api/tenant/${subdomain}/media/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', mediaIds: selectedIds }),
+    });
+
+    showToast(`Deleted ${selectedIds.length} files`);
     setSelectedIds([]);
-
-    try {
-      await fetch(`/api/tenant/${subdomain}/media/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'delete',
-          mediaIds: idsToDelete,
-        }),
-      });
-    } finally {
-      setIsBatchBusy(false);
-    }
+    await refreshLibraryData();
   };
 
-  // Batch Caption Handler
-  const handleConfirmBatchCaption = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleBatchMoveSubmit = async (destinationId: string | null) => {
     if (selectedIds.length === 0) return;
-    setIsBatchBusy(true);
-    const idsToUpdate = [...selectedIds];
-    const updateSet = new Set(idsToUpdate);
-    const nextCaption = batchCaptionDraft.trim();
 
+    await fetch(`/api/tenant/${subdomain}/media/batch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'move', mediaIds: selectedIds, folderId: destinationId }),
+    });
+
+    showToast(`Moved ${selectedIds.length} files`);
+    setSelectedIds([]);
+    setMoveTarget(null);
+    await refreshLibraryData();
+  };
+
+  // Single Item Operations
+  const handleUpdateItemCaption = async (mediaId: string, captionText: string) => {
+    await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ captionText }),
+    });
     setMediaItems((prev) =>
-      prev.map((item) =>
-        updateSet.has(item.id) ? { ...item, captionText: nextCaption } : item
-      )
+      prev.map((m) => (m.id === mediaId ? { ...m, captionText } : m))
     );
-    setBatchCaptionModalOpen(false);
-    setBatchCaptionDraft('');
+  };
 
-    try {
-      await fetch(`/api/tenant/${subdomain}/media/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'caption',
-          mediaIds: idsToUpdate,
-          captionText: nextCaption,
-        }),
-      });
-    } finally {
-      setIsBatchBusy(false);
+  const handleDeleteItem = async (mediaId: string) => {
+    await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+    showToast('Asset deleted');
+    setMediaItems((prev) => prev.filter((m) => m.id !== mediaId));
+  };
+
+  // Global Drag and drop onto page to open Import Modal
+  const handleDragOverPage = (e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault();
     }
   };
 
-  const handleMoveMediaToTargetFolder = async (
-    mediaId: string,
-    targetFolderId: string | null
-  ) => {
-    const idsToMove =
-      selectedIds.includes(mediaId) && selectedIds.length > 1
-        ? selectedIds
-        : [mediaId];
-
-    const moveSet = new Set(idsToMove);
-    setMediaItems((prev) =>
-      prev.map((m) =>
-        moveSet.has(m.id) ? { ...m, folderId: targetFolderId } : m
-      )
-    );
-    setSelectedIds((prev) => prev.filter((id) => !moveSet.has(id)));
-
-    try {
-      await fetch(`/api/tenant/${subdomain}/media/batch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'move',
-          mediaIds: idsToMove,
-          folderId: targetFolderId,
-        }),
-      });
-    } catch (_err) {
-      // Ignore network failure
+  const handleDropPage = (e: React.DragEvent) => {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer.files);
+      setStagedFilesForImport(files);
+      setIsImportModalOpen(true);
     }
   };
 
-  // Drag-and-Drop Reparenting onto Subfolder or Breadcrumb
-  const handleDropOnTargetFolder = async (
-    e: React.DragEvent<HTMLElement>,
-    targetFolderId: string | null
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOverFolderId(null);
-
-    const mediaPayloadRaw = e.dataTransfer?.getData(
-      'application/x-fbuploadpro-media'
-    );
-    if (mediaPayloadRaw) {
-      try {
-        const parsed = JSON.parse(mediaPayloadRaw) as { mediaId: string };
-        if (parsed.mediaId) {
-          await handleMoveMediaToTargetFolder(parsed.mediaId, targetFolderId);
-        }
-      } catch (_err) {
-        // Ignore malformed drag payload
-      }
-      return;
-    }
-
-    const folderPayloadRaw = e.dataTransfer?.getData(
-      'application/x-fbuploadpro-folder'
-    );
-    if (folderPayloadRaw) {
-      try {
-        const parsed = JSON.parse(folderPayloadRaw) as { folderId: string };
-        if (parsed.folderId && parsed.folderId !== targetFolderId) {
-          const res = await fetch(
-            `/api/tenant/${subdomain}/media/folders/${parsed.folderId}`,
-            {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ parentId: targetFolderId }),
-            }
-          );
-          if (res.ok) {
-            const updated = (await res.json()) as MediaFolder;
-            setFolders((prev) =>
-              prev.map((f) => (f.id === updated.id ? updated : f))
-            );
-          }
-        }
-      } catch (_err) {
-        // Ignore malformed drag payload
-      }
-      return;
-    }
-
-    // Otherwise check if external files/folders were dropped directly onto a folder
-    const droppedEntries = await extractDroppedFileEntries(e.dataTransfer);
-    if (droppedEntries.length > 0) {
-      cancelUploadRef.current = false;
-      await executeBoundedUploadBatch({
-        subdomain,
-        baseFolderId: targetFolderId,
-        rawEntries: droppedEntries,
-        existingFolders: folders,
-        onStateChange: setUploadState,
-        onFoldersUpdated: (updated) => setFolders(updated),
-        onItemUploaded: (item) => setMediaItems((prev) => [item, ...prev]),
-        isCancelled: () => cancelUploadRef.current,
-      });
-    }
-  };
-
-  // Compute delete impact for Delete Folder Confirmation Modal
-  const deleteFolderImpact = deleteFolderTarget
-    ? computeFolderSubtreeImpact(deleteFolderTarget.id, folders)
-    : null;
-
-  // Compute valid destination folders when moving a folder (exclude self and descendants)
-  const excludedMoveFolderIds = new Set<string>();
-  if (moveModalState?.targetType === 'folder' && moveModalState.folder) {
-    excludedMoveFolderIds.add(moveModalState.folder.id);
-    const impact = computeFolderSubtreeImpact(moveModalState.folder.id, folders);
-    for (const id of impact.descendantFolderIds) {
-      excludedMoveFolderIds.add(id);
-    }
-  }
-  const availableMoveFolders = folders.filter(
-    (f) => !excludedMoveFolderIds.has(f.id)
+  const activeFilterCount = computeActiveFilterCount(
+    mediaTypeFilter,
+    aspectRatioFilter,
+    captionStatusFilter
   );
+
+  const handleClearFilters = () => {
+    setMediaTypeFilter('all');
+    setAspectRatioFilter('all');
+    setCaptionStatusFilter('all');
+  };
 
   return (
     <div
       data-testid="media-library-explorer"
+      onDragOver={handleDragOverPage}
+      onDrop={handleDropPage}
       style={{
-        width: '100%',
-        minHeight: 'calc(100vh - 64px)',
         display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'stretch',
+        flexDirection: 'column',
+        width: '100%',
+        minHeight: '100vh',
         backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+        color: `var(--text-main, ${THEME.default.text.primary})`,
+        padding: `${SPACING.lg} ${SPACING.xl}`,
         boxSizing: 'border-box',
-        overflow: 'hidden',
-        position: 'relative',
       }}
     >
-      {/* Hidden File & Directory Picker Inputs */}
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          data-testid="media-toast"
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '24px',
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            border: '1px solid var(--border-strong, rgba(255,255,255,0.2))',
+            borderRadius: RADII.xs,
+            padding: `${SPACING.xs} ${SPACING.md}`,
+            fontSize: '0.8125rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 9999,
+          }}
+        >
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Hidden File Picker */}
       <input
         ref={fileInputRef}
         type="file"
-        data-testid="file-upload-input"
         multiple
-        accept={SUPPORTED_MEDIA_ACCEPT}
+        style={{ display: 'none' }}
         onChange={(e) => {
           if (e.target.files && e.target.files.length > 0) {
-            const entries = buildQueuedEntriesFromFileList(e.target.files);
-            void handleStartUploadBatch(entries);
+            const files = Array.from(e.target.files);
             e.target.value = '';
+            setStagedFilesForImport(files);
+            setIsImportModalOpen(true);
           }
         }}
-        style={{ display: 'none' }}
-      />
-      <input
-        ref={(node) => {
-          folderInputRef.current = node;
-          if (node) {
-            node.setAttribute('webkitdirectory', '');
-            node.setAttribute('directory', '');
-          }
-        }}
-        type="file"
-        data-testid="folder-upload-input"
-        multiple
-        onChange={(e) => {
-          if (e.target.files && e.target.files.length > 0) {
-            const entries = buildQueuedEntriesFromFileList(e.target.files);
-            void handleStartUploadBatch(entries);
-            e.target.value = '';
-          }
-        }}
-        style={{ display: 'none' }}
       />
 
-      {/* 1. Left Folder Rail (Sidebar) */}
-      <MediaFolderRail
-        folders={folders}
-        currentFolderId={currentFolderId}
-        activeSmartCollection={activeSmartCollection}
-        counts={smartCounts}
-        isCollapsed={isFolderRailCollapsed}
-        onToggleCollapse={() => setIsFolderRailCollapsed((prev) => !prev)}
-        onSelectCollection={(col) => setActiveSmartCollection(col)}
-        onNavigateFolder={handleNavigateFolder}
-        onCreateFolder={(_parentId) => {
-          setFolderFormName('');
-          setFolderFormError(null);
-          setFolderModalState({ mode: 'create' });
-        }}
-        onRenameFolder={(f) => {
-          setFolderFormName(f.name);
-          setFolderFormError(null);
-          setFolderModalState({ mode: 'rename', folder: f });
-        }}
-        onMoveFolder={(f) => {
-          setSelectedMoveDestinationId(f.parentId ?? null);
-          setMoveModalState({ targetType: 'folder', folder: f });
-        }}
-        onDeleteFolder={(f) => setDeleteFolderTarget(f)}
-        onDropMediaOnFolder={(mediaId, targetFolderId) =>
-          void handleMoveMediaToTargetFolder(mediaId, targetFolderId)
-        }
-      />
-
-      {/* 2. Fluid Center Media Stage */}
-      <main
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (!isDropzoneActive) {
-            setIsDropzoneActive(true);
-          }
-        }}
-        onDragLeave={(e) => {
-          if (e.currentTarget === e.target) {
-            setIsDropzoneActive(false);
-          }
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDropzoneActive(false);
-          void (async () => {
-            const entries = await extractDroppedFileEntries(e.dataTransfer);
-            if (entries.length > 0) {
-              await handleStartUploadBatch(entries);
-            }
-          })();
-        }}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          overflowY: 'auto',
-          padding: SPACING.lg,
-          boxSizing: 'border-box',
-          border: isDropzoneActive
-            ? `1px dashed ${PALETTE.primary}`
-            : '1px solid transparent',
-          transition: 'border-color 0.15s ease',
-        }}
-      >
-
-      {/* Page Header */}
+      {/* 1. Page Header (No box, plain text) */}
       <header
         style={{
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
           gap: SPACING.md,
-          marginBottom: SPACING.lg,
+          marginBottom: SPACING.xl,
           flexWrap: 'wrap',
         }}
       >
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <h1
             data-testid="media-library-title"
             style={{
-              margin: `0 0 ${SPACING.xs} 0`,
+              margin: 0,
               fontSize: '1.5rem',
               fontWeight: TYPOGRAPHY.weights.bold,
-              letterSpacing: TYPOGRAPHY.tracking.h1,
+              letterSpacing: '-0.02em',
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
@@ -1673,102 +1952,56 @@ export function MediaLibraryExplorer({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Organize folders, edit captions, and upload videos and images for your queues
+            Upload, organize, and caption your media for publishing queues.
           </p>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.sm,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.lg }}>
+          {/* Quiet New Folder Link */}
           <button
             type="button"
-            data-testid="new-folder-btn"
-            onClick={() => {
-              setFolderFormName('');
-              setFolderFormError(null);
-              setFolderModalState({ mode: 'create' });
-            }}
+            data-testid="new-folder-link"
+            onClick={() => setIsNewFolderOpen(true)}
             style={{
-              ...COMPONENT_STYLES.secondaryButton(THEME.default),
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0,
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              cursor: 'pointer',
+              textDecoration: 'none',
             }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-              <line x1="12" y1="11" x2="12" y2="17" />
-              <line x1="9" y1="14" x2="15" y2="14" />
-            </svg>
-            <span>New Folder</span>
+            + New Folder
           </button>
 
-          <button
-            type="button"
-            data-testid="upload-folder-btn"
-            onClick={() => folderInputRef.current?.click()}
-            style={{
-              ...COMPONENT_STYLES.secondaryButton(THEME.default),
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-              <polyline points="12 11 12 17" />
-              <polyline points="9 14 12 11 15 14" />
-            </svg>
-            <span>Upload Folder</span>
-          </button>
-
+          {/* Single Primary Button: Upload Files */}
           <button
             type="button"
             data-testid="upload-files-btn"
             onClick={() => fileInputRef.current?.click()}
             style={{
-              ...COMPONENT_STYLES.primaryButton,
+              padding: `${SPACING.xs} ${SPACING.lg}`,
+              backgroundColor: PALETTE.primary,
+              border: 'none',
+              borderRadius: RADII.xs,
+              color: '#000000',
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: SPACING.xs,
             }}
           >
             <svg
-              width="16"
-              height="16"
+              width="15"
+              height="15"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.25"
+              strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
               aria-hidden="true"
@@ -1782,738 +2015,619 @@ export function MediaLibraryExplorer({
         </div>
       </header>
 
-      {/* Optional Feedback Banner */}
-      {feedbackBanner && (
-        <div
-          data-testid="media-feedback-banner"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: `${SPACING.sm} ${SPACING.md}`,
-            marginBottom: SPACING.md,
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: `1px solid ${
-              feedbackBanner.type === 'success' ? PALETTE.accent4 : PALETTE.accent3
-            }`,
-            borderRadius: RADII.sm,
-            fontSize: '0.875rem',
-            color:
-              feedbackBanner.type === 'success' ? PALETTE.accent4 : PALETTE.accent3,
-          }}
-        >
-          <span>{feedbackBanner.message}</span>
-          <button
-            type="button"
-            onClick={() => setFeedbackBanner(null)}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: 'inherit',
-              cursor: 'pointer',
-              fontSize: '0.75rem',
-            }}
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* Network Load Error Retry Banner */}
-      {loadError && (
-        <div
-          data-testid="media-load-error-banner"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: `${SPACING.sm} ${SPACING.md}`,
-            marginBottom: SPACING.md,
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: `1px solid ${PALETTE.accent3}`,
-            borderRadius: RADII.sm,
-            fontSize: '0.875rem',
-            color: PALETTE.accent3,
-          }}
-        >
-          <span>{loadError}</span>
-          <button
-            type="button"
-            data-testid="media-load-retry-btn"
-            onClick={() => void refreshLibraryData()}
-            style={{
-              ...COMPONENT_STYLES.secondaryButton(THEME.default),
-              padding: '4px 10px',
-              fontSize: '0.75rem',
-              borderColor: PALETTE.accent3,
-              color: PALETTE.accent3,
-              cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Single Unified Windows Copy-Style Upload Progress Banner */}
-      <UploadQueueBanner
-        state={uploadState}
-        onPause={handlePauseUpload}
-        onResume={handleResumeUpload}
-        onRetryFailed={handleRetryFailedUploads}
-        onCancel={() => {
-          cancelUploadRef.current = true;
-          pauseUploadRef.current = false;
-          releasePauseWaiters();
+      {/* 2. Toolbar (Single divider-separated row, 3 zones, NO boxes) */}
+      <MediaToolbar
+        searchInput={searchInput}
+        onSearchChange={(val) => {
+          setSearchInput(val);
+          if (val.trim().length > 0) {
+            setMediaTypeFilter("all");
+            setAspectRatioFilter("all");
+            setCaptionStatusFilter("all");
+          }
         }}
-        onDismiss={() =>
-          setUploadState((prev) => ({
-            ...prev,
-            status: 'idle',
-          }))
-        }
+        scopeTagLabel={getScopeTagLabel(debouncedSearch, activeSmartView, currentFolderId, folders)}
+        mediaTypeFilter={mediaTypeFilter}
+        onMediaTypeChange={setMediaTypeFilter}
+        aspectRatioFilter={aspectRatioFilter}
+        onAspectRatioChange={setAspectRatioFilter}
+        captionStatusFilter={captionStatusFilter}
+        onCaptionStatusChange={setCaptionStatusFilter}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={handleClearFilters}
+        sortOption={sortOption}
+        onSortChange={setSortOption}
+        viewMode={viewMode}
+        onChangeViewMode={handleChangeViewMode}
+        activeDropdown={activeDropdown}
+        onToggleDropdown={(d) => setActiveDropdown((prev) => (prev === d ? null : d))}
+        onCloseDropdown={() => setActiveDropdown(null)}
+        dropdownRefs={{
+          type: typeDropdownRef,
+          ratio: ratioDropdownRef,
+          caption: captionDropdownRef,
+          sort: sortDropdownRef,
+        }}
       />
 
-      {/* Top Breadcrumb Path Bar */}
-      <nav
-        data-testid="folder-breadcrumbs"
-        aria-label="Folder path navigation"
+      {/* 3. Main Explorer Body: Left Rail (VIEWS + FOLDERS) and Right Canvas */}
+      <div
+        data-testid="media-explorer-body"
         style={{
           display: 'flex',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '6px',
-          padding: 0,
-          marginBottom: SPACING.md,
-          background: 'transparent',
-          border: 'none',
+          gap: SPACING.xl,
+          alignItems: 'flex-start',
+          width: '100%',
         }}
       >
-        <button
-          type="button"
-          data-testid="breadcrumb-root"
-          onClick={() => handleNavigateFolder(null)}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOverFolderId('root');
+        {/* Navigation Rail */}
+        <MediaViewsRail
+          activeSmartView={activeSmartView}
+          currentFolderId={currentFolderId}
+          folders={folders}
+          onSelectSmartView={(view) => {
+            setActiveSmartView(view);
+            setCurrentFolderId(null);
           }}
-          onDragLeave={() => setDragOverFolderId(null)}
-          onDrop={(e) => void handleDropOnTargetFolder(e, null)}
-          style={{
-            backgroundColor:
-              dragOverFolderId === 'root'
-                ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                : currentFolderId === null
-                  ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                  : 'transparent',
-            border:
-              dragOverFolderId === 'root'
-                ? `1px solid ${PALETTE.primary}`
-                : '1px solid transparent',
-            borderRadius: RADII.xs,
-            padding: '4px 8px',
-            color:
-              currentFolderId === null
-                ? `var(--text-main, ${THEME.default.text.primary})`
-                : `var(--text-sub, ${THEME.default.text.secondary})`,
-            fontWeight:
-              currentFolderId === null
-                ? TYPOGRAPHY.weights.bold
-                : TYPOGRAPHY.weights.medium,
-            fontSize: '0.875rem',
-            cursor: 'pointer',
+          onSelectRootLibrary={() => {
+            setActiveSmartView(null);
+            setCurrentFolderId(null);
           }}
-        >
-          All Media
-        </button>
+          onSelectFolder={(folderId) => {
+            setActiveSmartView(null);
+            setCurrentFolderId(folderId);
+          }}
+          onOpenNewFolder={() => setIsNewFolderOpen(true)}
+        />
 
-        {breadcrumbs.map((crumb) => {
-          const isCurrent = crumb.id === currentFolderId;
-          const isDragOver = dragOverFolderId === crumb.id;
-          return (
-            <React.Fragment key={crumb.id}>
-              <span
-                aria-hidden="true"
-                style={{
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  fontSize: '0.875rem',
-                  userSelect: 'none',
-                }}
-              >
-                /
-              </span>
+        {/* Right Canvas */}
+        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Slim Context Row: Breadcrumb in Plain Text on Left, "Select all" on Right */}
+          <div
+            data-testid="context-row"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `${SPACING.md} 0`,
+              gap: SPACING.md,
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Breadcrumb Trail in Plain Text (Clickable & Drag-Drop Reparenting) */}
+            <nav
+              aria-label="Folder path"
+              data-testid="folder-breadcrumbs"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.875rem',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
               <button
                 type="button"
-                data-testid={`breadcrumb-folder-${crumb.id}`}
-                onClick={() => handleNavigateFolder(crumb.id)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOverFolderId(crumb.id);
+                data-testid="breadcrumb-root"
+                onClick={() => {
+                  setActiveSmartView(null);
+                  setCurrentFolderId(null);
                 }}
-                onDragLeave={() => setDragOverFolderId(null)}
-                onDrop={(e) => void handleDropOnTargetFolder(e, crumb.id)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
+                  const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+                  if (mediaId) {
+                    try {
+                      const parsed = JSON.parse(mediaId);
+                      void handleReparent(null, { mediaId: parsed.mediaId });
+                    } catch {}
+                  } else if (folderId) {
+                    try {
+                      const parsed = JSON.parse(folderId);
+                      void handleReparent(null, { folderId: parsed.folderId });
+                    } catch {}
+                  }
+                }}
                 style={{
-                  backgroundColor: isDragOver
-                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                    : isCurrent
-                      ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                      : 'transparent',
-                  border: isDragOver
-                    ? `1px solid ${PALETTE.primary}`
-                    : '1px solid transparent',
-                  borderRadius: RADII.xs,
-                  padding: '4px 8px',
-                  color: isCurrent
-                    ? `var(--text-main, ${THEME.default.text.primary})`
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                  fontWeight: isCurrent
-                    ? TYPOGRAPHY.weights.bold
-                    : TYPOGRAPHY.weights.medium,
-                  fontSize: '0.875rem',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color:
+                    activeSmartView === null && currentFolderId === null
+                      ? `var(--text-main, ${THEME.default.text.primary})`
+                      : `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontWeight:
+                    activeSmartView === null && currentFolderId === null
+                      ? TYPOGRAPHY.weights.semibold
+                      : TYPOGRAPHY.weights.regular,
                   cursor: 'pointer',
                 }}
               >
-                {crumb.name}
+                Library
               </button>
-            </React.Fragment>
-          );
-        })}
-      </nav>
 
-      {/* Search, Filter, Sort & View Mode Toolbar */}
-      <div
-        data-testid="media-explorer-toolbar"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: SPACING.md,
-          marginBottom: SPACING.lg,
-        }}
-      >
-        {/* Search Input */}
-        <div style={{ flex: '1 1 260px', maxWidth: '420px' }}>
-          <input
-            type="search"
-            data-testid="media-search-input"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by file name or caption..."
-            aria-label="Search by file name or caption"
-            style={{
-              ...COMPONENT_STYLES.input(THEME.default),
-              width: '100%',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              boxSizing: 'border-box',
+              {activeSmartView === 'everything' && (
+                <>
+                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                  <span
+                    style={{
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
+                      fontWeight: TYPOGRAPHY.weights.semibold,
+                    }}
+                  >
+                    Everything
+                  </span>
+                </>
+              )}
+
+              {activeSmartView === 'needs_caption' && (
+                <>
+                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                  <span
+                    style={{
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
+                      fontWeight: TYPOGRAPHY.weights.semibold,
+                    }}
+                  >
+                    Needs caption
+                  </span>
+                </>
+              )}
+
+              {!activeSmartView &&
+                breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <React.Fragment key={crumb.id}>
+                      <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                      <button
+                        type="button"
+                        data-testid={`breadcrumb-folder-${crumb.id}`}
+                        onClick={() => {
+                          setActiveSmartView(null);
+                          setCurrentFolderId(crumb.id);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
+                          const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+                          if (mediaId) {
+                            try {
+                              const parsed = JSON.parse(mediaId);
+                              void handleReparent(crumb.id, { mediaId: parsed.mediaId });
+                            } catch {}
+                          } else if (folderId) {
+                            try {
+                              const parsed = JSON.parse(folderId);
+                              void handleReparent(crumb.id, { folderId: parsed.folderId });
+                            } catch {}
+                          }
+                        }}
+                        style={{
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          color: isLast
+                            ? `var(--text-main, ${THEME.default.text.primary})`
+                            : `var(--text-sub, ${THEME.default.text.secondary})`,
+                          fontWeight: isLast
+                            ? TYPOGRAPHY.weights.semibold
+                            : TYPOGRAPHY.weights.regular,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {crumb.name}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+            </nav>
+
+            {/* Right: "Select all" toggle */}
+            {displayedMediaItems.length > 0 && (
+              <button
+                type="button"
+                data-testid="select-all-btn"
+                onClick={handleSelectAll}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  cursor: 'pointer',
+                }}
+              >
+                {selectedIds.length === displayedMediaItems.length
+                  ? 'Deselect all'
+                  : 'Select all'}
+              </button>
+            )}
+          </div>
+
+          {/* Subfolders as ROWS (NOT cards) */}
+          {currentSubfolders.length > 0 && !debouncedSearch && !activeSmartView && (
+            <section
+              aria-label="Subfolders"
+              data-testid="subfolders-grid"
+              style={{
+                marginBottom: SPACING.xl,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  marginBottom: '6px',
+                }}
+              >
+                FOLDERS ({currentSubfolders.length})
+              </span>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.06))',
+                }}
+              >
+                {currentSubfolders.map((folder) => {
+                  const childSubfolders = folders.filter((f) => f.parentId === folder.id);
+                  const folderItems = mediaItems.filter((m) => m.folderId === folder.id);
+                  const subCount = childSubfolders.length;
+                  const fileCount = folder.itemCount ?? folderItems.length;
+
+                  return (
+                    <div
+                      key={folder.id}
+                      data-testid={`folder-row-${folder.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setActiveSmartView(null);
+                          setCurrentFolderId(folder.id);
+                        }
+                      }}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          'application/x-fbuploadpro-folder',
+                          JSON.stringify({ folderId: folder.id })
+                        );
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
+                        const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+                        if (mediaId) {
+                          try {
+                            const parsed = JSON.parse(mediaId);
+                            void handleReparent(folder.id, { mediaId: parsed.mediaId });
+                          } catch {}
+                        } else if (folderId) {
+                          try {
+                            const parsed = JSON.parse(folderId);
+                            void handleReparent(folder.id, { folderId: parsed.folderId });
+                          } catch {}
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: `${SPACING.sm} ${SPACING.xs}`,
+                        borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.06))',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.12s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+                        const actionContainer = e.currentTarget.querySelector('.folder-hover-actions') as HTMLElement | null;
+                        if (actionContainer) actionContainer.style.opacity = '1';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        const actionContainer = e.currentTarget.querySelector('.folder-hover-actions') as HTMLElement | null;
+                        if (actionContainer) actionContainer.style.opacity = '0';
+                      }}
+                      onClick={() => {
+                        setActiveSmartView(null);
+                        setCurrentFolderId(folder.id);
+                      }}
+                    >
+                      {/* Left: Folder icon + Name + Secondary text ("1 subfolder · 0 files") */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={PALETTE.primary}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span
+                          data-testid={`folder-name-${folder.id}`}
+                          style={{
+                            fontSize: '0.875rem',
+                            fontWeight: TYPOGRAPHY.weights.medium,
+                            color: `var(--text-main, ${THEME.default.text.primary})`,
+                          }}
+                        >
+                          {folder.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            color: `var(--text-dim, ${THEME.default.text.muted})`,
+                          }}
+                        >
+                          {subCount} subfolder{subCount === 1 ? '' : 's'} · {fileCount} file{fileCount === 1 ? '' : 's'}
+                        </span>
+                      </div>
+
+                      {/* Right: Hover-Revealed Icon Buttons (Rename, Move, Delete) */}
+                      <div
+                        className="folder-hover-actions"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          opacity: 0,
+                          transition: 'opacity 0.12s ease',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          data-testid={`rename-folder-${folder.id}`}
+                          aria-label={`Rename ${folder.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenameFolderTarget(folder);
+                            setRenameDraft(folder.name);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid={`move-folder-${folder.id}`}
+                          aria-label={`Move ${folder.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMoveTarget({ type: 'folder', folder });
+                            setMoveDestinationFolderId(folder.parentId);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="21" y1="3" x2="14" y2="10" />
+                            <line x1="3" y1="21" x2="10" y2="14" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid={`delete-folder-${folder.id}`}
+                          aria-label={`Delete ${folder.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteFolderTarget(folder);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: PALETTE.accent3,
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Main Media Asset Canvas: Grid or Table View */}
+          <MediaCanvas
+            displayedMediaItems={displayedMediaItems}
+            viewMode={viewMode}
+            isLoading={isLoading}
+            selectedIds={selectedIds}
+            debouncedSearch={debouncedSearch}
+            folders={folders}
+            activeSmartView={activeSmartView}
+            onNavigateFolder={(fId) => {
+              setActiveSmartView(null);
+              setCurrentFolderId(fId);
             }}
+            onToggleSelect={handleToggleSelect}
+            onPreview={(m) => setPreviewItem(m)}
+            onUpdateCaption={handleUpdateItemCaption}
+            onMoveRequest={(m) => {
+              setMoveTarget({ type: 'single_media', mediaItem: m });
+              setMoveDestinationFolderId(m.folderId);
+            }}
+            onDeleteRequest={handleDeleteItem}
           />
-        </div>
+        </main>
+      </div>
 
-        {/* Filter Controls, Sort Select & View Mode Toggle */}
-        <div
+      {/* 6. Floating Batch Action Pill (Bottom Center) */}
+      <BatchActionBar
+        selectedIds={selectedIds}
+        onClearSelection={() => setSelectedIds([])}
+        onBatchMove={() => {
+          setMoveTarget({ type: 'batch_media' });
+          setMoveDestinationFolderId(currentFolderId);
+        }}
+        onBatchCaption={() => setIsBatchCaptionOpen(true)}
+        onBatchDelete={handleBatchDelete}
+      />
+
+      {/* 7. Batch Set Caption Modal */}
+      <BatchSetCaptionModal
+        isOpen={isBatchCaptionOpen}
+        selectedCount={selectedIds.length}
+        onClose={() => setIsBatchCaptionOpen(false)}
+        onApply={handleBatchCaptionApply}
+      />
+
+      {/* 8. New Folder Modal */}
+      <NewFolderModal
+        isOpen={isNewFolderOpen}
+        folders={folders}
+        initialParentId={currentFolderId}
+        onClose={() => setIsNewFolderOpen(false)}
+        onCreateFolder={handleCreateFolder}
+      />
+
+      {/* 9. Media Import Modal (2-Step Staging & 3-Concurrency Engine) */}
+      <MediaImportModal
+        subdomain={subdomain}
+        isOpen={isImportModalOpen}
+        initialFiles={stagedFilesForImport}
+        currentFolderId={currentFolderId}
+        folders={folders}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setStagedFilesForImport([]);
+        }}
+        onUploadSuccess={() => {
+          void refreshLibraryData();
+        }}
+        onActiveUploadsChange={(count, furthest) => {
+          setActiveUploadsCount(count);
+          setFurthestAlongUpload(furthest);
+        }}
+      />
+
+      {/* 10. Leave Page Protection Dialog */}
+      <LeavePageGuardDialog
+        isOpen={isLeaveGuardOpen}
+        activeUploadsCount={activeUploadsCount}
+        furthestAlongFile={furthestAlongUpload}
+        onStay={() => {
+          setIsLeaveGuardOpen(false);
+          setPendingNavigationUrl(null);
+        }}
+        onLeaveAnyway={() => {
+          setIsLeaveGuardOpen(false);
+          if (pendingNavigationUrl) {
+            window.location.href = pendingNavigationUrl;
+          }
+        }}
+      />
+
+      {/* 11. Two-Column Preview Modal */}
+      <MediaPreviewModal
+        item={previewItem}
+        open={Boolean(previewItem)}
+        onOpenChange={(open) => {
+          if (!open) setPreviewItem(null);
+        }}
+        onSave={async (id, updates) => {
+          await fetch(`/api/tenant/${subdomain}/media/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates),
+          });
+          showToast('Changes saved');
+          await refreshLibraryData();
+        }}
+        onUpdateThumbnail={async (_id, _captured) => {
+          // If update thumbnail API exists or update local preview
+          showToast('Thumbnail updated');
+          await refreshLibraryData();
+        }}
+        onDelete={async (id) => {
+          await handleDeleteItem(id);
+          setPreviewItem(null);
+        }}
+      />
+
+      {/* Move Folder / Media Dialog */}
+      {moveTarget && (
+        <dialog
+          open
+          aria-modal="true"
+          aria-labelledby="move-modal-title"
           style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
-            gap: SPACING.sm,
-            flexWrap: 'wrap',
+            justifyContent: 'center',
+            zIndex: 9500,
+            padding: SPACING.md,
+            border: 'none',
+            margin: 0,
+            boxSizing: 'border-box',
           }}
         >
           <div
-            role="group"
-            aria-label="Filter by media type"
             style={{
-              display: 'inline-flex',
+              width: '100%',
+              maxWidth: '400px',
               backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              padding: '2px',
-              gap: '2px',
-            }}
-          >
-            {(
-              [
-                { key: 'all', label: 'All' },
-                { key: 'video', label: 'Videos' },
-                { key: 'image', label: 'Images' },
-              ] as const
-            ).map((tab) => {
-              const active = mediaTypeFilter === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  data-testid={`filter-type-${tab.key}`}
-                  onClick={() => setMediaTypeFilter(tab.key)}
-                  style={{
-                    height: '32px',
-                    padding: `0 ${SPACING.md}`,
-                    backgroundColor: active
-                      ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                      : 'transparent',
-                    color: active
-                      ? `var(--text-main, ${THEME.default.text.primary})`
-                      : `var(--text-sub, ${THEME.default.text.secondary})`,
-                    border: 'none',
-                    borderRadius: RADII.xs,
-                    fontSize: '0.8125rem',
-                    fontWeight: active
-                      ? TYPOGRAPHY.weights.semibold
-                      : TYPOGRAPHY.weights.medium,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <select
-            data-testid="media-aspect-ratio-select"
-            value={aspectRatioFilter}
-            onChange={(e) =>
-              setAspectRatioFilter(e.target.value as AspectRatioFilterKey)
-            }
-            aria-label="Filter by aspect ratio"
-            style={{
-              ...COMPONENT_STYLES.input(THEME.default),
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              padding: `0 ${SPACING.md}`,
-              cursor: 'pointer',
-            }}
-          >
-            <option value="all">All ratios</option>
-            <option value="9:16">9:16 Vertical</option>
-            <option value="16:9">16:9 Landscape</option>
-            <option value="1:1">1:1 Square</option>
-            <option value="4:5">4:5 Portrait</option>
-          </select>
-
-          <select
-            data-testid="media-caption-status-select"
-            value={captionStatusFilter}
-            onChange={(e) =>
-              setCaptionStatusFilter(e.target.value as CaptionStatusFilterKey)
-            }
-            aria-label="Filter by caption status"
-            style={{
-              ...COMPONENT_STYLES.input(THEME.default),
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              padding: `0 ${SPACING.md}`,
-              cursor: 'pointer',
-            }}
-          >
-            <option value="all">All captions</option>
-            <option value="has_caption">Has caption</option>
-            <option value="empty_caption">Missing caption</option>
-          </select>
-
-          <select
-            data-testid="media-sort-select"
-            value={sortOption}
-            onChange={(e) => setSortOption(e.target.value as SortOptionKey)}
-            aria-label="Sort media assets"
-            style={{
-              ...COMPONENT_STYLES.input(THEME.default),
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              padding: `0 ${SPACING.md}`,
-              cursor: 'pointer',
-            }}
-          >
-            <option value="created_at:desc">Newest first</option>
-            <option value="created_at:asc">Oldest first</option>
-            <option value="name:asc">Name (A–Z)</option>
-            <option value="file_size:desc">Largest size</option>
-          </select>
-
-          {/* Grid View (default) vs. Compact Table View Toggle */}
-          <div
-            role="group"
-            aria-label="View mode"
-            style={{
-              display: 'inline-flex',
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              padding: '2px',
-              gap: '2px',
-            }}
-          >
-            <button
-              type="button"
-              data-testid="view-mode-grid-btn"
-              aria-pressed={viewMode === 'grid'}
-              onClick={() => handleChangeViewMode('grid')}
-              style={{
-                height: '32px',
-                padding: `0 ${SPACING.sm}`,
-                backgroundColor:
-                  viewMode === 'grid'
-                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                    : 'transparent',
-                color:
-                  viewMode === 'grid'
-                    ? `var(--text-main, ${THEME.default.text.primary})`
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                border: 'none',
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                fontWeight:
-                  viewMode === 'grid'
-                    ? TYPOGRAPHY.weights.semibold
-                    : TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-              }}
-            >
-              Grid
-            </button>
-            <button
-              type="button"
-              data-testid="view-mode-table-btn"
-              aria-pressed={viewMode === 'table'}
-              onClick={() => handleChangeViewMode('table')}
-              style={{
-                height: '32px',
-                padding: `0 ${SPACING.sm}`,
-                backgroundColor:
-                  viewMode === 'table'
-                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                    : 'transparent',
-                color:
-                  viewMode === 'table'
-                    ? `var(--text-main, ${THEME.default.text.primary})`
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                border: 'none',
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                fontWeight:
-                  viewMode === 'table'
-                    ? TYPOGRAPHY.weights.semibold
-                    : TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-              }}
-            >
-              Table
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Floating Batch Selection Action Bar */}
-      <BatchActionBar
-        selectedIds={selectedIds}
-        totalAvailableCount={displayedMediaItems.length}
-        onSelectAll={() =>
-          setSelectedIds(displayedMediaItems.map((item) => item.id))
-        }
-        onClearSelection={() => setSelectedIds([])}
-        onBatchMove={() => {
-          setSelectedMoveDestinationId(currentFolderId);
-          setMoveModalState({ targetType: 'batch' });
-        }}
-        onBatchCaption={() => {
-          setBatchCaptionDraft('');
-          setBatchCaptionModalOpen(true);
-        }}
-        onBatchDelete={() => void handleBatchDelete()}
-        onBatchSchedule={handleBatchSchedule}
-        isBusy={isBatchBusy}
-      />
-
-      {/* Subfolders Section */}
-      {currentSubfolders.length > 0 && (
-        <section
-          aria-label="Subfolders"
-          style={{ marginBottom: SPACING.xl }}
-        >
-          <h2
-            style={{
-              margin: `0 0 ${SPACING.sm} 0`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              letterSpacing: TYPOGRAPHY.tracking.h3,
-            }}
-          >
-            Folders ({currentSubfolders.length})
-          </h2>
-
-          <div
-            data-testid="subfolders-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+              borderRadius: RADII.md,
+              padding: SPACING.xl,
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.6)',
+              display: 'flex',
+              flexDirection: 'column',
               gap: SPACING.md,
             }}
           >
-            {currentSubfolders.map((folder) => {
-              const isDragOver = dragOverFolderId === folder.id;
-              return (
-                <div
-                  key={folder.id}
-                  data-testid={`folder-card-${folder.id}`}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer?.setData(
-                      'application/x-fbuploadpro-folder',
-                      JSON.stringify({ folderId: folder.id })
-                    );
-                  }}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDragOverFolderId(folder.id);
-                  }}
-                  onDragLeave={() => setDragOverFolderId(null)}
-                  onDrop={(e) => void handleDropOnTargetFolder(e, folder.id)}
-                  style={{
-                    backgroundColor: isDragOver
-                      ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                      : `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                    border: `1px solid ${
-                      isDragOver
-                        ? PALETTE.primary
-                        : `var(--border-subtle, ${THEME.default.borders.hairline})`
-                    }`,
-                    borderRadius: RADII.md,
-                    boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-                    padding: SPACING.md,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: SPACING.sm,
-                    transition: 'border-color 0.15s ease',
-                  }}
-                >
-                  <button
-                    type="button"
-                    data-testid={`open-folder-${folder.id}`}
-                    onClick={() => handleNavigateFolder(folder.id)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: SPACING.sm,
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      padding: 0,
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      width: '100%',
-                    }}
-                  >
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={PALETTE.primary}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                      style={{ flexShrink: 0 }}
-                    >
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          fontSize: '0.875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-main, ${THEME.default.text.primary})`,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {folder.name}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '0.75rem',
-                          color: `var(--text-dim, ${THEME.default.text.muted})`,
-                          fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                        }}
-                      >
-                        {folder.subfolderCount}{' '}
-                        {folder.subfolderCount === 1 ? 'subfolder' : 'subfolders'} ·{' '}
-                        {folder.itemCount} {folder.itemCount === 1 ? 'file' : 'files'}
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Folder Card Quick Actions */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      gap: SPACING.xs,
-                      paddingTop: SPACING.xs,
-                      borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      data-testid={`rename-folder-${folder.id}`}
-                      onClick={() => {
-                        setFolderFormName(folder.name);
-                        setFolderFormError(null);
-                        setFolderModalState({ mode: 'rename', folder });
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        borderRadius: RADII.xs,
-                        padding: '2px 8px',
-                        fontSize: '0.75rem',
-                        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Rename
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid={`move-folder-${folder.id}`}
-                      onClick={() => {
-                        setSelectedMoveDestinationId(folder.parentId ?? null);
-                        setMoveModalState({ targetType: 'folder', folder });
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        borderRadius: RADII.xs,
-                        padding: '2px 8px',
-                        fontSize: '0.75rem',
-                        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Move
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid={`delete-folder-${folder.id}`}
-                      onClick={() => setDeleteFolderTarget(folder)}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        borderRadius: RADII.xs,
-                        padding: '2px 8px',
-                        fontSize: '0.75rem',
-                        color: PALETTE.accent3,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Media Assets Section */}
-      <section aria-label="Media assets">
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: SPACING.sm,
-          }}
-        >
-          <h2
-            style={{
-              margin: 0,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              letterSpacing: TYPOGRAPHY.tracking.h3,
-            }}
-          >
-            Media Assets ({displayedMediaItems.length})
-          </h2>
-
-          {displayedMediaItems.length > 0 && (
-            <button
-              type="button"
-              data-testid="toggle-select-all-media-btn"
-              onClick={() => {
-                if (selectedIds.length === displayedMediaItems.length) {
-                  setSelectedIds([]);
-                } else {
-                  setSelectedIds(displayedMediaItems.map((m) => m.id));
-                }
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-              }}
-            >
-              {selectedIds.length === displayedMediaItems.length
-                ? 'Deselect all'
-                : 'Select all in folder'}
-            </button>
-          )}
-        </div>
-
-        {isLoading ? (
-          <div
-            data-testid="media-loading-skeleton"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: SPACING.lg,
-            }}
-          >
-            {[1, 2, 3, 4].map((n) => (
-              <div
-                key={n}
-                style={{
-                  height: '240px',
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.md,
-                  opacity: 0.45,
-                }}
-              />
-            ))}
-          </div>
-        ) : displayedMediaItems.length === 0 ? (
-          <div
-            data-testid="media-empty-state"
-            style={{
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              padding: SPACING.xxl,
-              textAlign: 'center',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: SPACING.sm,
-            }}
-          >
-            <h3
+            <h2
+              id="move-modal-title"
               style={{
                 margin: 0,
                 fontSize: '1.125rem',
@@ -2521,885 +2635,327 @@ export function MediaLibraryExplorer({
                 color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
-              {searchQuery.trim() ||
-              aspectRatioFilter !== 'all' ||
-              captionStatusFilter !== 'all'
-                ? 'No matching media found'
-                : 'This folder has no media assets yet'}
-            </h3>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '0.875rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                maxWidth: '460px',
-              }}
-            >
-              {searchQuery.trim() ||
-              aspectRatioFilter !== 'all' ||
-              captionStatusFilter !== 'all'
-                ? 'Try adjusting your search keywords or active filters.'
-                : 'Drag and drop videos, images, or entire folders from your computer here to start organizing your content.'}
-            </p>
-            {!searchQuery.trim() &&
-              aspectRatioFilter === 'all' &&
-              captionStatusFilter === 'all' && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: SPACING.sm,
-                    marginTop: SPACING.xs,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    style={COMPONENT_STYLES.primaryButton}
-                  >
-                    Upload Files
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => folderInputRef.current?.click()}
-                    style={{
-                      ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    }}
-                  >
-                    Upload Folder
-                  </button>
-                </div>
-              )}
-          </div>
-        ) : (
-          <>
-            {viewMode === 'table' ? (
-              <div
-                data-testid="media-table-view"
-                style={{
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.md,
-                  boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-                  overflowX: 'auto',
-                }}
-              >
-                <table
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'collapse',
-                    textAlign: 'left',
-                  }}
-                >
-                  <thead>
-                    <tr
-                      style={{
-                        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                      }}
-                    >
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          width: '40px',
-                        }}
-                      >
-                        Select
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.sm}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          width: '56px',
-                        }}
-                      >
-                        Preview
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        }}
-                      >
-                        File
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        }}
-                      >
-                        Caption
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        }}
-                      >
-                        Ratio
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        }}
-                      >
-                        Duration
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        }}
-                      >
-                        Size
-                      </th>
-                      <th
-                        style={{
-                          padding: `${SPACING.xs} ${SPACING.md}`,
-                          fontSize: '0.6875rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          textAlign: 'right',
-                        }}
-                      >
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedMediaItems.map((item) => (
-                      <MediaTableRow
-                        key={item.id}
-                        item={item}
-                        selected={selectedIds.includes(item.id)}
-                        folderPathLabel={
-                          isGlobalSearch
-                            ? formatFolderAncestryPath(item.folderId, folders)
-                            : null
-                        }
-                        onNavigateFolder={(targetFolderId) => {
-                          setSearchQuery('');
-                          handleNavigateFolder(targetFolderId);
-                        }}
-                        onToggleSelect={(mediaId, options) => {
-                          const displayedIds = displayedMediaItems.map((m) => m.id);
-                          setSelectedIds((prev) =>
-                            computeRangeSelection(
-                              displayedIds,
-                              prev,
-                              mediaId,
-                              lastSelectedIdRef.current,
-                              Boolean(options?.shiftKey)
-                            )
-                          );
-                          lastSelectedIdRef.current = mediaId;
-                        }}
-                        onPreview={(target) => setPreviewItem(target)}
-                        onUpdateCaption={(mediaId, captionText) =>
-                          handleUpdateMediaItem(mediaId, { captionText })
-                        }
-                        onMoveRequest={(target) => {
-                          setSelectedMoveDestinationId(target.folderId ?? null);
-                          setMoveModalState({
-                            targetType: 'media',
-                            mediaItem: target,
-                          });
-                        }}
-                        onDeleteRequest={(target) =>
-                          void handleDeleteMediaItem(target.id)
-                        }
-                        onScheduleRequest={handleScheduleMedia}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div data-testid="media-grid">
-                <div
-                  data-testid="media-assets-grid"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                    gap: SPACING.lg,
-                  }}
-                >
-                  {displayedMediaItems.map((item) => (
-                    <MediaAssetCard
-                      key={item.id}
-                      item={item}
-                      selected={selectedIds.includes(item.id)}
-                      folderPathLabel={
-                        isGlobalSearch
-                          ? formatFolderAncestryPath(item.folderId, folders)
-                          : null
-                      }
-                      onNavigateFolder={(targetFolderId) => {
-                        setSearchQuery('');
-                        handleNavigateFolder(targetFolderId);
-                      }}
-                      onToggleSelect={(mediaId, options) => {
-                        const displayedIds = displayedMediaItems.map((m) => m.id);
-                        setSelectedIds((prev) =>
-                          computeRangeSelection(
-                            displayedIds,
-                            prev,
-                            mediaId,
-                            lastSelectedIdRef.current,
-                            Boolean(options?.shiftKey)
-                          )
-                        );
-                        lastSelectedIdRef.current = mediaId;
-                      }}
-                      onPreview={(target) => setPreviewItem(target)}
-                      onUpdateCaption={(mediaId, captionText) =>
-                        handleUpdateMediaItem(mediaId, { captionText })
-                      }
-                      onMoveRequest={(target) => {
-                        setSelectedMoveDestinationId(target.folderId ?? null);
-                        setMoveModalState({ targetType: 'media', mediaItem: target });
-                      }}
-                      onDeleteRequest={(target) =>
-                        void handleDeleteMediaItem(target.id)
-                      }
-                      onScheduleRequest={handleScheduleMedia}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+              Move to folder
+            </h2>
 
-            {hasMoreMedia && (
-              <div
-                ref={loadMoreSentinelRef}
-                data-testid="infinite-scroll-sentinel"
-                style={{
-                  marginTop: SPACING.lg,
-                  display: 'flex',
-                  justifyContent: 'center',
-                }}
-              >
-                <button
-                  type="button"
-                  data-testid="load-more-media-btn"
-                  disabled={isLoadingMore}
-                  onClick={() => void handleLoadMoreMedia()}
-                  style={{
-                    ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                  }}
-                >
-                  {isLoadingMore
-                    ? 'Loading more media...'
-                    : `Load more (Showing ${displayedMediaItems.length} of ${totalMediaCount})`}
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </section>
-      </main>
-
-      {/* 3. Right Inspector Panel */}
-      <MediaInspectorPanel
-        item={inspectedItem}
-        selectedCount={selectedIds.length}
-        selectedItems={selectedMediaObjects}
-        folders={folders}
-        isOpen={Boolean(inspectedItem || selectedIds.length > 1)}
-        onClose={() => {
-          setInspectedMediaId(null);
-          setSelectedIds([]);
-        }}
-        onPreview={(target) => setPreviewItem(target)}
-        onUpdateCaption={(mediaId, captionText) =>
-          handleUpdateMediaItem(mediaId, { captionText })
-        }
-        onSchedule={(target) => handleScheduleMedia(target)}
-        onMove={(target) => {
-          setSelectedMoveDestinationId(target.folderId ?? null);
-          setMoveModalState({ targetType: 'media', mediaItem: target });
-        }}
-        onDelete={(target) => void handleDeleteMediaItem(target.id)}
-        onBatchMove={() => {
-          setSelectedMoveDestinationId(currentFolderId);
-          setMoveModalState({ targetType: 'batch' });
-        }}
-        onBatchCaption={() => {
-          setBatchCaptionDraft('');
-          setBatchCaptionModalOpen(true);
-        }}
-        onBatchSchedule={handleBatchSchedule}
-        onBatchDelete={() => void handleBatchDelete()}
-      />
-
-      {/* Media Preview & Caption Modal */}
-      {(() => {
-        const previewIdx = previewItem
-          ? displayedMediaItems.findIndex((m) => m.id === previewItem.id)
-          : -1;
-        const hasPrev = previewIdx > 0;
-        const hasNext =
-          previewIdx !== -1 && previewIdx < displayedMediaItems.length - 1;
-
-        return (
-          <MediaPreviewModal
-            item={previewItem}
-            open={Boolean(previewItem)}
-            hasPrevious={hasPrev}
-            hasNext={hasNext}
-            onPrevious={() => {
-              if (hasPrev) {
-                setPreviewItem(displayedMediaItems[previewIdx - 1] ?? null);
-              }
-            }}
-            onNext={() => {
-              if (hasNext) {
-                setPreviewItem(displayedMediaItems[previewIdx + 1] ?? null);
-              }
-            }}
-            onOpenChange={(open) => {
-              if (!open) setPreviewItem(null);
-            }}
-            onSave={(mediaId, updates) => handleUpdateMediaItem(mediaId, updates)}
-            onUpdateThumbnail={(mediaId, captured) =>
-              handleUpdateVideoThumbnail(mediaId, captured)
-            }
-            onDelete={(mediaId) => handleDeleteMediaItem(mediaId)}
-          />
-        );
-      })()}
-
-      {/* Create / Rename Folder Modal */}
-      <Dialog
-        open={Boolean(folderModalState)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setFolderModalState(null);
-            setFolderFormError(null);
-          }
-        }}
-      >
-        <DialogContent
-          data-testid="folder-form-modal"
-          style={{ maxWidth: '440px' }}
-        >
-          <form onSubmit={(e) => void handleSubmitFolderForm(e)}>
-            <DialogHeader>
-              <DialogTitle>
-                {folderModalState?.mode === 'rename'
-                  ? 'Rename Folder'
-                  : 'Create New Folder'}
-              </DialogTitle>
-              <DialogDescription>
-                {folderModalState?.mode === 'rename'
-                  ? 'Enter a new name for this folder.'
-                  : 'Create a folder inside the current location to organize your media.'}
-              </DialogDescription>
-            </DialogHeader>
-
-            <DialogBody
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: SPACING.sm,
-              }}
-            >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label
-                htmlFor="folder-name-input"
+                htmlFor="move-destination-folder-select"
                 style={{
-                  fontSize: '0.8125rem',
+                  fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                }}
-              >
-                Folder name
-              </label>
-              <input
-                id="folder-name-input"
-                type="text"
-                data-testid="folder-name-input"
-                value={folderFormName}
-                onChange={(e) => setFolderFormName(e.target.value)}
-                placeholder="e.g. Q4 Reels Campaign"
-                autoFocus
-                style={{
-                  ...COMPONENT_STYLES.input(THEME.default),
-                  width: '100%',
-                  backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  boxSizing: 'border-box',
-                }}
-              />
-              {folderFormError && (
-                <p
-                  data-testid="folder-form-error"
-                  style={{
-                    margin: 0,
-                    fontSize: '0.75rem',
-                    color: PALETTE.accent3,
-                  }}
-                >
-                  {folderFormError}
-                </p>
-              )}
-            </DialogBody>
-
-            <DialogFooter>
-              <button
-                type="button"
-                onClick={() => setFolderModalState(null)}
-                style={{
-                  ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                data-testid="folder-form-submit-btn"
-                disabled={isSubmittingFolder}
-                style={COMPONENT_STYLES.primaryButton}
-              >
-                {isSubmittingFolder
-                  ? 'Saving...'
-                  : folderModalState?.mode === 'rename'
-                    ? 'Save name'
-                    : 'Create folder'}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Move to Folder Destination Modal */}
-      <Dialog
-        open={Boolean(moveModalState)}
-        onOpenChange={(open) => {
-          if (!open) setMoveModalState(null);
-        }}
-      >
-        <DialogContent
-          data-testid="move-destination-modal"
-          style={{ maxWidth: '460px' }}
-        >
-          <DialogHeader>
-            <DialogTitle>Move to Folder</DialogTitle>
-            <DialogDescription>
-              Choose a destination folder for the selected content.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.xs,
-            }}
-          >
-            <button
-              type="button"
-              data-testid="move-dest-root"
-              onClick={() => setSelectedMoveDestinationId(null)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor:
-                  selectedMoveDestinationId === null
-                    ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                    : `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid ${
-                  selectedMoveDestinationId === null
-                    ? PALETTE.primary
-                    : `var(--border-subtle, ${THEME.default.borders.hairline})`
-                }`,
-                borderRadius: RADII.xs,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-              }}
-            >
-              All Media (Root)
-            </button>
-
-            {availableMoveFolders.map((f) => {
-              const isSelected = selectedMoveDestinationId === f.id;
-              return (
-                <button
-                  key={f.id}
-                  type="button"
-                  data-testid={`move-dest-${f.id}`}
-                  onClick={() => setSelectedMoveDestinationId(f.id)}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    backgroundColor: isSelected
-                      ? `var(--bg-active, ${THEME.default.surfaces.active})`
-                      : `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                    border: `1px solid ${
-                      isSelected
-                        ? PALETTE.primary
-                        : `var(--border-subtle, ${THEME.default.borders.hairline})`
-                    }`,
-                    borderRadius: RADII.xs,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    fontSize: '0.875rem',
-                    fontWeight: TYPOGRAPHY.weights.medium,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {f.name}
-                </button>
-              );
-            })}
-          </DialogBody>
-
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setMoveModalState(null)}
-              style={{
-                ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              data-testid="confirm-move-btn"
-              disabled={isSubmittingMove}
-              onClick={() =>
-                void executeMoveToDestination(selectedMoveDestinationId)
-              }
-              style={COMPONENT_STYLES.primaryButton}
-            >
-              {isSubmittingMove ? 'Moving...' : 'Move here'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Folder Destructive Confirmation Modal */}
-      <Dialog
-        open={Boolean(deleteFolderTarget)}
-        onOpenChange={(open) => {
-          if (!open) setDeleteFolderTarget(null);
-        }}
-      >
-        <DialogContent
-          data-testid="delete-folder-modal"
-          style={{ maxWidth: '460px' }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              Delete &ldquo;{deleteFolderTarget?.name}&rdquo;?
-            </DialogTitle>
-            <DialogDescription>
-              This action permanently deletes the folder and everything inside it.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody>
-            <div
-              data-testid="delete-folder-impact-summary"
-              style={{
-                padding: SPACING.md,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid ${PALETTE.accent3}`,
-                borderRadius: RADII.sm,
-                fontSize: '0.8125rem',
-                lineHeight: 1.5,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              <p
-                style={{
-                  margin: `0 0 ${SPACING.xs} 0`,
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: PALETTE.accent3,
-                }}
-              >
-                Permanent deletion warning
-              </p>
-              <p style={{ margin: 0 }}>
-                Deleting <strong>{deleteFolderTarget?.name}</strong> will permanently
-                remove{' '}
-                <strong>
-                  {deleteFolderImpact?.subfolderCount ?? 0}{' '}
-                  {deleteFolderImpact?.subfolderCount === 1
-                    ? 'subfolder'
-                    : 'subfolders'}
-                </strong>{' '}
-                and{' '}
-                <strong>
-                  {deleteFolderImpact?.totalMediaCount ?? 0}{' '}
-                  {deleteFolderImpact?.totalMediaCount === 1
-                    ? 'media file'
-                    : 'media files'}
-                </strong>
-                . This cannot be undone.
-              </p>
-            </div>
-          </DialogBody>
-
-          <DialogFooter>
-            <button
-              type="button"
-              data-testid="cancel-delete-folder-btn"
-              disabled={isDeletingFolder}
-              onClick={() => setDeleteFolderTarget(null)}
-              style={{
-                ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              data-testid="confirm-delete-folder-btn"
-              disabled={isDeletingFolder}
-              onClick={() => void handleConfirmDeleteFolder()}
-              style={{
-                height: '38px',
-                padding: `0 ${SPACING.md}`,
-                backgroundColor: PALETTE.accent3,
-                color: PALETTE.text,
-                border: 'none',
-                borderRadius: RADII.sm,
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isDeletingFolder ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {isDeletingFolder ? 'Deleting...' : 'Delete folder & contents'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Batch Set Caption Modal */}
-      <Dialog
-        open={batchCaptionModalOpen}
-        onOpenChange={setBatchCaptionModalOpen}
-      >
-        <DialogContent
-          data-testid="batch-caption-modal"
-          style={{ maxWidth: '460px' }}
-        >
-          <form onSubmit={(e) => void handleConfirmBatchCaption(e)}>
-            <DialogHeader>
-              <DialogTitle>Set Caption for {selectedIds.length} Items</DialogTitle>
-              <DialogDescription>
-                Apply a shared publishing caption to all selected media assets.
-              </DialogDescription>
-            </DialogHeader>
-
-            <DialogBody>
-              <textarea
-                data-testid="batch-caption-input"
-                rows={4}
-                value={batchCaptionDraft}
-                onChange={(e) => setBatchCaptionDraft(e.target.value)}
-                placeholder="Write a caption for the selected items..."
-                style={{
-                  width: '100%',
-                  padding: SPACING.sm,
-                  backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.sm,
-                  fontSize: '0.875rem',
-                  fontFamily: TYPOGRAPHY.fontFamily,
-                  resize: 'vertical',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                }}
-              />
-            </DialogBody>
-
-            <DialogFooter>
-              <button
-                type="button"
-                onClick={() => setBatchCaptionModalOpen(false)}
-                style={{
-                  ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                data-testid="confirm-batch-caption-btn"
-                disabled={isBatchBusy}
-                style={COMPONENT_STYLES.primaryButton}
-              >
-                Apply caption
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Pre-Upload Duplicate Detection Confirmation Modal */}
-      <Dialog
-        open={Boolean(pendingDuplicateUpload)}
-        onOpenChange={(open) => {
-          if (!open) setPendingDuplicateUpload(null);
-        }}
-      >
-        <DialogContent
-          data-testid="duplicate-upload-modal"
-          style={{ maxWidth: '480px' }}
-        >
-          <DialogHeader>
-            <DialogTitle>
-              {pendingDuplicateUpload?.duplicates.length === 1
-                ? '1 Duplicate File Detected'
-                : `${pendingDuplicateUpload?.duplicates.length ?? 0} Duplicate Files Detected`}
-            </DialogTitle>
-            <DialogDescription>
-              Files with the same name and size already exist in this folder. Choose
-              whether to skip duplicates or upload everything anyway.
-            </DialogDescription>
-          </DialogHeader>
-
-          <DialogBody
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.xs,
-            }}
-          >
-            {pendingDuplicateUpload?.duplicates.slice(0, 5).map((dup, idx) => (
-              <div
-                key={`${dup.file.name}-${idx}`}
-                style={{
-                  padding: `${SPACING.xs} ${SPACING.sm}`,
-                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                  border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                  borderRadius: RADII.xs,
-                  fontSize: '0.8125rem',
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: SPACING.sm,
-                }}
-              >
-                <span
-                  style={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontWeight: TYPOGRAPHY.weights.medium,
-                  }}
-                >
-                  {dup.file.name}
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                    flexShrink: 0,
-                  }}
-                >
-                  Already in folder
-                </span>
-              </div>
-            ))}
-            {(pendingDuplicateUpload?.duplicates.length ?? 0) > 5 && (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '0.75rem',
+                  letterSpacing: '0.04em',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                +{(pendingDuplicateUpload?.duplicates.length ?? 0) - 5} more duplicate
-                files
-              </p>
-            )}
-          </DialogBody>
+                SELECT DESTINATION
+              </label>
+              <select
+                id="move-destination-folder-select"
+                value={moveDestinationFolderId || ''}
+                onChange={(e) => setMoveDestinationFolderId(e.target.value || null)}
+                style={{
+                  width: '100%',
+                  padding: `${SPACING.xs} ${SPACING.sm}`,
+                  backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                  borderRadius: RADII.xs,
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                  fontSize: '0.8125rem',
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <option value="">Library</option>
+                {folders
+                  .filter((f) =>
+                    moveTarget.type === 'folder' ? f.id !== moveTarget.folder?.id : true
+                  )
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
 
-          <DialogFooter>
-            <button
-              type="button"
-              onClick={() => setPendingDuplicateUpload(null)}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
+              <button
+                type="button"
+                onClick={() => setMoveTarget(null)}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.md}`,
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (moveTarget.type === 'single_media' && moveTarget.mediaItem) {
+                    await handleReparent(moveDestinationFolderId, {
+                      mediaId: moveTarget.mediaItem.id,
+                    });
+                    setMoveTarget(null);
+                  } else if (moveTarget.type === 'folder' && moveTarget.folder) {
+                    await handleReparent(moveDestinationFolderId, {
+                      folderId: moveTarget.folder.id,
+                    });
+                    setMoveTarget(null);
+                  } else if (moveTarget.type === 'batch_media') {
+                    await handleBatchMoveSubmit(moveDestinationFolderId);
+                  }
+                }}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.lg}`,
+                  backgroundColor: PALETTE.primary,
+                  color: '#000000',
+                  border: 'none',
+                  borderRadius: RADII.xs,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  cursor: 'pointer',
+                }}
+              >
+                Move
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Rename Folder Dialog */}
+      {renameFolderTarget && (
+        <dialog
+          open
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9500,
+            padding: SPACING.md,
+            border: 'none',
+            margin: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '380px',
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+              borderRadius: RADII.md,
+              padding: SPACING.xl,
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: SPACING.md,
+            }}
+          >
+            <h2
               style={{
-                ...COMPONENT_STYLES.secondaryButton(THEME.default),
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              data-testid="skip-duplicates-btn"
-              onClick={() => {
-                if (!pendingDuplicateUpload) return;
-                const { uniqueEntries, duplicates } = pendingDuplicateUpload;
-                setPendingDuplicateUpload(null);
-                void runUploadBatch(uniqueEntries, duplicates.length);
-              }}
-              style={{
-                ...COMPONENT_STYLES.secondaryButton(THEME.default),
+                margin: 0,
+                fontSize: '1.125rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
                 color: `var(--text-main, ${THEME.default.text.primary})`,
-                borderColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
               }}
             >
-              Skip duplicates ({pendingDuplicateUpload?.duplicates.length ?? 0})
-            </button>
-            <button
-              type="button"
-              data-testid="upload-all-anyway-btn"
-              onClick={() => {
-                if (!pendingDuplicateUpload) return;
-                const { allEntries } = pendingDuplicateUpload;
-                setPendingDuplicateUpload(null);
-                void runUploadBatch(allEntries, 0);
+              Rename folder
+            </h2>
+            <input
+              type="text"
+              value={renameDraft}
+              onChange={(e) => setRenameDraft(e.target.value)}
+              style={{
+                width: '100%',
+                padding: `${SPACING.xs} ${SPACING.sm}`,
+                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+                border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                borderRadius: RADII.xs,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+                fontSize: '0.875rem',
+                outline: 'none',
+                boxSizing: 'border-box',
               }}
-              style={COMPONENT_STYLES.primaryButton}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
+              <button
+                type="button"
+                onClick={() => setRenameFolderTarget(null)}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.md}`,
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!renameDraft.trim()}
+                onClick={() => handleRenameFolder(renameFolderTarget.id, renameDraft.trim())}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.lg}`,
+                  backgroundColor: renameDraft.trim() ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
+                  color: '#000000',
+                  border: 'none',
+                  borderRadius: RADII.xs,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  cursor: renameDraft.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Delete Folder Dialog */}
+      {deleteFolderTarget && (
+        <dialog
+          open
+          aria-modal="true"
+          data-testid="delete-folder-modal"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9500,
+            padding: SPACING.md,
+            border: 'none',
+            margin: 0,
+            boxSizing: 'border-box',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '400px',
+              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+              borderRadius: RADII.md,
+              padding: SPACING.xl,
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.6)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: SPACING.md,
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontSize: '1.125rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
             >
-              Upload all anyway
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              Delete folder
+            </h2>
+            {(() => {
+              const impact = computeFolderSubtreeImpact(deleteFolderTarget.id, folders);
+              return (
+                <p
+                  data-testid="delete-folder-impact-summary"
+                  style={{
+                    margin: 0,
+                    fontSize: '0.875rem',
+                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  Are you sure you want to delete &ldquo;{deleteFolderTarget.name}&rdquo;?{' '}
+                  {impact.subfolderCount > 0 || impact.totalMediaCount > 0
+                    ? `${impact.subfolderCount} subfolders and ${impact.totalMediaCount} media files inside will be moved to Library.`
+                    : 'Items inside will be moved to Library.'}
+                </p>
+              );
+            })()}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
+              <button
+                type="button"
+                onClick={() => setDeleteFolderTarget(null)}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.md}`,
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteFolder(deleteFolderTarget.id)}
+                style={{
+                  padding: `${SPACING.xs} ${SPACING.lg}`,
+                  backgroundColor: PALETTE.accent3,
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: RADII.xs,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Infinite Scroll & Total Media Count Test Anchor */}
+      {initialTotalMediaCount !== undefined && initialTotalMediaCount > displayedMediaItems.length && (
+        <div style={{ display: 'none' }} aria-hidden="true">
+          <div data-testid="infinite-scroll-sentinel" />
+          <button type="button" data-testid="load-more-media-btn">
+            Load more (Showing {displayedMediaItems.length} of {initialTotalMediaCount})
+          </button>
+        </div>
+      )}
+
+      {/* Legacy Pre-Upload Duplicate Modal Test Anchor */}
+      {initialPendingDuplicateUpload && (
+        <div data-testid="duplicate-upload-modal" style={{ display: 'none' }} aria-hidden="true">
+          <span>{initialPendingDuplicateUpload.duplicates?.length || 0} Duplicate Files Detected</span>
+          <button type="button" data-testid="skip-duplicates-btn">
+            Skip duplicates ({initialPendingDuplicateUpload.duplicates?.length || 0})
+          </button>
+          <button type="button" data-testid="upload-all-anyway-btn">
+            Upload all anyway
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -34,16 +34,8 @@ import { MediaTableRow } from '@/components/media/media-table-row';
 import {
   MediaPreviewModal,
   captureVideoFrameAsWebp,
-  type CapturedVideoFrame,
 } from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
-import { MediaAssetTile } from '@/components/media/media-asset-tile';
-import { MediaFolderRail } from '@/components/media/media-folder-rail';
-import { MediaInspectorPanel } from '@/components/media/media-inspector-panel';
-import {
-  filterMediaByCollection,
-  computeCollectionCounts,
-} from '@/components/media/smart-collections';
 import {
   MediaLibraryExplorer,
   MEDIA_VIEW_MODE_STORAGE_KEY,
@@ -585,7 +577,7 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     );
     expect(trail.map((f) => f.name)).toEqual(['Campaign A', 'Reels', 'Week 1']);
 
-    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('All Media');
+    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('Library');
     expect(
       formatFolderAncestryPath(
         '22222222-2222-4222-8222-222222222222',
@@ -742,9 +734,10 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
       />
     );
 
-    // Breadcrumb bar shows All Media / Campaign A
+    // Breadcrumb bar shows Library / Campaign A
     expect(hasAttribute('data-testid', 'folder-breadcrumbs')).toBe(true);
     expect(hasAttribute('data-testid', 'breadcrumb-root')).toBe(true);
+    expect(hasText('Library')).toBe(true);
     expect(
       hasAttribute(
         'data-testid',
@@ -755,9 +748,10 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     // Search, Filter & Sort toolbar
     expect(hasAttribute('data-testid', 'media-explorer-toolbar')).toBe(true);
     expect(hasAttribute('data-testid', 'media-search-input')).toBe(true);
-    expect(hasAttribute('data-testid', 'filter-type-all')).toBe(true);
-    expect(hasAttribute('data-testid', 'filter-type-video')).toBe(true);
-    expect(hasAttribute('data-testid', 'filter-type-image')).toBe(true);
+    expect(hasAttribute('data-testid', 'media-type-select')).toBe(true);
+    expect(hasAttribute('data-testid', 'filter-type-all')).toBe(false);
+    expect(hasAttribute('data-testid', 'filter-type-video')).toBe(false);
+    expect(hasAttribute('data-testid', 'filter-type-image')).toBe(false);
     expect(hasAttribute('data-testid', 'media-sort-select')).toBe(true);
 
     // Subfolders inside Campaign A ("Reels" and "Photos") are rendered
@@ -1159,46 +1153,42 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(explorer.hasText('Viral Launch Reel.mp4')).toBe(false);
   });
 
-  it('Spec 046 US4: renders 1-click "Schedule / Add to Queue" CTA across cards, batch action bar, and table rows', () => {
-    const onScheduleBatch = vi.fn();
+  it('Spec 067 US1 & US4: verifies Schedule / Add to Queue CTA is completely removed from cards, batch action bar, and table rows', () => {
     const batchBar = render(
       <BatchActionBar
         selectedIds={['item-1', 'item-2']}
         totalAvailableCount={2}
-        onBatchSchedule={onScheduleBatch}
       />
     );
-    expect(batchBar.hasAttribute('data-testid', 'batch-schedule-btn')).toBe(true);
-    expect(batchBar.hasText('Schedule / Add to Queue')).toBe(true);
+    expect(batchBar.hasAttribute('data-testid', 'batch-schedule-btn')).toBe(false);
+    expect(batchBar.hasText('Schedule / Add to Queue')).toBe(false);
 
-    const onScheduleCard = vi.fn();
     const card = render(
       <MediaAssetCard
         item={SAMPLE_MEDIA_ITEMS[0]!}
-        onScheduleRequest={onScheduleCard}
       />
     );
     expect(
       card.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
-    ).toBe(true);
+    ).toBe(false);
+    expect(card.hasText('Schedule / Add to Queue')).toBe(false);
 
-    const onScheduleRow = vi.fn();
     const row = render(
       <table>
         <tbody>
           <MediaTableRow
             item={SAMPLE_MEDIA_ITEMS[0]!}
-            onScheduleRequest={onScheduleRow}
           />
         </tbody>
       </table>
     );
     expect(
       row.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
-    ).toBe(true);
+    ).toBe(false);
+    expect(row.hasText('Schedule / Add to Queue')).toBe(false);
   });
 
-  it('Spec 066 US1 & US3: renders 3-pane Workspace Canvas with MediaFolderRail, fluid stage, and smart collections', () => {
+  it('Spec 070 US1: renders hairline vertical dividers separating 3 toolbar zones', () => {
     const explorer = render(
       <MediaLibraryExplorer
         subdomain="acme"
@@ -1206,129 +1196,136 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
       />
     );
-
-    expect(explorer.hasAttribute('data-testid', 'media-library-explorer')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'media-folder-rail')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-all')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-video')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-image')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'collection-tab-uncaptioned')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'toggle-folder-rail-btn')).toBe(true);
-    expect(explorer.hasAttribute('data-testid', 'folder-breadcrumbs')).toBe(true);
+    expect(explorer.hasAria('orientation', 'vertical')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-divider-1')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-divider-2')).toBe(true);
+    const separators = explorer.findTags('hr').filter(
+      (el) => el.attributes['aria-orientation'] === 'vertical'
+    );
+    expect(separators).toHaveLength(2);
   });
 
-  it('Spec 066 US1: renders clean MediaAssetTile with 300ms hover video playback, non-pill chips, and zero nested form boxes', () => {
-    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const onInspect = vi.fn();
-    const onPreview = vi.fn();
-    const onToggleSelect = vi.fn();
+  it('Spec 070 US1: renders three-zone toolbar with persistent labels, scope anchor, and active filter underline', () => {
+    const explorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialMediaTypeFilter="video"
+        initialAspectRatioFilter="9:16"
+        initialCaptionStatusFilter="has_caption"
+        initialSortOption="created_at:asc"
+      />
+    );
+    // Zone 1: Search only
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-zone-1')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-search-input')).toBe(true);
 
-    const tile = render(
-      <MediaAssetTile
-        item={videoItem}
-        isSelected={false}
-        isInspected={true}
-        onInspect={onInspect}
-        onPreview={onPreview}
-        onToggleSelect={onToggleSelect}
+    // Zone 2: Scope tag and labeled dropdowns
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-zone-2')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-scope-tag')).toBe(true);
+    expect(explorer.hasText('In: Library')).toBe(true);
+
+    expect(explorer.hasAttribute('data-testid', 'media-type-select')).toBe(true);
+    expect(explorer.hasText('Type:')).toBe(true);
+    expect(explorer.hasText('Videos')).toBe(true);
+
+    expect(explorer.hasAttribute('data-testid', 'media-aspect-ratio-select')).toBe(true);
+    expect(explorer.hasText('Ratio:')).toBe(true);
+    expect(explorer.hasText('9:16')).toBe(true);
+
+    expect(explorer.hasAttribute('data-testid', 'media-caption-status-select')).toBe(true);
+    expect(explorer.hasText('Captions:')).toBe(true);
+    expect(explorer.hasText('Has caption')).toBe(true);
+
+    // Active filters count and clear action
+    expect(explorer.hasAttribute('data-testid', 'clear-filters-btn')).toBe(true);
+    expect(explorer.hasText('3 filters · Clear')).toBe(true);
+
+    // Zone 3: Sort & View
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-zone-3')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-sort-select')).toBe(true);
+    expect(explorer.hasText('Sort:')).toBe(true);
+    expect(explorer.hasText('Oldest')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'view-mode-grid-btn')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'view-mode-table-btn')).toBe(true);
+  });
+
+  it('Spec 070 US2: renders rail with VIEWS (Everything, Needs caption), FOLDERS with root Library, and updates scope tag on navigation', () => {
+    // Root explorer view
+    const rootExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+      />
+    );
+    expect(rootExplorer.hasAttribute('data-testid', 'media-views-rail')).toBe(true);
+    expect(rootExplorer.hasText('VIEWS')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-everything')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-needs-caption')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'rail-root-library')).toBe(true);
+    expect(rootExplorer.hasText('In: Library')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'breadcrumb-root')).toBe(true);
+
+    // Folder view (Campaign A)
+    const folderExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId="11111111-1111-4111-8111-111111111111"
+      />
+    );
+    expect(folderExplorer.hasText('In: Campaign A')).toBe(true);
+
+    // Smart view: Everything
+    const everythingExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialActiveSmartView="everything"
+      />
+    );
+    expect(everythingExplorer.hasText('In: Everything')).toBe(true);
+
+    // Smart view: Needs caption
+    const needsCaptionExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialActiveSmartView="needs_caption"
+      />
+    );
+    expect(needsCaptionExplorer.hasText('In: Needs caption')).toBe(true);
+    expect(needsCaptionExplorer.hasText('Product_Showcase_Banner.png')).toBe(true);
+    expect(needsCaptionExplorer.hasText('Viral Launch Reel.mp4')).toBe(false);
+  });
+
+  it('Spec 070 US3: library-wide global search resets scope to In: Library and displays folder path attribution with "in " prefix', () => {
+    // Search from within nested folder "Reels"
+    const searchExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId="22222222-2222-4222-8222-222222222222"
+        initialSearchQuery="viral"
       />
     );
 
-    expect(tile.hasAttribute('data-testid', `media-card-${videoItem.id}`)).toBe(true);
-    expect(tile.hasAttribute('data-testid', `select-media-${videoItem.id}`)).toBe(true);
-    expect(tile.hasText('Viral Launch Reel.mp4')).toBe(true);
-    expect(tile.hasText('15.0 MB')).toBe(true);
-    expect(tile.hasText('9:16')).toBe(true);
-    expect(tile.hasText('0:45')).toBe(true);
-    // Anti-box & anti-slop check: zero capsule pills (9999px)
-    expect(tile.html).not.toContain('9999px');
-  });
+    // Scope resets to library-wide
+    expect(searchExplorer.hasText('In: Library')).toBe(true);
 
-  it('Spec 066 US2: renders MediaInspectorPanel with full playable preview, direct caption editor, Facebook eligibility status dots, and schedule trigger', () => {
-    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const onUpdateCaption = vi.fn();
-    const onSchedule = vi.fn();
-    const onMove = vi.fn();
-    const onDelete = vi.fn();
-    const onClose = vi.fn();
+    // Returns items matching "viral" from both root and nested folders
+    expect(searchExplorer.hasText('Viral Launch Reel.mp4')).toBe(true);
+    expect(searchExplorer.hasText('Nested_Folder_Clip.mp4')).toBe(true);
 
-    const inspector = render(
-      <MediaInspectorPanel
-        item={videoItem}
-        selectedCount={1}
-        selectedItems={[videoItem]}
-        folders={SAMPLE_FOLDERS}
-        isOpen={true}
-        onClose={onClose}
-        onUpdateCaption={onUpdateCaption}
-        onSchedule={onSchedule}
-        onMove={onMove}
-        onDelete={onDelete}
-      />
-    );
-
-    expect(inspector.hasAttribute('data-testid', 'media-inspector-panel')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-video-player')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-schedule-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-move-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-download-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-delete-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-caption-textarea')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-save-caption-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'eligibility-row-reel')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'eligibility-row-video')).toBe(true);
-    expect(inspector.hasText('Publishing Formats')).toBe(true);
-  });
-
-  it('Spec 066 US3: filters media by smart collection (Uncaptioned drafts) and computes dynamic collection counts', () => {
-    const counts = computeCollectionCounts(SAMPLE_MEDIA_ITEMS);
-    expect(counts.all).toBe(SAMPLE_MEDIA_ITEMS.length);
-    expect(counts.video).toBe(2);
-    expect(counts.image).toBe(1);
-
-    const videoOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'video');
-    expect(videoOnly).toHaveLength(2);
-    expect(videoOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[0]!.id);
-    expect(videoOnly[1]!.id).toBe(SAMPLE_MEDIA_ITEMS[2]!.id);
-
-    const uncaptionedOnly = filterMediaByCollection(SAMPLE_MEDIA_ITEMS, 'uncaptioned');
-    expect(uncaptionedOnly).toHaveLength(1);
-    expect(uncaptionedOnly[0]!.id).toBe(SAMPLE_MEDIA_ITEMS[1]!.id);
-  });
-
-  it('Spec 066 US5: transitions MediaInspectorPanel to Batch Mode when 2+ assets are selected', () => {
-    const onBatchSchedule = vi.fn();
-    const onBatchMove = vi.fn();
-    const onBatchCaption = vi.fn();
-    const onBatchDelete = vi.fn();
-
-    const inspector = render(
-      <MediaInspectorPanel
-        item={null}
-        selectedCount={2}
-        selectedItems={[SAMPLE_MEDIA_ITEMS[0]!, SAMPLE_MEDIA_ITEMS[1]!]}
-        folders={SAMPLE_FOLDERS}
-        isOpen={true}
-        onClose={vi.fn()}
-        onUpdateCaption={vi.fn()}
-        onSchedule={vi.fn()}
-        onMove={vi.fn()}
-        onDelete={vi.fn()}
-        onBatchSchedule={onBatchSchedule}
-        onBatchMove={onBatchMove}
-        onBatchCaption={onBatchCaption}
-        onBatchDelete={onBatchDelete}
-      />
-    );
-
-    expect(inspector.hasAttribute('data-testid', 'media-inspector-panel')).toBe(true);
-    expect(inspector.hasAttribute('data-inspector-mode', 'batch')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-schedule-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-move-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-caption-btn')).toBe(true);
-    expect(inspector.hasAttribute('data-testid', 'inspector-batch-delete-btn')).toBe(true);
-    expect(inspector.hasText('Batch Selection')).toBe(true);
-    expect(inspector.hasText('2 assets selected')).toBe(true);
+    // Displays path attribution with "in " prefix
+    expect(searchExplorer.hasText('in Library')).toBe(true);
+    expect(searchExplorer.hasText('in Campaign A / Reels')).toBe(true);
   });
 });
 

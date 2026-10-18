@@ -319,7 +319,6 @@ flowchart LR
 - **Spec 064 (Completed & Verified)**: **Canonical Default Auth Showcase Panel Standardization & Legacy Purge** (Established `AuthShowcasePanel` as the universal default showcase across all authentication layouts in `AuthSplitLayout` (`/login`, `/signup`, `/forgot-password`, `/reset-password`), completely purging legacy Meta-only value pillars (`VALUE_PILLARS`), obsolete headline copy, and unused icon components from `auth-split-layout.tsx`; updated unit tests in `auth-components.test.tsx` and verified `/signup` renders the modern multi-platform showcase).
 - **Spec 065 (Completed & Verified)**: **Browser Tab Favicon & Platform Metadata Realignment** (Eliminated multi-tenant edge middleware routing interception for metadata icon endpoints `/icon`, `/apple-icon`, `/favicon.ico`, and `*.ico` files so browsers can fetch tab icons without 307 login redirects or 404 rewrites on tenant subdomains; installed multi-resolution `favicon.ico` (16x16, 32x32, 48x48) in `apps/web/src/app/favicon.ico` and `apps/web/public/favicon.ico` derived from the official gold FBUploadPro brand geometry; installed root static vector fallback `apps/web/public/icon.svg`; explicitly declared `icons` in `apps/web/src/app/layout.tsx` metadata linking SVG and ICO formats; updated global platform description to `"publishing automation platform"`; verified with unit tests in `middleware-routing.test.ts`).
 - **Spec 066 (Completed & Verified)**: **High-Contrast Browser Tab Icon & Automated Cache Busting** (Embedded canonical dark squircle tile `#0c0d10` with `#2b323c` hairline border and `rx=14` into `apps/web/src/app/icon.svg`, `apps/web/public/icon.svg`, and regenerated multi-resolution `favicon.ico` in `apps/web/src/app/` and `apps/web/public/`, achieving >18:1 contrast across light and dark Chrome tabs; introduced `?v=2` cache-busting query strings on metadata icon links in `apps/web/src/app/layout.tsx` to force Chrome SQLite database invalidation across all existing page sessions).
-- **Spec 066b (Completed & Verified)**: **Workspace Canvas Media Library Redesign** (Completely transformed the Media Library from a nested "box-in-a-box" card hierarchy into a high-precision, 3-pane Workspace Canvas adhering to Binance Precision design standards; built `MediaFolderRail` featuring collapsible left sidebar tree navigation with Smart Collections (*All Media*, *Videos*, *Images*, *Uncaptioned* drafts) and native HTML5 drag-and-drop move targets; created `MediaAssetTile` replacing nested cards with visual-first thumbnail tiles featuring 300ms hover video playback, non-pill corner chips, clean typography, and zero embedded form clutter; created `MediaInspectorPanel` housing a rich playable preview/video scrubber, direct caption editor with live character counter, Facebook format eligibility indicators with luminous status dots, one-click scheduling to queue, and dedicated Batch Mode for multi-asset actions; refactored `MediaLibraryExplorer` with flush, borderless typographic breadcrumb header and integrated search/filters; verified with comprehensive UI test suites in `media-library-explorer.test.tsx`).
 - **Spec 067 (Completed & Verified)**: **Vercel Web Analytics Integration** (Integrated `@vercel/analytics` package into `apps/web` and embedded the `<Analytics />` component from `@vercel/analytics/next` into the root application layout `apps/web/src/app/layout.tsx` to automatically collect Core Web Vitals, visitor insights, and page metrics in production Vercel deployments with zero runtime overhead and full Next.js 16 / React 19 App Router Server Component compatibility; verified with dedicated unit tests in `root-layout-analytics.test.tsx`).
 - **Feature Views Assembly (Active Priority)**: Assembling the recreated frontend views across Specs 005–006 utilizing the completed Spec 008–034 primitives.
 
@@ -885,6 +884,115 @@ Spec 064 standardizes the modern multi-platform cloud publishing showcase panel 
 
 ### 31.3 Mobile Display Architecture
 * **Hidden Showcase on Mobile**: On mobile and narrow viewports (<1024px), `.auth-showcase-panel` is hidden (`display: none !important`), and the dedicated `.auth-mobile-header` displays the brand logo and application title directly above the centered authentication card, ensuring fast, friction-free login and signup access on handheld devices.
+
+---
+
+## 32. Spec 067 Media Library Layout, View Modes & Import Flow Redesign
+
+Spec 067 comprehensively redesigns the Media Library (`/tenant/[subdomain]/media`, component `MediaLibraryExplorer`) in the FBUploadPro Next.js web application, establishing an unboxed flat studio workspace, intuitive view modes, hover-revealed interactions, and a robust 2-step staged ingestion engine:
+
+### 32.1 Architecture & Unboxed Layout Principles
+* **Flat Unboxed Canvas & Zero Box-in-Box Architecture**: Eradicated all nested card boxes and bordered panels inside bordered panels. Page sections, toolbars, subfolder lists, and grids are demarcated solely by generous whitespace and subtle hairline dividers (`border-subtle`).
+* **Universal Plain-Language Microcopy**: All user-visible strings strictly use plain, conversational language (e.g., "Import media", "Upload, organize, and caption your media for publishing queues.", "Caption added", "Missing caption"). Internal backend architecture, database mechanics, storage protocols, and regex/sanitization jargon are permanently barred from view models and labels.
+* **Hover-Revealed Secondary Controls**: Infrequently accessed actions (Rename, Move, Delete) across folders, asset tiles, and table rows remain concealed until user hover, preserving visual calmness and zero-clutter density across large asset libraries.
+* **Permanent Removal of Scheduling CTAs & Eligibility Badges**: 1-click Schedule / Add to Queue CTAs are permanently deleted from `MediaAssetCard`, `MediaTableRow`, `BatchActionBar`, and `MediaPreviewModal`. Scheduling belongs strictly to the publishing queue section. Format eligibility badges (Reels, Feed Video, Story, Photo) are permanently removed from library asset tiles and table views.
+* **Strict Decoupling from Downloader**: The Media Library and Cloud Downloader are completely decoupled. The Media Library contains zero downloader panels, tabs, or background scraper triggers.
+
+### 32.2 View Modes & Component Hierarchy
+* **Subfolder Rows**: Rendered as clean, single-level horizontal rows under section label `FOLDERS (n)` displaying folder icon, name, and secondary text (e.g. `"1 subfolder · 0 files"`). Rows and breadcrumb ancestors act as interactive drop targets for moving assets or subfolders.
+* **Asset Grid**: Rounded thumbnail tiles with metadata rendered directly underneath on the page canvas (file name, size · upload date from `created_at` e.g. `"10.3 KB · Oct 18, 2026"`, caption status line), top-left hover checkbox, bottom-right aspect ratio badge, hover Preview and overflow menu (Move, Delete), and a 300ms hover muted video preview.
+* **Table View**: Unboxed plain table with sticky header, merged Details column (`ratio · duration`), dedicated Upload Date column, click-to-edit caption, and hover actions (Preview, Move, Delete).
+* **Breadcrumbs & Reparenting**: Plain-text breadcrumbs row with clickable ancestors and drag-and-drop drop targets for folder reparenting.
+* **Floating Batch Action Pill**: Selecting 1+ assets reveals a floating bottom-center pill ("n selected · Move · Set caption · Delete · Clear") without highlighted primary action.
+* **Batch Set Caption Modal**: Supports "Replace existing captions" and "Add to the end of existing captions" (inserting after a newline, or setting directly on empty captions) with character counter validation (0 / 2,200).
+* **Studio Preview Modal**: Centered two-column modal: left large preview (video player with scrubber and "Capture frame" button / full image) and right metadata rows (Type, Size, Aspect ratio, Duration, Upload date) + editable Name and Caption; footer with red "Delete asset" on left, Cancel and Save changes on right.
+* **New Folder Modal**: Centered modal with autofocused name input, parent folder selector, and inline duplicate name validation.
+
+### 32.3 Two-Step Staged Ingestion & Concurrency Engine
+* **Step 1: Pre-Upload Staging**: Native file picker and drag-and-drop open `MediaImportModal` in staging mode. Validates file formats, sizes (500MB cap), and rejects 0-byte files; pre-screens intra-batch and server-side duplicate detection (`POST /api/tenant/[subdomain]/media/check-duplicates`) with per-row Skip / Upload anyway actions.
+* **Step 2: Upload Execution**: Strict 3-concurrency worker engine with automatic queue advancement, per-file pause/resume/cancel/retry with exponential backoff, overall batch progress, completion summary, and minimized dock mode permitting background ingestion while browsing.
+* **Leave-Page Upload Protection**: During active in-flight uploads, in-app navigation triggers a protective confirmation dialog (`LeavePageGuardDialog`) displaying furthest-along upload progress, and native browser `beforeunload` is armed until all uploads complete, preventing accidental cancellation and ghost partial storage objects.
+
+---
+
+## 33. Spec 068 Downloader Component & API Namespace Separation
+
+Spec 068 establishes complete architectural and directory namespace separation between the Cloud Media Downloader and the Media Library:
+
+### 33.1 Dedicated Frontend Component Hierarchy
+* **Dedicated Component Directory (`apps/web/src/components/downloader/`)**:
+  - Relocated `MediaDownloader` from `apps/web/src/components/media/media-downloader.tsx` to `apps/web/src/components/downloader/media-downloader.tsx`.
+  - The top-level tenant Downloader page (`apps/web/src/app/tenant/[subdomain]/downloader/page.tsx`) imports directly from `@/components/downloader/media-downloader`.
+  - `apps/web/src/components/media/media-downloader.tsx` is maintained strictly as a backward-compatible pass-through re-export.
+
+### 33.2 Dedicated Backend API Route Topology
+* **Primary Route (`POST` & `GET /api/tenant/[subdomain]/downloader`)**:
+  - Primary API route relocated to `apps/web/src/app/api/tenant/[subdomain]/downloader/route.ts`.
+  - Handles hybrid link extraction, direct R2 ingestion, and asynchronous background job status polling.
+  - Frontend components target `/api/tenant/${subdomain}/downloader`.
+* **Zero-Downtime Legacy Route Wrapper**:
+  - `apps/web/src/app/api/tenant/[subdomain]/media/downloader/route.ts` re-exports `GET` and `POST` from `../../downloader/route`, ensuring zero disruption to in-flight browser sessions, worker callbacks, or legacy external scripts.
+
+---
+
+## 34. Spec 069 Media Library Functional Fixes: Ingestion Guard, Query Alignment & Toolbar Interactivity
+
+Spec 069 resolves four critical and high-priority functional defects in the Media Library (`/tenant/[subdomain]/media`, `MediaLibraryExplorer`) without modifying visual themes, colors, typography, or design tokens:
+
+### 34.1 Robust Media Ingestion Pipeline & User-Initiated Cancel Guard (Issue 1)
+* **Presigned Response Property Alignment**: Corrected `MediaImportModal` to consume the actual field names returned by `POST /api/tenant/[subdomain]/media/upload-url` (`mediaUploadUrl`, `mediaKey`, `publicMediaUrl`, `thumbnailUploadUrl`, `thumbnailKey`, `publicThumbnailUrl`), falling back gracefully to legacy properties. Eliminates `PUT /undefined` 404 network failures and bad request payloads during `/media/confirm`.
+* **Explicit User-Action Cancel Guard**: Added a strict guard tracking `userInitiatedCancel`. A batch can ONLY enter or display the `canceled` state when the user explicitly clicks a per-file cancel action or the "Cancel remaining" button. If uploads fail due to network errors, presigned expiry, or confirmation rejections, the engine surfaces the authentic state (`Import failed — 0 of N uploaded`), preserving diagnosability.
+* **Transition & Telemetry Logging**: Instrument the upload state machine with informative console logs (`[upload-engine] Transition to complete`, `[upload-engine] Upload error`) detailing exact transition triggers and failed file IDs.
+
+### 34.2 Storage Media Listing & Query Limit Alignment (Issue 2)
+* **Schema Max Limit Adjustment**: Updated `MediaListQuerySchema` in `packages/contracts/src/domain/media.ts` to allow `limit: z.coerce.number().int().min(1).max(1000).default(50)`.
+* **Restored Explorer Root Listing**: The explorer's query `/api/tenant/[subdomain]/media?limit=500` now validates with 100% success against the contracts schema. Pre-existing assets stored in R2 and registered in `media_items` (such as `velocta-avatar.png`) resolve and render immediately at the root folder and in live searches without re-uploading or altering objects.
+
+### 34.3 Toolbar Dropdown Containment & Keyboard Interactivity (Issue 3)
+* **Pointerdown Event Containment**: Replaced the unconstrained document `pointerdown` listener with container ref checks (`ratioDropdownRef`, `captionDropdownRef`, `sortDropdownRef`). The menu no longer unmounts during the pointer-down phase, allowing option button click events to fire, update state (`aspectRatioFilter`, `captionStatusFilter`, `sortOption`), and refresh trigger labels.
+* **Accessible Keyboard Navigation**: Added full keyboard navigation support across all toolbar dropdown triggers and menu items (Enter, Space, Escape, and ArrowDown) conforming to WCAG 2.1 AA keyboard accessibility.
+
+### 34.4 Hairline Toolbar Group Dividers (Issue 4)
+* **Approved Visual Dividers**: Inserted three 1px vertical hairline dividers (`role="separator"`, `aria-orientation="vertical"`, `var(--border-subtle)`) cleanly separating the four functional toolbar clusters: Search, Media-type tabs, Dropdowns, and View toggle.
+
+---
+
+## 35. Spec 070 Media Library Toolbar Zones & Rail Smart Views
+
+Spec 070 rebuilds the Media Library toolbar and navigation architecture into an unmistakable, 3-zone control bar, adds cross-folder Smart Views to the rail, renames the root repository to "Library", and implements library-wide global search with folder path attribution without touching themes, colors, or fonts:
+
+### 35.1 Root Repository Rename to "Library"
+* **"Library" as the Universal Root**: Renamed the root location from "All Media" to "Library" across all navigation and explorer touchpoints:
+  - Breadcrumb root trail: Reads `Library` at root, and `Library / asdf / sdafd` inside subfolders.
+  - "+ New Folder" modal: The "PLACE INSIDE" default parent folder selector reads `Library`.
+  - Media Import modal: The destination folder dropdown lists `Library` as the root option.
+  - Folder reparenting & deletion: Modals and impact summaries consistently state that items will be moved to `Library`.
+
+### 35.2 Three-Zone Toolbar Architecture
+* **Single Divider-Separated Row**: The toolbar is organized into three distinct, non-overlapping zones separated by vertical hairline dividers (`<hr aria-orientation="vertical">`):
+  1. **Zone 1 — GLOBAL (left)**: Dedicated exclusively to search. Uses placeholder `"Search files and captions…"`. Search executes library-wide across all files and captions regardless of current folder or view.
+  2. **Divider 1**: Separates global search from local scoped controls.
+  3. **Zone 2 — LOCAL (middle)**: Controls that apply strictly to the current folder or smart view.
+     - **Scope Anchor Tag**: First element (`data-testid="media-scope-tag"`), e.g., `"In: Library"`, `"In: Everything"`, `"In: Needs caption"`, or `"In: asdf"`. During active search, automatically anchors to `"In: Library"`.
+     - **Three Labeled Dropdowns**: Eradicated the duplicate `All / Videos / Images` tablist in favor of persistent labeled dropdowns: `"Type: All"`, `"Ratio: All"`, and `"Captions: All"`.
+     - **Active Accent Underline**: Non-default filter values receive the active accent underline (`2px solid ${PALETTE.primary}`) directly beneath the value text (e.g. `Ratio: 9:16`).
+     - **Dynamic Clear Action**: When any local filter is active, displays `"N filters · Clear"` (or `"1 filter · Clear"`) to immediately reset all three filters back to default `All`.
+  4. **Divider 2**: Separates local filtering from sorting and view modes.
+  5. **Zone 3 — SORT + VIEW (right)**: Contains the labeled `"Sort: Newest"` dropdown (short values: `Newest`, `Oldest`, `Name A–Z`, `Largest`) followed by bare grid and table view toggle icon buttons.
+
+### 35.3 Rail Smart Views ("VIEWS": "Everything" & "Needs caption")
+* **Smart Cross-Folder Collections**: Replaced the legacy rail collections with a dedicated `VIEWS` rail section containing exactly two cross-folder smart views:
+  - **Everything**: Displays every media item in the library across all folders.
+  - **Needs caption**: Displays all assets with missing or empty captions across all folders, giving content creators instant access to uncaptioned backlog without manual searching.
+* **Preserved Local Filters**: Switching between folders or smart views seamlessly preserves active local filter settings (`Type`, `Ratio`, `Captions`, `Sort`).
+
+### 35.4 Global Search with Folder Path Attribution
+* **Library-Wide Search**: Any query entered into Zone 1 searches the entire repository across all folders and smart views.
+* **Folder Path Badges**: Every search result card and table row displays its folder path attribution (e.g. `"in asdf / sdafd"` or `"in Library"`), providing instant location context and one-click navigation directly to the enclosing folder.
+
+
+
+
 
 
 
