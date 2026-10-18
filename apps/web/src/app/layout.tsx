@@ -4,6 +4,7 @@ import './globals.css';
 import { DesktopTitleBar } from '@/components/desktop';
 import { WhatsAppSupportButton } from '@/components/support';
 import { Analytics } from '@vercel/analytics/next';
+import { PostHogProvider } from '@/components/posthog-provider';
 
 export const metadata: Metadata = {
   title: 'FBUploadPro',
@@ -48,10 +49,15 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body>
-        <DesktopTitleBar />
-        <main>{children}</main>
-        <WhatsAppSupportButton />
-        <Analytics />
+        <PostHogProvider
+          apiKey={process.env.POSTHOG_KEY}
+          host={process.env.POSTHOG_HOST || 'https://us.i.posthog.com'}
+        >
+          <DesktopTitleBar />
+          <main>{children}</main>
+          <WhatsAppSupportButton />
+          <Analytics />
+        </PostHogProvider>
       </body>
     </html>
   );

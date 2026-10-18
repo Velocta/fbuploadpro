@@ -1,5 +1,6 @@
 import { Ratelimit, type Duration } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
+import { logServerError } from './server-analytics';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -136,9 +137,10 @@ export async function checkRateLimit(
           : Math.max(1, Math.ceil((reset - Date.now()) / 1000)),
       };
     } catch (err) {
-      console.error(
+      logServerError(
         '[RateLimiter] Upstash rate-limit check failed; denying request (fail-closed).',
-        err instanceof Error ? err.message : String(err)
+        err,
+        { key: key.slice(0, 32), maxRequests, windowMs }
       );
       return { allowed: false, remaining: 0, retryAfterSeconds: 60 };
     }

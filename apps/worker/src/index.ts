@@ -12,6 +12,8 @@ export interface Env {
    * Never set in production. Never derived from request input.
    */
   __TEST_DB__?: unknown;
+  POSTHOG_KEY?: string;
+  POSTHOG_HOST?: string;
   TOKEN_ENCRYPTION_KEY?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
   MASTER_ENCRYPTION_KEY?: string;
@@ -38,6 +40,7 @@ import {
   detectSourcePlatform,
 } from '@fbuploadpro/contracts';
 import { executeDownloadJob } from './services/downloader-engine.js';
+import { captureWorkerError } from './analytics.js';
 
 
 export interface ScheduledOptions {
@@ -58,27 +61,30 @@ function initWorkerDb(env: Env, optionsDb?: any): any {
   }) as any;
 }
 
-async function recoverStuckPublishingItems(db: any): Promise<void> {
+async function recoverStuckPublishingItems(db: any, env?: Env): Promise<void> {
   const currentMinute = new Date().getMinutes();
   if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
     try {
       const { data, error } = await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
       if (error) {
+        captureWorkerError(env ?? {}, error, { site: 'recoverStuckPublishingItems', kind: 'rpc_error' });
         console.error('[recoverStuckPublishingItems] RPC error:', error);
       } else if (data && data > 0) {
         console.info(`[recoverStuckPublishingItems] Recovered ${data} stuck publishing items`);
       }
     } catch (err) {
+      captureWorkerError(env ?? {}, err, { site: 'recoverStuckPublishingItems', kind: 'unexpected' });
       console.error('[recoverStuckPublishingItems] Unexpected error:', err);
     }
   }
 }
 
-export async function failStuckDownloadJobs(db: any): Promise<number> {
+export async function failStuckDownloadJobs(db: any, env?: Env): Promise<number> {
   if (typeof db?.rpc === 'function') {
     try {
       const { data, error } = await db.rpc('fail_stuck_download_jobs', { p_timeout_minutes: 15 });
       if (error) {
+        captureWorkerError(env ?? {}, error, { site: 'failStuckDownloadJobs', kind: 'rpc_error' });
         console.error('[failStuckDownloadJobs] RPC error:', error);
         return 0;
       }
@@ -87,6 +93,7 @@ export async function failStuckDownloadJobs(db: any): Promise<number> {
       }
       return Number(data ?? 0);
     } catch (err) {
+      captureWorkerError(env ?? {}, err, { site: 'failStuckDownloadJobs', kind: 'unexpected' });
       console.error('[failStuckDownloadJobs] Unexpected error:', err);
       return 0;
     }
@@ -119,10 +126,10 @@ export async function handleScheduled(
 
   try {
     // 1. Every 5 minutes, recover items stuck in 'publishing' status
-    await recoverStuckPublishingItems(db);
+    await recoverStuckPublishingItems(db, env);
 
     // 1b. Fail download jobs stalled for > 15 minutes
-    await failStuckDownloadJobs(db);
+    await failStuckDownloadJobs(db, env);
 
     // 2. Direct dispatch (Cloudflare Queues were never provisioned; direct
     //    execution is the design)

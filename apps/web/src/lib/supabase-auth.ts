@@ -11,6 +11,7 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
+import { logServerError } from './server-analytics';
 
 // In-memory credential store for test/CI fallback when Supabase external cluster is not configured
 const localPasswordStore = new Map<string, string>();
@@ -324,7 +325,7 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
         .maybeSingle();
 
       if (error) {
-        console.error('[Supabase PostgREST] findUserByEmail error:', error.message);
+        logServerError('[Supabase PostgREST] findUserByEmail error', error, { email: canonicalEmail });
       } else if (data) {
         const fallback = deriveSubdomainFromEmail(canonicalEmail);
         const subdomain = await findWorkspaceSubdomainByOwner(supabase, data.id, fallback);
@@ -335,7 +336,7 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
         return { ...(data as object), subdomain, passwordUpdatedAt } as AuthUser;
       }
     } catch (err) {
-      console.error('[Supabase PostgREST] findUserByEmail exception:', err);
+      logServerError('[Supabase PostgREST] findUserByEmail exception', err, { email: canonicalEmail });
     }
   }
 
@@ -508,7 +509,7 @@ export async function signUpTenantUser(params: {
       if ((adminErr as Error)?.message === 'Email is already registered') {
         throw adminErr;
       }
-      console.error('[Supabase Auth Admin] getUserById exception:', adminErr);
+      logServerError('[Supabase Auth Admin] getUserById exception:', adminErr);
     }
 
     // User is unconfirmed in Supabase: update details and resend code
@@ -664,7 +665,7 @@ export async function signUpTenantUser(params: {
         userRecord.subdomain = wsSubdomain;
       }
     } catch (insertErr) {
-      console.error('[Supabase PostgREST] User insert exception:', insertErr);
+      logServerError('[Supabase PostgREST] User insert exception', insertErr);
       throw insertErr;
     }
   } else {
@@ -942,7 +943,7 @@ export async function registerTenantUser(params: {
         status: 'active',
       } as AuthUser;
     } catch (insertErr) {
-      console.error('[Supabase PostgREST] User insert exception:', insertErr);
+      logServerError('[Supabase PostgREST] User insert exception', insertErr);
       throw insertErr;
     }
   } else {
@@ -1062,7 +1063,7 @@ export async function loginTenantUser(params: {
         );
         user.subdomain = wsSubdomain;
       } catch (upsertErr) {
-        console.error('[Supabase PostgREST] User upsert on login error:', upsertErr);
+        logServerError('[Supabase PostgREST] User upsert on login error', upsertErr, { email: canonicalEmail });
       }
     }
   } else {
@@ -1165,10 +1166,10 @@ export async function requestPasswordReset(params: {
       const options = params.redirectTo ? { redirectTo: params.redirectTo } : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail, options);
       if (error) {
-        console.error('[Supabase Auth] resetPasswordForEmail error:', error.message);
+        logServerError('[Supabase Auth] resetPasswordForEmail error', error, { email: canonicalEmail });
       }
     } catch (err) {
-      console.error('[Supabase Auth] resetPasswordForEmail exception:', err);
+      logServerError('[Supabase Auth] resetPasswordForEmail exception', err, { email: canonicalEmail });
     }
   }
 
