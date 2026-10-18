@@ -8,7 +8,8 @@ export type UploadStatus =
   | 'uploading'
   | 'paused'
   | 'completed'
-  | 'failed';
+  | 'failed'
+  | 'cancelled';
 
 export interface ImportQueueItem {
   id: string;
@@ -21,10 +22,11 @@ export interface ImportQueueItem {
   status: UploadStatus;
   progressPercent: number;
   isDuplicate: boolean;
-  duplicateResolution?: 'skip' | 'upload_anyway';
+  duplicateResolution?: 'skip' | 'upload_anyway' | 'keep';
   validationError?: string | null;
   abortController?: AbortController;
   retryCount: number;
+  previewUrl?: string | null;
   uploadedItem?: MediaItemResponse;
 }
 

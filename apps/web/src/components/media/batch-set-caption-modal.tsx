@@ -47,12 +47,12 @@ export function BatchSetCaptionModal({
       open
       aria-labelledby="batch-caption-title"
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) {
+        if (!isSubmitting && e.target === e.currentTarget) {
           onClose();
         }
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') {
+        if (!isSubmitting && e.key === 'Escape') {
           onClose();
         }
       }}
@@ -135,9 +135,10 @@ export function BatchSetCaptionModal({
                 type="radio"
                 name="captionMode"
                 value="replace"
+                disabled={isSubmitting}
                 checked={mode === 'replace'}
                 onChange={() => setMode('replace')}
-                style={{ accentColor: PALETTE.primary, cursor: 'pointer' }}
+                style={{ accentColor: PALETTE.primary, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
               />
               <span>Replace existing captions</span>
             </label>
@@ -148,16 +149,17 @@ export function BatchSetCaptionModal({
                 gap: SPACING.sm,
                 fontSize: '0.8125rem',
                 color: `var(--text-main, ${THEME.default.text.primary})`,
-                cursor: 'pointer',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
               }}
             >
               <input
                 type="radio"
                 name="captionMode"
                 value="append"
+                disabled={isSubmitting}
                 checked={mode === 'append'}
                 onChange={() => setMode('append')}
-                style={{ accentColor: PALETTE.primary, cursor: 'pointer' }}
+                style={{ accentColor: PALETTE.primary, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
               />
               <span>Add to the end of existing captions</span>
             </label>
@@ -168,6 +170,7 @@ export function BatchSetCaptionModal({
             <textarea
               data-testid="batch-caption-textarea"
               rows={4}
+              disabled={isSubmitting}
               value={captionText}
               onChange={(e) => setCaptionText(e.target.value)}
               placeholder="Enter caption text..."
@@ -183,6 +186,7 @@ export function BatchSetCaptionModal({
                 outline: 'none',
                 resize: 'vertical',
                 boxSizing: 'border-box',
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             />
             <div
@@ -209,6 +213,7 @@ export function BatchSetCaptionModal({
           >
             <button
               type="button"
+              disabled={isSubmitting}
               onClick={onClose}
               style={{
                 padding: `${SPACING.xs} ${SPACING.md}`,
@@ -216,7 +221,8 @@ export function BatchSetCaptionModal({
                 border: 'none',
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 fontSize: '0.8125rem',
-                cursor: 'pointer',
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                opacity: isSubmitting ? 0.6 : 1,
               }}
             >
               Cancel

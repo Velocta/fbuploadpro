@@ -36,6 +36,9 @@ import {
   captureVideoFrameAsWebp,
 } from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
+import { NewFolderModal } from '@/components/media/new-folder-modal';
+import { BatchSetCaptionModal } from '@/components/media/batch-set-caption-modal';
+import { MediaImportModal } from '@/components/media/media-import-modal';
 import {
   MediaLibraryExplorer,
   MEDIA_VIEW_MODE_STORAGE_KEY,
@@ -1251,7 +1254,7 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(explorer.hasAttribute('data-testid', 'view-mode-table-btn')).toBe(true);
   });
 
-  it('Spec 070 US2: renders rail with VIEWS (Everything, Needs caption), FOLDERS with root Library, and updates scope tag on navigation', () => {
+  it('Spec 071 US1: renders full-width layout without VIEWS sidebar rail and keeps breadcrumb navigation', () => {
     // Root explorer view
     const rootExplorer = render(
       <MediaLibraryExplorer
@@ -1260,11 +1263,15 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
       />
     );
-    expect(rootExplorer.hasAttribute('data-testid', 'media-views-rail')).toBe(true);
-    expect(rootExplorer.hasText('VIEWS')).toBe(true);
-    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-everything')).toBe(true);
-    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-needs-caption')).toBe(true);
-    expect(rootExplorer.hasAttribute('data-testid', 'rail-root-library')).toBe(true);
+    // Rail and VIEWS must be completely absent
+    expect(rootExplorer.hasAttribute('data-testid', 'media-views-rail')).toBe(false);
+    expect(rootExplorer.hasText('VIEWS')).toBe(false);
+    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-everything')).toBe(false);
+    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-needs-caption')).toBe(false);
+    expect(rootExplorer.hasAttribute('data-testid', 'rail-root-library')).toBe(false);
+
+    // Full-width body and breadcrumbs must be present
+    expect(rootExplorer.hasAttribute('data-testid', 'media-explorer-body')).toBe(true);
     expect(rootExplorer.hasText('In: Library')).toBe(true);
     expect(rootExplorer.hasAttribute('data-testid', 'breadcrumb-root')).toBe(true);
 
@@ -1278,30 +1285,55 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
       />
     );
     expect(folderExplorer.hasText('In: Campaign A')).toBe(true);
+    expect(folderExplorer.hasAttribute('data-testid', 'media-views-rail')).toBe(false);
+  });
 
-    // Smart view: Everything
-    const everythingExplorer = render(
-      <MediaLibraryExplorer
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialMediaItems={SAMPLE_MEDIA_ITEMS}
-        initialActiveSmartView="everything"
+  it('Spec 071 US2 & US3: action states on BatchActionBar, NewFolderModal, and MediaPreviewModal lock out duplicate actions', () => {
+    // BatchActionBar with isBusy=true disables all action buttons
+    const batchBar = render(
+      <BatchActionBar
+        selectedIds={['1', '2']}
+        isBusy={true}
+        onClearSelection={vi.fn()}
+        onBatchMove={vi.fn()}
+        onBatchCaption={vi.fn()}
+        onBatchDelete={vi.fn()}
       />
     );
-    expect(everythingExplorer.hasText('In: Everything')).toBe(true);
+    expect(batchBar.hasText('2 selected')).toBe(true);
+    const deleteBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-delete-btn');
+    expect(deleteBtn?.attributes.disabled).toBeDefined();
+    const moveBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-move-btn');
+    expect(moveBtn?.attributes.disabled).toBeDefined();
+    const captionBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-caption-btn');
+    expect(captionBtn?.attributes.disabled).toBeDefined();
 
-    // Smart view: Needs caption
-    const needsCaptionExplorer = render(
-      <MediaLibraryExplorer
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialMediaItems={SAMPLE_MEDIA_ITEMS}
-        initialActiveSmartView="needs_caption"
+    // NewFolderModal renders disabled submit when empty or duplicate
+    const newFolderModal = render(
+      <NewFolderModal
+        isOpen={true}
+        folders={SAMPLE_FOLDERS}
+        initialParentId={null}
+        onClose={vi.fn()}
+        onCreateFolder={vi.fn().mockResolvedValue(undefined)}
       />
     );
-    expect(needsCaptionExplorer.hasText('In: Needs caption')).toBe(true);
-    expect(needsCaptionExplorer.hasText('Product_Showcase_Banner.png')).toBe(true);
-    expect(needsCaptionExplorer.hasText('Viral Launch Reel.mp4')).toBe(false);
+    const createBtn = newFolderModal.findTags('button').find((b) => b.attributes['data-testid'] === 'submit-create-folder');
+    expect(createBtn?.attributes.disabled).toBeDefined();
+    expect(newFolderModal.hasText('Create folder')).toBe(true);
+
+    // MediaPreviewModal renders delete and save buttons with busy protection
+    const previewModal = render(
+      <MediaPreviewModal
+        open={true}
+        item={SAMPLE_MEDIA_ITEMS[0]}
+        onOpenChange={vi.fn()}
+        onDelete={vi.fn().mockResolvedValue(undefined)}
+        onSave={vi.fn().mockResolvedValue(undefined)}
+      />
+    );
+    expect(previewModal.hasAttribute('data-testid', 'modal-delete-media-btn')).toBe(true);
+    expect(previewModal.hasAttribute('data-testid', 'modal-save-caption-btn')).toBe(true);
   });
 
   it('Spec 070 US3: library-wide global search resets scope to In: Library and displays folder path attribution with "in " prefix', () => {
@@ -1328,4 +1360,104 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(searchExplorer.hasText('in Campaign A / Reels')).toBe(true);
   });
 });
+
+describe('Spec 072: MediaImportModal Staging, Progress, Duplicates & Concurrency Purification', () => {
+  it('US1 & US2: renders destination folder pill, live subtext, 46px thumbnail tiles, and X removal', () => {
+    const validFile1 = new File(['valid video content'], 'promo.mp4', { type: 'video/mp4' });
+    const validFile2 = new File(['valid image content'], 'banner.png', { type: 'image/png' });
+
+    const modal = render(
+      <MediaImportModal
+        subdomain="acme"
+        isOpen={true}
+        initialFiles={[validFile1, validFile2]}
+        currentFolderId={null}
+        folders={SAMPLE_FOLDERS}
+        onClose={vi.fn()}
+        onUploadSuccess={vi.fn()}
+      />
+    );
+
+    // Header & Subtext
+    expect(modal.hasText('Import media')).toBe(true);
+    expect(modal.hasText('2 files selected · will be added to Library')).toBe(true);
+    expect(modal.hasAttribute('data-testid', 'destination-folder-pill')).toBe(true);
+    expect(modal.hasText('To: Library')).toBe(true);
+
+    // Staging rows with 46px thumbnail tiles and names
+    expect(modal.hasText('promo.mp4')).toBe(true);
+    expect(modal.hasText('banner.png')).toBe(true);
+    expect(modal.hasText('Start import (2)')).toBe(true);
+  });
+
+  it('US1: destination pill defaults to current active folder', () => {
+    const file = new File(['sample'], 'clip.mp4', { type: 'video/mp4' });
+
+    const modal = render(
+      <MediaImportModal
+        subdomain="acme"
+        isOpen={true}
+        initialFiles={[file]}
+        currentFolderId="11111111-1111-4111-8111-111111111111"
+        folders={SAMPLE_FOLDERS}
+        onClose={vi.fn()}
+        onUploadSuccess={vi.fn()}
+      />
+    );
+
+    expect(modal.hasText('To: Campaign A')).toBe(true);
+    expect(modal.hasText('1 file selected · will be added to Campaign A')).toBe(true);
+  });
+
+  it('US3: non-blocking validation flags unsupported MIME, empty, and oversized files and excludes from import count', () => {
+    const unsupportedFile = new File(['text'], 'notes.txt', { type: 'text/plain' });
+    const emptyFile = new File([], 'empty.mp4', { type: 'video/mp4' });
+    const oversizedFile = new File([new Uint8Array(10)], 'huge.mp4', { type: 'video/mp4' });
+    Object.defineProperty(oversizedFile, 'size', { value: 600 * 1024 * 1024 });
+
+    const modal = render(
+      <MediaImportModal
+        subdomain="acme"
+        isOpen={true}
+        initialFiles={[unsupportedFile, emptyFile, oversizedFile]}
+        currentFolderId={null}
+        folders={SAMPLE_FOLDERS}
+        onClose={vi.fn()}
+        onUploadSuccess={vi.fn()}
+      />
+    );
+
+    expect(modal.hasText("can't upload — not a supported format")).toBe(true);
+    expect(modal.hasText('empty file')).toBe(true);
+    expect(modal.hasText('too large — 500 MB max')).toBe(true);
+
+    // Excluded from count; button is disabled with Start import (0)
+    expect(modal.hasText('Start import (0)')).toBe(true);
+    const startBtn = modal.findTags('button').find((b) => b.attributes['data-testid'] === 'start-import-btn');
+    expect(startBtn?.attributes.disabled).toBeDefined();
+  });
+
+  it('US5: purges technical concurrency copy from staging UI', () => {
+    const validFile = new File(['data'], 'test.mp4', { type: 'video/mp4' });
+
+    const modal = render(
+      <MediaImportModal
+        subdomain="acme"
+        isOpen={true}
+        initialFiles={[validFile]}
+        currentFolderId={null}
+        folders={SAMPLE_FOLDERS}
+        onClose={vi.fn()}
+        onUploadSuccess={vi.fn()}
+      />
+    );
+
+    expect(modal.hasText('Uploads run 3 at a time')).toBe(false);
+    expect(modal.hasText('wait in line')).toBe(false);
+    expect(modal.hasText('concurrency')).toBe(false);
+    expect(modal.hasText('+ Add more')).toBe(true);
+    expect(modal.hasText('Cancel')).toBe(true);
+  });
+});
+
 
