@@ -761,6 +761,16 @@ export function MediaImportModal({
     return null;
   };
 
+  const getCompleteTitle = () => {
+    if (completedItems.length > 0) {
+      return `Import complete — ${completedItems.length} of ${totalInBatch} uploaded`;
+    }
+    if (userInitiatedCancel) {
+      return 'Import canceled — nothing was uploaded';
+    }
+    return `Import failed — 0 of ${totalInBatch} uploaded`;
+  };
+
   return (
     <dialog
       open
@@ -821,12 +831,7 @@ export function MediaImportModal({
               {step === 'staging' && 'Import media'}
               {step === 'progress' &&
                 `Uploading ${Math.min(activeUploadingItems.length || 3, MAX_CONCURRENT_UPLOADS)} at a time · ${overallProgressPercent}% overall`}
-              {step === 'complete' &&
-                (completedItems.length > 0
-                  ? `Import complete — ${completedItems.length} of ${totalInBatch} uploaded`
-                  : userInitiatedCancel
-                    ? 'Import canceled — nothing was uploaded'
-                    : `Import failed — 0 of ${totalInBatch} uploaded`)}
+              {step === 'complete' && getCompleteTitle()}
             </h2>
             {step === 'staging' && (
               <p

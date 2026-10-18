@@ -1194,10 +1194,9 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
       />
     );
-    expect(explorer.hasAttribute('role', 'separator')).toBe(true);
     expect(explorer.hasAria('orientation', 'vertical')).toBe(true);
-    const separators = explorer.findTags('div').filter(
-      (el) => el.attributes.role === 'separator' && el.attributes['aria-orientation'] === 'vertical'
+    const separators = explorer.findTags('hr').filter(
+      (el) => el.attributes['aria-orientation'] === 'vertical'
     );
     expect(separators.length).toBe(3);
   });

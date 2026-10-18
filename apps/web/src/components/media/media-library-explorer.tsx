@@ -1195,13 +1195,14 @@ export function MediaLibraryExplorer({
         </div>
 
         {/* Divider 1: Between Search and Navigation controls */}
-        <div
-          role="separator"
+        <hr
           aria-orientation="vertical"
           style={{
             width: '1px',
             height: '16px',
             backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+            border: 'none',
+            margin: 0,
             flexShrink: 0,
           }}
         />
@@ -1266,13 +1267,14 @@ export function MediaLibraryExplorer({
           </div>
 
           {/* Divider 2: Between Media Type Tabs and Dropdown Filters */}
-          <div
-            role="separator"
+          <hr
             aria-orientation="vertical"
             style={{
               width: '1px',
               height: '16px',
               backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              border: 'none',
+              margin: 0,
               flexShrink: 0,
             }}
           />
@@ -1578,13 +1580,14 @@ export function MediaLibraryExplorer({
           </div>
 
           {/* Divider 3: Between Dropdown Filters and View Mode Toggle */}
-          <div
-            role="separator"
+          <hr
             aria-orientation="vertical"
             style={{
               width: '1px',
               height: '16px',
               backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              border: 'none',
+              margin: 0,
               flexShrink: 0,
             }}
           />
