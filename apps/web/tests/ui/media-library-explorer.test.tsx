@@ -1300,12 +1300,12 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
       />
     );
     expect(batchBar.hasText('2 selected')).toBe(true);
-    const deleteBtn = batchBar.getByTestId('batch-delete-btn');
-    expect(deleteBtn?.hasAttribute('disabled')).toBe(true);
-    const moveBtn = batchBar.getByTestId('batch-move-btn');
-    expect(moveBtn?.hasAttribute('disabled')).toBe(true);
-    const captionBtn = batchBar.getByTestId('batch-caption-btn');
-    expect(captionBtn?.hasAttribute('disabled')).toBe(true);
+    const deleteBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-delete-btn');
+    expect(deleteBtn?.attributes.disabled !== undefined).toBe(true);
+    const moveBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-move-btn');
+    expect(moveBtn?.attributes.disabled !== undefined).toBe(true);
+    const captionBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-caption-btn');
+    expect(captionBtn?.attributes.disabled !== undefined).toBe(true);
 
     // NewFolderModal renders disabled submit when empty or duplicate
     const newFolderModal = render(
@@ -1317,8 +1317,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
         onCreateFolder={vi.fn().mockResolvedValue(undefined)}
       />
     );
-    const createBtn = newFolderModal.getByTestId('submit-create-folder');
-    expect(createBtn?.hasAttribute('disabled')).toBe(true);
+    const createBtn = newFolderModal.findTags('button').find((b) => b.attributes['data-testid'] === 'submit-create-folder');
+    expect(createBtn?.attributes.disabled !== undefined).toBe(true);
     expect(newFolderModal.hasText('Create folder')).toBe(true);
 
     // MediaPreviewModal renders delete and save buttons with busy protection
