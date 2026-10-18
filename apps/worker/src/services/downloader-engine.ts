@@ -141,7 +141,10 @@ export async function updateJobStatus(
   if (updates.errorMessage !== undefined) dbUpdates.error_message = updates.errorMessage;
   if (updates.metadata !== undefined) dbUpdates.metadata = updates.metadata;
 
-  await db.from('media_download_jobs').update(dbUpdates).eq('id', jobId);
+  const { error } = await db.from('media_download_jobs').update(dbUpdates).eq('id', jobId);
+  if (error) {
+    console.error('[updateJobStatus] Failed to persist job status:', { jobId, error });
+  }
 }
 
 export function trimTrailingSlash(url: string): string {

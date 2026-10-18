@@ -221,7 +221,10 @@ async function settleSupabaseOutcome(
       if (typeof accountUpdateQuery?.eq === 'function') {
         accountUpdateQuery = accountUpdateQuery.eq('user_id', item.userId);
       }
-      await accountUpdateQuery;
+      const { error: accountUpdateError } = await accountUpdateQuery;
+      if (accountUpdateError) {
+        console.error('[settleOutcome] Failed to mark account expired:', { accountId, error: accountUpdateError });
+      }
     }
   }
 }
