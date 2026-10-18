@@ -1378,6 +1378,37 @@ export interface MediaImportModalProps {
   onActiveUploadsChange?: (count: number, furthestAlong: { name: string; progressPercent: number } | null) => void;
 }
 
+function validateFileForImport(file: File, mime: string): string | null {
+  if (file.size === 0) {
+    return 'empty file';
+  }
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return 'too large — 500 MB max';
+  }
+  if (!mime || !AllowedMediaMimeTypes.includes(mime as any)) {
+    return "can't upload — not a supported format";
+  }
+  return null;
+}
+
+function createImagePreviewUrl(file: File, mime: string): string | null {
+  if (!mime.startsWith('image/')) return null;
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
+  try {
+    return URL.createObjectURL(file);
+  } catch {
+    return null;
+  }
+}
+
+function generateQueueItemId(): string {
+  const uniqueId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : nextUniqueId();
+  return `item-${Date.now()}-${uniqueId}`;
+}
+
 function buildImportQueueItems(
   files: File[],
   folderId: string | null,
@@ -1392,36 +1423,12 @@ function buildImportQueueItems(
     if (existingKeys.has(key)) continue;
 
     const mime = resolveMimeType(file);
-    let valError: string | null = null;
-
-    if (file.size === 0) {
-      valError = 'empty file';
-    } else if (file.size > MAX_FILE_SIZE_BYTES) {
-      valError = 'too large — 500 MB max';
-    } else if (!mime || !AllowedMediaMimeTypes.includes(mime as any)) {
-      valError = "can't upload — not a supported format";
-    }
-
     const isDuplicateName =
       existingNames.has(file.name) ||
       newItems.some((it) => it.name === file.name);
 
-    let previewUrl: string | null = null;
-    if (mime.startsWith('image/') && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
-      try {
-        previewUrl = URL.createObjectURL(file);
-      } catch {
-        previewUrl = null;
-      }
-    }
-
-    const uniqueId =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : nextUniqueId();
-
     newItems.push({
-      id: `item-${Date.now()}-${uniqueId}`,
+      id: generateQueueItemId(),
       file,
       name: file.name,
       size: file.size,
@@ -1431,9 +1438,9 @@ function buildImportQueueItems(
       status: 'staged',
       progressPercent: 0,
       isDuplicate: isDuplicateName,
-      validationError: valError,
+      validationError: validateFileForImport(file, mime),
       retryCount: 0,
-      previewUrl,
+      previewUrl: createImagePreviewUrl(file, mime),
     });
   }
 
