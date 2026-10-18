@@ -140,7 +140,9 @@ export function setupWorkspaceLifecycleGuard({
     if (channel) {
       try {
         channel.close();
-      } catch {}
+      } catch {
+        // Intentional: best-effort cleanup on unmount — nothing to do if close throws.
+      }
     }
     window.removeEventListener('storage', handleStorage);
     window.removeEventListener('pageshow', handlePageShow);
