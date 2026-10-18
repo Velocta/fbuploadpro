@@ -178,6 +178,39 @@ export function computeRangeSelection(
     : [...currentSelection, targetId];
 }
 
+function matchesSearch(item: MediaItemResponse, query: string): boolean {
+  if (!query) return true;
+  const matchName = item.name.toLowerCase().includes(query);
+  const matchCaption = (item.captionText || '').toLowerCase().includes(query);
+  return matchName || matchCaption;
+}
+
+function matchesSmartViewOrFolder(
+  item: MediaItemResponse,
+  currentFolderId: string | null,
+  activeSmartView: MediaSmartViewKey | null | undefined
+): boolean {
+  if (activeSmartView === 'everything') return true;
+  if (activeSmartView === 'needs_caption') {
+    return !item.captionText || item.captionText.trim().length === 0;
+  }
+  return (item.folderId ?? null) === currentFolderId;
+}
+
+function matchesMediaType(item: MediaItemResponse, filter: MediaTypeFilterKey): boolean {
+  return filter === 'all' || item.mediaType === filter;
+}
+
+function matchesAspectRatio(item: MediaItemResponse, filter: AspectRatioFilterKey): boolean {
+  return filter === 'all' || item.aspectRatio === filter;
+}
+
+function matchesCaptionStatus(item: MediaItemResponse, filter: CaptionStatusFilterKey): boolean {
+  if (filter === 'all') return true;
+  const hasCaption = Boolean(item.captionText && item.captionText.trim().length > 0);
+  return filter === 'has_caption' ? hasCaption : !hasCaption;
+}
+
 function matchesMediaFilters(
   item: MediaItemResponse,
   currentFolderId: string | null,
@@ -188,35 +221,16 @@ function matchesMediaFilters(
   trimmedSearch: string
 ): boolean {
   if (trimmedSearch.length > 0) {
-    const matchName = item.name.toLowerCase().includes(trimmedSearch);
-    const matchCaption = (item.captionText || '').toLowerCase().includes(trimmedSearch);
-    if (!matchName && !matchCaption) {
-      return false;
-    }
-  } else if (activeSmartView === 'everything') {
-    // Cross-folder smart view: show all items
-  } else if (activeSmartView === 'needs_caption') {
-    if (item.captionText && item.captionText.trim().length > 0) {
-      return false;
-    }
-  } else if ((item.folderId ?? null) !== currentFolderId) {
+    if (!matchesSearch(item, trimmedSearch)) return false;
+  } else if (!matchesSmartViewOrFolder(item, currentFolderId, activeSmartView)) {
     return false;
   }
 
-  if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
-    return false;
-  }
-  if (aspectRatioFilter !== 'all' && item.aspectRatio !== aspectRatioFilter) {
-    return false;
-  }
-  if (captionStatusFilter === 'has_caption' && (!item.captionText || item.captionText.trim().length === 0)) {
-    return false;
-  }
-  if (captionStatusFilter === 'empty_caption' && item.captionText && item.captionText.trim().length > 0) {
-    return false;
-  }
-
-  return true;
+  return (
+    matchesMediaType(item, mediaTypeFilter) &&
+    matchesAspectRatio(item, aspectRatioFilter) &&
+    matchesCaptionStatus(item, captionStatusFilter)
+  );
 }
 
 function sortMediaItems(a: MediaItemResponse, b: MediaItemResponse, sortOption: SortOptionKey): number {
@@ -422,6 +436,314 @@ export async function checkServerDuplicateEntries(
   }
 }
 
+interface MediaCanvasProps {
+  displayedMediaItems: MediaItemResponse[];
+  viewMode: MediaViewMode;
+  isLoading: boolean;
+  selectedIds: string[];
+  debouncedSearch: string;
+  folders: MediaFolder[];
+  activeSmartView: MediaSmartViewKey | null;
+  onNavigateFolder: (folderId: string | null) => void;
+  onToggleSelect: (mediaId: string, options?: { shiftKey?: boolean | undefined }) => void;
+  onPreview: (item: MediaItemResponse) => void;
+  onUpdateCaption: (mediaId: string, captionText: string) => void;
+  onMoveRequest: (item: MediaItemResponse) => void;
+  onDeleteRequest: (mediaId: string) => void;
+}
+
+function MediaCanvas({
+  displayedMediaItems,
+  viewMode,
+  isLoading,
+  selectedIds,
+  debouncedSearch,
+  folders,
+  activeSmartView,
+  onNavigateFolder,
+  onToggleSelect,
+  onPreview,
+  onUpdateCaption,
+  onMoveRequest,
+  onDeleteRequest,
+}: Readonly<MediaCanvasProps>) {
+  if (displayedMediaItems.length > 0) {
+    if (viewMode === 'grid') {
+      return (
+        <div
+          data-testid="media-assets-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+            gap: SPACING.lg,
+            marginTop: SPACING.xs,
+          }}
+        >
+          {displayedMediaItems.map((item) => (
+            <MediaAssetCard
+              key={item.id}
+              item={item}
+              selected={selectedIds.includes(item.id)}
+              folderPathLabel={
+                debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
+              }
+              onNavigateFolder={onNavigateFolder}
+              onToggleSelect={onToggleSelect}
+              onPreview={onPreview}
+              onUpdateCaption={onUpdateCaption}
+              onMoveRequest={onMoveRequest}
+              onDeleteRequest={() => onDeleteRequest(item.id)}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        data-testid="media-table-view"
+        style={{
+          width: '100%',
+          overflowX: 'auto',
+          marginTop: SPACING.xs,
+        }}
+      >
+        <table
+          data-testid="media-table"
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            textAlign: 'left',
+          }}
+        >
+          <thead
+            style={{
+              position: 'sticky',
+              top: 0,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              zIndex: 2,
+            }}
+          >
+            <tr>
+              <th style={{ width: '40px', padding: `${SPACING.sm} ${SPACING.md}` }}>
+                <span className="sr-only">Select</span>
+              </th>
+              <th style={{ width: '48px', padding: `${SPACING.sm} 0` }}>
+                <span className="sr-only">Thumbnail</span>
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                FILE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                CAPTION
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                DETAILS
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                SIZE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                DATE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  textAlign: 'right',
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                ACTIONS
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayedMediaItems.map((item) => (
+              <MediaTableRow
+                key={item.id}
+                item={item}
+                selected={selectedIds.includes(item.id)}
+                folderPathLabel={
+                  debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
+                }
+                onNavigateFolder={onNavigateFolder}
+                onToggleSelect={onToggleSelect}
+                onPreview={onPreview}
+                onUpdateCaption={onUpdateCaption}
+                onMoveRequest={onMoveRequest}
+                onDeleteRequest={() => onDeleteRequest(item.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (!isLoading) {
+    const { title: emptyTitle, subtext: emptySubtext } = getEmptyStateInfo(
+      activeSmartView,
+      debouncedSearch
+    );
+
+    return (
+      <div
+        data-testid="media-empty-state"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: `${SPACING.xxl} 0`,
+          gap: SPACING.md,
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+        }}
+      >
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </svg>
+        <div style={{ textAlign: 'center' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.9375rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+            }}
+          >
+            {emptyTitle}
+          </p>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.8125rem' }}>
+            {emptySubtext}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function computeNextSelection(
+  prev: string[],
+  mediaId: string,
+  allDisplayedIds: string[],
+  shiftKey?: boolean
+): string[] {
+  if (shiftKey && prev.length > 0) {
+    const lastId = prev.at(-1)!;
+    const lastIdx = allDisplayedIds.indexOf(lastId);
+    const currIdx = allDisplayedIds.indexOf(mediaId);
+    if (lastIdx !== -1 && currIdx !== -1) {
+      const start = Math.min(lastIdx, currIdx);
+      const end = Math.max(lastIdx, currIdx);
+      const slice = allDisplayedIds.slice(start, end + 1);
+      return Array.from(new Set([...prev, ...slice]));
+    }
+  }
+  return prev.includes(mediaId)
+    ? prev.filter((id) => id !== mediaId)
+    : [...prev, mediaId];
+}
+
+function isPointerInsideDropdown(
+  activeDropdown: 'type' | 'ratio' | 'caption' | 'sort' | null,
+  target: Node | null,
+  refs: Record<'type' | 'ratio' | 'caption' | 'sort', React.RefObject<HTMLDivElement | null>>
+): boolean {
+  if (!activeDropdown || !target) return false;
+  return Boolean(refs[activeDropdown]?.current?.contains(target));
+}
+
+function useUploadNavigationGuard(
+  activeUploadsCount: number,
+  onInterceptNavigation: (href: string) => void
+) {
+  useEffect(() => {
+    if (activeUploadsCount <= 0) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeUploadsCount]);
+
+  useEffect(() => {
+    if (activeUploadsCount <= 0) return;
+
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (!target) return;
+      const href = target.getAttribute('href');
+      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        e.preventDefault();
+        e.stopPropagation();
+        onInterceptNavigation(href);
+      }
+    };
+
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => document.removeEventListener('click', handleDocumentClick, true);
+  }, [activeUploadsCount, onInterceptNavigation]);
+}
+
 export interface MediaLibraryExplorerProps {
   subdomain: string;
   initialFolders?: MediaFolder[];
@@ -525,15 +847,15 @@ export function MediaLibraryExplorer({
   // Close dropdowns when clicking outside
   useEffect(() => {
     if (!activeDropdown) return;
+    const dropdownRefs = {
+      type: typeDropdownRef,
+      ratio: ratioDropdownRef,
+      caption: captionDropdownRef,
+      sort: sortDropdownRef,
+    };
     const handleOutsideClick = (e: MouseEvent | PointerEvent) => {
       const target = e.target as Node | null;
-      if (!target) return;
-      if (
-        (activeDropdown === 'type' && typeDropdownRef.current?.contains(target)) ||
-        (activeDropdown === 'ratio' && ratioDropdownRef.current?.contains(target)) ||
-        (activeDropdown === 'caption' && captionDropdownRef.current?.contains(target)) ||
-        (activeDropdown === 'sort' && sortDropdownRef.current?.contains(target))
-      ) {
+      if (isPointerInsideDropdown(activeDropdown, target, dropdownRefs)) {
         return;
       }
       setActiveDropdown(null);
@@ -578,38 +900,12 @@ export function MediaLibraryExplorer({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Arm browser native beforeunload when uploads are active
-  useEffect(() => {
-    if (activeUploadsCount <= 0) return;
+  const handleInterceptNavigation = useCallback((href: string) => {
+    setPendingNavigationUrl(href);
+    setIsLeaveGuardOpen(true);
+  }, []);
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [activeUploadsCount]);
-
-  // Intercept in-app link clicks if uploads are active
-  useEffect(() => {
-    if (activeUploadsCount <= 0) return;
-
-    const handleDocumentClick = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('a');
-      if (!target) return;
-      const href = target.getAttribute('href');
-      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-        e.preventDefault();
-        e.stopPropagation();
-        setPendingNavigationUrl(href);
-        setIsLeaveGuardOpen(true);
-      }
-    };
-
-    document.addEventListener('click', handleDocumentClick, true);
-    return () => document.removeEventListener('click', handleDocumentClick, true);
-  }, [activeUploadsCount]);
+  useUploadNavigationGuard(activeUploadsCount, handleInterceptNavigation);
 
   // Data Fetching
   const refreshLibraryData = useCallback(async () => {
@@ -683,23 +979,8 @@ export function MediaLibraryExplorer({
     mediaId: string,
     options?: { shiftKey?: boolean | undefined } | undefined
   ) => {
-    setSelectedIds((prev) => {
-      if (options?.shiftKey && prev.length > 0) {
-        const lastId = prev.at(-1)!;
-        const allIds = displayedMediaItems.map((m) => m.id);
-        const lastIdx = allIds.indexOf(lastId);
-        const currIdx = allIds.indexOf(mediaId);
-        if (lastIdx !== -1 && currIdx !== -1) {
-          const start = Math.min(lastIdx, currIdx);
-          const end = Math.max(lastIdx, currIdx);
-          const slice = allIds.slice(start, end + 1);
-          return Array.from(new Set([...prev, ...slice]));
-        }
-      }
-      return prev.includes(mediaId)
-        ? prev.filter((id) => id !== mediaId)
-        : [...prev, mediaId];
-    });
+    const allIds = displayedMediaItems.map((m) => m.id);
+    setSelectedIds((prev) => computeNextSelection(prev, mediaId, allIds, options?.shiftKey));
   };
 
   const handleSelectAll = () => {
@@ -870,230 +1151,6 @@ export function MediaLibraryExplorer({
       setStagedFilesForImport(files);
       setIsImportModalOpen(true);
     }
-  };
-
-  const renderMediaCanvas = () => {
-    if (displayedMediaItems.length > 0) {
-      if (viewMode === 'grid') {
-        return (
-          <div
-            data-testid="media-assets-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-              gap: SPACING.lg,
-              marginTop: SPACING.xs,
-            }}
-          >
-            {displayedMediaItems.map((item) => (
-              <MediaAssetCard
-                key={item.id}
-                item={item}
-                selected={selectedIds.includes(item.id)}
-                folderPathLabel={
-                  debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
-                }
-                onNavigateFolder={(fId) => {
-                  setActiveSmartView(null);
-                  setCurrentFolderId(fId);
-                }}
-                onToggleSelect={handleToggleSelect}
-                onPreview={(m) => setPreviewItem(m)}
-                onUpdateCaption={handleUpdateItemCaption}
-                onMoveRequest={(m) => {
-                  setMoveTarget({ type: 'single_media', mediaItem: m });
-                  setMoveDestinationFolderId(m.folderId);
-                }}
-                onDeleteRequest={(m) => handleDeleteItem(m.id)}
-              />
-            ))}
-          </div>
-        );
-      }
-
-      return (
-        <div
-          data-testid="media-table-view"
-          style={{
-            width: '100%',
-            overflowX: 'auto',
-            marginTop: SPACING.xs,
-          }}
-        >
-          <table
-            data-testid="media-table"
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              textAlign: 'left',
-            }}
-          >
-            <thead
-              style={{
-                position: 'sticky',
-                top: 0,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))',
-                zIndex: 2,
-              }}
-            >
-              <tr>
-                <th style={{ width: '40px', padding: `${SPACING.sm} ${SPACING.md}` }}>
-                  <span className="sr-only">Select</span>
-                </th>
-                <th style={{ width: '48px', padding: `${SPACING.sm} 0` }}>
-                  <span className="sr-only">Thumbnail</span>
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  FILE
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  CAPTION
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  DETAILS
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  SIZE
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  DATE
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    textAlign: 'right',
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  ACTIONS
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedMediaItems.map((item) => (
-                <MediaTableRow
-                  key={item.id}
-                  item={item}
-                  selected={selectedIds.includes(item.id)}
-                  folderPathLabel={
-                    debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
-                  }
-                  onNavigateFolder={(fId) => {
-                    setActiveSmartView(null);
-                    setCurrentFolderId(fId);
-                  }}
-                  onToggleSelect={handleToggleSelect}
-                  onPreview={(m) => setPreviewItem(m)}
-                  onUpdateCaption={handleUpdateItemCaption}
-                  onMoveRequest={(m) => {
-                    setMoveTarget({ type: 'single_media', mediaItem: m });
-                    setMoveDestinationFolderId(m.folderId);
-                  }}
-                  onDeleteRequest={(m) => handleDeleteItem(m.id)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    if (!isLoading) {
-      const { title: emptyTitle, subtext: emptySubtext } = getEmptyStateInfo(
-        activeSmartView,
-        debouncedSearch
-      );
-
-      return (
-        <div
-          data-testid="media-empty-state"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: `${SPACING.xxl} 0`,
-            gap: SPACING.md,
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-          }}
-        >
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <circle cx="9" cy="9" r="2" />
-            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-          </svg>
-          <div style={{ textAlign: 'center' }}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '0.9375rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              {emptyTitle}
-            </p>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.8125rem' }}>
-              {emptySubtext}
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
   };
 
   const activeFilterCount =
@@ -2486,7 +2543,27 @@ export function MediaLibraryExplorer({
           )}
 
           {/* Main Media Asset Canvas: Grid or Table View */}
-          {renderMediaCanvas()}
+          <MediaCanvas
+            displayedMediaItems={displayedMediaItems}
+            viewMode={viewMode}
+            isLoading={isLoading}
+            selectedIds={selectedIds}
+            debouncedSearch={debouncedSearch}
+            folders={folders}
+            activeSmartView={activeSmartView}
+            onNavigateFolder={(fId) => {
+              setActiveSmartView(null);
+              setCurrentFolderId(fId);
+            }}
+            onToggleSelect={handleToggleSelect}
+            onPreview={(m) => setPreviewItem(m)}
+            onUpdateCaption={handleUpdateItemCaption}
+            onMoveRequest={(m) => {
+              setMoveTarget({ type: 'single_media', mediaItem: m });
+              setMoveDestinationFolderId(m.folderId);
+            }}
+            onDeleteRequest={handleDeleteItem}
+          />
         </main>
       </div>
 

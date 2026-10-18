@@ -1202,7 +1202,7 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     const separators = explorer.findTags('hr').filter(
       (el) => el.attributes['aria-orientation'] === 'vertical'
     );
-    expect(separators.length).toBe(2);
+    expect(separators).toHaveLength(2);
   });
 
   it('Spec 070 US1: renders three-zone toolbar with persistent labels, scope anchor, and active filter underline', () => {
