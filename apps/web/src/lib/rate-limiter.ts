@@ -1,4 +1,4 @@
-import { Ratelimit } from '@upstash/ratelimit';
+import { Ratelimit, type Duration } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 
 export interface RateLimitResult {
@@ -61,7 +61,7 @@ function getRedis(): Redis {
 
 const upstashLimiters = new Map<string, Ratelimit>();
 
-function toWindowString(windowMs: number): string {
+function toWindowString(windowMs: number): Duration {
   if (windowMs % 3600000 === 0) return `${windowMs / 3600000} h`;
   if (windowMs % 60000 === 0) return `${windowMs / 60000} m`;
   if (windowMs % 1000 === 0) return `${windowMs / 1000} s`;
