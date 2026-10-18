@@ -1328,6 +1328,68 @@ export interface MediaImportModalProps {
   onActiveUploadsChange?: (count: number, furthestAlong: { name: string; progressPercent: number } | null) => void;
 }
 
+function buildImportQueueItems(
+  files: File[],
+  folderId: string | null,
+  existingQueue: ImportQueueItem[] = []
+): ImportQueueItem[] {
+  const existingKeys = new Set(existingQueue.map((item) => `${item.name}-${item.size}`));
+  const existingNames = new Set(existingQueue.map((item) => item.name));
+  const newItems: ImportQueueItem[] = [];
+
+  for (const file of files) {
+    const key = `${file.name}-${file.size}`;
+    if (existingKeys.has(key)) continue;
+
+    const mime = resolveMimeType(file);
+    let valError: string | null = null;
+
+    if (file.size === 0) {
+      valError = 'empty file';
+    } else if (file.size > MAX_FILE_SIZE_BYTES) {
+      valError = 'too large — 500 MB max';
+    } else if (!mime || !AllowedMediaMimeTypes.includes(mime as any)) {
+      valError = "can't upload — not a supported format";
+    }
+
+    const isDuplicateName =
+      existingNames.has(file.name) ||
+      newItems.some((it) => it.name === file.name);
+
+    let previewUrl: string | null = null;
+    if (mime.startsWith('image/') && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+      try {
+        previewUrl = URL.createObjectURL(file);
+      } catch {
+        previewUrl = null;
+      }
+    }
+
+    const uniqueId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2, 9);
+
+    newItems.push({
+      id: `item-${Date.now()}-${uniqueId}`,
+      file,
+      name: file.name,
+      size: file.size,
+      mimeType: mime,
+      mediaType: resolveMediaType(mime),
+      destinationFolderId: folderId,
+      status: 'staged',
+      progressPercent: 0,
+      isDuplicate: isDuplicateName,
+      validationError: valError,
+      retryCount: 0,
+      previewUrl,
+    });
+  }
+
+  return newItems;
+}
+
 export function MediaImportModal({
   subdomain,
   isOpen,
@@ -1342,7 +1404,11 @@ export function MediaImportModal({
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId);
   const [isDestinationDropdownOpen, setIsDestinationDropdownOpen] = useState(false);
-  const [queue, setQueue] = useState<ImportQueueItem[]>([]);
+  const [queue, setQueue] = useState<ImportQueueItem[]>(() =>
+    isOpen && initialFiles && initialFiles.length > 0
+      ? buildImportQueueItems(initialFiles, currentFolderId)
+      : []
+  );
   const [userInitiatedCancel, setUserInitiatedCancel] = useState(false);
   const [isStartingImport, setIsStartingImport] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1362,51 +1428,8 @@ export function MediaImportModal({
     if (!isOpen || initialFiles.length === 0 || step !== 'staging') return;
 
     setQueue((prevQueue) => {
-      const existingNames = new Set(prevQueue.map((item) => `${item.name}-${item.size}`));
-      const newItems: ImportQueueItem[] = [];
-
-      for (const file of initialFiles) {
-        const key = `${file.name}-${file.size}`;
-        if (existingNames.has(key)) continue;
-
-        const mime = resolveMimeType(file);
-        let valError: string | null = null;
-
-        if (file.size === 0) {
-          valError = 'empty file';
-        } else if (file.size > MAX_FILE_SIZE_BYTES) {
-          valError = 'too large — 500 MB max';
-        } else if (!mime || !AllowedMediaMimeTypes.includes(mime as any)) {
-          valError = "can't upload — not a supported format";
-        }
-
-        // Intra-batch duplicate check
-        const isDuplicateName =
-          existingNames.has(file.name) ||
-          newItems.some((it) => it.name === file.name);
-
-        const previewUrl =
-          mime.startsWith('image/') && typeof URL !== 'undefined'
-            ? URL.createObjectURL(file)
-            : null;
-
-        newItems.push({
-          id: `item-${Date.now()}-${crypto.randomUUID()}`,
-          file,
-          name: file.name,
-          size: file.size,
-          mimeType: mime,
-          mediaType: resolveMediaType(mime),
-          destinationFolderId: selectedFolderId,
-          status: 'staged',
-          progressPercent: 0,
-          isDuplicate: isDuplicateName,
-          validationError: valError,
-          retryCount: 0,
-          previewUrl,
-        });
-      }
-
+      const newItems = buildImportQueueItems(initialFiles, selectedFolderId, prevQueue);
+      if (newItems.length === 0) return prevQueue;
       return [...prevQueue, ...newItems];
     });
   }, [isOpen, initialFiles, selectedFolderId, step]);
@@ -1982,36 +2005,10 @@ export function MediaImportModal({
             if (e.target.files) {
               const newFiles = Array.from(e.target.files);
               e.target.value = '';
-              const newItems = newFiles.map((f) => {
-                const mime = resolveMimeType(f);
-                let valErr: string | null = null;
-                if (f.size === 0) valErr = 'empty file';
-                else if (f.size > MAX_FILE_SIZE_BYTES) valErr = 'too large — 500 MB max';
-                else if (!mime || !AllowedMediaMimeTypes.includes(mime as any))
-                  valErr = "can't upload — not a supported format";
-
-                const previewUrl =
-                  mime.startsWith('image/') && typeof URL !== 'undefined'
-                    ? URL.createObjectURL(f)
-                    : null;
-
-                return {
-                  id: `item-${Date.now()}-${crypto.randomUUID()}`,
-                  file: f,
-                  name: f.name,
-                  size: f.size,
-                  mimeType: mime,
-                  mediaType: resolveMediaType(mime),
-                  destinationFolderId: selectedFolderId,
-                  status: 'staged' as const,
-                  progressPercent: 0,
-                  isDuplicate: false,
-                  validationError: valErr,
-                  retryCount: 0,
-                  previewUrl,
-                };
-              });
-              setQueue((prev) => [...prev, ...newItems]);
+              setQueue((prev) => [
+                ...prev,
+                ...buildImportQueueItems(newFiles, selectedFolderId, prev),
+              ]);
             }
           }}
         />
