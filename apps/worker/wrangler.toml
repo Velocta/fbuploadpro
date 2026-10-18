@@ -7,18 +7,4 @@ compatibility_flags = ["nodejs_compat"]
 crons = ["* * * * *", "0 2 * * *"]
 
 [vars]
-DISPATCH_BATCH_SIZE = "250"
 DISPATCH_CONCURRENCY = "25"
-DISPATCH_MAX_BATCHES_PER_TICK = "5"
-
-# High-Throughput 200,000 Posts/Day Queue Architecture (Cloudflare Queues)
-# [[queues.producers]]
-# queue = "fbuploadpro-publish-queue"
-# binding = "PUBLISH_QUEUE"
-
-# [[queues.consumers]]
-# queue = "fbuploadpro-publish-queue"
-# max_batch_size = 100
-# max_batch_timeout = 5
-# max_concurrency = 25
-# max_retries = 3
