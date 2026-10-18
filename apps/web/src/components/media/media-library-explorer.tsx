@@ -700,8 +700,10 @@ function computeNextSelection(
     : [...prev, mediaId];
 }
 
+export type ActiveDropdownKey = 'type' | 'ratio' | 'caption' | 'sort' | null;
+
 function isPointerInsideDropdown(
-  activeDropdown: 'type' | 'ratio' | 'caption' | 'sort' | null,
+  activeDropdown: ActiveDropdownKey,
   target: Node | null,
   refs: Record<'type' | 'ratio' | 'caption' | 'sort', React.RefObject<HTMLDivElement | null>>
 ): boolean {
@@ -934,15 +936,10 @@ interface MediaToolbarProps {
   onSortChange: (sort: SortOptionKey) => void;
   viewMode: MediaViewMode;
   onChangeViewMode: (mode: MediaViewMode) => void;
-  activeDropdown: 'type' | 'ratio' | 'caption' | 'sort' | null;
-  onToggleDropdown: (dropdown: 'type' | 'ratio' | 'caption' | 'sort') => void;
+  activeDropdown: ActiveDropdownKey;
+  onToggleDropdown: (dropdown: NonNullable<ActiveDropdownKey>) => void;
   onCloseDropdown: () => void;
-  dropdownRefs: {
-    type: React.RefObject<HTMLDivElement | null>;
-    ratio: React.RefObject<HTMLDivElement | null>;
-    caption: React.RefObject<HTMLDivElement | null>;
-    sort: React.RefObject<HTMLDivElement | null>;
-  };
+  dropdownRefs: Record<NonNullable<ActiveDropdownKey>, React.RefObject<HTMLDivElement | null>>;
 }
 
 function MediaToolbar({
@@ -1230,6 +1227,231 @@ function MediaToolbar({
   );
 }
 
+interface MediaViewsRailProps {
+  activeSmartView: MediaSmartViewKey | null;
+  currentFolderId: string | null;
+  folders: MediaFolder[];
+  onSelectSmartView: (view: MediaSmartViewKey) => void;
+  onSelectRootLibrary: () => void;
+  onSelectFolder: (folderId: string) => void;
+  onOpenNewFolder: () => void;
+}
+
+function MediaViewsRail({
+  activeSmartView,
+  currentFolderId,
+  folders,
+  onSelectSmartView,
+  onSelectRootLibrary,
+  onSelectFolder,
+  onOpenNewFolder,
+}: Readonly<MediaViewsRailProps>) {
+  const rootFolders = folders.filter((f) => !f.parentId);
+  const isRootSelected = activeSmartView === null && currentFolderId === null;
+
+  return (
+    <aside
+      data-testid="media-views-rail"
+      style={{
+        width: '180px',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SPACING.lg,
+        paddingTop: SPACING.md,
+      }}
+    >
+      {/* Section: VIEWS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span
+          style={{
+            fontSize: '0.6875rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            letterSpacing: '0.04em',
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            marginBottom: '4px',
+          }}
+        >
+          VIEWS
+        </span>
+
+        <button
+          type="button"
+          data-testid="smart-view-everything"
+          onClick={() => onSelectSmartView('everything')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight:
+              activeSmartView === 'everything'
+                ? TYPOGRAPHY.weights.semibold
+                : TYPOGRAPHY.weights.regular,
+            color:
+              activeSmartView === 'everything'
+                ? PALETTE.primary
+                : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Everything
+        </button>
+
+        <button
+          type="button"
+          data-testid="smart-view-needs-caption"
+          onClick={() => onSelectSmartView('needs_caption')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight:
+              activeSmartView === 'needs_caption'
+                ? TYPOGRAPHY.weights.semibold
+                : TYPOGRAPHY.weights.regular,
+            color:
+              activeSmartView === 'needs_caption'
+                ? PALETTE.primary
+                : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Needs caption
+        </button>
+      </div>
+
+      {/* Section: FOLDERS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '4px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              letterSpacing: '0.04em',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+            }}
+          >
+            FOLDERS
+          </span>
+          <button
+            type="button"
+            data-testid="rail-new-folder-btn"
+            onClick={onOpenNewFolder}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0,
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+            }}
+          >
+            + New
+          </button>
+        </div>
+
+        <button
+          type="button"
+          data-testid="rail-root-library"
+          onClick={onSelectRootLibrary}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight: isRootSelected
+              ? TYPOGRAPHY.weights.semibold
+              : TYPOGRAPHY.weights.regular,
+            color: isRootSelected
+              ? PALETTE.primary
+              : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Library
+        </button>
+
+        {rootFolders.map((f) => {
+          const isSelected = activeSmartView === null && currentFolderId === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              data-testid={`rail-folder-${f.id}`}
+              onClick={() => onSelectFolder(f.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.xs,
+                backgroundColor: 'transparent',
+                border: 'none',
+                padding: '4px 0 4px 8px',
+                fontSize: '0.8125rem',
+                fontWeight: isSelected
+                  ? TYPOGRAPHY.weights.semibold
+                  : TYPOGRAPHY.weights.regular,
+                color: isSelected
+                  ? PALETTE.primary
+                  : `var(--text-sub, ${THEME.default.text.secondary})`,
+                cursor: 'pointer',
+                textAlign: 'left',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {f.name}
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function getInitialViewMode(initialMode?: MediaViewMode): MediaViewMode {
+  if (initialMode) return initialMode;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
+    if (stored === 'grid' || stored === 'table') return stored;
+  }
+  return 'grid';
+}
+
+function computeActiveFilterCount(
+  mediaType: MediaTypeFilterKey,
+  ratio: AspectRatioFilterKey,
+  captionStatus: CaptionStatusFilterKey
+): number {
+  return (
+    (mediaType !== 'all' ? 1 : 0) +
+    (ratio !== 'all' ? 1 : 0) +
+    (captionStatus !== 'all' ? 1 : 0)
+  );
+}
+
 export interface MediaLibraryExplorerProps {
   subdomain: string;
   initialFolders?: MediaFolder[];
@@ -1277,14 +1499,7 @@ export function MediaLibraryExplorer({
   const [isLoading, setIsLoading] = useState(!initialMediaItems);
 
   // View mode
-  const [viewMode, setViewMode] = useState<MediaViewMode>(() => {
-    if (initialViewMode) return initialViewMode;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
-      if (stored === 'grid' || stored === 'table') return stored;
-    }
-    return 'grid';
-  });
+  const [viewMode, setViewMode] = useState<MediaViewMode>(() => getInitialViewMode(initialViewMode));
 
   const handleChangeViewMode = (mode: MediaViewMode) => {
     setViewMode(mode);
@@ -1312,7 +1527,7 @@ export function MediaLibraryExplorer({
   const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
 
   // Custom Dropdowns state & container refs (prevents mouse click swallowing)
-  const [activeDropdown, setActiveDropdown] = useState<'type' | 'ratio' | 'caption' | 'sort' | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<ActiveDropdownKey>(null);
   const typeDropdownRef = useRef<HTMLDivElement | null>(null);
   const ratioDropdownRef = useRef<HTMLDivElement | null>(null);
   const captionDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -1640,10 +1855,11 @@ export function MediaLibraryExplorer({
     }
   };
 
-  const activeFilterCount =
-    (mediaTypeFilter !== 'all' ? 1 : 0) +
-    (aspectRatioFilter !== 'all' ? 1 : 0) +
-    (captionStatusFilter !== 'all' ? 1 : 0);
+  const activeFilterCount = computeActiveFilterCount(
+    mediaTypeFilter,
+    aspectRatioFilter,
+    captionStatusFilter
+  );
 
   const handleClearFilters = () => {
     setMediaTypeFilter('all');
@@ -1845,200 +2061,24 @@ export function MediaLibraryExplorer({
         }}
       >
         {/* Navigation Rail */}
-        <aside
-          data-testid="media-views-rail"
-          style={{
-            width: '180px',
-            flexShrink: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: SPACING.lg,
-            paddingTop: SPACING.md,
+        <MediaViewsRail
+          activeSmartView={activeSmartView}
+          currentFolderId={currentFolderId}
+          folders={folders}
+          onSelectSmartView={(view) => {
+            setActiveSmartView(view);
+            setCurrentFolderId(null);
           }}
-        >
-          {/* Section: VIEWS */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                letterSpacing: '0.04em',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                marginBottom: '4px',
-              }}
-            >
-              VIEWS
-            </span>
-
-            <button
-              type="button"
-              data-testid="smart-view-everything"
-              onClick={() => {
-                setActiveSmartView('everything');
-                setCurrentFolderId(null);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: '4px 0',
-                fontSize: '0.8125rem',
-                fontWeight:
-                  activeSmartView === 'everything'
-                    ? TYPOGRAPHY.weights.semibold
-                    : TYPOGRAPHY.weights.regular,
-                color:
-                  activeSmartView === 'everything'
-                    ? PALETTE.primary
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              Everything
-            </button>
-
-            <button
-              type="button"
-              data-testid="smart-view-needs-caption"
-              onClick={() => {
-                setActiveSmartView('needs_caption');
-                setCurrentFolderId(null);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: '4px 0',
-                fontSize: '0.8125rem',
-                fontWeight:
-                  activeSmartView === 'needs_caption'
-                    ? TYPOGRAPHY.weights.semibold
-                    : TYPOGRAPHY.weights.regular,
-                color:
-                  activeSmartView === 'needs_caption'
-                    ? PALETTE.primary
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              Needs caption
-            </button>
-          </div>
-
-          {/* Section: FOLDERS */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '4px',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '0.6875rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  letterSpacing: '0.04em',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                }}
-              >
-                FOLDERS
-              </span>
-              <button
-                type="button"
-                data-testid="rail-new-folder-btn"
-                onClick={() => setIsNewFolderOpen(true)}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  fontSize: '0.6875rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  cursor: 'pointer',
-                }}
-              >
-                + New
-              </button>
-            </div>
-
-            <button
-              type="button"
-              data-testid="rail-root-library"
-              onClick={() => {
-                setActiveSmartView(null);
-                setCurrentFolderId(null);
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: '4px 0',
-                fontSize: '0.8125rem',
-                fontWeight:
-                  activeSmartView === null && currentFolderId === null
-                    ? TYPOGRAPHY.weights.semibold
-                    : TYPOGRAPHY.weights.regular,
-                color:
-                  activeSmartView === null && currentFolderId === null
-                    ? PALETTE.primary
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              Library
-            </button>
-
-            {folders
-              .filter((f) => !f.parentId)
-              .map((f) => {
-                const isSelected = activeSmartView === null && currentFolderId === f.id;
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    data-testid={`rail-folder-${f.id}`}
-                    onClick={() => {
-                      setActiveSmartView(null);
-                      setCurrentFolderId(f.id);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: SPACING.xs,
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      padding: '4px 0 4px 8px',
-                      fontSize: '0.8125rem',
-                      fontWeight: isSelected
-                        ? TYPOGRAPHY.weights.semibold
-                        : TYPOGRAPHY.weights.regular,
-                      color: isSelected
-                        ? PALETTE.primary
-                        : `var(--text-sub, ${THEME.default.text.secondary})`,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {f.name}
-                  </button>
-                );
-              })}
-          </div>
-        </aside>
+          onSelectRootLibrary={() => {
+            setActiveSmartView(null);
+            setCurrentFolderId(null);
+          }}
+          onSelectFolder={(folderId) => {
+            setActiveSmartView(null);
+            setCurrentFolderId(folderId);
+          }}
+          onOpenNewFolder={() => setIsNewFolderOpen(true)}
+        />
 
         {/* Right Canvas */}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
