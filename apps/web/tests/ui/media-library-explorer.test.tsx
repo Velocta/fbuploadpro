@@ -1185,5 +1185,37 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     ).toBe(false);
     expect(row.hasText('Schedule / Add to Queue')).toBe(false);
   });
+
+  it('Spec 068 US4: renders hairline vertical dividers between toolbar groups', () => {
+    const explorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+      />
+    );
+    expect(explorer.hasAttribute('role', 'separator')).toBe(true);
+    expect(explorer.hasAria('orientation', 'vertical')).toBe(true);
+    const separators = explorer.findTags('div').filter(
+      (el) => el.attributes.role === 'separator' && el.attributes['aria-orientation'] === 'vertical'
+    );
+    expect(separators.length).toBe(3);
+  });
+
+  it('Spec 068 US3: renders custom dropdown triggers with labels reflecting initial filters', () => {
+    const explorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialAspectRatioFilter="1:1"
+        initialCaptionStatusFilter="has_caption"
+        initialSortOption="created_at:asc"
+      />
+    );
+    expect(explorer.hasText('1:1 Square')).toBe(true);
+    expect(explorer.hasText('Has caption')).toBe(true);
+    expect(explorer.hasText('Oldest first')).toBe(true);
+  });
 });
 
