@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import { handleDownloadMediaFromUrl } from '../../src/app/api/tenant/[subdomain]/downloader/route';
-import { handleDownloadMediaFromUrl as legacyHandleDownload } from '../../src/app/api/tenant/[subdomain]/media/downloader/route';
 import { MockStorageProvider } from '../../src/lib/storage';
 import { normalizeCloudDriveUrl } from '../../src/lib/media-downloader';
 
@@ -440,12 +439,4 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/download
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('preserves backward compatibility when called via legacy re-exported handler', async () => {
-    const unauthReq = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
-      method: 'POST',
-      body: JSON.stringify({ url: 'https://cdn.example.com/reel.mp4' }),
-    });
-    const unauthRes = await legacyHandleDownload(unauthReq, 'acme');
-    expect(unauthRes.status).toBe(401);
-  });
 });

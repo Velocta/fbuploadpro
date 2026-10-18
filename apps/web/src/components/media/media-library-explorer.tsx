@@ -2210,21 +2210,29 @@ export function MediaLibraryExplorer({
     setIsMoving(true);
     try {
       if (payload.mediaId) {
-        await fetch(`/api/tenant/${subdomain}/media/${payload.mediaId}`, {
+        const res = await fetch(`/api/tenant/${subdomain}/media/${payload.mediaId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ folderId: targetFolderId }),
         });
+        if (!res.ok) {
+          showToast('Could not move item. Please try again.');
+          return;
+        }
         showToast('Item moved');
         await refreshLibraryData();
         return;
       }
       if (payload.folderId && payload.folderId !== targetFolderId) {
-        await fetch(`/api/tenant/${subdomain}/media/folders/${payload.folderId}`, {
+        const res = await fetch(`/api/tenant/${subdomain}/media/folders/${payload.folderId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parentId: targetFolderId }),
         });
+        if (!res.ok) {
+          showToast('Could not move folder. Please try again.');
+          return;
+        }
         showToast('Folder moved');
         await refreshLibraryData();
       }
@@ -2253,7 +2261,11 @@ export function MediaLibraryExplorer({
         });
       });
 
-      await Promise.all(updates);
+      const results = await Promise.all(updates);
+      if (results.some((res) => !res.ok)) {
+        showToast('Some captions could not be updated. Please try again.');
+        return;
+      }
       showToast(`Caption updated on ${selectedIds.length} files`);
       setSelectedIds([]);
       await refreshLibraryData();
@@ -2270,12 +2282,16 @@ export function MediaLibraryExplorer({
 
     setIsBatchDeleting(true);
     try {
-      await fetch(`/api/tenant/${subdomain}/media/batch`, {
+      const res = await fetch(`/api/tenant/${subdomain}/media/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'delete', mediaIds: selectedIds }),
       });
 
+      if (!res.ok) {
+        showToast('Could not delete files. Please try again.');
+        return;
+      }
       showToast(`Deleted ${selectedIds.length} files`);
       setSelectedIds([]);
       await refreshLibraryData();
@@ -2288,12 +2304,16 @@ export function MediaLibraryExplorer({
     if (selectedIds.length === 0 || isMoving) return;
     setIsMoving(true);
     try {
-      await fetch(`/api/tenant/${subdomain}/media/batch`, {
+      const res = await fetch(`/api/tenant/${subdomain}/media/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'move', mediaIds: selectedIds, folderId: destinationId }),
       });
 
+      if (!res.ok) {
+        showToast('Could not move files. Please try again.');
+        return;
+      }
       showToast(`Moved ${selectedIds.length} files`);
       setSelectedIds([]);
       setMoveTarget(null);
@@ -2319,9 +2339,13 @@ export function MediaLibraryExplorer({
     if (deletingAssetId === mediaId) return;
     setDeletingAssetId(mediaId);
     try {
-      await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
+      const res = await fetch(`/api/tenant/${subdomain}/media/${mediaId}`, {
         method: 'DELETE',
       });
+      if (!res.ok) {
+        showToast('Could not delete asset. Please try again.');
+        return;
+      }
       showToast('Asset deleted');
       setMediaItems((prev) => prev.filter((m) => m.id !== mediaId));
     } finally {

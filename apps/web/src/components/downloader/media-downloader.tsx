@@ -27,7 +27,7 @@ import {
   COMPONENT_STYLES,
 } from '@/lib/theme';
 import { formatFolderAncestryPath } from '@/components/media/media-library-explorer';
-import { deriveDefaultCaption, formatBytes } from '@/components/media/upload-queue-banner';
+import { deriveDefaultCaption, formatBytes } from '@/lib/upload-queue-helpers';
 
 export const DEFAULT_DOWNLOADS_FOLDER_NAME = 'Downloads';
 
@@ -467,7 +467,17 @@ async function pollDownloadJobCompletion(params: {
       return iteration.outcome;
     }
   }
-  return { saved: [], failed: null };
+  // Poll timeout: surface as a failed entry instead of silently dropping the URL
+  const { jobId, url, folderId } = params;
+  return {
+    saved: [],
+    failed: {
+      id: `timeout-${jobId}`,
+      url,
+      folderId,
+      errorMessage: 'Download timed out while waiting for the file. Please try again.',
+    },
+  };
 }
 
 async function processSingleBatchUrl(params: {
@@ -858,12 +868,10 @@ function DownloaderSavedItemRow({
   entry,
   folders,
   onOpenInFolder,
-  onSchedule,
 }: Readonly<{
   entry: DownloaderSavedEntry;
   folders: MediaFolder[];
   onOpenInFolder: (folderId: string | null) => void;
-  onSchedule?: (entry: DownloaderSavedEntry) => void;
 }>) {
   const { item, platform } = entry;
   const resolvedCaption =
@@ -1002,23 +1010,8 @@ function DownloaderSavedItemRow({
         </div>
       </div>
 
-      {/* 1-Click Schedule / Add to Queue and Open in Folder Actions */}
+      {/* Open in Folder Action */}
       <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
-        {onSchedule && (
-          <button
-            type="button"
-            data-testid={`downloader-schedule-btn-${item.id}`}
-            onClick={() => onSchedule(entry)}
-            style={{
-              ...COMPONENT_STYLES.primaryButton,
-              height: '34px',
-              fontSize: '0.8125rem',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Schedule / Add to Queue
-          </button>
-        )}
         <button
           type="button"
           data-testid={`downloader-open-folder-${item.id}`}
@@ -1402,10 +1395,6 @@ export function MediaDownloader({
 
   const handleOpenInFolder = (folderId: string | null) => {
     router.push(buildMediaFolderHref(subdomain, folderId));
-  };
-
-  const handleScheduleEntry = (entry: DownloaderSavedEntry) => {
-    router.push(`/tenant/${subdomain}/pages?mediaId=${encodeURIComponent(entry.item.id)}`);
   };
 
   const progressPercent =
@@ -2019,7 +2008,6 @@ export function MediaDownloader({
                 entry={entry}
                 folders={folders}
                 onOpenInFolder={handleOpenInFolder}
-                onSchedule={handleScheduleEntry}
               />
             ))}
           </div>
