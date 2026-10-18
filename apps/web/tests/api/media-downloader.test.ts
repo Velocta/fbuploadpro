@@ -2,13 +2,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
-import { handleDownloadMediaFromUrl } from '../../src/app/api/tenant/[subdomain]/media/downloader/route';
+import { handleDownloadMediaFromUrl } from '../../src/app/api/tenant/[subdomain]/downloader/route';
+import { handleDownloadMediaFromUrl as legacyHandleDownload } from '../../src/app/api/tenant/[subdomain]/media/downloader/route';
 import { MockStorageProvider } from '../../src/lib/storage';
 import { normalizeCloudDriveUrl } from '../../src/lib/media-downloader';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
-describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/downloader)', () => {
+describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/downloader)', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   const downloadsFolderId = '33333333-3333-4333-a333-333333333333';
   let validSessionCookie: string;
@@ -100,7 +101,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
   }
 
   it('rejects unauthenticated requests with 401 and cross-tenant requests with 403', async () => {
-    const unauthReq = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const unauthReq = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       body: JSON.stringify({ url: 'https://cdn.example.com/reel.mp4' }),
     });
@@ -108,7 +109,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
     expect(unauthRes.status).toBe(401);
 
     const crossTenantReq = new NextRequest(
-      'http://localhost:3000/api/tenant/other-workspace/media/downloader',
+      'http://localhost:3000/api/tenant/other-workspace/downloader',
       {
         method: 'POST',
         headers: { cookie: validSessionCookie },
@@ -133,7 +134,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
       })
     );
 
-    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
       body: JSON.stringify({
@@ -207,7 +208,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
       return new Response('Not Found', { status: 404 });
     });
 
-    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
       body: JSON.stringify({
@@ -279,7 +280,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
       return new Response('Not Found', { status: 404 });
     });
 
-    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
       body: JSON.stringify({
@@ -329,7 +330,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
     const mockFetch = vi.fn();
 
     const privateIpReq = new NextRequest(
-      'http://localhost:3000/api/tenant/acme/media/downloader',
+      'http://localhost:3000/api/tenant/acme/downloader',
       {
         method: 'POST',
         headers: { cookie: validSessionCookie },
@@ -359,7 +360,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
         { status: 200, headers: { 'content-type': 'text/html' } }
       )
     );
-    const ssrfHopReq = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const ssrfHopReq = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
       body: JSON.stringify({
@@ -391,7 +392,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
       })
     );
 
-    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
       body: JSON.stringify({
@@ -417,7 +418,7 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
     const { db } = createMockDb({ validFolderIds: [downloadsFolderId] });
     const mockFetch = vi.fn();
 
-    const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+    const req = new NextRequest('http://localhost:3000/api/tenant/acme/downloader', {
       method: 'POST',
       headers: { cookie: validSessionCookie },
       body: JSON.stringify({
@@ -437,5 +438,14 @@ describe('Cloud Media Downloader Endpoint (POST /api/tenant/[subdomain]/media/do
     const errBody = await res.json();
     expect(errBody.error).toBe('FOLDER_NOT_FOUND');
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves backward compatibility when called via legacy re-exported handler', async () => {
+    const unauthReq = new NextRequest('http://localhost:3000/api/tenant/acme/media/downloader', {
+      method: 'POST',
+      body: JSON.stringify({ url: 'https://cdn.example.com/reel.mp4' }),
+    });
+    const unauthRes = await legacyHandleDownload(unauthReq, 'acme');
+    expect(unauthRes.status).toBe(401);
   });
 });
