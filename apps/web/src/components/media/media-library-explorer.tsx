@@ -11,7 +11,7 @@ import { BatchSetCaptionModal } from './batch-set-caption-modal';
 import { MediaImportModal } from './media-import-modal';
 import { NewFolderModal } from './new-folder-modal';
 import { LeavePageGuardDialog } from './leave-page-guard-dialog';
-import { type BatchCaptionMode, filterAndSortMediaItems } from './media-types';
+import { type BatchCaptionMode } from './media-types';
 
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
 
@@ -148,6 +148,55 @@ export function computeRangeSelection(
     : [...currentSelection, targetId];
 }
 
+function matchesMediaFilters(
+  item: MediaItemResponse,
+  currentFolderId: string | null,
+  mediaTypeFilter: 'all' | 'video' | 'image',
+  aspectRatioFilter: AspectRatioFilterKey,
+  captionStatusFilter: CaptionStatusFilterKey,
+  trimmedSearch: string
+): boolean {
+  if (trimmedSearch.length === 0 && (item.folderId ?? null) !== currentFolderId) {
+    return false;
+  }
+  if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
+    return false;
+  }
+  if (aspectRatioFilter !== 'all' && item.aspectRatio !== aspectRatioFilter) {
+    return false;
+  }
+  if (captionStatusFilter === 'has_caption' && (!item.captionText || item.captionText.trim().length === 0)) {
+    return false;
+  }
+  if (captionStatusFilter === 'empty_caption' && item.captionText && item.captionText.trim().length > 0) {
+    return false;
+  }
+  if (trimmedSearch.length > 0) {
+    const matchName = item.name.toLowerCase().includes(trimmedSearch);
+    const matchCaption = (item.captionText || '').toLowerCase().includes(trimmedSearch);
+    if (!matchName && !matchCaption) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sortMediaItems(a: MediaItemResponse, b: MediaItemResponse, sortOption: SortOptionKey): number {
+  if (sortOption === 'created_at:desc') {
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  }
+  if (sortOption === 'created_at:asc') {
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  }
+  if (sortOption === 'name:asc') {
+    return a.name.localeCompare(b.name);
+  }
+  if (sortOption === 'file_size:desc') {
+    return b.fileSize - a.fileSize;
+  }
+  return 0;
+}
+
 export function filterAndSortMediaItems(
   items: MediaItemResponse[],
   options: {
@@ -169,50 +218,18 @@ export function filterAndSortMediaItems(
   } = options;
   const trimmedSearch = searchQuery.trim().toLowerCase();
 
-  const filtered = items.filter((item) => {
-    if (trimmedSearch.length === 0 && (item.folderId ?? null) !== currentFolderId) {
-      return false;
-    }
-    if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
-      return false;
-    }
-    if (aspectRatioFilter !== 'all' && item.aspectRatio !== aspectRatioFilter) {
-      return false;
-    }
-    if (captionStatusFilter === 'has_caption') {
-      if (!item.captionText || item.captionText.trim().length === 0) {
-        return false;
-      }
-    } else if (captionStatusFilter === 'empty_caption') {
-      if (item.captionText && item.captionText.trim().length > 0) {
-        return false;
-      }
-    }
-    if (trimmedSearch.length > 0) {
-      const matchName = item.name.toLowerCase().includes(trimmedSearch);
-      const matchCaption = (item.captionText || '').toLowerCase().includes(trimmedSearch);
-      if (!matchName && !matchCaption) {
-        return false;
-      }
-    }
-    return true;
-  });
-
-  return filtered.sort((a, b) => {
-    if (sortOption === 'created_at:desc') {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }
-    if (sortOption === 'created_at:asc') {
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    }
-    if (sortOption === 'name:asc') {
-      return a.name.localeCompare(b.name);
-    }
-    if (sortOption === 'file_size:desc') {
-      return b.fileSize - a.fileSize;
-    }
-    return 0;
-  });
+  return items
+    .filter((item) =>
+      matchesMediaFilters(
+        item,
+        currentFolderId,
+        mediaTypeFilter,
+        aspectRatioFilter,
+        captionStatusFilter,
+        trimmedSearch
+      )
+    )
+    .sort((a, b) => sortMediaItems(a, b, sortOption));
 }
 
 export function resolveTargetFolderIdForEntry(
@@ -533,7 +550,7 @@ export function MediaLibraryExplorer({
   const displayedMediaItems = useMemo(() => {
     return filterAndSortMediaItems(mediaItems, {
       currentFolderId,
-      debouncedSearch,
+      searchQuery: debouncedSearch,
       mediaTypeFilter,
       aspectRatioFilter,
       captionStatusFilter,
