@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import { DesktopTitleBar } from '@/components/desktop';
 import { WhatsAppSupportButton } from '@/components/support';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata: Metadata = {
   title: 'FBUploadPro',
@@ -50,6 +51,7 @@ export default function RootLayout({
         <DesktopTitleBar />
         <main>{children}</main>
         <WhatsAppSupportButton />
+        <Analytics />
       </body>
     </html>
   );
