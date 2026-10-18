@@ -26,8 +26,8 @@ import {
   TYPOGRAPHY,
   COMPONENT_STYLES,
 } from '@/lib/theme';
-import { formatFolderAncestryPath } from './media-library-explorer';
-import { deriveDefaultCaption, formatBytes } from './upload-queue-banner';
+import { formatFolderAncestryPath } from '@/components/media/media-library-explorer';
+import { deriveDefaultCaption, formatBytes } from '@/components/media/upload-queue-banner';
 
 export const DEFAULT_DOWNLOADS_FOLDER_NAME = 'Downloads';
 

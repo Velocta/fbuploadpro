@@ -13,11 +13,11 @@ import {
 } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
-import { getStorageService } from '../../../../../../lib/storage';
+import { getStorageService } from '@/lib/storage';
 import {
   MediaDownloaderError,
   resolveAndUploadMediaFromUrl,
-} from '../../../../../../lib/media-downloader';
+} from '@/lib/media-downloader';
 
 type NullableNumeric = string | number | null;
 type NumericString = string | number;
