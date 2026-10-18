@@ -25,6 +25,20 @@ AI-generated code frequently suffers from "slop"—unnecessary bloat, speculativ
 - **Complete Implementations Only**: Never commit placeholder comments (`// TODO: implement later`, `# pass`, `throw NotImplementedError()`), mock fallbacks, or dummy functions in production paths.
 - **Fail-Fast over Fake Success**: Never return fake success responses or dummy data to mask incomplete logic. Every code path must be fully implemented and verified.
 
+#### Structural Scaffolding (Not Stubs)
+
+`apps/desktop` (Tauri shell) and `apps/extension` (browser companion) are
+**intentional structural scaffolding** for surfaces planned for future launch.
+They are not stub violations and must not be removed by cleanup efforts.
+
+- **Scaffolding** = a declared future surface with structural presence
+  (workspace layout, config, typed contracts). Expected to be incomplete.
+- **Stub** = an incomplete implementation inside a live production path
+  (`// TODO`, `throw NotImplementedError()`, mock fallbacks). Never allowed.
+
+Only the web app (`apps/web`) is launched. Do not flag scaffolding
+directories in audits, and do not propose their removal.
+
 ### C. Concise, High-Signal Comments
 - **Self-Documenting Code**: Code must be readable without narration. Do not state the obvious (`// increment counter by 1`, `# return the response`, `// initialize variable`).
 - **Explain "Why", Not "What"**: Comments are reserved exclusively for non-obvious business logic, domain nuances, algorithmic complexity, or external API quirks.
