@@ -60,15 +60,34 @@ let mockSupabaseClientForTesting: SupabaseClient | null = null;
 let mockSupabaseAnonClientForTesting: SupabaseClient | null = null;
 let mockSupabaseServiceClientForTesting: SupabaseClient | null = null;
 
+/**
+ * Single gate for every test double in this module. Mocks may only take
+ * effect outside production — even if a setter is somehow called in
+ * production, the mock is never honored by the getters.
+ */
+function isTestDoubleAllowed(): boolean {
+  return process.env.NODE_ENV !== 'production';
+}
+
+/** Throws if test doubles are attempted in production. */
+function assertTestDoubleAllowed(caller: string): void {
+  if (!isTestDoubleAllowed()) {
+    throw new Error(`${caller} is test-only and must not be called in production.`);
+  }
+}
+
 export function _setMockSupabaseClient(client: SupabaseClient | null): void {
+  assertTestDoubleAllowed('_setMockSupabaseClient');
   mockSupabaseClientForTesting = client;
 }
 
 export function _setMockSupabaseAnonClient(client: SupabaseClient | null): void {
+  assertTestDoubleAllowed('_setMockSupabaseAnonClient');
   mockSupabaseAnonClientForTesting = client;
 }
 
 export function _setMockSupabaseServiceClient(client: SupabaseClient | null): void {
+  assertTestDoubleAllowed('_setMockSupabaseServiceClient');
   mockSupabaseServiceClientForTesting = client;
 }
 
@@ -77,10 +96,10 @@ export function _setMockSupabaseServiceClient(client: SupabaseClient | null): vo
  * Intended for client-facing operations and GoTrue user authentication flows running under user RLS.
  */
 export function getSupabaseAnonClient(): SupabaseClient | null {
-  if (mockSupabaseAnonClientForTesting) {
+  if (isTestDoubleAllowed() && mockSupabaseAnonClientForTesting) {
     return mockSupabaseAnonClientForTesting;
   }
-  if (mockSupabaseClientForTesting) {
+  if (isTestDoubleAllowed() && mockSupabaseClientForTesting) {
     return mockSupabaseClientForTesting;
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -109,24 +128,14 @@ export function getSupabaseAnonClient(): SupabaseClient | null {
  * Exclusively for server-side administrative workflows and system jobs.
  */
 export function getSupabaseServiceClient(): SupabaseClient | null {
-  if (mockSupabaseServiceClientForTesting) {
+  if (isTestDoubleAllowed() && mockSupabaseServiceClientForTesting) {
     return mockSupabaseServiceClientForTesting;
   }
-  if (mockSupabaseClientForTesting) {
+  if (isTestDoubleAllowed() && mockSupabaseClientForTesting) {
     return mockSupabaseClientForTesting;
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  // Fail closed in production: never silently downgrade the service-role
-  // client to the anon key. Callers of this function believe they hold an
-  // RLS-bypassing client; a quiet fallback would violate that contract.
-  if (process.env.NODE_ENV === 'production' && !serviceKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is strictly required in production.');
-  }
-
-  // Non-production convenience fallback only. Production returns above.
-  const key = serviceKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (url && key && !url.includes('placeholder') && !key.includes('placeholder')) {
     try {
@@ -1461,6 +1470,7 @@ export function _resetAuthStores(): void {
 }
 
 export async function _seedTestUser(user: AuthUser, password?: string): Promise<void> {
+  assertTestDoubleAllowed('_seedTestUser');
   let canonical: string;
   try {
     canonical = canonicalizeGmailAddress(user.email);

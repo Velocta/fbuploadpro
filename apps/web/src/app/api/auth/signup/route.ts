@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 signup OTP requests per 60 seconds)
-    const ipLimit = checkRateLimit(`signup:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`signup:ip:${clientIp}`, 5, 60 * 1000);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const canonicalEmail = parseResult.data.email;
 
     // 2. Email identifier rate limiting (max 3 requests per 60 seconds per email)
-    const emailLimit = checkRateLimit(`signup:email:${canonicalEmail}`, 3, 60 * 1000);
+    const emailLimit = await checkRateLimit(`signup:email:${canonicalEmail}`, 3, 60 * 1000);
     if (!emailLimit.allowed) {
       return NextResponse.json(
         {

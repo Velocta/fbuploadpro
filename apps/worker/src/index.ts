@@ -31,6 +31,8 @@ export interface Env {
   };
   MEDIA_BUCKET?: any;
   R2_PUBLIC_URL?: string;
+  /** Comma-separated extra origins allowed by CORS (see getAllowedOrigin). */
+  CORS_ALLOWED_ORIGINS?: string;
 }
 
 export * from './fb-client.js';
@@ -483,26 +485,69 @@ async function handleMediaDownloadRoutes(
   );
 }
 
+/**
+ * Returns the request origin if it is allowed to call this worker, else null.
+ * The worker serves the FBUploadPro web app, so only its domains (apex,
+ * www, *.fbuploadpro.com tenant subdomains, app.vinsmokemedia.online) plus
+ * localhost in non-production are accepted. Extra origins can be added via
+ * the CORS_ALLOWED_ORIGINS env var (comma-separated). Never '*': these
+ * endpoints authenticate via Bearer tokens.
+ */
+function getAllowedOrigin(request: Request, env: Env): string | null {
+  const origin = request.headers.get('Origin');
+  if (!origin) return null;
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const extra = (env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const allowedHosts = new Set([
+    'fbuploadpro.com',
+    'www.fbuploadpro.com',
+    'app.vinsmokemedia.online',
+    ...extra,
+  ]);
+  const isTenantSubdomain =
+    hostname.endsWith('.fbuploadpro.com') || hostname.endsWith('.vinsmokemedia.online');
+  const isLocalhost =
+    env.ENVIRONMENT !== 'production' &&
+    (hostname === 'localhost' || hostname === '127.0.0.1');
+  if (allowedHosts.has(hostname) || isTenantSubdomain || isLocalhost) {
+    return origin;
+  }
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const allowedOrigin = getAllowedOrigin(request, env);
 
     // 1. CORS Preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        },
-      });
+      const preflightHeaders: Record<string, string> = {
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      };
+      if (allowedOrigin) {
+        preflightHeaders['Access-Control-Allow-Origin'] = allowedOrigin;
+        preflightHeaders['Vary'] = 'Origin';
+      }
+      return new Response(null, { status: 204, headers: preflightHeaders });
     }
 
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+    const corsHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    if (allowedOrigin) {
+      corsHeaders['Access-Control-Allow-Origin'] = allowedOrigin;
+      corsHeaders['Vary'] = 'Origin';
+    }
 
     // 2. Healthcheck
     if (request.method === 'GET' && url.pathname === '/health') {
