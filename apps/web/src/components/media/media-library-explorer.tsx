@@ -739,6 +739,11 @@ function useUploadNavigationGuard(
       }
     };
 
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => document.removeEventListener('click', handleDocumentClick, true);
+  }, [activeUploadsCount, onInterceptNavigation]);
+}
+
 const TYPE_DROPDOWN_OPTIONS = [
   { key: 'all', label: 'All' },
   { key: 'video', label: 'Videos' },
