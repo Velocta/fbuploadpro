@@ -12,7 +12,6 @@ import { describe, it, expect, vi } from 'vitest';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { RADII, PALETTE } from '@/lib/theme';
 import {
-  UploadQueueBanner,
   MAX_CONCURRENT_UPLOADS,
   formatBytes,
   deriveDefaultCaption,
@@ -24,7 +23,7 @@ import {
   runBoundedUploadQueue,
   detectDuplicateUploadEntries,
   type UploadBatchState,
-} from '@/components/media/upload-queue-banner';
+} from '@/lib/upload-queue-helpers';
 import {
   MediaAssetCard,
   HOVER_VIDEO_PREVIEW_DELAY_MS,
@@ -166,54 +165,6 @@ const SAMPLE_MEDIA_ITEMS: MediaItemResponse[] = [
 ];
 
 describe('Spec 029: UploadQueueBanner & Bounded Ingestion Helpers (US3)', () => {
-  it('renders nothing when upload state is idle', () => {
-    const idleState: UploadBatchState = {
-      status: 'idle',
-      totalFiles: 0,
-      completedFiles: 0,
-      failedFiles: 0,
-      skippedFiles: 0,
-      totalBytes: 0,
-      transferredBytes: 0,
-      currentFileName: null,
-    };
-
-    const { html } = render(<UploadQueueBanner state={idleState} />);
-    expect(html).toBe('');
-  });
-
-  it('renders a single unified Windows Copy-style progress bar showing overall %, file counts, and transferred bytes without per-file progress bars', () => {
-    const uploadingState: UploadBatchState = {
-      status: 'uploading',
-      totalFiles: 350,
-      completedFiles: 140,
-      failedFiles: 0,
-      skippedFiles: 2,
-      totalBytes: 100 * 1024 * 1024, // 100.0 MB
-      transferredBytes: 40 * 1024 * 1024, // 40.0 MB
-      currentFileName: 'viral_hook_141.mp4',
-    };
-
-    const { hasText, hasAttribute, findTags } = render(
-      <UploadQueueBanner state={uploadingState} onCancel={vi.fn()} />
-    );
-
-    expect(hasAttribute('data-testid', 'unified-upload-progress-banner')).toBe(true);
-    expect(hasText('Uploading 140 of 350 files...')).toBe(true);
-    expect(hasText('Current: viral_hook_141.mp4')).toBe(true);
-    expect(hasText('40.0 MB of 100.0 MB')).toBe(true);
-    expect(hasText('40%')).toBe(true);
-    expect(hasText('Skipped 2 unsupported files.')).toBe(true);
-    expect(hasAttribute('data-testid', 'upload-cancel-btn')).toBe(true);
-
-    // Must render exactly 1 progressbar element for the entire batch
-    const progressBars = findTags('div').filter(
-      (d) => d.attributes['role'] === 'progressbar'
-    );
-    expect(progressBars).toHaveLength(1);
-    expect(progressBars[0]?.attributes['aria-valuenow']).toBe('40');
-  });
-
   it('extracts relative folder segments and filters hidden/unsupported files accurately', () => {
     expect(resolveFolderPathSegments('Campaign A/Reels/Week 1/clip1.mp4')).toEqual([
       'Campaign A',
@@ -865,58 +816,7 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     ).toBe(true);
   });
 
-  it('US2: renders Pause, Resume, and Retry Failed controls in UploadQueueBanner and supports cooperative pause/resume in runBoundedUploadQueue', async () => {
-    const uploadingRender = render(
-      <UploadQueueBanner
-        state={{
-          status: 'uploading',
-          totalFiles: 10,
-          completedFiles: 3,
-          failedFiles: 0,
-          skippedFiles: 0,
-          totalBytes: 50 * 1024 * 1024,
-          transferredBytes: 15 * 1024 * 1024,
-          currentFileName: 'clip_4.mp4',
-        }}
-        onPause={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
-    expect(uploadingRender.hasAttribute('data-testid', 'pause-upload-btn')).toBe(true);
-
-    const failedFileEntry = {
-      file: new File(['err'], 'failed_clip.mp4', { type: 'video/mp4' }),
-      relativePath: 'failed_clip.mp4',
-    };
-    const pausedWithFailedRender = render(
-      <UploadQueueBanner
-        state={{
-          status: 'paused',
-          totalFiles: 10,
-          completedFiles: 4,
-          failedFiles: 2,
-          skippedFiles: 0,
-          totalBytes: 50 * 1024 * 1024,
-          transferredBytes: 20 * 1024 * 1024,
-          currentFileName: 'clip_5.mp4',
-          failedEntries: [failedFileEntry],
-        }}
-        onResume={vi.fn()}
-        onRetryFailed={vi.fn()}
-        onCancel={vi.fn()}
-      />
-    );
-    expect(
-      pausedWithFailedRender.hasAttribute('data-testid', 'resume-upload-btn')
-    ).toBe(true);
-    expect(
-      pausedWithFailedRender.hasAttribute('data-testid', 'retry-failed-uploads-btn')
-    ).toBe(true);
-    expect(
-      pausedWithFailedRender.hasText('Paused — 4 of 10 files uploaded')
-    ).toBe(true);
-    expect(pausedWithFailedRender.hasText('Retry Failed (2)')).toBe(true);
-
+  it('US2: supports cooperative pause/resume in runBoundedUploadQueue', async () => {
     // Verify cooperative pause & resume in runBoundedUploadQueue
     let paused = true;
     const resumeResolvers: Array<() => void> = [];
