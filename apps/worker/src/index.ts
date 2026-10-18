@@ -2,12 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { FacebookPublishClient, type IFacebookPublishClient } from './fb-client.js';
 import {
   runDispatchCycle,
-  claimDueItems,
-  dispatchItem,
   type DispatcherDbClient,
 } from './dispatcher.js';
-import { settleOutcome } from './settlement.js';
-import type { ClaimedQueueItem } from '@fbuploadpro/contracts';
 
 export interface Env {
   ENVIRONMENT?: string;
@@ -16,6 +12,8 @@ export interface Env {
    * Never set in production. Never derived from request input.
    */
   __TEST_DB__?: unknown;
+  POSTHOG_KEY?: string;
+  POSTHOG_HOST?: string;
   TOKEN_ENCRYPTION_KEY?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
   MASTER_ENCRYPTION_KEY?: string;
@@ -26,11 +24,6 @@ export interface Env {
   DISPATCH_BATCH_SIZE?: string;
   DISPATCH_MAX_BATCHES_PER_TICK?: string;
   DISPATCH_CONCURRENCY?: string;
-  POSTHOG_KEY?: string;
-  POSTHOG_HOST?: string;
-  PUBLISH_QUEUE?: {
-    sendBatch(messages: Array<{ body: ClaimedQueueItem }>): Promise<void>;
-  };
   MEDIA_BUCKET?: any;
   R2_PUBLIC_URL?: string;
   /** Comma-separated extra origins allowed by CORS (see getAllowedOrigin). */
@@ -47,24 +40,13 @@ import {
   detectSourcePlatform,
 } from '@fbuploadpro/contracts';
 import { executeDownloadJob } from './services/downloader-engine.js';
-import { captureWorkerError } from './analytics';
+import { captureWorkerError } from './analytics.js';
 
 
 export interface ScheduledOptions {
   db?: DispatcherDbClient;
   fbClient?: IFacebookPublishClient;
   limit?: number;
-}
-
-export interface QueueMessage {
-  body: ClaimedQueueItem;
-  ack(): void;
-  retry(): void;
-}
-
-export interface QueueBatch {
-  messages: QueueMessage[];
-  queue: string;
 }
 
 function initWorkerDb(env: Env, optionsDb?: any): any {
@@ -119,77 +101,6 @@ export async function failStuckDownloadJobs(db: any, env?: Env): Promise<number>
   return 0;
 }
 
-async function revertUnsentQueueItems(db: any, unsentIds: string[]): Promise<void> {
-  if (unsentIds.length === 0) return;
-  try {
-    if (typeof db.from === 'function') {
-      await db.from('queue_items').update({ status: 'queued', updated_at: new Date().toISOString() }).in('id', unsentIds);
-    } else if (typeof db.query === 'function') {
-      await db.query(`UPDATE queue_items SET status = 'queued', updated_at = now() WHERE id = ANY($1)`, [unsentIds]);
-    }
-  } catch (revertErr) {
-    console.error('[fanOutClaimedBatches] Failed to revert unsent items to queued:', revertErr);
-  }
-}
-
-async function sendClaimedSlice(
-  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
-  db: any,
-  slice: any[]
-): Promise<void> {
-  try {
-    await queue.sendBatch(slice.map((body) => ({ body })));
-  } catch (sendErr) {
-    console.error('[fanOutClaimedBatches] Failed to send batch to queue; reverting items to queued:', sendErr);
-    const unsentIds = slice.map((item) => item.id);
-    await revertUnsentQueueItems(db, unsentIds);
-  }
-}
-
-async function processSingleClaimedBatch(
-  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
-  db: any,
-  batchSize: number
-): Promise<boolean> {
-  const CHUNK_SIZE = 100;
-  const claimed = await claimDueItems(db, batchSize);
-  if (claimed.length === 0) {
-    return false;
-  }
-
-  const slices: any[][] = [];
-  for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
-    slices.push(claimed.slice(i, i + CHUNK_SIZE));
-  }
-  await Promise.all(slices.map((slice) => sendClaimedSlice(queue, db, slice)));
-  return true;
-}
-
-async function fanOutBatchesSequentially(
-  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
-  db: any,
-  remainingBatches: number,
-  batchSize: number
-): Promise<void> {
-  if (remainingBatches <= 0) {
-    return;
-  }
-  const hasMore = await processSingleClaimedBatch(queue, db, batchSize);
-  if (!hasMore) {
-    return;
-  }
-  return fanOutBatchesSequentially(queue, db, remainingBatches - 1, batchSize);
-}
-
-async function fanOutClaimedBatches(
-  queue: { sendBatch: (batch: Array<{ body: any }>) => Promise<unknown> },
-  db: any,
-  maxBatches: number,
-  batchSize: number
-): Promise<void> {
-  await fanOutBatchesSequentially(queue, db, maxBatches, batchSize);
-}
-
 export async function handleScheduled(
   controller: ScheduledController,
   env: Env,
@@ -198,7 +109,6 @@ export async function handleScheduled(
 ): Promise<void> {
   const masterKey = env.TOKEN_ENCRYPTION_KEY || env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
   if (!masterKey) {
-    captureWorkerError(env, new Error('TOKEN_ENCRYPTION_KEY not configured'), { site: 'handleScheduled', kind: 'missing_key' }, _ctx?.waitUntil?.bind(_ctx));
     console.warn('[Scheduled] TOKEN_ENCRYPTION_KEY is not configured; skipping cycle');
     return;
   }
@@ -221,65 +131,19 @@ export async function handleScheduled(
     // 1b. Fail download jobs stalled for > 15 minutes
     await failStuckDownloadJobs(db, env);
 
-    // 2. High-Throughput Producer vs Direct Runner
-    if (env.PUBLISH_QUEUE && typeof env.PUBLISH_QUEUE.sendBatch === 'function') {
-      const maxBatches = Number(env.DISPATCH_MAX_BATCHES_PER_TICK || 5);
-      const batchSize = Number(env.DISPATCH_BATCH_SIZE || 500);
-      await fanOutClaimedBatches(env.PUBLISH_QUEUE, db, maxBatches, batchSize);
-    } else {
-      // Direct execution for tests and local development
-      const concurrency = Number(env.DISPATCH_CONCURRENCY || 25);
-      await runDispatchCycle({
-        db,
-        fbClient,
-        masterKey,
-        limit: options?.limit ?? 10,
-        concurrency,
-      });
-    }
+    // 2. Direct dispatch (Cloudflare Queues were never provisioned; direct
+    //    execution is the design)
+    const concurrency = Number(env.DISPATCH_CONCURRENCY || 25);
+    await runDispatchCycle({
+      db,
+      fbClient,
+      masterKey,
+      limit: options?.limit ?? 10,
+      concurrency,
+    });
   } finally {
     // Stateless cleanup
   }
-}
-
-export async function handleQueueBatch(
-  batch: QueueBatch,
-  env: Env,
-  _ctx?: ExecutionContext
-): Promise<void> {
-  const masterKey = env.TOKEN_ENCRYPTION_KEY || env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
-  if (!masterKey) {
-    console.error('[QueueConsumer] TOKEN_ENCRYPTION_KEY is missing');
-    return;
-  }
-
-  const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseKey) {
-    console.error('[QueueConsumer] Supabase credentials missing');
-    return;
-  }
-
-  const db = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  }) as any;
-
-  const fbClient = new FacebookPublishClient(
-    env.FB_GRAPH_API_URL ? { baseUrl: env.FB_GRAPH_API_URL } : undefined
-  );
-
-  await Promise.allSettled(
-    batch.messages.map(async (msg) => {
-      try {
-        const outcome = await dispatchItem(msg.body, fbClient, masterKey);
-        await settleOutcome(db, msg.body, outcome);
-        msg.ack();
-      } catch (err) {
-        console.error(`[QueueConsumer] Failed processing item ${msg.body.id}:`, err);
-        msg.retry();
-      }
-    })
-  );
 }
 
 async function authenticateWorkerRequest(
@@ -593,13 +457,5 @@ export default {
     ctx: ExecutionContext
   ): Promise<void> {
     await handleScheduled(controller, env, ctx);
-  },
-
-  async queue(
-    batch: QueueBatch,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<void> {
-    await handleQueueBatch(batch, env, ctx);
   },
 };
