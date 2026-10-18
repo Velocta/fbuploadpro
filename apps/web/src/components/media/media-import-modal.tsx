@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback, useId } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { AllowedMediaMimeTypes } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
