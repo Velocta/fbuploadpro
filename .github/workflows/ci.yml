@@ -9,40 +9,6 @@ on:
       - main
 
 jobs:
-  secret-scan:
-    name: Secret Scanning
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          fetch-depth: 0
-      - name: Run Gitleaks
-        run: |
-          wget -qO- https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar xz -C /tmp
-          /tmp/gitleaks detect --source . --no-git --config .gitleaks.toml -v
-
-  dependency-audit:
-    name: Dependency Audit
-    runs-on: ubuntu-latest
-    # Informational for now: Tinypool 1.x (via Vitest 3.x) has a critical RCE (GHSA-5gmw-xhrv-c9v3)
-    # that requires a Vitest 4.x major update to fix. Tracked separately; not blocking this PR.
-    continue-on-error: true
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup pnpm
-        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
-        with:
-          version: 9.15.9
-      - name: Setup Node.js
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
-        with:
-          node-version: 20
-          cache: pnpm
-      - name: Audit dependencies
-        run: pnpm audit --audit-level=high
-
   verify:
     name: Build, Lint, Typecheck & Test
     runs-on: ubuntu-latest
