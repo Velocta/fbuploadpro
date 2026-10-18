@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 password reset attempts per 60 seconds)
-    const ipLimit = checkRateLimit(`reset_pwd:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`reset_pwd:ip:${clientIp}`, 5, 60 * 1000);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {

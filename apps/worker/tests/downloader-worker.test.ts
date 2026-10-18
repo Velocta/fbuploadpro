@@ -92,11 +92,22 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
     it('OPTIONS /api/media/download/enqueue returns CORS preflight headers', async () => {
       const req = new Request('https://worker.internal/api/media/download/enqueue', {
         method: 'OPTIONS',
+        headers: { Origin: 'https://shahzebpyc.fbuploadpro.com' },
       });
       const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
       expect(res.status).toBe(204);
-      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://shahzebpyc.fbuploadpro.com');
       expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+    });
+
+    it('OPTIONS from a disallowed origin gets no Access-Control-Allow-Origin', async () => {
+      const req = new Request('https://worker.internal/api/media/download/enqueue', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com' },
+      });
+      const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
     });
 
     it('requires authentication for /api/media/download endpoints', async () => {

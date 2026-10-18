@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 resend requests per 60 seconds per IP)
-    const ipLimit = checkRateLimit(`resend:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`resend:ip:${clientIp}`, 5, 60 * 1000);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {

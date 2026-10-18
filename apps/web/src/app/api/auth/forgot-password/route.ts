@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 reset requests per 60 seconds)
-    const ipLimit = checkRateLimit(`forgot:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`forgot:ip:${clientIp}`, 5, 60 * 1000);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Identifier rate limiting (max 3 reset requests per 60 seconds per email)
-    const emailLimit = checkRateLimit(`forgot:email:${canonicalEmail}`, 3, 60 * 1000);
+    const emailLimit = await checkRateLimit(`forgot:email:${canonicalEmail}`, 3, 60 * 1000);
     if (!emailLimit.allowed) {
       return NextResponse.json(
         {
