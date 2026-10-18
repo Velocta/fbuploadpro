@@ -1484,7 +1484,7 @@ export function MediaLibraryExplorer({
               <button
                 type="button"
                 data-testid="media-sort-select"
-                onClick={() => setActiveDropdown((prev) => (prev === 'sort' ? null : 'sort'));}
+                onClick={() => setActiveDropdown((prev) => (prev === 'sort' ? null : 'sort'))}
                 onKeyDown={(e) => {
                   if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
