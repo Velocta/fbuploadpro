@@ -1151,43 +1151,39 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(explorer.hasText('Viral Launch Reel.mp4')).toBe(false);
   });
 
-  it('Spec 046 US4: renders 1-click "Schedule / Add to Queue" CTA across cards, batch action bar, and table rows', () => {
-    const onScheduleBatch = vi.fn();
+  it('Spec 067 US1 & US4: verifies Schedule / Add to Queue CTA is completely removed from cards, batch action bar, and table rows', () => {
     const batchBar = render(
       <BatchActionBar
         selectedIds={['item-1', 'item-2']}
         totalAvailableCount={2}
-        onBatchSchedule={onScheduleBatch}
       />
     );
-    expect(batchBar.hasAttribute('data-testid', 'batch-schedule-btn')).toBe(true);
-    expect(batchBar.hasText('Schedule / Add to Queue')).toBe(true);
+    expect(batchBar.hasAttribute('data-testid', 'batch-schedule-btn')).toBe(false);
+    expect(batchBar.hasText('Schedule / Add to Queue')).toBe(false);
 
-    const onScheduleCard = vi.fn();
     const card = render(
       <MediaAssetCard
         item={SAMPLE_MEDIA_ITEMS[0]!}
-        onScheduleRequest={onScheduleCard}
       />
     );
     expect(
       card.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
-    ).toBe(true);
+    ).toBe(false);
+    expect(card.hasText('Schedule / Add to Queue')).toBe(false);
 
-    const onScheduleRow = vi.fn();
     const row = render(
       <table>
         <tbody>
           <MediaTableRow
             item={SAMPLE_MEDIA_ITEMS[0]!}
-            onScheduleRequest={onScheduleRow}
           />
         </tbody>
       </table>
     );
     expect(
       row.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
-    ).toBe(true);
+    ).toBe(false);
+    expect(row.hasText('Schedule / Add to Queue')).toBe(false);
   });
 });
 
