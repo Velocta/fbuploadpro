@@ -32,10 +32,18 @@ export interface Env {
 
 // Explicit re-exports for test imports (replaces export * to avoid leaking internals).
 export {
+  executeDownloadJob,
+  inferMimeFromUrlOrHeader,
+  sanitizeFileName,
+  extractFilenameFromHeader,
+  trimTrailingSlash,
+  writeStreamToDestination,
+  validateDownloadSafetyAndQuota,
+  validateDownloadSafety,
+  cleanupFailedDownload,
   resolveRemoteCandidates,
   persistDownloadedMediaItem,
   tryUploadVideoThumbnailToR2,
-  failStuckDownloadJobs,
 } from './services/downloader-engine.js';
 import {
   EnqueueDownloadJobRequestSchema,
