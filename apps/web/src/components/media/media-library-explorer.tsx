@@ -25,7 +25,15 @@ export type SortOptionKey =
   | 'name:asc'
   | 'file_size:desc';
 
-const ASPECT_RATIO_LABELS: Record<AspectRatioFilterKey, string> = {
+export type MediaSmartViewKey = 'everything' | 'needs_caption';
+
+export const MEDIA_TYPE_LABELS: Record<MediaTypeFilterKey, string> = {
+  all: 'All',
+  video: 'Videos',
+  image: 'Images',
+};
+
+export const ASPECT_RATIO_LABELS: Record<AspectRatioFilterKey, string> = {
   all: 'All ratios',
   '9:16': '9:16 Vertical',
   '16:9': '16:9 Landscape',
@@ -33,17 +41,38 @@ const ASPECT_RATIO_LABELS: Record<AspectRatioFilterKey, string> = {
   '4:5': '4:5 Portrait',
 };
 
-const CAPTION_STATUS_LABELS: Record<CaptionStatusFilterKey, string> = {
+export const ASPECT_RATIO_SHORT_VALUES: Record<AspectRatioFilterKey, string> = {
+  all: 'All',
+  '9:16': '9:16',
+  '16:9': '16:9',
+  '1:1': '1:1',
+  '4:5': '4:5',
+};
+
+export const CAPTION_STATUS_LABELS: Record<CaptionStatusFilterKey, string> = {
   all: 'All captions',
   has_caption: 'Has caption',
   empty_caption: 'Missing caption',
 };
 
-const SORT_OPTION_LABELS: Record<SortOptionKey, string> = {
+export const CAPTION_STATUS_SHORT_VALUES: Record<CaptionStatusFilterKey, string> = {
+  all: 'All',
+  has_caption: 'Has caption',
+  empty_caption: 'Missing caption',
+};
+
+export const SORT_OPTION_LABELS: Record<SortOptionKey, string> = {
   'created_at:desc': 'Newest first',
   'created_at:asc': 'Oldest first',
   'name:asc': 'Name (A–Z)',
   'file_size:desc': 'Largest size',
+};
+
+export const SORT_OPTION_SHORT_VALUES: Record<SortOptionKey, string> = {
+  'created_at:desc': 'Newest',
+  'created_at:asc': 'Oldest',
+  'name:asc': 'Name A–Z',
+  'file_size:desc': 'Largest',
 };
 
 
@@ -82,9 +111,9 @@ export function formatFolderAncestryPath(
   folderId: string | null,
   folders: MediaFolder[]
 ): string {
-  if (!folderId) return 'All Media';
+  if (!folderId) return 'Library';
   const trail = buildFolderBreadcrumbs(folderId, folders);
-  if (trail.length === 0) return 'All Media';
+  if (trail.length === 0) return 'Library';
   return trail.map((f) => f.name).join(' / ');
 }
 
@@ -149,37 +178,59 @@ export function computeRangeSelection(
     : [...currentSelection, targetId];
 }
 
+function matchesSearch(item: MediaItemResponse, query: string): boolean {
+  if (!query) return true;
+  const matchName = item.name.toLowerCase().includes(query);
+  const matchCaption = (item.captionText || '').toLowerCase().includes(query);
+  return matchName || matchCaption;
+}
+
+function matchesSmartViewOrFolder(
+  item: MediaItemResponse,
+  currentFolderId: string | null,
+  activeSmartView: MediaSmartViewKey | null | undefined
+): boolean {
+  if (activeSmartView === 'everything') return true;
+  if (activeSmartView === 'needs_caption') {
+    return !item.captionText || item.captionText.trim().length === 0;
+  }
+  return (item.folderId ?? null) === currentFolderId;
+}
+
+function matchesMediaType(item: MediaItemResponse, filter: MediaTypeFilterKey): boolean {
+  return filter === 'all' || item.mediaType === filter;
+}
+
+function matchesAspectRatio(item: MediaItemResponse, filter: AspectRatioFilterKey): boolean {
+  return filter === 'all' || item.aspectRatio === filter;
+}
+
+function matchesCaptionStatus(item: MediaItemResponse, filter: CaptionStatusFilterKey): boolean {
+  if (filter === 'all') return true;
+  const hasCaption = Boolean(item.captionText && item.captionText.trim().length > 0);
+  return filter === 'has_caption' ? hasCaption : !hasCaption;
+}
+
 function matchesMediaFilters(
   item: MediaItemResponse,
   currentFolderId: string | null,
+  activeSmartView: MediaSmartViewKey | null | undefined,
   mediaTypeFilter: MediaTypeFilterKey,
   aspectRatioFilter: AspectRatioFilterKey,
   captionStatusFilter: CaptionStatusFilterKey,
   trimmedSearch: string
 ): boolean {
-  if (trimmedSearch.length === 0 && (item.folderId ?? null) !== currentFolderId) {
-    return false;
-  }
-  if (mediaTypeFilter !== 'all' && item.mediaType !== mediaTypeFilter) {
-    return false;
-  }
-  if (aspectRatioFilter !== 'all' && item.aspectRatio !== aspectRatioFilter) {
-    return false;
-  }
-  if (captionStatusFilter === 'has_caption' && (!item.captionText || item.captionText.trim().length === 0)) {
-    return false;
-  }
-  if (captionStatusFilter === 'empty_caption' && item.captionText && item.captionText.trim().length > 0) {
-    return false;
-  }
   if (trimmedSearch.length > 0) {
-    const matchName = item.name.toLowerCase().includes(trimmedSearch);
-    const matchCaption = (item.captionText || '').toLowerCase().includes(trimmedSearch);
-    if (!matchName && !matchCaption) {
-      return false;
-    }
+    if (!matchesSearch(item, trimmedSearch)) return false;
+  } else if (!matchesSmartViewOrFolder(item, currentFolderId, activeSmartView)) {
+    return false;
   }
-  return true;
+
+  return (
+    matchesMediaType(item, mediaTypeFilter) &&
+    matchesAspectRatio(item, aspectRatioFilter) &&
+    matchesCaptionStatus(item, captionStatusFilter)
+  );
 }
 
 function sortMediaItems(a: MediaItemResponse, b: MediaItemResponse, sortOption: SortOptionKey): number {
@@ -202,6 +253,7 @@ export function filterAndSortMediaItems(
   items: MediaItemResponse[],
   options: {
     currentFolderId: string | null;
+    activeSmartView?: MediaSmartViewKey | null | undefined;
     mediaTypeFilter: MediaTypeFilterKey;
     aspectRatioFilter?: AspectRatioFilterKey | undefined;
     captionStatusFilter?: CaptionStatusFilterKey | undefined;
@@ -211,6 +263,7 @@ export function filterAndSortMediaItems(
 ): MediaItemResponse[] {
   const {
     currentFolderId,
+    activeSmartView,
     mediaTypeFilter,
     aspectRatioFilter = 'all',
     captionStatusFilter = 'all',
@@ -224,6 +277,7 @@ export function filterAndSortMediaItems(
       matchesMediaFilters(
         item,
         currentFolderId,
+        activeSmartView,
         mediaTypeFilter,
         aspectRatioFilter,
         captionStatusFilter,
@@ -231,6 +285,50 @@ export function filterAndSortMediaItems(
       )
     )
     .sort((a, b) => sortMediaItems(a, b, sortOption));
+}
+
+export function getScopeTagLabel(
+  debouncedSearch: string,
+  activeSmartView: MediaSmartViewKey | null,
+  currentFolderId: string | null,
+  folders: MediaFolder[]
+): string {
+  if (debouncedSearch.length > 0) {
+    return 'In: Library';
+  }
+  if (activeSmartView === 'everything') {
+    return 'In: Everything';
+  }
+  if (activeSmartView === 'needs_caption') {
+    return 'In: Needs caption';
+  }
+  if (!currentFolderId) {
+    return 'In: Library';
+  }
+  const folder = folders.find((f) => f.id === currentFolderId);
+  return folder ? `In: ${folder.name}` : 'In: Library';
+}
+
+export function getEmptyStateInfo(
+  activeSmartView: MediaSmartViewKey | null,
+  debouncedSearch: string
+): { title: string; subtext: string } {
+  if (activeSmartView === 'needs_caption') {
+    return {
+      title: 'All files have captions',
+      subtext: 'Upload new files or organize existing folders.',
+    };
+  }
+  if (debouncedSearch) {
+    return {
+      title: 'No matching files found',
+      subtext: 'Try a different search term or clear filters.',
+    };
+  }
+  return {
+    title: 'No media in this folder',
+    subtext: 'Upload files or drag them anywhere into this folder to get started.',
+  };
 }
 
 export function resolveTargetFolderIdForEntry(
@@ -338,13 +436,1031 @@ export async function checkServerDuplicateEntries(
   }
 }
 
+interface MediaCanvasProps {
+  displayedMediaItems: MediaItemResponse[];
+  viewMode: MediaViewMode;
+  isLoading: boolean;
+  selectedIds: string[];
+  debouncedSearch: string;
+  folders: MediaFolder[];
+  activeSmartView: MediaSmartViewKey | null;
+  onNavigateFolder: (folderId: string | null) => void;
+  onToggleSelect: (mediaId: string, options?: { shiftKey?: boolean | undefined }) => void;
+  onPreview: (item: MediaItemResponse) => void;
+  onUpdateCaption: (mediaId: string, captionText: string) => void;
+  onMoveRequest: (item: MediaItemResponse) => void;
+  onDeleteRequest: (mediaId: string) => void;
+}
+
+function MediaCanvas({
+  displayedMediaItems,
+  viewMode,
+  isLoading,
+  selectedIds,
+  debouncedSearch,
+  folders,
+  activeSmartView,
+  onNavigateFolder,
+  onToggleSelect,
+  onPreview,
+  onUpdateCaption,
+  onMoveRequest,
+  onDeleteRequest,
+}: Readonly<MediaCanvasProps>) {
+  if (displayedMediaItems.length > 0) {
+    if (viewMode === 'grid') {
+      return (
+        <div
+          data-testid="media-assets-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
+            gap: SPACING.lg,
+            marginTop: SPACING.xs,
+          }}
+        >
+          {displayedMediaItems.map((item) => (
+            <MediaAssetCard
+              key={item.id}
+              item={item}
+              selected={selectedIds.includes(item.id)}
+              folderPathLabel={
+                debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
+              }
+              onNavigateFolder={onNavigateFolder}
+              onToggleSelect={onToggleSelect}
+              onPreview={onPreview}
+              onUpdateCaption={onUpdateCaption}
+              onMoveRequest={onMoveRequest}
+              onDeleteRequest={() => onDeleteRequest(item.id)}
+            />
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        data-testid="media-table-view"
+        style={{
+          width: '100%',
+          overflowX: 'auto',
+          marginTop: SPACING.xs,
+        }}
+      >
+        <table
+          data-testid="media-table"
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            textAlign: 'left',
+          }}
+        >
+          <thead
+            style={{
+              position: 'sticky',
+              top: 0,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              zIndex: 2,
+            }}
+          >
+            <tr>
+              <th style={{ width: '40px', padding: `${SPACING.sm} ${SPACING.md}` }}>
+                <span className="sr-only">Select</span>
+              </th>
+              <th style={{ width: '48px', padding: `${SPACING.sm} 0` }}>
+                <span className="sr-only">Thumbnail</span>
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                FILE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                CAPTION
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                DETAILS
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                SIZE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                DATE
+              </th>
+              <th
+                style={{
+                  padding: `${SPACING.sm} ${SPACING.md}`,
+                  textAlign: 'right',
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                }}
+              >
+                ACTIONS
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayedMediaItems.map((item) => (
+              <MediaTableRow
+                key={item.id}
+                item={item}
+                selected={selectedIds.includes(item.id)}
+                folderPathLabel={
+                  debouncedSearch ? `in ${formatFolderAncestryPath(item.folderId, folders)}` : null
+                }
+                onNavigateFolder={onNavigateFolder}
+                onToggleSelect={onToggleSelect}
+                onPreview={onPreview}
+                onUpdateCaption={onUpdateCaption}
+                onMoveRequest={onMoveRequest}
+                onDeleteRequest={() => onDeleteRequest(item.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (!isLoading) {
+    const { title: emptyTitle, subtext: emptySubtext } = getEmptyStateInfo(
+      activeSmartView,
+      debouncedSearch
+    );
+
+    return (
+      <div
+        data-testid="media-empty-state"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: `${SPACING.xxl} 0`,
+          gap: SPACING.md,
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+        }}
+      >
+        <svg
+          width="40"
+          height="40"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </svg>
+        <div style={{ textAlign: 'center' }}>
+          <p
+            style={{
+              margin: 0,
+              fontSize: '0.9375rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+            }}
+          >
+            {emptyTitle}
+          </p>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.8125rem' }}>
+            {emptySubtext}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function computeNextSelection(
+  prev: string[],
+  mediaId: string,
+  allDisplayedIds: string[],
+  shiftKey?: boolean
+): string[] {
+  if (shiftKey && prev.length > 0) {
+    const lastId = prev.at(-1)!;
+    const lastIdx = allDisplayedIds.indexOf(lastId);
+    const currIdx = allDisplayedIds.indexOf(mediaId);
+    if (lastIdx !== -1 && currIdx !== -1) {
+      const start = Math.min(lastIdx, currIdx);
+      const end = Math.max(lastIdx, currIdx);
+      const slice = allDisplayedIds.slice(start, end + 1);
+      return Array.from(new Set([...prev, ...slice]));
+    }
+  }
+  return prev.includes(mediaId)
+    ? prev.filter((id) => id !== mediaId)
+    : [...prev, mediaId];
+}
+
+export type ActiveDropdownKey = 'type' | 'ratio' | 'caption' | 'sort' | null;
+
+function isPointerInsideDropdown(
+  activeDropdown: ActiveDropdownKey,
+  target: Node | null,
+  refs: Record<'type' | 'ratio' | 'caption' | 'sort', React.RefObject<HTMLDivElement | null>>
+): boolean {
+  if (!activeDropdown || !target) return false;
+  return Boolean(refs[activeDropdown]?.current?.contains(target));
+}
+
+function useUploadNavigationGuard(
+  activeUploadsCount: number,
+  onInterceptNavigation: (href: string) => void
+) {
+  useEffect(() => {
+    if (activeUploadsCount <= 0) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [activeUploadsCount]);
+
+  useEffect(() => {
+    if (activeUploadsCount <= 0) return;
+
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (!target) return;
+      const href = target.getAttribute('href');
+      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        e.preventDefault();
+        e.stopPropagation();
+        onInterceptNavigation(href);
+      }
+    };
+
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => document.removeEventListener('click', handleDocumentClick, true);
+  }, [activeUploadsCount, onInterceptNavigation]);
+}
+
+const TYPE_DROPDOWN_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'video', label: 'Videos' },
+  { key: 'image', label: 'Images' },
+] as const;
+
+const RATIO_DROPDOWN_OPTIONS = [
+  { key: 'all', label: 'All ratios' },
+  { key: '9:16', label: '9:16 Vertical' },
+  { key: '16:9', label: '16:9 Landscape' },
+  { key: '1:1', label: '1:1 Square' },
+  { key: '4:5', label: '4:5 Portrait' },
+] as const;
+
+const CAPTION_DROPDOWN_OPTIONS = [
+  { key: 'all', label: 'All captions' },
+  { key: 'has_caption', label: 'Has caption' },
+  { key: 'empty_caption', label: 'Missing caption' },
+] as const;
+
+const SORT_DROPDOWN_OPTIONS = [
+  { key: 'created_at:desc', label: 'Newest first' },
+  { key: 'created_at:asc', label: 'Oldest first' },
+  { key: 'name:asc', label: 'Name (A–Z)' },
+  { key: 'file_size:desc', label: 'Largest size' },
+] as const;
+
+interface ToolbarDropdownItem<T extends string> {
+  key: T;
+  label: string;
+}
+
+interface ToolbarDropdownProps<T extends string> {
+  testId: string;
+  label: string;
+  displayValue: string;
+  isUnderlined?: boolean;
+  isOpen: boolean;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  options: readonly ToolbarDropdownItem<T>[];
+  selectedKey: T;
+  optionTestIdPrefix: string;
+  onToggle: () => void;
+  onSelect: (key: T) => void;
+  onClose: () => void;
+}
+
+function ToolbarDropdown<T extends string>({
+  testId,
+  label,
+  displayValue,
+  isUnderlined = false,
+  isOpen,
+  containerRef,
+  options,
+  selectedKey,
+  optionTestIdPrefix,
+  onToggle,
+  onSelect,
+  onClose,
+}: Readonly<ToolbarDropdownProps<T>>) {
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        data-testid={testId}
+        aria-haspopup="true"
+        aria-expanded={isOpen}
+        onClick={onToggle}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          } else if (e.key === 'Escape') {
+            onClose();
+          }
+        }}
+        style={{
+          backgroundColor: 'transparent',
+          border: 'none',
+          padding: 0,
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          fontSize: '0.8125rem',
+          fontWeight: TYPOGRAPHY.weights.medium,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+        }}
+      >
+        <span>{label}</span>
+        <span
+          style={{
+            color: isUnderlined ? `var(--text-main, ${THEME.default.text.primary})` : 'inherit',
+            borderBottom: isUnderlined ? `2px solid ${PALETTE.primary}` : 'none',
+            paddingBottom: '2px',
+          }}
+        >
+          {displayValue}
+        </span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: '26px',
+            left: 0,
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+            borderRadius: RADII.xs,
+            padding: '4px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            zIndex: 30,
+            minWidth: '120px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+          }}
+        >
+          {options.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              role="menuitem"
+              data-testid={`${optionTestIdPrefix}-option-${opt.key}`}
+              tabIndex={0}
+              onClick={() => {
+                onSelect(opt.key);
+                onClose();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(opt.key);
+                  onClose();
+                } else if (e.key === 'Escape') {
+                  onClose();
+                }
+              }}
+              style={{
+                padding: '6px 10px',
+                textAlign: 'left',
+                backgroundColor:
+                  selectedKey === opt.key
+                    ? 'rgba(255, 255, 255, 0.08)'
+                    : 'transparent',
+                border: 'none',
+                borderRadius: RADII.xs,
+                color:
+                  selectedKey === opt.key
+                    ? `var(--text-main, ${THEME.default.text.primary})`
+                    : `var(--text-sub, ${THEME.default.text.secondary})`,
+                fontSize: '0.8125rem',
+                fontWeight:
+                  selectedKey === opt.key
+                    ? TYPOGRAPHY.weights.medium
+                    : TYPOGRAPHY.weights.regular,
+                cursor: 'pointer',
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface MediaToolbarProps {
+  searchInput: string;
+  onSearchChange: (value: string) => void;
+  scopeTagLabel: string;
+  mediaTypeFilter: MediaTypeFilterKey;
+  onMediaTypeChange: (type: MediaTypeFilterKey) => void;
+  aspectRatioFilter: AspectRatioFilterKey;
+  onAspectRatioChange: (ratio: AspectRatioFilterKey) => void;
+  captionStatusFilter: CaptionStatusFilterKey;
+  onCaptionStatusChange: (status: CaptionStatusFilterKey) => void;
+  activeFilterCount: number;
+  onClearFilters: () => void;
+  sortOption: SortOptionKey;
+  onSortChange: (sort: SortOptionKey) => void;
+  viewMode: MediaViewMode;
+  onChangeViewMode: (mode: MediaViewMode) => void;
+  activeDropdown: ActiveDropdownKey;
+  onToggleDropdown: (dropdown: NonNullable<ActiveDropdownKey>) => void;
+  onCloseDropdown: () => void;
+  dropdownRefs: Record<NonNullable<ActiveDropdownKey>, React.RefObject<HTMLDivElement | null>>;
+}
+
+function MediaToolbar({
+  searchInput,
+  onSearchChange,
+  scopeTagLabel,
+  mediaTypeFilter,
+  onMediaTypeChange,
+  aspectRatioFilter,
+  onAspectRatioChange,
+  captionStatusFilter,
+  onCaptionStatusChange,
+  activeFilterCount,
+  onClearFilters,
+  sortOption,
+  onSortChange,
+  viewMode,
+  onChangeViewMode,
+  activeDropdown,
+  onToggleDropdown,
+  onCloseDropdown,
+  dropdownRefs,
+}: Readonly<MediaToolbarProps>) {
+  return (
+    <div
+      data-testid="media-explorer-toolbar"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: SPACING.md,
+        paddingBottom: SPACING.md,
+        borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+        flexWrap: 'wrap',
+      }}
+    >
+      {/* Zone 1 — GLOBAL (left): the search field only */}
+      <div
+        data-testid="media-toolbar-zone-1"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.xs,
+          flex: '1 1 240px',
+          maxWidth: '360px',
+        }}
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          aria-hidden="true"
+          style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}
+        >
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="search"
+          data-testid="media-search-input"
+          value={searchInput}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search files and captions…"
+          aria-label="Search files and captions"
+          style={{
+            width: '100%',
+            backgroundColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            fontSize: '0.875rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            padding: '4px 0',
+          }}
+        />
+      </div>
+
+      {/* Divider 1: Between Zone 1 (Global Search) and Zone 2 (Local Scoped Controls) */}
+      <hr
+        data-testid="media-toolbar-divider-1"
+        aria-orientation="vertical"
+        style={{
+          width: '1px',
+          height: '16px',
+          backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+          border: 'none',
+          margin: 0,
+          flexShrink: 0,
+        }}
+      />
+
+      {/* Zone 2 — LOCAL (middle): controls that apply ONLY to the current view */}
+      <div
+        data-testid="media-toolbar-zone-2"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Scope Tag Anchor */}
+        <span
+          data-testid="media-scope-tag"
+          style={{
+            fontSize: '0.8125rem',
+            fontWeight: TYPOGRAPHY.weights.medium,
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            paddingRight: '4px',
+          }}
+        >
+          {scopeTagLabel}
+        </span>
+
+        {/* Labeled Dropdown 1: Type */}
+        <ToolbarDropdown
+          testId="media-type-select"
+          label="Type: "
+          displayValue={MEDIA_TYPE_LABELS[mediaTypeFilter]}
+          isUnderlined={mediaTypeFilter !== 'all'}
+          isOpen={activeDropdown === 'type'}
+          containerRef={dropdownRefs.type}
+          options={TYPE_DROPDOWN_OPTIONS}
+          selectedKey={mediaTypeFilter}
+          optionTestIdPrefix="type"
+          onToggle={() => onToggleDropdown('type')}
+          onSelect={onMediaTypeChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Labeled Dropdown 2: Ratio */}
+        <ToolbarDropdown
+          testId="media-aspect-ratio-select"
+          label="Ratio: "
+          displayValue={ASPECT_RATIO_SHORT_VALUES[aspectRatioFilter]}
+          isUnderlined={aspectRatioFilter !== 'all'}
+          isOpen={activeDropdown === 'ratio'}
+          containerRef={dropdownRefs.ratio}
+          options={RATIO_DROPDOWN_OPTIONS}
+          selectedKey={aspectRatioFilter}
+          optionTestIdPrefix="aspect-ratio"
+          onToggle={() => onToggleDropdown('ratio')}
+          onSelect={onAspectRatioChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Labeled Dropdown 3: Captions */}
+        <ToolbarDropdown
+          testId="media-caption-status-select"
+          label="Captions: "
+          displayValue={CAPTION_STATUS_SHORT_VALUES[captionStatusFilter]}
+          isUnderlined={captionStatusFilter !== 'all'}
+          isOpen={activeDropdown === 'caption'}
+          containerRef={dropdownRefs.caption}
+          options={CAPTION_DROPDOWN_OPTIONS}
+          selectedKey={captionStatusFilter}
+          optionTestIdPrefix="caption-status"
+          onToggle={() => onToggleDropdown('caption')}
+          onSelect={onCaptionStatusChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Dynamic Filter Clear Badge */}
+        {activeFilterCount > 0 && (
+          <button
+            type="button"
+            data-testid="clear-filters-btn"
+            onClick={onClearFilters}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '2px 6px',
+              fontSize: '0.75rem',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+            }}
+          >
+            <span>
+              {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filters'} · Clear
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/* Divider 2: Between Zone 2 (Local Filters) and Zone 3 (Sort & View Mode) */}
+      <hr
+        data-testid="media-toolbar-divider-2"
+        aria-orientation="vertical"
+        style={{
+          width: '1px',
+          height: '16px',
+          backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+          border: 'none',
+          margin: 0,
+          flexShrink: 0,
+        }}
+      />
+
+      {/* Zone 3 — SORT + VIEW (right) */}
+      <div
+        data-testid="media-toolbar-zone-3"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+        }}
+      >
+        {/* Labeled Sort Dropdown */}
+        <ToolbarDropdown
+          testId="media-sort-select"
+          label="Sort: "
+          displayValue={SORT_OPTION_SHORT_VALUES[sortOption]}
+          isOpen={activeDropdown === 'sort'}
+          containerRef={dropdownRefs.sort}
+          options={SORT_DROPDOWN_OPTIONS}
+          selectedKey={sortOption}
+          optionTestIdPrefix="sort"
+          onToggle={() => onToggleDropdown('sort')}
+          onSelect={onSortChange}
+          onClose={onCloseDropdown}
+        />
+
+        {/* Bare Grid/Table Toggle Icons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            type="button"
+            data-testid="view-mode-grid-btn"
+            aria-label="Grid view"
+            onClick={() => onChangeViewMode('grid')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '4px',
+              color:
+                viewMode === 'grid'
+                  ? PALETTE.primary
+                  : `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            data-testid="view-mode-table-btn"
+            aria-label="Table view"
+            onClick={() => onChangeViewMode('table')}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '4px',
+              color:
+                viewMode === 'table'
+                  ? PALETTE.primary
+                  : `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface MediaViewsRailProps {
+  activeSmartView: MediaSmartViewKey | null;
+  currentFolderId: string | null;
+  folders: MediaFolder[];
+  onSelectSmartView: (view: MediaSmartViewKey) => void;
+  onSelectRootLibrary: () => void;
+  onSelectFolder: (folderId: string) => void;
+  onOpenNewFolder: () => void;
+}
+
+function MediaViewsRail({
+  activeSmartView,
+  currentFolderId,
+  folders,
+  onSelectSmartView,
+  onSelectRootLibrary,
+  onSelectFolder,
+  onOpenNewFolder,
+}: Readonly<MediaViewsRailProps>) {
+  const rootFolders = folders.filter((f) => !f.parentId);
+  const isRootSelected = activeSmartView === null && currentFolderId === null;
+
+  return (
+    <aside
+      data-testid="media-views-rail"
+      style={{
+        width: '180px',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SPACING.lg,
+        paddingTop: SPACING.md,
+      }}
+    >
+      {/* Section: VIEWS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <span
+          style={{
+            fontSize: '0.6875rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            letterSpacing: '0.04em',
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+            marginBottom: '4px',
+          }}
+        >
+          VIEWS
+        </span>
+
+        <button
+          type="button"
+          data-testid="smart-view-everything"
+          onClick={() => onSelectSmartView('everything')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight:
+              activeSmartView === 'everything'
+                ? TYPOGRAPHY.weights.semibold
+                : TYPOGRAPHY.weights.regular,
+            color:
+              activeSmartView === 'everything'
+                ? PALETTE.primary
+                : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Everything
+        </button>
+
+        <button
+          type="button"
+          data-testid="smart-view-needs-caption"
+          onClick={() => onSelectSmartView('needs_caption')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight:
+              activeSmartView === 'needs_caption'
+                ? TYPOGRAPHY.weights.semibold
+                : TYPOGRAPHY.weights.regular,
+            color:
+              activeSmartView === 'needs_caption'
+                ? PALETTE.primary
+                : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Needs caption
+        </button>
+      </div>
+
+      {/* Section: FOLDERS */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '4px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              letterSpacing: '0.04em',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+            }}
+          >
+            FOLDERS
+          </span>
+          <button
+            type="button"
+            data-testid="rail-new-folder-btn"
+            onClick={onOpenNewFolder}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: 0,
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              cursor: 'pointer',
+            }}
+          >
+            + New
+          </button>
+        </div>
+
+        <button
+          type="button"
+          data-testid="rail-root-library"
+          onClick={onSelectRootLibrary}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '4px 0',
+            fontSize: '0.8125rem',
+            fontWeight: isRootSelected
+              ? TYPOGRAPHY.weights.semibold
+              : TYPOGRAPHY.weights.regular,
+            color: isRootSelected
+              ? PALETTE.primary
+              : `var(--text-sub, ${THEME.default.text.secondary})`,
+            cursor: 'pointer',
+            textAlign: 'left',
+          }}
+        >
+          Library
+        </button>
+
+        {rootFolders.map((f) => {
+          const isSelected = activeSmartView === null && currentFolderId === f.id;
+          return (
+            <button
+              key={f.id}
+              type="button"
+              data-testid={`rail-folder-${f.id}`}
+              onClick={() => onSelectFolder(f.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.xs,
+                backgroundColor: 'transparent',
+                border: 'none',
+                padding: '4px 0 4px 8px',
+                fontSize: '0.8125rem',
+                fontWeight: isSelected
+                  ? TYPOGRAPHY.weights.semibold
+                  : TYPOGRAPHY.weights.regular,
+                color: isSelected
+                  ? PALETTE.primary
+                  : `var(--text-sub, ${THEME.default.text.secondary})`,
+                cursor: 'pointer',
+                textAlign: 'left',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {f.name}
+            </button>
+          );
+        })}
+      </div>
+    </aside>
+  );
+}
+
+function getInitialViewMode(initialMode?: MediaViewMode): MediaViewMode {
+  if (initialMode) return initialMode;
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
+    if (stored === 'grid' || stored === 'table') return stored;
+  }
+  return 'grid';
+}
+
+function computeActiveFilterCount(
+  mediaType: MediaTypeFilterKey,
+  ratio: AspectRatioFilterKey,
+  captionStatus: CaptionStatusFilterKey
+): number {
+  return (
+    (mediaType !== 'all' ? 1 : 0) +
+    (ratio !== 'all' ? 1 : 0) +
+    (captionStatus !== 'all' ? 1 : 0)
+  );
+}
+
 export interface MediaLibraryExplorerProps {
   subdomain: string;
   initialFolders?: MediaFolder[];
   initialMediaItems?: MediaItemResponse[];
   initialCurrentFolderId?: string | null;
+  initialActiveSmartView?: MediaSmartViewKey | null;
   initialViewMode?: MediaViewMode;
   initialSearchQuery?: string;
+  initialMediaTypeFilter?: MediaTypeFilterKey;
   initialAspectRatioFilter?: AspectRatioFilterKey;
   initialCaptionStatusFilter?: CaptionStatusFilterKey;
   initialSortOption?: SortOptionKey;
@@ -358,8 +1474,10 @@ export function MediaLibraryExplorer({
   initialFolders,
   initialMediaItems,
   initialCurrentFolderId = null,
+  initialActiveSmartView = null,
   initialViewMode,
   initialSearchQuery = '',
+  initialMediaTypeFilter = 'all',
   initialAspectRatioFilter = 'all',
   initialCaptionStatusFilter = 'all',
   initialSortOption = 'created_at:desc',
@@ -374,18 +1492,14 @@ export function MediaLibraryExplorer({
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(
     initialCurrentFolderId
   );
+  const [activeSmartView, setActiveSmartView] = useState<MediaSmartViewKey | null>(
+    initialActiveSmartView
+  );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(!initialMediaItems);
 
   // View mode
-  const [viewMode, setViewMode] = useState<MediaViewMode>(() => {
-    if (initialViewMode) return initialViewMode;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
-      if (stored === 'grid' || stored === 'table') return stored;
-    }
-    return 'grid';
-  });
+  const [viewMode, setViewMode] = useState<MediaViewMode>(() => getInitialViewMode(initialViewMode));
 
   const handleChangeViewMode = (mode: MediaViewMode) => {
     setViewMode(mode);
@@ -401,7 +1515,9 @@ export function MediaLibraryExplorer({
   const [debouncedSearch, setDebouncedSearch] = useState(
     initialSearchQuery.trim().toLowerCase()
   );
-  const [mediaTypeFilter, setMediaTypeFilter] = useState<'all' | 'video' | 'image'>('all');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<MediaTypeFilterKey>(
+    initialMediaTypeFilter
+  );
   const [aspectRatioFilter, setAspectRatioFilter] = useState<AspectRatioFilterKey>(
     initialAspectRatioFilter
   );
@@ -410,8 +1526,12 @@ export function MediaLibraryExplorer({
   );
   const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
 
-  // Custom Dropdowns state (prevents mouse click swallowing)
-  const [activeDropdown, setActiveDropdown] = useState<'ratio' | 'caption' | 'sort' | null>(null);
+  // Custom Dropdowns state & container refs (prevents mouse click swallowing)
+  const [activeDropdown, setActiveDropdown] = useState<ActiveDropdownKey>(null);
+  const typeDropdownRef = useRef<HTMLDivElement | null>(null);
+  const ratioDropdownRef = useRef<HTMLDivElement | null>(null);
+  const captionDropdownRef = useRef<HTMLDivElement | null>(null);
+  const sortDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Debounce search with 250ms (0ms if cleared immediately)
   useEffect(() => {
@@ -428,7 +1548,19 @@ export function MediaLibraryExplorer({
   // Close dropdowns when clicking outside
   useEffect(() => {
     if (!activeDropdown) return;
-    const handleOutsideClick = () => setActiveDropdown(null);
+    const dropdownRefs = {
+      type: typeDropdownRef,
+      ratio: ratioDropdownRef,
+      caption: captionDropdownRef,
+      sort: sortDropdownRef,
+    };
+    const handleOutsideClick = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as Node | null;
+      if (isPointerInsideDropdown(activeDropdown, target, dropdownRefs)) {
+        return;
+      }
+      setActiveDropdown(null);
+    };
     document.addEventListener('pointerdown', handleOutsideClick);
     return () => document.removeEventListener('pointerdown', handleOutsideClick);
   }, [activeDropdown]);
@@ -469,38 +1601,12 @@ export function MediaLibraryExplorer({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Arm browser native beforeunload when uploads are active
-  useEffect(() => {
-    if (activeUploadsCount <= 0) return;
+  const handleInterceptNavigation = useCallback((href: string) => {
+    setPendingNavigationUrl(href);
+    setIsLeaveGuardOpen(true);
+  }, []);
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [activeUploadsCount]);
-
-  // Intercept in-app link clicks if uploads are active
-  useEffect(() => {
-    if (activeUploadsCount <= 0) return;
-
-    const handleDocumentClick = (e: MouseEvent) => {
-      const target = (e.target as HTMLElement).closest('a');
-      if (!target) return;
-      const href = target.getAttribute('href');
-      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-        e.preventDefault();
-        e.stopPropagation();
-        setPendingNavigationUrl(href);
-        setIsLeaveGuardOpen(true);
-      }
-    };
-
-    document.addEventListener('click', handleDocumentClick, true);
-    return () => document.removeEventListener('click', handleDocumentClick, true);
-  }, [activeUploadsCount]);
+  useUploadNavigationGuard(activeUploadsCount, handleInterceptNavigation);
 
   // Data Fetching
   const refreshLibraryData = useCallback(async () => {
@@ -551,6 +1657,7 @@ export function MediaLibraryExplorer({
   const displayedMediaItems = useMemo(() => {
     return filterAndSortMediaItems(mediaItems, {
       currentFolderId,
+      activeSmartView,
       searchQuery: debouncedSearch,
       mediaTypeFilter,
       aspectRatioFilter,
@@ -560,6 +1667,7 @@ export function MediaLibraryExplorer({
   }, [
     mediaItems,
     currentFolderId,
+    activeSmartView,
     debouncedSearch,
     mediaTypeFilter,
     aspectRatioFilter,
@@ -572,23 +1680,8 @@ export function MediaLibraryExplorer({
     mediaId: string,
     options?: { shiftKey?: boolean | undefined } | undefined
   ) => {
-    setSelectedIds((prev) => {
-      if (options?.shiftKey && prev.length > 0) {
-        const lastId = prev.at(-1)!;
-        const allIds = displayedMediaItems.map((m) => m.id);
-        const lastIdx = allIds.indexOf(lastId);
-        const currIdx = allIds.indexOf(mediaId);
-        if (lastIdx !== -1 && currIdx !== -1) {
-          const start = Math.min(lastIdx, currIdx);
-          const end = Math.max(lastIdx, currIdx);
-          const slice = allIds.slice(start, end + 1);
-          return Array.from(new Set([...prev, ...slice]));
-        }
-      }
-      return prev.includes(mediaId)
-        ? prev.filter((id) => id !== mediaId)
-        : [...prev, mediaId];
-    });
+    const allIds = displayedMediaItems.map((m) => m.id);
+    setSelectedIds((prev) => computeNextSelection(prev, mediaId, allIds, options?.shiftKey));
   };
 
   const handleSelectAll = () => {
@@ -656,8 +1749,9 @@ export function MediaLibraryExplorer({
       });
       showToast('Item moved');
       await refreshLibraryData();
-    } else if (payload.folderId) {
-      if (payload.folderId === targetFolderId) return;
+      return;
+    }
+    if (payload.folderId && payload.folderId !== targetFolderId) {
       await fetch(`/api/tenant/${subdomain}/media/folders/${payload.folderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -761,219 +1855,16 @@ export function MediaLibraryExplorer({
     }
   };
 
-  const renderMediaCanvas = () => {
-    if (displayedMediaItems.length > 0) {
-      if (viewMode === 'grid') {
-        return (
-          <div
-            data-testid="media-assets-grid"
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))',
-              gap: SPACING.lg,
-              marginTop: SPACING.xs,
-            }}
-          >
-            {displayedMediaItems.map((item) => (
-              <MediaAssetCard
-                key={item.id}
-                item={item}
-                selected={selectedIds.includes(item.id)}
-                folderPathLabel={
-                  debouncedSearch ? formatFolderAncestryPath(item.folderId, folders) : null
-                }
-                onNavigateFolder={(fId) => setCurrentFolderId(fId)}
-                onToggleSelect={handleToggleSelect}
-                onPreview={(m) => setPreviewItem(m)}
-                onUpdateCaption={handleUpdateItemCaption}
-                onMoveRequest={(m) => {
-                  setMoveTarget({ type: 'single_media', mediaItem: m });
-                  setMoveDestinationFolderId(m.folderId);
-                }}
-                onDeleteRequest={(m) => handleDeleteItem(m.id)}
-              />
-            ))}
-          </div>
-        );
-      }
+  const activeFilterCount = computeActiveFilterCount(
+    mediaTypeFilter,
+    aspectRatioFilter,
+    captionStatusFilter
+  );
 
-      return (
-        <div
-          data-testid="media-table-view"
-          style={{
-            width: '100%',
-            overflowX: 'auto',
-            marginTop: SPACING.xs,
-          }}
-        >
-          <table
-            data-testid="media-table"
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              textAlign: 'left',
-            }}
-          >
-            <thead
-              style={{
-                position: 'sticky',
-                top: 0,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))',
-                zIndex: 2,
-              }}
-            >
-              <tr>
-                <th style={{ width: '40px', padding: `${SPACING.sm} ${SPACING.md}` }}>
-                  <span className="sr-only">Select</span>
-                </th>
-                <th style={{ width: '48px', padding: `${SPACING.sm} 0` }}>
-                  <span className="sr-only">Thumbnail</span>
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  FILE
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  CAPTION
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  DETAILS
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  SIZE
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  DATE
-                </th>
-                <th
-                  style={{
-                    padding: `${SPACING.sm} ${SPACING.md}`,
-                    textAlign: 'right',
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  ACTIONS
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedMediaItems.map((item) => (
-                <MediaTableRow
-                  key={item.id}
-                  item={item}
-                  selected={selectedIds.includes(item.id)}
-                  folderPathLabel={
-                    debouncedSearch ? formatFolderAncestryPath(item.folderId, folders) : null
-                  }
-                  onNavigateFolder={(fId) => setCurrentFolderId(fId)}
-                  onToggleSelect={handleToggleSelect}
-                  onPreview={(m) => setPreviewItem(m)}
-                  onUpdateCaption={handleUpdateItemCaption}
-                  onMoveRequest={(m) => {
-                    setMoveTarget({ type: 'single_media', mediaItem: m });
-                    setMoveDestinationFolderId(m.folderId);
-                  }}
-                  onDeleteRequest={(m) => handleDeleteItem(m.id)}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-
-    if (!isLoading) {
-      return (
-        <div
-          data-testid="media-empty-state"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: `${SPACING.xxl} 0`,
-            gap: SPACING.md,
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-          }}
-        >
-          <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <circle cx="9" cy="9" r="2" />
-            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-          </svg>
-          <div style={{ textAlign: 'center' }}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '0.9375rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              {debouncedSearch ? 'No matching files found' : 'No media in this folder'}
-            </p>
-            <p style={{ margin: '4px 0 0 0', fontSize: '0.8125rem' }}>
-              {debouncedSearch
-                ? 'Try a different search term or clear filters.'
-                : 'Upload files or drag them anywhere into this folder to get started.'}
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
+  const handleClearFilters = () => {
+    setMediaTypeFilter('all');
+    setAspectRatioFilter('all');
+    setCaptionStatusFilter('all');
   };
 
   return (
@@ -1124,769 +2015,484 @@ export function MediaLibraryExplorer({
         </div>
       </header>
 
-      {/* 2. Toolbar (Single divider-separated row, NO boxes) */}
+      {/* 2. Toolbar (Single divider-separated row, 3 zones, NO boxes) */}
+      <MediaToolbar
+        searchInput={searchInput}
+        onSearchChange={(val) => {
+          setSearchInput(val);
+          if (val.trim().length > 0) {
+            setMediaTypeFilter("all");
+            setAspectRatioFilter("all");
+            setCaptionStatusFilter("all");
+          }
+        }}
+        scopeTagLabel={getScopeTagLabel(debouncedSearch, activeSmartView, currentFolderId, folders)}
+        mediaTypeFilter={mediaTypeFilter}
+        onMediaTypeChange={setMediaTypeFilter}
+        aspectRatioFilter={aspectRatioFilter}
+        onAspectRatioChange={setAspectRatioFilter}
+        captionStatusFilter={captionStatusFilter}
+        onCaptionStatusChange={setCaptionStatusFilter}
+        activeFilterCount={activeFilterCount}
+        onClearFilters={handleClearFilters}
+        sortOption={sortOption}
+        onSortChange={setSortOption}
+        viewMode={viewMode}
+        onChangeViewMode={handleChangeViewMode}
+        activeDropdown={activeDropdown}
+        onToggleDropdown={(d) => setActiveDropdown((prev) => (prev === d ? null : d))}
+        onCloseDropdown={() => setActiveDropdown(null)}
+        dropdownRefs={{
+          type: typeDropdownRef,
+          ratio: ratioDropdownRef,
+          caption: captionDropdownRef,
+          sort: sortDropdownRef,
+        }}
+      />
+
+      {/* 3. Main Explorer Body: Left Rail (VIEWS + FOLDERS) and Right Canvas */}
       <div
-        data-testid="media-explorer-toolbar"
+        data-testid="media-explorer-body"
         style={{
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: SPACING.md,
-          paddingBottom: SPACING.md,
-          borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-          flexWrap: 'wrap',
+          gap: SPACING.xl,
+          alignItems: 'flex-start',
+          width: '100%',
         }}
       >
-        {/* Left: Magnifier Icon + Borderless Search Input */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            flex: '1 1 260px',
-            maxWidth: '380px',
+        {/* Navigation Rail */}
+        <MediaViewsRail
+          activeSmartView={activeSmartView}
+          currentFolderId={currentFolderId}
+          folders={folders}
+          onSelectSmartView={(view) => {
+            setActiveSmartView(view);
+            setCurrentFolderId(null);
           }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={`var(--text-dim, ${THEME.default.text.muted})`}
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="search"
-            data-testid="media-search-input"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by file name or caption…"
-            aria-label="Search by file name or caption"
-            style={{
-              width: '100%',
-              backgroundColor: 'transparent',
-              border: 'none',
-              outline: 'none',
-              fontSize: '0.875rem',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              padding: '4px 0',
-            }}
-          />
-        </div>
+          onSelectRootLibrary={() => {
+            setActiveSmartView(null);
+            setCurrentFolderId(null);
+          }}
+          onSelectFolder={(folderId) => {
+            setActiveSmartView(null);
+            setCurrentFolderId(folderId);
+          }}
+          onOpenNewFolder={() => setIsNewFolderOpen(true)}
+        />
 
-        {/* Center / Right: Tabs, Dropdowns & Bare View Toggle */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.lg,
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Media Type Tabs: All / Videos / Images with active underline */}
+        {/* Right Canvas */}
+        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Slim Context Row: Breadcrumb in Plain Text on Left, "Select all" on Right */}
           <div
-            role="tablist"
-            aria-label="Filter by media type"
+            data-testid="context-row"
             style={{
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: `${SPACING.md} 0`,
               gap: SPACING.md,
+              flexWrap: 'wrap',
             }}
           >
-            {(
-              [
-                { key: 'all', label: 'All' },
-                { key: 'video', label: 'Videos' },
-                { key: 'image', label: 'Images' },
-              ] as const
-            ).map((tab) => {
-              const active = mediaTypeFilter === tab.key;
-              return (
-                <button
-                  key={tab.key}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  data-testid={`filter-type-${tab.key}`}
-                  onClick={() => setMediaTypeFilter(tab.key)}
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderBottom: active
-                      ? `2px solid ${PALETTE.primary}`
-                      : '2px solid transparent',
-                    padding: `${SPACING.xs} 0`,
-                    color: active
-                      ? `var(--text-main, ${THEME.default.text.primary})`
-                      : `var(--text-dim, ${THEME.default.text.muted})`,
-                    fontSize: '0.8125rem',
-                    fontWeight: active
-                      ? TYPOGRAPHY.weights.semibold
-                      : TYPOGRAPHY.weights.medium,
-                    cursor: 'pointer',
-                    transition: 'color 0.12s ease',
-                  }}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Aspect Ratio Plain Text Dropdown with Caret */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              data-testid="media-aspect-ratio-select"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setActiveDropdown((prev) => (prev === 'ratio' ? null : 'ratio'));
-              }}
+            {/* Breadcrumb Trail in Plain Text (Clickable & Drag-Drop Reparenting) */}
+            <nav
+              aria-label="Folder path"
+              data-testid="folder-breadcrumbs"
               style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>{ASPECT_RATIO_LABELS[aspectRatioFilter]}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-
-            {activeDropdown === 'ratio' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '26px',
-                  left: 0,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                  borderRadius: RADII.xs,
-                  padding: '4px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 30,
-                  minWidth: '140px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
-                }}
-              >
-                {[
-                  { key: 'all', label: 'All ratios' },
-                  { key: '9:16', label: '9:16 Vertical' },
-                  { key: '16:9', label: '16:9 Landscape' },
-                  { key: '1:1', label: '1:1 Square' },
-                  { key: '4:5', label: '4:5 Portrait' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setAspectRatioFilter(opt.key as AspectRatioFilterKey);
-                      setActiveDropdown(null);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      textAlign: 'left',
-                      backgroundColor:
-                        aspectRatioFilter === opt.key
-                          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                          : 'transparent',
-                      border: 'none',
-                      borderRadius: RADII.xs,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Caption Status Plain Text Dropdown with Caret */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              data-testid="media-caption-status-select"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setActiveDropdown((prev) => (prev === 'caption' ? null : 'caption'));
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>{CAPTION_STATUS_LABELS[captionStatusFilter]}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-
-            {activeDropdown === 'caption' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '26px',
-                  left: 0,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                  borderRadius: RADII.xs,
-                  padding: '4px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 30,
-                  minWidth: '130px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
-                }}
-              >
-                {[
-                  { key: 'all', label: 'All captions' },
-                  { key: 'has_caption', label: 'Has caption' },
-                  { key: 'empty_caption', label: 'Missing caption' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setCaptionStatusFilter(opt.key as CaptionStatusFilterKey);
-                      setActiveDropdown(null);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      textAlign: 'left',
-                      backgroundColor:
-                        captionStatusFilter === opt.key
-                          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                          : 'transparent',
-                      border: 'none',
-                      borderRadius: RADII.xs,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Sort Plain Text Dropdown with Caret */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              data-testid="media-sort-select"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setActiveDropdown((prev) => (prev === 'sort' ? null : 'sort'));
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>{SORT_OPTION_LABELS[sortOption]}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-
-            {activeDropdown === 'sort' && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '26px',
-                  right: 0,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                  borderRadius: RADII.xs,
-                  padding: '4px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 30,
-                  minWidth: '130px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
-                }}
-              >
-                {[
-                  { key: 'created_at:desc', label: 'Newest first' },
-                  { key: 'created_at:asc', label: 'Oldest first' },
-                  { key: 'name:asc', label: 'Name (A–Z)' },
-                  { key: 'file_size:desc', label: 'Largest size' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setSortOption(opt.key as SortOptionKey);
-                      setActiveDropdown(null);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      textAlign: 'left',
-                      backgroundColor:
-                        sortOption === opt.key
-                          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                          : 'transparent',
-                      border: 'none',
-                      borderRadius: RADII.xs,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Bare Grid/Table Toggle Icons (NO segmented control box) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              type="button"
-              data-testid="view-mode-grid-btn"
-              aria-label="Grid view"
-              onClick={() => handleChangeViewMode('grid')}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: '4px',
-                color:
-                  viewMode === 'grid'
-                    ? PALETTE.primary
-                    : `var(--text-dim, ${THEME.default.text.muted})`,
-                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
+                gap: '6px',
+                fontSize: '0.875rem',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              data-testid="view-mode-table-btn"
-              aria-label="Table view"
-              onClick={() => handleChangeViewMode('table')}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: '4px',
-                color:
-                  viewMode === 'table'
-                    ? PALETTE.primary
-                    : `var(--text-dim, ${THEME.default.text.muted})`,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <line x1="8" y1="6" x2="21" y2="6" />
-                <line x1="8" y1="12" x2="21" y2="12" />
-                <line x1="8" y1="18" x2="21" y2="18" />
-                <line x1="3" y1="6" x2="3.01" y2="6" />
-                <line x1="3" y1="12" x2="3.01" y2="12" />
-                <line x1="3" y1="18" x2="3.01" y2="18" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Slim Context Row: Breadcrumb in Plain Text on Left, "Select all" on Right */}
-      <div
-        data-testid="context-row"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: `${SPACING.md} 0`,
-          gap: SPACING.md,
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* Breadcrumb Trail in Plain Text (Clickable & Drag-Drop Reparenting) */}
-        <nav
-          aria-label="Folder path"
-          data-testid="folder-breadcrumbs"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          <button
-            type="button"
-            data-testid="breadcrumb-root"
-            onClick={() => setCurrentFolderId(null)}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
-              const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
-              if (mediaId) {
-                try {
-                  const parsed = JSON.parse(mediaId);
-                  void handleReparent(null, { mediaId: parsed.mediaId });
-                } catch {}
-              } else if (folderId) {
-                try {
-                  const parsed = JSON.parse(folderId);
-                  void handleReparent(null, { folderId: parsed.folderId });
-                } catch {}
-              }
-            }}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color:
-                currentFolderId === null
-                  ? `var(--text-main, ${THEME.default.text.primary})`
-                  : `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontWeight:
-                currentFolderId === null
-                  ? TYPOGRAPHY.weights.semibold
-                  : TYPOGRAPHY.weights.regular,
-              cursor: 'pointer',
-            }}
-          >
-            All Media
-          </button>
-
-          {breadcrumbs.map((crumb, idx) => {
-            const isLast = idx === breadcrumbs.length - 1;
-            return (
-              <React.Fragment key={crumb.id}>
-                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
-                <button
-                  type="button"
-                  data-testid={`breadcrumb-folder-${crumb.id}`}
-                  onClick={() => setCurrentFolderId(crumb.id)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
-                    const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
-                    if (mediaId) {
-                      try {
-                        const parsed = JSON.parse(mediaId);
-                        void handleReparent(crumb.id, { mediaId: parsed.mediaId });
-                      } catch {}
-                    } else if (folderId) {
-                      try {
-                        const parsed = JSON.parse(folderId);
-                        void handleReparent(crumb.id, { folderId: parsed.folderId });
-                      } catch {}
-                    }
-                  }}
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                    color: isLast
+              <button
+                type="button"
+                data-testid="breadcrumb-root"
+                onClick={() => {
+                  setActiveSmartView(null);
+                  setCurrentFolderId(null);
+                }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
+                  const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+                  if (mediaId) {
+                    try {
+                      const parsed = JSON.parse(mediaId);
+                      void handleReparent(null, { mediaId: parsed.mediaId });
+                    } catch {}
+                  } else if (folderId) {
+                    try {
+                      const parsed = JSON.parse(folderId);
+                      void handleReparent(null, { folderId: parsed.folderId });
+                    } catch {}
+                  }
+                }}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color:
+                    activeSmartView === null && currentFolderId === null
                       ? `var(--text-main, ${THEME.default.text.primary})`
                       : `var(--text-sub, ${THEME.default.text.secondary})`,
-                    fontWeight: isLast
+                  fontWeight:
+                    activeSmartView === null && currentFolderId === null
                       ? TYPOGRAPHY.weights.semibold
                       : TYPOGRAPHY.weights.regular,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {crumb.name}
-                </button>
-              </React.Fragment>
-            );
-          })}
-        </nav>
+                  cursor: 'pointer',
+                }}
+              >
+                Library
+              </button>
 
-        {/* Right: "Select all" toggle */}
-        {displayedMediaItems.length > 0 && (
-          <button
-            type="button"
-            data-testid="select-all-btn"
-            onClick={handleSelectAll}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: 'pointer',
-            }}
-          >
-            {selectedIds.length === displayedMediaItems.length
-              ? 'Deselect all'
-              : 'Select all'}
-          </button>
-        )}
-      </div>
-
-      {/* 4. Subfolders as ROWS (NOT cards) */}
-      {currentSubfolders.length > 0 && !debouncedSearch && (
-        <section
-          aria-label="Subfolders"
-          data-testid="subfolders-grid"
-          style={{
-            marginBottom: SPACING.xl,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2px',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              letterSpacing: '0.04em',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              marginBottom: '6px',
-            }}
-          >
-            FOLDERS ({currentSubfolders.length})
-          </span>
-
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.06))',
-            }}
-          >
-            {currentSubfolders.map((folder) => {
-              const childSubfolders = folders.filter((f) => f.parentId === folder.id);
-              const folderItems = mediaItems.filter((m) => m.folderId === folder.id);
-              const subCount = childSubfolders.length;
-              const fileCount = folder.itemCount ?? folderItems.length;
-
-              return (
-                <div
-                  key={folder.id}
-                  data-testid={`folder-row-${folder.id}`}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setCurrentFolderId(folder.id);
-                    }
-                  }}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData(
-                      'application/x-fbuploadpro-folder',
-                      JSON.stringify({ folderId: folder.id })
-                    );
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
-                    const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
-                    if (mediaId) {
-                      try {
-                        const parsed = JSON.parse(mediaId);
-                        void handleReparent(folder.id, { mediaId: parsed.mediaId });
-                      } catch {}
-                    } else if (folderId) {
-                      try {
-                        const parsed = JSON.parse(folderId);
-                        void handleReparent(folder.id, { folderId: parsed.folderId });
-                      } catch {}
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: `${SPACING.sm} ${SPACING.xs}`,
-                    borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.06))',
-                    cursor: 'pointer',
-                    transition: 'background-color 0.12s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
-                    const actionContainer = e.currentTarget.querySelector('.folder-hover-actions') as HTMLElement | null;
-                    if (actionContainer) actionContainer.style.opacity = '1';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    const actionContainer = e.currentTarget.querySelector('.folder-hover-actions') as HTMLElement | null;
-                    if (actionContainer) actionContainer.style.opacity = '0';
-                  }}
-                  onClick={() => setCurrentFolderId(folder.id)}
-                >
-                  {/* Left: Folder icon + Name + Secondary text ("1 subfolder · 0 files") */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke={PALETTE.primary}
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span
-                      data-testid={`folder-name-${folder.id}`}
-                      style={{
-                        fontSize: '0.875rem',
-                        fontWeight: TYPOGRAPHY.weights.medium,
-                        color: `var(--text-main, ${THEME.default.text.primary})`,
-                      }}
-                    >
-                      {folder.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '0.75rem',
-                        color: `var(--text-dim, ${THEME.default.text.muted})`,
-                      }}
-                    >
-                      {subCount} subfolder{subCount === 1 ? '' : 's'} · {fileCount} file{fileCount === 1 ? '' : 's'}
-                    </span>
-                  </div>
-
-                  {/* Right: Hover-Revealed Icon Buttons (Rename, Move, Delete) */}
-                  <div
-                    className="folder-hover-actions"
+              {activeSmartView === 'everything' && (
+                <>
+                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                  <span
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      opacity: 0,
-                      transition: 'opacity 0.12s ease',
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
+                      fontWeight: TYPOGRAPHY.weights.semibold,
                     }}
                   >
-                    <button
-                      type="button"
-                      data-testid={`rename-folder-${folder.id}`}
-                      aria-label={`Rename ${folder.name}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenameFolderTarget(folder);
-                        setRenameDraft(folder.name);
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        cursor: 'pointer',
-                        padding: '4px',
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                      </svg>
-                    </button>
+                    Everything
+                  </span>
+                </>
+              )}
 
-                    <button
-                      type="button"
-                      data-testid={`move-folder-${folder.id}`}
-                      aria-label={`Move ${folder.name}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMoveTarget({ type: 'folder', folder });
-                        setMoveDestinationFolderId(folder.parentId);
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                        cursor: 'pointer',
-                        padding: '4px',
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                        <polyline points="15 3 21 3 21 9" />
-                        <polyline points="9 21 3 21 3 15" />
-                        <line x1="21" y1="3" x2="14" y2="10" />
-                        <line x1="3" y1="21" x2="10" y2="14" />
-                      </svg>
-                    </button>
+              {activeSmartView === 'needs_caption' && (
+                <>
+                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                  <span
+                    style={{
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
+                      fontWeight: TYPOGRAPHY.weights.semibold,
+                    }}
+                  >
+                    Needs caption
+                  </span>
+                </>
+              )}
 
-                    <button
-                      type="button"
-                      data-testid={`delete-folder-${folder.id}`}
-                      aria-label={`Delete ${folder.name}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteFolderTarget(folder);
-                      }}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: PALETTE.accent3,
-                        cursor: 'pointer',
-                        padding: '4px',
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+              {!activeSmartView &&
+                breadcrumbs.map((crumb, idx) => {
+                  const isLast = idx === breadcrumbs.length - 1;
+                  return (
+                    <React.Fragment key={crumb.id}>
+                      <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                      <button
+                        type="button"
+                        data-testid={`breadcrumb-folder-${crumb.id}`}
+                        onClick={() => {
+                          setActiveSmartView(null);
+                          setCurrentFolderId(crumb.id);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
+                          const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+                          if (mediaId) {
+                            try {
+                              const parsed = JSON.parse(mediaId);
+                              void handleReparent(crumb.id, { mediaId: parsed.mediaId });
+                            } catch {}
+                          } else if (folderId) {
+                            try {
+                              const parsed = JSON.parse(folderId);
+                              void handleReparent(crumb.id, { folderId: parsed.folderId });
+                            } catch {}
+                          }
+                        }}
+                        style={{
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          padding: 0,
+                          color: isLast
+                            ? `var(--text-main, ${THEME.default.text.primary})`
+                            : `var(--text-sub, ${THEME.default.text.secondary})`,
+                          fontWeight: isLast
+                            ? TYPOGRAPHY.weights.semibold
+                            : TYPOGRAPHY.weights.regular,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {crumb.name}
+                      </button>
+                    </React.Fragment>
+                  );
+                })}
+            </nav>
+
+            {/* Right: "Select all" toggle */}
+            {displayedMediaItems.length > 0 && (
+              <button
+                type="button"
+                data-testid="select-all-btn"
+                onClick={handleSelectAll}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  cursor: 'pointer',
+                }}
+              >
+                {selectedIds.length === displayedMediaItems.length
+                  ? 'Deselect all'
+                  : 'Select all'}
+              </button>
+            )}
           </div>
-        </section>
-      )}
 
-      {/* 5. Main Media Asset Canvas: Grid or Table View */}
-      {renderMediaCanvas()}
+          {/* Subfolders as ROWS (NOT cards) */}
+          {currentSubfolders.length > 0 && !debouncedSearch && !activeSmartView && (
+            <section
+              aria-label="Subfolders"
+              data-testid="subfolders-grid"
+              style={{
+                marginBottom: SPACING.xl,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '2px',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  letterSpacing: '0.04em',
+                  color: `var(--text-dim, ${THEME.default.text.muted})`,
+                  marginBottom: '6px',
+                }}
+              >
+                FOLDERS ({currentSubfolders.length})
+              </span>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.06))',
+                }}
+              >
+                {currentSubfolders.map((folder) => {
+                  const childSubfolders = folders.filter((f) => f.parentId === folder.id);
+                  const folderItems = mediaItems.filter((m) => m.folderId === folder.id);
+                  const subCount = childSubfolders.length;
+                  const fileCount = folder.itemCount ?? folderItems.length;
+
+                  return (
+                    <div
+                      key={folder.id}
+                      data-testid={`folder-row-${folder.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setActiveSmartView(null);
+                          setCurrentFolderId(folder.id);
+                        }
+                      }}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(
+                          'application/x-fbuploadpro-folder',
+                          JSON.stringify({ folderId: folder.id })
+                        );
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
+                        const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+                        if (mediaId) {
+                          try {
+                            const parsed = JSON.parse(mediaId);
+                            void handleReparent(folder.id, { mediaId: parsed.mediaId });
+                          } catch {}
+                        } else if (folderId) {
+                          try {
+                            const parsed = JSON.parse(folderId);
+                            void handleReparent(folder.id, { folderId: parsed.folderId });
+                          } catch {}
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: `${SPACING.sm} ${SPACING.xs}`,
+                        borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.06))',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.12s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+                        const actionContainer = e.currentTarget.querySelector('.folder-hover-actions') as HTMLElement | null;
+                        if (actionContainer) actionContainer.style.opacity = '1';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        const actionContainer = e.currentTarget.querySelector('.folder-hover-actions') as HTMLElement | null;
+                        if (actionContainer) actionContainer.style.opacity = '0';
+                      }}
+                      onClick={() => {
+                        setActiveSmartView(null);
+                        setCurrentFolderId(folder.id);
+                      }}
+                    >
+                      {/* Left: Folder icon + Name + Secondary text ("1 subfolder · 0 files") */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke={PALETTE.primary}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span
+                          data-testid={`folder-name-${folder.id}`}
+                          style={{
+                            fontSize: '0.875rem',
+                            fontWeight: TYPOGRAPHY.weights.medium,
+                            color: `var(--text-main, ${THEME.default.text.primary})`,
+                          }}
+                        >
+                          {folder.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '0.75rem',
+                            color: `var(--text-dim, ${THEME.default.text.muted})`,
+                          }}
+                        >
+                          {subCount} subfolder{subCount === 1 ? '' : 's'} · {fileCount} file{fileCount === 1 ? '' : 's'}
+                        </span>
+                      </div>
+
+                      {/* Right: Hover-Revealed Icon Buttons (Rename, Move, Delete) */}
+                      <div
+                        className="folder-hover-actions"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          opacity: 0,
+                          transition: 'opacity 0.12s ease',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          data-testid={`rename-folder-${folder.id}`}
+                          aria-label={`Rename ${folder.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenameFolderTarget(folder);
+                            setRenameDraft(folder.name);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid={`move-folder-${folder.id}`}
+                          aria-label={`Move ${folder.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMoveTarget({ type: 'folder', folder });
+                            setMoveDestinationFolderId(folder.parentId);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="21" y1="3" x2="14" y2="10" />
+                            <line x1="3" y1="21" x2="10" y2="14" />
+                          </svg>
+                        </button>
+
+                        <button
+                          type="button"
+                          data-testid={`delete-folder-${folder.id}`}
+                          aria-label={`Delete ${folder.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteFolderTarget(folder);
+                          }}
+                          style={{
+                            backgroundColor: 'transparent',
+                            border: 'none',
+                            color: PALETTE.accent3,
+                            cursor: 'pointer',
+                            padding: '4px',
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Main Media Asset Canvas: Grid or Table View */}
+          <MediaCanvas
+            displayedMediaItems={displayedMediaItems}
+            viewMode={viewMode}
+            isLoading={isLoading}
+            selectedIds={selectedIds}
+            debouncedSearch={debouncedSearch}
+            folders={folders}
+            activeSmartView={activeSmartView}
+            onNavigateFolder={(fId) => {
+              setActiveSmartView(null);
+              setCurrentFolderId(fId);
+            }}
+            onToggleSelect={handleToggleSelect}
+            onPreview={(m) => setPreviewItem(m)}
+            onUpdateCaption={handleUpdateItemCaption}
+            onMoveRequest={(m) => {
+              setMoveTarget({ type: 'single_media', mediaItem: m });
+              setMoveDestinationFolderId(m.folderId);
+            }}
+            onDeleteRequest={handleDeleteItem}
+          />
+        </main>
+      </div>
 
       {/* 6. Floating Batch Action Pill (Bottom Center) */}
       <BatchActionBar
@@ -2060,7 +2666,7 @@ export function MediaLibraryExplorer({
                   cursor: 'pointer',
                 }}
               >
-                <option value="">All Media</option>
+                <option value="">Library</option>
                 {folders
                   .filter((f) =>
                     moveTarget.type === 'folder' ? f.id !== moveTarget.folder?.id : true
@@ -2287,8 +2893,8 @@ export function MediaLibraryExplorer({
                 >
                   Are you sure you want to delete &ldquo;{deleteFolderTarget.name}&rdquo;?{' '}
                   {impact.subfolderCount > 0 || impact.totalMediaCount > 0
-                    ? `${impact.subfolderCount} subfolders and ${impact.totalMediaCount} media files inside will be moved to All Media.`
-                    : 'Items inside will be moved to All Media.'}
+                    ? `${impact.subfolderCount} subfolders and ${impact.totalMediaCount} media files inside will be moved to Library.`
+                    : 'Items inside will be moved to Library.'}
                 </p>
               );
             })()}

@@ -195,11 +195,12 @@ export function MediaImportModal({
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId);
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
+  const [userInitiatedCancel, setUserInitiatedCancel] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Synchronize initial files into staging queue
   useEffect(() => {
-    if (!isOpen || initialFiles.length === 0) return;
+    if (!isOpen || initialFiles.length === 0 || step !== 'staging') return;
 
     setQueue((prevQueue) => {
       // Avoid re-adding existing files
@@ -353,13 +354,22 @@ export function MediaImportModal({
         }
 
         const presignData = await presignRes.json();
-        const { uploadUrl, mediaId, storageKey, thumbnailUploadUrl, thumbnailKey } =
-          presignData;
+        const mediaUploadUrl = presignData.mediaUploadUrl || presignData.uploadUrl;
+        const mediaKey = presignData.mediaKey || presignData.storageKey;
+        const mediaId = presignData.mediaId;
+        const thumbnailUploadUrl = presignData.thumbnailUploadUrl;
+        const thumbnailKey = presignData.thumbnailKey;
+        const publicMediaUrl = presignData.publicMediaUrl || presignData.url || '';
+        const publicThumbnailUrl = presignData.publicThumbnailUrl || presignData.thumbnailUrl || null;
+
+        if (!mediaUploadUrl) {
+          throw new Error('Upload URL missing from presign response');
+        }
 
         // 2. Direct R2 upload via XHR for real progress events
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open('PUT', uploadUrl, true);
+          xhr.open('PUT', mediaUploadUrl, true);
           xhr.setRequestHeader('Content-Type', item.mimeType);
 
           xhr.upload.onprogress = (e) => {
@@ -395,7 +405,7 @@ export function MediaImportModal({
               headers: { 'Content-Type': 'image/webp' },
               body: thumbData.blob,
             });
-            uploadedThumbnailUrl = presignData.thumbnailUrl || null;
+            uploadedThumbnailUrl = publicThumbnailUrl;
           } catch {
             // Ignore thumbnail upload error; fall back to type icon
           }
@@ -411,9 +421,9 @@ export function MediaImportModal({
             fileSize: item.size,
             mimeType: item.mimeType,
             mediaType: item.mediaType,
-            storageKey,
+            storageKey: mediaKey,
             folderId: selectedFolderId,
-            url: presignData.url || '',
+            url: publicMediaUrl,
             thumbnailKey: uploadedThumbnailUrl ? thumbnailKey : null,
             thumbnailUrl: uploadedThumbnailUrl,
             durationSeconds: thumbData.duration,
@@ -425,7 +435,8 @@ export function MediaImportModal({
         });
 
         if (!confirmRes.ok) {
-          throw new Error('Failed to confirm upload in library');
+          const errText = await confirmRes.text();
+          throw new Error(`Failed to confirm upload in library: ${errText}`);
         }
 
         const confirmData = await confirmRes.json();
@@ -449,8 +460,11 @@ export function MediaImportModal({
         }
       } catch (err: any) {
         if (err.message === 'Upload aborted') {
+          console.info(`[upload-engine] Upload aborted for item: ${item.id}`);
           return;
         }
+
+        console.error(`[upload-engine] Upload failed for ${item.name}:`, err);
 
         // Auto-retry up to 3 times
         if (item.retryCount < 3) {
@@ -501,13 +515,23 @@ export function MediaImportModal({
         (it) => it.status === 'completed' || it.status === 'failed'
       );
       if (hasFinished) {
+        const completedCount = queue.filter((it) => it.status === 'completed').length;
+        const failedCount = queue.filter((it) => it.status === 'failed').length;
+        console.info('[upload-engine] Transition to complete', {
+          source: userInitiatedCancel ? 'user_cancel' : 'workers_finished',
+          completed: completedCount,
+          failed: failedCount,
+          total: queue.length,
+        });
         setStep('complete');
       }
     }
-  }, [step, queue, uploadFile]);
+  }, [step, queue, uploadFile, userInitiatedCancel]);
 
   // Actions
   const handleStartImport = () => {
+    setUserInitiatedCancel(false);
+    console.info('[upload-engine] Starting import batch');
     setQueue((prev) =>
       prev.map((it) =>
         it.status === 'staged' && !it.validationError && it.duplicateResolution !== 'skip'
@@ -558,6 +582,8 @@ export function MediaImportModal({
   };
 
   const handleCancelUpload = (id: string) => {
+    setUserInitiatedCancel(true);
+    console.info(`[upload-engine] User canceled item: ${id}`);
     setQueue((prev) =>
       prev.map((it) => {
         if (it.id === id) {
@@ -581,6 +607,8 @@ export function MediaImportModal({
   };
 
   const handleCancelRemaining = () => {
+    setUserInitiatedCancel(true);
+    console.info('[upload-engine] User canceled remaining items');
     setQueue((prev) =>
       prev.map((it) => {
         if (it.status === 'queued') {
@@ -733,6 +761,16 @@ export function MediaImportModal({
     return null;
   };
 
+  const getCompleteTitle = () => {
+    if (completedItems.length > 0) {
+      return `Import complete — ${completedItems.length} of ${totalInBatch} uploaded`;
+    }
+    if (userInitiatedCancel) {
+      return 'Import canceled — nothing was uploaded';
+    }
+    return `Import failed — 0 of ${totalInBatch} uploaded`;
+  };
+
   return (
     <dialog
       open
@@ -793,10 +831,7 @@ export function MediaImportModal({
               {step === 'staging' && 'Import media'}
               {step === 'progress' &&
                 `Uploading ${Math.min(activeUploadingItems.length || 3, MAX_CONCURRENT_UPLOADS)} at a time · ${overallProgressPercent}% overall`}
-              {step === 'complete' &&
-                (completedItems.length > 0
-                  ? `Import complete — ${completedItems.length} of ${totalInBatch} uploaded`
-                  : 'Import canceled — nothing was uploaded')}
+              {step === 'complete' && getCompleteTitle()}
             </h2>
             {step === 'staging' && (
               <p
@@ -821,7 +856,7 @@ export function MediaImportModal({
                     cursor: 'pointer',
                   }}
                 >
-                  <option value="">All Media</option>
+                  <option value="">Library</option>
                   {folders.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}

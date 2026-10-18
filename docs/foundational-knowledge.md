@@ -932,6 +932,65 @@ Spec 068 establishes complete architectural and directory namespace separation b
 * **Zero-Downtime Legacy Route Wrapper**:
   - `apps/web/src/app/api/tenant/[subdomain]/media/downloader/route.ts` re-exports `GET` and `POST` from `../../downloader/route`, ensuring zero disruption to in-flight browser sessions, worker callbacks, or legacy external scripts.
 
+---
+
+## 34. Spec 069 Media Library Functional Fixes: Ingestion Guard, Query Alignment & Toolbar Interactivity
+
+Spec 069 resolves four critical and high-priority functional defects in the Media Library (`/tenant/[subdomain]/media`, `MediaLibraryExplorer`) without modifying visual themes, colors, typography, or design tokens:
+
+### 34.1 Robust Media Ingestion Pipeline & User-Initiated Cancel Guard (Issue 1)
+* **Presigned Response Property Alignment**: Corrected `MediaImportModal` to consume the actual field names returned by `POST /api/tenant/[subdomain]/media/upload-url` (`mediaUploadUrl`, `mediaKey`, `publicMediaUrl`, `thumbnailUploadUrl`, `thumbnailKey`, `publicThumbnailUrl`), falling back gracefully to legacy properties. Eliminates `PUT /undefined` 404 network failures and bad request payloads during `/media/confirm`.
+* **Explicit User-Action Cancel Guard**: Added a strict guard tracking `userInitiatedCancel`. A batch can ONLY enter or display the `canceled` state when the user explicitly clicks a per-file cancel action or the "Cancel remaining" button. If uploads fail due to network errors, presigned expiry, or confirmation rejections, the engine surfaces the authentic state (`Import failed — 0 of N uploaded`), preserving diagnosability.
+* **Transition & Telemetry Logging**: Instrument the upload state machine with informative console logs (`[upload-engine] Transition to complete`, `[upload-engine] Upload error`) detailing exact transition triggers and failed file IDs.
+
+### 34.2 Storage Media Listing & Query Limit Alignment (Issue 2)
+* **Schema Max Limit Adjustment**: Updated `MediaListQuerySchema` in `packages/contracts/src/domain/media.ts` to allow `limit: z.coerce.number().int().min(1).max(1000).default(50)`.
+* **Restored Explorer Root Listing**: The explorer's query `/api/tenant/[subdomain]/media?limit=500` now validates with 100% success against the contracts schema. Pre-existing assets stored in R2 and registered in `media_items` (such as `velocta-avatar.png`) resolve and render immediately at the root folder and in live searches without re-uploading or altering objects.
+
+### 34.3 Toolbar Dropdown Containment & Keyboard Interactivity (Issue 3)
+* **Pointerdown Event Containment**: Replaced the unconstrained document `pointerdown` listener with container ref checks (`ratioDropdownRef`, `captionDropdownRef`, `sortDropdownRef`). The menu no longer unmounts during the pointer-down phase, allowing option button click events to fire, update state (`aspectRatioFilter`, `captionStatusFilter`, `sortOption`), and refresh trigger labels.
+* **Accessible Keyboard Navigation**: Added full keyboard navigation support across all toolbar dropdown triggers and menu items (Enter, Space, Escape, and ArrowDown) conforming to WCAG 2.1 AA keyboard accessibility.
+
+### 34.4 Hairline Toolbar Group Dividers (Issue 4)
+* **Approved Visual Dividers**: Inserted three 1px vertical hairline dividers (`role="separator"`, `aria-orientation="vertical"`, `var(--border-subtle)`) cleanly separating the four functional toolbar clusters: Search, Media-type tabs, Dropdowns, and View toggle.
+
+---
+
+## 35. Spec 070 Media Library Toolbar Zones & Rail Smart Views
+
+Spec 070 rebuilds the Media Library toolbar and navigation architecture into an unmistakable, 3-zone control bar, adds cross-folder Smart Views to the rail, renames the root repository to "Library", and implements library-wide global search with folder path attribution without touching themes, colors, or fonts:
+
+### 35.1 Root Repository Rename to "Library"
+* **"Library" as the Universal Root**: Renamed the root location from "All Media" to "Library" across all navigation and explorer touchpoints:
+  - Breadcrumb root trail: Reads `Library` at root, and `Library / asdf / sdafd` inside subfolders.
+  - "+ New Folder" modal: The "PLACE INSIDE" default parent folder selector reads `Library`.
+  - Media Import modal: The destination folder dropdown lists `Library` as the root option.
+  - Folder reparenting & deletion: Modals and impact summaries consistently state that items will be moved to `Library`.
+
+### 35.2 Three-Zone Toolbar Architecture
+* **Single Divider-Separated Row**: The toolbar is organized into three distinct, non-overlapping zones separated by vertical hairline dividers (`<hr aria-orientation="vertical">`):
+  1. **Zone 1 — GLOBAL (left)**: Dedicated exclusively to search. Uses placeholder `"Search files and captions…"`. Search executes library-wide across all files and captions regardless of current folder or view.
+  2. **Divider 1**: Separates global search from local scoped controls.
+  3. **Zone 2 — LOCAL (middle)**: Controls that apply strictly to the current folder or smart view.
+     - **Scope Anchor Tag**: First element (`data-testid="media-scope-tag"`), e.g., `"In: Library"`, `"In: Everything"`, `"In: Needs caption"`, or `"In: asdf"`. During active search, automatically anchors to `"In: Library"`.
+     - **Three Labeled Dropdowns**: Eradicated the duplicate `All / Videos / Images` tablist in favor of persistent labeled dropdowns: `"Type: All"`, `"Ratio: All"`, and `"Captions: All"`.
+     - **Active Accent Underline**: Non-default filter values receive the active accent underline (`2px solid ${PALETTE.primary}`) directly beneath the value text (e.g. `Ratio: 9:16`).
+     - **Dynamic Clear Action**: When any local filter is active, displays `"N filters · Clear"` (or `"1 filter · Clear"`) to immediately reset all three filters back to default `All`.
+  4. **Divider 2**: Separates local filtering from sorting and view modes.
+  5. **Zone 3 — SORT + VIEW (right)**: Contains the labeled `"Sort: Newest"` dropdown (short values: `Newest`, `Oldest`, `Name A–Z`, `Largest`) followed by bare grid and table view toggle icon buttons.
+
+### 35.3 Rail Smart Views ("VIEWS": "Everything" & "Needs caption")
+* **Smart Cross-Folder Collections**: Replaced the legacy rail collections with a dedicated `VIEWS` rail section containing exactly two cross-folder smart views:
+  - **Everything**: Displays every media item in the library across all folders.
+  - **Needs caption**: Displays all assets with missing or empty captions across all folders, giving content creators instant access to uncaptioned backlog without manual searching.
+* **Preserved Local Filters**: Switching between folders or smart views seamlessly preserves active local filter settings (`Type`, `Ratio`, `Captions`, `Sort`).
+
+### 35.4 Global Search with Folder Path Attribution
+* **Library-Wide Search**: Any query entered into Zone 1 searches the entire repository across all folders and smart views.
+* **Folder Path Badges**: Every search result card and table row displays its folder path attribution (e.g. `"in asdf / sdafd"` or `"in Library"`), providing instant location context and one-click navigation directly to the enclosing folder.
+
+
+
 
 
 

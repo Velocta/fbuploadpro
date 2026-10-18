@@ -108,7 +108,7 @@ export const MediaListQuerySchema = z.object({
   search: z.string().optional(),
   sortBy: z.enum(['created_at', 'name', 'file_size']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  limit: z.coerce.number().int().min(1).max(1000).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   cursor: z.string().optional(),
   postFormat: PostFormatSchema.optional(),

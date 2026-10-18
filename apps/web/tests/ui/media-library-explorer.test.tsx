@@ -577,7 +577,7 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     );
     expect(trail.map((f) => f.name)).toEqual(['Campaign A', 'Reels', 'Week 1']);
 
-    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('All Media');
+    expect(formatFolderAncestryPath(null, SAMPLE_FOLDERS)).toBe('Library');
     expect(
       formatFolderAncestryPath(
         '22222222-2222-4222-8222-222222222222',
@@ -734,9 +734,10 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
       />
     );
 
-    // Breadcrumb bar shows All Media / Campaign A
+    // Breadcrumb bar shows Library / Campaign A
     expect(hasAttribute('data-testid', 'folder-breadcrumbs')).toBe(true);
     expect(hasAttribute('data-testid', 'breadcrumb-root')).toBe(true);
+    expect(hasText('Library')).toBe(true);
     expect(
       hasAttribute(
         'data-testid',
@@ -747,9 +748,10 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     // Search, Filter & Sort toolbar
     expect(hasAttribute('data-testid', 'media-explorer-toolbar')).toBe(true);
     expect(hasAttribute('data-testid', 'media-search-input')).toBe(true);
-    expect(hasAttribute('data-testid', 'filter-type-all')).toBe(true);
-    expect(hasAttribute('data-testid', 'filter-type-video')).toBe(true);
-    expect(hasAttribute('data-testid', 'filter-type-image')).toBe(true);
+    expect(hasAttribute('data-testid', 'media-type-select')).toBe(true);
+    expect(hasAttribute('data-testid', 'filter-type-all')).toBe(false);
+    expect(hasAttribute('data-testid', 'filter-type-video')).toBe(false);
+    expect(hasAttribute('data-testid', 'filter-type-image')).toBe(false);
     expect(hasAttribute('data-testid', 'media-sort-select')).toBe(true);
 
     // Subfolders inside Campaign A ("Reels" and "Photos") are rendered
@@ -1184,6 +1186,146 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
       row.hasAttribute('data-testid', `schedule-media-${SAMPLE_MEDIA_ITEMS[0]!.id}`)
     ).toBe(false);
     expect(row.hasText('Schedule / Add to Queue')).toBe(false);
+  });
+
+  it('Spec 070 US1: renders hairline vertical dividers separating 3 toolbar zones', () => {
+    const explorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+      />
+    );
+    expect(explorer.hasAria('orientation', 'vertical')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-divider-1')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-divider-2')).toBe(true);
+    const separators = explorer.findTags('hr').filter(
+      (el) => el.attributes['aria-orientation'] === 'vertical'
+    );
+    expect(separators).toHaveLength(2);
+  });
+
+  it('Spec 070 US1: renders three-zone toolbar with persistent labels, scope anchor, and active filter underline', () => {
+    const explorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialMediaTypeFilter="video"
+        initialAspectRatioFilter="9:16"
+        initialCaptionStatusFilter="has_caption"
+        initialSortOption="created_at:asc"
+      />
+    );
+    // Zone 1: Search only
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-zone-1')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-search-input')).toBe(true);
+
+    // Zone 2: Scope tag and labeled dropdowns
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-zone-2')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-scope-tag')).toBe(true);
+    expect(explorer.hasText('In: Library')).toBe(true);
+
+    expect(explorer.hasAttribute('data-testid', 'media-type-select')).toBe(true);
+    expect(explorer.hasText('Type:')).toBe(true);
+    expect(explorer.hasText('Videos')).toBe(true);
+
+    expect(explorer.hasAttribute('data-testid', 'media-aspect-ratio-select')).toBe(true);
+    expect(explorer.hasText('Ratio:')).toBe(true);
+    expect(explorer.hasText('9:16')).toBe(true);
+
+    expect(explorer.hasAttribute('data-testid', 'media-caption-status-select')).toBe(true);
+    expect(explorer.hasText('Captions:')).toBe(true);
+    expect(explorer.hasText('Has caption')).toBe(true);
+
+    // Active filters count and clear action
+    expect(explorer.hasAttribute('data-testid', 'clear-filters-btn')).toBe(true);
+    expect(explorer.hasText('3 filters · Clear')).toBe(true);
+
+    // Zone 3: Sort & View
+    expect(explorer.hasAttribute('data-testid', 'media-toolbar-zone-3')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'media-sort-select')).toBe(true);
+    expect(explorer.hasText('Sort:')).toBe(true);
+    expect(explorer.hasText('Oldest')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'view-mode-grid-btn')).toBe(true);
+    expect(explorer.hasAttribute('data-testid', 'view-mode-table-btn')).toBe(true);
+  });
+
+  it('Spec 070 US2: renders rail with VIEWS (Everything, Needs caption), FOLDERS with root Library, and updates scope tag on navigation', () => {
+    // Root explorer view
+    const rootExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+      />
+    );
+    expect(rootExplorer.hasAttribute('data-testid', 'media-views-rail')).toBe(true);
+    expect(rootExplorer.hasText('VIEWS')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-everything')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'smart-view-needs-caption')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'rail-root-library')).toBe(true);
+    expect(rootExplorer.hasText('In: Library')).toBe(true);
+    expect(rootExplorer.hasAttribute('data-testid', 'breadcrumb-root')).toBe(true);
+
+    // Folder view (Campaign A)
+    const folderExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId="11111111-1111-4111-8111-111111111111"
+      />
+    );
+    expect(folderExplorer.hasText('In: Campaign A')).toBe(true);
+
+    // Smart view: Everything
+    const everythingExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialActiveSmartView="everything"
+      />
+    );
+    expect(everythingExplorer.hasText('In: Everything')).toBe(true);
+
+    // Smart view: Needs caption
+    const needsCaptionExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialActiveSmartView="needs_caption"
+      />
+    );
+    expect(needsCaptionExplorer.hasText('In: Needs caption')).toBe(true);
+    expect(needsCaptionExplorer.hasText('Product_Showcase_Banner.png')).toBe(true);
+    expect(needsCaptionExplorer.hasText('Viral Launch Reel.mp4')).toBe(false);
+  });
+
+  it('Spec 070 US3: library-wide global search resets scope to In: Library and displays folder path attribution with "in " prefix', () => {
+    // Search from within nested folder "Reels"
+    const searchExplorer = render(
+      <MediaLibraryExplorer
+        subdomain="acme"
+        initialFolders={SAMPLE_FOLDERS}
+        initialMediaItems={SAMPLE_MEDIA_ITEMS}
+        initialCurrentFolderId="22222222-2222-4222-8222-222222222222"
+        initialSearchQuery="viral"
+      />
+    );
+
+    // Scope resets to library-wide
+    expect(searchExplorer.hasText('In: Library')).toBe(true);
+
+    // Returns items matching "viral" from both root and nested folders
+    expect(searchExplorer.hasText('Viral Launch Reel.mp4')).toBe(true);
+    expect(searchExplorer.hasText('Nested_Folder_Clip.mp4')).toBe(true);
+
+    // Displays path attribution with "in " prefix
+    expect(searchExplorer.hasText('in Library')).toBe(true);
+    expect(searchExplorer.hasText('in Campaign A / Reels')).toBe(true);
   });
 });
 
