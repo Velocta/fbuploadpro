@@ -64,12 +64,12 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, user }: Rea
   const accountsHref = href('/accounts');
   const pagesHref = href('/pages');
 
-  const isHomeActive = effectivePath === homeHref;
-  const isMediaActive = effectivePath.startsWith(mediaHref);
-  const isDownloaderActive = effectivePath.startsWith(downloaderHref);
-  const isFdolaStudioActive = effectivePath.startsWith(fdolaStudioHref);
-  const isAccountsActive = effectivePath.startsWith(accountsHref);
-  const isPagesActive = effectivePath.startsWith(pagesHref);
+  const isHomeActive = effectivePath === normalizeTenantPath(homeHref, subdomain);
+  const isMediaActive = effectivePath.startsWith(normalizeTenantPath(mediaHref, subdomain));
+  const isDownloaderActive = effectivePath.startsWith(normalizeTenantPath(downloaderHref, subdomain));
+  const isFdolaStudioActive = effectivePath.startsWith(normalizeTenantPath(fdolaStudioHref, subdomain));
+  const isAccountsActive = effectivePath.startsWith(normalizeTenantPath(accountsHref, subdomain));
+  const isPagesActive = effectivePath.startsWith(normalizeTenantPath(pagesHref, subdomain));
 
   const handleNavigate = (href: string) => {
     setOptimisticPathname(href);
@@ -378,7 +378,7 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, user }: Rea
               {UPCOMING_PLATFORMS.map((platform) => {
                 const platformAccountsHref = href(`/${platform.routeSlug}/accounts`);
                 const isPlatformActive = effectivePath.startsWith(`/${platform.routeSlug}`);
-                const isAccountsSubActive = effectivePath.startsWith(platformAccountsHref);
+                const isAccountsSubActive = effectivePath.startsWith(normalizeTenantPath(platformAccountsHref, subdomain));
                 const isOpen = openPlatforms[platform.key] ?? (isPlatformActive ? true : false);
 
                 return (
