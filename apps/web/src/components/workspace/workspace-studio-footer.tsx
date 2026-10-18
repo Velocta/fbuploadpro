@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sidebar';
 import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 import { broadcastAuthEvent } from '@/lib/auth-broadcast';
+import { buildTenantHref, normalizeTenantPath } from '@/lib/tenant-href';
 import { CreateWorkspaceModal } from './create-workspace-modal';
 
 export interface WorkspaceItem {
@@ -21,6 +22,8 @@ export interface WorkspaceItem {
 
 export interface WorkspaceStudioFooterProps {
   subdomain: string;
+  /** True when on the tenant's own subdomain: use clean paths (/accounts). */
+  useCleanPaths?: boolean | undefined;
   user?: {
     name: string;
     email: string;

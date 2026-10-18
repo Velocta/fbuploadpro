@@ -16,7 +16,13 @@ interface TenantLayoutProps {
 export default async function TenantLayout({ params, children }: Readonly<TenantLayoutProps>) {
   const { subdomain } = await params;
   const session = await getServerSessionContext();
-  const hostHeader = (await headers()).get('host');
+  let hostHeader: string | null = null;
+  try {
+    hostHeader = (await headers()).get('host');
+  } catch {
+    // Outside a request scope (tests, static generation): fall back to prefixed URLs.
+    hostHeader = null;
+  }
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'fbuploadpro.com';
   const useCleanPaths = shouldUseCleanTenantPaths(hostHeader, subdomain, rootDomain);
 
