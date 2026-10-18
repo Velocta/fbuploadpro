@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useParams } from 'next/navigation';
-import { MediaDownloader } from '@/components/media/media-downloader';
+import { MediaDownloader } from '@/components/downloader/media-downloader';
 
 export default function TenantMediaDownloaderPage() {
   const params = useParams();

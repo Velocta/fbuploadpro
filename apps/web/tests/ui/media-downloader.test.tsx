@@ -21,7 +21,7 @@ import {
   buildMediaFolderHref,
   type DownloaderBatchProgressState,
   type DownloaderFailedEntry,
-} from '@/components/media/media-downloader';
+} from '@/components/downloader/media-downloader';
 import { render } from '../components/setup';
 
 const mockPush = vi.fn();
