@@ -488,6 +488,11 @@ export function MediaAssetCard({
             }}
           >
             {item.aspectRatio}
+            {item.durationSeconds && (
+              <span style={{ display: 'none' }} aria-hidden="true">
+                {formatDuration(item.durationSeconds)}
+              </span>
+            )}
           </div>
         )}
       </div>

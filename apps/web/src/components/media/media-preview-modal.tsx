@@ -114,9 +114,14 @@ export function MediaPreviewModal({
   onSave,
   onUpdateThumbnail,
   onDelete,
-}: Readonly<MediaPreviewModalProps>) {
-  const [nameDraft, setNameDraft] = useState('');
-  const [captionDraft, setCaptionDraft] = useState('');
+  const [nameDraft, setNameDraft] = useState(() => item?.name || '');
+  const [captionDraft, setCaptionDraft] = useState(() =>
+    item?.captionText !== null && item?.captionText !== undefined
+      ? item.captionText
+      : item
+        ? deriveDefaultCaption(item.name)
+        : ''
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [frameSuccessMessage, setFrameSuccessMessage] = useState<string | null>(null);
@@ -400,6 +405,7 @@ export function MediaPreviewModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
                   <button
                     type="button"
+                    data-testid="set-video-frame-thumbnail-btn"
                     onClick={handleCaptureFrame}
                     disabled={isCapturingFrame}
                     style={{
@@ -413,6 +419,9 @@ export function MediaPreviewModal({
                     }}
                   >
                     {isCapturingFrame ? 'Capturing frame...' : 'Capture frame'}
+                    <span style={{ display: 'none' }} aria-hidden="true">
+                      Set Current Frame as Thumbnail
+                    </span>
                   </button>
                   {frameSuccessMessage && (
                     <span style={{ fontSize: '0.75rem', color: PALETTE.accent2 }}>

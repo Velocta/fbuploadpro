@@ -1118,7 +1118,7 @@ export function MediaLibraryExplorer({
           <div style={{ position: 'relative' }}>
             <button
               type="button"
-              data-testid="caption-dropdown-trigger"
+              data-testid="media-caption-status-select"
               onPointerDown={(e) => {
                 e.stopPropagation();
                 setActiveDropdown((prev) => (prev === 'caption' ? null : 'caption'));
@@ -1699,6 +1699,10 @@ export function MediaLibraryExplorer({
                 key={item.id}
                 item={item}
                 selected={selectedIds.includes(item.id)}
+                folderPathLabel={
+                  debouncedSearch ? formatFolderAncestryPath(item.folderId, folders) : null
+                }
+                onNavigateFolder={(fId) => setCurrentFolderId(fId)}
                 onToggleSelect={handleToggleSelect}
                 onPreview={(m) => setPreviewItem(m)}
                 onUpdateCaption={handleUpdateItemCaption}

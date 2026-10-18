@@ -259,7 +259,7 @@ export function MediaTableRow({
         {isEditingCaption ? (
           <input
             type="text"
-            data-testid={`row-caption-input-${item.id}`}
+            data-testid={`table-caption-input-${item.id}`}
             value={captionDraft}
             onChange={(e) => setCaptionDraft(e.target.value)}
             onBlur={() => void handleSaveCaption()}
@@ -287,7 +287,7 @@ export function MediaTableRow({
         ) : (
           <button
             type="button"
-            data-testid={`row-caption-${item.id}`}
+            data-testid={`table-inline-caption-${item.id}`}
             onClick={() => setIsEditingCaption(true)}
             title="Click to edit caption"
             style={{
