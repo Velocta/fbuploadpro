@@ -30,10 +30,13 @@ export interface Env {
   CORS_ALLOWED_ORIGINS?: string;
 }
 
-export * from './fb-client.js';
-export * from './dispatcher.js';
-export * from './settlement.js';
-export * from './services/downloader-engine.js';
+// Explicit re-exports for test imports (replaces export * to avoid leaking internals).
+export {
+  resolveRemoteCandidates,
+  persistDownloadedMediaItem,
+  tryUploadVideoThumbnailToR2,
+  failStuckDownloadJobs,
+} from './services/downloader-engine.js';
 import {
   EnqueueDownloadJobRequestSchema,
   validateSafeRemoteUrl,
@@ -61,9 +64,12 @@ function initWorkerDb(env: Env, optionsDb?: any): any {
   }) as any;
 }
 
+// How often (in minutes) stuck-item recovery runs. Coupled to the worker's "* * * * *" cron.
+const RECOVERY_INTERVAL_MINUTES = 5;
+
 async function recoverStuckPublishingItems(db: any, env?: Env): Promise<void> {
   const currentMinute = new Date().getMinutes();
-  if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
+  if (currentMinute % RECOVERY_INTERVAL_MINUTES === 0 && typeof db.rpc === 'function') {
     try {
       const { data, error } = await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
       if (error) {
