@@ -103,6 +103,454 @@ export interface MediaPreviewModalProps {
   onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
 }
 
+interface PreviewMediaViewerProps {
+  item: MediaItemResponse;
+  isVideo: boolean;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  currentTime: number;
+  duration: number;
+  isPlaying: boolean;
+  isCapturingFrame: boolean;
+  frameSuccessMessage: string | null;
+  onTimeUpdate: () => void;
+  onEnded: () => void;
+  onTogglePlay: () => void;
+  onScrubberChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onCaptureFrame: () => void;
+}
+
+function PreviewMediaViewer({
+  item,
+  isVideo,
+  videoRef,
+  currentTime,
+  duration,
+  isPlaying,
+  isCapturingFrame,
+  frameSuccessMessage,
+  onTimeUpdate,
+  onEnded,
+  onTogglePlay,
+  onScrubberChange,
+  onCaptureFrame,
+}: Readonly<PreviewMediaViewerProps>) {
+  return (
+    <div
+      style={{
+        padding: SPACING.xl,
+        backgroundColor: '#000000',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: SPACING.md,
+        borderRight: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxHeight: '440px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          borderRadius: RADII.xs,
+        }}
+      >
+        {isVideo ? (
+          <video
+            ref={videoRef}
+            data-testid="modal-video-player"
+            src={item.url}
+            controls={false}
+            playsInline
+            onTimeUpdate={onTimeUpdate}
+            onEnded={onEnded}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '440px',
+              objectFit: 'contain',
+              borderRadius: RADII.xs,
+            }}
+          >
+            <track kind="captions" />
+          </video>
+        ) : (
+          <img
+            src={item.url}
+            alt={item.name}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '440px',
+              objectFit: 'contain',
+              borderRadius: RADII.xs,
+            }}
+          />
+        )}
+      </div>
+
+      {isVideo && (
+        <div
+          style={{
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+            <button
+              type="button"
+              onClick={onTogglePlay}
+              style={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: '#ffffff',
+                cursor: 'pointer',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+              }}
+            >
+              {isPlaying ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="6" y="4" width="4" height="16" />
+                  <rect x="14" y="4" width="4" height="16" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+              )}
+            </button>
+
+            <input
+              type="range"
+              min={0}
+              max={duration || 100}
+              step={0.01}
+              value={currentTime}
+              onChange={onScrubberChange}
+              style={{
+                flex: 1,
+                accentColor: PALETTE.primary,
+                cursor: 'pointer',
+              }}
+            />
+
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                minWidth: '55px',
+                textAlign: 'right',
+              }}
+            >
+              {formatDuration(currentTime) || '0:00'} / {formatDuration(duration || item.durationSeconds) || '0:00'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+            <button
+              type="button"
+              data-testid="set-video-frame-thumbnail-btn"
+              onClick={onCaptureFrame}
+              disabled={isCapturingFrame}
+              style={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: PALETTE.primary,
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: isCapturingFrame ? 'wait' : 'pointer',
+                padding: '2px 0',
+              }}
+            >
+              {isCapturingFrame ? 'Capturing frame...' : 'Capture frame'}
+              <span style={{ display: 'none' }} aria-hidden="true">
+                Set Current Frame as Thumbnail
+              </span>
+            </button>
+            {frameSuccessMessage && (
+              <span style={{ fontSize: '0.75rem', color: PALETTE.accent2 }}>
+                {frameSuccessMessage}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PreviewMetadataEditorProps {
+  item: MediaItemResponse;
+  isVideo: boolean;
+  nameDraft: string;
+  captionDraft: string;
+  isSaving: boolean;
+  isDeleting: boolean;
+  onNameChange: (val: string) => void;
+  onCaptionChange: (val: string) => void;
+}
+
+function PreviewMetadataEditor({
+  item,
+  isVideo,
+  nameDraft,
+  captionDraft,
+  isSaving,
+  isDeleting,
+  onNameChange,
+  onCaptionChange,
+}: Readonly<PreviewMetadataEditorProps>) {
+  const isBusy = isSaving || isDeleting;
+  return (
+    <div
+      style={{
+        padding: SPACING.xl,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SPACING.md,
+      }}
+    >
+      <h2
+        id="preview-modal-title"
+        style={{
+          margin: 0,
+          fontSize: '1rem',
+          fontWeight: TYPOGRAPHY.weights.semibold,
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+        }}
+      >
+        Asset Details
+      </h2>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          paddingBottom: SPACING.sm,
+          borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Type</span>
+          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontWeight: TYPOGRAPHY.weights.medium }}>
+            {item.mediaType === 'video' ? 'Video' : 'Image'}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Size</span>
+          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
+            {formatBytes(item.fileSize)}
+          </span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Aspect ratio</span>
+          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})` }}>
+            {item.aspectRatio && item.aspectRatio !== 'unknown' ? item.aspectRatio : '—'}
+          </span>
+        </div>
+        {isVideo && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+            <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Duration</span>
+            <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
+              {formatDuration(item.durationSeconds) || '—'}
+            </span>
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
+          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Upload date</span>
+          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
+            {formatUploadDate(item.createdAt)}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label
+            htmlFor="preview-filename-input"
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              letterSpacing: '0.04em',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+            }}
+          >
+            FILE NAME
+          </label>
+          <input
+            id="preview-filename-input"
+            type="text"
+            data-testid="modal-filename-input"
+            disabled={isBusy}
+            value={nameDraft}
+            onChange={(e) => onNameChange(e.target.value)}
+            style={{
+              width: '100%',
+              padding: `${SPACING.xs} ${SPACING.sm}`,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+              borderRadius: RADII.xs,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              fontSize: '0.8125rem',
+              outline: 'none',
+              boxSizing: 'border-box',
+              opacity: isBusy ? 0.6 : 1,
+            }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <label
+            htmlFor="preview-caption-textarea"
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              letterSpacing: '0.04em',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+            }}
+          >
+            CAPTION
+          </label>
+          <textarea
+            id="preview-caption-textarea"
+            data-testid="modal-caption-input"
+            rows={4}
+            disabled={isBusy}
+            value={captionDraft}
+            onChange={(e) => onCaptionChange(e.target.value)}
+            placeholder="Add a caption..."
+            style={{
+              width: '100%',
+              padding: SPACING.sm,
+              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+              borderRadius: RADII.xs,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+              fontSize: '0.8125rem',
+              lineHeight: 1.45,
+              outline: 'none',
+              resize: 'vertical',
+              boxSizing: 'border-box',
+              opacity: isBusy ? 0.6 : 1,
+            }}
+          />
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              fontSize: '0.6875rem',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              fontVariantNumeric: TYPOGRAPHY.tabularNums,
+            }}
+          >
+            {captionDraft.length} / 2,200
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PreviewModalFooterProps {
+  hasDelete: boolean;
+  isSaving: boolean;
+  isDeleting: boolean;
+  onDelete?: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+}
+
+function PreviewModalFooter({
+  hasDelete,
+  isSaving,
+  isDeleting,
+  onDelete,
+  onCancel,
+  onSave,
+}: Readonly<PreviewModalFooterProps>) {
+  const isBusy = isSaving || isDeleting;
+  return (
+    <div
+      style={{
+        padding: `${SPACING.md} ${SPACING.xl}`,
+        borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
+      }}
+    >
+      {hasDelete ? (
+        <button
+          type="button"
+          data-testid="modal-delete-media-btn"
+          disabled={isBusy}
+          onClick={onDelete}
+          style={{
+            backgroundColor: 'transparent',
+            border: 'none',
+            color: PALETTE.accent3,
+            fontSize: '0.8125rem',
+            fontWeight: TYPOGRAPHY.weights.medium,
+            cursor: isBusy ? 'not-allowed' : 'pointer',
+            opacity: isBusy ? 0.6 : 1,
+            padding: `${SPACING.xs} 0`,
+          }}
+        >
+          {isDeleting ? 'Deleting...' : 'Delete asset'}
+        </button>
+      ) : (
+        <div />
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={onCancel}
+          style={{
+            padding: `${SPACING.xs} ${SPACING.md}`,
+            backgroundColor: 'transparent',
+            border: 'none',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            fontSize: '0.8125rem',
+            cursor: isBusy ? 'not-allowed' : 'pointer',
+            opacity: isBusy ? 0.6 : 1,
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          data-testid="modal-save-caption-btn"
+          disabled={isBusy}
+          onClick={onSave}
+          style={{
+            padding: `${SPACING.xs} ${SPACING.lg}`,
+            backgroundColor: PALETTE.primary,
+            color: '#000000',
+            border: 'none',
+            borderRadius: RADII.xs,
+            fontSize: '0.8125rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            cursor: isBusy ? 'not-allowed' : 'pointer',
+            opacity: isBusy ? 0.6 : 1,
+          }}
+        >
+          {isSaving ? 'Saving...' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function MediaPreviewModal({
   item,
   open,
@@ -278,7 +726,6 @@ export function MediaPreviewModal({
           overflow: 'hidden',
         }}
       >
-        {/* Main 2-Column Content */}
         <div
           style={{
             display: 'grid',
@@ -287,381 +734,42 @@ export function MediaPreviewModal({
             overflowY: 'auto',
           }}
         >
-          {/* LEFT: Large Preview + Minimal Scrubber + Capture Frame */}
-          <div
-            style={{
-              padding: SPACING.xl,
-              backgroundColor: '#000000',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: SPACING.md,
-              borderRight: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-            }}
-          >
-            <div
-              style={{
-                width: '100%',
-                maxHeight: '440px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                borderRadius: RADII.xs,
-              }}
-            >
-              {isVideo ? (
-                <video
-                  ref={videoRef}
-                  data-testid="modal-video-player"
-                  src={item.url}
-                  controls={false}
-                  playsInline
-                  onTimeUpdate={handleTimeUpdate}
-                  onEnded={() => setIsPlaying(false)}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '440px',
-                    objectFit: 'contain',
-                    borderRadius: RADII.xs,
-                  }}
-                >
-                  <track kind="captions" />
-                </video>
-              ) : (
-                <img
-                  src={item.url}
-                  alt={item.name}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '440px',
-                    objectFit: 'contain',
-                    borderRadius: RADII.xs,
-                  }}
-                />
-              )}
-            </div>
+          <PreviewMediaViewer
+            item={item}
+            isVideo={isVideo}
+            videoRef={videoRef}
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            isCapturingFrame={isCapturingFrame}
+            frameSuccessMessage={frameSuccessMessage}
+            onTimeUpdate={handleTimeUpdate}
+            onEnded={() => setIsPlaying(false)}
+            onTogglePlay={handleTogglePlay}
+            onScrubberChange={handleScrubberChange}
+            onCaptureFrame={handleCaptureFrame}
+          />
 
-            {/* Video Controls: Minimal Scrubber */}
-            {isVideo && (
-              <div
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-                  <button
-                    type="button"
-                    onClick={handleTogglePlay}
-                    style={{
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      color: '#ffffff',
-                      cursor: 'pointer',
-                      padding: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    {isPlaying ? (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <rect x="6" y="4" width="4" height="16" />
-                        <rect x="14" y="4" width="4" height="16" />
-                      </svg>
-                    ) : (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <polygon points="5 3 19 12 5 21 5 3" />
-                      </svg>
-                    )}
-                  </button>
-
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    step={0.01}
-                    value={currentTime}
-                    onChange={handleScrubberChange}
-                    style={{
-                      flex: 1,
-                      accentColor: PALETTE.primary,
-                      cursor: 'pointer',
-                    }}
-                  />
-
-                  <span
-                    style={{
-                      fontSize: '0.6875rem',
-                      color: `var(--text-dim, ${THEME.default.text.muted})`,
-                      fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                      minWidth: '55px',
-                      textAlign: 'right',
-                    }}
-                  >
-                    {formatDuration(currentTime) || '0:00'} / {formatDuration(duration || item.durationSeconds) || '0:00'}
-                  </span>
-                </div>
-
-                {/* Capture Frame Text Button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-                  <button
-                    type="button"
-                    data-testid="set-video-frame-thumbnail-btn"
-                    onClick={handleCaptureFrame}
-                    disabled={isCapturingFrame}
-                    style={{
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      color: PALETTE.primary,
-                      fontSize: '0.75rem',
-                      fontWeight: TYPOGRAPHY.weights.medium,
-                      cursor: isCapturingFrame ? 'wait' : 'pointer',
-                      padding: '2px 0',
-                    }}
-                  >
-                    {isCapturingFrame ? 'Capturing frame...' : 'Capture frame'}
-                    <span style={{ display: 'none' }} aria-hidden="true">
-                      Set Current Frame as Thumbnail
-                    </span>
-                  </button>
-                  {frameSuccessMessage && (
-                    <span style={{ fontSize: '0.75rem', color: PALETTE.accent2 }}>
-                      {frameSuccessMessage}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT: Plain Label/Value Metadata Rows + Name & Caption Fields */}
-          <div
-            style={{
-              padding: SPACING.xl,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.md,
-            }}
-          >
-            <h2
-              id="preview-modal-title"
-              style={{
-                margin: 0,
-                fontSize: '1rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              Asset Details
-            </h2>
-
-            {/* Metadata Rows */}
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                paddingBottom: SPACING.sm,
-                borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Type</span>
-                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontWeight: TYPOGRAPHY.weights.medium }}>
-                  {item.mediaType === 'video' ? 'Video' : 'Image'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Size</span>
-                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
-                  {formatBytes(item.fileSize)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Aspect ratio</span>
-                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})` }}>
-                  {item.aspectRatio && item.aspectRatio !== 'unknown' ? item.aspectRatio : '—'}
-                </span>
-              </div>
-              {isVideo && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Duration</span>
-                  <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
-                    {formatDuration(item.durationSeconds) || '—'}
-                  </span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-                <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Upload date</span>
-                <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
-                  {formatUploadDate(item.createdAt)}
-                </span>
-              </div>
-            </div>
-
-            {/* Editable Fields: File Name & Caption */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label
-                  htmlFor="preview-filename-input"
-                  style={{
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  FILE NAME
-                </label>
-                <input
-                  id="preview-filename-input"
-                  type="text"
-                  data-testid="modal-filename-input"
-                  disabled={isSaving || isDeleting}
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: `${SPACING.xs} ${SPACING.sm}`,
-                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                    borderRadius: RADII.xs,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    fontSize: '0.8125rem',
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    opacity: isSaving || isDeleting ? 0.6 : 1,
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label
-                  htmlFor="preview-caption-textarea"
-                  style={{
-                    fontSize: '0.6875rem',
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    letterSpacing: '0.04em',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  }}
-                >
-                  CAPTION
-                </label>
-                <textarea
-                  id="preview-caption-textarea"
-                  data-testid="modal-caption-input"
-                  rows={4}
-                  disabled={isSaving || isDeleting}
-                  value={captionDraft}
-                  onChange={(e) => setCaptionDraft(e.target.value)}
-                  placeholder="Add a caption..."
-                  style={{
-                    width: '100%',
-                    padding: SPACING.sm,
-                    backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                    borderRadius: RADII.xs,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    fontSize: '0.8125rem',
-                    lineHeight: 1.45,
-                    outline: 'none',
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                    opacity: isSaving || isDeleting ? 0.6 : 1,
-                  }}
-                />
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    fontSize: '0.6875rem',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                  }}
-                >
-                  {captionDraft.length} / 2,200
-                </div>
-              </div>
-            </div>
-          </div>
+          <PreviewMetadataEditor
+            item={item}
+            isVideo={isVideo}
+            nameDraft={nameDraft}
+            captionDraft={captionDraft}
+            isSaving={isSaving}
+            isDeleting={isDeleting}
+            onNameChange={setNameDraft}
+            onCaptionChange={setCaptionDraft}
+          />
         </div>
 
-        {/* Footer: Delete Asset (red text button) on left; Cancel and Save Changes (primary) on right */}
-        <div
-          style={{
-            padding: `${SPACING.md} ${SPACING.xl}`,
-            borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-          }}
-        >
-          {onDelete ? (
-            <button
-              type="button"
-              data-testid="modal-delete-media-btn"
-              disabled={isDeleting || isSaving}
-              onClick={handleDelete}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: PALETTE.accent3,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: isDeleting || isSaving ? 'not-allowed' : 'pointer',
-                opacity: isDeleting || isSaving ? 0.6 : 1,
-                padding: `${SPACING.xs} 0`,
-              }}
-            >
-              {isDeleting ? 'Deleting...' : 'Delete asset'}
-            </button>
-          ) : (
-            <div />
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-            <button
-              type="button"
-              disabled={isSaving || isDeleting}
-              onClick={() => onOpenChange(false)}
-              style={{
-                padding: `${SPACING.xs} ${SPACING.md}`,
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                cursor: isSaving || isDeleting ? 'not-allowed' : 'pointer',
-                opacity: isSaving || isDeleting ? 0.6 : 1,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              data-testid="modal-save-caption-btn"
-              disabled={isSaving || isDeleting}
-              onClick={handleSaveChanges}
-              style={{
-                padding: `${SPACING.xs} ${SPACING.lg}`,
-                backgroundColor: PALETTE.primary,
-                color: '#000000',
-                border: 'none',
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isSaving || isDeleting ? 'not-allowed' : 'pointer',
-                opacity: isDeleting ? 0.6 : 1,
-              }}
-            >
-              {isSaving ? 'Saving...' : 'Save changes'}
-            </button>
-          </div>
-        </div>
+        <PreviewModalFooter
+          hasDelete={Boolean(onDelete)}
+          isSaving={isSaving}
+          isDeleting={isDeleting}
+          onDelete={handleDelete}
+          onCancel={() => onOpenChange(false)}
+          onSave={handleSaveChanges}
+        />
       </div>
     </dialog>
   );
