@@ -49,7 +49,7 @@ export function NewFolderModal({
 
   const canSubmit = trimmedName.length > 0 && !isDuplicate && !isSubmitting;
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.SyntheticEvent) => {
     e?.preventDefault();
     if (!canSubmit) return;
 
@@ -67,7 +67,7 @@ export function NewFolderModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="new-folder-title"
-      onClick={(e) => {
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }

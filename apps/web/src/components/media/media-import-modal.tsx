@@ -227,7 +227,7 @@ export function MediaImportModal({
           newItems.some((it) => it.name === file.name);
 
         newItems.push({
-          id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          id: `item-${Date.now()}-${crypto.randomUUID()}`,
           file,
           name: file.name,
           size: file.size,
@@ -486,7 +486,7 @@ export function MediaImportModal({
         .slice(0, availableSlots);
 
       for (const item of nextItems) {
-        uploadFile(item);
+        void uploadFile(item);
       }
     }
 
@@ -551,7 +551,7 @@ export function MediaImportModal({
   const handleResumeUpload = (id: string) => {
     const item = queue.find((it) => it.id === id);
     if (item) {
-      uploadFile(item);
+      void uploadFile(item);
     }
   };
 
@@ -675,6 +675,61 @@ export function MediaImportModal({
             totalInBatch
         )
       : 0;
+
+  const renderStagingRowStatus = (item: ImportQueueItem) => {
+    if (item.validationError) {
+      return (
+        <span
+          style={{
+            fontSize: '0.75rem',
+            color: PALETTE.accent3,
+            fontWeight: TYPOGRAPHY.weights.medium,
+          }}
+        >
+          {item.validationError}
+        </span>
+      );
+    }
+    if (item.isDuplicate) {
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              color: PALETTE.primary,
+              fontWeight: TYPOGRAPHY.weights.semibold,
+            }}
+          >
+            possible duplicate
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              handleResolveDuplicate(
+                item.id,
+                item.duplicateResolution === 'skip' ? 'upload_anyway' : 'skip'
+              )
+            }
+            style={{
+              padding: '2px 6px',
+              backgroundColor: 'transparent',
+              border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
+              borderRadius: RADII.xs,
+              color:
+                item.duplicateResolution === 'skip'
+                  ? `var(--text-dim, ${THEME.default.text.muted})`
+                  : `var(--text-main, ${THEME.default.text.primary})`,
+              fontSize: '0.6875rem',
+              cursor: 'pointer',
+            }}
+          >
+            {item.duplicateResolution === 'skip' ? 'Skipped' : 'Skip'}
+          </button>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div
@@ -894,52 +949,7 @@ export function MediaImportModal({
                 <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
                   {step === 'staging' && (
                     <>
-                      {item.validationError ? (
-                        <span
-                          style={{
-                            fontSize: '0.75rem',
-                            color: PALETTE.accent3,
-                            fontWeight: TYPOGRAPHY.weights.medium,
-                          }}
-                        >
-                          {item.validationError}
-                        </span>
-                      ) : item.isDuplicate ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span
-                            style={{
-                              fontSize: '0.6875rem',
-                              color: PALETTE.primary,
-                              fontWeight: TYPOGRAPHY.weights.semibold,
-                            }}
-                          >
-                            possible duplicate
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleResolveDuplicate(
-                                item.id,
-                                item.duplicateResolution === 'skip' ? 'upload_anyway' : 'skip'
-                              )
-                            }
-                            style={{
-                              padding: '2px 6px',
-                              backgroundColor: 'transparent',
-                              border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
-                              borderRadius: RADII.xs,
-                              color:
-                                item.duplicateResolution === 'skip'
-                                  ? `var(--text-dim, ${THEME.default.text.muted})`
-                                  : `var(--text-main, ${THEME.default.text.primary})`,
-                              fontSize: '0.6875rem',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {item.duplicateResolution === 'skip' ? 'Skipped' : 'Skip'}
-                          </button>
-                        </div>
-                      ) : null}
+                      {renderStagingRowStatus(item)}
 
                       <button
                         type="button"
@@ -1212,7 +1222,7 @@ export function MediaImportModal({
                           else if (!mime || !AllowedMediaMimeTypes.includes(mime as any))
                             valErr = "can't upload — not a supported format";
                           return {
-                            id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                            id: `item-${Date.now()}-${crypto.randomUUID()}`,
                             file: f,
                             name: f.name,
                             size: f.size,

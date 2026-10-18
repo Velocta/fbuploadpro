@@ -116,12 +116,8 @@ export function MediaPreviewModal({
   onDelete,
 }: Readonly<MediaPreviewModalProps>) {
   const [nameDraft, setNameDraft] = useState(() => item?.name || '');
-  const [captionDraft, setCaptionDraft] = useState(() =>
-    item?.captionText !== null && item?.captionText !== undefined
-      ? item.captionText
-      : item
-        ? deriveDefaultCaption(item.name)
-        : ''
+  const [captionDraft, setCaptionDraft] = useState(
+    () => item?.captionText ?? (item ? deriveDefaultCaption(item.name) : '')
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
@@ -136,11 +132,7 @@ export function MediaPreviewModal({
   useEffect(() => {
     if (item && open) {
       setNameDraft(item.name || '');
-      setCaptionDraft(
-        item.captionText !== null && item.captionText !== undefined
-          ? item.captionText
-          : deriveDefaultCaption(item.name)
-      );
+      setCaptionDraft(item.captionText ?? deriveDefaultCaption(item.name));
       setFrameSuccessMessage(null);
       setCurrentTime(0);
       setIsPlaying(false);
@@ -159,7 +151,7 @@ export function MediaPreviewModal({
   };
 
   const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = parseFloat(e.target.value);
+    const newTime = Number.parseFloat(e.target.value);
     setCurrentTime(newTime);
     if (videoRef.current) {
       videoRef.current.currentTime = newTime;
@@ -218,7 +210,7 @@ export function MediaPreviewModal({
       aria-modal="true"
       aria-labelledby="preview-modal-title"
       data-testid="media-preview-modal"
-      onClick={(e) => {
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
           onOpenChange(false);
         }
@@ -364,12 +356,12 @@ export function MediaPreviewModal({
                     }}
                   >
                     {isPlaying ? (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <rect x="6" y="4" width="4" height="16" />
                         <rect x="14" y="4" width="4" height="16" />
                       </svg>
                     ) : (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <polygon points="5 3 19 12 5 21 5 3" />
                       </svg>
                     )}

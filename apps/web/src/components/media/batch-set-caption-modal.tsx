@@ -45,7 +45,7 @@ export function BatchSetCaptionModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="batch-caption-title"
-      onClick={(e) => {
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
         }
@@ -131,7 +131,7 @@ export function BatchSetCaptionModal({
                 onChange={() => setMode('replace')}
                 style={{ accentColor: PALETTE.primary, cursor: 'pointer' }}
               />
-              Replace existing captions
+              <span>Replace existing captions</span>
             </label>
             <label
               style={{
@@ -151,7 +151,7 @@ export function BatchSetCaptionModal({
                 onChange={() => setMode('append')}
                 style={{ accentColor: PALETTE.primary, cursor: 'pointer' }}
               />
-              Add to the end of existing captions
+              <span>Add to the end of existing captions</span>
             </label>
           </div>
 

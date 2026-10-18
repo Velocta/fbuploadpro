@@ -27,6 +27,65 @@ export interface MediaTableRowProps {
   onDeleteRequest?: ((item: MediaItemResponse) => void) | undefined;
 }
 
+function renderRowThumbnailContent(
+  thumbnailSrc: string | null,
+  imgError: boolean,
+  name: string,
+  isVideo: boolean,
+  onError: () => void
+) {
+  if (thumbnailSrc && !imgError) {
+    return (
+      <img
+        src={thumbnailSrc}
+        alt={name}
+        onError={onError}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          display: 'block',
+        }}
+      />
+    );
+  }
+  if (isVideo) {
+    return (
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <polygon points="10 8 16 12 10 16 10 8" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </svg>
+  );
+}
+
 export function MediaTableRow({
   item,
   selected = false,
@@ -154,49 +213,12 @@ export function MediaTableRow({
             color: `var(--text-dim, ${THEME.default.text.muted})`,
           }}
         >
-          {thumbnailSrc && !imgError ? (
-            <img
-              src={thumbnailSrc}
-              alt={item.name}
-              onError={() => setImgError(true)}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-              }}
-            />
-          ) : isVideo ? (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="2" />
-              <polygon points="10 8 16 12 10 16 10 8" />
-            </svg>
-          ) : (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-              <circle cx="9" cy="9" r="2" />
-              <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-            </svg>
+          {renderRowThumbnailContent(
+            thumbnailSrc,
+            imgError,
+            item.name,
+            isVideo,
+            () => setImgError(true)
           )}
         </button>
       </td>
