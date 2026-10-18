@@ -1740,12 +1740,16 @@ function SubfolderRowsSection({
                   try {
                     const parsed = JSON.parse(mediaId);
                     onReparent(folder.id, { mediaId: parsed.mediaId });
-                  } catch {}
+                  } catch {
+                    // Intentional: invalid JSON means the dropped data isn't ours — ignore.
+                  }
                 } else if (folderId) {
                   try {
                     const parsed = JSON.parse(folderId);
                     onReparent(folder.id, { folderId: parsed.folderId });
-                  } catch {}
+                  } catch {
+                    // Intentional: invalid JSON means the dropped data isn't ours — ignore.
+                  }
                 }
               }}
               style={{
@@ -1951,7 +1955,9 @@ export function MediaLibraryExplorer({
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(MEDIA_VIEW_MODE_STORAGE_KEY, mode);
-      } catch {}
+      } catch {
+        // Intentional: localStorage may be unavailable (private mode/quota) — view mode just won't persist.
+      }
     }
   };
 
@@ -2613,12 +2619,16 @@ export function MediaLibraryExplorer({
                     try {
                       const parsed = JSON.parse(mediaId);
                       void handleReparent(null, { mediaId: parsed.mediaId });
-                    } catch {}
+                    } catch {
+                      // Intentional: invalid JSON means the dropped data isn't ours — ignore.
+                    }
                   } else if (folderId) {
                     try {
                       const parsed = JSON.parse(folderId);
                       void handleReparent(null, { folderId: parsed.folderId });
-                    } catch {}
+                    } catch {
+                      // Intentional: invalid JSON means the dropped data isn't ours — ignore.
+                    }
                   }
                 }}
                 style={{
@@ -2689,12 +2699,16 @@ export function MediaLibraryExplorer({
                             try {
                               const parsed = JSON.parse(mediaId);
                               void handleReparent(crumb.id, { mediaId: parsed.mediaId });
-                            } catch {}
+                            } catch {
+                              // Intentional: invalid JSON means the dropped data isn't ours — ignore.
+                            }
                           } else if (folderId) {
                             try {
                               const parsed = JSON.parse(folderId);
                               void handleReparent(crumb.id, { folderId: parsed.folderId });
-                            } catch {}
+                            } catch {
+                              // Intentional: invalid JSON means the dropped data isn't ours — ignore.
+                            }
                           }
                         }}
                         style={{

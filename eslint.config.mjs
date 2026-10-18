@@ -31,7 +31,7 @@ export default [
     },
     rules: {
       "no-undef": "off",
-      "no-empty": ["error", { "allowEmptyCatch": true }],
+      "no-empty": "error",
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": [
         "error",
