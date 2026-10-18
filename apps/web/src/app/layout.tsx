@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import './globals.css';
 import { DesktopTitleBar } from '@/components/desktop';
 import { WhatsAppSupportButton } from '@/components/support';
