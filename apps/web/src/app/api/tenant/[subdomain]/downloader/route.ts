@@ -198,7 +198,7 @@ async function persistResolvedMediaItems(
 
 interface ValidatedDownloadInput {
   session: { userId: string; email?: string; [key: string]: any };
-  body: { url: string; folderId?: string | null };
+  body: { url: string; folderId?: string | null | undefined };
 }
 
 async function validateDownloadAuthAndPayload(
