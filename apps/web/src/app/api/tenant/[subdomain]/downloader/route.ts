@@ -196,6 +196,150 @@ async function persistResolvedMediaItems(
   });
 }
 
+interface ValidatedDownloadInput {
+  session: { userId: string; email?: string; [key: string]: any };
+  body: { url: string; folderId?: string | null };
+}
+
+async function validateDownloadAuthAndPayload(
+  request: NextRequest,
+  subdomain: string
+): Promise<{ errorResponse?: NextResponse; validated?: ValidatedDownloadInput }> {
+  const sessionSecret = getSessionSecret();
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  let session;
+  try {
+    session = await verifySessionToken(sessionCookie, sessionSecret);
+  } catch {
+    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+
+  const access = canAccessTenant(session, subdomain);
+  if (!access.allowed) {
+    return { errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+
+  let rawBody: unknown;
+  try {
+    rawBody = await request.json();
+  } catch {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'INVALID_REQUEST', message: 'Invalid JSON request payload.' },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const parsed = DownloaderIngestRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return {
+      errorResponse: NextResponse.json(
+        {
+          error: 'INVALID_REQUEST',
+          message: 'Please enter a valid link starting with http:// or https://.',
+          details: parsed.error.flatten(),
+        },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const safety = validateSafeRemoteUrl(parsed.data.url);
+  if (!safety.valid || !safety.url) {
+    return {
+      errorResponse: NextResponse.json(
+        {
+          error: 'UNSAFE_URL',
+          message: safety.reason ?? 'Please enter a valid public http:// or https:// link.',
+        },
+        { status: 400 }
+      ),
+    };
+  }
+
+  return { validated: { session, body: parsed.data } };
+}
+
+async function verifyTargetFolderOwnership(
+  dbClient: DatabaseClient | SupabaseClient<any> | undefined,
+  targetFolderId: string | null,
+  userId: string
+): Promise<boolean> {
+  if (targetFolderId === null) return true;
+
+  if (isLegacyClient(dbClient)) {
+    return verifyFolderOwnership(dbClient, targetFolderId, userId);
+  }
+
+  const supabase = getRouteSupabase(dbClient);
+  if (!supabase) return false;
+
+  const { data: folder } = await supabase
+    .from('media_folders')
+    .select('id')
+    .eq('id', targetFolderId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return Boolean(folder);
+}
+
+async function persistMediaRecords(
+  dbClient: DatabaseClient | SupabaseClient<any> | undefined,
+  userId: string,
+  targetFolderId: string | null,
+  resolvedItems: Awaited<ReturnType<typeof resolveAndUploadMediaFromUrl>>['items']
+): Promise<MediaItemResponse[] | null> {
+  if (isLegacyClient(dbClient)) {
+    const insertedRows = await persistResolvedMediaItems(
+      dbClient,
+      userId,
+      targetFolderId,
+      resolvedItems
+    );
+    if (insertedRows.length !== resolvedItems.length) {
+      return null;
+    }
+    return insertedRows.map(mapRowToMediaItemResponse);
+  }
+
+  const supabase = getRouteSupabase(dbClient);
+  if (!supabase) return null;
+
+  const insertRecords = resolvedItems.map((item) => ({
+    id: item.mediaId,
+    user_id: userId,
+    folder_id: targetFolderId,
+    name: item.name,
+    file_size: item.fileSize,
+    mime_type: item.mimeType,
+    media_type: item.mediaType,
+    storage_key: item.storageKey,
+    url: item.url,
+    thumbnail_key: item.thumbnailKey,
+    thumbnail_url: item.thumbnailUrl,
+    duration_seconds: item.durationSeconds,
+    aspect_ratio: item.aspectRatio,
+    caption_text: item.captionText,
+  }));
+
+  const { data: insertedRows, error: insertErr } = await supabase
+    .from('media_items')
+    .insert(insertRecords)
+    .select();
+
+  if (insertErr || !insertedRows || insertedRows.length !== resolvedItems.length) {
+    return null;
+  }
+
+  return (insertedRows as MediaItemDbRow[]).map(mapRowToMediaItemResponse);
+}
+
 export async function handleDownloadMediaFromUrl(
   request: NextRequest,
   subdomain: string,
@@ -204,144 +348,24 @@ export async function handleDownloadMediaFromUrl(
   fetchImpl?: typeof fetch,
   extractorApiUrl?: string | null
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
-
-  // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // 2. Tenant isolation check
-  const access = canAccessTenant(session, subdomain);
-  if (!access.allowed) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  // 3. Request payload validation
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: 'INVALID_REQUEST', message: 'Invalid JSON request payload.' },
-      { status: 400 }
-    );
-  }
-
-  const parsed = DownloaderIngestRequestSchema.safeParse(rawBody);
-  if (!parsed.success) {
-    return NextResponse.json(
-      {
-        error: 'INVALID_REQUEST',
-        message: 'Please enter a valid link starting with http:// or https://.',
-        details: parsed.error.flatten(),
-      },
-      { status: 400 }
-    );
-  }
-
-  const body = parsed.data;
-  const safety = validateSafeRemoteUrl(body.url);
-  if (!safety.valid || !safety.url) {
-    return NextResponse.json(
-      {
-        error: 'UNSAFE_URL',
-        message: safety.reason ?? 'Please enter a valid public http:// or https:// link.',
-      },
-      { status: 400 }
-    );
-  }
+  const { errorResponse, validated } = await validateDownloadAuthAndPayload(request, subdomain);
+  if (errorResponse) return errorResponse;
+  const { session, body } = validated!;
 
   const storage = storageService ?? getStorageService();
   const targetFolderId = body.folderId ?? null;
   let uploadedItemsToCleanup: Array<{ storageKey: string; thumbnailKey?: string | null }> | null = null;
 
   try {
-    if (isLegacyClient(dbClient)) {
-      // 4. Verify destination folder ownership if folderId is specified
-      if (targetFolderId !== null) {
-        const folderExists = await verifyFolderOwnership(dbClient, targetFolderId, session.userId);
-        if (!folderExists) {
-          return NextResponse.json(
-            {
-              error: 'FOLDER_NOT_FOUND',
-              message: 'Selected destination folder was not found.',
-            },
-            { status: 404 }
-          );
-        }
-      }
-
-      // 5. Resolve remote media link & stream directly to R2
-      const resolved = await resolveAndUploadMediaFromUrl({
-        sourceUrl: body.url,
-        userId: session.userId,
-        storage,
-        fetchImpl,
-        extractorApiUrl,
-      });
-      uploadedItemsToCleanup = resolved.items;
-
-      // 6. Persist all resolved media items inside a transaction
-      const insertedRows = await persistResolvedMediaItems(
-        dbClient,
-        session.userId,
-        targetFolderId,
-        resolved.items
+    const folderValid = await verifyTargetFolderOwnership(dbClient, targetFolderId, session.userId);
+    if (!folderValid) {
+      return NextResponse.json(
+        {
+          error: 'FOLDER_NOT_FOUND',
+          message: 'Selected destination folder was not found.',
+        },
+        { status: 404 }
       );
-
-      if (insertedRows.length !== resolved.items.length) {
-        await cleanupUploadedItems(storage, uploadedItemsToCleanup);
-        return NextResponse.json(
-          {
-            error: 'INTERNAL_ERROR',
-            message: 'Could not save all media items. Please try again.',
-          },
-          { status: 500 }
-        );
-      }
-
-      uploadedItemsToCleanup = null; // Successfully saved
-      const responseItems = insertedRows.map(mapRowToMediaItemResponse);
-      const responsePayload = DownloaderIngestResponseSchema.parse({
-        sourceUrl: resolved.sourceUrl,
-        platform: resolved.platform,
-        items: responseItems,
-      });
-
-      return NextResponse.json(responsePayload, { status: 201 });
-    }
-
-    const supabase = getRouteSupabase(dbClient);
-    if (!supabase) {
-      return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
-    }
-
-    if (targetFolderId !== null) {
-      const { data: folder } = await supabase
-        .from('media_folders')
-        .select('id')
-        .eq('id', targetFolderId)
-        .eq('user_id', session.userId)
-        .maybeSingle();
-
-      if (!folder) {
-        return NextResponse.json(
-          {
-            error: 'FOLDER_NOT_FOUND',
-            message: 'Selected destination folder was not found.',
-          },
-          { status: 404 }
-        );
-      }
     }
 
     const resolved = await resolveAndUploadMediaFromUrl({
@@ -353,29 +377,14 @@ export async function handleDownloadMediaFromUrl(
     });
     uploadedItemsToCleanup = resolved.items;
 
-    const insertRecords = resolved.items.map((item) => ({
-      id: item.mediaId,
-      user_id: session.userId,
-      folder_id: targetFolderId,
-      name: item.name,
-      file_size: item.fileSize,
-      mime_type: item.mimeType,
-      media_type: item.mediaType,
-      storage_key: item.storageKey,
-      url: item.url,
-      thumbnail_key: item.thumbnailKey,
-      thumbnail_url: item.thumbnailUrl,
-      duration_seconds: item.durationSeconds,
-      aspect_ratio: item.aspectRatio,
-      caption_text: item.captionText,
-    }));
+    const responseItems = await persistMediaRecords(
+      dbClient,
+      session.userId,
+      targetFolderId,
+      resolved.items
+    );
 
-    const { data: insertedRows, error: insertErr } = await supabase
-      .from('media_items')
-      .insert(insertRecords)
-      .select();
-
-    if (insertErr || !insertedRows) {
+    if (!responseItems) {
       await cleanupUploadedItems(storage, uploadedItemsToCleanup);
       return NextResponse.json(
         {
@@ -386,8 +395,7 @@ export async function handleDownloadMediaFromUrl(
       );
     }
 
-    uploadedItemsToCleanup = null; // Successfully saved
-    const responseItems = (insertedRows as MediaItemDbRow[]).map(mapRowToMediaItemResponse);
+    uploadedItemsToCleanup = null;
     const responsePayload = DownloaderIngestResponseSchema.parse({
       sourceUrl: resolved.sourceUrl,
       platform: resolved.platform,
