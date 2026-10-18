@@ -1401,7 +1401,7 @@ export function MediaLibraryExplorer({
               fontWeight:
                 currentFolderId === null
                   ? TYPOGRAPHY.weights.semibold
-                  : TYPOGRAPHY.weights.normal,
+                  : TYPOGRAPHY.weights.regular,
               cursor: 'pointer',
             }}
           >
@@ -1443,7 +1443,7 @@ export function MediaLibraryExplorer({
                       : `var(--text-sub, ${THEME.default.text.secondary})`,
                     fontWeight: isLast
                       ? TYPOGRAPHY.weights.semibold
-                      : TYPOGRAPHY.weights.normal,
+                      : TYPOGRAPHY.weights.regular,
                     cursor: 'pointer',
                   }}
                 >
