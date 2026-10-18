@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/sidebar';
 import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 import { broadcastAuthEvent } from '@/lib/auth-broadcast';
+import { buildTenantHref, normalizeTenantPath } from '@/lib/tenant-href';
 import { CreateWorkspaceModal } from './create-workspace-modal';
 
 export interface WorkspaceItem {
@@ -21,6 +22,8 @@ export interface WorkspaceItem {
 
 export interface WorkspaceStudioFooterProps {
   subdomain: string;
+  /** True when on the tenant's own subdomain: use clean paths (/accounts). */
+  useCleanPaths?: boolean | undefined;
   user?: {
     name: string;
     email: string;
@@ -475,6 +478,7 @@ export function PopoverActionsList({
 
 export function WorkspaceStudioFooter({
   subdomain,
+  useCleanPaths = false,
   user,
   onNavigate,
 }: Readonly<WorkspaceStudioFooterProps>) {
@@ -500,7 +504,7 @@ export function WorkspaceStudioFooter({
   const displayName = user?.name || subdomain;
   const displayEmail = user?.email || `${subdomain}@fbuploadpro.com`;
   const activeWorkspace = resolveActiveWorkspace(workspaces, subdomain);
-  const isSettingsActive = pathname ? pathname.startsWith(`/tenant/${subdomain}/settings`) : false;
+  const isSettingsActive = pathname ? normalizeTenantPath(pathname, subdomain).startsWith('/settings') : false;
 
   useEffect(() => {
     let isMounted = true;
@@ -590,6 +594,11 @@ export function WorkspaceStudioFooter({
         if (isMobile) setOpenMobile(false);
         if (data.redirectUrl) {
           window.location.href = data.redirectUrl;
+        } else if (useCleanPaths) {
+          // On the tenant's own subdomain: switch to the target workspace's host.
+          const parts = window.location.hostname.split('.');
+          parts[0] = targetSubdomain;
+          window.location.href = `${window.location.protocol}//${parts.join('.')}/`;
         } else {
           window.location.href = `/tenant/${targetSubdomain}`;
         }
@@ -604,7 +613,7 @@ export function WorkspaceStudioFooter({
   const handleOpenSettings = () => {
     setIsOpen(false);
     if (isMobile) setOpenMobile(false);
-    const settingsHref = `/tenant/${subdomain}/settings`;
+    const settingsHref = buildTenantHref(subdomain, '/settings', useCleanPaths);
     if (onNavigate) {
       onNavigate(settingsHref);
     } else {

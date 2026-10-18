@@ -26,11 +26,14 @@ import {
 } from '@/components/ui/sidebar';
 import { THEME, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
+import { buildTenantHref, normalizeTenantPath } from '@/lib/tenant-href';
 import { WorkspaceStudioFooter } from './workspace-studio-footer';
 import { UPCOMING_PLATFORMS, TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
 
 export interface WorkspaceSidebarProps {
   subdomain: string;
+  /** True when on the tenant's own subdomain: use clean paths (/accounts). */
+  useCleanPaths?: boolean | undefined;
   user?: {
     name: string;
     email: string;
@@ -38,7 +41,7 @@ export interface WorkspaceSidebarProps {
   } | undefined;
 }
 
-export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarProps>) {
+export function WorkspaceSidebar({ subdomain, useCleanPaths = false, user }: Readonly<WorkspaceSidebarProps>) {
   const pathname = usePathname();
   const router = useRouter();
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -51,21 +54,22 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
     setOptimisticPathname(null);
   }, [pathname]);
 
-  const effectivePath = optimisticPathname ?? (pathname || '');
+  const effectivePath = normalizeTenantPath(optimisticPathname ?? (pathname || ''), subdomain);
 
-  const homeHref = `/tenant/${subdomain}`;
-  const mediaHref = `/tenant/${subdomain}/media`;
-  const downloaderHref = `/tenant/${subdomain}/downloader`;
-  const fdolaStudioHref = `/tenant/${subdomain}/fdola-studio`;
-  const accountsHref = `/tenant/${subdomain}/accounts`;
-  const pagesHref = `/tenant/${subdomain}/pages`;
+  const href = (path: string) => buildTenantHref(subdomain, path, useCleanPaths);
+  const homeHref = href('/');
+  const mediaHref = href('/media');
+  const downloaderHref = href('/downloader');
+  const fdolaStudioHref = href('/fdola-studio');
+  const accountsHref = href('/accounts');
+  const pagesHref = href('/pages');
 
-  const isHomeActive = effectivePath === homeHref;
-  const isMediaActive = effectivePath.startsWith(mediaHref);
-  const isDownloaderActive = effectivePath.startsWith(downloaderHref);
-  const isFdolaStudioActive = effectivePath.startsWith(fdolaStudioHref);
-  const isAccountsActive = effectivePath.startsWith(accountsHref);
-  const isPagesActive = effectivePath.startsWith(pagesHref);
+  const isHomeActive = effectivePath === normalizeTenantPath(homeHref, subdomain);
+  const isMediaActive = effectivePath.startsWith(normalizeTenantPath(mediaHref, subdomain));
+  const isDownloaderActive = effectivePath.startsWith(normalizeTenantPath(downloaderHref, subdomain));
+  const isFdolaStudioActive = effectivePath.startsWith(normalizeTenantPath(fdolaStudioHref, subdomain));
+  const isAccountsActive = effectivePath.startsWith(normalizeTenantPath(accountsHref, subdomain));
+  const isPagesActive = effectivePath.startsWith(normalizeTenantPath(pagesHref, subdomain));
 
   const handleNavigate = (href: string) => {
     setOptimisticPathname(href);
@@ -372,9 +376,9 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
 
               {/* Upcoming Supported Platforms */}
               {UPCOMING_PLATFORMS.map((platform) => {
-                const platformAccountsHref = `/tenant/${subdomain}/${platform.routeSlug}/accounts`;
-                const isPlatformActive = effectivePath.startsWith(`/tenant/${subdomain}/${platform.routeSlug}`);
-                const isAccountsSubActive = effectivePath.startsWith(platformAccountsHref);
+                const platformAccountsHref = href(`/${platform.routeSlug}/accounts`);
+                const isPlatformActive = effectivePath.startsWith(`/${platform.routeSlug}`);
+                const isAccountsSubActive = effectivePath.startsWith(normalizeTenantPath(platformAccountsHref, subdomain));
                 const isOpen = openPlatforms[platform.key] ?? (isPlatformActive ? true : false);
 
                 return (
@@ -482,6 +486,7 @@ export function WorkspaceSidebar({ subdomain, user }: Readonly<WorkspaceSidebarP
       <SidebarFooter>
         <WorkspaceStudioFooter
           subdomain={subdomain}
+          useCleanPaths={useCleanPaths}
           user={user}
           onNavigate={handleNavigate}
         />

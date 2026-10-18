@@ -1,4 +1,6 @@
 import React from 'react';
+import { headers } from 'next/headers';
+import { shouldUseCleanTenantPaths } from '@/lib/tenant-href';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb';
@@ -14,6 +16,15 @@ interface TenantLayoutProps {
 export default async function TenantLayout({ params, children }: Readonly<TenantLayoutProps>) {
   const { subdomain } = await params;
   const session = await getServerSessionContext();
+  let hostHeader: string | null = null;
+  try {
+    hostHeader = (await headers()).get('host');
+  } catch {
+    // Outside a request scope (tests, static generation): fall back to prefixed URLs.
+    hostHeader = null;
+  }
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'fbuploadpro.com';
+  const useCleanPaths = shouldUseCleanTenantPaths(hostHeader, subdomain, rootDomain);
 
   const user = session
     ? {
@@ -28,7 +39,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
   return (
     <SidebarProvider>
       <WorkspaceLifecycleGuard userId={session?.userId} userEmail={session?.email} />
-      <WorkspaceSidebar subdomain={subdomain} user={user} />
+      <WorkspaceSidebar subdomain={subdomain} useCleanPaths={useCleanPaths} user={user} />
       <SidebarInset>
         <header
           data-slot="workspace-topbar"
@@ -56,7 +67,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
               flexShrink: 0,
             }}
           />
-          <WorkspaceBreadcrumb subdomain={subdomain} />
+          <WorkspaceBreadcrumb subdomain={subdomain} useCleanPaths={useCleanPaths} />
         </header>
         {children}
       </SidebarInset>

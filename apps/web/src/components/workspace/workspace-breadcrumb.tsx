@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { buildTenantHref } from '@/lib/tenant-href';
 
 export interface BreadcrumbSegment {
   label: string;
@@ -25,7 +26,11 @@ const PLATFORM_LABELS: Record<string, string> = {
   youtube: 'YouTube',
 };
 
-export function computeBreadcrumbs(pathname: string, subdomain: string): BreadcrumbSegment[] {
+export function computeBreadcrumbs(
+  pathname: string,
+  subdomain: string,
+  useCleanPaths: boolean = false
+): BreadcrumbSegment[] {
   if (!pathname) return [{ label: 'Home' }];
   const prefix = `/tenant/${subdomain}`;
   if (pathname === prefix || pathname === `${prefix}/`) {
@@ -49,7 +54,7 @@ export function computeBreadcrumbs(pathname: string, subdomain: string): Breadcr
     if (segments.length > 1) {
       return [
         { label: 'Facebook' },
-        { label: 'Pages', href: `${prefix}/pages` },
+        { label: 'Pages', href: buildTenantHref(subdomain, '/pages', useCleanPaths) },
         { label: 'Details' },
       ];
     }
@@ -71,11 +76,13 @@ export function computeBreadcrumbs(pathname: string, subdomain: string): Breadcr
 
 export interface WorkspaceBreadcrumbProps {
   subdomain: string;
+  /** True when on the tenant's own subdomain: use clean paths (/accounts). */
+  useCleanPaths?: boolean | undefined;
 }
 
-export function WorkspaceBreadcrumb({ subdomain }: Readonly<WorkspaceBreadcrumbProps>) {
+export function WorkspaceBreadcrumb({ subdomain, useCleanPaths = false }: Readonly<WorkspaceBreadcrumbProps>) {
   const pathname = usePathname() || '';
-  const crumbs = computeBreadcrumbs(pathname, subdomain);
+  const crumbs = computeBreadcrumbs(pathname, subdomain, useCleanPaths);
 
   return (
     <nav
