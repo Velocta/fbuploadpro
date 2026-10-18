@@ -1223,6 +1223,47 @@ interface MinimizedUploadPillProps {
   onRestore: () => void;
 }
 
+let itemSeq = 0;
+function nextUniqueId(): string {
+  itemSeq += 1;
+  return `${Date.now()}-${itemSeq}`;
+}
+
+function computeOverallProgress(nonCancelledItems: ImportQueueItem[]): number {
+  if (nonCancelledItems.length === 0) return 0;
+  const total = nonCancelledItems.reduce(
+    (acc, it) => acc + (it.status === 'completed' ? 100 : it.progressPercent),
+    0
+  );
+  return Math.round(total / nonCancelledItems.length);
+}
+
+function computeFurthestAlong(
+  uploadingItems: ImportQueueItem[]
+): { name: string; progressPercent: number } | null {
+  if (uploadingItems.length === 0) return null;
+  return uploadingItems.reduce<{ name: string; progressPercent: number } | null>((acc, curr) => {
+    if (!acc || curr.progressPercent > acc.progressPercent) {
+      return { name: curr.name, progressPercent: curr.progressPercent };
+    }
+    return acc;
+  }, null);
+}
+
+function handleModalKeyDown(
+  key: string,
+  step: 'staging' | 'progress' | 'complete',
+  onClose: () => void,
+  onDone: () => void
+) {
+  if (key !== 'Escape') return;
+  if (step === 'staging') {
+    onClose();
+  } else if (step === 'complete') {
+    onDone();
+  }
+}
+
 function MinimizedUploadPill({
   completedCount,
   totalCount,
@@ -1233,7 +1274,6 @@ function MinimizedUploadPill({
     <aside
       aria-label="Upload progress dock"
       data-testid="minimized-upload-dock"
-      onClick={onRestore}
       style={{
         position: 'fixed',
         bottom: SPACING.md,
@@ -1247,68 +1287,78 @@ function MinimizedUploadPill({
         display: 'flex',
         alignItems: 'center',
         gap: SPACING.sm,
-        cursor: 'pointer',
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '130px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Uploading {completedCount} of {totalCount}
-          </span>
-          <span
-            style={{
-              fontSize: '0.6875rem',
-              color: PALETTE.primary,
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              fontVariantNumeric: TYPOGRAPHY.tabularNums,
-            }}
-          >
-            {overallPercent}%
-          </span>
-        </div>
-        <div
-          style={{
-            width: '100%',
-            height: '3px',
-            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            borderRadius: '2px',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              width: `${overallPercent}%`,
-              height: '100%',
-              backgroundColor: PALETTE.primary,
-              transition: 'width 0.2s ease',
-            }}
-          />
-        </div>
-      </div>
       <button
         type="button"
         data-testid="restore-modal-btn"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRestore();
-        }}
+        onClick={onRestore}
+        aria-label={`Restore upload dialog: Uploading ${completedCount} of ${totalCount}`}
         style={{
-          padding: '2px 8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.sm,
           backgroundColor: 'transparent',
-          border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
-          borderRadius: RADII.full,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          fontSize: '0.6875rem',
+          border: 'none',
+          padding: 0,
           cursor: 'pointer',
+          color: 'inherit',
+          textAlign: 'left',
         }}
       >
-        View
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '130px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: `var(--text-main, ${THEME.default.text.primary})`,
+              }}
+            >
+              Uploading {completedCount} of {totalCount}
+            </span>
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                color: PALETTE.primary,
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                fontVariantNumeric: TYPOGRAPHY.tabularNums,
+              }}
+            >
+              {overallPercent}%
+            </span>
+          </div>
+          <div
+            style={{
+              width: '100%',
+              height: '3px',
+              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+              borderRadius: '2px',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              style={{
+                width: `${overallPercent}%`,
+                height: '100%',
+                backgroundColor: PALETTE.primary,
+                transition: 'width 0.2s ease',
+              }}
+            />
+          </div>
+        </div>
+        <span
+          style={{
+            padding: '2px 8px',
+            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+            border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
+            borderRadius: RADII.full,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            fontSize: '0.6875rem',
+          }}
+        >
+          View
+        </span>
       </button>
     </aside>
   );
@@ -1368,7 +1418,7 @@ function buildImportQueueItems(
     const uniqueId =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2, 9);
+        : nextUniqueId();
 
     newItems.push({
       id: `item-${Date.now()}-${uniqueId}`,
@@ -1388,6 +1438,21 @@ function buildImportQueueItems(
   }
 
   return newItems;
+}
+
+function isItemReadyToImport(item: ImportQueueItem): boolean {
+  return item.status === 'staged' && !item.validationError && !item.isDuplicate;
+}
+
+function isBatchCompleted(queue: ImportQueueItem[], step: string): boolean {
+  if (step !== 'progress' || queue.length === 0) return false;
+  const inFlight = queue.filter(
+    (it) => it.status === 'queued' || it.status === 'uploading'
+  );
+  if (inFlight.length > 0) return false;
+  return queue.some(
+    (it) => it.status === 'completed' || it.status === 'failed' || it.status === 'cancelled'
+  );
 }
 
 export function MediaImportModal({
@@ -1477,23 +1542,14 @@ export function MediaImportModal({
   }, [step, subdomain, selectedFolderId, queue.length]);
 
   // Derived counts
-  const validStagedItems = queue.filter(
-    (item) => item.status === 'staged' && !item.validationError && !item.isDuplicate
-  );
+  const validStagedItems = queue.filter(isItemReadyToImport);
   const activeUploadingItems = queue.filter((item) => item.status === 'uploading');
   const queuedItems = queue.filter((item) => item.status === 'queued');
   const completedItems = queue.filter((item) => item.status === 'completed');
   const nonCancelledItems = queue.filter((item) => item.status !== 'cancelled');
 
   // Furthest along progress
-  const furthestAlong = activeUploadingItems.reduce<
-    { name: string; progressPercent: number } | null
-  >((acc, curr) => {
-    if (!acc || curr.progressPercent > acc.progressPercent) {
-      return { name: curr.name, progressPercent: curr.progressPercent };
-    }
-    return acc;
-  }, null);
+  const furthestAlong = computeFurthestAlong(activeUploadingItems);
 
   // Notify parent of active upload state for leave-page protection
   useEffect(() => {
@@ -1687,17 +1743,8 @@ export function MediaImportModal({
       }
     }
 
-    // Check completion
-    const inFlight = queue.filter(
-      (it) => it.status === 'queued' || it.status === 'uploading'
-    );
-    if (inFlight.length === 0 && queue.length > 0 && step === 'progress') {
-      const hasFinished = queue.some(
-        (it) => it.status === 'completed' || it.status === 'failed' || it.status === 'cancelled'
-      );
-      if (hasFinished) {
-        setStep('complete');
-      }
+    if (isBatchCompleted(queue, step)) {
+      setStep('complete');
     }
   }, [step, queue, uploadFile]);
 
@@ -1707,11 +1754,7 @@ export function MediaImportModal({
     setIsStartingImport(true);
     setUserInitiatedCancel(false);
     setQueue((prev) =>
-      prev.map((it) =>
-        it.status === 'staged' && !it.validationError && !it.isDuplicate
-          ? { ...it, status: 'queued' }
-          : it
-      )
+      prev.map((it) => (isItemReadyToImport(it) ? { ...it, status: 'queued' } : it))
     );
     setStep('progress');
   };
@@ -1809,15 +1852,7 @@ export function MediaImportModal({
   const destinationFolderName =
     (selectedFolderId ? folders.find((f) => f.id === selectedFolderId)?.name : null) || 'Library';
 
-  const overallProgressPercent =
-    nonCancelledItems.length > 0
-      ? Math.round(
-          nonCancelledItems.reduce(
-            (acc, it) => acc + (it.status === 'completed' ? 100 : it.progressPercent),
-            0
-          ) / nonCancelledItems.length
-        )
-      : 0;
+  const overallProgressPercent = computeOverallProgress(nonCancelledItems);
 
   const duplicatesCount = queue.filter((it) => it.isDuplicate).length;
   const isAllCancelled =
@@ -1834,15 +1869,7 @@ export function MediaImportModal({
           onClose();
         }
       }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          if (step === 'staging') {
-            onClose();
-          } else if (step === 'complete') {
-            handleDone();
-          }
-        }
-      }}
+      onKeyDown={(e) => handleModalKeyDown(e.key, step, onClose, handleDone)}
       style={{
         position: 'fixed',
         inset: 0,

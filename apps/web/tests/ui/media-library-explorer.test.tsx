@@ -1302,11 +1302,11 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     );
     expect(batchBar.hasText('2 selected')).toBe(true);
     const deleteBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-delete-btn');
-    expect(deleteBtn?.attributes.disabled !== undefined).toBe(true);
+    expect(deleteBtn?.attributes.disabled).toBeDefined();
     const moveBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-move-btn');
-    expect(moveBtn?.attributes.disabled !== undefined).toBe(true);
+    expect(moveBtn?.attributes.disabled).toBeDefined();
     const captionBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-caption-btn');
-    expect(captionBtn?.attributes.disabled !== undefined).toBe(true);
+    expect(captionBtn?.attributes.disabled).toBeDefined();
 
     // NewFolderModal renders disabled submit when empty or duplicate
     const newFolderModal = render(
@@ -1319,7 +1319,7 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
       />
     );
     const createBtn = newFolderModal.findTags('button').find((b) => b.attributes['data-testid'] === 'submit-create-folder');
-    expect(createBtn?.attributes.disabled !== undefined).toBe(true);
+    expect(createBtn?.attributes.disabled).toBeDefined();
     expect(newFolderModal.hasText('Create folder')).toBe(true);
 
     // MediaPreviewModal renders delete and save buttons with busy protection
@@ -1434,7 +1434,7 @@ describe('Spec 072: MediaImportModal Staging, Progress, Duplicates & Concurrency
     // Excluded from count; button is disabled with Start import (0)
     expect(modal.hasText('Start import (0)')).toBe(true);
     const startBtn = modal.findTags('button').find((b) => b.attributes['data-testid'] === 'start-import-btn');
-    expect(startBtn?.attributes.disabled !== undefined).toBe(true);
+    expect(startBtn?.attributes.disabled).toBeDefined();
   });
 
   it('US5: purges technical concurrency copy from staging UI', () => {
