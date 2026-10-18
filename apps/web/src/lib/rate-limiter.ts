@@ -1,3 +1,6 @@
+import { Ratelimit, type Duration } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
 export interface RateLimitResult {
   allowed: boolean;
   remaining: number;
@@ -33,6 +36,52 @@ export function validateRateLimiterConfig(): void {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Distributed rate limiting (production) via Upstash Redis.
+//
+// The in-memory Maps below are per-serverless-instance and therefore only a
+// speed bump on Vercel — an attacker can spread requests across instances.
+// In production every check goes through Upstash sliding windows instead.
+// ---------------------------------------------------------------------------
+
+let sharedRedis: Redis | null = null;
+
+function getRedis(): Redis {
+  if (sharedRedis) return sharedRedis;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    throw new Error(
+      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are strictly required for distributed rate limiting in production.'
+    );
+  }
+  sharedRedis = new Redis({ url, token });
+  return sharedRedis;
+}
+
+const upstashLimiters = new Map<string, Ratelimit>();
+
+function toWindowString(windowMs: number): Duration {
+  if (windowMs % 3600000 === 0) return `${windowMs / 3600000} h`;
+  if (windowMs % 60000 === 0) return `${windowMs / 60000} m`;
+  if (windowMs % 1000 === 0) return `${windowMs / 1000} s`;
+  return `${windowMs} ms`;
+}
+
+function getUpstashLimiter(maxRequests: number, windowMs: number): Ratelimit {
+  const cacheKey = `${maxRequests}:${windowMs}`;
+  const cached = upstashLimiters.get(cacheKey);
+  if (cached) return cached;
+  const limiter = new Ratelimit({
+    redis: getRedis(),
+    limiter: Ratelimit.slidingWindow(maxRequests, toWindowString(windowMs)),
+    analytics: true,
+    prefix: 'fbuploadpro:ratelimit',
+  });
+  upstashLimiters.set(cacheKey, limiter);
+  return limiter;
+}
+
 const CLEANUP_INTERVAL_MS = 60 * 1000;
 let lastCleanup = Date.now();
 
@@ -60,22 +109,41 @@ function cleanupStores(): void {
 /**
  * Sliding window rate limiter.
  * Checks whether the request with `key` exceeds `maxRequests` in the last `windowMs` milliseconds.
+ *
+ * Production: distributed sliding window via Upstash Redis. Fail-closed —
+ * if Redis is unreachable or misconfigured the request is denied rather
+ * than silently allowed (brute-force protection must not fail open).
+ *
+ * Non-production: in-memory sliding window (single instance is fine for
+ * dev/test).
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   key: string,
   maxRequests: number,
   windowMs: number
-): RateLimitResult {
-  try {
-    validateRateLimiterConfig();
-  } catch (err) {
-    if (process.env.NODE_ENV === 'production') {
-      console.warn(
-        '[RateLimiter] Upstash Redis credentials not configured. Falling back to in-memory rate limiting.',
+): Promise<RateLimitResult> {
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const { success, remaining, reset } = await getUpstashLimiter(
+        maxRequests,
+        windowMs
+      ).limit(key);
+      return {
+        allowed: success,
+        remaining: Math.max(0, remaining),
+        retryAfterSeconds: success
+          ? 0
+          : Math.max(1, Math.ceil((reset - Date.now()) / 1000)),
+      };
+    } catch (err) {
+      console.error(
+        '[RateLimiter] Upstash rate-limit check failed; denying request (fail-closed).',
         err instanceof Error ? err.message : String(err)
       );
+      return { allowed: false, remaining: 0, retryAfterSeconds: 60 };
     }
   }
+
   cleanupStores();
   const now = Date.now();
 

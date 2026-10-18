@@ -13,6 +13,21 @@ const VERCEL_ORG_ID = process.env.VERCEL_ORG_ID;
 
 const isDryRun = process.argv.includes('--dry-run');
 
+// Public, non-sensitive config. These values are embedded in client bundles
+// anyway, so syncing them to preview deployments is harmless and keeps
+// previews functional. Everything else is secret and production-only.
+const PREVIEW_SAFE_KEYS = new Set([
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  'NEXT_PUBLIC_ROOT_DOMAIN',
+  'NEXT_PUBLIC_APP_URL',
+  'NEXT_PUBLIC_MARKETING_URL',
+  'NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER',
+  'NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE',
+  'NEXT_PUBLIC_SIGNUPS_ENABLED',
+  'DEFAULT_STORAGE_QUOTA_BYTES',
+]);
+
 const SYNC_KEYS = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
@@ -22,8 +37,6 @@ const SYNC_KEYS = [
   'NEXT_PUBLIC_MARKETING_URL',
   'SESSION_SECRET',
   'TOKEN_ENCRYPTION_KEY',
-  'FACEBOOK_APP_ID',
-  'FACEBOOK_APP_SECRET',
   'R2_ACCOUNT_ID',
   'R2_ACCESS_KEY_ID',
   'R2_SECRET_ACCESS_KEY',
@@ -74,15 +87,18 @@ async function run() {
       key.startsWith('NEXT_PUBLIC_') ||
       key === 'DEFAULT_STORAGE_QUOTA_BYTES';
 
+    // Secrets are production-only. Syncing production secrets to preview
+    // deployments would hand every PR preview build the prod keys.
+    const targets = PREVIEW_SAFE_KEYS.has(key) ? ['production', 'preview'] : ['production'];
     const payload = {
       key,
       value: val,
       type: isPublicConfig ? 'plain' : 'sensitive',
-      target: ['production', 'preview'],
+      target: targets,
     };
 
     if (isDryRun) {
-      console.log(`[DRY-RUN] Would upsert ${key} as ${payload.type} (targets: production, preview)`);
+      console.log(`[DRY-RUN] Would upsert ${key} as ${payload.type} (targets: ${payload.target.join(', ')})`);
       syncedCount++;
       continue;
     }

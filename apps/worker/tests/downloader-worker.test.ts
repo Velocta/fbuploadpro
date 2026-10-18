@@ -13,6 +13,45 @@ import worker, {
   type Env,
 } from '../src/index.js';
 
+// Test-only mock DB. Previously lived in src/index.ts; moved here so the
+// production bundle contains no test doubles. Injected via env.__TEST_DB__.
+function createTestMockDb(userId: string): any {
+  const defaultJob = {
+    id: crypto.randomUUID(),
+    user_id: userId,
+    status: 'queued',
+    progress_percent: 0,
+    downloaded_bytes: 0,
+  };
+
+  const queryBuilder = {
+    single: () => Promise.resolve({ data: defaultJob, error: null }),
+    maybeSingle: () => Promise.resolve({ data: null, error: null }),
+    limit: () => Promise.resolve({ data: [], error: null }),
+  };
+
+  const tableMock = {
+    insert: () => ({ select: () => queryBuilder }),
+    select: () => ({
+      eq: () => ({
+        eq: () => queryBuilder,
+        order: () => queryBuilder,
+      }),
+    }),
+    update: () => ({
+      eq: () => Promise.resolve({ data: null, error: null }),
+    }),
+  };
+
+  return {
+    auth: {
+      getUser: () => Promise.resolve({ data: { user: { id: userId } }, error: null }),
+    },
+    from: () => tableMock,
+  };
+}
+
+
 describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
   describe('Helper Functions', () => {
     it('infers MIME types correctly from headers or extensions', () => {
@@ -53,11 +92,22 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
     it('OPTIONS /api/media/download/enqueue returns CORS preflight headers', async () => {
       const req = new Request('https://worker.internal/api/media/download/enqueue', {
         method: 'OPTIONS',
+        headers: { Origin: 'https://shahzebpyc.fbuploadpro.com' },
       });
       const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
       expect(res.status).toBe(204);
-      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://shahzebpyc.fbuploadpro.com');
       expect(res.headers.get('Access-Control-Allow-Methods')).toContain('POST');
+    });
+
+    it('OPTIONS from a disallowed origin gets no Access-Control-Allow-Origin', async () => {
+      const req = new Request('https://worker.internal/api/media/download/enqueue', {
+        method: 'OPTIONS',
+        headers: { Origin: 'https://evil.example.com' },
+      });
+      const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
+      expect(res.status).toBe(204);
+      expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
     });
 
     it('requires authentication for /api/media/download endpoints', async () => {
@@ -85,7 +135,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-test-user-id': '11111111-1111-4111-a111-111111111111',
+          Authorization: 'Bearer test-token',
         },
         body: JSON.stringify({ url: 'http://127.0.0.1:8080/internal.mp4' }),
       });
@@ -94,6 +144,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
         ENVIRONMENT: 'test',
         SUPABASE_URL: 'https://test.supabase.co',
         SUPABASE_SERVICE_ROLE_KEY: 'test-key',
+        __TEST_DB__: createTestMockDb('11111111-1111-4111-a111-111111111111'),
       }, dummyCtx);
 
       expect(res.status).toBe(400);
@@ -133,7 +184,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-test-user-id': '11111111-1111-4111-a111-111111111111',
+          Authorization: 'Bearer test-token',
         },
         body: JSON.stringify({
           url: 'https://cdn.example.com/public_video.mp4',
@@ -145,6 +196,7 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
         ENVIRONMENT: 'test',
         SUPABASE_URL: 'https://mock.supabase.co',
         SUPABASE_SERVICE_ROLE_KEY: 'mock-key',
+        __TEST_DB__: createTestMockDb('11111111-1111-4111-a111-111111111111'),
       };
 
       // Run with mocked db in global or fetch
@@ -161,10 +213,10 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       const req = new Request('https://worker.internal/api/media/download/jobs/test-job-123', {
         method: 'GET',
         headers: {
-          'x-test-user-id': '11111111-1111-4111-a111-111111111111',
+          Authorization: 'Bearer test-token',
         },
       });
-      const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
+      const res = await worker.fetch(req, { ENVIRONMENT: 'test', __TEST_DB__: createTestMockDb('11111111-1111-4111-a111-111111111111') }, dummyCtx);
       expect([200, 404]).toContain(res.status);
     });
 
@@ -172,10 +224,10 @@ describe('Cloudflare Worker Media Downloader Engine (Spec 043)', () => {
       const req = new Request('https://worker.internal/api/media/download/jobs', {
         method: 'GET',
         headers: {
-          'x-test-user-id': '11111111-1111-4111-a111-111111111111',
+          Authorization: 'Bearer test-token',
         },
       });
-      const res = await worker.fetch(req, { ENVIRONMENT: 'test' }, dummyCtx);
+      const res = await worker.fetch(req, { ENVIRONMENT: 'test', __TEST_DB__: createTestMockDb('11111111-1111-4111-a111-111111111111') }, dummyCtx);
       expect(res.status).toBe(200);
       const data = (await res.json()) as { success?: boolean; jobs?: any[] };
       expect(data.success).toBe(true);

@@ -11,6 +11,11 @@ import type { ClaimedQueueItem } from '@fbuploadpro/contracts';
 
 export interface Env {
   ENVIRONMENT?: string;
+  /**
+   * Test-only seam: integration tests inject a mock DB handle here.
+   * Never set in production. Never derived from request input.
+   */
+  __TEST_DB__?: unknown;
   TOKEN_ENCRYPTION_KEY?: string;
   FB_ENCRYPTION_MASTER_KEY?: string;
   MASTER_ENCRYPTION_KEY?: string;
@@ -26,6 +31,8 @@ export interface Env {
   };
   MEDIA_BUCKET?: any;
   R2_PUBLIC_URL?: string;
+  /** Comma-separated extra origins allowed by CORS (see getAllowedOrigin). */
+  CORS_ALLOWED_ORIGINS?: string;
 }
 
 export * from './fb-client.js';
@@ -267,51 +274,10 @@ export async function handleQueueBatch(
   );
 }
 
-function createTestMockDb(userId: string): any {
-  const defaultJob = {
-    id: crypto.randomUUID(),
-    user_id: userId,
-    status: 'queued',
-    progress_percent: 0,
-    downloaded_bytes: 0,
-  };
-
-  const queryBuilder = {
-    single: () => Promise.resolve({ data: defaultJob, error: null }),
-    maybeSingle: () => Promise.resolve({ data: null, error: null }),
-    limit: () => Promise.resolve({ data: [], error: null }),
-  };
-
-  const tableMock = {
-    insert: () => ({ select: () => queryBuilder }),
-    select: () => ({
-      eq: () => ({
-        eq: () => queryBuilder,
-        order: () => queryBuilder,
-      }),
-    }),
-    update: () => ({
-      eq: () => Promise.resolve({ data: null, error: null }),
-    }),
-  };
-
-  return {
-    auth: {
-      getUser: () => Promise.resolve({ data: { user: { id: userId } }, error: null }),
-    },
-    from: () => tableMock,
-  };
-}
-
 async function authenticateWorkerRequest(
   request: Request,
-  env: Env,
   db: any
 ): Promise<string | null> {
-  if (env.ENVIRONMENT === 'test' && request.headers.get('x-test-user-id')) {
-    return request.headers.get('x-test-user-id');
-  }
-
   const authHeader = request.headers.get('Authorization') || request.headers.get('authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
   if (token && db?.auth && typeof db.auth.getUser === 'function') {
@@ -476,10 +442,14 @@ async function handleMediaDownloadRoutes(
   pathname: string,
   corsHeaders: Record<string, string>
 ): Promise<Response> {
-  let db = initWorkerDb(env);
-  if (!db && env.ENVIRONMENT === 'test') {
-    db = createTestMockDb(request.headers.get('x-test-user-id') || 'test-user-id');
-  }
+  // Test-only seam (see Env.__TEST_DB__): integration tests inject a mock DB
+  // via env. This is never derived from request input, so it cannot be
+  // triggered remotely. Disabled entirely when ENVIRONMENT === 'production'.
+  const testDb =
+    env.ENVIRONMENT === 'production'
+      ? null
+      : (env as unknown as { __TEST_DB__?: unknown }).__TEST_DB__ ?? null;
+  const db = initWorkerDb(env) ?? testDb;
 
   if (!db) {
     return new Response(
@@ -488,7 +458,7 @@ async function handleMediaDownloadRoutes(
     );
   }
 
-  const userId = await authenticateWorkerRequest(request, env, db);
+  const userId = await authenticateWorkerRequest(request, db);
   if (!userId) {
     return new Response(
       JSON.stringify({ error: 'Unauthorized: valid authorization token required' }),
@@ -515,26 +485,69 @@ async function handleMediaDownloadRoutes(
   );
 }
 
+/**
+ * Returns the request origin if it is allowed to call this worker, else null.
+ * The worker serves the FBUploadPro web app, so only its domains (apex,
+ * www, *.fbuploadpro.com tenant subdomains, app.vinsmokemedia.online) plus
+ * localhost in non-production are accepted. Extra origins can be added via
+ * the CORS_ALLOWED_ORIGINS env var (comma-separated). Never '*': these
+ * endpoints authenticate via Bearer tokens.
+ */
+function getAllowedOrigin(request: Request, env: Env): string | null {
+  const origin = request.headers.get('Origin');
+  if (!origin) return null;
+  let hostname: string;
+  try {
+    hostname = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const extra = (env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const allowedHosts = new Set([
+    'fbuploadpro.com',
+    'www.fbuploadpro.com',
+    'app.vinsmokemedia.online',
+    ...extra,
+  ]);
+  const isTenantSubdomain =
+    hostname.endsWith('.fbuploadpro.com') || hostname.endsWith('.vinsmokemedia.online');
+  const isLocalhost =
+    env.ENVIRONMENT !== 'production' &&
+    (hostname === 'localhost' || hostname === '127.0.0.1');
+  if (allowedHosts.has(hostname) || isTenantSubdomain || isLocalhost) {
+    return origin;
+  }
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const allowedOrigin = getAllowedOrigin(request, env);
 
     // 1. CORS Preflight
     if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-test-user-id',
-        },
-      });
+      const preflightHeaders: Record<string, string> = {
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      };
+      if (allowedOrigin) {
+        preflightHeaders['Access-Control-Allow-Origin'] = allowedOrigin;
+        preflightHeaders['Vary'] = 'Origin';
+      }
+      return new Response(null, { status: 204, headers: preflightHeaders });
     }
 
-    const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+    const corsHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    if (allowedOrigin) {
+      corsHeaders['Access-Control-Allow-Origin'] = allowedOrigin;
+      corsHeaders['Vary'] = 'Origin';
+    }
 
     // 2. Healthcheck
     if (request.method === 'GET' && url.pathname === '/health') {

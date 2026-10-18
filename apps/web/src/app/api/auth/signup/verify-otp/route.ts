@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // IP rate limiting on OTP verification attempts (10 requests per 60s)
-    const ipLimit = checkRateLimit(`verify_otp:ip:${clientIp}`, 10, 60 * 1000);
+    const ipLimit = await checkRateLimit(`verify_otp:ip:${clientIp}`, 10, 60 * 1000);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
