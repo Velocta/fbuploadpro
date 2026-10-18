@@ -26,6 +26,8 @@ export interface Env {
   DISPATCH_BATCH_SIZE?: string;
   DISPATCH_MAX_BATCHES_PER_TICK?: string;
   DISPATCH_CONCURRENCY?: string;
+  POSTHOG_KEY?: string;
+  POSTHOG_HOST?: string;
   PUBLISH_QUEUE?: {
     sendBatch(messages: Array<{ body: ClaimedQueueItem }>): Promise<void>;
   };
@@ -45,6 +47,7 @@ import {
   detectSourcePlatform,
 } from '@fbuploadpro/contracts';
 import { executeDownloadJob } from './services/downloader-engine.js';
+import { captureWorkerError } from './analytics';
 
 
 export interface ScheduledOptions {
@@ -76,27 +79,30 @@ function initWorkerDb(env: Env, optionsDb?: any): any {
   }) as any;
 }
 
-async function recoverStuckPublishingItems(db: any): Promise<void> {
+async function recoverStuckPublishingItems(db: any, env?: Env): Promise<void> {
   const currentMinute = new Date().getMinutes();
   if (currentMinute % 5 === 0 && typeof db.rpc === 'function') {
     try {
       const { data, error } = await db.rpc('recover_stuck_publishing_items', { p_timeout_minutes: 10 });
       if (error) {
+        captureWorkerError(env ?? {}, error, { site: 'recoverStuckPublishingItems', kind: 'rpc_error' });
         console.error('[recoverStuckPublishingItems] RPC error:', error);
       } else if (data && data > 0) {
         console.info(`[recoverStuckPublishingItems] Recovered ${data} stuck publishing items`);
       }
     } catch (err) {
+      captureWorkerError(env ?? {}, err, { site: 'recoverStuckPublishingItems', kind: 'unexpected' });
       console.error('[recoverStuckPublishingItems] Unexpected error:', err);
     }
   }
 }
 
-export async function failStuckDownloadJobs(db: any): Promise<number> {
+export async function failStuckDownloadJobs(db: any, env?: Env): Promise<number> {
   if (typeof db?.rpc === 'function') {
     try {
       const { data, error } = await db.rpc('fail_stuck_download_jobs', { p_timeout_minutes: 15 });
       if (error) {
+        captureWorkerError(env ?? {}, error, { site: 'failStuckDownloadJobs', kind: 'rpc_error' });
         console.error('[failStuckDownloadJobs] RPC error:', error);
         return 0;
       }
@@ -105,6 +111,7 @@ export async function failStuckDownloadJobs(db: any): Promise<number> {
       }
       return Number(data ?? 0);
     } catch (err) {
+      captureWorkerError(env ?? {}, err, { site: 'failStuckDownloadJobs', kind: 'unexpected' });
       console.error('[failStuckDownloadJobs] Unexpected error:', err);
       return 0;
     }
@@ -191,6 +198,7 @@ export async function handleScheduled(
 ): Promise<void> {
   const masterKey = env.TOKEN_ENCRYPTION_KEY || env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
   if (!masterKey) {
+    captureWorkerError(env, new Error('TOKEN_ENCRYPTION_KEY not configured'), { site: 'handleScheduled', kind: 'missing_key' }, _ctx?.waitUntil?.bind(_ctx));
     console.warn('[Scheduled] TOKEN_ENCRYPTION_KEY is not configured; skipping cycle');
     return;
   }
@@ -208,10 +216,10 @@ export async function handleScheduled(
 
   try {
     // 1. Every 5 minutes, recover items stuck in 'publishing' status
-    await recoverStuckPublishingItems(db);
+    await recoverStuckPublishingItems(db, env);
 
     // 1b. Fail download jobs stalled for > 15 minutes
-    await failStuckDownloadJobs(db);
+    await failStuckDownloadJobs(db, env);
 
     // 2. High-Throughput Producer vs Direct Runner
     if (env.PUBLISH_QUEUE && typeof env.PUBLISH_QUEUE.sendBatch === 'function') {
