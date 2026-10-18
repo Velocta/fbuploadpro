@@ -1196,6 +1196,7 @@ export function MediaLibraryExplorer({
 
         {/* Divider 1: Between Search and Navigation controls */}
         <hr
+          data-testid="media-toolbar-divider-1"
           aria-orientation="vertical"
           style={{
             width: '1px',
@@ -1268,6 +1269,7 @@ export function MediaLibraryExplorer({
 
           {/* Divider 2: Between Media Type Tabs and Dropdown Filters */}
           <hr
+            data-testid="media-toolbar-divider-2"
             aria-orientation="vertical"
             style={{
               width: '1px',
@@ -1581,6 +1583,7 @@ export function MediaLibraryExplorer({
 
           {/* Divider 3: Between Dropdown Filters and View Mode Toggle */}
           <hr
+            data-testid="media-toolbar-divider-3"
             aria-orientation="vertical"
             style={{
               width: '1px',
