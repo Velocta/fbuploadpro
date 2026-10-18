@@ -436,10 +436,10 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       throw this.createGraphError(photoRes, photoData);
     }
 
-    const photoId = String(photoData.id);
-    if (!photoId) {
+    if (!photoData.id) {
       throw new FacebookGraphError('Invalid photo upload response for story: missing id');
     }
+    const photoId = String(photoData.id);
 
     // Step 2: Publish Photo Story
     const storyUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/photo_stories`;
