@@ -114,6 +114,7 @@ export function MediaPreviewModal({
   onSave,
   onUpdateThumbnail,
   onDelete,
+}: Readonly<MediaPreviewModalProps>) {
   const [nameDraft, setNameDraft] = useState(() => item?.name || '');
   const [captionDraft, setCaptionDraft] = useState(() =>
     item?.captionText !== null && item?.captionText !== undefined
