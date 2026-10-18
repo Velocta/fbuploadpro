@@ -1014,6 +1014,42 @@ Spec 071 restores the Media Library to a full-width explorer canvas by removing 
   - `MediaImportModal`: Start import button guarded with `isStartingImport` to suppress rapid double clicks prior to queue progress transition.
   - Single Asset Deletion: Guarded by `deletingAssetId` to prevent duplicate parallel DELETE requests.
 
+---
+
+## 37. Spec 072 Import Media Dialog Layout, Behavior & Concurrency Purification
+
+Spec 072 updates the existing `MediaImportModal` in place, standardizing staging layout, duplicate management, validation copy, and progress tracking while purging technical plumbing jargon:
+
+### 37.1 Staging Mode Layout & Validation
+* **Destination Pill Selector**: Replaced native `<select>` with a `"To: {folder}"` pill button (`data-testid="destination-folder-pill"`) with folder icon, defaulting to current folder or `"Library"`. Clicking opens a dropdown menu to override destination for the whole batch.
+* **Live Dynamic Subtext**: Header displays `"{N} file(s) selected · will be added to {folder}"`, updating live whenever the target folder is changed.
+* **46px Square Thumbnail Tiles**: Every staged item renders a 46px square tile (`width: 46px, height: 46px`) showing real image previews for images (via client object URL with SVG icon fallback) and video type icons for videos.
+* **Non-Blocking Validation Flags**: Flagged rows are excluded from the upload count:
+  - Unsupported MIME: `"can't upload — not a supported format"` (allowed: `video/mp4`, `video/quicktime`, `video/webm`, `image/jpeg`, `image/png`, `image/webp`).
+  - Size > 500 MB: `"too large — 500 MB max"`.
+  - 0-byte file: `"empty file"`.
+  - Start import button reflects only valid files (`"Start import ({n})"`) and is disabled when `n === 0`.
+* **SHA-256 Duplicate Management**:
+  - Global banner when duplicates detected: `"N possible duplicate(s) found"` with a `"Skip all"` button to drop duplicates at once.
+  - Row-level `"possible duplicate"` badge with inline `"Keep"` (clears flag and includes file) and `"Skip"` (X button to drop).
+* **Purge of Concurrency Jargon**: Eradicated all references to concurrency limits and queue mechanics (`"Uploads run 3 at a time — the rest wait in line."`) from the UI.
+
+### 37.2 Progress Mode, Queue Concurrency & Dock Collapsing
+* **Aggregate Batch Progress**: Progress header shows `"Importing media"`, `"Adding to {folder}"`, prominent aggregate percentage label, and a full-width track bar.
+* **Per-Row Execution States**:
+  - `uploading`: Percentage label, thin progress bar, Pause and Cancel buttons.
+  - `paused`: Neutral progress bar (`var(--text-dim)`), `"paused"` status, and Resume button. Paused files retain their queue slot.
+  - `queued`: `"queued"` status with cancel X.
+  - `completed`: Green checkmark with `"uploaded to {folder}"`.
+  - `failed`: `"failed — retry"` with manual Retry button (following 3 automated retries with exponential backoff).
+  - `cancelled`: Dimmed row with `"cancelled"` status.
+* **Footer Controls & Safeguards**:
+  - Subtle warning while uploading: `"Leaving now will cancel the remaining uploads."`
+  - Quiet red `"Cancel remaining"` link appears when `queuedItems.length > activeUploadingItems.length` (cancels queued items only, leaving active in-flight uploads intact).
+  - `"Keep working"` button collapses modal into a floating bottom-right dock (`data-testid="minimized-upload-dock"`) showing progress track, percentage, `"Uploading N of M"`, and click-to-restore.
+  - Completion state: Header displays `"Import complete"` and `"N of M added to {folder}"` (or `"Import canceled — nothing was uploaded"` if all were cancelled) with a single primary `"Done"` button.
+
+
 
 
 
