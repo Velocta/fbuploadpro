@@ -856,7 +856,7 @@ export function MediaImportModal({
                     cursor: 'pointer',
                   }}
                 >
-                  <option value="">All Media</option>
+                  <option value="">Library</option>
                   {folders.map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.name}

@@ -954,6 +954,42 @@ Spec 069 resolves four critical and high-priority functional defects in the Medi
 ### 34.4 Hairline Toolbar Group Dividers (Issue 4)
 * **Approved Visual Dividers**: Inserted three 1px vertical hairline dividers (`role="separator"`, `aria-orientation="vertical"`, `var(--border-subtle)`) cleanly separating the four functional toolbar clusters: Search, Media-type tabs, Dropdowns, and View toggle.
 
+---
+
+## 35. Spec 070 Media Library Toolbar Zones & Rail Smart Views
+
+Spec 070 rebuilds the Media Library toolbar and navigation architecture into an unmistakable, 3-zone control bar, adds cross-folder Smart Views to the rail, renames the root repository to "Library", and implements library-wide global search with folder path attribution without touching themes, colors, or fonts:
+
+### 35.1 Root Repository Rename to "Library"
+* **"Library" as the Universal Root**: Renamed the root location from "All Media" to "Library" across all navigation and explorer touchpoints:
+  - Breadcrumb root trail: Reads `Library` at root, and `Library / asdf / sdafd` inside subfolders.
+  - "+ New Folder" modal: The "PLACE INSIDE" default parent folder selector reads `Library`.
+  - Media Import modal: The destination folder dropdown lists `Library` as the root option.
+  - Folder reparenting & deletion: Modals and impact summaries consistently state that items will be moved to `Library`.
+
+### 35.2 Three-Zone Toolbar Architecture
+* **Single Divider-Separated Row**: The toolbar is organized into three distinct, non-overlapping zones separated by vertical hairline dividers (`<hr aria-orientation="vertical">`):
+  1. **Zone 1 — GLOBAL (left)**: Dedicated exclusively to search. Uses placeholder `"Search files and captions…"`. Search executes library-wide across all files and captions regardless of current folder or view.
+  2. **Divider 1**: Separates global search from local scoped controls.
+  3. **Zone 2 — LOCAL (middle)**: Controls that apply strictly to the current folder or smart view.
+     - **Scope Anchor Tag**: First element (`data-testid="media-scope-tag"`), e.g., `"In: Library"`, `"In: Everything"`, `"In: Needs caption"`, or `"In: asdf"`. During active search, automatically anchors to `"In: Library"`.
+     - **Three Labeled Dropdowns**: Eradicated the duplicate `All / Videos / Images` tablist in favor of persistent labeled dropdowns: `"Type: All"`, `"Ratio: All"`, and `"Captions: All"`.
+     - **Active Accent Underline**: Non-default filter values receive the active accent underline (`2px solid ${PALETTE.primary}`) directly beneath the value text (e.g. `Ratio: 9:16`).
+     - **Dynamic Clear Action**: When any local filter is active, displays `"N filters · Clear"` (or `"1 filter · Clear"`) to immediately reset all three filters back to default `All`.
+  4. **Divider 2**: Separates local filtering from sorting and view modes.
+  5. **Zone 3 — SORT + VIEW (right)**: Contains the labeled `"Sort: Newest"` dropdown (short values: `Newest`, `Oldest`, `Name A–Z`, `Largest`) followed by bare grid and table view toggle icon buttons.
+
+### 35.3 Rail Smart Views ("VIEWS": "Everything" & "Needs caption")
+* **Smart Cross-Folder Collections**: Replaced the legacy rail collections with a dedicated `VIEWS` rail section containing exactly two cross-folder smart views:
+  - **Everything**: Displays every media item in the library across all folders.
+  - **Needs caption**: Displays all assets with missing or empty captions across all folders, giving content creators instant access to uncaptioned backlog without manual searching.
+* **Preserved Local Filters**: Switching between folders or smart views seamlessly preserves active local filter settings (`Type`, `Ratio`, `Captions`, `Sort`).
+
+### 35.4 Global Search with Folder Path Attribution
+* **Library-Wide Search**: Any query entered into Zone 1 searches the entire repository across all folders and smart views.
+* **Folder Path Badges**: Every search result card and table row displays its folder path attribution (e.g. `"in asdf / sdafd"` or `"in Library"`), providing instant location context and one-click navigation directly to the enclosing folder.
+
+
 
 
 
