@@ -51,6 +51,7 @@ export default function TenantDedicatedPageView({
   const pageId = pageIdProp ?? ((params?.pageId as string) || '');
 
   const [activeTab, setActiveTab] = useState<DedicatedPageTab>(initialTab);
+  const [hoveredTab, setHoveredTab] = useState<DedicatedPageTab | null>(null);
   const [page, setPage] = useState<FacebookPageItem | null>(() => {
     if (initialPage) return initialPage;
     if (pageNameProp) {
@@ -122,7 +123,7 @@ export default function TenantDedicatedPageView({
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
-        setPageError('Unable to locate the requested Facebook Page.');
+        setPageError("Couldn't locate the requested Facebook Page.");
       }
     } catch (err: unknown) {
       // Gracefully fallback to minimal display if pageNameProp was supplied for test or demo rendering
@@ -142,7 +143,7 @@ export default function TenantDedicatedPageView({
           createdAt: '2026-10-01T00:00:00.000Z',
         });
       } else {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to load page information.';
+        const errorMsg = err instanceof Error ? err.message : "Couldn't load the page information. Please try again.";
         setPageError(errorMsg);
       }
     } finally {
@@ -200,7 +201,7 @@ export default function TenantDedicatedPageView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
       });
-      if (!res.ok) throw new Error('Failed to update automation status');
+      if (!res.ok) throw new Error("Couldn't update the automation status. Please try again.");
       const updated = await res.json();
       const nextResolvedStatus = updated?.page?.status ?? updated?.status ?? nextStatus;
       setPage((prev) => (prev ? { ...prev, status: nextResolvedStatus } : null));
@@ -209,7 +210,7 @@ export default function TenantDedicatedPageView({
         message: nextStatus === 'paused' ? 'Automation has been paused.' : 'Automation has been resumed.',
       });
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to update automation state' });
+      setNotification({ type: 'error', message: err.message || "Couldn't update the automation state. Please try again." });
     }
   };
 
@@ -235,11 +236,11 @@ export default function TenantDedicatedPageView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!res.ok) throw new Error('Failed to update queued item');
+      if (!res.ok) throw new Error("Couldn't update the queued item. Please try again.");
       setNotification({ type: 'success', message: 'Queued post updated.' });
       await fetchQueue();
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to update item' });
+      setNotification({ type: 'error', message: err.message || "Couldn't update the item. Please try again." });
     }
   };
 
@@ -249,11 +250,11 @@ export default function TenantDedicatedPageView({
       const res = await fetch(`/api/tenant/${subdomain}/publishing/queue/${itemId}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Failed to delete item');
+      if (!res.ok) throw new Error("Couldn't delete the item. Please try again.");
       setNotification({ type: 'success', message: 'Post removed from queue.' });
       setQueueItems((prev) => prev.filter((i) => i.id !== itemId));
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to remove post' });
+      setNotification({ type: 'error', message: err.message || "Couldn't remove the post. Please try again." });
     }
   };
 
@@ -271,7 +272,7 @@ export default function TenantDedicatedPageView({
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to create publishing slot');
+      throw new Error(err.message || "Couldn't create the publishing slot. Please try again.");
     }
     setNotification({ type: 'success', message: 'Recurring publishing slot added.' });
     await fetchSlots();
@@ -287,7 +288,7 @@ export default function TenantDedicatedPageView({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || 'Failed to update schedule timezone');
+        throw new Error(err.message || "Couldn't update the schedule timezone. Please try again.");
       }
       const data = await res.json().catch(() => ({}));
       const realignedCount = Number(data?.realignedQueueCount ?? 0);
@@ -307,7 +308,7 @@ export default function TenantDedicatedPageView({
     } catch (err: any) {
       setNotification({
         type: 'error',
-        message: err.message || 'Failed to update schedule timezone',
+        message: err.message || "Couldn't update the schedule timezone. Please try again.",
       });
     }
   };
@@ -320,10 +321,10 @@ export default function TenantDedicatedPageView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive }),
       });
-      if (!res.ok) throw new Error('Failed to toggle slot');
+      if (!res.ok) throw new Error("Couldn't toggle the slot. Please try again.");
       setSlots((prev) => prev.map((s) => (s.id === slotId ? { ...s, isActive } : s)));
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to update slot' });
+      setNotification({ type: 'error', message: err.message || "Couldn't update the slot. Please try again." });
     }
   };
 
@@ -333,11 +334,11 @@ export default function TenantDedicatedPageView({
       const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}/slots/${slotId}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Failed to delete slot');
+      if (!res.ok) throw new Error("Couldn't delete the slot. Please try again.");
       setNotification({ type: 'success', message: 'Publishing slot deleted.' });
       setSlots((prev) => prev.filter((s) => s.id !== slotId));
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to delete slot' });
+      setNotification({ type: 'error', message: err.message || "Couldn't delete the slot. Please try again." });
     }
   };
 
@@ -347,10 +348,10 @@ export default function TenantDedicatedPageView({
       const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}`, {
         method: 'DELETE',
       });
-      if (!res.ok) throw new Error('Failed to disconnect page');
+      if (!res.ok) throw new Error("Couldn't disconnect the page. Please try again.");
       router.push(`/tenant/${subdomain}/pages`);
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to disconnect page' });
+      setNotification({ type: 'error', message: err.message || "Couldn't disconnect the page. Please try again." });
     }
   };
 
@@ -406,9 +407,9 @@ export default function TenantDedicatedPageView({
             padding: `${SPACING.sm} ${SPACING.md}`,
             borderRadius: RADII.sm,
             backgroundColor:
-              notification.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              notification.type === 'success' ? 'rgba(46, 189, 133, 0.15)' : 'rgba(246, 70, 93, 0.15)',
             border: `1px solid ${
-              notification.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'
+              notification.type === 'success' ? 'rgba(46, 189, 133, 0.3)' : 'rgba(246, 70, 93, 0.3)'
             }`,
             color: notification.type === 'success' ? PALETTE.accent4 : PALETTE.accent3,
             fontSize: '0.875rem',
@@ -457,7 +458,7 @@ export default function TenantDedicatedPageView({
           style={{
             padding: SPACING.xxl,
             backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: '1px solid rgba(239, 68, 68, 0.3)',
+            border: '1px solid rgba(246, 70, 93, 0.3)',
             borderRadius: RADII.md,
             textAlign: 'center',
             display: 'flex',
@@ -524,9 +525,10 @@ export default function TenantDedicatedPageView({
                     borderBottom: isSelected
                       ? `2px solid ${PALETTE.primary}`
                       : '2px solid transparent',
-                    color: isSelected
-                      ? `var(--text-main, ${THEME.default.text.primary})`
-                      : `var(--text-sub, ${THEME.default.text.secondary})`,
+                    color:
+                      isSelected || hoveredTab === tab.id
+                        ? `var(--text-main, ${THEME.default.text.primary})`
+                        : `var(--text-sub, ${THEME.default.text.secondary})`,
                     fontSize: '0.8125rem',
                     fontWeight: isSelected
                       ? TYPOGRAPHY.weights.semibold
@@ -538,15 +540,11 @@ export default function TenantDedicatedPageView({
                     gap: '6px',
                     transition: 'color 0.15s ease, border-color 0.15s ease',
                   }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-                    }
+                  onMouseEnter={() => {
+                    if (!isSelected) setHoveredTab(tab.id);
                   }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-                    }
+                  onMouseLeave={() => {
+                    if (!isSelected) setHoveredTab(null);
                   }}
                 >
                   <span>{tab.label}</span>

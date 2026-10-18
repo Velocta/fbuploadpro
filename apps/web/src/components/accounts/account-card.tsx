@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { getUserInitials } from '@/lib/user-initials';
 
 export interface FacebookAccountLinkedPageItem {
   id: string;
@@ -35,14 +36,14 @@ export interface AccountCardProps {
   forceAvatarError?: boolean | undefined;
 }
 
-export function getInitials(name: string, fallback = 'FB'): string {
-  return (name || fallback)
-    .split(' ')
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+/**
+ * Kept for existing importers (add-page-modal.tsx, page-card.tsx). The letter
+ * computation is shared via getUserInitials from '@/lib/user-initials'; this
+ * shim only preserves the per-caller fallback behavior.
+ */
+export function getInitials(name: string | null | undefined, fallback = 'FB'): string {
+  if (!name || !name.trim()) return fallback;
+  return getUserInitials(name);
 }
 
 export function getAccountRingColor(
@@ -547,7 +548,7 @@ export function AccountCard({
               gap: SPACING.xs,
             }}
           >
-            <span>{isExpired ? 'Reconnect account' : 'Refresh token'}</span>
+            <span>{isExpired ? 'Reconnect account' : 'Refresh connection'}</span>
           </button>
         ) : (
           <div style={{ flex: 1 }} />

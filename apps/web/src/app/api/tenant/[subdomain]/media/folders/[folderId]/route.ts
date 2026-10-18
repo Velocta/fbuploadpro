@@ -73,7 +73,7 @@ export async function handleUpdateFolder(
          FROM media_folders
          WHERE id = $1 AND user_id = $2`,
         [folderId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!existingRows || existingRows.length === 0) {
         return NextResponse.json(
@@ -97,7 +97,7 @@ export async function handleUpdateFolder(
           const parentRows = (await dbClient.query(
             `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
             [parsed.data.parentId, session.userId]
-          )) as any[];
+          )) as Record<string, unknown>[];
 
           if (!parentRows || parentRows.length === 0) {
             return NextResponse.json(
@@ -117,7 +117,7 @@ export async function handleUpdateFolder(
              )
              SELECT id FROM descendants WHERE id = $3`,
             [folderId, session.userId, parsed.data.parentId]
-          )) as any[];
+          )) as Record<string, unknown>[];
 
           if (cycleRows && cycleRows.length > 0) {
             return NextResponse.json(
@@ -152,7 +152,7 @@ export async function handleUpdateFolder(
          WHERE id = $${paramIdx++} AND user_id = $${paramIdx++}
          RETURNING id, user_id, parent_id, name, created_at, updated_at`,
         values
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!updateRows || updateRows.length === 0) {
         return NextResponse.json(
@@ -168,14 +168,14 @@ export async function handleUpdateFolder(
          FROM media_items
          WHERE folder_id = $1 AND user_id = $2`,
         [folderId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       const subfolderRows = (await dbClient.query(
         `SELECT COUNT(*)::int AS subfolder_count
          FROM media_folders
          WHERE parent_id = $1 AND user_id = $2`,
         [folderId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       const itemCount = Number(countRows[0]?.item_count ?? 0);
       const subfolderCount = Number(subfolderRows[0]?.subfolder_count ?? 0);
@@ -187,8 +187,8 @@ export async function handleUpdateFolder(
         name: row.name,
         itemCount,
         subfolderCount,
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
+        createdAt: new Date(row.created_at as string).toISOString(),
+        updatedAt: new Date(row.updated_at as string).toISOString(),
       });
 
       return NextResponse.json(responsePayload);
@@ -420,7 +420,7 @@ export async function handleDeleteFolder(
     const existingRows = (await dbClient.query(
       `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
       [folderId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!existingRows || existingRows.length === 0) {
       return NextResponse.json(
@@ -438,11 +438,11 @@ export async function handleDeleteFolder(
        )
        SELECT id FROM folder_tree`,
       [folderId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     const folderIds: string[] =
       treeRows && treeRows.length > 0
-        ? treeRows.map((r) => r.id)
+        ? treeRows.map((r) => String(r.id))
         : [folderId];
 
     // 3. Collect all media items inside the folder subtree
@@ -451,7 +451,7 @@ export async function handleDeleteFolder(
        FROM media_items
        WHERE user_id = $1 AND folder_id = ANY($2::uuid[])`,
       [session.userId, folderIds]
-    )) as any[]) ?? [];
+    )) as Record<string, unknown>[]) ?? [];
 
     // 4. Purge R2 objects for all contained media items in bounded batches of 50
     const keysToDelete = mediaRows

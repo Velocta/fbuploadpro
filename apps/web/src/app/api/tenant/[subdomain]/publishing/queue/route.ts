@@ -82,7 +82,7 @@ export async function handleEnqueueMedia(
     const pageRows = (await dbClient.query(
       'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [pageId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
@@ -106,7 +106,7 @@ export async function handleEnqueueMedia(
          FROM media_items
          WHERE id = $1 AND user_id = $2`,
         [mediaId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!mediaRows || mediaRows.length === 0) {
         return NextResponse.json({ error: 'Media not found' }, { status: 404 });
@@ -156,7 +156,7 @@ export async function handleEnqueueMedia(
          FROM page_queue_slots
          WHERE id = $1 AND fb_page_id = $2 AND user_id = $3`,
         [requestedSlotId, pageId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!slotRows || slotRows.length === 0) {
         return NextResponse.json(
@@ -165,7 +165,12 @@ export async function handleEnqueueMedia(
         );
       }
 
-      const slot = slotRows[0];
+      const slot = slotRows[0] as Record<string, unknown> & {
+        id: string;
+        slot_time: string;
+        is_active: boolean;
+        allowed_formats: string[] | null;
+      };
       finalSlotId = slot.id;
 
       if (requestedScheduledTime) {
@@ -174,7 +179,7 @@ export async function handleEnqueueMedia(
         const existingQueued = (await dbClient.query(
           `SELECT scheduled_time FROM queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
           [pageId, session.userId]
-        )) as any[];
+        )) as Record<string, unknown>[];
 
         const computed = calculateNextVacantSlot({
           slots: [
@@ -216,7 +221,7 @@ export async function handleEnqueueMedia(
          WHERE fb_page_id = $1 AND user_id = $2 AND is_active = true
          ORDER BY slot_time ASC`,
         [pageId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!activeSlots || activeSlots.length === 0) {
         return NextResponse.json(
@@ -232,7 +237,7 @@ export async function handleEnqueueMedia(
       const existingQueued = (await dbClient.query(
         `SELECT scheduled_time FROM queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
         [pageId, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       const computed = calculateNextVacantSlot({
         slots: activeSlots.map((s: any) => ({
@@ -309,7 +314,7 @@ export async function handleEnqueueMedia(
         caption ?? '',
         firstComment ?? null,
       ]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     const createdRow = insertRows[0];
 
@@ -321,7 +326,7 @@ export async function handleEnqueueMedia(
       mediaId: createdRow.media_id ?? null,
       postFormat: (createdRow.post_format as PostFormat) ?? finalPostFormat,
       linkUrl: createdRow.link_url ?? linkUrl ?? null,
-      scheduledTime: new Date(createdRow.scheduled_time).toISOString(),
+      scheduledTime: new Date(createdRow.scheduled_time as string).toISOString(),
       caption: createdRow.caption ?? '',
       firstComment: createdRow.first_comment ?? null,
       status: createdRow.status,
@@ -330,10 +335,10 @@ export async function handleEnqueueMedia(
       fbPostId: createdRow.fb_post_id ?? null,
       fbCommentId: createdRow.fb_comment_id ?? null,
       publishedAt: createdRow.published_at
-        ? new Date(createdRow.published_at).toISOString()
+        ? new Date(createdRow.published_at as string).toISOString()
         : null,
-      createdAt: new Date(createdRow.created_at).toISOString(),
-      updatedAt: new Date(createdRow.updated_at).toISOString(),
+      createdAt: new Date(createdRow.created_at as string).toISOString(),
+      updatedAt: new Date(createdRow.updated_at as string).toISOString(),
       ...(mediaRecord
         ? {
             media: {
@@ -473,7 +478,7 @@ export async function handleEnqueueMedia(
                 : String(slot.slot_time),
             timezone: pageTimezone,
             isActive: Boolean(slot.is_active),
-            allowedFormats: (slot as any).allowed_formats ?? null,
+            allowedFormats: (slot.allowed_formats as string[] | null) ?? null,
           },
         ],
         existingScheduledTimes: (existingQueued || []).map(
@@ -585,7 +590,7 @@ export async function handleEnqueueMedia(
     mediaId: createdRow.media_id ?? null,
     postFormat: (createdRow.post_format as PostFormat) ?? finalPostFormat,
     linkUrl: createdRow.link_url ?? linkUrl ?? null,
-    scheduledTime: new Date(createdRow.scheduled_time).toISOString(),
+    scheduledTime: new Date(createdRow.scheduled_time as string).toISOString(),
     caption: createdRow.caption ?? '',
     firstComment: createdRow.first_comment ?? null,
     status: createdRow.status,
@@ -594,10 +599,10 @@ export async function handleEnqueueMedia(
     fbPostId: createdRow.fb_post_id ?? null,
     fbCommentId: createdRow.fb_comment_id ?? null,
     publishedAt: createdRow.published_at
-      ? new Date(createdRow.published_at).toISOString()
+      ? new Date(createdRow.published_at as string).toISOString()
       : null,
-    createdAt: new Date(createdRow.created_at).toISOString(),
-    updatedAt: new Date(createdRow.updated_at).toISOString(),
+    createdAt: new Date(createdRow.created_at as string).toISOString(),
+    updatedAt: new Date(createdRow.updated_at as string).toISOString(),
     ...(mediaRecord
       ? {
           media: {
@@ -692,7 +697,7 @@ export async function handleListQueueItems(
 
     // 5. Total count
     const countSql = `SELECT COUNT(*) AS total FROM queue_items qi WHERE ${whereClause}`;
-    const countRows = (await dbClient.query(countSql, params)) as any[];
+    const countRows = (await dbClient.query(countSql, params)) as Record<string, unknown>[];
     const total = countRows.length > 0 ? Number(countRows[0].total) : 0;
 
     // 6. Paginated list with joined media
@@ -730,7 +735,7 @@ export async function handleListQueueItems(
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const rows = (await dbClient.query(listSql, listParams)) as any[];
+    const rows = (await dbClient.query(listSql, listParams)) as Record<string, unknown>[];
 
     const items = (rows || []).map((row: any) => ({
       id: row.id,
@@ -751,8 +756,8 @@ export async function handleListQueueItems(
       publishedAt: row.published_at
         ? new Date(row.published_at).toISOString()
         : null,
-      createdAt: new Date(row.created_at).toISOString(),
-      updatedAt: new Date(row.updated_at).toISOString(),
+      createdAt: new Date(row.created_at as string).toISOString(),
+      updatedAt: new Date(row.updated_at as string).toISOString(),
       media: row.media_name
         ? {
             name: row.media_name,
@@ -784,7 +789,7 @@ export async function handleListQueueItems(
     `;
     const countParams = pageId ? [session.userId, workspaceId, pageId] : [session.userId, workspaceId];
     try {
-      const statusRows = (await dbClient.query(statusCountSql, countParams)) as any[];
+      const statusRows = (await dbClient.query(statusCountSql, countParams)) as Record<string, unknown>[];
       for (const row of statusRows || []) {
         const cnt = Number(row.cnt ?? 0);
         if (row.status === 'queued') queuedCount = cnt;
@@ -877,8 +882,8 @@ export async function handleListQueueItems(
       publishedAt: row.published_at
         ? new Date(row.published_at).toISOString()
         : null,
-      createdAt: new Date(row.created_at).toISOString(),
-      updatedAt: new Date(row.updated_at).toISOString(),
+      createdAt: new Date(row.created_at as string).toISOString(),
+      updatedAt: new Date(row.updated_at as string).toISOString(),
       media: m
         ? {
             name: m.name,
@@ -901,9 +906,9 @@ export async function handleListQueueItems(
   let skippedCount = 0;
   let cancelledCount = 0;
 
-  if (pageId && typeof (supabase as any).rpc === 'function') {
+  if (pageId && typeof (supabase as SupabaseClient).rpc === 'function') {
     try {
-      const { data: countData } = await (supabase as any).rpc('get_page_queue_status_counts', {
+      const { data: countData } = await (supabase as SupabaseClient).rpc('get_page_queue_status_counts', {
         p_page_id: pageId,
         p_user_id: session.userId,
       });

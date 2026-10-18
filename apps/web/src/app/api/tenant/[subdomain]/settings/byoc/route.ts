@@ -9,7 +9,7 @@ import {
   decryptToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
@@ -37,7 +37,7 @@ export async function GET(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
@@ -167,7 +167,7 @@ export async function PUT(
     );
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
@@ -216,7 +216,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }

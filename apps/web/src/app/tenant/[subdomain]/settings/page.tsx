@@ -61,15 +61,6 @@ export default function WorkspaceSettingsPage() {
         >
           Settings
         </h1>
-        <p
-          style={{
-            margin: `${SPACING.xs} 0 0 0`,
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          Manage Settings
-        </p>
       </div>
 
       {/* Tabs Navigation Bar */}

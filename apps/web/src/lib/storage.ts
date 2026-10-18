@@ -8,6 +8,9 @@ import type {
   PutObjectParams,
   PutObjectResult,
 } from '@fbuploadpro/contracts';
+// Test-only mock. Only used by the non-production fallback in getStorageService()
+// below; never instantiated in production (R2 is always configured there).
+import { getMockStorageProvider } from '../../tests/helpers/mock-storage';
 
 export const R2ConfigSchema = z.object({
   accountId: z.string().min(1, 'R2_ACCOUNT_ID is required'),
@@ -58,55 +61,6 @@ function trimTrailingSlashes(str: string): string {
     end--;
   }
   return str.slice(0, end);
-}
-
-export class MockStorageProvider implements IStorageService {
-  public deletedKeys: Set<string> = new Set();
-  public requestedUploadKeys: Set<string> = new Set();
-  public uploadedObjects: Map<string, { contentType: string; byteLength: number }> = new Map();
-  public publicUrlBase: string = 'https://media.fbuploadpro.com';
-
-  getPresignedUploadUrl(params: PresignedUploadParams): Promise<PresignedUploadResult> {
-    const expiresIn = params.expiresInSeconds ?? 900;
-    this.requestedUploadKeys.add(params.key);
-    return Promise.resolve({
-      uploadUrl: `https://mock-r2.fbuploadpro.com/upload/${encodeURIComponent(params.key)}?expires=${expiresIn}`,
-      publicUrl: this.getPublicUrl(params.key),
-      expiresInSeconds: expiresIn,
-    });
-  }
-
-  putObject(params: PutObjectParams): Promise<PutObjectResult> {
-    this.uploadedObjects.set(params.key, {
-      contentType: params.contentType,
-      byteLength: params.body.byteLength,
-    });
-    this.deletedKeys.delete(params.key);
-    return Promise.resolve({
-      key: params.key,
-      publicUrl: this.getPublicUrl(params.key),
-      byteLength: params.body.byteLength,
-    });
-  }
-
-  deleteObject(key: string): Promise<void> {
-    this.deletedKeys.add(key);
-    this.requestedUploadKeys.delete(key);
-    this.uploadedObjects.delete(key);
-    return Promise.resolve();
-  }
-
-  getPublicUrl(key: string): string {
-    const trimmedBase = trimTrailingSlashes(this.publicUrlBase);
-    const trimmedKey = key.replace(/^\/+/, '');
-    return `${trimmedBase}/${trimmedKey}`;
-  }
-
-  reset(): void {
-    this.deletedKeys.clear();
-    this.requestedUploadKeys.clear();
-    this.uploadedObjects.clear();
-  }
 }
 
 export class R2StorageProvider implements IStorageService {
@@ -165,13 +119,6 @@ export class R2StorageProvider implements IStorageService {
   }
 }
 
-let activeMockStorage: MockStorageProvider | null = null;
-
-export function getMockStorageProvider(): MockStorageProvider {
-  activeMockStorage ??= new MockStorageProvider();
-  return activeMockStorage;
-}
-
 export function getStorageService(): IStorageService {
   const config = getR2Config();
   if (config) {
@@ -182,5 +129,7 @@ export function getStorageService(): IStorageService {
       'Cloudflare R2 storage credentials (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME) are strictly required in production'
     );
   }
+  // Development/test fallback only. The mock lives in tests/helpers/ and is
+  // never instantiated in production (R2 is always configured there).
   return getMockStorageProvider();
 }

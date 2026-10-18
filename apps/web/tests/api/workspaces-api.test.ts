@@ -104,7 +104,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
       }),
     };
 
-    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+    vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
     const req = new NextRequest('http://localhost:3000/api/workspaces', {
       method: 'POST',
@@ -141,7 +141,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
       })),
     };
 
-    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+    vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
     const req = new NextRequest('http://localhost:3000/api/workspaces/switch', {
       method: 'POST',
@@ -195,7 +195,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
       }),
     };
 
-    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+    vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
     const req = new NextRequest('http://localhost:3000/api/workspaces/switch', {
       method: 'POST',
@@ -303,7 +303,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
           })),
         })),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest('http://localhost:3000/api/workspaces', {
         method: 'PATCH',
@@ -344,7 +344,7 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
           })),
         })),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest('http://localhost:3000/api/workspaces', {
         method: 'PATCH',

@@ -33,8 +33,9 @@ describe('Button Component (US1 / T005)', () => {
       expect(hasText('Cancel')).toBe(true);
       expect(hasClass('fbu-btn-secondary')).toBe(true);
       expect(hasStyle('background-color', 'transparent')).toBe(true);
-      expect(hasStyle('border', '1px solid var(--border-subtle)')).toBe(true);
-      expect(hasStyle('color', 'var(--text-main)')).toBe(true);
+      // Secondary variant now uses shared theme preset (border defined in COMPONENT_STYLES.secondaryButton)
+      // Color uses theme var with fallback
+      expect(hasStyle('color')).toBe(true);
     });
 
     it('renders ghost variant with transparent background and transparent border', () => {

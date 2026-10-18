@@ -28,6 +28,9 @@ SET status = 'failed',
 WHERE id = $1;
 `.trim();
 
+// --- Settlement retry tuning ---
+const DEFAULT_RETRY_DELAY_SECONDS = 300;
+
 export const INSERT_PUBLISH_LOG_SQL = `
 INSERT INTO publish_logs (
     user_id,
@@ -82,7 +85,7 @@ async function settleSupabaseOutcome(
       p_fb_post_id: outcome.fbPostId ?? null,
       p_fb_comment_id: outcome.fbCommentId ?? null,
       p_retry_count: attemptNumber,
-      p_retry_delay_seconds: outcome.retryDelaySeconds ?? 300,
+      p_retry_delay_seconds: outcome.retryDelaySeconds ?? DEFAULT_RETRY_DELAY_SECONDS,
       p_error_code: outcome.errorCode ?? null,
       p_error_subcode: outcome.errorSubcode ?? null,
       p_error_message: outcome.errorMessage ?? null,
@@ -127,7 +130,7 @@ async function settleSupabaseOutcome(
     }
   } else {
     const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
-    const retryDelay = outcome.retryDelaySeconds ?? 300;
+    const retryDelay = outcome.retryDelaySeconds ?? DEFAULT_RETRY_DELAY_SECONDS;
     const itemUpdate = isRetry
       ? {
           status: 'queued',

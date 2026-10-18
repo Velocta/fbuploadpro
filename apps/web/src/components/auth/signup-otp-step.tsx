@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Input, Button, Alert } from '@/components/ui';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
-import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
@@ -90,7 +90,7 @@ export function SignupOtpStep({
       }
     } catch {
       setGeneralError(
-        'Unable to verify code at this moment. Please check your connection and try again.'
+        "Couldn't verify the code. Please check your connection and try again."
       );
       setIsSubmitting(false);
     }
@@ -114,7 +114,7 @@ export function SignupOtpStep({
       const data = await res.json();
 
       if (!res.ok) {
-        setGeneralError(sanitizeAuthErrorMessage(data.error, 'Unable to resend code right now.'));
+        setGeneralError(sanitizeAuthErrorMessage(data.error, "Couldn't resend the code right now."));
         if (data.cooldownSecondsRemaining) {
           setResendCooldown(data.cooldownSecondsRemaining);
         }
@@ -126,7 +126,7 @@ export function SignupOtpStep({
       setResendCooldown(60);
       setIsResending(false);
     } catch {
-      setGeneralError('Failed to resend verification code. Please check your connection.');
+      setGeneralError("Couldn't resend the verification code. Please check your connection.");
       setIsResending(false);
     }
   };
@@ -158,14 +158,14 @@ export function SignupOtpStep({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim, #6b7280)' }}>
+          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
             Verification code sent to
           </span>
           <span
             style={{
               fontSize: '0.875rem',
               fontWeight: TYPOGRAPHY.weights.medium,
-              color: 'var(--text-main, #f3f4f6)',
+              color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
             {email}
@@ -257,7 +257,7 @@ export function SignupOtpStep({
           style={{
             background: 'transparent',
             border: 'none',
-            color: resendCooldown > 0 ? 'var(--text-dim, #6b7280)' : PALETTE.primary,
+            color: resendCooldown > 0 ? `var(--text-dim, ${THEME.default.text.muted})` : PALETTE.primary,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.medium,
             cursor: resendCooldown > 0 ? 'default' : 'pointer',

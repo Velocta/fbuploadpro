@@ -209,7 +209,7 @@ export function PageTabDashboard({
           }}
         >
           <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-            Edge Dispatcher
+            Auto-publishing
           </span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: SPACING.xs }}>
             <span
@@ -317,7 +317,7 @@ export function PageTabDashboard({
                 </svg>
               </div>
               <p style={{ margin: `0 0 ${SPACING.md} 0`, fontSize: '0.875rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                The publishing queue for this page is currently empty.
+                Nothing scheduled yet. Queue your first post to get this page publishing.
               </p>
               <button
                 type="button"

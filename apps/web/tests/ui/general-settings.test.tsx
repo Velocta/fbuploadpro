@@ -51,10 +51,10 @@ describe('Spec 061: Workspace Settings General Tab Redesign', () => {
   });
 
   describe('Page Header & Tab Bar Verification', () => {
-    it('renders exact page header "Settings" and "Manage Settings" verbatim', () => {
+    it('renders exact page header "Settings" verbatim', () => {
       const { hasText } = render(<WorkspaceSettingsPage />);
       expect(hasText('Settings')).toBe(true);
-      expect(hasText('Manage Settings')).toBe(true);
+      // "Manage Settings" subtext was removed in the production-grade cleanup (redundant)
     });
 
     it('preserves General and Facebook tabs', () => {

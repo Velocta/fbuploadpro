@@ -8,6 +8,7 @@ import {
   SPACING,
   STATUS_SIGNALS,
   TYPOGRAPHY,
+  COMPONENT_STYLES,
 } from '@/lib/theme';
 import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import { ScheduleTimezoneModal } from './schedule-timezone-modal';
@@ -37,23 +38,6 @@ export interface PageTabPostingTimesProps {
   onToggleSlot: (slotId: string, isActive: boolean) => Promise<void>;
   onDeleteSlot: (slotId: string) => Promise<void>;
 }
-
-export const COMMON_TIMEZONES = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Asia/Dubai',
-  'Asia/Karachi',
-  'Asia/Kolkata',
-  'Asia/Singapore',
-  'Asia/Tokyo',
-  'Australia/Sydney',
-];
 
 export const ALL_POST_FORMATS: Array<{ id: string; label: string }> = [
   { id: 'reel', label: 'Reels' },
@@ -188,18 +172,16 @@ function PostingTimesHeader({
           data-testid="add-slot-button"
           onClick={onOpenAddModal}
           style={{
+            ...COMPONENT_STYLES.primaryButton,
             height: '34px',
             padding: `0 ${SPACING.md}`,
-            backgroundColor: PALETTE.primary,
-            color: '#000000',
+            color: PALETTE.background,
             border: `1px solid ${PALETTE.primary}`,
-            borderRadius: RADII.sm,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.semibold,
             display: 'inline-flex',
             alignItems: 'center',
             gap: '6px',
-            cursor: 'pointer',
             boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
             transition: 'transform 0.12s ease',
           }}
@@ -339,32 +321,33 @@ export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }:
             style={{
               fontSize: '0.75rem',
               fontWeight: TYPOGRAPHY.weights.medium,
-              padding: '2px 8px',
-              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.xs,
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
             All Formats Allowed
           </span>
         ) : (
-          formats.map((fmt) => (
-            <span
-              key={fmt}
-              data-testid={`slot-format-badge-${slot.id}-${fmt}`}
-              style={{
-                fontSize: '0.6875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                padding: '2px 7px',
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              {resolveFormatLabel(fmt)}
-            </span>
+          formats.map((fmt, index) => (
+            <React.Fragment key={fmt}>
+              {index > 0 && (
+                <span
+                  aria-hidden="true"
+                  style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}
+                >
+                  ·
+                </span>
+              )}
+              <span
+                data-testid={`slot-format-badge-${slot.id}-${fmt}`}
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  color: `var(--text-main, ${THEME.default.text.primary})`,
+                }}
+              >
+                {resolveFormatLabel(fmt)}
+              </span>
+            </React.Fragment>
           ))
         )}
       </div>
@@ -434,7 +417,7 @@ export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }:
               height: '14px',
               borderRadius: '50%',
               backgroundColor: slot.isActive
-                ? '#000000'
+                ? PALETTE.background
                 : `var(--text-sub, ${THEME.default.text.secondary})`,
               transition: 'left 0.15s ease, background-color 0.15s ease',
             }}
@@ -547,15 +530,13 @@ function PostingTimesEmptyState({ onOpenAddModal }: Readonly<EmptyStateProps>) {
         data-testid="empty-add-slot-button"
         onClick={onOpenAddModal}
         style={{
+          ...COMPONENT_STYLES.primaryButton,
           height: '34px',
           padding: `0 ${SPACING.lg}`,
-          backgroundColor: PALETTE.primary,
-          color: '#000000',
+          color: PALETTE.background,
           border: `1px solid ${PALETTE.primary}`,
-          borderRadius: RADII.sm,
           fontSize: '0.8125rem',
           fontWeight: TYPOGRAPHY.weights.semibold,
-          cursor: 'pointer',
         }}
       >
         Add First Posting Time
@@ -641,7 +622,7 @@ function AddEditPostingTimeModal({
       });
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save posting time.';
+      const msg = err instanceof Error ? err.message : "Couldn't save this posting time. Please try again.";
       setError(msg);
     } finally {
       setIsSubmitting(false);
@@ -884,14 +865,13 @@ function AddEditPostingTimeModal({
               data-testid="save-slot-btn"
               disabled={isSubmitting}
               style={{
+                ...COMPONENT_STYLES.primaryButton,
                 height: '34px',
                 padding: `0 ${SPACING.md}`,
-                backgroundColor: PALETTE.primary,
                 border: `1px solid ${PALETTE.primary}`,
-                borderRadius: RADII.sm,
                 fontSize: '0.8125rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
-                color: '#000000',
+                color: PALETTE.background,
                 cursor: isSubmitting ? 'not-allowed' : 'pointer',
               }}
             >
@@ -983,7 +963,7 @@ function DeleteSlotConfirmModal({
               borderRadius: RADII.sm,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
-              color: '#ffffff',
+              color: PALETTE.text,
               cursor: isDeleting ? 'not-allowed' : 'pointer',
             }}
           >

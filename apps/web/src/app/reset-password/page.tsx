@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
-import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -23,7 +23,7 @@ export default function ResetPasswordPage() {
       title="Password Recovery"
       description="Password recovery is now managed securely with a 6-digit verification code."
       footer={
-        <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+        <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
           Back to{' '}
           <Link
             href="/login"

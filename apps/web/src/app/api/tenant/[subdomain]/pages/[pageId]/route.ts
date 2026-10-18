@@ -6,7 +6,7 @@ import {
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -46,8 +46,8 @@ function formatPageRow(row: any) {
     followersGained,
     status: row.status,
     tasks: parsedTasks,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   });
 }
 
@@ -101,7 +101,7 @@ async function fetchActivePageById(
       WHERE p.id = $1 AND p.user_id = $2 AND p.workspace_id = $3
         AND p.status != 'disconnected'`,
       [pageId, userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!rows || rows.length === 0 || !rows[0]) {
       return null;
@@ -109,7 +109,7 @@ async function fetchActivePageById(
     return formatPageRow(rows[0]);
   }
 
-  const supabase = (client && 'from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
+  const supabase = (client && 'from' in client ? client : getSupabaseAdminClient()) as SupabaseClient<any> | null;
   if (!supabase) return null;
 
   const { data, error } = await supabase
@@ -154,7 +154,7 @@ async function fetchQueueCountsLegacy(
        FROM queue_items
        WHERE page_id = $1 AND user_id = $2`,
       [pageId, userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
     if (rows && rows[0]) {
       return {
         queued: Number(rows[0].queued ?? 0),
@@ -231,7 +231,7 @@ async function fetchPageQueueCounts(
     return counts ?? { ...DEFAULT_QUEUE_STATUS_COUNTS };
   }
 
-  const supabase = ('from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
+  const supabase = ('from' in client ? client : getSupabaseAdminClient()) as SupabaseClient<any> | null;
   if (!supabase) return { ...DEFAULT_QUEUE_STATUS_COUNTS };
 
   const rpcCounts = await fetchQueueCountsRpc(supabase, pageId, userId);
@@ -314,7 +314,7 @@ export async function handleUpdatePage(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -374,7 +374,7 @@ export async function handleDisconnectPage(
        WHERE id = $1 AND user_id = $2 AND workspace_id = $3
        RETURNING id, fb_page_id`,
       [pageId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!result || result.length === 0 || !result[0]) {
       return NextResponse.json(
@@ -391,7 +391,7 @@ export async function handleDisconnectPage(
       [session.userId, pageId]
     );
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

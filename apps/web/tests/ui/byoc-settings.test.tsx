@@ -58,7 +58,7 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
   describe('BYOCSettingsView - State 1 (Not Connected)', () => {
     it('renders loading placeholder when initialLoading is true', () => {
       const { hasText } = render(<BYOCSettingsView subdomain="acme" initialLoading={true} />);
-      expect(hasText('Loading credentials configuration...')).toBe(true);
+      expect(hasText('Loading...')).toBe(true);
     });
 
     it('renders Connect Facebook card with Not connected status badge', () => {
@@ -90,12 +90,12 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       );
 
       expect(hasText('Add them here')).toBe(true);
-      expect(hasText('APP ID')).toBe(true);
+      expect(hasText('App ID')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-app-id-input')).toBe(true);
       expect(hasAttribute('placeholder', 'e.g. 123456789012345')).toBe(true);
       expect(hasText('find this in your Meta app under Settings → Basic.')).toBe(true);
 
-      expect(hasText('APP SECRET')).toBe(true);
+      expect(hasText('App Secret')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-app-secret-input')).toBe(true);
       expect(hasAttribute('placeholder', 'Enter your App Secret')).toBe(true);
       expect(hasText('Show')).toBe(true);
@@ -117,7 +117,7 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
           'Add this address to your Meta app so Facebook can bring you back here after you sign in.'
         )
       ).toBe(true);
-      expect(hasText('SIGN-IN ADDRESS')).toBe(true);
+      expect(hasText('Sign-in address')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-signin-address')).toBe(true);
       expect(hasText('/api/auth/facebook/callback')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-copy-callback-btn')).toBe(true);
@@ -154,11 +154,11 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
         <BYOCSettingsView subdomain="acme" initialCredentials={connectedCreds} />
       );
 
-      expect(hasText('APP ID')).toBe(true);
+      expect(hasText('App ID')).toBe(true);
       expect(hasText('987654321098765')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-copy-app-id-btn')).toBe(true);
 
-      expect(hasText('APP SECRET')).toBe(true);
+      expect(hasText('App Secret')).toBe(true);
       expect(hasText('••••••••••••••••••••••••')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-state2-secret-toggle')).toBe(true);
       expect(hasText('Only you can see this — we keep it safe and never show it again.')).toBe(true);

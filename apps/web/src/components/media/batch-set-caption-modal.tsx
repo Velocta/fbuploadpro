@@ -234,7 +234,7 @@ export function BatchSetCaptionModal({
               style={{
                 padding: `${SPACING.xs} ${SPACING.lg}`,
                 backgroundColor: canSubmit ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
-                color: '#000000',
+                color: PALETTE.background,
                 border: 'none',
                 borderRadius: RADII.xs,
                 fontSize: '0.8125rem',

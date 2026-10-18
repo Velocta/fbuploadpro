@@ -25,7 +25,7 @@ describe('Signup Paused Notice UI (Spec 064)', () => {
       expect(hasText('New registrations are currently closed')).toBe(true);
       expect(
         hasText(
-          'We are temporarily not accepting new account registrations while performing platform scaling.'
+          "We're temporarily pausing new signups while we scale up. Existing users can keep using their workspaces as usual."
         )
       ).toBe(true);
       expect(html).toContain(`border-left:3px solid ${PALETTE.primary}`);

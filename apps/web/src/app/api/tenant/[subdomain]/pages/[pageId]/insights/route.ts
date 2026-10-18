@@ -9,7 +9,7 @@ import {
   type DatabaseClient,
   type PageInsightsResponse,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -99,16 +99,16 @@ export async function handleGetInsights(
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
     }
-    const found = pageRows[0] as any;
+    const found = pageRows[0] as Record<string, unknown>;
     page = {
-      id: found.id,
-      fb_page_id: found.fb_page_id,
-      page_name: found.page_name,
-      encrypted_access_token: found.encrypted_access_token,
-      status: found.status,
+      id: found.id as string,
+      fb_page_id: found.fb_page_id as string,
+      page_name: found.page_name as string,
+      encrypted_access_token: found.encrypted_access_token as string,
+      status: found.status as string,
     };
   } else {
-    const supabase = (client && 'from' in client ? client : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (client && 'from' in client ? client : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

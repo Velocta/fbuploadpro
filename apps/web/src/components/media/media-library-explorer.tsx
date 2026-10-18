@@ -11,6 +11,14 @@ import { BatchSetCaptionModal } from './batch-set-caption-modal';
 import { MediaImportModal } from './media-import-modal';
 import { NewFolderModal } from './new-folder-modal';
 import { LeavePageGuardDialog } from './leave-page-guard-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { type BatchCaptionMode } from './media-types';
 
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
@@ -33,14 +41,6 @@ export const MEDIA_TYPE_LABELS: Record<MediaTypeFilterKey, string> = {
   image: 'Images',
 };
 
-export const ASPECT_RATIO_LABELS: Record<AspectRatioFilterKey, string> = {
-  all: 'All ratios',
-  '9:16': '9:16 Vertical',
-  '16:9': '16:9 Landscape',
-  '1:1': '1:1 Square',
-  '4:5': '4:5 Portrait',
-};
-
 export const ASPECT_RATIO_SHORT_VALUES: Record<AspectRatioFilterKey, string> = {
   all: 'All',
   '9:16': '9:16',
@@ -49,23 +49,10 @@ export const ASPECT_RATIO_SHORT_VALUES: Record<AspectRatioFilterKey, string> = {
   '4:5': '4:5',
 };
 
-export const CAPTION_STATUS_LABELS: Record<CaptionStatusFilterKey, string> = {
-  all: 'All captions',
-  has_caption: 'Has caption',
-  empty_caption: 'Missing caption',
-};
-
 export const CAPTION_STATUS_SHORT_VALUES: Record<CaptionStatusFilterKey, string> = {
   all: 'All',
   has_caption: 'Has caption',
   empty_caption: 'Missing caption',
-};
-
-export const SORT_OPTION_LABELS: Record<SortOptionKey, string> = {
-  'created_at:desc': 'Newest first',
-  'created_at:asc': 'Oldest first',
-  'name:asc': 'Name (A–Z)',
-  'file_size:desc': 'Largest size',
 };
 
 export const SORT_OPTION_SHORT_VALUES: Record<SortOptionKey, string> = {
@@ -159,25 +146,6 @@ export function computeFolderSubtreeImpact(
     totalMediaCount,
   };
 }
-
-export function computeRangeSelection(
-  allIds: string[],
-  currentSelection: string[],
-  targetId: string,
-  anchorId: string | null,
-  shiftKey: boolean
-): string[] {
-  if (shiftKey && anchorId && allIds.includes(anchorId) && allIds.includes(targetId)) {
-    const start = Math.min(allIds.indexOf(anchorId), allIds.indexOf(targetId));
-    const end = Math.max(allIds.indexOf(anchorId), allIds.indexOf(targetId));
-    const range = allIds.slice(start, end + 1);
-    return Array.from(new Set([...currentSelection, ...range]));
-  }
-  return currentSelection.includes(targetId)
-    ? currentSelection.filter((id) => id !== targetId)
-    : [...currentSelection, targetId];
-}
-
 function matchesSearch(item: MediaItemResponse, query: string): boolean {
   if (!query) return true;
   const matchName = item.name.toLowerCase().includes(query);
@@ -538,10 +506,11 @@ function MediaCanvas({
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                FILE
+                File
               </th>
               <th
                 style={{
@@ -549,10 +518,11 @@ function MediaCanvas({
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                CAPTION
+                Caption
               </th>
               <th
                 style={{
@@ -560,10 +530,11 @@ function MediaCanvas({
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                DETAILS
+                Details
               </th>
               <th
                 style={{
@@ -571,10 +542,11 @@ function MediaCanvas({
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                SIZE
+                Size
               </th>
               <th
                 style={{
@@ -582,10 +554,11 @@ function MediaCanvas({
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                DATE
+                Date
               </th>
               <th
                 style={{
@@ -594,10 +567,11 @@ function MediaCanvas({
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
                   color: `var(--text-dim, ${THEME.default.text.muted})`,
                 }}
               >
-                ACTIONS
+                Actions
               </th>
             </tr>
           </thead>
@@ -1332,10 +1306,11 @@ function MoveTargetDialog({
               fontSize: '0.6875rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               letterSpacing: '0.04em',
+              textTransform: 'uppercase',
               color: `var(--text-dim, ${THEME.default.text.muted})`,
             }}
           >
-            SELECT DESTINATION
+            Select destination
           </label>
           <select
             id="move-destination-folder-select"
@@ -1392,7 +1367,7 @@ function MoveTargetDialog({
             style={{
               padding: `${SPACING.xs} ${SPACING.lg}`,
               backgroundColor: isMoving ? 'rgba(250, 215, 52, 0.3)' : PALETTE.primary,
-              color: '#000000',
+              color: PALETTE.background,
               border: 'none',
               borderRadius: RADII.xs,
               fontSize: '0.8125rem',
@@ -1515,7 +1490,7 @@ function RenameFolderDialog({
             style={{
               padding: `${SPACING.xs} ${SPACING.lg}`,
               backgroundColor: canSave ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
-              color: '#000000',
+              color: PALETTE.background,
               border: 'none',
               borderRadius: RADII.xs,
               fontSize: '0.8125rem',
@@ -1636,7 +1611,7 @@ function DeleteFolderDialog({
             style={{
               padding: `${SPACING.xs} ${SPACING.lg}`,
               backgroundColor: PALETTE.accent3,
-              color: '#ffffff',
+              color: PALETTE.text,
               border: 'none',
               borderRadius: RADII.xs,
               fontSize: '0.8125rem',
@@ -1653,6 +1628,106 @@ function DeleteFolderDialog({
   );
 }
 
+interface BatchDeleteConfirmDialogProps {
+  count: number;
+  isDeleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+function BatchDeleteConfirmDialog({
+  count,
+  isDeleting,
+  onClose,
+  onConfirm,
+}: Readonly<BatchDeleteConfirmDialogProps>) {
+  return (
+    <Dialog open onOpenChange={(next) => { if (!next) onClose(); }}>
+      <DialogContent style={{ maxWidth: '440px' }} data-testid="batch-delete-confirm-dialog">
+        <DialogHeader>
+          <DialogTitle>Delete {count} assets?</DialogTitle>
+          <DialogDescription>This can&apos;t be undone.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <button
+            type="button"
+            data-testid="batch-delete-keep-btn"
+            disabled={isDeleting}
+            onClick={onClose}
+            style={{
+              height: '36px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: 'transparent',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              borderRadius: RADII.sm,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              opacity: isDeleting ? 0.6 : 1,
+            }}
+          >
+            Keep
+          </button>
+          <button
+            type="button"
+            data-testid="batch-delete-confirm-btn"
+            disabled={isDeleting}
+            onClick={onConfirm}
+            style={{
+              height: '36px',
+              padding: `0 ${SPACING.md}`,
+              backgroundColor: PALETTE.accent3,
+              color: PALETTE.text,
+              border: 'none',
+              borderRadius: RADII.sm,
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
+              opacity: isDeleting ? 0.7 : 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: SPACING.xs,
+            }}
+          >
+            {isDeleting ? 'Deleting...' : `Delete ${count} assets`}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Reads an internal media/folder drag payload from a drop event.
+ * Returns the parsed payload, or null when the drop carries no internal
+ * payload (or the payload is malformed — intentionally ignored, since
+ * invalid JSON means the dropped data isn't ours).
+ */
+function readInternalDropPayload(
+  e: React.DragEvent
+): { mediaId?: string; folderId?: string } | null {
+  const mediaRaw = e.dataTransfer.getData('application/x-fbuploadpro-media');
+  if (mediaRaw) {
+    try {
+      const parsed = JSON.parse(mediaRaw) as { mediaId?: string };
+      return parsed.mediaId ? { mediaId: parsed.mediaId } : null;
+    } catch {
+      return null;
+    }
+  }
+  const folderRaw = e.dataTransfer.getData('application/x-fbuploadpro-folder');
+  if (folderRaw) {
+    try {
+      const parsed = JSON.parse(folderRaw) as { folderId?: string };
+      return parsed.folderId ? { folderId: parsed.folderId } : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 interface SubfolderRowsSectionProps {
   currentSubfolders: MediaFolder[];
   folders: MediaFolder[];
@@ -1662,7 +1737,7 @@ interface SubfolderRowsSectionProps {
   onStartRename: (folder: MediaFolder) => void;
   onStartMove: (folder: MediaFolder) => void;
   onStartDelete: (folder: MediaFolder) => void;
-  onReparent: (targetFolderId: string | null, payload: { mediaId?: string; folderId?: string }) => void;
+  onFilesDrop: (e: React.DragEvent, targetFolderId: string | null) => void;
 }
 
 function SubfolderRowsSection({
@@ -1674,7 +1749,7 @@ function SubfolderRowsSection({
   onStartRename,
   onStartMove,
   onStartDelete,
-  onReparent,
+  onFilesDrop,
 }: Readonly<SubfolderRowsSectionProps>) {
   return (
     <section
@@ -1732,26 +1807,7 @@ function SubfolderRowsSection({
                 );
               }}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
-                const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
-                if (mediaId) {
-                  try {
-                    const parsed = JSON.parse(mediaId);
-                    onReparent(folder.id, { mediaId: parsed.mediaId });
-                  } catch {
-                    // Intentional: invalid JSON means the dropped data isn't ours — ignore.
-                  }
-                } else if (folderId) {
-                  try {
-                    const parsed = JSON.parse(folderId);
-                    onReparent(folder.id, { folderId: parsed.folderId });
-                  } catch {
-                    // Intentional: invalid JSON means the dropped data isn't ours — ignore.
-                  }
-                }
-              }}
+              onDrop={(e) => onFilesDrop(e, folder.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -2046,6 +2102,7 @@ export function MediaLibraryExplorer({
   const [isDeletingFolder, setIsDeletingFolder] = useState(false);
   const [isMoving, setIsMoving] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false);
   const [isBatchCaptioning, setIsBatchCaptioning] = useState(false);
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
 
@@ -2282,9 +2339,6 @@ export function MediaLibraryExplorer({
 
   const handleBatchDelete = async () => {
     if (selectedIds.length === 0 || isBatchDeleting) return;
-    if (!window.confirm(`Delete ${selectedIds.length} assets? This cannot be undone.`)) {
-      return;
-    }
 
     setIsBatchDeleting(true);
     try {
@@ -2366,9 +2420,25 @@ export function MediaLibraryExplorer({
     }
   };
 
-  const handleDropPage = (e: React.DragEvent) => {
+  /**
+   * Shared drop handler for library drop zones.
+   *
+   * - Internal drags (media / folder payloads) reparent the dragged item into
+   *   `targetFolderId` (`null` = Library root).
+   * - OS file drops open the import modal.
+   * - The page-level zone omits `targetFolderId` to accept file drops only;
+   *   internal drags dropped on the page background are ignored (unchanged behavior).
+   */
+  const handleFilesDrop = (e: React.DragEvent, targetFolderId?: string | null) => {
+    e.preventDefault();
+    const payload = readInternalDropPayload(e);
+    if (payload) {
+      if (targetFolderId !== undefined) {
+        void handleReparent(targetFolderId, payload);
+      }
+      return;
+    }
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      e.preventDefault();
       const files = Array.from(e.dataTransfer.files);
       setStagedFilesForImport(files);
       setIsImportModalOpen(true);
@@ -2391,7 +2461,7 @@ export function MediaLibraryExplorer({
     <div
       data-testid="media-library-explorer"
       onDragOver={handleDragOverPage}
-      onDrop={handleDropPage}
+      onDrop={(e) => handleFilesDrop(e)}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -2506,7 +2576,7 @@ export function MediaLibraryExplorer({
               backgroundColor: PALETTE.primary,
               border: 'none',
               borderRadius: RADII.xs,
-              color: '#000000',
+              color: PALETTE.background,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               cursor: 'pointer',
@@ -2611,26 +2681,7 @@ export function MediaLibraryExplorer({
                   setCurrentFolderId(null);
                 }}
                 onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
-                  const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
-                  if (mediaId) {
-                    try {
-                      const parsed = JSON.parse(mediaId);
-                      void handleReparent(null, { mediaId: parsed.mediaId });
-                    } catch {
-                      // Intentional: invalid JSON means the dropped data isn't ours — ignore.
-                    }
-                  } else if (folderId) {
-                    try {
-                      const parsed = JSON.parse(folderId);
-                      void handleReparent(null, { folderId: parsed.folderId });
-                    } catch {
-                      // Intentional: invalid JSON means the dropped data isn't ours — ignore.
-                    }
-                  }
-                }}
+                onDrop={(e) => handleFilesDrop(e, null)}
                 style={{
                   backgroundColor: 'transparent',
                   border: 'none',
@@ -2691,26 +2742,7 @@ export function MediaLibraryExplorer({
                           setCurrentFolderId(crumb.id);
                         }}
                         onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const mediaId = e.dataTransfer.getData('application/x-fbuploadpro-media');
-                          const folderId = e.dataTransfer.getData('application/x-fbuploadpro-folder');
-                          if (mediaId) {
-                            try {
-                              const parsed = JSON.parse(mediaId);
-                              void handleReparent(crumb.id, { mediaId: parsed.mediaId });
-                            } catch {
-                              // Intentional: invalid JSON means the dropped data isn't ours — ignore.
-                            }
-                          } else if (folderId) {
-                            try {
-                              const parsed = JSON.parse(folderId);
-                              void handleReparent(crumb.id, { folderId: parsed.folderId });
-                            } catch {
-                              // Intentional: invalid JSON means the dropped data isn't ours — ignore.
-                            }
-                          }
-                        }}
+                        onDrop={(e) => handleFilesDrop(e, crumb.id)}
                         style={{
                           backgroundColor: 'transparent',
                           border: 'none',
@@ -2776,9 +2808,7 @@ export function MediaLibraryExplorer({
               onStartDelete={(folder) => {
                 setDeleteFolderTarget(folder);
               }}
-              onReparent={(targetFolderId, payload) => {
-                void handleReparent(targetFolderId, payload);
-              }}
+              onFilesDrop={(e, folderId) => handleFilesDrop(e, folderId)}
             />
           )}
 
@@ -2823,7 +2853,11 @@ export function MediaLibraryExplorer({
           if (isBatchDeleting || isBatchCaptioning || isMoving) return;
           setIsBatchCaptionOpen(true);
         }}
-        onBatchDelete={handleBatchDelete}
+        onBatchDelete={() => {
+          if (isBatchDeleting || isBatchCaptioning || isMoving) return;
+          if (selectedIds.length === 0) return;
+          setShowBatchDeleteConfirm(true);
+        }}
       />
 
       {/* 7. Batch Set Caption Modal */}
@@ -2896,11 +2930,6 @@ export function MediaLibraryExplorer({
           showToast('Changes saved');
           await refreshLibraryData();
         }}
-        onUpdateThumbnail={async (_id, _captured) => {
-          // If update thumbnail API exists or update local preview
-          showToast('Thumbnail updated');
-          await refreshLibraryData();
-        }}
         onDelete={async (id) => {
           await handleDeleteItem(id);
           setPreviewItem(null);
@@ -2954,6 +2983,19 @@ export function MediaLibraryExplorer({
           isDeleting={isDeletingFolder}
           onClose={() => setDeleteFolderTarget(null)}
           onConfirm={() => handleDeleteFolder(deleteFolderTarget.id)}
+        />
+      )}
+
+      {/* Batch Delete Confirm Dialog */}
+      {showBatchDeleteConfirm && (
+        <BatchDeleteConfirmDialog
+          count={selectedIds.length}
+          isDeleting={isBatchDeleting}
+          onClose={() => setShowBatchDeleteConfirm(false)}
+          onConfirm={async () => {
+            await handleBatchDelete();
+            setShowBatchDeleteConfirm(false);
+          }}
         />
       )}
 

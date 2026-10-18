@@ -32,8 +32,8 @@ function formatMediaRow(row: any) {
     captionText: row.caption_text ?? null,
     width: row.width ? Number(row.width) : null,
     height: row.height ? Number(row.height) : null,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   });
 }
 
@@ -101,7 +101,7 @@ async function queryLegacyDuplicates(
     nonNullFolders,
     names,
     fileSizes,
-  ])) as any[];
+  ])) as Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>;
 }
 
 async function querySupabaseDuplicates(

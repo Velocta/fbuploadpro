@@ -286,7 +286,7 @@ export function Step1TimezoneSelector({
                             border: isSelected
                               ? `4px solid ${PALETTE.primary}`
                               : `1.5px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                            backgroundColor: isSelected ? '#ffffff' : 'transparent',
+                            backgroundColor: isSelected ? PALETTE.text : 'transparent',
                             boxSizing: 'border-box',
                             flexShrink: 0,
                           }}
@@ -385,14 +385,13 @@ export function Step1TimezoneSelector({
           disabled={isSameAsActive}
           onClick={onProceed}
           style={{
+            ...COMPONENT_STYLES.primaryButton,
             height: '36px',
             padding: `0 ${SPACING.lg}`,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.medium,
-            borderRadius: RADII.sm,
-            backgroundColor: isSameAsActive ? 'rgba(255, 255, 255, 0.1)' : PALETTE.primary,
-            color: isSameAsActive ? 'rgba(255, 255, 255, 0.4)' : '#000000',
-            border: 'none',
+            backgroundColor: isSameAsActive ? `var(--bg-active, ${THEME.default.surfaces.active})` : PALETTE.primary,
+            color: isSameAsActive ? `var(--text-dim, ${THEME.default.text.muted})` : PALETTE.background,
             cursor: isSameAsActive ? 'not-allowed' : 'pointer',
             transition: 'background-color 0.15s ease',
           }}
@@ -710,7 +709,7 @@ export function Step2ReviewImpact({
             backgroundColor: 'rgba(239, 68, 68, 0.1)',
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: RADII.sm,
-            color: '#f87171',
+            color: PALETTE.accent3,
             fontSize: '0.8125rem',
             marginBottom: SPACING.md,
           }}
@@ -749,14 +748,11 @@ export function Step2ReviewImpact({
           disabled={isSubmitting}
           onClick={onConfirm}
           style={{
+            ...COMPONENT_STYLES.primaryButton,
             height: '36px',
             padding: `0 ${SPACING.lg}`,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.medium,
-            borderRadius: RADII.sm,
-            backgroundColor: PALETTE.primary,
-            color: '#000000',
-            border: 'none',
             cursor: isSubmitting ? 'wait' : 'pointer',
             opacity: isSubmitting ? 0.7 : 1,
             transition: 'opacity 0.15s ease',
@@ -802,7 +798,7 @@ export function ScheduleTimezoneModal({
       await onConfirmTimezone(selectedTimezone);
       onClose();
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to update schedule timezone. Please try again.');
+      setErrorMessage(err?.message || "Couldn't update the schedule timezone. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

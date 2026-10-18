@@ -58,7 +58,7 @@ Supabase GoTrue automatically interpolates the following variables when generati
 | :--- | :--- |
 | `{{ .Token }}` | The 6-digit numeric one-time authentication code (e.g. `839201`). |
 | `{{ .Email }}` | The recipient's canonical email address. |
-| `{{ .SiteURL }}` | The configured application gateway URL (e.g. `https://app.vinsmokemedia.online`). |
+| `{{ .SiteURL }}` | The configured application gateway URL (e.g. `https://app.fbuploadpro.com`). |
 | `{{ .ConfirmationURL }}` | Direct link fallback URL (if link verification is ever enabled). |
 
 ---

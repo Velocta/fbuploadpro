@@ -59,22 +59,6 @@ export async function captureServerException(
   }
 }
 
-/** Capture a custom server-side event. */
-export async function captureServerEvent(
-  event: string,
-  properties?: Record<string, unknown>,
-  distinctId: string = 'server'
-): Promise<void> {
-  const ph = getClient();
-  if (!ph) return;
-  try {
-    ph.capture({ distinctId, event, ...(properties ? { properties } : {}) });
-    await ph.flush();
-  } catch {
-    // Never let telemetry break the request.
-  }
-}
-
 /**
  * Drop-in replacement for console.error at high-value error sites:
  * keeps the console log AND sends a structured event to PostHog.

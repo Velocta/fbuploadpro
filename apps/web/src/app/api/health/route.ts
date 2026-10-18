@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 
 export async function probeHealth(
   client?: DatabaseClient,
@@ -52,7 +52,7 @@ export async function probeHealth(
 
   let timerId: NodeJS.Timeout;
   try {
-    const supabase = getSupabaseClient();
+    const supabase = getSupabaseAdminClient();
     if (!supabase) {
       throw new Error('Supabase client is not configured');
     }

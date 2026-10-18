@@ -11,8 +11,19 @@ import {
 } from '@/components/ui/sidebar';
 import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 import { broadcastAuthEvent } from '@/lib/auth-broadcast';
+import { getUserInitials } from '@/lib/user-initials';
 import { buildTenantHref, normalizeTenantPath } from '@/lib/tenant-href';
 import { CreateWorkspaceModal } from './create-workspace-modal';
+
+/**
+ * Kept for existing importers (tests/ui/workspace-studio-footer.test.tsx).
+ * Letter computation is shared via getUserInitials from '@/lib/user-initials';
+ * this shim only preserves the historical 'WS' empty-name fallback.
+ */
+export function getMonogram(name: string): string {
+  const initials = getUserInitials(name);
+  return initials === '?' ? 'WS' : initials;
+}
 
 export interface WorkspaceItem {
   id: string;
@@ -30,22 +41,6 @@ export interface WorkspaceStudioFooterProps {
     avatarUrl?: string | undefined;
   } | undefined;
   onNavigate?: ((href: string) => void) | undefined;
-}
-
-export function getMonogram(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase() || 'WS';
-}
-
-export function getUserInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) {
-    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase();
-  }
-  return name.slice(0, 2).toUpperCase() || 'U';
 }
 
 function clearClientSessionCookies(): void {
@@ -225,7 +220,7 @@ function PopoverWorkspacesList({
                 flexShrink: 0,
               }}
             >
-              {getMonogram(ws.name || ws.subdomain)}
+              {getUserInitials(ws.name || ws.subdomain)}
             </div>
             <span
               style={{
@@ -771,7 +766,7 @@ export function WorkspaceStudioFooter({
                 flexShrink: 0,
               }}
             >
-              {getMonogram(activeWorkspace.name || subdomain)}
+              {getUserInitials(activeWorkspace.name || subdomain)}
             </div>
 
             {/* Middle: Workspace Name + Subtitle (Expanded Only) */}

@@ -95,7 +95,7 @@ export function EnqueueModal({
       setError(null);
       try {
         const res = await fetch(`/api/tenant/${subdomain}/media?limit=50`);
-        if (!res.ok) throw new Error('Failed to load media assets');
+        if (!res.ok) throw new Error("Couldn't load media assets. Please try again.");
         const data = await res.json();
         if (active) {
           const items: EnqueueMediaItemOption[] = (data.items || []).map((m: any) => ({
@@ -118,7 +118,7 @@ export function EnqueueModal({
           }
         }
       } catch (err: any) {
-        if (active) setError(err.message || 'Unable to retrieve media assets');
+        if (active) setError(err.message || "Couldn't load media assets. Please try again.");
       } finally {
         if (active) setIsLoadingMedia(false);
       }
@@ -155,7 +155,7 @@ export function EnqueueModal({
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (selectedFormat !== 'text' && !selectedMediaId) {
-      setError('Please select a media item to enqueue');
+      setError('Please select a media item to schedule');
       return;
     }
     if (selectedFormat === 'text' && (!caption || caption.trim().length === 0)) {
@@ -211,13 +211,13 @@ export function EnqueueModal({
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || 'Failed to enqueue post');
+        throw new Error(errorData.message || errorData.error || "Couldn't schedule this post. Please try again.");
       }
 
       onEnqueued();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to schedule media post');
+      setError(err.message || "Couldn't schedule this post. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -331,7 +331,7 @@ export function EnqueueModal({
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontSize: '10px',
-                    color: '#000',
+                    color: PALETTE.background,
                     fontWeight: 'bold',
                   }}
                 >
@@ -684,7 +684,7 @@ export function EnqueueModal({
                 opacity: isSubmitDisabled ? 0.7 : 1,
               }}
             >
-              {isSubmitting ? 'Scheduling...' : 'Enqueue Post'}
+              {isSubmitting ? 'Scheduling...' : 'Schedule Post'}
             </button>
           </div>
         </form>

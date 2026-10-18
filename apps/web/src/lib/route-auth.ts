@@ -6,7 +6,7 @@ import {
   type DatabaseClient,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function isLegacyClient(
@@ -26,7 +26,7 @@ export function getRouteSupabase(
   if (client && 'from' in client) {
     return client as SupabaseClient<any>;
   }
-  return getSupabaseClient() as SupabaseClient<any> | null;
+  return getSupabaseAdminClient() as SupabaseClient<any> | null;
 }
 
 export async function authenticateTenantRoute(

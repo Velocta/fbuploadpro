@@ -242,8 +242,8 @@ function ImportStagingHeader({
             gap: '6px',
             padding: '4px 10px',
             backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))',
-            borderRadius: RADII.full,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            borderRadius: RADII.sm,
             color: `var(--text-main, ${THEME.default.text.primary})`,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.medium,
@@ -638,7 +638,7 @@ function ImportStagingFooter({
           style={{
             padding: `${SPACING.xs} ${SPACING.lg}`,
             backgroundColor: !isStartDisabled ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
-            color: '#000000',
+            color: PALETTE.background,
             border: 'none',
             borderRadius: RADII.xs,
             fontSize: '0.8125rem',
@@ -1136,7 +1136,7 @@ function ImportProgressFooter({
           style={{
             padding: `${SPACING.xs} ${SPACING.lg}`,
             backgroundColor: PALETTE.primary,
-            color: '#000000',
+            color: PALETTE.background,
             border: 'none',
             borderRadius: RADII.xs,
             fontSize: '0.8125rem',
@@ -1279,8 +1279,8 @@ function MinimizedUploadPill({
         bottom: SPACING.md,
         right: SPACING.md,
         backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-        borderRadius: RADII.full,
+        border: `1px solid var(--border-strong, ${THEME.default.borders.strong})`,
+        borderRadius: RADII.md,
         padding: `${SPACING.xs} ${SPACING.md}`,
         boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         zIndex: 9000,
@@ -1349,12 +1349,9 @@ function MinimizedUploadPill({
         </div>
         <span
           style={{
-            padding: '2px 8px',
-            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
-            borderRadius: RADII.full,
             color: `var(--text-main, ${THEME.default.text.primary})`,
             fontSize: '0.6875rem',
+            fontWeight: TYPOGRAPHY.weights.medium,
           }}
         >
           View
@@ -1597,7 +1594,7 @@ export function MediaImportModal({
         });
 
         if (!presignRes.ok) {
-          throw new Error('Failed to get presigned upload URL');
+          throw new Error("Couldn't start the upload. Please try again.");
         }
 
         const presignData = await presignRes.json();
@@ -1682,8 +1679,7 @@ export function MediaImportModal({
         });
 
         if (!confirmRes.ok) {
-          const errText = await confirmRes.text();
-          throw new Error(`Failed to confirm upload in library: ${errText}`);
+          throw new Error("Upload finished but we couldn't save it to your library. Please try again.");
         }
 
         const confirmData = await confirmRes.json();

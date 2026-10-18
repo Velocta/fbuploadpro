@@ -6,7 +6,7 @@ import {
   verifyMagicLinkToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
@@ -37,7 +37,7 @@ export async function handleConnectFacebook(
   }
 
   // 2. Resolve App ID: check workspace BYOC credentials strictly without env fallback
-  const client = dbClient || getSupabaseClient();
+  const client = dbClient || getSupabaseAdminClient();
   const byocResult = await resolveWorkspaceFacebookCredentials(
     client,
     payload.tenantSubdomain,

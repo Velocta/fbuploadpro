@@ -63,7 +63,7 @@ export async function handleBatchMedia(
         const folderRows = (await dbClient.query(
           `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
           [payload.folderId, session.userId]
-        )) as any[];
+        )) as Record<string, unknown>[];
 
         if (!folderRows || folderRows.length === 0) {
           return NextResponse.json(
@@ -79,7 +79,7 @@ export async function handleBatchMedia(
          WHERE user_id = $2 AND id = ANY($3::uuid[])
          RETURNING id`,
         [payload.folderId, session.userId, payload.mediaIds]
-      )) as any[]) ?? [];
+      )) as Record<string, unknown>[]) ?? [];
 
       const response = BatchMediaResponseSchema.parse({
         success: true,
@@ -97,7 +97,7 @@ export async function handleBatchMedia(
          WHERE user_id = $2 AND id = ANY($3::uuid[])
          RETURNING id`,
         [payload.captionText, session.userId, payload.mediaIds]
-      )) as any[]) ?? [];
+      )) as Record<string, unknown>[]) ?? [];
 
       const response = BatchMediaResponseSchema.parse({
         success: true,
@@ -115,7 +115,7 @@ export async function handleBatchMedia(
        FROM media_items
        WHERE user_id = $1 AND id = ANY($2::uuid[])`,
       [session.userId, payload.mediaIds]
-    )) as any[]) ?? [];
+    )) as Record<string, unknown>[]) ?? [];
 
     const keysToDelete = mediaRows
       .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
@@ -235,7 +235,7 @@ export async function handleBatchMedia(
 
   const items = mediaRows ?? [];
   const keysToDelete = items
-    .flatMap((item: any) => [(item as any).storage_key, (item as any).thumbnail_key])
+    .flatMap((item: Record<string, unknown>) => [item.storage_key, item.thumbnail_key])
     .filter((k): k is string => Boolean(k));
 
   await Promise.all(

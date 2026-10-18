@@ -1,5 +1,5 @@
 import React, { forwardRef } from 'react';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -38,6 +38,33 @@ const SPINNER_DIMENSIONS: Record<ButtonSize, number> = {
   md: 16,
   lg: 18,
 };
+
+/**
+ * Button variants reuse the shared theme button presets (COMPONENT_STYLES in
+ * src/lib/theme.ts) instead of hand-duplicating the spec. Height, padding and
+ * fontSize are size-driven via baseStyle, fontWeight/borderRadius are already
+ * set there, and cursor is disabled-aware — those keys are stripped from the
+ * preset copies so the size system keeps working unchanged.
+ */
+function stripBaseOwnedKeys<T extends Record<string, unknown>>(
+  preset: T,
+  keys: ReadonlyArray<keyof T>
+): Partial<T> {
+  const copy: Partial<T> = { ...preset };
+  for (const key of keys) {
+    delete copy[key];
+  }
+  return copy;
+}
+
+const BASE_OWNED_KEYS = [
+  'height',
+  'padding',
+  'fontSize',
+  'fontWeight',
+  'borderRadius',
+  'cursor',
+] as const;
 
 const Spinner = ({ size }: { readonly size: ButtonSize }) => {
   const dimension = SPINNER_DIMENSIONS[size] ?? 16;
@@ -103,15 +130,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
 
   const variantStyles: Record<ButtonVariant, React.CSSProperties> = {
     primary: {
-      backgroundColor: PALETTE.primary,
-      color: PALETTE.background,
-      border: 'none',
-      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.35)',
+      // Shared theme primary-button spec (gold fill, inset highlight, 0.12s ease).
+      ...stripBaseOwnedKeys(COMPONENT_STYLES.primaryButton, BASE_OWNED_KEYS),
     },
     secondary: {
-      backgroundColor: 'transparent',
-      color: 'var(--text-main)',
-      border: '1px solid var(--border-subtle)',
+      // Shared theme secondary-button spec (hairline border, theme-var fallbacks).
+      ...stripBaseOwnedKeys(COMPONENT_STYLES.secondaryButton(), BASE_OWNED_KEYS),
     },
     ghost: {
       backgroundColor: 'transparent',

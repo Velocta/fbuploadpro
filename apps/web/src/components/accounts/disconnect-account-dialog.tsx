@@ -44,7 +44,7 @@ export function DisconnectAccountDialog({
         <DialogHeader>
           <DialogTitle>Disconnect {account.displayName}?</DialogTitle>
           <DialogDescription>
-            This Account will no longer be available
+            This account will no longer be available
           </DialogDescription>
         </DialogHeader>
 
@@ -63,7 +63,7 @@ export function DisconnectAccountDialog({
               }}
             >
               <p style={{ margin: 0 }}>
-                No Facebook pages are linked to this account yet. its safe to remove, You can reconnect it anytime.
+                No Facebook Pages are linked to this account yet. It&apos;s safe to remove — you can reconnect it any time.
               </p>
             </div>
           ) : (
@@ -83,7 +83,7 @@ export function DisconnectAccountDialog({
                 Before you disconnect
               </p>
               <p style={{ margin: 0 }}>
-                <strong>{pagesCount} linked {pagesLabel}</strong> will be Removed, and any scheduled content on them will be removed as well.
+                <strong>{pagesCount} linked {pagesLabel}</strong> will be removed, and any scheduled content on them will be removed as well.
               </p>
               {linkedPages.length > 0 && (
                 <ul

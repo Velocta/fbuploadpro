@@ -229,14 +229,6 @@ export async function verifyPendingSignupPassword(email: string, candidatePasswo
   if (!entry?.data?.hashedPassword) return false;
   return await verifyHashedPassword(candidatePassword, entry.data.hashedPassword);
 }
-
-export function verifyPendingSignupPasswordSync(email: string, candidatePassword: string): boolean {
-  cleanupExpiredEntries();
-  const entry = getPendingSignup(email);
-  if (!entry?.data?.hashedPassword) return false;
-  return verifyHashedPasswordSync(candidatePassword, entry.data.hashedPassword);
-}
-
 function updatePendingSignupOtpEntry(entry: PendingSignupEntry): string {
   const now = Date.now();
   const newOtp = generateSecureOtp();
@@ -247,40 +239,6 @@ function updatePendingSignupOtpEntry(entry: PendingSignupEntry): string {
   clearLockout(entry.data.email);
   return newOtp;
 }
-
-export function refreshPendingSignupOtp(email: string): {
-  success: boolean;
-  otp?: string;
-  error?: string;
-} {
-  cleanupExpiredEntries();
-  const canonicalEmail = resolveCanonicalEmail(email);
-
-  const lockoutStatus = isLockedOut(canonicalEmail);
-  if (lockoutStatus.locked) {
-    const minutes = Math.ceil(lockoutStatus.retryAfterSeconds / 60);
-    return {
-      success: false,
-      error: `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`,
-    };
-  }
-
-  const entry = pendingSignups.get(canonicalEmail);
-  if (!entry) {
-    return {
-      success: false,
-      error: 'No pending registration found.',
-    };
-  }
-
-  return {
-    success: true,
-    otp: updatePendingSignupOtpEntry(entry),
-  };
-}
-
-
-
 export function verifySignupOtp(
   email: string,
   providedOtp: string
@@ -406,12 +364,6 @@ export function resendSignupOtp(email: string): {
   };
 }
 
-export function clearPendingSignup(email: string): void {
-  const canonicalEmail = resolveCanonicalEmail(email);
-  pendingSignups.delete(canonicalEmail);
-  clearLockout(canonicalEmail);
-}
-
 export function createPasswordResetOtp(email: string): {
   otp: string;
   expiresAt: Date;
@@ -430,7 +382,6 @@ export function createPasswordResetOtp(email: string): {
   const otp = generateSecureOtp();
 
 
-
   const entry: PendingPasswordResetEntry = {
     email: canonicalEmail,
     otp,
@@ -447,13 +398,6 @@ export function createPasswordResetOtp(email: string): {
     expiresAt: new Date(entry.expiresAt),
   };
 }
-
-export function getPendingPasswordReset(email: string): PendingPasswordResetEntry | null {
-  cleanupExpiredEntries();
-  const canonicalEmail = resolveCanonicalEmail(email);
-  return pendingPasswordResets.get(canonicalEmail) || null;
-}
-
 export function verifyPasswordResetOtp(
   email: string,
   providedOtp: string
@@ -583,12 +527,6 @@ export function resendPasswordResetOtp(email: string): {
     success: true,
     otp: newOtp,
   };
-}
-
-export function clearPendingPasswordReset(email: string): void {
-  const canonicalEmail = resolveCanonicalEmail(email);
-  pendingPasswordResets.delete(canonicalEmail);
-  clearLockout(`reset:${canonicalEmail}`);
 }
 
 // For unit tests

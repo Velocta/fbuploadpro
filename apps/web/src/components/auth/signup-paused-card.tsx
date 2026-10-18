@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, RADII, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { Button } from '@/components/ui';
 import { buildWhatsAppSupportUrl } from '@/lib/whatsapp';
 
@@ -38,8 +38,8 @@ export const SignupPausedCard: React.FC<SignupPausedCardProps> = ({
       {/* Notice Banner */}
       <div
         style={{
-          backgroundColor: '#121722',
-          border: '1px solid #1f2736',
+          backgroundColor: THEME.default.surfaces.subtle,
+          border: `1px solid ${PALETTE.neutral}`,
           borderLeft: `3px solid ${PALETTE.primary}`,
           borderRadius: RADII.sm,
           padding: `${SPACING.lg} ${SPACING.xl}`,
@@ -60,11 +60,11 @@ export const SignupPausedCard: React.FC<SignupPausedCardProps> = ({
           style={{
             margin: 0,
             fontSize: '0.875rem',
-            color: '#94a3b8',
+            color: THEME.default.text.secondary,
             lineHeight: 1.55,
           }}
         >
-          We are temporarily not accepting new account registrations while performing platform scaling. Existing operators can continue to access their workspaces normally.
+          We&apos;re temporarily pausing new signups while we scale up. Existing users can keep using their workspaces as usual.
         </p>
       </div>
 
@@ -103,7 +103,7 @@ export const SignupPausedCard: React.FC<SignupPausedCardProps> = ({
               justifyContent: 'center',
               padding: `${SPACING.sm} ${SPACING.md}`,
               fontSize: '0.8125rem',
-              color: '#94a3b8',
+              color: THEME.default.text.secondary,
               textDecoration: 'none',
               transition: 'color 150ms ease',
               textAlign: 'center',

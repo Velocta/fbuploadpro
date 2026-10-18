@@ -125,14 +125,14 @@ export function PageTabInsights({
       const res = await fetch(url);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.message || 'Unable to fetch page insights');
+        throw new Error(errorData.error || errorData.message || "Couldn't load page insights. Please try again.");
       }
       const responseJson: PageInsightsResponse = await res.json();
       setData(responseJson);
       // Persist in localStorage with 15-minute expiration
       setCachedInsights(page.id, rangeValue, responseJson);
     } catch (err: any) {
-      setError(err.message || 'Failed to load insights data');
+      setError(err.message || "Couldn't load page insights. Please try again.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);

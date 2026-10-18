@@ -9,6 +9,14 @@ import {
   formatUploadDate,
   formatDuration,
 } from './media-types';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 export interface CapturedVideoFrame {
   blob: Blob | null;
@@ -138,7 +146,7 @@ function PreviewMediaViewer({
     <div
       style={{
         padding: SPACING.xl,
-        backgroundColor: '#000000',
+        backgroundColor: PALETTE.background,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -206,7 +214,7 @@ function PreviewMediaViewer({
               style={{
                 backgroundColor: 'transparent',
                 border: 'none',
-                color: '#ffffff',
+                color: PALETTE.text,
                 cursor: 'pointer',
                 padding: 0,
                 display: 'flex',
@@ -379,10 +387,11 @@ function PreviewMetadataEditor({
               fontSize: '0.6875rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               letterSpacing: '0.04em',
+              textTransform: 'uppercase',
               color: `var(--text-dim, ${THEME.default.text.muted})`,
             }}
           >
-            FILE NAME
+            File name
           </label>
           <input
             id="preview-filename-input"
@@ -413,10 +422,11 @@ function PreviewMetadataEditor({
               fontSize: '0.6875rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               letterSpacing: '0.04em',
+              textTransform: 'uppercase',
               color: `var(--text-dim, ${THEME.default.text.muted})`,
             }}
           >
-            CAPTION
+            Caption
           </label>
           <textarea
             id="preview-caption-textarea"
@@ -535,7 +545,7 @@ function PreviewModalFooter({
           style={{
             padding: `${SPACING.xs} ${SPACING.lg}`,
             backgroundColor: PALETTE.primary,
-            color: '#000000',
+            color: PALETTE.background,
             border: 'none',
             borderRadius: RADII.xs,
             fontSize: '0.8125rem',
@@ -569,6 +579,7 @@ export function MediaPreviewModal({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isCapturingFrame, setIsCapturingFrame] = useState(false);
   const [frameSuccessMessage, setFrameSuccessMessage] = useState<string | null>(null);
 
@@ -645,16 +656,20 @@ export function MediaPreviewModal({
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!onDelete || isDeleting || isSaving) return;
-    if (window.confirm(`Delete "${item.name}"? This cannot be undone.`)) {
-      setIsDeleting(true);
-      try {
-        await onDelete(item.id);
-        onOpenChange(false);
-      } finally {
-        setIsDeleting(false);
-      }
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!onDelete || isDeleting || isSaving) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(item.id);
+      setShowDeleteConfirm(false);
+      onOpenChange(false);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -669,7 +684,7 @@ export function MediaPreviewModal({
         }
       }}
       onKeyDown={(e) => {
-        if (!isSaving && !isDeleting && e.key === 'Escape') {
+        if (!isSaving && !isDeleting && !showDeleteConfirm && e.key === 'Escape') {
           onOpenChange(false);
         }
       }}
@@ -771,6 +786,61 @@ export function MediaPreviewModal({
           onSave={handleSaveChanges}
         />
       </div>
+
+      {/* Single-asset delete confirmation */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent style={{ maxWidth: '440px' }} data-testid="preview-delete-confirm-dialog">
+          <DialogHeader>
+            <DialogTitle>Delete &ldquo;{item.name}&rdquo;?</DialogTitle>
+            <DialogDescription>This can&apos;t be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              data-testid="preview-delete-keep-btn"
+              disabled={isDeleting}
+              onClick={() => setShowDeleteConfirm(false)}
+              style={{
+                height: '36px',
+                padding: `0 ${SPACING.md}`,
+                backgroundColor: 'transparent',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                borderRadius: RADII.sm,
+                fontSize: '0.875rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.6 : 1,
+              }}
+            >
+              Keep
+            </button>
+            <button
+              type="button"
+              data-testid="preview-delete-confirm-btn"
+              disabled={isDeleting}
+              onClick={handleConfirmDelete}
+              style={{
+                height: '36px',
+                padding: `0 ${SPACING.md}`,
+                backgroundColor: PALETTE.accent3,
+                color: PALETTE.text,
+                border: 'none',
+                borderRadius: RADII.sm,
+                fontSize: '0.875rem',
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                cursor: isDeleting ? 'not-allowed' : 'pointer',
+                opacity: isDeleting ? 0.7 : 1,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: SPACING.xs,
+              }}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </dialog>
   );
 }

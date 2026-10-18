@@ -53,14 +53,14 @@ export async function handleListFolders(
        GROUP BY f.id, f.user_id, f.parent_id, f.name, f.created_at, f.updated_at
        ORDER BY f.name ASC`,
       [session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     const unorganizedRows = (await dbClient.query(
       `SELECT COUNT(*)::int AS unorganized_count
        FROM media_items
        WHERE user_id = $1 AND folder_id IS NULL`,
       [session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     const unorganizedCount = Number(unorganizedRows[0]?.unorganized_count ?? 0);
 
@@ -71,8 +71,8 @@ export async function handleListFolders(
       name: row.name,
       itemCount: Number(row.item_count ?? 0),
       subfolderCount: Number(row.subfolder_count ?? 0),
-      createdAt: new Date(row.created_at).toISOString(),
-      updatedAt: new Date(row.updated_at).toISOString(),
+      createdAt: new Date(row.created_at as string).toISOString(),
+      updatedAt: new Date(row.updated_at as string).toISOString(),
     }));
 
     const responsePayload = FolderListResponseSchema.parse({
@@ -136,8 +136,8 @@ export async function handleListFolders(
     name: row.name,
     itemCount: itemCounts.get(row.id) || 0,
     subfolderCount: subfolderCounts.get(row.id) || 0,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   }));
 
   const responsePayload = FolderListResponseSchema.parse({
@@ -198,7 +198,7 @@ export async function handleCreateFolder(
         const parentRows = (await dbClient.query(
           `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
           [parentId, session.userId]
-        )) as any[];
+        )) as Record<string, unknown>[];
 
         if (!parentRows || parentRows.length === 0) {
           return NextResponse.json(
@@ -216,7 +216,7 @@ export async function handleCreateFolder(
          VALUES ($1, $2, $3, now(), now())
          RETURNING id, user_id, parent_id, name, created_at, updated_at`,
         [session.userId, parentId, parsed.data.name]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       const row = rows[0];
       const responsePayload = FolderResponseSchema.parse({
@@ -226,8 +226,8 @@ export async function handleCreateFolder(
         name: row.name,
         itemCount: 0,
         subfolderCount: 0,
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
+        createdAt: new Date(row.created_at as string).toISOString(),
+        updatedAt: new Date(row.updated_at as string).toISOString(),
       });
 
       return NextResponse.json(responsePayload, { status: 201 });

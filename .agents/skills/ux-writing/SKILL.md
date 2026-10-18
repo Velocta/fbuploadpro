@@ -61,7 +61,7 @@ Users are business owners, creators, and operators—not backend developers or d
 - **Label**: Clear, specific noun phrase ("Email address", "Full name", "Workspace name").
 - **Placeholder**: Realistic, representative example or omitted if the label is obvious ("name@company.com", not "Enter your valid email string here").
 - **Helper text**: Only include when genuinely necessary to guide user decisions, never to explain backend regex.
-  - Good: "Your workspace URL will be: company.vinsmokemedia.online"
+  - Good: "Your workspace URL will be: company.fbuploadpro.com"
   - Bad: "Dots and plus tags will be stripped"
 
 ### Buttons & Action Controls

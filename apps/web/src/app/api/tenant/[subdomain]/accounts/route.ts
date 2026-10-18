@@ -8,7 +8,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -57,7 +57,7 @@ function syncExpiredAccountStatus(
     return;
   }
 
-  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
   if (!supabase) return;
 
   supabase
@@ -202,7 +202,7 @@ export async function handleListAccounts(
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     rows = await fetchLegacyAccounts(dbClient as DatabaseClient, workspaceId, session.userId);
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

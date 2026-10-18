@@ -9,6 +9,7 @@ import {
   SPACING,
   TYPOGRAPHY,
   STATUS_SIGNALS,
+  COMPONENT_STYLES,
 } from '@/lib/theme';
 import {
   type FacebookPageItem,
@@ -153,7 +154,7 @@ function CheckpointBanner({
           height="20"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#f59e0b"
+          stroke={PALETTE.primary}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -189,12 +190,11 @@ function CheckpointBanner({
         disabled={isUpdatingStatus}
         onClick={handleReactivate}
         style={{
+          ...COMPONENT_STYLES.primaryButton,
           height: '34px',
           padding: `0 ${SPACING.md}`,
-          backgroundColor: PALETTE.primary,
-          color: '#000000',
+          color: PALETTE.background,
           border: `1px solid ${PALETTE.primary}`,
-          borderRadius: RADII.sm,
           fontSize: '0.8125rem',
           fontWeight: TYPOGRAPHY.weights.semibold,
           cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
@@ -870,18 +870,16 @@ export function DedicatedPageHeader({
             data-testid="header-add-queue-btn"
             onClick={onOpenAddQueue}
             style={{
+              ...COMPONENT_STYLES.primaryButton,
               height: '34px',
               padding: `0 ${SPACING.md}`,
-              backgroundColor: PALETTE.primary,
-              color: '#000000',
+              color: PALETTE.background,
               border: `1px solid ${PALETTE.primary}`,
-              borderRadius: RADII.sm,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              cursor: 'pointer',
               boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
               transition: 'transform 0.12s ease, box-shadow 0.12s ease',
             }}

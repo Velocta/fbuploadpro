@@ -71,6 +71,7 @@ export const RADII = {
 
 export const TYPOGRAPHY = {
   fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace',
   fontFeatureSettings: "'cv02', 'cv03', 'cv04', 'cv11'",
   tabularNums: 'tabular-nums',
   tracking: {
@@ -231,13 +232,6 @@ export const THEME = {
   light: LIGHT_THEME,
   default: DARK_THEME,
 } as const;
-
-/**
- * Returns the active ThemeTokens object based on the current theme mode.
- */
-export function getTheme(mode: 'dark' | 'light' = 'dark'): ThemeTokens {
-  return mode === 'light' ? LIGHT_THEME : DARK_THEME;
-}
 
 /**
  * Pre-composed, standard component style presets to prevent ad-hoc styling.

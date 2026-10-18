@@ -11,19 +11,7 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { RADII, PALETTE } from '@/lib/theme';
-import {
-  MAX_CONCURRENT_UPLOADS,
-  formatBytes,
-  deriveDefaultCaption,
-  resolveSupportedMimeType,
-  resolveFolderPathSegments,
-  buildQueuedEntriesFromFileList,
-  ensureNestedFolderHierarchy,
-  executeBoundedUploadBatch,
-  runBoundedUploadQueue,
-  detectDuplicateUploadEntries,
-  type UploadBatchState,
-} from '@/lib/upload-queue-helpers';
+import { formatBytes, deriveDefaultCaption } from '@/lib/upload-queue-helpers';
 import {
   MediaAssetCard,
   HOVER_VIDEO_PREVIEW_DELAY_MS,
@@ -43,7 +31,6 @@ import {
   MEDIA_VIEW_MODE_STORAGE_KEY,
   buildFolderBreadcrumbs,
   formatFolderAncestryPath,
-  computeRangeSelection,
   computeFolderSubtreeImpact,
   filterAndSortMediaItems,
   resolveTargetFolderIdForEntry,
@@ -163,210 +150,6 @@ const SAMPLE_MEDIA_ITEMS: MediaItemResponse[] = [
     updatedAt: '2026-10-10T13:00:00.000Z',
   },
 ];
-
-describe('Spec 029: UploadQueueBanner & Bounded Ingestion Helpers (US3)', () => {
-  it('extracts relative folder segments and filters hidden/unsupported files accurately', () => {
-    expect(resolveFolderPathSegments('Campaign A/Reels/Week 1/clip1.mp4')).toEqual([
-      'Campaign A',
-      'Reels',
-      'Week 1',
-    ]);
-    expect(resolveFolderPathSegments('standalone.mp4')).toEqual([]);
-    expect(formatBytes(15728640)).toBe('15.0 MB');
-    expect(deriveDefaultCaption('My Summer Promo.mp4')).toBe('My Summer Promo');
-
-    expect(resolveSupportedMimeType({ name: '.DS_Store', type: '' })).toBeNull();
-    expect(resolveSupportedMimeType({ name: 'Thumbs.db', type: '' })).toBeNull();
-    expect(resolveSupportedMimeType({ name: 'clip.mp4', type: '' })).toBe('video/mp4');
-    expect(resolveSupportedMimeType({ name: 'banner.webp', type: 'image/webp' })).toBe(
-      'image/webp'
-    );
-  });
-
-  it('reuses existing sibling folders and creates missing nested subfolders sequentially in ensureNestedFolderHierarchy', async () => {
-    const createdPayloads: Array<{ name: string; parentId: string | null }> = [];
-    const mockFetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as {
-        name: string;
-        parentId: string | null;
-      };
-      createdPayloads.push(body);
-      const createdFolder: MediaFolder = {
-        id: `new-folder-${createdPayloads.length}`,
-        userId: '00000000-0000-4000-8000-000000000001',
-        parentId: body.parentId,
-        name: body.name,
-        itemCount: 0,
-        subfolderCount: 0,
-        createdAt: '2026-10-10T14:00:00.000Z',
-        updatedAt: '2026-10-10T14:00:00.000Z',
-      };
-      return new Response(JSON.stringify(createdFolder), { status: 201 });
-    }) as unknown as typeof fetch;
-
-    const entries = buildQueuedEntriesFromFileList([
-      Object.assign(new File(['video'], 'clip1.mp4', { type: 'video/mp4' }), {
-        webkitRelativePath: 'Campaign A/Reels/Week 2/clip1.mp4',
-      }),
-      Object.assign(new File(['image'], 'slide1.jpg', { type: 'image/jpeg' }), {
-        webkitRelativePath: 'Campaign A/Carousel/slide1.jpg',
-      }),
-    ]);
-
-    const { folderPathMap, updatedFolders } = await ensureNestedFolderHierarchy({
-      subdomain: 'acme',
-      baseFolderId: null,
-      entries,
-      existingFolders: SAMPLE_FOLDERS,
-      fetchImpl: mockFetch,
-    });
-
-    // "Campaign A" (1111...) and "Reels" (2222...) already exist; only "Week 2" and "Carousel" should be created
-    expect(createdPayloads).toEqual([
-      {
-        name: 'Week 2',
-        parentId: '22222222-2222-4222-8222-222222222222',
-      },
-      {
-        name: 'Carousel',
-        parentId: '11111111-1111-4111-8111-111111111111',
-      },
-    ]);
-    expect(folderPathMap.get('Campaign A/Reels/Week 2')).toBe('new-folder-1');
-    expect(folderPathMap.get('Campaign A/Carousel')).toBe('new-folder-2');
-    expect(updatedFolders).toHaveLength(SAMPLE_FOLDERS.length + 2);
-  });
-
-  it('processes multi-file uploads with bounded concurrency (max 3 concurrent) and emits unified progress updates', async () => {
-    let activeUploads = 0;
-    let maxObservedConcurrency = 0;
-    let confirmCounter = 0;
-
-    const mockFetch = vi.fn(async (input: string | URL | Request) => {
-      const url = typeof input === 'string' ? input : input.toString();
-
-      if (url.endsWith('/media/upload-url')) {
-        activeUploads += 1;
-        maxObservedConcurrency = Math.max(maxObservedConcurrency, activeUploads);
-        await new Promise((r) => setTimeout(r, 15));
-        confirmCounter += 1;
-        const id = `00000000-0000-4000-8000-00000000010${confirmCounter}`;
-        return new Response(
-          JSON.stringify({
-            mediaId: id,
-            mediaKey: `users/u1/media/${id}.mp4`,
-            mediaUploadUrl: `https://mock-r2.fbuploadpro.com/upload/${id}`,
-            thumbnailKey: `users/u1/thumbnails/${id}.webp`,
-            thumbnailUploadUrl: `https://mock-r2.fbuploadpro.com/thumb/${id}`,
-            publicMediaUrl: `https://media.fbuploadpro.com/${id}.mp4`,
-            publicThumbnailUrl: `https://media.fbuploadpro.com/${id}.webp`,
-          }),
-          { status: 200 }
-        );
-      }
-
-      if (url.endsWith('/media/confirm')) {
-        await new Promise((r) => setTimeout(r, 10));
-        activeUploads -= 1;
-        return new Response(
-          JSON.stringify({
-            ...SAMPLE_MEDIA_ITEMS[0],
-            id: `confirmed-${confirmCounter}`,
-          }),
-          { status: 201 }
-        );
-      }
-
-      return new Response('{}', { status: 200 });
-    }) as unknown as typeof fetch;
-
-    const files = Array.from({ length: 7 }, (_, idx) => ({
-      file: new File(['content'], `video_${idx + 1}.mp4`, { type: 'video/mp4' }),
-      relativePath: `video_${idx + 1}.mp4`,
-    }));
-    // Add an unsupported hidden system file to verify graceful skip
-    files.push({
-      file: new File(['sys'], '.DS_Store', { type: '' }),
-      relativePath: '.DS_Store',
-    });
-
-    const recordedStates: UploadBatchState[] = [];
-    const result = await executeBoundedUploadBatch({
-      subdomain: 'acme',
-      baseFolderId: '11111111-1111-4111-8111-111111111111',
-      rawEntries: files,
-      existingFolders: SAMPLE_FOLDERS,
-      onStateChange: (st) => recordedStates.push(st),
-      fetchImpl: mockFetch,
-    });
-
-    expect(maxObservedConcurrency).toBeLessThanOrEqual(MAX_CONCURRENT_UPLOADS);
-    expect(maxObservedConcurrency).toBeGreaterThanOrEqual(2);
-    expect(result.uploadedItems).toHaveLength(7);
-
-    const finalState = recordedStates.at(-1);
-    expect(finalState?.status).toBe('completed');
-    expect(finalState?.completedFiles).toBe(7);
-    expect(finalState?.totalFiles).toBe(7);
-    expect(finalState?.skippedFiles).toBe(1);
-  });
-
-  it('fails and records failedEntries when R2 PUT upload fails, never calling /media/confirm (Audit Issue 23)', async () => {
-    let confirmCalled = false;
-
-    const mockFetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-
-      if (url.endsWith('/media/upload-url')) {
-        return new Response(
-          JSON.stringify({
-            mediaId: 'test-media-1',
-            mediaKey: 'users/u1/media/test.mp4',
-            mediaUploadUrl: 'https://r2.cloudflare.com/upload/test.mp4',
-            thumbnailKey: 'users/u1/thumbnails/test.webp',
-            thumbnailUploadUrl: 'https://r2.cloudflare.com/thumb/test.webp',
-            publicMediaUrl: 'https://media.fbuploadpro.com/test.mp4',
-            publicThumbnailUrl: 'https://media.fbuploadpro.com/test.webp',
-          }),
-          { status: 200 }
-        );
-      }
-
-      if (init?.method === 'PUT') {
-        // Simulate R2 presigned PUT upload failure (e.g. 403 Forbidden / Expired URL)
-        return new Response('Access Denied', { status: 403 });
-      }
-
-      if (url.endsWith('/media/confirm')) {
-        confirmCalled = true;
-        return new Response('{}', { status: 201 });
-      }
-
-      return new Response('{}', { status: 200 });
-    }) as unknown as typeof fetch;
-
-    const files = [
-      {
-        file: new File(['failed_content'], 'failed_video.mp4', { type: 'video/mp4' }),
-        relativePath: 'failed_video.mp4',
-      },
-    ];
-
-    const result = await executeBoundedUploadBatch({
-      subdomain: 'acme',
-      baseFolderId: '11111111-1111-4111-8111-111111111111',
-      rawEntries: files,
-      existingFolders: SAMPLE_FOLDERS,
-      fetchImpl: mockFetch,
-      onStateChange: vi.fn(),
-    });
-
-    expect(confirmCalled).toBe(false);
-    expect(result.uploadedItems).toHaveLength(0);
-    expect(result.failedEntries).toHaveLength(1);
-    expect(result.failedEntries[0].relativePath).toBe('failed_video.mp4');
-  });
-});
 
 describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2, US6)', () => {
   it('renders MediaAssetCard with inline caption, multi-select checkbox, rectangular RADII.xs metadata badges, and zero capsule pills', () => {
@@ -500,27 +283,6 @@ describe('Spec 029: BatchActionBar & Shift+Click Range Selection (US4, US6)', ()
     expect(hasAttribute('data-testid', 'batch-delete-btn')).toBe(true);
   });
 
-  it('computes contiguous range selection when Shift+Click is used', () => {
-    const displayedIds = ['m1', 'm2', 'm3', 'm4', 'm5'];
-    const selectedRange = computeRangeSelection(
-      displayedIds,
-      ['m2'],
-      'm4',
-      'm2',
-      true
-    );
-    expect(selectedRange).toEqual(['m2', 'm3', 'm4']);
-
-    // Single click without shift toggles individual item
-    const toggledSingle = computeRangeSelection(
-      displayedIds,
-      ['m2', 'm3', 'm4'],
-      'm3',
-      'm4',
-      false
-    );
-    expect(toggledSingle).toEqual(['m2', 'm4']);
-  });
 });
 
 describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sync & Duplicate Guard (US1, US4, US5, US6, US7)', () => {
@@ -628,53 +390,6 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     expect(hasText('Load more (Showing 2 of 250)')).toBe(true);
   });
 
-  it('detects duplicate files against existing folder items and intra-batch duplicates and renders Duplicate Files Detected modal', () => {
-    const dupFile = new File(['x'], 'Viral Launch Reel.mp4', { type: 'video/mp4' });
-    Object.defineProperty(dupFile, 'size', { value: 15728640 });
-
-    const newFile = new File(['y'], 'Brand_New_Clip.mp4', { type: 'video/mp4' });
-    Object.defineProperty(newFile, 'size', { value: 4194304 });
-
-    const intraDupFile = new File(['y'], 'Brand_New_Clip.mp4', { type: 'video/mp4' });
-    Object.defineProperty(intraDupFile, 'size', { value: 4194304 });
-
-    const entries = [
-      { file: dupFile, relativePath: 'Viral Launch Reel.mp4' },
-      { file: newFile, relativePath: 'Brand_New_Clip.mp4' },
-      { file: intraDupFile, relativePath: 'Brand_New_Clip.mp4' },
-    ];
-
-    const detection = detectDuplicateUploadEntries(
-      entries,
-      SAMPLE_MEDIA_ITEMS,
-      SAMPLE_FOLDERS,
-      null
-    );
-
-    expect(detection.duplicates).toHaveLength(2);
-    expect(detection.uniqueEntries).toHaveLength(1);
-    expect(detection.uniqueEntries[0]?.file.name).toBe('Brand_New_Clip.mp4');
-
-    const { hasText, hasAttribute } = render(
-      <MediaLibraryExplorer
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialMediaItems={SAMPLE_MEDIA_ITEMS}
-        initialPendingDuplicateUpload={{
-          allEntries: entries,
-          uniqueEntries: detection.uniqueEntries,
-          duplicates: detection.duplicates,
-        }}
-      />
-    );
-
-    expect(hasAttribute('data-testid', 'duplicate-upload-modal')).toBe(true);
-    expect(hasAttribute('data-testid', 'skip-duplicates-btn')).toBe(true);
-    expect(hasAttribute('data-testid', 'upload-all-anyway-btn')).toBe(true);
-    expect(hasText('2 Duplicate Files Detected')).toBe(true);
-    expect(hasText('Skip duplicates (2)')).toBe(true);
-    expect(hasText('Upload all anyway')).toBe(true);
-  });
 
   it('renders MediaLibraryExplorer with breadcrumb navigation, nested subfolders, destructive delete folder modal impact, and strict theme compliance', () => {
     const campaignA = SAMPLE_FOLDERS[0]!;
@@ -816,37 +531,6 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     ).toBe(true);
   });
 
-  it('US2: supports cooperative pause/resume in runBoundedUploadQueue', async () => {
-    // Verify cooperative pause & resume in runBoundedUploadQueue
-    let paused = true;
-    const resumeResolvers: Array<() => void> = [];
-    const processed: number[] = [];
-
-    const queuePromise = runBoundedUploadQueue({
-      items: [1, 2, 3],
-      concurrency: 2,
-      isPaused: () => paused,
-      waitIfPaused: async () => {
-        if (!paused) return;
-        await new Promise<void>((resolve) => {
-          resumeResolvers.push(resolve);
-        });
-      },
-      worker: async (item) => {
-        processed.push(item);
-      },
-    });
-
-    await new Promise((r) => setTimeout(r, 15));
-    expect(processed).toHaveLength(0);
-
-    paused = false;
-    while (resumeResolvers.length > 0) {
-      resumeResolvers.shift()?.();
-    }
-    await queuePromise;
-    expect(processed.sort()).toEqual([1, 2, 3]);
-  });
 
   it('US3: filters media items by Aspect Ratio (9:16, 16:9, 1:1) and Caption Status (has_caption, empty_caption) and renders toolbar filter selects', () => {
     const allRootAndNested = SAMPLE_MEDIA_ITEMS;

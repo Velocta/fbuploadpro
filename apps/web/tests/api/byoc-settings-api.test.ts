@@ -2,13 +2,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { encryptToken, signSessionToken } from '@fbuploadpro/contracts';
 import { GET as getBYOC, PUT as saveBYOC, DELETE as deleteBYOC } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
-import { POST as testBYOC } from '@/app/api/tenant/[subdomain]/settings/byoc/test/route';
 import * as authModule from '@/lib/supabase-auth';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
-describe('Facebook BYOC Settings & Test API Routes', () => {
+describe('Facebook BYOC Settings API Routes', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
   const workspaceId = '22222222-2222-4222-a222-222222222222';
   const subdomain = 'acme';
@@ -79,7 +78,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         headers: { cookie: validSessionCookie },
@@ -114,7 +113,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         headers: { cookie: validSessionCookie },
@@ -164,7 +163,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         headers: { cookie: validSessionCookie },
@@ -218,7 +217,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         method: 'PUT',
@@ -254,7 +253,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         method: 'PUT',
@@ -313,7 +312,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         method: 'PUT',
@@ -328,176 +327,6 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
         expect.objectContaining({
           fb_app_id: '987654321098765',
           status: 'unverified',
-        })
-      );
-    });
-  });
-
-  describe('POST /api/tenant/[subdomain]/settings/byoc/test', () => {
-    it('returns 400 when no credentials are configured for workspace', async () => {
-      const mockSupabase = {
-        from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                }),
-              }),
-            };
-          }
-          return {};
-        }),
-      };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
-
-      const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc/test`, {
-        method: 'POST',
-        headers: { cookie: validSessionCookie },
-      });
-      const res = await testBYOC(req, { params: Promise.resolve({ subdomain }) });
-      expect(res.status).toBe(400);
-    });
-
-    it('returns 200 with status valid when Meta Graph API accepts credentials', async () => {
-      const encryptedSecret = await encryptToken('raw_app_secret_123', TEST_ENCRYPTION_KEY);
-      const updateMock = vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      });
-
-      const mockSupabase = {
-        from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: {
-                      workspace_id: workspaceId,
-                      fb_app_id: '123456789012345',
-                      encrypted_fb_app_secret: encryptedSecret,
-                    },
-                    error: null,
-                  }),
-                }),
-              }),
-              update: updateMock,
-            };
-          }
-          return {};
-        }),
-      };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
-
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: true,
-          json: async () => ({ id: '123456789012345', name: 'My Production FB App' }),
-        })
-      );
-
-      const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc/test`, {
-        method: 'POST',
-        headers: { cookie: validSessionCookie },
-      });
-      const res = await testBYOC(req, { params: Promise.resolve({ subdomain }) });
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.success).toBe(true);
-      expect(json.status).toBe('valid');
-      expect(json.appName).toBe('My Production FB App');
-      expect(updateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'valid',
-        })
-      );
-    });
-
-    it('returns 200 with status invalid when Meta Graph API rejects credentials', async () => {
-      const encryptedSecret = await encryptToken('raw_app_secret_123', TEST_ENCRYPTION_KEY);
-      const updateMock = vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      });
-
-      const mockSupabase = {
-        from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: {
-                      workspace_id: workspaceId,
-                      fb_app_id: '123456789012345',
-                      encrypted_fb_app_secret: encryptedSecret,
-                    },
-                    error: null,
-                  }),
-                }),
-              }),
-              update: updateMock,
-            };
-          }
-          return {};
-        }),
-      };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
-
-      vi.stubGlobal(
-        'fetch',
-        vi.fn().mockResolvedValue({
-          ok: false,
-          json: async () => ({ error: { message: 'Invalid client secret' } }),
-        })
-      );
-
-      const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc/test`, {
-        method: 'POST',
-        headers: { cookie: validSessionCookie },
-      });
-      const res = await testBYOC(req, { params: Promise.resolve({ subdomain }) });
-      expect(res.status).toBe(200);
-      const json = await res.json();
-      expect(json.success).toBe(false);
-      expect(json.status).toBe('invalid');
-      expect(json.message).toBe('Invalid client secret');
-      expect(updateMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status: 'invalid',
         })
       );
     });
@@ -538,7 +367,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         method: 'DELETE',
@@ -572,7 +401,7 @@ describe('Facebook BYOC Settings & Test API Routes', () => {
           return {};
         }),
       };
-      vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/settings/byoc`, {
         method: 'DELETE',

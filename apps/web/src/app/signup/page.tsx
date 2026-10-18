@@ -6,7 +6,7 @@ import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
-import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
@@ -245,7 +245,7 @@ export default function SignupPage() {
         setGeneralError(
           sanitizeAuthErrorMessage(
             data.error,
-            'Unable to create your account at this moment. Please try again shortly.'
+            "Couldn't create your account. Please try again shortly."
           )
         );
         setIsSubmitting(false);
@@ -264,7 +264,7 @@ export default function SignupPage() {
         completeAuthRedirect(data.redirectUrl, data.user);
       }
     } catch {
-      setGeneralError('Unable to create your account at this moment. Please check your connection and try again.');
+      setGeneralError("Couldn't create your account. Please check your connection and try again.");
       setIsSubmitting(false);
     }
   };
@@ -274,7 +274,7 @@ export default function SignupPage() {
   const layoutMeta = getSignupLayoutMeta(isPaused, step, email);
 
   const signInFooter = (
-    <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+    <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
       Already have an account?{' '}
       <Link
         href={returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'}
@@ -318,7 +318,7 @@ export default function SignupPage() {
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--text-sub, #9ca3af)',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               fontSize: '0.8125rem',
               cursor: 'pointer',
               textDecoration: 'underline',
@@ -432,7 +432,7 @@ export default function SignupPage() {
               >
                 Sign in instead
               </Link>
-              <span style={{ color: 'var(--text-dim, #6b7280)' }}>•</span>
+              <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>•</span>
               <Link
                 href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
                 style={{
@@ -491,7 +491,7 @@ export default function SignupPage() {
           <p
             style={{
               fontSize: '0.75rem',
-              color: 'var(--text-dim, #6b7280)',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
               lineHeight: 1.5,
               textAlign: 'center',
               marginTop: SPACING.xs,

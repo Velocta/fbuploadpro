@@ -318,6 +318,14 @@ describe('ISSUE-07: Silent PostgREST Insert/Upsert Failures During Signup & Veri
                   }),
                 })),
               })),
+              upsert: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  single: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { message: 'null value in column "id" violates not-null constraint', code: '23502' },
+                  }),
+                })),
+              })),
             };
           }
           if (table === 'workspaces') {
@@ -342,7 +350,7 @@ describe('ISSUE-07: Silent PostgREST Insert/Upsert Failures During Signup & Veri
       authModule._setMockSupabaseClient(mockSupabase as any);
 
       await expect(
-        authModule.registerTenantUser({
+        authModule.signUpTenantUser({
           name: 'Test User',
           email: 'testuser@gmail.com',
           phone: '+15555550199',
@@ -375,6 +383,14 @@ describe('ISSUE-07: Silent PostgREST Insert/Upsert Failures During Signup & Veri
                   }),
                 })),
               })),
+              upsert: vi.fn(() => ({
+                select: vi.fn(() => ({
+                  single: vi.fn().mockResolvedValue({
+                    data: null,
+                    error: { message: '', code: '23502' },
+                  }),
+                })),
+              })),
             };
           }
           return {};
@@ -384,7 +400,7 @@ describe('ISSUE-07: Silent PostgREST Insert/Upsert Failures During Signup & Veri
       authModule._setMockSupabaseClient(mockSupabase as any);
 
       await expect(
-        authModule.registerTenantUser({
+        authModule.signUpTenantUser({
           name: 'Test User',
           email: 'testuser@gmail.com',
           phone: '+15555550199',

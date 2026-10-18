@@ -58,7 +58,6 @@ export function escapePostgrestFilterValue(val: string): string {
 }
 const localUserStore = new Map<string, AuthUser>();
 let mockSupabaseClientForTesting: SupabaseClient | null = null;
-let mockSupabaseAnonClientForTesting: SupabaseClient | null = null;
 let mockSupabaseServiceClientForTesting: SupabaseClient | null = null;
 
 /**
@@ -82,53 +81,17 @@ export function _setMockSupabaseClient(client: SupabaseClient | null): void {
   mockSupabaseClientForTesting = client;
 }
 
-export function _setMockSupabaseAnonClient(client: SupabaseClient | null): void {
-  assertTestDoubleAllowed('_setMockSupabaseAnonClient');
-  mockSupabaseAnonClientForTesting = client;
-}
-
 export function _setMockSupabaseServiceClient(client: SupabaseClient | null): void {
   assertTestDoubleAllowed('_setMockSupabaseServiceClient');
   mockSupabaseServiceClientForTesting = client;
 }
 
 /**
- * Returns a Supabase client configured with the public anonymous key (NEXT_PUBLIC_SUPABASE_ANON_KEY).
- * Intended for client-facing operations and GoTrue user authentication flows running under user RLS.
- */
-export function getSupabaseAnonClient(): SupabaseClient | null {
-  if (isTestDoubleAllowed() && mockSupabaseAnonClientForTesting) {
-    return mockSupabaseAnonClientForTesting;
-  }
-  if (isTestDoubleAllowed() && mockSupabaseClientForTesting) {
-    return mockSupabaseClientForTesting;
-  }
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (url && key && !url.includes('placeholder') && !key.includes('placeholder')) {
-    try {
-      return createClient(url, key, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-        },
-      });
-    } catch {
-      return null;
-    }
-  }
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are strictly required in production.');
-  }
-  return null;
-}
-
-/**
  * Returns a Supabase client configured with the service-role key (SUPABASE_SERVICE_ROLE_KEY).
  * Exclusively for server-side administrative workflows and system jobs.
+ * The name makes the elevated privilege explicit at every call site.
  */
-export function getSupabaseServiceClient(): SupabaseClient | null {
+export function getSupabaseAdminClient(): SupabaseClient | null {
   if (isTestDoubleAllowed() && mockSupabaseServiceClientForTesting) {
     return mockSupabaseServiceClientForTesting;
   }
@@ -154,14 +117,6 @@ export function getSupabaseServiceClient(): SupabaseClient | null {
     throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are strictly required in production.');
   }
   return null;
-}
-
-/**
- * Default Supabase client for backwards compatibility with existing backend routes.
- * Defaults to service role client when available, falling back to anon key.
- */
-export function getSupabaseClient(): SupabaseClient | null {
-  return getSupabaseServiceClient();
 }
 
 export function getCookieDomain(requestHost?: string | null): string | undefined {
@@ -282,7 +237,7 @@ export interface AuthUser {
 }
 
 async function findWorkspaceSubdomainByOwner(
-  supabase: ReturnType<typeof getSupabaseClient>,
+  supabase: ReturnType<typeof getSupabaseAdminClient>,
   ownerId: string,
   fallbackSubdomain: string
 ): Promise<string> {
@@ -314,7 +269,7 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
     return null;
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     try {
       const quoted = escapePostgrestFilterValue(canonicalEmail);
@@ -348,7 +303,7 @@ export async function findUserByEmail(emailInput: string): Promise<AuthUser | nu
 }
 
 export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<string> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) return baseSubdomain;
 
   try {
@@ -400,7 +355,7 @@ export async function resolveUniqueSubdomain(baseSubdomain: string): Promise<str
 }
 
 export async function ensureWorkspaceForUser(
-  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
   userId: string,
   userNameOrFallback: string,
   preferredSubdomain: string
@@ -494,7 +449,7 @@ export async function signUpTenantUser(params: {
   }
 
   const existingUser = await findUserByEmail(canonicalEmail);
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
 
   if (supabase && existingUser) {
     // Check if this existing user is already confirmed in Supabase Auth
@@ -717,7 +672,7 @@ export async function verifySignupOtpViaSupabase(params: {
 }): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
   const canonicalEmail = resolveCanonicalEmail(params.email);
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   let userRecord: AuthUser | null = await findUserByEmail(canonicalEmail);
 
   if (supabase) {
@@ -828,7 +783,7 @@ export async function resendSignupOtpViaSupabase(email: string): Promise<{
     canonicalEmail = email.trim().toLowerCase();
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     const { error } = await supabase.auth.resend({
       type: 'signup',
@@ -849,148 +804,6 @@ export async function resendSignupOtpViaSupabase(email: string): Promise<{
   const { resendSignupOtp } = await import('@/lib/otp-service');
   return resendSignupOtp(canonicalEmail);
 }
-
-export async function registerTenantUser(params: {
-  name: string;
-  phone: string;
-  email: string;
-  password?: string | undefined;
-  hashedPassword?: string | undefined;
-}): Promise<{ user: AuthUser; token: string; redirectUrl: string }> {
-  let canonicalEmail: string;
-  try {
-    canonicalEmail = canonicalizeGmailAddress(params.email);
-  } catch {
-    canonicalEmail = params.email.trim().toLowerCase();
-  }
-
-  let formattedPhone: string;
-  try {
-    formattedPhone = validateAndFormatE164Phone(params.phone);
-  } catch {
-    formattedPhone = params.phone.trim();
-  }
-
-  // Check email uniqueness
-  const existingUser = await findUserByEmail(canonicalEmail);
-  if (existingUser) {
-    throw new Error('Email is already registered');
-  }
-
-  // Derive unique subdomain
-  const rawSubdomain = deriveSubdomainFromEmail(canonicalEmail);
-  const subdomain = await resolveUniqueSubdomain(rawSubdomain);
-
-  let userId: string;
-  let userRecord: AuthUser;
-  const supabase = getSupabaseClient();
-  const rawPassword = params.password || '';
-  const rawOrHashedPassword = params.hashedPassword || params.password || '';
-
-  if (supabase) {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: canonicalEmail,
-      password: rawPassword,
-      options: {
-        data: {
-          name: params.name,
-          phone: formattedPhone,
-          subdomain,
-        },
-      },
-    });
-
-    if (authError || !authData.user) {
-      throw new Error(authError?.message || 'Authentication registration failed');
-    }
-    userId = authData.user.id;
-
-    // Persist in users table via Supabase PostgREST
-    try {
-      const { data: inserted, error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email: canonicalEmail,
-          normalized_email: canonicalEmail,
-          name: params.name,
-          phone: formattedPhone,
-          role: 'user',
-          status: 'active',
-        })
-        .select('id, email, name, phone, role, status')
-        .single();
-
-      if (insertError) {
-        throw new Error(insertError.message || 'User profile creation failed');
-      }
-
-      const wsSubdomain = await ensureWorkspaceForUser(
-        supabase,
-        userId,
-        params.name || canonicalEmail.split('@')[0],
-        subdomain
-      );
-
-      userRecord = {
-        ...(inserted as AuthUser | null),
-        id: userId,
-        email: canonicalEmail,
-        name: params.name,
-        phone: formattedPhone,
-        subdomain: wsSubdomain,
-        role: 'user',
-        status: 'active',
-      } as AuthUser;
-    } catch (insertErr) {
-      logServerError('[Supabase PostgREST] User insert exception', insertErr);
-      throw insertErr;
-    }
-  } else {
-    userId = crypto.randomUUID();
-    const hashed = rawOrHashedPassword.includes(':')
-      ? rawOrHashedPassword
-      : await hashPassword(rawOrHashedPassword);
-    localPasswordStore.set(canonicalEmail, hashed);
-
-    userRecord = {
-      id: userId,
-      email: canonicalEmail,
-      name: params.name,
-      phone: formattedPhone,
-      subdomain,
-      role: 'user',
-      status: 'active',
-    };
-    localUserStore.set(canonicalEmail, userRecord);
-  }
-
-  const sessionSecret = getSessionSecret();
-  const token = await signSessionToken(
-    {
-      userId: userRecord.id,
-      email: userRecord.email,
-      name: userRecord.name,
-      subdomain: userRecord.subdomain,
-      role: userRecord.role,
-      status: userRecord.status,
-    },
-    sessionSecret,
-    86400 * 30 // 30 days matching fbup_session cookie maxAge
-  );
-
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
-  const isLocal = rootDomain.includes('localhost') || rootDomain.includes('127.0.0.1');
-  const protocol = isLocal ? 'http' : 'https';
-  const redirectUrl = `${protocol}://${userRecord.subdomain}.${rootDomain}/`;
-
-  return {
-    user: userRecord,
-    token,
-    redirectUrl,
-  };
-}
-
 export async function loginTenantUser(params: {
   email: string;
   password: string;
@@ -1005,7 +818,7 @@ export async function loginTenantUser(params: {
   }
   let user = await findUserByEmail(canonicalEmail);
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email: user?.email || canonicalEmail,
@@ -1140,44 +953,6 @@ export async function loginTenantUser(params: {
     redirectUrl,
   };
 }
-
-export async function requestPasswordReset(params: {
-  email: string;
-  redirectTo?: string | undefined;
-}): Promise<{ message: string; resetToken?: string | undefined }> {
-  let canonicalEmail: string;
-  try {
-    canonicalEmail = canonicalizeGmailAddress(params.email);
-  } catch {
-    canonicalEmail = params.email.trim().toLowerCase();
-  }
-
-  const user = await findUserByEmail(canonicalEmail);
-  // For security against email enumeration, return confirmation even if email not found
-  if (!user && !getSupabaseClient()) {
-    return {
-      message: 'If an account exists with this email address, a recovery link has been sent.',
-    };
-  }
-
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const options = params.redirectTo ? { redirectTo: params.redirectTo } : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail, options);
-      if (error) {
-        logServerError('[Supabase Auth] resetPasswordForEmail error', error, { email: canonicalEmail });
-      }
-    } catch (err) {
-      logServerError('[Supabase Auth] resetPasswordForEmail exception', err, { email: canonicalEmail });
-    }
-  }
-
-  return {
-    message: 'If an account exists with this email address, a recovery link has been sent.',
-  };
-}
-
 export async function sendPasswordResetOtpViaSupabase(email: string): Promise<{
   success: boolean;
   otp?: string | undefined;
@@ -1190,7 +965,7 @@ export async function sendPasswordResetOtpViaSupabase(email: string): Promise<{
     canonicalEmail = email.trim().toLowerCase();
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail);
     if (error) {
@@ -1218,7 +993,7 @@ export async function resendPasswordResetOtpViaSupabase(email: string): Promise<
     canonicalEmail = email.trim().toLowerCase();
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     const { error } = await supabase.auth.resetPasswordForEmail(canonicalEmail);
     if (error) {
@@ -1250,7 +1025,7 @@ export async function resetUserPasswordWithOtp(params: {
     canonicalEmail = params.email.trim().toLowerCase();
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     const { error } = await supabase.auth.verifyOtp({
       email: canonicalEmail,
@@ -1361,7 +1136,6 @@ export async function resetUserPasswordWithOtp(params: {
   };
 }
 
-export const resetPasswordWithSupabaseOtp = resetUserPasswordWithOtp;
 
 export async function resetUserPassword(params: {
   email?: string | undefined;
@@ -1390,7 +1164,7 @@ export async function resetUserPassword(params: {
     throw new Error('A valid password reset link or token is required.');
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (supabase) {
     if (params.code) {
       const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(params.code);
@@ -1466,7 +1240,6 @@ export function _resetAuthStores(): void {
   localPasswordStore.clear();
   localUserStore.clear();
   mockSupabaseClientForTesting = null;
-  mockSupabaseAnonClientForTesting = null;
   mockSupabaseServiceClientForTesting = null;
 }
 
@@ -1498,7 +1271,7 @@ export async function validateSessionActive(session: SessionPayload): Promise<bo
   if (session.status === 'suspended') return false;
   const user = await findUserByEmail(session.email);
   if (!user) {
-    if (!getSupabaseClient() && process.env.NODE_ENV !== 'production') {
+    if (!getSupabaseAdminClient() && process.env.NODE_ENV !== 'production') {
       return session.status === 'active';
     }
     return false;

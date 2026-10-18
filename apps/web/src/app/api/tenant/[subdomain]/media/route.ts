@@ -8,7 +8,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -136,7 +136,7 @@ export async function handleListMedia(
 
     // 1. Total count
     const countSql = `SELECT COUNT(*)::int AS total FROM media_items WHERE ${whereClause}`;
-    const countRows = (await dbClient.query(countSql, params)) as any[];
+    const countRows = (await dbClient.query(countSql, params)) as Record<string, unknown>[];
     total = Number(countRows[0]?.total ?? 0);
 
     // Keyset cursor pagination condition
@@ -164,14 +164,14 @@ export async function handleListMedia(
     if (cursor) {
       const queryParams = [...params, limit];
       const itemsSql = `SELECT * FROM media_items WHERE ${cursorWhereClause} ORDER BY created_at DESC, id DESC LIMIT $${queryParams.length}`;
-      rows = (await dbClient.query(itemsSql, queryParams)) as any[];
+      rows = (await dbClient.query(itemsSql, queryParams)) as Record<string, unknown>[];
     } else {
       const queryParams = [...params, limit, offset];
       const itemsSql = `SELECT * FROM media_items WHERE ${cursorWhereClause} ORDER BY ${orderColumn} ${orderDirection} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
-      rows = (await dbClient.query(itemsSql, queryParams)) as any[];
+      rows = (await dbClient.query(itemsSql, queryParams)) as Record<string, unknown>[];
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -231,7 +231,7 @@ export async function handleListMedia(
       } else if (sortBy === 'file_size') {
         sortCol = 'file_size';
       }
-      queryBuilder = queryBuilder.order(sortCol as any, { ascending: sortOrder === 'asc' });
+      queryBuilder = queryBuilder.order(sortCol as string, { ascending: sortOrder === 'asc' });
       queryBuilder = queryBuilder.range(offset, offset + limit - 1);
     }
 
@@ -264,8 +264,8 @@ export async function handleListMedia(
     captionText: row.caption_text ?? null,
     width: row.width ? Number(row.width) : null,
     height: row.height ? Number(row.height) : null,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   }));
 
   let nextCursor: string | null = null;

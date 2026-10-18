@@ -12,7 +12,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -73,7 +73,7 @@ export async function handleImportPages(
     const accounts = (await dbClient.query(
       'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
       return NextResponse.json(
@@ -83,7 +83,7 @@ export async function handleImportPages(
     }
     account = accounts[0];
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -145,7 +145,7 @@ export async function handleImportPages(
 
   if (isSupabaseMode && matchedPages.length > 0) {
     const supabase = (
-      dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()
+      dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()
     ) as SupabaseClient<any> | null;
     if (supabase) {
       const pageFbIds = matchedPages.map((item) => String(item.id));
@@ -214,7 +214,7 @@ export async function handleImportPages(
           encryptedPageToken,
           profilePictureUrl,
         ]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (result && result.length > 0 && result[0]) {
         const row = result[0];
@@ -226,7 +226,7 @@ export async function handleImportPages(
       }
       return null;
     } else {
-      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
       if (!supabase) return null;
 
       const existingPage = existingPagesMap.get(String(pageItem.id));
