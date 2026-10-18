@@ -912,6 +912,27 @@ Spec 067 comprehensively redesigns the Media Library (`/tenant/[subdomain]/media
 * **Step 2: Upload Execution**: Strict 3-concurrency worker engine with automatic queue advancement, per-file pause/resume/cancel/retry with exponential backoff, overall batch progress, completion summary, and minimized dock mode permitting background ingestion while browsing.
 * **Leave-Page Upload Protection**: During active in-flight uploads, in-app navigation triggers a protective confirmation dialog (`LeavePageGuardDialog`) displaying furthest-along upload progress, and native browser `beforeunload` is armed until all uploads complete, preventing accidental cancellation and ghost partial storage objects.
 
+---
+
+## 33. Spec 068 Downloader Component & API Namespace Separation
+
+Spec 068 establishes complete architectural and directory namespace separation between the Cloud Media Downloader and the Media Library:
+
+### 33.1 Dedicated Frontend Component Hierarchy
+* **Dedicated Component Directory (`apps/web/src/components/downloader/`)**:
+  - Relocated `MediaDownloader` from `apps/web/src/components/media/media-downloader.tsx` to `apps/web/src/components/downloader/media-downloader.tsx`.
+  - The top-level tenant Downloader page (`apps/web/src/app/tenant/[subdomain]/downloader/page.tsx`) imports directly from `@/components/downloader/media-downloader`.
+  - `apps/web/src/components/media/media-downloader.tsx` is maintained strictly as a backward-compatible pass-through re-export.
+
+### 33.2 Dedicated Backend API Route Topology
+* **Primary Route (`POST` & `GET /api/tenant/[subdomain]/downloader`)**:
+  - Primary API route relocated to `apps/web/src/app/api/tenant/[subdomain]/downloader/route.ts`.
+  - Handles hybrid link extraction, direct R2 ingestion, and asynchronous background job status polling.
+  - Frontend components target `/api/tenant/${subdomain}/downloader`.
+* **Zero-Downtime Legacy Route Wrapper**:
+  - `apps/web/src/app/api/tenant/[subdomain]/media/downloader/route.ts` re-exports `GET` and `POST` from `../../downloader/route`, ensuring zero disruption to in-flight browser sessions, worker callbacks, or legacy external scripts.
+
+
 
 
 

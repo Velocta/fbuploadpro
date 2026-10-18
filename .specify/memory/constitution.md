@@ -222,6 +222,13 @@ Direct commits to `main` are strictly forbidden. All modifications must be deliv
     - **Leave-Page Upload Protection**: During active in-flight uploads, in-app navigation triggers a protective confirmation dialog displaying furthest-along upload progress, and native browser `beforeunload` is armed until all uploads complete, preventing accidental cancellation and ghost partial storage objects.
     - **Strict Domain Boundary Isolation from Downloader**: The Media Library and Downloader are completely decoupled. The Media Library MUST contain zero downloader panels, tabs, or background scraper triggers.
 
+    - **Principle 32: Downloader Namespace & Architecture Boundary Separation**:
+      - The Cloud Media Downloader is an independent top-level capability with dedicated UI, routing, and background extraction pipelines.
+      - Downloader UI components MUST reside exclusively in `apps/web/src/components/downloader/` (never within `components/media/`).
+      - Downloader API endpoints MUST reside at `/api/tenant/[subdomain]/downloader` (`apps/web/src/app/api/tenant/[subdomain]/downloader/route.ts`).
+      - Legacy routes (`/api/tenant/[subdomain]/media/downloader`) and component imports (`components/media/media-downloader.tsx`) must strictly serve as zero-overhead backward-compatibility re-exports.
+      - Media Library (`/tenant/[subdomain]/media`) and Downloader (`/tenant/[subdomain]/downloader`) MUST remain completely decoupled.
+
 ## Development Workflow & Quality Gates
 
 1. **Ideation & Governance**: Broad proposals and milestone announcements begin in GitHub Discussions.
@@ -246,6 +253,6 @@ The Constitution is the supreme governing document of the FBUploadPro repository
 - **Compliance**: All contributors, AI agents, and code reviews must verify compliance against these principles before merging code.
 - **Guidance Reference**: Operational agent instructions are maintained in [.agents/AGENTS.md](../../.agents/AGENTS.md).
 
-**Version**: 2.35.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-18
+**Version**: 2.36.0 | **Ratified**: 2026-10-07 | **Last Amended**: 2026-10-18
 
 
