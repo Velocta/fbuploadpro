@@ -509,7 +509,7 @@ export async function signUpTenantUser(params: {
       if ((adminErr as Error)?.message === 'Email is already registered') {
         throw adminErr;
       }
-      logServerError('[Supabase Auth Admin] getUserById exception', adminErr);
+      logServerError('[Supabase Auth Admin] getUserById exception:', adminErr);
     }
 
     // User is unconfirmed in Supabase: update details and resend code

@@ -14,7 +14,7 @@ export interface PostHogEnv {
 
 const DEFAULT_HOST = 'https://us.i.posthog.com';
 
-function toErrorInfo(error: unknown): { message: string; stack?: string } {
+function toErrorInfo(error: unknown): { message: string; stack?: string | undefined } {
   if (error instanceof Error) {
     return { message: error.message, stack: error.stack };
   }
