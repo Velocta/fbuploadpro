@@ -25,8 +25,10 @@ export function BatchSetCaptionModal({
 
   const trimmedText = captionText.trim();
   const canSubmit = trimmedText.length > 0 && !isSubmitting;
+  const targetLabel = selectedCount === 1 ? '1 file' : `${selectedCount} files`;
+  const submitLabel = isSubmitting ? 'Applying...' : `Apply to ${targetLabel}`;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
 
@@ -41,9 +43,8 @@ export function BatchSetCaptionModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="batch-caption-title"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
@@ -58,6 +59,12 @@ export function BatchSetCaptionModal({
       style={{
         position: 'fixed',
         inset: 0,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        margin: 0,
+        border: 'none',
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
@@ -65,6 +72,7 @@ export function BatchSetCaptionModal({
         justifyContent: 'center',
         zIndex: 9500,
         padding: SPACING.md,
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -228,13 +236,11 @@ export function BatchSetCaptionModal({
                 cursor: canSubmit ? 'pointer' : 'not-allowed',
               }}
             >
-              {isSubmitting
-                ? 'Applying...'
-                : `Apply to ${selectedCount} file${selectedCount === 1 ? '' : 's'}`}
+              {submitLabel}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
   );
 }

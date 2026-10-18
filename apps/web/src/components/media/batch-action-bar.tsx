@@ -68,9 +68,9 @@ export function BatchActionBar({
         <button
           type="button"
           data-testid="batch-select-all-btn"
+          tabIndex={-1}
           onClick={onSelectAll}
           style={{ display: 'none' }}
-          aria-hidden="true"
         >
           Select all
         </button>

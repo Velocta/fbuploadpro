@@ -128,6 +128,13 @@ export function MediaTableRow({
     }
   };
 
+  let rowBackgroundColor = 'transparent';
+  if (selected) {
+    rowBackgroundColor = `var(--bg-active, ${THEME.default.surfaces.active})`;
+  } else if (isHovered) {
+    rowBackgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
+  }
+
   return (
     <tr
       data-testid={`media-row-${item.id}`}
@@ -141,11 +148,7 @@ export function MediaTableRow({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       style={{
-        backgroundColor: selected
-          ? `var(--bg-active, ${THEME.default.surfaces.active})`
-          : isHovered
-            ? `var(--bg-hover, ${THEME.default.surfaces.hover})`
-            : 'transparent',
+        backgroundColor: rowBackgroundColor,
         borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         transition: 'background-color 0.12s ease',
       }}

@@ -63,9 +63,8 @@ export function NewFolderModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="new-folder-title"
       onPointerDown={(e) => {
         if (e.target === e.currentTarget) {
@@ -80,6 +79,12 @@ export function NewFolderModal({
       style={{
         position: 'fixed',
         inset: 0,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        margin: 0,
+        border: 'none',
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
@@ -87,6 +92,7 @@ export function NewFolderModal({
         justifyContent: 'center',
         zIndex: 9500,
         padding: SPACING.md,
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -260,6 +266,6 @@ export function NewFolderModal({
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
   );
 }

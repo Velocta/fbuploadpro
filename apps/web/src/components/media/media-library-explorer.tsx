@@ -16,6 +16,7 @@ import { type BatchCaptionMode } from './media-types';
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
 
 export type MediaViewMode = 'grid' | 'table';
+export type MediaTypeFilterKey = 'all' | 'video' | 'image';
 export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1' | '4:5';
 export type CaptionStatusFilterKey = 'all' | 'has_caption' | 'empty_caption';
 export type SortOptionKey =
@@ -151,7 +152,7 @@ export function computeRangeSelection(
 function matchesMediaFilters(
   item: MediaItemResponse,
   currentFolderId: string | null,
-  mediaTypeFilter: 'all' | 'video' | 'image',
+  mediaTypeFilter: MediaTypeFilterKey,
   aspectRatioFilter: AspectRatioFilterKey,
   captionStatusFilter: CaptionStatusFilterKey,
   trimmedSearch: string
@@ -201,7 +202,7 @@ export function filterAndSortMediaItems(
   items: MediaItemResponse[],
   options: {
     currentFolderId: string | null;
-    mediaTypeFilter: 'all' | 'video' | 'image';
+    mediaTypeFilter: MediaTypeFilterKey;
     aspectRatioFilter?: AspectRatioFilterKey | undefined;
     captionStatusFilter?: CaptionStatusFilterKey | undefined;
     searchQuery: string;
@@ -239,7 +240,7 @@ export function resolveTargetFolderIdForEntry(
 ): string | null | undefined {
   const segments: string[] = entry.relativeSubfolderPath ?? (entry.relativePath
     ? entry.relativePath
-        .replace(/\\/g, '/')
+        .replaceAll('\\', '/')
         .trim()
         .split('/')
         .map((p: string) => p.trim())
@@ -526,7 +527,7 @@ export function MediaLibraryExplorer({
 
   useEffect(() => {
     if (!initialMediaItems) {
-      refreshLibraryData();
+      void refreshLibraryData();
     }
   }, [refreshLibraryData, initialMediaItems]);
 
@@ -573,7 +574,7 @@ export function MediaLibraryExplorer({
   ) => {
     setSelectedIds((prev) => {
       if (options?.shiftKey && prev.length > 0) {
-        const lastId = prev[prev.length - 1];
+        const lastId = prev.at(-1)!;
         const allIds = displayedMediaItems.map((m) => m.id);
         const lastIdx = allIds.indexOf(lastId);
         const currIdx = allIds.indexOf(mediaId);
@@ -1928,7 +1929,7 @@ export function MediaLibraryExplorer({
           setStagedFilesForImport([]);
         }}
         onUploadSuccess={() => {
-          refreshLibraryData();
+          void refreshLibraryData();
         }}
         onActiveUploadsChange={(count, furthest) => {
           setActiveUploadsCount(count);
@@ -1982,13 +1983,17 @@ export function MediaLibraryExplorer({
 
       {/* Move Folder / Media Dialog */}
       {moveTarget && (
-        <div
-          role="dialog"
+        <dialog
+          open
           aria-modal="true"
           aria-labelledby="move-modal-title"
           style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
             backgroundColor: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(8px)',
             display: 'flex',
@@ -1996,6 +2001,9 @@ export function MediaLibraryExplorer({
             justifyContent: 'center',
             zIndex: 9500,
             padding: SPACING.md,
+            border: 'none',
+            margin: 0,
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -2026,6 +2034,7 @@ export function MediaLibraryExplorer({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <label
+                htmlFor="move-destination-folder-select"
                 style={{
                   fontSize: '0.6875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
@@ -2036,6 +2045,7 @@ export function MediaLibraryExplorer({
                 SELECT DESTINATION
               </label>
               <select
+                id="move-destination-folder-select"
                 value={moveDestinationFolderId || ''}
                 onChange={(e) => setMoveDestinationFolderId(e.target.value || null)}
                 style={{
@@ -2110,17 +2120,21 @@ export function MediaLibraryExplorer({
               </button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       {/* Rename Folder Dialog */}
       {renameFolderTarget && (
-        <div
-          role="dialog"
+        <dialog
+          open
           aria-modal="true"
           style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
             backgroundColor: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(8px)',
             display: 'flex',
@@ -2128,6 +2142,9 @@ export function MediaLibraryExplorer({
             justifyContent: 'center',
             zIndex: 9500,
             padding: SPACING.md,
+            border: 'none',
+            margin: 0,
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -2204,18 +2221,22 @@ export function MediaLibraryExplorer({
               </button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       {/* Delete Folder Dialog */}
       {deleteFolderTarget && (
-        <div
-          role="dialog"
+        <dialog
+          open
           aria-modal="true"
           data-testid="delete-folder-modal"
           style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100vh',
+            maxWidth: '100vw',
+            maxHeight: '100vh',
             backgroundColor: 'rgba(0, 0, 0, 0.75)',
             backdropFilter: 'blur(8px)',
             display: 'flex',
@@ -2223,6 +2244,9 @@ export function MediaLibraryExplorer({
             justifyContent: 'center',
             zIndex: 9500,
             padding: SPACING.md,
+            border: 'none',
+            margin: 0,
+            boxSizing: 'border-box',
           }}
         >
           <div
@@ -2301,7 +2325,7 @@ export function MediaLibraryExplorer({
               </button>
             </div>
           </div>
-        </div>
+        </dialog>
       )}
 
       {/* Infinite Scroll & Total Media Count Test Anchor */}

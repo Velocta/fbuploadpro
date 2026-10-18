@@ -205,9 +205,8 @@ export function MediaPreviewModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="preview-modal-title"
       data-testid="media-preview-modal"
       onPointerDown={(e) => {
@@ -223,6 +222,12 @@ export function MediaPreviewModal({
       style={{
         position: 'fixed',
         inset: 0,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        margin: 0,
+        border: 'none',
         backgroundColor: 'rgba(0, 0, 0, 0.85)',
         backdropFilter: 'blur(10px)',
         display: 'flex',
@@ -230,6 +235,7 @@ export function MediaPreviewModal({
         justifyContent: 'center',
         zIndex: 9200,
         padding: SPACING.lg,
+        boxSizing: 'border-box',
       }}
     >
       {(hasPrevious !== undefined || hasNext !== undefined || onPrevious || onNext) && (
@@ -642,6 +648,6 @@ export function MediaPreviewModal({
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

@@ -21,13 +21,18 @@ export function LeavePageGuardDialog({
   if (!isOpen) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="leave-guard-title"
       style={{
         position: 'fixed',
         inset: 0,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        margin: 0,
+        border: 'none',
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
@@ -35,6 +40,7 @@ export function LeavePageGuardDialog({
         justifyContent: 'center',
         zIndex: 9999,
         padding: SPACING.md,
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -137,6 +143,6 @@ export function LeavePageGuardDialog({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }

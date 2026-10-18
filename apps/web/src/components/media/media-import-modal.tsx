@@ -285,7 +285,7 @@ export function MediaImportModal({
       }
     };
 
-    checkDuplicates();
+    void checkDuplicates();
   }, [step, subdomain, selectedFolderId, queue.length]);
 
   // Derived counts
@@ -315,6 +315,12 @@ export function MediaImportModal({
     const totalActive = activeUploadingItems.length + queuedItems.length;
     onActiveUploadsChange?.(totalActive, furthestAlong);
   }, [activeUploadingItems.length, queuedItems.length, furthestAlong, onActiveUploadsChange]);
+
+  const updateItemProgress = useCallback((id: string, pct: number) => {
+    setQueue((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, progressPercent: pct } : it))
+    );
+  }, []);
 
   // Concurrency Engine: Upload Worker Execution Loop
   const uploadFile = useCallback(
@@ -359,11 +365,7 @@ export function MediaImportModal({
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const pct = Math.min(95, Math.round((e.loaded / e.total) * 100));
-              setQueue((prev) =>
-                prev.map((it) =>
-                  it.id === item.id ? { ...it, progressPercent: pct } : it
-                )
-              );
+              updateItemProgress(item.id, pct);
             }
           };
 
@@ -568,8 +570,8 @@ export function MediaImportModal({
   };
 
   const handleRetryUpload = (id: string) => {
-    const item = queue.find((it) => it.id === id);
-    if (item) {
+    const hasItem = queue.some((it) => it.id === id);
+    if (hasItem) {
       setQueue((prev) =>
         prev.map((it) =>
           it.id === id ? { ...it, status: 'queued', retryCount: 0, validationError: null } : it
@@ -732,13 +734,18 @@ export function MediaImportModal({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      open
       aria-labelledby="import-media-title"
       style={{
         position: 'fixed',
         inset: 0,
+        width: '100vw',
+        height: '100vh',
+        maxWidth: 'none',
+        maxHeight: 'none',
+        margin: 0,
+        border: 'none',
         backgroundColor: 'rgba(0, 0, 0, 0.75)',
         backdropFilter: 'blur(8px)',
         display: 'flex',
@@ -746,6 +753,7 @@ export function MediaImportModal({
         justifyContent: 'center',
         zIndex: 9000,
         padding: SPACING.md,
+        boxSizing: 'border-box',
       }}
     >
       <div
@@ -1370,6 +1378,6 @@ export function MediaImportModal({
           )}
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
