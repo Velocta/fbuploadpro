@@ -25,7 +25,7 @@ function getClient(): PostHog | null {
   return client;
 }
 
-function toErrorInfo(error: unknown): { message: string; stack?: string } {
+function toErrorInfo(error: unknown): { message: string; stack?: string | undefined } {
   if (error instanceof Error) {
     return { message: error.message, stack: error.stack };
   }
@@ -68,7 +68,7 @@ export async function captureServerEvent(
   const ph = getClient();
   if (!ph) return;
   try {
-    ph.capture({ distinctId, event, properties });
+    ph.capture({ distinctId, event, ...(properties ? { properties } : {}) });
     await ph.flush();
   } catch {
     // Never let telemetry break the request.

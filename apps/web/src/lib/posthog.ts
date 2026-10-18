@@ -29,8 +29,6 @@ export function initPostHog(apiKey: string | undefined | null, host?: string | u
     capture_pageview: false,
     capture_pageleave: false,
     disable_session_recording: true,
-    // Exception autocapture still needs explicit opt-in in posthog-js.
-    enable_exception_autocapture: true,
   });
   initialized = true;
 }
