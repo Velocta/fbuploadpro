@@ -169,6 +169,23 @@ describe('Media Domain Contracts', () => {
       }
     });
 
+    it('accepts limit up to 1000 and rejects limit exceeding 1000', () => {
+      const valid500 = MediaListQuerySchema.safeParse({ limit: '500' });
+      expect(valid500.success).toBe(true);
+      if (valid500.success) {
+        expect(valid500.data.limit).toBe(500);
+      }
+
+      const valid1000 = MediaListQuerySchema.safeParse({ limit: '1000' });
+      expect(valid1000.success).toBe(true);
+      if (valid1000.success) {
+        expect(valid1000.data.limit).toBe(1000);
+      }
+
+      const invalid1001 = MediaListQuerySchema.safeParse({ limit: '1001' });
+      expect(invalid1001.success).toBe(false);
+    });
+
     it('validates UpdateMediaItemRequestSchema with thumbnailKey and thumbnailUrl', () => {
       const r2Res = UpdateMediaItemRequestSchema.safeParse({
         thumbnailKey: 'tenants/u1/thumbnails/frame-1.webp',

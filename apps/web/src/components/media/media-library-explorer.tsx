@@ -410,8 +410,11 @@ export function MediaLibraryExplorer({
   );
   const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
 
-  // Custom Dropdowns state (prevents mouse click swallowing)
+  // Custom Dropdowns state & container refs (prevents mouse click swallowing)
   const [activeDropdown, setActiveDropdown] = useState<'ratio' | 'caption' | 'sort' | null>(null);
+  const ratioDropdownRef = useRef<HTMLDivElement | null>(null);
+  const captionDropdownRef = useRef<HTMLDivElement | null>(null);
+  const sortDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Debounce search with 250ms (0ms if cleared immediately)
   useEffect(() => {
@@ -428,7 +431,18 @@ export function MediaLibraryExplorer({
   // Close dropdowns when clicking outside
   useEffect(() => {
     if (!activeDropdown) return;
-    const handleOutsideClick = () => setActiveDropdown(null);
+    const handleOutsideClick = (e: MouseEvent | PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (
+        (activeDropdown === 'ratio' && ratioDropdownRef.current?.contains(target)) ||
+        (activeDropdown === 'caption' && captionDropdownRef.current?.contains(target)) ||
+        (activeDropdown === 'sort' && sortDropdownRef.current?.contains(target))
+      ) {
+        return;
+      }
+      setActiveDropdown(null);
+    };
     document.addEventListener('pointerdown', handleOutsideClick);
     return () => document.removeEventListener('pointerdown', handleOutsideClick);
   }, [activeDropdown]);
@@ -1180,6 +1194,18 @@ export function MediaLibraryExplorer({
           />
         </div>
 
+        {/* Divider 1: Between Search and Navigation controls */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          style={{
+            width: '1px',
+            height: '16px',
+            backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+            flexShrink: 0,
+          }}
+        />
+
         {/* Center / Right: Tabs, Dropdowns & Bare View Toggle */}
         <div
           style={{
@@ -1239,245 +1265,329 @@ export function MediaLibraryExplorer({
             })}
           </div>
 
-          {/* Aspect Ratio Plain Text Dropdown with Caret */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              data-testid="media-aspect-ratio-select"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setActiveDropdown((prev) => (prev === 'ratio' ? null : 'ratio'));
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>{ASPECT_RATIO_LABELS[aspectRatioFilter]}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
+          {/* Divider 2: Between Media Type Tabs and Dropdown Filters */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            style={{
+              width: '1px',
+              height: '16px',
+              backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              flexShrink: 0,
+            }}
+          />
 
-            {activeDropdown === 'ratio' && (
-              <div
+          {/* Dropdown filters group */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.md,
+            }}
+          >
+            {/* Aspect Ratio Plain Text Dropdown with Caret */}
+            <div ref={ratioDropdownRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                data-testid="media-aspect-ratio-select"
+                onClick={() => setActiveDropdown((prev) => (prev === 'ratio' ? null : 'ratio'))}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveDropdown((prev) => (prev === 'ratio' ? null : 'ratio'));
+                  } else if (e.key === 'Escape') {
+                    setActiveDropdown(null);
+                  }
+                }}
                 style={{
-                  position: 'absolute',
-                  top: '26px',
-                  left: 0,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                  borderRadius: RADII.xs,
-                  padding: '4px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 30,
-                  minWidth: '140px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                {[
-                  { key: 'all', label: 'All ratios' },
-                  { key: '9:16', label: '9:16 Vertical' },
-                  { key: '16:9', label: '16:9 Landscape' },
-                  { key: '1:1', label: '1:1 Square' },
-                  { key: '4:5', label: '4:5 Portrait' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setAspectRatioFilter(opt.key as AspectRatioFilterKey);
-                      setActiveDropdown(null);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      textAlign: 'left',
-                      backgroundColor:
-                        aspectRatioFilter === opt.key
-                          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                          : 'transparent',
-                      border: 'none',
-                      borderRadius: RADII.xs,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                <span>{ASPECT_RATIO_LABELS[aspectRatioFilter]}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
 
-          {/* Caption Status Plain Text Dropdown with Caret */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              data-testid="media-caption-status-select"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setActiveDropdown((prev) => (prev === 'caption' ? null : 'caption'));
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>{CAPTION_STATUS_LABELS[captionStatusFilter]}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
+              {activeDropdown === 'ratio' && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: '26px',
+                    left: 0,
+                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                    borderRadius: RADII.xs,
+                    padding: '4px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    zIndex: 30,
+                    minWidth: '140px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                  }}
+                >
+                  {[
+                    { key: 'all', label: 'All ratios' },
+                    { key: '9:16', label: '9:16 Vertical' },
+                    { key: '16:9', label: '16:9 Landscape' },
+                    { key: '1:1', label: '1:1 Square' },
+                    { key: '4:5', label: '4:5 Portrait' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="menuitem"
+                      tabIndex={0}
+                      onClick={() => {
+                        setAspectRatioFilter(opt.key as AspectRatioFilterKey);
+                        setActiveDropdown(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setAspectRatioFilter(opt.key as AspectRatioFilterKey);
+                          setActiveDropdown(null);
+                        } else if (e.key === 'Escape') {
+                          setActiveDropdown(null);
+                        }
+                      }}
+                      style={{
+                        padding: '6px 10px',
+                        textAlign: 'left',
+                        backgroundColor:
+                          aspectRatioFilter === opt.key
+                            ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
+                            : 'transparent',
+                        border: 'none',
+                        borderRadius: RADII.xs,
+                        color: `var(--text-main, ${THEME.default.text.primary})`,
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {activeDropdown === 'caption' && (
-              <div
+            {/* Caption Status Plain Text Dropdown with Caret */}
+            <div ref={captionDropdownRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                data-testid="media-caption-status-select"
+                onClick={() => setActiveDropdown((prev) => (prev === 'caption' ? null : 'caption'))}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveDropdown((prev) => (prev === 'caption' ? null : 'caption'));
+                  } else if (e.key === 'Escape') {
+                    setActiveDropdown(null);
+                  }
+                }}
                 style={{
-                  position: 'absolute',
-                  top: '26px',
-                  left: 0,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                  borderRadius: RADII.xs,
-                  padding: '4px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 30,
-                  minWidth: '130px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                {[
-                  { key: 'all', label: 'All captions' },
-                  { key: 'has_caption', label: 'Has caption' },
-                  { key: 'empty_caption', label: 'Missing caption' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setCaptionStatusFilter(opt.key as CaptionStatusFilterKey);
-                      setActiveDropdown(null);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      textAlign: 'left',
-                      backgroundColor:
-                        captionStatusFilter === opt.key
-                          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                          : 'transparent',
-                      border: 'none',
-                      borderRadius: RADII.xs,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                <span>{CAPTION_STATUS_LABELS[captionStatusFilter]}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
 
-          {/* Sort Plain Text Dropdown with Caret */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              data-testid="media-sort-select"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setActiveDropdown((prev) => (prev === 'sort' ? null : 'sort'));
-              }}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <span>{SORT_OPTION_LABELS[sortOption]}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
+              {activeDropdown === 'caption' && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: '26px',
+                    left: 0,
+                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                    borderRadius: RADII.xs,
+                    padding: '4px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    zIndex: 30,
+                    minWidth: '130px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                  }}
+                >
+                  {[
+                    { key: 'all', label: 'All captions' },
+                    { key: 'has_caption', label: 'Has caption' },
+                    { key: 'empty_caption', label: 'Missing caption' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="menuitem"
+                      tabIndex={0}
+                      onClick={() => {
+                        setCaptionStatusFilter(opt.key as CaptionStatusFilterKey);
+                        setActiveDropdown(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setCaptionStatusFilter(opt.key as CaptionStatusFilterKey);
+                          setActiveDropdown(null);
+                        } else if (e.key === 'Escape') {
+                          setActiveDropdown(null);
+                        }
+                      }}
+                      style={{
+                        padding: '6px 10px',
+                        textAlign: 'left',
+                        backgroundColor:
+                          captionStatusFilter === opt.key
+                            ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
+                            : 'transparent',
+                        border: 'none',
+                        borderRadius: RADII.xs,
+                        color: `var(--text-main, ${THEME.default.text.primary})`,
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            {activeDropdown === 'sort' && (
-              <div
+            {/* Sort Plain Text Dropdown with Caret */}
+            <div ref={sortDropdownRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                data-testid="media-sort-select"
+                onClick={() => setActiveDropdown((prev) => (prev === 'sort' ? null : 'sort'));}
+                onKeyDown={(e) => {
+                  if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveDropdown((prev) => (prev === 'sort' ? null : 'sort'));
+                  } else if (e.key === 'Escape') {
+                    setActiveDropdown(null);
+                  }
+                }}
                 style={{
-                  position: 'absolute',
-                  top: '26px',
-                  right: 0,
-                  backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                  border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                  borderRadius: RADII.xs,
-                  padding: '4px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  zIndex: 30,
-                  minWidth: '130px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                  fontSize: '0.8125rem',
+                  fontWeight: TYPOGRAPHY.weights.medium,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
                 }}
               >
-                {[
-                  { key: 'created_at:desc', label: 'Newest first' },
-                  { key: 'created_at:asc', label: 'Oldest first' },
-                  { key: 'name:asc', label: 'Name (A–Z)' },
-                  { key: 'file_size:desc', label: 'Largest size' },
-                ].map((opt) => (
-                  <button
-                    key={opt.key}
-                    type="button"
-                    onClick={() => {
-                      setSortOption(opt.key as SortOptionKey);
-                      setActiveDropdown(null);
-                    }}
-                    style={{
-                      padding: '6px 10px',
-                      textAlign: 'left',
-                      backgroundColor:
-                        sortOption === opt.key
-                          ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                          : 'transparent',
-                      border: 'none',
-                      borderRadius: RADII.xs,
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.75rem',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
+                <span>{SORT_OPTION_LABELS[sortOption]}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {activeDropdown === 'sort' && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute',
+                    top: '26px',
+                    right: 0,
+                    backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+                    border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
+                    borderRadius: RADII.xs,
+                    padding: '4px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    zIndex: 30,
+                    minWidth: '130px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px',
+                  }}
+                >
+                  {[
+                    { key: 'created_at:desc', label: 'Newest first' },
+                    { key: 'created_at:asc', label: 'Oldest first' },
+                    { key: 'name:asc', label: 'Name (A–Z)' },
+                    { key: 'file_size:desc', label: 'Largest size' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="menuitem"
+                      tabIndex={0}
+                      onClick={() => {
+                        setSortOption(opt.key as SortOptionKey);
+                        setActiveDropdown(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSortOption(opt.key as SortOptionKey);
+                          setActiveDropdown(null);
+                        } else if (e.key === 'Escape') {
+                          setActiveDropdown(null);
+                        }
+                      }}
+                      style={{
+                        padding: '6px 10px',
+                        textAlign: 'left',
+                        backgroundColor:
+                          sortOption === opt.key
+                            ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
+                            : 'transparent',
+                        border: 'none',
+                        borderRadius: RADII.xs,
+                        color: `var(--text-main, ${THEME.default.text.primary})`,
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Divider 3: Between Dropdown Filters and View Mode Toggle */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            style={{
+              width: '1px',
+              height: '16px',
+              backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
+              flexShrink: 0,
+            }}
+          />
 
           {/* Bare Grid/Table Toggle Icons (NO segmented control box) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

@@ -932,6 +932,29 @@ Spec 068 establishes complete architectural and directory namespace separation b
 * **Zero-Downtime Legacy Route Wrapper**:
   - `apps/web/src/app/api/tenant/[subdomain]/media/downloader/route.ts` re-exports `GET` and `POST` from `../../downloader/route`, ensuring zero disruption to in-flight browser sessions, worker callbacks, or legacy external scripts.
 
+---
+
+## 34. Spec 069 Media Library Functional Fixes: Ingestion Guard, Query Alignment & Toolbar Interactivity
+
+Spec 069 resolves four critical and high-priority functional defects in the Media Library (`/tenant/[subdomain]/media`, `MediaLibraryExplorer`) without modifying visual themes, colors, typography, or design tokens:
+
+### 34.1 Robust Media Ingestion Pipeline & User-Initiated Cancel Guard (Issue 1)
+* **Presigned Response Property Alignment**: Corrected `MediaImportModal` to consume the actual field names returned by `POST /api/tenant/[subdomain]/media/upload-url` (`mediaUploadUrl`, `mediaKey`, `publicMediaUrl`, `thumbnailUploadUrl`, `thumbnailKey`, `publicThumbnailUrl`), falling back gracefully to legacy properties. Eliminates `PUT /undefined` 404 network failures and bad request payloads during `/media/confirm`.
+* **Explicit User-Action Cancel Guard**: Added a strict guard tracking `userInitiatedCancel`. A batch can ONLY enter or display the `canceled` state when the user explicitly clicks a per-file cancel action or the "Cancel remaining" button. If uploads fail due to network errors, presigned expiry, or confirmation rejections, the engine surfaces the authentic state (`Import failed — 0 of N uploaded`), preserving diagnosability.
+* **Transition & Telemetry Logging**: Instrument the upload state machine with informative console logs (`[upload-engine] Transition to complete`, `[upload-engine] Upload error`) detailing exact transition triggers and failed file IDs.
+
+### 34.2 Storage Media Listing & Query Limit Alignment (Issue 2)
+* **Schema Max Limit Adjustment**: Updated `MediaListQuerySchema` in `packages/contracts/src/domain/media.ts` to allow `limit: z.coerce.number().int().min(1).max(1000).default(50)`.
+* **Restored Explorer Root Listing**: The explorer's query `/api/tenant/[subdomain]/media?limit=500` now validates with 100% success against the contracts schema. Pre-existing assets stored in R2 and registered in `media_items` (such as `velocta-avatar.png`) resolve and render immediately at the root folder and in live searches without re-uploading or altering objects.
+
+### 34.3 Toolbar Dropdown Containment & Keyboard Interactivity (Issue 3)
+* **Pointerdown Event Containment**: Replaced the unconstrained document `pointerdown` listener with container ref checks (`ratioDropdownRef`, `captionDropdownRef`, `sortDropdownRef`). The menu no longer unmounts during the pointer-down phase, allowing option button click events to fire, update state (`aspectRatioFilter`, `captionStatusFilter`, `sortOption`), and refresh trigger labels.
+* **Accessible Keyboard Navigation**: Added full keyboard navigation support across all toolbar dropdown triggers and menu items (Enter, Space, Escape, and ArrowDown) conforming to WCAG 2.1 AA keyboard accessibility.
+
+### 34.4 Hairline Toolbar Group Dividers (Issue 4)
+* **Approved Visual Dividers**: Inserted three 1px vertical hairline dividers (`role="separator"`, `aria-orientation="vertical"`, `var(--border-subtle)`) cleanly separating the four functional toolbar clusters: Search, Media-type tabs, Dropdowns, and View toggle.
+
+
 
 
 
