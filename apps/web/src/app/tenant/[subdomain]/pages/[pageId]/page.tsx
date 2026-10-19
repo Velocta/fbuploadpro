@@ -590,6 +590,7 @@ export default function TenantDedicatedPageView({
                 onUpdateItem={handleUpdateQueueItem}
                 onDeleteItem={handleDeleteQueueItem}
                 onOpenAddQueue={() => setIsComposerOpen(true)}
+                onMutated={fetchQueue}
               />
             )}
 
