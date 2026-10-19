@@ -18,7 +18,7 @@ import {
   PageTabCalendar,
   PageTabInsights,
   PageTabSettings,
-  EnqueueModal,
+  PostComposer,
   type PageSlotSummary,
   type DedicatedQueueItem,
 } from '@/components/pages/dedicated';
@@ -78,7 +78,7 @@ export default function TenantDedicatedPageView({
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [isEnqueueModalOpen, setIsEnqueueModalOpen] = useState(false);
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
 
   // 1. Fetch Page Details
   const fetchPageDetails = useCallback(async () => {
@@ -494,7 +494,7 @@ export default function TenantDedicatedPageView({
             page={page}
             subdomain={subdomain}
             onStatusToggle={handleStatusToggle}
-            onOpenAddQueue={() => setIsEnqueueModalOpen(true)}
+            onOpenAddQueue={() => setIsComposerOpen(true)}
             onDisconnectRequest={handleDisconnectPage}
           />
 
@@ -577,7 +577,7 @@ export default function TenantDedicatedPageView({
                 slots={slots}
                 onPublishNow={handlePublishNow}
                 onSwitchTab={setActiveTab}
-                onOpenAddQueue={() => setIsEnqueueModalOpen(true)}
+                onOpenAddQueue={() => setIsComposerOpen(true)}
               />
             )}
 
@@ -589,7 +589,7 @@ export default function TenantDedicatedPageView({
                 onPublishNow={handlePublishNow}
                 onUpdateItem={handleUpdateQueueItem}
                 onDeleteItem={handleDeleteQueueItem}
-                onOpenAddQueue={() => setIsEnqueueModalOpen(true)}
+                onOpenAddQueue={() => setIsComposerOpen(true)}
               />
             )}
 
@@ -620,18 +620,20 @@ export default function TenantDedicatedPageView({
             )}
           </div>
 
-          {/* Enqueue Modal */}
-          <EnqueueModal
-            pageId={page.id}
-            subdomain={subdomain}
-            slots={slots}
-            isOpen={isEnqueueModalOpen}
-            onClose={() => setIsEnqueueModalOpen(false)}
-            onEnqueued={() => {
-              void fetchQueue();
-              setNotification({ type: 'success', message: 'Media post added to queue successfully.' });
-            }}
-          />
+          {/* Post composer */}
+          {isComposerOpen && (
+            <PostComposer
+              pageId={page.id}
+              subdomain={subdomain}
+              slots={slots}
+              onClose={() => setIsComposerOpen(false)}
+              onSubmitted={(message) => {
+                void fetchQueue();
+                setIsComposerOpen(false);
+                setNotification({ type: 'success', message });
+              }}
+            />
+          )}
         </>
       )}
     </div>
