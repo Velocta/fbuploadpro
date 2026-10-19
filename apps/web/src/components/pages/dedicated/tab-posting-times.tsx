@@ -117,7 +117,7 @@ function PostingTimesHeader({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          Daily publishing windows and permitted content formats for automated dispatch.
+          Daily posting windows and the post types that can go out in each.
         </p>
       </div>
 
@@ -283,15 +283,6 @@ export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }:
           >
             {formatted.ampm}
           </span>
-          <span
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              marginLeft: '4px',
-            }}
-          >
-            ({formatted.time24})
-          </span>
         </div>
       </div>
 
@@ -313,7 +304,7 @@ export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }:
             marginRight: '2px',
           }}
         >
-          Formats:
+          Post types:
         </span>
         {isAllFormats ? (
           <span
@@ -324,7 +315,7 @@ export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }:
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
-            All Formats Allowed
+            All post types
           </span>
         ) : (
           formats.map((fmt, index) => (
@@ -379,7 +370,7 @@ export function PostingTimeRow({ slot, isToggling, onToggle, onEdit, onRemove }:
             e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
           }}
         >
-          Edit Formats
+          Edit
         </button>
 
         <button
@@ -521,7 +512,7 @@ function PostingTimesEmptyState({ onOpenAddModal }: Readonly<EmptyStateProps>) {
             lineHeight: 1.5,
           }}
         >
-          Set up your daily publishing times and select which formats (Reels, Photos, Videos) to schedule. Content added to your queue will be automatically published into these windows.
+          Set up your daily posting times and choose which post types go out in each. Posts added to your queue go out automatically at these times.
         </p>
       </div>
 
@@ -582,7 +573,7 @@ function AddEditPostingTimeModal({
     setSelectedFormats((prev) => {
       if (prev.includes(formatId)) {
         if (prev.length === 1) {
-          setError('At least one format must be selected.');
+          setError('Choose at least one post type.');
           return prev;
         }
         setError(null);
@@ -604,12 +595,12 @@ function AddEditPostingTimeModal({
 
     const timeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
     if (!timeRegex.test(timeInput)) {
-      setError('Please specify time in 24-hour format (e.g. 09:00 or 17:30).');
+      setError('Enter a valid time (for example, 09:00 or 17:30).');
       return;
     }
 
     if (selectedFormats.length === 0) {
-      setError('Please select at least one permitted format.');
+      setError('Choose at least one post type.');
       return;
     }
 
@@ -630,6 +621,7 @@ function AddEditPostingTimeModal({
   };
 
   const modalTitleText = isEditing ? 'Edit Posting Time' : 'Add Daily Posting Time';
+  const preview = formatSlotDisplay(/^\d{2}:\d{2}$/.test(timeInput) ? timeInput : '09:00');
   let submitButtonText = 'Save Posting Time';
   if (isSubmitting) {
     submitButtonText = 'Saving...';
@@ -665,7 +657,7 @@ function AddEditPostingTimeModal({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Configure daily dispatch timing and select which content formats may occupy this time.
+            Set the time and choose which post types go out at this time.
           </p>
         </div>
 
@@ -697,7 +689,7 @@ function AddEditPostingTimeModal({
                 marginBottom: '6px',
               }}
             >
-              Time of Day (24-Hour)
+              Time of day
             </label>
             <input
               id="posting-time-input"
@@ -718,6 +710,15 @@ function AddEditPostingTimeModal({
                 boxSizing: 'border-box',
               }}
             />
+            <p
+              style={{
+                margin: `${SPACING.xs} 0 0 0`,
+                fontSize: '0.75rem',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              Posts at {preview.time12} {preview.ampm}.
+            </p>
           </div>
 
           {/* Schedule Timezone Note */}
@@ -760,7 +761,7 @@ function AddEditPostingTimeModal({
                   margin: 0,
                 }}
               >
-                Permitted Content Formats
+                Post types
               </legend>
               <button
                 type="button"
@@ -830,7 +831,7 @@ function AddEditPostingTimeModal({
                 color: `var(--text-dim, ${THEME.default.text.muted})`,
               }}
             >
-              Only queued items matching the selected formats will be dispatched during this window.
+              Only queued posts matching the selected post types go out during this window.
             </p>
           </fieldset>
 

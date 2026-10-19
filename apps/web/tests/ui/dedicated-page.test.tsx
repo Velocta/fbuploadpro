@@ -191,7 +191,8 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasText('Active')).toBe(true);
       expect(hasAttribute('data-testid', 'dedicated-page-status')).toBe(true);
       expect(hasAttribute('data-testid', 'page-live-link')).toBe(true);
-      expect(hasAttribute('data-testid', 'header-status-toggle-btn')).toBe(true);
+      expect(hasAttribute('data-testid', 'header-automation-status')).toBe(true);
+      expect(hasText('Automation on')).toBe(true);
       expect(hasAttribute('data-testid', 'header-add-queue-btn')).toBe(true);
     });
 
@@ -240,24 +241,33 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       avatar?.props.onError?.();
     });
 
-    it('handles status toggle from active to paused', async () => {
+    it('shows automation status text only — no toggle in the header', async () => {
       const onStatusToggle = vi.fn().mockResolvedValue(undefined);
 
-      const tree = renderAndCaptureTree(() =>
-        DedicatedPageHeader({
-          page: samplePage,
-          subdomain: 'cyberdyne',
-          onStatusToggle,
-          onOpenAddQueue: vi.fn(),
-          onDisconnectRequest: vi.fn(),
-        })
+      const { hasText, hasAttribute } = render(
+        <DedicatedPageHeader
+          page={samplePage}
+          subdomain="cyberdyne"
+          onStatusToggle={onStatusToggle}
+          onOpenAddQueue={vi.fn()}
+          onDisconnectRequest={vi.fn()}
+        />
       );
 
-      const toggleBtn = findElementByTestId(tree, 'header-status-toggle-btn');
-      expect(toggleBtn).not.toBeNull();
-      await toggleBtn?.props.onClick();
+      expect(hasAttribute('data-testid', 'header-automation-status')).toBe(true);
+      expect(hasText('Automation on')).toBe(true);
+      expect(hasAttribute('data-testid', 'header-status-toggle-btn')).toBe(false);
 
-      expect(onStatusToggle).toHaveBeenCalledWith('paused');
+      const { hasText: hasPausedText } = render(
+        <DedicatedPageHeader
+          page={{ ...samplePage, status: 'paused' }}
+          subdomain="cyberdyne"
+          onStatusToggle={onStatusToggle}
+          onOpenAddQueue={vi.fn()}
+          onDisconnectRequest={vi.fn()}
+        />
+      );
+      expect(hasPausedText('Automation off')).toBe(true);
     });
 
     it('opens add to queue modal on button click', () => {
@@ -295,9 +305,10 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(avatar?.props.style?.width).toBe('44px');
       expect(avatar?.props.style?.height).toBe('44px');
 
-      // 2. Verify 34px action button heights
-      const toggleBtn = findElementByTestId(tree, 'header-status-toggle-btn');
-      expect(toggleBtn?.props.style?.height).toBe('34px');
+      // 2. Verify 34px action heights (automation status is text-only, no toggle button)
+      const automationStatus = findElementByTestId(tree, 'header-automation-status');
+      expect(automationStatus).not.toBeNull();
+      expect(automationStatus?.props.style?.height).toBe('34px');
 
       const queueBtn = findElementByTestId(tree, 'header-add-queue-btn');
       expect(queueBtn?.props.style?.height).toBe('34px');
@@ -502,8 +513,10 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasAttribute('data-testid', 'page-tab-calendar')).toBe(true);
       expect(hasText('Posting Times')).toBe(true);
       expect(hasText('09:00')).toBe(true);
-      expect(hasText('15:00')).toBe(true);
-      expect(hasText('21:00')).toBe(true);
+      expect(hasText('03:00')).toBe(true);
+      expect(hasText('PM')).toBe(true);
+      expect(html).not.toContain('15:00');
+      expect(html).not.toContain('21:00');
       expect(hasAttribute('data-testid', 'slots-grid')).toBe(true);
       expect(hasAttribute('data-testid', 'slot-format-container-slot-1')).toBe(true);
       expect(hasAttribute('data-testid', 'edit-slot-btn-slot-1')).toBe(true);
@@ -625,7 +638,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
       expect(hasAttribute('data-testid', 'page-tab-settings')).toBe(true);
       expect(hasAttribute('data-testid', 'settings-automation-card')).toBe(true);
-      expect(hasText('Automation Master Switch')).toBe(true);
+      expect(hasText('Automation')).toBe(true);
       expect(hasAttribute('data-testid', 'settings-token-card')).toBe(true);
       expect(hasText('fb_101202303')).toBe(true);
       expect(hasAttribute('data-testid', 'settings-danger-zone')).toBe(true);
@@ -648,6 +661,23 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       await toggleBtn?.props.onClick();
 
       expect(onStatusToggle).toHaveBeenCalledWith('paused');
+    });
+
+    it('renders the automation control as a single switch with a timezone line above it', () => {
+      const { hasText, hasAttribute, html } = render(
+        <PageTabSettings
+          page={samplePage}
+          subdomain="cyberdyne"
+          onStatusToggle={vi.fn()}
+          onDisconnectPage={vi.fn()}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'settings-timezone-line')).toBe(true);
+      expect(hasText('Times shown in')).toBe(true);
+      expect(hasText('Change')).toBe(true);
+      expect(html).toContain('role="switch"');
+      expect(html).toContain('>On<');
     });
   });
 

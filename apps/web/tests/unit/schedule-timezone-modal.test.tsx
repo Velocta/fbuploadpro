@@ -38,8 +38,8 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     expect(html).toContain('data-testid="current-timezone-banner"');
     expect(html).toContain('data-testid="timezone-search-input"');
     expect(html).toContain('data-testid="proceed-to-step2-button"');
-    expect(html).toContain('Select Schedule Timezone');
-    expect(html).toContain('Current Active Timezone');
+    expect(html).toContain('Change timezone');
+    expect(html).toContain('Current timezone');
   });
 
   it('renders Step 1 directory grouped by regions with matching timezone options', () => {
@@ -76,7 +76,7 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     );
 
     expect(html).toContain('data-testid="proceed-to-step2-button"');
-    expect(html).toContain('Next: Review Shift');
+    expect(html).toContain('Review change');
   });
 
   it('renders Step 2 review with comparison card, impact metrics, and clock-time note', () => {
@@ -99,9 +99,9 @@ describe('ScheduleTimezoneModal (Spec 062)', () => {
     expect(html).toContain('data-testid="back-to-step1-button"');
     expect(html).toContain('America/New_York');
     expect(html).toContain('Asia/Karachi');
-    expect(html).toContain('Recurring Slots');
-    expect(html).toContain('Pending Queue Items');
-    expect(html).toContain('Update Schedule Timezone');
+    expect(html).toContain('Posting times');
+    expect(html).toContain('Queued posts');
+    expect(html).toContain('Update timezone');
   });
 
   it('displays error message in Step 2 when error is present', () => {

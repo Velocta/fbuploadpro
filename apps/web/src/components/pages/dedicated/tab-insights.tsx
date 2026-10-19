@@ -22,6 +22,29 @@ import type { PageInsightsResponse, PageInsightsRange } from '@fbuploadpro/contr
 
 export const INSIGHTS_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
+const INSIGHTS_FETCH_TIMEOUT_MS = 20 * 1000; // Skeleton must never hang past this
+
+function formatUpdatedAgo(cachedAt: string): string {
+  const then = Date.parse(cachedAt);
+  if (Number.isNaN(then)) return 'from Facebook';
+  const minutes = Math.max(0, Math.round((Date.now() - then) / 60000));
+  if (minutes < 1) return 'Updated just now · from Facebook';
+  if (minutes < 60) return `Updated ${minutes} min ago · from Facebook`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `Updated ${hours} h ago · from Facebook`;
+  return `Updated ${Math.floor(hours / 24)} d ago · from Facebook`;
+}
+
+function hasMeaningfulInsights(data: PageInsightsResponse): boolean {
+  return (
+    data.overview.followersCount > 0 ||
+    data.overview.totalVideoViews > 0 ||
+    data.overview.totalPostEngagements > 0 ||
+    data.reactions.total > 0 ||
+    data.timeSeries.length > 0
+  );
+}
+
 export interface StoredInsightsCacheEntry {
   data: PageInsightsResponse;
   cachedAt: number;
@@ -118,11 +141,14 @@ export function PageTabInsights({
       setIsLoading(true);
     }
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), INSIGHTS_FETCH_TIMEOUT_MS);
+
     try {
       const url = `/api/tenant/${subdomain}/pages/${page.id}/insights?range=${rangeValue}${
         forceRefresh ? '&refresh=true' : ''
       }`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || errorData.message || "Couldn't load page insights. Please try again.");
@@ -132,8 +158,13 @@ export function PageTabInsights({
       // Persist in localStorage with 15-minute expiration
       setCachedInsights(page.id, rangeValue, responseJson);
     } catch (err: any) {
-      setError(err.message || "Couldn't load page insights. Please try again.");
+      if (err?.name === 'AbortError') {
+        setError('Insights took too long to load. Please try again.');
+      } else {
+        setError(err.message || "Couldn't load page insights. Please try again.");
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setIsLoading(false);
       setIsRefreshing(false);
     }
@@ -187,13 +218,14 @@ export function PageTabInsights({
             Page Performance & Insights
           </h3>
           <p
+            data-testid="insights-updated-line"
             style={{
               margin: `${SPACING.xs} 0 0 0`,
               fontSize: '0.875rem',
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Direct metrics from Facebook Graph API v26.0 for {page.pageName}.
+            {data ? formatUpdatedAgo(data.cachedAt) : 'from Facebook'}
           </p>
         </div>
 
@@ -237,11 +269,11 @@ export function PageTabInsights({
             })}
           </div>
 
-          {/* Refresh Button */}
+          {/* Refresh Button — always clickable, spinner while syncing */}
           <button
             type="button"
             data-testid="refresh-insights-btn"
-            disabled={isRefreshing || isLoading}
+            aria-label="Sync insights"
             onClick={handleManualRefresh}
             style={{
               padding: `${SPACING.xs} ${SPACING.sm}`,
@@ -251,10 +283,11 @@ export function PageTabInsights({
               backgroundColor: 'transparent',
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
               border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              cursor: isRefreshing || isLoading ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
               gap: SPACING.xs,
+              opacity: isRefreshing ? 0.7 : 1,
             }}
           >
             <svg
@@ -348,8 +381,23 @@ export function PageTabInsights({
         </div>
       )}
 
+      {/* Empty state: no insights data yet */}
+      {!isLoading && !error && (!data || !hasMeaningfulInsights(data)) && (
+        <div
+          data-testid="insights-empty-state"
+          style={{
+            padding: SPACING.xxl,
+            textAlign: 'center',
+            fontSize: '0.875rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          Insights will appear here after your first posts publish.
+        </div>
+      )}
+
       {/* Main Insights Content */}
-      {data && (
+      {data && hasMeaningfulInsights(data) && (
         <>
           {/* Key KPI Overview Cards */}
           <div
@@ -588,12 +636,12 @@ export function PageTabInsights({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
                 {[
-                  { label: 'Likes', count: data.reactions.like },
-                  { label: 'Loves', count: data.reactions.love },
-                  { label: 'Wows', count: data.reactions.wow },
-                  { label: 'Hahas', count: data.reactions.haha },
-                  { label: 'Sorrows', count: data.reactions.sorry },
-                  { label: 'Angers', count: data.reactions.anger },
+                  { label: 'Like', count: data.reactions.like },
+                  { label: 'Love', count: data.reactions.love },
+                  { label: 'Wow', count: data.reactions.wow },
+                  { label: 'Haha', count: data.reactions.haha },
+                  { label: 'Sad', count: data.reactions.sorry },
+                  { label: 'Angry', count: data.reactions.anger },
                 ].map((reaction) => {
                   const pct =
                     data.reactions.total > 0
