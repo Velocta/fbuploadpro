@@ -724,6 +724,20 @@ describe('FacebookPublishClient', () => {
         video_id: 'vid_story_789',
       });
     });
+
+    it('throws FacebookGraphError when video story start response is missing video_id', async () => {
+      const mockFetch = vi.fn();
+      mockFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const err = await client
+        .publishVideoStory({ pageId, accessToken, videoUrl })
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(FacebookGraphError);
+      expect((err as Error).message).toMatch(/missing video_id/i);
+    });
   });
 
   describe('Rate Limit Header Telemetry (parseGraphRateLimitHeaders)', () => {
