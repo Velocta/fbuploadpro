@@ -8,6 +8,7 @@ import {
   parseHtmlMediaCandidates,
   parseJsonPayloadCandidates,
   type RemoteMediaCandidate,
+  InternalError,
 } from '@fbuploadpro/contracts';
 import type { Env } from '../index.js';
 
@@ -606,7 +607,7 @@ export async function persistDownloadedMediaItem(
   });
 
   if (mediaInsertError) {
-    throw new Error(`Failed to save media metadata: ${mediaInsertError.message}`);
+    throw new InternalError(`Failed to save media metadata: ${mediaInsertError.message}`);
   }
 
   const mediaIds = allMediaIds && allMediaIds.length > 0 ? allMediaIds : [mediaId];
