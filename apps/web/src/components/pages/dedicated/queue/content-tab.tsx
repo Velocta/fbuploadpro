@@ -119,7 +119,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
   // onPublishNow / onUpdateItem / onDeleteItem are retained in the props
   // contract for route compatibility; the tab performs its own API calls so
   // single deletes stay undoable and reorder/reschedule stay optimistic.
-  const { page, queueItems, isLoading = false, onOpenAddQueue } = props;
+  const { page, queueItems, isLoading = false, onOpenAddQueue, onMutated } = props;
   const params = useParams();
   const subdomain = (params.subdomain as string) || '';
   const pageId = page.id;
@@ -349,8 +349,11 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         return;
       }
       pushToast('Queue reordered — posting times updated.');
+      // Backstop: let the page route refresh its queue data so the
+      // dashboard/calendar tabs don't show stale times until reload.
+      onMutated?.();
     },
-    [reorderableItems, slots, timeZone, patchOnServer, pushToast, refreshItems]
+    [reorderableItems, slots, timeZone, patchOnServer, pushToast, refreshItems, onMutated]
   );
 
   const handleDropOnRow = useCallback(
@@ -406,11 +409,12 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
           void refreshItems();
         }
         pushToast('Post restored.');
+        onMutated?.();
       } catch {
         pushToast("Couldn't restore this post.", { tone: 'error' });
       }
     },
-    [subdomain, pageId, pushToast, refreshItems]
+    [subdomain, pageId, pushToast, refreshItems, onMutated]
   );
 
   const handleDelete = useCallback(
@@ -440,8 +444,9 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         duration: UNDO_DURATION_MS,
         action: { label: 'Undo', onClick: () => void restoreDeletedItem(item) },
       });
+      onMutated?.();
     },
-    [subdomain, pushToast, restoreDeletedItem]
+    [subdomain, pushToast, restoreDeletedItem, onMutated]
   );
 
   const handleBulkDelete = useCallback(async () => {
@@ -473,7 +478,10 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
       pushToast(`Deleted ${deleted} of ${ids.length} posts.`, { tone: 'error' });
       void refreshItems();
     }
-  }, [selection, subdomain, pushToast, refreshItems]);
+    if (deleted > 0) {
+      onMutated?.();
+    }
+  }, [selection, subdomain, pushToast, refreshItems, onMutated]);
 
   // --- retry ------------------------------------------------------------------------
   const handleRetry = useCallback(
@@ -498,8 +506,9 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         return;
       }
       pushToast(`Retrying ${formatSlotShort(retryTime, timeZone)}.`);
+      onMutated?.();
     },
-    [connectionExpired, slots, timeZone, applyPatch, pushToast]
+    [connectionExpired, slots, timeZone, applyPatch, pushToast, onMutated]
   );
 
   // --- selection ----------------------------------------------------------------------
@@ -773,7 +782,10 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
           timeZone={timeZone}
           onPatch={applyPatch}
           onClose={() => setRescheduleItem(null)}
-          onSaved={(message) => pushToast(message)}
+          onSaved={(message) => {
+            pushToast(message);
+            onMutated?.();
+          }}
           onError={(message) => pushToast(message, { tone: 'error' })}
         />
       )}
@@ -825,6 +837,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
             setEditItem(null);
             pushToast(message);
             void refreshItems();
+            onMutated?.();
           }}
         />
       )}
@@ -840,6 +853,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
           onComplete={() => {
             setBulkOpen(false);
             void refreshItems();
+            onMutated?.();
           }}
         />
       )}

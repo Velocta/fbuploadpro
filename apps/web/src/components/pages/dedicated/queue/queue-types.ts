@@ -37,6 +37,13 @@ export interface PageTabQueueProps {
   onUpdateItem: (itemId: string, data: { caption?: string; firstComment?: string | null }) => Promise<void>;
   onDeleteItem: (itemId: string) => Promise<void>;
   onOpenAddQueue: () => void;
+  /**
+   * Optional backstop called after every successful queue mutation
+   * (reorder, reschedule, edit, delete, retry, bulk add) so the page route
+   * can refresh its own queue data — keeping the dashboard/calendar tabs
+   * in sync without a full page reload.
+   */
+  onMutated?: () => void;
 }
 
 /** Content-tab status filter. "Queued" = slot-based, "Scheduled" = custom time. */
