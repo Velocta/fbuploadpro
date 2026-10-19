@@ -134,16 +134,15 @@ function resolveInitialScheduleValue(
   initialPost: ComposerInitialPost | undefined,
   slots: PageSlotSummary[]
 ): string {
+  const format = initialPost?.postFormat ?? 'reel';
   if (initialPost) {
     const parsed = new Date(initialPost.scheduledTime);
     if (!Number.isNaN(parsed.getTime())) {
-      return toDateTimeLocalValue(parsed, timezoneForFormat(slots, initialPost.postFormat ?? 'reel'));
+      return toDateTimeLocalValue(parsed, timezoneForFormat(slots, format));
     }
   }
-  const format = initialPost?.postFormat ?? 'reel';
   const nextSlot = getNextSlotForFormat(slots, format);
-  const fallback = nextSlot ? getNextOccurrence(nextSlot, new Date()) : null;
-  const date = fallback ?? roundUpToNextHour(new Date());
+  const date = (nextSlot ? getNextOccurrence(nextSlot, new Date()) : null) ?? roundUpToNextHour(new Date());
   return toDateTimeLocalValue(date, nextSlot?.timezone ?? browserTimezone());
 }
 
@@ -189,6 +188,174 @@ function submitButtonLabel(isEdit: boolean, intent: ComposerIntent): string {
   return 'Add to queue';
 }
 
+// ---------------------------------------------------------------------------
+// Intent section
+// ---------------------------------------------------------------------------
+
+interface IntentSectionProps {
+  intent: ComposerIntent;
+  onIntentChange: (intent: ComposerIntent) => void;
+  hasActiveSlots: boolean;
+  pageId: string;
+  subdomain: string;
+  onSlotAdded: (slot: PageSlotSummary) => void;
+  scheduleValue: string;
+  onScheduleChange: (value: string) => void;
+  scheduleTimezone: string;
+  scheduleDate: Date | null;
+  isScheduleInFuture: boolean;
+  format: PostFormat;
+  nextSlotForFormat: PageSlotSummary | null;
+  nextSlotOccurrence: Date | null;
+}
+
+function renderQueueIntentBody(props: IntentSectionProps): React.ReactNode {
+  const { format, nextSlotForFormat, nextSlotOccurrence } = props;
+  if (!nextSlotForFormat || !nextSlotOccurrence) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
+        <p data-testid="composer-no-covering-slot-notice" style={{ ...composerHintStyle, margin: 0 }}>
+          No posting time covers {FORMAT_LABELS[format]}s yet.
+        </p>
+        <PostingTimeQuickAdd pageId={props.pageId} subdomain={props.subdomain} onAdded={props.onSlotAdded} />
+      </div>
+    );
+  }
+  return (
+    <p data-testid="composer-queue-goes-out" style={{ ...composerHintStyle, margin: 0 }}>
+      Goes out at the next posting time for {FORMAT_LABELS[format]}s:{' '}
+      {formatSlotShort(nextSlotOccurrence, nextSlotForFormat.timezone)}.
+    </p>
+  );
+}
+
+function renderScheduleIntentBody(props: IntentSectionProps): React.ReactNode {
+  const { scheduleValue, onScheduleChange, scheduleTimezone, scheduleDate, isScheduleInFuture } = props;
+  return (
+    <div style={composerFieldStyle}>
+      <label htmlFor="composer-schedule-picker" style={composerLabelStyle}>
+        Date and time
+      </label>
+      <input
+        id="composer-schedule-picker"
+        data-testid="composer-schedule-picker"
+        type="datetime-local"
+        value={scheduleValue}
+        min={toDateTimeLocalValue(new Date(), scheduleTimezone)}
+        onChange={(e) => onScheduleChange(e.target.value)}
+        style={composerInputStyle()}
+      />
+      <span style={composerHintStyle}>Times shown in {scheduleTimezone}.</span>
+      {scheduleDate && isScheduleInFuture && (
+        <span data-testid="composer-schedule-goes-out" style={composerHintStyle}>
+          Goes out {formatSlotLong(scheduleDate, scheduleTimezone)}.
+        </span>
+      )}
+    </div>
+  );
+}
+
+function IntentSection(props: IntentSectionProps): React.ReactElement {
+  const { intent, onIntentChange, hasActiveSlots } = props;
+  return (
+    <div style={composerFieldStyle}>
+      <span style={composerLabelStyle}>How should this go out?</span>
+      <IntentSelector value={intent} onChange={onIntentChange} queueDisabled={!hasActiveSlots} />
+      {!hasActiveSlots && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
+          <p data-testid="composer-no-slots-notice" style={{ ...composerHintStyle, margin: 0 }}>
+            Set posting times first — your queued posts go out automatically at these times.
+          </p>
+          <PostingTimeQuickAdd pageId={props.pageId} subdomain={props.subdomain} onAdded={props.onSlotAdded} />
+        </div>
+      )}
+      {intent === 'now' && (
+        <p data-testid="composer-intent-now-note" style={{ ...composerHintStyle, margin: 0 }}>
+          This will publish to Facebook immediately.
+        </p>
+      )}
+      {intent === 'schedule' && renderScheduleIntentBody(props)}
+      {intent === 'queue' && hasActiveSlots && renderQueueIntentBody(props)}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Submit section
+// ---------------------------------------------------------------------------
+
+interface SubmitSectionProps {
+  error: string | null;
+  isEdit: boolean;
+  intent: ComposerIntent;
+  scheduleDate: Date | null;
+  isScheduleInFuture: boolean;
+  scheduleTimezone: string;
+  isSubmitDisabled: boolean;
+  isSubmitting: boolean;
+  onClose: () => void;
+}
+
+function SubmitSection(props: SubmitSectionProps): React.ReactElement {
+  const { error, isEdit, intent, isSubmitDisabled, isSubmitting, onClose } = props;
+  const showNowNote = intent === 'now' && !isEdit;
+  const showScheduleNote =
+    intent === 'schedule' && !isEdit && props.scheduleDate !== null && props.isScheduleInFuture;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, alignItems: 'flex-end' }}>
+      {error && (
+        <p data-testid="post-composer-error" style={{ ...composerErrorStyle, margin: 0, alignSelf: 'stretch' }}>
+          {error}
+        </p>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
+        <button
+          type="button"
+          data-testid="cancel-post-composer-btn"
+          onClick={onClose}
+          style={{
+            padding: `${SPACING.xs} ${SPACING.md}`,
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            fontWeight: TYPOGRAPHY.weights.medium,
+            backgroundColor: 'transparent',
+            color: 'var(--text-sub)',
+            border: '1px solid var(--border-subtle)',
+            cursor: 'pointer',
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          data-testid="submit-post-composer-btn"
+          disabled={isSubmitDisabled}
+          style={{
+            ...COMPONENT_STYLES.primaryButton,
+            padding: `${SPACING.xs} ${SPACING.lg}`,
+            cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
+            opacity: isSubmitDisabled ? 0.7 : 1,
+          }}
+        >
+          {isSubmitting ? 'Saving…' : submitButtonLabel(isEdit, intent)}
+        </button>
+      </div>
+      {showNowNote && (
+        <span style={composerHintStyle}>This will publish to Facebook immediately.</span>
+      )}
+      {showScheduleNote && props.scheduleDate && (
+        <span style={composerHintStyle}>
+          Goes out {formatSlotLong(props.scheduleDate, props.scheduleTimezone)}.
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator
+// ---------------------------------------------------------------------------
+
 export function PostComposer({
   pageId,
   subdomain,
@@ -214,11 +381,7 @@ export function PostComposer({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Schedule intent: timezone comes from the default slot, else the browser.
-  const scheduleTimezone = useMemo(
-    () => timezoneForFormat(slots, format),
-    [slots, format]
-  );
-
+  const scheduleTimezone = useMemo(() => timezoneForFormat(slots, format), [slots, format]);
   const [scheduleValue, setScheduleValue] = useState(() =>
     resolveInitialScheduleValue(initialPost, slotsProp)
   );
@@ -251,14 +414,11 @@ export function PostComposer({
     () => (nextSlotForFormat ? getNextOccurrence(nextSlotForFormat, new Date()) : null),
     [nextSlotForFormat]
   );
-
   const scheduleDate = useMemo(
     () => parseDateTimeLocalValue(scheduleValue, scheduleTimezone),
     [scheduleValue, scheduleTimezone]
   );
   const isScheduleInFuture = Boolean(scheduleDate && scheduleDate.getTime() > Date.now());
-
-  // ---- Media / caption handling -------------------------------------------
 
   const handleItemsChange = (next: ComposerMediaItem[]) => {
     setItems(next);
@@ -270,23 +430,11 @@ export function PostComposer({
     }
   };
 
-  const handleCaptionChange = (value: string) => {
-    setCaption(value);
-    setIsCaptionTouched(true);
-  };
-
-  const handleSlotAdded = (slot: PageSlotSummary) => {
-    setSlots((prev) => [...prev, slot]);
-  };
-
-  // ---- Validation -----------------------------------------------------------
-
-  const hasMediaTypeError = items.some((item) => getMediaItemError(item, format) !== null);
   const validationError = computeValidationError({
     format,
     caption,
     hasItems: items.length > 0,
-    hasMediaTypeError,
+    hasMediaTypeError: items.some((item) => getMediaItemError(item, format) !== null),
     mediaCountError: getMediaCountError(items, format),
     linkValid: isValidLink(link),
     intent,
@@ -296,14 +444,11 @@ export function PostComposer({
   });
   const isSubmitDisabled = isSubmitting || validationError !== null;
 
-  // ---- Submit ---------------------------------------------------------------
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitDisabled) return;
     setIsSubmitting(true);
     setError(null);
-
     try {
       const message =
         isEdit && initialPost
@@ -341,73 +486,12 @@ export function PostComposer({
     }
   };
 
-  // ---- Intent block ----------------------------------------------------------
-
-  const renderQueueBlock = () => {
-    if (activeSlots.length === 0) {
-      // Covered by the always-visible notice under the intent selector.
-      return null;
-    }
-    if (!nextSlotForFormat || !nextSlotOccurrence) {
-      return (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-          <p data-testid="composer-no-covering-slot-notice" style={{ ...composerHintStyle, margin: 0 }}>
-            No posting time covers {FORMAT_LABELS[format]}s yet.
-          </p>
-          <PostingTimeQuickAdd pageId={pageId} subdomain={subdomain} onAdded={handleSlotAdded} />
-        </div>
-      );
-    }
-    return (
-      <p data-testid="composer-queue-goes-out" style={{ ...composerHintStyle, margin: 0 }}>
-        Goes out at the next posting time for {FORMAT_LABELS[format]}s:{' '}
-        {formatSlotShort(nextSlotOccurrence, nextSlotForFormat.timezone)}.
-      </p>
-    );
-  };
-
-  const renderScheduleBlock = () => (
-    <div style={composerFieldStyle}>
-      <label htmlFor="composer-schedule-picker" style={composerLabelStyle}>
-        Date and time
-      </label>
-      <input
-        id="composer-schedule-picker"
-        data-testid="composer-schedule-picker"
-        type="datetime-local"
-        value={scheduleValue}
-        min={toDateTimeLocalValue(new Date(), scheduleTimezone)}
-        onChange={(e) => setScheduleValue(e.target.value)}
-        style={composerInputStyle()}
-      />
-      <span style={composerHintStyle}>Times shown in {scheduleTimezone}.</span>
-      {scheduleDate && isScheduleInFuture && (
-        <span data-testid="composer-schedule-goes-out" style={composerHintStyle}>
-          Goes out {formatSlotLong(scheduleDate, scheduleTimezone)}.
-        </span>
-      )}
-    </div>
-  );
-
-  const renderIntentBlock = () => {
-    if (intent === 'now') {
-      return (
-        <p data-testid="composer-intent-now-note" style={{ ...composerHintStyle, margin: 0 }}>
-          This will publish to Facebook immediately.
-        </p>
-      );
-    }
-    if (intent === 'schedule') return renderScheduleBlock();
-    return renderQueueBlock();
-  };
-
   const title = isEdit ? 'Edit post' : format === 'text' ? 'Create text post' : 'Create post';
   const description = isEdit
     ? 'Update this post — it keeps its scheduled time unless you change it.'
     : format === 'text'
       ? 'Write a post — it publishes as text on your Page.'
       : 'Put together a post for your Page.';
-  const submitLabel = submitButtonLabel(isEdit, intent);
 
   return (
     <div data-testid="post-composer-backdrop" style={MODAL_BACKDROP_STYLE}>
@@ -418,7 +502,6 @@ export function PostComposer({
         aria-label={title}
         style={{ ...MODAL_CONTAINER_STYLE, maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}
       >
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.md }}>
           <div>
             <h3
@@ -450,22 +533,23 @@ export function PostComposer({
         </div>
 
         <form onSubmit={(e) => void handleSubmit(e)} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-          {/* Intent */}
-          <div style={composerFieldStyle}>
-            <span style={composerLabelStyle}>How should this go out?</span>
-            <IntentSelector value={intent} onChange={setIntent} queueDisabled={activeSlots.length === 0} />
-            {activeSlots.length === 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-                <p data-testid="composer-no-slots-notice" style={{ ...composerHintStyle, margin: 0 }}>
-                  Set posting times first — your queued posts go out automatically at these times.
-                </p>
-                <PostingTimeQuickAdd pageId={pageId} subdomain={subdomain} onAdded={handleSlotAdded} />
-              </div>
-            )}
-            {renderIntentBlock()}
-          </div>
+          <IntentSection
+            intent={intent}
+            onIntentChange={setIntent}
+            hasActiveSlots={activeSlots.length > 0}
+            pageId={pageId}
+            subdomain={subdomain}
+            onSlotAdded={(slot) => setSlots((prev) => [...prev, slot])}
+            scheduleValue={scheduleValue}
+            onScheduleChange={setScheduleValue}
+            scheduleTimezone={scheduleTimezone}
+            scheduleDate={scheduleDate}
+            isScheduleInFuture={isScheduleInFuture}
+            format={format}
+            nextSlotForFormat={nextSlotForFormat}
+            nextSlotOccurrence={nextSlotOccurrence}
+          />
 
-          {/* Format */}
           <div style={composerFieldStyle}>
             <span style={composerLabelStyle}>Format</span>
             <FormatSelector value={format} onChange={setFormat} />
@@ -476,7 +560,6 @@ export function PostComposer({
             )}
           </div>
 
-          {/* Media (hidden for text) */}
           {format !== 'text' && (
             <ComposerMediaArea
               pageId={pageId}
@@ -488,21 +571,21 @@ export function PostComposer({
             />
           )}
 
-          {/* Caption */}
           <ComposerCaption
             value={caption}
-            onChange={handleCaptionChange}
+            onChange={(value) => {
+              setCaption(value);
+              setIsCaptionTouched(true);
+            }}
             required={format === 'text'}
           />
 
-          {/* Link — text, photo, and video only */}
           <ComposerLink
             value={link}
             onChange={setLink}
             visible={format === 'text' || format === 'image' || format === 'video'}
           />
 
-          {/* Preview */}
           <ComposerPreview
             pageName={pageName}
             format={format}
@@ -511,56 +594,17 @@ export function PostComposer({
             mediaItems={items}
           />
 
-          {/* Server error */}
-          {error && (
-            <p data-testid="post-composer-error" style={{ ...composerErrorStyle, margin: 0 }}>
-              {error}
-            </p>
-          )}
-
-          {/* Actions */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
-              <button
-                type="button"
-                data-testid="cancel-post-composer-btn"
-                onClick={onClose}
-                style={{
-                  padding: `${SPACING.xs} ${SPACING.md}`,
-                  borderRadius: '6px',
-                  fontSize: '0.875rem',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                  backgroundColor: 'transparent',
-                  color: 'var(--text-sub)',
-                  border: '1px solid var(--border-subtle)',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                data-testid="submit-post-composer-btn"
-                disabled={isSubmitDisabled}
-                style={{
-                  ...COMPONENT_STYLES.primaryButton,
-                  padding: `${SPACING.xs} ${SPACING.lg}`,
-                  cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
-                  opacity: isSubmitDisabled ? 0.7 : 1,
-                }}
-              >
-                {isSubmitting ? 'Saving…' : submitLabel}
-              </button>
-            </div>
-            {intent === 'now' && !isEdit && (
-              <span style={composerHintStyle}>This will publish to Facebook immediately.</span>
-            )}
-            {intent === 'schedule' && scheduleDate && isScheduleInFuture && !isEdit && (
-              <span style={composerHintStyle}>
-                Goes out {formatSlotLong(scheduleDate, scheduleTimezone)}.
-              </span>
-            )}
-          </div>
+          <SubmitSection
+            error={error}
+            isEdit={isEdit}
+            intent={intent}
+            scheduleDate={scheduleDate}
+            isScheduleInFuture={isScheduleInFuture}
+            scheduleTimezone={scheduleTimezone}
+            isSubmitDisabled={isSubmitDisabled}
+            isSubmitting={isSubmitting}
+            onClose={onClose}
+          />
         </form>
       </div>
     </div>
