@@ -15,6 +15,7 @@ import { ComposerCaption } from './composer-caption';
 import { ComposerLink, isValidLink } from './composer-link';
 import { ComposerPreview } from './composer-preview';
 import { PostingTimeQuickAdd } from './posting-time-quick-add';
+import { submitCreatePost, submitEditPost } from './composer-submit';
 import {
   getNextSlotForFormat,
   getNextOccurrence,
@@ -75,6 +76,8 @@ const FORMAT_LABELS: Record<PostFormat, string> = {
   story: 'Story',
 };
 
+const SINGLE_MEDIA_FORMATS: PostFormat[] = ['video', 'reel', 'story'];
+
 function browserTimezone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -90,6 +93,102 @@ function roundUpToNextHour(from: Date): Date {
   return d;
 }
 
+function timezoneForFormat(slots: PageSlotSummary[], format: PostFormat): string {
+  return getNextSlotForFormat(slots, format)?.timezone ?? browserTimezone();
+}
+
+function resolveInitialIntent(
+  slots: PageSlotSummary[],
+  initialIntent: ComposerIntent | undefined,
+  initialPost: ComposerInitialPost | undefined
+): ComposerIntent {
+  if (initialIntent) return initialIntent;
+  if (initialPost) {
+    // Best-effort intent guess: a future scheduled time reads as a custom
+    // schedule, otherwise the queue. (105's edit flow can pass initialIntent.)
+    const scheduled = new Date(initialPost.scheduledTime);
+    if (!Number.isNaN(scheduled.getTime()) && scheduled.getTime() > Date.now()) return 'schedule';
+    return 'queue';
+  }
+  return slots.some((s) => s.isActive) ? 'queue' : 'now';
+}
+
+function resolveInitialItems(initialPost: ComposerInitialPost | undefined): ComposerMediaItem[] {
+  const media = initialPost?.media;
+  if (!media) return [];
+  return [
+    {
+      id: initialPost.mediaId ?? 'initial-media',
+      name: media.name,
+      mediaType: media.mediaType,
+      url: media.url,
+      thumbnailUrl: media.thumbnailUrl,
+      durationSeconds: media.durationSeconds,
+      width: media.width,
+      height: media.height,
+    },
+  ];
+}
+
+function resolveInitialScheduleValue(
+  initialPost: ComposerInitialPost | undefined,
+  slots: PageSlotSummary[]
+): string {
+  if (initialPost) {
+    const parsed = new Date(initialPost.scheduledTime);
+    if (!Number.isNaN(parsed.getTime())) {
+      return toDateTimeLocalValue(parsed, timezoneForFormat(slots, initialPost.postFormat ?? 'reel'));
+    }
+  }
+  const format = initialPost?.postFormat ?? 'reel';
+  const nextSlot = getNextSlotForFormat(slots, format);
+  const fallback = nextSlot ? getNextOccurrence(nextSlot, new Date()) : null;
+  const date = fallback ?? roundUpToNextHour(new Date());
+  return toDateTimeLocalValue(date, nextSlot?.timezone ?? browserTimezone());
+}
+
+function getMediaCountError(items: ComposerMediaItem[], format: PostFormat): string | null {
+  if (format === 'text' || items.length <= 1) return null;
+  if (!SINGLE_MEDIA_FORMATS.includes(format)) return null;
+  const noun = format === 'story' ? 'file' : 'video';
+  return `Choose one ${noun} for this ${FORMAT_LABELS[format].toLowerCase()}.`;
+}
+
+interface ValidationContext {
+  format: PostFormat;
+  caption: string;
+  hasItems: boolean;
+  hasMediaTypeError: boolean;
+  mediaCountError: string | null;
+  linkValid: boolean;
+  intent: ComposerIntent;
+  isScheduleInFuture: boolean;
+  hasActiveSlots: boolean;
+  hasCoveringSlot: boolean;
+}
+
+/** Single place deciding whether submit is allowed and why not. */
+function computeValidationError(ctx: ValidationContext): string | null {
+  if (ctx.format === 'text' && !ctx.caption.trim()) return 'Write a caption for your text post.';
+  if (ctx.format !== 'text' && !ctx.hasItems) return 'Choose media for this post.';
+  if (ctx.hasMediaTypeError) return 'Remove or replace the flagged media to continue.';
+  if (ctx.mediaCountError) return ctx.mediaCountError;
+  if (!ctx.linkValid) return 'Fix the link before submitting.';
+  if (ctx.intent === 'schedule' && !ctx.isScheduleInFuture) return 'Pick a time in the future.';
+  if (ctx.intent === 'queue' && !ctx.hasActiveSlots) return 'Set posting times first.';
+  if (ctx.intent === 'queue' && !ctx.hasCoveringSlot) {
+    return `No posting time covers ${FORMAT_LABELS[ctx.format]}s yet.`;
+  }
+  return null;
+}
+
+function submitButtonLabel(isEdit: boolean, intent: ComposerIntent): string {
+  if (isEdit) return 'Save changes';
+  if (intent === 'now') return 'Post now';
+  if (intent === 'schedule') return 'Schedule post';
+  return 'Add to queue';
+}
+
 export function PostComposer({
   pageId,
   subdomain,
@@ -102,35 +201,11 @@ export function PostComposer({
   const isEdit = Boolean(initialPost);
 
   const [slots, setSlots] = useState<PageSlotSummary[]>(slotsProp);
-  const [intent, setIntent] = useState<ComposerIntent>(() => {
-    if (initialIntent) return initialIntent;
-    if (initialPost) {
-      // Best-effort intent guess: a future scheduled time reads as a custom
-      // schedule, otherwise the queue. (105's edit flow can pass initialIntent.)
-      const scheduled = new Date(initialPost.scheduledTime);
-      if (!Number.isNaN(scheduled.getTime()) && scheduled.getTime() > Date.now()) return 'schedule';
-      return 'queue';
-    }
-    const hasActive = slotsProp.some((s) => s.isActive);
-    return hasActive ? 'queue' : 'now';
-  });
+  const [intent, setIntent] = useState<ComposerIntent>(() =>
+    resolveInitialIntent(slotsProp, initialIntent, initialPost)
+  );
   const [format, setFormat] = useState<PostFormat>(initialPost?.postFormat ?? 'reel');
-  const [items, setItems] = useState<ComposerMediaItem[]>(() => {
-    const media = initialPost?.media;
-    if (!media) return [];
-    return [
-      {
-        id: initialPost.mediaId ?? 'initial-media',
-        name: media.name,
-        mediaType: media.mediaType,
-        url: media.url,
-        thumbnailUrl: media.thumbnailUrl,
-        durationSeconds: media.durationSeconds,
-        width: media.width,
-        height: media.height,
-      },
-    ];
-  });
+  const [items, setItems] = useState<ComposerMediaItem[]>(() => resolveInitialItems(initialPost));
   const [caption, setCaption] = useState(initialPost?.caption ?? '');
   const [isCaptionTouched, setIsCaptionTouched] = useState(Boolean(initialPost?.caption));
   const [link, setLink] = useState(initialPost?.linkUrl ?? '');
@@ -139,24 +214,14 @@ export function PostComposer({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Schedule intent: timezone comes from the default slot, else the browser.
-  const scheduleTimezone = useMemo(() => {
-    const defaultSlot = getNextSlotForFormat(slots, format);
-    return defaultSlot?.timezone ?? browserTimezone();
-  }, [slots, format]);
+  const scheduleTimezone = useMemo(
+    () => timezoneForFormat(slots, format),
+    [slots, format]
+  );
 
-  const [scheduleValue, setScheduleValue] = useState(() => {
-    if (initialPost?.scheduledTime) {
-      const parsed = new Date(initialPost.scheduledTime);
-      if (!Number.isNaN(parsed.getTime())) {
-        return toDateTimeLocalValue(parsed, scheduleTimezoneFor(initialPost, slotsProp));
-      }
-    }
-    const nextSlot = getNextSlotForFormat(slotsProp, initialPost?.postFormat ?? 'reel');
-    const fallback = nextSlot
-      ? getNextOccurrence(nextSlot, new Date())
-      : roundUpToNextHour(new Date());
-    return toDateTimeLocalValue(fallback ?? roundUpToNextHour(new Date()), nextSlot?.timezone ?? browserTimezone());
-  });
+  const [scheduleValue, setScheduleValue] = useState(() =>
+    resolveInitialScheduleValue(initialPost, slotsProp)
+  );
 
   useEffect(() => {
     let active = true;
@@ -210,52 +275,28 @@ export function PostComposer({
     setIsCaptionTouched(true);
   };
 
-  const handleFormatChange = (next: PostFormat) => {
-    setFormat(next);
-    // Incompatible assets are kept but flagged with a blocking inline error
-    // (see ComposerMediaArea) — the format never flips on its own and assets
-    // are never silently dropped.
-  };
-
   const handleSlotAdded = (slot: PageSlotSummary) => {
     setSlots((prev) => [...prev, slot]);
   };
 
-  // ---- Validation ----------------------------------------------------------
+  // ---- Validation -----------------------------------------------------------
 
-  const mediaErrors = items.map((item) => getMediaItemError(item, format));
-  const hasMediaTypeError = mediaErrors.some((e) => e !== null);
-  const singleMediaFormat = format === 'video' || format === 'reel' || format === 'story';
-  const mediaCountError =
-    format === 'text'
-      ? null
-      : items.length === 0
-        ? null // presence checked separately below
-        : singleMediaFormat && items.length > 1
-          ? `Choose one ${format === 'story' ? 'file' : 'video'} for this ${FORMAT_LABELS[format].toLowerCase()}.`
-          : null;
-
-  const linkValid = isValidLink(link);
-
-  const validationError: string | null = (() => {
-    if (format === 'text' && !caption.trim()) return 'Write a caption for your text post.';
-    if (format !== 'text' && items.length === 0) return 'Choose media for this post.';
-    if (hasMediaTypeError) return 'Remove or replace the flagged media to continue.';
-    if (mediaCountError) return mediaCountError;
-    if (!linkValid) return 'Fix the link before submitting.';
-    if (intent === 'schedule' && !isScheduleInFuture) return 'Pick a time in the future.';
-    if (intent === 'queue' && activeSlots.length === 0) return 'Set posting times first.';
-    if (intent === 'queue' && !nextSlotForFormat) {
-      return `No posting time covers ${FORMAT_LABELS[format]}s yet.`;
-    }
-    return null;
-  })();
-
+  const hasMediaTypeError = items.some((item) => getMediaItemError(item, format) !== null);
+  const validationError = computeValidationError({
+    format,
+    caption,
+    hasItems: items.length > 0,
+    hasMediaTypeError,
+    mediaCountError: getMediaCountError(items, format),
+    linkValid: isValidLink(link),
+    intent,
+    isScheduleInFuture,
+    hasActiveSlots: activeSlots.length > 0,
+    hasCoveringSlot: nextSlotForFormat !== null,
+  });
   const isSubmitDisabled = isSubmitting || validationError !== null;
 
-  const submitLabel = isEdit ? 'Save changes' : intent === 'now' ? 'Post now' : intent === 'schedule' ? 'Schedule post' : 'Add to queue';
-
-  // ---- Submit --------------------------------------------------------------
+  // ---- Submit ---------------------------------------------------------------
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -264,11 +305,35 @@ export function PostComposer({
     setError(null);
 
     try {
-      if (isEdit && initialPost) {
-        await submitEdit();
-      } else {
-        await submitCreate();
-      }
+      const message =
+        isEdit && initialPost
+          ? await submitEditPost({
+              subdomain,
+              itemId: initialPost.id,
+              format,
+              caption,
+              link,
+              intent,
+              scheduleDate,
+              wasFailed: initialPost.status === 'failed',
+              pageName,
+            })
+          : await submitCreatePost({
+              pageId,
+              subdomain,
+              format,
+              items,
+              caption,
+              link,
+              intent,
+              scheduleDate,
+              scheduleTimezone,
+              nextSlotForFormat,
+              nextSlotOccurrence,
+              pageName,
+            });
+      onSubmitted(message);
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't save this post. Please try again.");
     } finally {
@@ -276,125 +341,13 @@ export function PostComposer({
     }
   };
 
-  const submitCreate = async () => {
-    const payload: Record<string, unknown> = {
-      pageId,
-      caption,
-      postFormat: format,
-    };
-    if (format !== 'text' && items[0]) payload.mediaId = items[0].id;
-    if (link.trim()) payload.linkUrl = link.trim();
-
-    let message: string;
-    if (intent === 'now') {
-      payload.scheduledTime = new Date().toISOString();
-      message = `Posted to ${pageName}.`;
-    } else if (intent === 'schedule' && scheduleDate) {
-      payload.scheduledTime = scheduleDate.toISOString();
-      message = `Scheduled for ${formatSlotLong(scheduleDate, scheduleTimezone)}.`;
-    } else {
-      // Queue: the server computes the next vacant slot for the format.
-      message = nextSlotOccurrence
-        ? `Added to queue — goes out ${formatSlotShort(nextSlotOccurrence, nextSlotForFormat?.timezone)}.`
-        : 'Added to queue.';
-    }
-
-    const res = await fetch(`/api/tenant/${subdomain}/publishing/queue`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || data.error || "Couldn't save this post. Please try again.");
-    }
-    onSubmitted(message);
-    onClose();
-  };
-
-  const submitEdit = async () => {
-    const post = initialPost!;
-    const payload: Record<string, unknown> = {
-      caption,
-      linkUrl: link.trim() || null,
-      postFormat: format,
-    };
-    if (intent === 'schedule' && scheduleDate) {
-      payload.scheduledTime = scheduleDate.toISOString();
-    } else if (intent === 'now') {
-      payload.scheduledTime = new Date().toISOString();
-    }
-    // Editing a failed post clears the failure and re-queues it.
-    if (post.status === 'failed') payload.status = 'queued';
-
-    const res = await fetch(`/api/tenant/${subdomain}/publishing/queue/${post.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || data.error || "Couldn't save this post. Please try again.");
-    }
-
-    if (intent === 'now') {
-      const publishRes = await fetch(
-        `/api/tenant/${subdomain}/publishing/queue/${post.id}/publish-now`,
-        { method: 'POST' }
-      );
-      if (!publishRes.ok) {
-        const data = await publishRes.json().catch(() => ({}));
-        throw new Error(data.message || data.error || "Couldn't publish this post. Please try again.");
-      }
-      onSubmitted(`Posted to ${pageName}.`);
-    } else {
-      onSubmitted('Post updated.');
-    }
-    onClose();
-  };
-
   // ---- Intent block ----------------------------------------------------------
 
-  const renderIntentBlock = () => {
-    if (intent === 'now') {
-      return (
-        <p data-testid="composer-intent-now-note" style={{ ...composerHintStyle, margin: 0 }}>
-          This will publish to Facebook immediately.
-        </p>
-      );
-    }
-
-    if (intent === 'schedule') {
-      return (
-        <div style={composerFieldStyle}>
-          <label htmlFor="composer-schedule-picker" style={composerLabelStyle}>
-            Date and time
-          </label>
-          <input
-            id="composer-schedule-picker"
-            data-testid="composer-schedule-picker"
-            type="datetime-local"
-            value={scheduleValue}
-            min={toDateTimeLocalValue(new Date(), scheduleTimezone)}
-            onChange={(e) => setScheduleValue(e.target.value)}
-            style={composerInputStyle()}
-          />
-          <span style={composerHintStyle}>Times shown in {scheduleTimezone}.</span>
-          {scheduleDate && isScheduleInFuture && (
-            <span data-testid="composer-schedule-goes-out" style={composerHintStyle}>
-              Goes out {formatSlotLong(scheduleDate, scheduleTimezone)}.
-            </span>
-          )}
-        </div>
-      );
-    }
-
-    // Queue intent
+  const renderQueueBlock = () => {
     if (activeSlots.length === 0) {
       // Covered by the always-visible notice under the intent selector.
       return null;
     }
-
     if (!nextSlotForFormat || !nextSlotOccurrence) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
@@ -405,7 +358,6 @@ export function PostComposer({
         </div>
       );
     }
-
     return (
       <p data-testid="composer-queue-goes-out" style={{ ...composerHintStyle, margin: 0 }}>
         Goes out at the next posting time for {FORMAT_LABELS[format]}s:{' '}
@@ -414,12 +366,48 @@ export function PostComposer({
     );
   };
 
+  const renderScheduleBlock = () => (
+    <div style={composerFieldStyle}>
+      <label htmlFor="composer-schedule-picker" style={composerLabelStyle}>
+        Date and time
+      </label>
+      <input
+        id="composer-schedule-picker"
+        data-testid="composer-schedule-picker"
+        type="datetime-local"
+        value={scheduleValue}
+        min={toDateTimeLocalValue(new Date(), scheduleTimezone)}
+        onChange={(e) => setScheduleValue(e.target.value)}
+        style={composerInputStyle()}
+      />
+      <span style={composerHintStyle}>Times shown in {scheduleTimezone}.</span>
+      {scheduleDate && isScheduleInFuture && (
+        <span data-testid="composer-schedule-goes-out" style={composerHintStyle}>
+          Goes out {formatSlotLong(scheduleDate, scheduleTimezone)}.
+        </span>
+      )}
+    </div>
+  );
+
+  const renderIntentBlock = () => {
+    if (intent === 'now') {
+      return (
+        <p data-testid="composer-intent-now-note" style={{ ...composerHintStyle, margin: 0 }}>
+          This will publish to Facebook immediately.
+        </p>
+      );
+    }
+    if (intent === 'schedule') return renderScheduleBlock();
+    return renderQueueBlock();
+  };
+
   const title = isEdit ? 'Edit post' : format === 'text' ? 'Create text post' : 'Create post';
   const description = isEdit
     ? 'Update this post — it keeps its scheduled time unless you change it.'
     : format === 'text'
       ? 'Write a post — it publishes as text on your Page.'
       : 'Put together a post for your Page.';
+  const submitLabel = submitButtonLabel(isEdit, intent);
 
   return (
     <div data-testid="post-composer-backdrop" style={MODAL_BACKDROP_STYLE}>
@@ -480,7 +468,7 @@ export function PostComposer({
           {/* Format */}
           <div style={composerFieldStyle}>
             <span style={composerLabelStyle}>Format</span>
-            <FormatSelector value={format} onChange={handleFormatChange} />
+            <FormatSelector value={format} onChange={setFormat} />
             {format === 'reel' && (
               <span data-testid="composer-reel-hint" style={composerHintStyle}>
                 Portrait works best for reels.
@@ -577,12 +565,4 @@ export function PostComposer({
       </div>
     </div>
   );
-}
-
-function scheduleTimezoneFor(
-  initialPost: ComposerInitialPost,
-  slots: PageSlotSummary[]
-): string {
-  const covering = getNextSlotForFormat(slots, initialPost.postFormat ?? 'reel');
-  return covering?.timezone ?? browserTimezone();
 }
