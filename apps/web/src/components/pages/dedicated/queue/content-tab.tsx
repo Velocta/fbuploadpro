@@ -376,6 +376,43 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
   );
 
   // --- delete ---------------------------------------------------------------------
+  /** Re-creates a deleted post from its snapshot (Undo). */
+  const restoreDeletedItem = useCallback(
+    async (snapshot: DedicatedQueueItem) => {
+      try {
+        const res = await fetch(`/api/tenant/${subdomain}/publishing/queue`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            pageId,
+            mediaId: snapshot.mediaId ?? null,
+            postFormat: resolveFormat(snapshot),
+            linkUrl: snapshot.linkUrl ?? null,
+            scheduledTime: new Date(snapshot.scheduledTime).toISOString(),
+            caption: snapshot.caption ?? '',
+            firstComment: snapshot.firstComment ?? null,
+          }),
+        });
+        if (!res.ok) {
+          pushToast("Couldn't restore this post.", { tone: 'error' });
+          return;
+        }
+        const created = mapCreatedItem(await res.json().catch(() => null));
+        if (created) {
+          setItems((prev) =>
+            prev.some((candidate) => candidate.id === created.id) ? prev : [...prev, created]
+          );
+        } else {
+          void refreshItems();
+        }
+        pushToast('Post restored.');
+      } catch {
+        pushToast("Couldn't restore this post.", { tone: 'error' });
+      }
+    },
+    [subdomain, pageId, pushToast, refreshItems]
+  );
+
   const handleDelete = useCallback(
     async (item: DedicatedQueueItem) => {
       setBusyRow({ id: item.id, action: 'delete' });
@@ -401,48 +438,10 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
       });
       pushToast('Post deleted.', {
         duration: UNDO_DURATION_MS,
-        action: {
-          label: 'Undo',
-          onClick: () => {
-            void (async () => {
-              try {
-                const res = await fetch(`/api/tenant/${subdomain}/publishing/queue`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    pageId,
-                    mediaId: item.mediaId ?? null,
-                    postFormat: resolveFormat(item),
-                    linkUrl: item.linkUrl ?? null,
-                    scheduledTime: new Date(item.scheduledTime).toISOString(),
-                    caption: item.caption ?? '',
-                    firstComment: item.firstComment ?? null,
-                  }),
-                });
-                if (!res.ok) {
-                  pushToast("Couldn't restore this post.", { tone: 'error' });
-                  return;
-                }
-                const created = mapCreatedItem(await res.json().catch(() => null));
-                if (created) {
-                  setItems((prev) =>
-                    prev.some((candidate) => candidate.id === created.id)
-                      ? prev
-                      : [...prev, created]
-                  );
-                } else {
-                  void refreshItems();
-                }
-                pushToast('Post restored.');
-              } catch {
-                pushToast("Couldn't restore this post.", { tone: 'error' });
-              }
-            })();
-          },
-        },
+        action: { label: 'Undo', onClick: () => void restoreDeletedItem(item) },
       });
     },
-    [subdomain, pageId, pushToast, refreshItems]
+    [subdomain, pushToast, restoreDeletedItem]
   );
 
   const handleBulkDelete = useCallback(async () => {
