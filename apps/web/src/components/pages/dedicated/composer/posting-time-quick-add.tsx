@@ -8,11 +8,8 @@ import {
   composerErrorStyle,
   composerFieldStyle,
   composerInputStyle,
-  SPACING,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-  THEME,
 } from './composer-styles';
+import { SPACING, TYPOGRAPHY, COMPONENT_STYLES, THEME } from '@/lib/theme';
 
 const FORMAT_OPTIONS: Array<{ id: PostFormat; label: string }> = [
   { id: 'text', label: 'Text' },

@@ -13,12 +13,8 @@ import {
   composerErrorStyle,
   composerFieldStyle,
   composerSecondaryButtonStyle,
-  SPACING,
-  RADII,
-  PALETTE,
-  THEME,
-  TYPOGRAPHY,
 } from './composer-styles';
+import { SPACING, RADII, PALETTE, THEME, TYPOGRAPHY } from '@/lib/theme';
 
 export interface ComposerMediaItem {
   id: string;
@@ -135,7 +131,8 @@ export function ComposerMediaArea({
       onItemsChange([...items, ...incoming.filter((i) => !existingIds.has(i.id))]);
     } else {
       // Single-media formats: the newest pick replaces the previous one.
-      onItemsChange([incoming[incoming.length - 1]!]);
+      const newest = incoming.at(-1);
+      if (newest) onItemsChange([newest]);
     }
   };
 
@@ -176,8 +173,7 @@ export function ComposerMediaArea({
     onItemsChange(items.filter((i) => i.id !== id));
   };
 
-  const acceptAttr =
-    format === 'image' ? 'image/*' : format === 'text' ? 'image/*,video/*' : 'video/*,image/*';
+  const acceptAttr = format === 'image' ? 'image/*' : 'video/*,image/*';
 
   return (
     <div data-testid="composer-media-area" style={composerFieldStyle}>

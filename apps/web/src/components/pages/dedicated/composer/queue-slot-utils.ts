@@ -189,13 +189,16 @@ export function toDateTimeLocalValue(date: Date, timeZone: string | null | undef
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
+/** datetime-local input value shape: "2026-10-21T09:00". */
+const DATE_TIME_LOCAL_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
 /** Interprets a datetime-local input value as wall-clock time in the timezone. */
 export function parseDateTimeLocalValue(
   value: string,
   timeZone: string | null | undefined
 ): Date | null {
   if (!value || typeof value !== 'string') return null;
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  const match = DATE_TIME_LOCAL_PATTERN.exec(value);
   if (!match) return null;
   const [, year, month, day, hour, minute] = match.map(Number);
   return makeZonedDate(year, month, day, hour, minute, resolveValidTimezone(timeZone));

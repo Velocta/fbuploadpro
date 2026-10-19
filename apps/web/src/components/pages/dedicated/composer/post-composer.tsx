@@ -31,10 +31,8 @@ import {
   composerErrorStyle,
   composerFieldStyle,
   composerInputStyle,
-  SPACING,
-  COMPONENT_STYLES,
-  TYPOGRAPHY,
 } from './composer-styles';
+import { SPACING, COMPONENT_STYLES, TYPOGRAPHY } from '@/lib/theme';
 
 /** Subset of a queue item needed to pre-fill the composer for editing. */
 export interface ComposerInitialPost {
@@ -76,7 +74,7 @@ const FORMAT_LABELS: Record<PostFormat, string> = {
   story: 'Story',
 };
 
-const SINGLE_MEDIA_FORMATS: PostFormat[] = ['video', 'reel', 'story'];
+const SINGLE_MEDIA_FORMATS: ReadonlySet<PostFormat> = new Set(['video', 'reel', 'story']);
 
 function browserTimezone(): string {
   try {
@@ -106,8 +104,8 @@ function resolveInitialIntent(
   if (initialPost) {
     // Best-effort intent guess: a future scheduled time reads as a custom
     // schedule, otherwise the queue. (105's edit flow can pass initialIntent.)
-    const scheduled = new Date(initialPost.scheduledTime);
-    if (!Number.isNaN(scheduled.getTime()) && scheduled.getTime() > Date.now()) return 'schedule';
+    const scheduledTime = new Date(initialPost.scheduledTime).getTime();
+    if (!Number.isNaN(scheduledTime) && scheduledTime > Date.now()) return 'schedule';
     return 'queue';
   }
   return slots.some((s) => s.isActive) ? 'queue' : 'now';
@@ -148,7 +146,7 @@ function resolveInitialScheduleValue(
 
 function getMediaCountError(items: ComposerMediaItem[], format: PostFormat): string | null {
   if (format === 'text' || items.length <= 1) return null;
-  if (!SINGLE_MEDIA_FORMATS.includes(format)) return null;
+  if (!SINGLE_MEDIA_FORMATS.has(format)) return null;
   const noun = format === 'story' ? 'file' : 'video';
   return `Choose one ${noun} for this ${FORMAT_LABELS[format].toLowerCase()}.`;
 }
@@ -179,6 +177,18 @@ function computeValidationError(ctx: ValidationContext): string | null {
     return `No posting time covers ${FORMAT_LABELS[ctx.format]}s yet.`;
   }
   return null;
+}
+
+function composerTitle(isEdit: boolean, format: PostFormat): string {
+  if (isEdit) return 'Edit post';
+  if (format === 'text') return 'Create text post';
+  return 'Create post';
+}
+
+function composerDescription(isEdit: boolean, format: PostFormat): string {
+  if (isEdit) return 'Update this post — it keeps its scheduled time unless you change it.';
+  if (format === 'text') return 'Write a post — it publishes as text on your Page.';
+  return 'Put together a post for your Page.';
 }
 
 function submitButtonLabel(isEdit: boolean, intent: ComposerIntent): string {
@@ -255,7 +265,7 @@ function renderScheduleIntentBody(props: IntentSectionProps): React.ReactNode {
   );
 }
 
-function IntentSection(props: IntentSectionProps): React.ReactElement {
+function IntentSection(props: Readonly<IntentSectionProps>): React.ReactElement {
   const { intent, onIntentChange, hasActiveSlots } = props;
   return (
     <div style={composerFieldStyle}>
@@ -296,11 +306,11 @@ interface SubmitSectionProps {
   onClose: () => void;
 }
 
-function SubmitSection(props: SubmitSectionProps): React.ReactElement {
+function SubmitSection(props: Readonly<SubmitSectionProps>): React.ReactElement {
   const { error, isEdit, intent, isSubmitDisabled, isSubmitting, onClose } = props;
   const showNowNote = intent === 'now' && !isEdit;
-  const showScheduleNote =
-    intent === 'schedule' && !isEdit && props.scheduleDate !== null && props.isScheduleInFuture;
+  const scheduleNoteDate =
+    intent === 'schedule' && !isEdit && props.isScheduleInFuture ? props.scheduleDate : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, alignItems: 'flex-end' }}>
       {error && (
@@ -343,9 +353,9 @@ function SubmitSection(props: SubmitSectionProps): React.ReactElement {
       {showNowNote && (
         <span style={composerHintStyle}>This will publish to Facebook immediately.</span>
       )}
-      {showScheduleNote && props.scheduleDate && (
+      {scheduleNoteDate && (
         <span style={composerHintStyle}>
-          Goes out {formatSlotLong(props.scheduleDate, props.scheduleTimezone)}.
+          Goes out {formatSlotLong(scheduleNoteDate, props.scheduleTimezone)}.
         </span>
       )}
     </div>
@@ -486,21 +496,23 @@ export function PostComposer({
     }
   };
 
-  const title = isEdit ? 'Edit post' : format === 'text' ? 'Create text post' : 'Create post';
-  const description = isEdit
-    ? 'Update this post — it keeps its scheduled time unless you change it.'
-    : format === 'text'
-      ? 'Write a post — it publishes as text on your Page.'
-      : 'Put together a post for your Page.';
+  const title = composerTitle(isEdit, format);
+  const description = composerDescription(isEdit, format);
 
   return (
     <div data-testid="post-composer-backdrop" style={MODAL_BACKDROP_STYLE}>
-      <div
+      <dialog
         data-testid="post-composer"
-        role="dialog"
-        aria-modal="true"
+        open
         aria-label={title}
-        style={{ ...MODAL_CONTAINER_STYLE, maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}
+        style={{
+          ...MODAL_CONTAINER_STYLE,
+          position: 'static',
+          margin: 0,
+          maxWidth: '640px',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+        }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.md }}>
           <div>
@@ -525,7 +537,7 @@ export function PostComposer({
             onClick={onClose}
             style={{ background: 'none', border: 'none', color: 'var(--text-sub)', cursor: 'pointer', padding: SPACING.xs }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -606,7 +618,7 @@ export function PostComposer({
             onClose={onClose}
           />
         </form>
-      </div>
+      </dialog>
     </div>
   );
 }

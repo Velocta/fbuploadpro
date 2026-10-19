@@ -6,11 +6,8 @@ import {
   composerLabelStyle,
   composerHintStyle,
   composerFieldStyle,
-  SPACING,
-  RADII,
-  THEME,
-  TYPOGRAPHY,
 } from './composer-styles';
+import { SPACING, RADII, THEME, TYPOGRAPHY } from '@/lib/theme';
 import type { ComposerMediaItem } from './composer-media-area';
 
 const FORMAT_LABELS: Record<PostFormat, string> = {

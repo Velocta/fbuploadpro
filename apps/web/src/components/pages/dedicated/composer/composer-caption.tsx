@@ -5,9 +5,8 @@ import {
   composerLabelStyle,
   composerFieldStyle,
   composerInputStyle,
-  SPACING,
-  PALETTE,
 } from './composer-styles';
+import { SPACING, PALETTE } from '@/lib/theme';
 
 export const CAPTION_CHAR_LIMIT = 63206;
 const CAPTION_WARN_AT = 60000;

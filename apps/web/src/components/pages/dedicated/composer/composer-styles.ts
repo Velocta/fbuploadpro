@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+import { THEME, PALETTE, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 
 /** Small field label used above composer controls. */
 export const composerLabelStyle: CSSProperties = {
@@ -24,6 +24,12 @@ export const composerErrorStyle: CSSProperties = {
 
 /** Plain text-button option (segmented controls, quiet actions). */
 export function segmentedOptionStyle(isActive: boolean, isDisabled = false): CSSProperties {
+  let color: string;
+  if (isDisabled || !isActive) {
+    color = `var(--text-sub, ${THEME.default.text.secondary})`;
+  } else {
+    color = `var(--text-main, ${THEME.default.text.primary})`;
+  }
   return {
     background: 'none',
     border: 'none',
@@ -32,11 +38,7 @@ export function segmentedOptionStyle(isActive: boolean, isDisabled = false): CSS
     padding: `${SPACING.xs} ${SPACING.sm}`,
     fontSize: '0.875rem',
     fontWeight: isActive ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.medium,
-    color: isDisabled
-      ? `var(--text-sub, ${THEME.default.text.secondary})`
-      : isActive
-        ? `var(--text-main, ${THEME.default.text.primary})`
-        : `var(--text-sub, ${THEME.default.text.secondary})`,
+    color,
     cursor: isDisabled ? 'not-allowed' : 'pointer',
     opacity: isDisabled ? 0.55 : 1,
   };
@@ -71,5 +73,3 @@ export const composerFieldStyle: CSSProperties = {
 export const composerInputErrorBorder: CSSProperties = {
   border: `1px solid ${PALETTE.accent3}`,
 };
-
-export { RADII, SPACING, TYPOGRAPHY, PALETTE, THEME, COMPONENT_STYLES };
