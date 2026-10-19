@@ -10,7 +10,7 @@ import {
   composerInputStyle,
 } from '../composer/composer-styles';
 import { COMPONENT_STYLES, SPACING, RADII, TYPOGRAPHY } from '@/lib/theme';
-import { formatLabel, type BulkDestination } from './bulk-utils';
+import { formatLabel, pluralize, type BulkDestination } from './bulk-utils';
 
 export interface BulkReviewRow {
   asset: ComposerMediaItem;
@@ -100,10 +100,11 @@ export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
   }
 
   // Review state
+  const postNoun = pluralize(rows.length, 'post', 'posts');
   const submitLabel =
     destination === 'queue'
-      ? `Add ${rows.length} post${rows.length === 1 ? '' : 's'} to queue`
-      : `Schedule ${rows.length} post${rows.length === 1 ? '' : 's'}`;
+      ? `Add ${rows.length} ${postNoun} to queue`
+      : `Schedule ${rows.length} ${postNoun}`;
 
   return (
     <div data-testid="bulk-step-review" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
@@ -205,7 +206,7 @@ export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
             opacity: isSubmitting || rows.length === 0 ? 0.7 : 1,
           }}
         >
-          {isSubmitting ? `Adding ${rows.length} post${rows.length === 1 ? '' : 's'}…` : submitLabel}
+          {isSubmitting ? `Adding ${rows.length} ${postNoun}…` : submitLabel}
         </button>
       </div>
     </div>

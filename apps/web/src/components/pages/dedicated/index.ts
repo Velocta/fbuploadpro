@@ -55,6 +55,7 @@ export {
   describeQueueRange,
   suggestFormatForExcluded,
   formatLabel,
+  pluralize,
   type BulkDestination,
   type BulkAssignedTime,
   type PartitionedAssets,

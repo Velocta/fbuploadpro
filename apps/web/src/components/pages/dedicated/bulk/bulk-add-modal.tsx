@@ -23,6 +23,7 @@ import {
   computeBulkQueueTimes,
   partitionAssets,
   resolveRowCaption,
+  type BulkAssignedTime,
   type BulkDestination,
 } from './bulk-utils';
 
@@ -60,6 +61,56 @@ function defaultScheduleDate(slots: PageSlotSummary[], format: PostFormat): Date
   const fallback = new Date(Date.now() + 60 * 60 * 1000);
   fallback.setMinutes(0, 0, 0);
   return fallback;
+}
+
+interface ReviewRowContext {
+  destination: BulkDestination;
+  queueTimes: BulkAssignedTime[];
+  scheduleDate: Date | null;
+  scheduleTimezone: string;
+  sharedCaption: string;
+  captionOverrides: Readonly<Record<string, string>>;
+}
+
+/** Builds one review row: caption default + computed slot/schedule time. */
+function buildReviewRow(
+  asset: ComposerMediaItem,
+  index: number,
+  ctx: ReviewRowContext,
+  onCaptionChange: (id: string, caption: string) => void,
+  onRemove: (id: string) => void
+): BulkReviewRow {
+  const caption = resolveRowCaption(asset, ctx.sharedCaption, ctx.captionOverrides);
+  let timeLabel: string;
+  let scheduledISO: string;
+  if (ctx.destination === 'queue') {
+    const assigned = ctx.queueTimes.at(index);
+    if (assigned) {
+      timeLabel = formatSlotShort(assigned.date, assigned.timezone);
+      scheduledISO = assigned.date.toISOString();
+    } else {
+      timeLabel = 'No slot';
+      scheduledISO = new Date().toISOString();
+    }
+  } else {
+    const date = ctx.scheduleDate ?? new Date();
+    timeLabel = formatSlotLong(date, ctx.scheduleTimezone);
+    scheduledISO = date.toISOString();
+  }
+  return {
+    asset,
+    caption,
+    timeLabel,
+    scheduledISO,
+    onCaptionChange: (next: string) => onCaptionChange(asset.id, next),
+    onRemove: () => onRemove(asset.id),
+  };
+}
+
+function stepperStepColor(isActive: boolean, isDone: boolean): string {
+  if (isActive) return PALETTE.primary;
+  if (isDone) return 'var(--text)';
+  return 'var(--text-sub)';
 }
 
 export function BulkAddModal(props: Readonly<BulkAddModalProps>) {
@@ -109,30 +160,19 @@ export function BulkAddModal(props: Readonly<BulkAddModalProps>) {
   const reviewRows: BulkReviewRow[] = useMemo(() => {
     const queueTimes =
       destination === 'queue' ? computeBulkQueueTimes(localSlots, format, eligible.length) : [];
-    return eligible.map((asset, index) => {
-      const caption = resolveRowCaption(asset, sharedCaption, captionOverrides);
-      let timeLabel: string;
-      let scheduledISO: string;
-      if (destination === 'queue') {
-        const assigned = queueTimes.at(index);
-        timeLabel = assigned ? formatSlotShort(assigned.date, assigned.timezone) : 'No slot';
-        scheduledISO = assigned ? assigned.date.toISOString() : new Date().toISOString();
-      } else {
-        const date = scheduleDate ?? new Date();
-        timeLabel = formatSlotLong(date, scheduleTimezone);
-        scheduledISO = date.toISOString();
-      }
-      return {
-        asset,
-        caption,
-        timeLabel,
-        onCaptionChange: (next: string) =>
-          setCaptionOverrides((prev) => ({ ...prev, [asset.id]: next })),
-        onRemove: () => setAssets((prev) => prev.filter((a) => a.id !== asset.id)),
-        scheduledISO,
-      };
-    });
-  }, [eligible, destination, localSlots, format, sharedCaption, captionOverrides, scheduleDate]);
+    const ctx: ReviewRowContext = {
+      destination,
+      queueTimes,
+      scheduleDate,
+      scheduleTimezone,
+      sharedCaption,
+      captionOverrides,
+    };
+    const handleCaptionChange = (id: string, caption: string) =>
+      setCaptionOverrides((prev) => ({ ...prev, [id]: caption }));
+    const handleRemove = (id: string) => setAssets((prev) => prev.filter((a) => a.id !== id));
+    return eligible.map((asset, index) => buildReviewRow(asset, index, ctx, handleCaptionChange, handleRemove));
+  }, [eligible, destination, localSlots, format, sharedCaption, captionOverrides, scheduleDate, scheduleTimezone]);
 
   if (!isOpen) return null;
 
@@ -191,7 +231,7 @@ export function BulkAddModal(props: Readonly<BulkAddModalProps>) {
         );
       }
       onComplete();
-    } catch (_e) {
+    } catch {
       setSubmitError("Couldn't add these posts. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -203,18 +243,10 @@ export function BulkAddModal(props: Readonly<BulkAddModalProps>) {
   };
 
   const canContinueFromMedia = assets.length > 0;
+  const continueEnabled = step === 1 ? canContinueFromMedia : detailsValid;
 
   return (
-    <div
-      data-testid="bulk-add-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Bulk add"
-      style={MODAL_BACKDROP_STYLE}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) onClose();
-      }}
-    >
+    <div data-testid="bulk-add-modal" style={MODAL_BACKDROP_STYLE}>
       <div style={{ ...MODAL_CONTAINER_STYLE, maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: TYPOGRAPHY.weights.semibold }}>
@@ -251,7 +283,7 @@ export function BulkAddModal(props: Readonly<BulkAddModalProps>) {
                   border: 'none',
                   padding: 0,
                   cursor: clickable ? 'pointer' : 'default',
-                  color: isActive ? PALETTE.primary : isDone ? 'var(--text)' : 'var(--text-sub)',
+                  color: stepperStepColor(isActive, isDone),
                   fontWeight: isActive ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.regular,
                   fontSize: '0.875rem',
                   borderBottom: isActive ? `2px solid ${PALETTE.primary}` : '2px solid transparent',
@@ -327,12 +359,12 @@ export function BulkAddModal(props: Readonly<BulkAddModalProps>) {
               type="button"
               data-testid="bulk-continue-btn"
               onClick={() => setStep((s) => (s === 1 ? 2 : 3) as BulkStep)}
-              disabled={step === 1 ? !canContinueFromMedia : !detailsValid}
+              disabled={!continueEnabled}
               style={{
                 ...COMPONENT_STYLES.primaryButton,
                 padding: `${SPACING.xs} ${SPACING.lg}`,
-                cursor: step === 1 ? (canContinueFromMedia ? 'pointer' : 'not-allowed') : detailsValid ? 'pointer' : 'not-allowed',
-                opacity: step === 1 ? (canContinueFromMedia ? 1 : 0.7) : detailsValid ? 1 : 0.7,
+                cursor: continueEnabled ? 'pointer' : 'not-allowed',
+                opacity: continueEnabled ? 1 : 0.7,
               }}
             >
               Continue

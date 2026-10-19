@@ -5,11 +5,61 @@ import {
   canAccessTenant,
   getSessionSecret,
   verifySessionToken,
+  type BulkQueueItem,
+  type BulkEnqueueItemResult,
 } from '@fbuploadpro/contracts';
 import { handleEnqueueMedia } from '../route';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 
 const SINGLE_QUEUE_PATH = '/publishing/queue';
+
+function errorMessageFrom(data: Record<string, unknown>): string {
+  if (typeof data.message === 'string') return data.message;
+  if (typeof data.error === 'string') return data.error;
+  return 'Could not add this post.';
+}
+
+type EnqueueBulkItemResult = Pick<BulkEnqueueItemResult, 'ok' | 'itemId' | 'error'>;
+
+/**
+ * Enqueues one bulk row through the single-item handler, so validation,
+ * tenant/page checks, and storage behavior are identical to adding posts one
+ * at a time. A failed row is reported per row — it never fails the whole run.
+ */
+async function enqueueBulkItem(
+  request: NextRequest,
+  subdomain: string,
+  pageId: string,
+  item: BulkQueueItem
+): Promise<EnqueueBulkItemResult> {
+  const singleUrl = new URL(request.url);
+  singleUrl.pathname = singleUrl.pathname.replace(/\/bulk\/?$/, SINGLE_QUEUE_PATH);
+
+  try {
+    const singleRequest = new NextRequest(singleUrl.toString(), {
+      method: 'POST',
+      headers: request.headers,
+      body: JSON.stringify({
+        pageId,
+        mediaId: item.mediaId ?? null,
+        postFormat: item.format,
+        caption: item.caption,
+        linkUrl: item.linkUrl ?? null,
+        scheduledTime: item.scheduledTime,
+      }),
+    });
+
+    const response = await handleEnqueueMedia(singleRequest, subdomain);
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+
+    if (response.status === 201 && typeof data.id === 'string') {
+      return { ok: true, itemId: data.id };
+    }
+    return { ok: false, error: errorMessageFrom(data) };
+  } catch {
+    return { ok: false, error: 'Could not add this post. Please try again.' };
+  }
+}
 
 /**
  * Bulk-add queue items. Each row is enqueued through the same single-item
@@ -70,45 +120,12 @@ export async function POST(
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
-  // 5. Enqueue each item through the single-item handler. The cookie header is
-  // forwarded so the inner handler authenticates exactly like a direct call.
-  const singleUrl = new URL(request.url);
-  singleUrl.pathname = singleUrl.pathname.replace(/\/bulk\/?$/, SINGLE_QUEUE_PATH);
-
-  const results: Array<{ ok: boolean; itemId?: string; error?: string }> = [];
-
+  // 5. Enqueue each item through the single-item handler. Sequential on purpose:
+  // per-item results must map 1:1 onto the client's rows, and 150 parallel
+  // writes would needlessly hammer the database.
+  const results: EnqueueBulkItemResult[] = [];
   for (const item of items) {
-    try {
-      const singleRequest = new NextRequest(singleUrl.toString(), {
-        method: 'POST',
-        headers: request.headers,
-        body: JSON.stringify({
-          pageId,
-          mediaId: item.mediaId ?? null,
-          postFormat: item.format,
-          caption: item.caption,
-          linkUrl: item.linkUrl ?? null,
-          scheduledTime: item.scheduledTime,
-        }),
-      });
-
-      const response = await handleEnqueueMedia(singleRequest, subdomain);
-      const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-
-      if (response.status === 201 && typeof data.id === 'string') {
-        results.push({ ok: true, itemId: data.id });
-      } else {
-        const message =
-          typeof data.message === 'string'
-            ? data.message
-            : typeof data.error === 'string'
-              ? data.error
-              : 'Could not add this post.';
-        results.push({ ok: false, error: message });
-      }
-    } catch (_e) {
-      results.push({ ok: false, error: 'Could not add this post. Please try again.' });
-    }
+    results.push(await enqueueBulkItem(request, subdomain, pageId, item));
   }
 
   const validated = BulkEnqueueResponseSchema.parse({ results });

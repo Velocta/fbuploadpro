@@ -65,13 +65,12 @@ export function computeBulkQueueTimes(
 export function describeQueueRange(times: BulkAssignedTime[]): string | null {
   if (times.length === 0) return null;
   const first = times[0];
-  const last = times[times.length - 1];
-  const noun = times.length === 1 ? 'post' : 'posts';
+  const last = times.at(-1) ?? first;
   const firstLabel = formatSlotShort(first.date, first.timezone);
   const lastLabel = formatSlotShort(last.date, last.timezone);
   return times.length === 1
     ? `1 post → ${firstLabel}`
-    : `${times.length} ${noun} → ${firstLabel} … ${lastLabel}`;
+    : `${times.length} ${pluralize(times.length, 'post', 'posts')} → ${firstLabel} … ${lastLabel}`;
 }
 
 /**
@@ -97,6 +96,11 @@ const FORMAT_LABELS: Record<PostFormat, string> = {
 /** Sentence-case label for a post format ("Photo", "Reel", …). */
 export function formatLabel(format: PostFormat): string {
   return FORMAT_LABELS[format];
+}
+
+/** "1 post" / "2 posts" — sentence-case pluralization for counts. */
+export function pluralize(count: number, singular: string, plural: string): string {
+  return count === 1 ? singular : plural;
 }
 
 /**
