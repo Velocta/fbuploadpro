@@ -6,7 +6,6 @@ import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import {
   type ImportQueueItem,
   formatBytes,
-  deriveDefaultCaption,
 } from './media-types';
 
 

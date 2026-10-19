@@ -2,7 +2,7 @@
 
 import React from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { MediaAssetCard } from './media-asset-card';
 import { MediaTableRow } from './media-table-row';
 import type { MediaViewMode, MediaSmartViewKey } from './media-types';

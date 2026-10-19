@@ -1,14 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import {
-  type ImportQueueItem,
-  formatBytes,
-  deriveDefaultCaption,
-} from './media-types';
-import { ImportProgressRow } from './media-import-progress-row';
 
 
 // -----------------------------------------------------------------------------

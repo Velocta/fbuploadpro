@@ -1,29 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { AllowedMediaMimeTypes } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import {
   type ImportQueueItem,
-  formatBytes,
-  deriveDefaultCaption,
 } from './media-types';
 import {
-  resolveMimeType,
-  resolveMediaType,
-  classifyAspectRatio,
-  generateThumbnailBlob,
-  nextUniqueId,
   computeOverallProgress,
   computeFurthestAlong,
   handleModalKeyDown,
-  validateFileForImport,
-  createImagePreviewUrl,
-  generateQueueItemId,
   buildImportQueueItems,
   isItemReadyToImport,
-  isBatchCompleted,
 } from './media-import-utils';
 import { useImportUpload } from './media-import-upload-engine';
 import {
