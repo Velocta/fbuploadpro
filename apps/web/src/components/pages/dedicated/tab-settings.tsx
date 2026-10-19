@@ -69,6 +69,11 @@ export function PageTabSettings({
   const { isPaused, isNeedsAttention, statusSignal, statusLabel } = getSettingsStatusDetails(page.status);
   const displayedTimezone = timezoneOverride || page.timezone || detectBrowserTimezone();
 
+  let automationStateLabel = isPaused ? 'Off' : 'On';
+  if (isUpdatingStatus) {
+    automationStateLabel = 'Updating…';
+  }
+
   const handleToggleAutomation = async () => {
     setIsUpdatingStatus(true);
     try {
@@ -339,7 +344,7 @@ export function PageTabSettings({
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
-            {isUpdatingStatus ? 'Updating…' : isPaused ? 'Off' : 'On'}
+            {automationStateLabel}
           </span>
         </div>
       </div>
