@@ -22,6 +22,7 @@ import { PagesEmptyState } from '@/components/pages/pages-empty-state';
 import {
   AddPageModal,
   getActiveAccounts,
+  getExpiredAccounts,
   getSelectablePageIds,
   toggleSelectAllPages,
   type DiscoveredPageItem,
@@ -199,12 +200,12 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(errorAvatarRender.hasText('CR')).toBe(true);
     });
 
-    it('renders zero followersGained ("0") and negative followersGained ("-350" when currentFollowers < startingFollowers)', () => {
+    it('hides the followers-gained line when growth is zero (Spec 102)', () => {
       const zeroRender = render(
         <PageCard page={zeroGrowthPage} subdomain="acme" />
       );
       expect(zeroRender.hasText('5,400')).toBe(true);
-      expect(zeroRender.hasText('0')).toBe(true);
+      expect(zeroRender.hasAttribute('data-testid', 'page-followers-gained')).toBe(false);
 
       // Verify negative followersGained both from explicit field and computed fallback
       const computedNegativePage: FacebookPageItem = {
@@ -397,9 +398,10 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       },
     ];
 
-    it('Step 1 renders active connected Facebook accounts and filters out expired accounts', () => {
+    it('Step 1 lists active accounts and shows expired accounts grayed with inline Reconnect (Spec 102)', () => {
       const accounts = [sampleActiveAccount, sampleExpiredAccount];
       expect(getActiveAccounts(accounts)).toEqual([sampleActiveAccount]);
+      expect(getExpiredAccounts(accounts)).toEqual([sampleExpiredAccount]);
 
       const { hasText, hasAttribute } = render(
         <AddPageModal
@@ -415,18 +417,22 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(hasAttribute('data-testid', 'select-account-acc-1')).toBe(true);
       expect(hasText('Sarah Connor')).toBe(true);
       expect(hasText('2 pages linked')).toBe(true);
-      // Expired account should not be listed as an active import source
+      // Expired account is listed grayed with inline Reconnect — never as an import source
       expect(hasAttribute('data-testid', 'select-account-acc-expired')).toBe(false);
+      expect(hasAttribute('data-testid', 'expired-account-acc-expired')).toBe(true);
+      expect(hasAttribute('data-testid', 'reconnect-account-acc-expired')).toBe(true);
+      expect(hasText('Reconnect')).toBe(true);
+      expect(hasText('Session expired')).toBe(true);
     });
 
-    it('Step 1 shows "No active Facebook accounts connected" notice when 0 active accounts exist', () => {
+    it('Step 1 shows "No active Facebook accounts connected" notice only when no accounts exist at all (Spec 102)', () => {
       const onNavigateToAccounts = vi.fn();
       const { hasText, hasAttribute } = render(
         <AddPageModal
           subdomain="acme"
           open={true}
           onOpenChange={vi.fn()}
-          accounts={[sampleExpiredAccount]}
+          accounts={[]}
           onNavigateToAccounts={onNavigateToAccounts}
         />
       );
@@ -434,6 +440,40 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(hasAttribute('data-testid', 'no-active-accounts-notice')).toBe(true);
       expect(hasText('No active Facebook accounts connected')).toBe(true);
       expect(hasAttribute('data-testid', 'go-to-accounts-btn')).toBe(true);
+    });
+
+    it('Step 1 never shows the no-accounts claim when an expired-but-linked account exists (Spec 102)', () => {
+      const { hasText, hasAttribute } = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[sampleExpiredAccount]}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'no-active-accounts-notice')).toBe(false);
+      expect(hasText('No active Facebook accounts connected')).toBe(false);
+      expect(hasAttribute('data-testid', 'expired-account-acc-expired')).toBe(true);
+    });
+
+    it('inline Reconnect on an expired account calls onReconnectAccount (Spec 102)', () => {
+      const onReconnectAccount = vi.fn();
+      const tree = renderAndCaptureTree(() =>
+        AddPageModal({
+          subdomain: 'acme',
+          open: true,
+          onOpenChange: vi.fn(),
+          accounts: [sampleExpiredAccount],
+          onReconnectAccount,
+        })
+      );
+
+      const btn = findElementByTestId(tree, 'reconnect-account-acc-expired');
+      expect(btn).not.toBeNull();
+      btn?.props.onClick();
+      expect(onReconnectAccount).toHaveBeenCalledTimes(1);
+      expect(onReconnectAccount.mock.calls[0][0].id).toBe('acc-expired');
     });
 
     it('selecting an account in Step 1 queries GET /api/tenant/{subdomain}/accounts/{accountId}/pages/discover and transitions to Step 2', async () => {
@@ -780,7 +820,7 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(attentionRender.hasText('5 connected pages')).toBe(true);
       expect(attentionRender.hasText('3 require reconnecting')).toBe(true);
 
-      // 2. All operational scenario
+      // 2. All connected scenario — no contradictory "All operational" claim (Spec 102)
       const healthyPages = [pageActive1, pagePaused];
       const healthyRender = render(
         <TenantPagesPage
@@ -790,8 +830,54 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
         />
       );
       expect(
-        healthyRender.hasText('2 connected pages · All operational')
+        healthyRender.hasText('2 connected pages')
       ).toBe(true);
+      expect(healthyRender.hasText('All operational')).toBe(false);
+    });
+
+    it('shows the expired-connection banner with Reconnect when an account is expired (Spec 102)', () => {
+      const { hasAttribute, hasText } = render(
+        <TenantPagesPage
+          subdomainProp="acme"
+          initialPages={[pageActive1]}
+          initialAccounts={[sampleActiveAccount, sampleExpiredAccount]}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'pages-expired-connection-banner')).toBe(true);
+      expect(
+        hasText('Your Facebook connection expired. Reconnect to resume publishing.')
+      ).toBe(true);
+      expect(hasAttribute('data-testid', 'pages-reconnect-btn')).toBe(true);
+    });
+
+    it('hides the expired-connection banner when all accounts are connected (Spec 102)', () => {
+      const { hasAttribute } = render(
+        <TenantPagesPage
+          subdomainProp="acme"
+          initialPages={[pageActive1]}
+          initialAccounts={[sampleActiveAccount]}
+        />
+      );
+
+      expect(hasAttribute('data-testid', 'pages-expired-connection-banner')).toBe(false);
+    });
+
+    it('Reconnect routes to Settings → Facebook with the reconnect notice when no app credentials are configured (Spec 102)', () => {
+      const tree = renderAndCaptureTree(() =>
+        TenantPagesPage({
+          subdomainProp: 'acme',
+          initialPages: [pageActive1],
+          initialAccounts: [sampleActiveAccount, sampleExpiredAccount],
+        })
+      );
+
+      const btn = findElementByTestId(tree, 'pages-reconnect-btn');
+      expect(btn).not.toBeNull();
+      btn?.props.onClick();
+      expect(mockPush).toHaveBeenCalledWith(
+        '/tenant/acme/settings?tab=byoc&notice=reconnect'
+      );
     });
 
     it('validates light mode canvas contrast token is #f6f8fa and panel is #ffffff (Spec 050)', () => {

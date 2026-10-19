@@ -18,10 +18,10 @@ import {
   TYPOGRAPHY,
   COMPONENT_STYLES,
 } from '@/lib/theme';
-import {
-  getInitials,
-  type FacebookAccountItem,
-} from '@/components/accounts/account-card';
+import { getUserInitials } from '@/lib/user-initials';
+import { getAccountHealth } from '@/components/accounts/account-health';
+import { type FacebookAccountItem } from '@/components/accounts/account-card';
+import { buildDirectConnectUrl } from '@/components/accounts/connect-account-modal';
 
 export interface DiscoveredPageItem {
   fbPageId: string;
@@ -41,6 +41,7 @@ export interface AddPageModalProps {
   accounts?: FacebookAccountItem[] | undefined;
   onSuccess?: ((importedCount: number) => void) | undefined;
   onNavigateToAccounts?: (() => void) | undefined;
+  onReconnectAccount?: ((account: FacebookAccountItem) => void) | undefined;
   initialStep?: 'select-account' | 'select-pages' | undefined;
   initialSelectedAccount?: FacebookAccountItem | null | undefined;
   initialDiscoveredPages?: DiscoveredPageItem[] | undefined;
@@ -50,7 +51,13 @@ export interface AddPageModalProps {
 export function getActiveAccounts(
   accounts: FacebookAccountItem[]
 ): FacebookAccountItem[] {
-  return accounts.filter((acc) => acc.status === 'active');
+  return accounts.filter((acc) => getAccountHealth(acc) === 'connected');
+}
+
+export function getExpiredAccounts(
+  accounts: FacebookAccountItem[]
+): FacebookAccountItem[] {
+  return accounts.filter((acc) => getAccountHealth(acc) === 'expired');
 }
 
 export function getSelectablePageIds(pages: DiscoveredPageItem[]): string[] {
@@ -234,7 +241,8 @@ function DiscoveredPageAvatar({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const showImg =
     Boolean(profilePictureUrl) && failedUrl !== profilePictureUrl;
-  const initials = getInitials(pageName, 'PG');
+  const trimmedName = pageName.trim();
+  const initials = trimmedName ? getUserInitials(trimmedName) : 'PG';
 
   if (showImg) {
     return (
@@ -283,6 +291,7 @@ export function AddPageModal({
   accounts,
   onSuccess,
   onNavigateToAccounts,
+  onReconnectAccount,
   initialStep = 'select-account',
   initialSelectedAccount = null,
   initialDiscoveredPages = [],
@@ -311,6 +320,8 @@ export function AddPageModal({
 
   const effectiveAccounts = fetchedAccounts ?? accounts ?? [];
   const activeAccounts = getActiveAccounts(effectiveAccounts);
+  const expiredAccounts = getExpiredAccounts(effectiveAccounts);
+  const hasAnyAccounts = activeAccounts.length > 0 || expiredAccounts.length > 0;
 
   const fetchAccountsIfNeeded = useCallback(async () => {
     if (!subdomain || accounts !== undefined) return;
@@ -413,6 +424,22 @@ export function AddPageModal({
       onNavigateToAccounts();
     } else if (typeof window !== 'undefined') {
       window.location.href = `/tenant/${subdomain}/accounts`;
+    }
+  };
+
+  const handleReconnectAccount = (account: FacebookAccountItem) => {
+    if (onReconnectAccount) {
+      onReconnectAccount(account);
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.location.href = buildDirectConnectUrl({
+        id: account.id,
+        fbAccountId: account.fbAccountId,
+        displayName: account.displayName,
+        status: account.status,
+        updatedAt: account.updatedAt,
+      });
     }
   };
 
@@ -524,7 +551,7 @@ export function AddPageModal({
                 </div>
               )}
 
-              {!isLoadingAccounts && activeAccounts.length === 0 && (
+              {!isLoadingAccounts && !hasAnyAccounts && (
                 <div
                   data-testid="no-active-accounts-notice"
                   style={{
@@ -583,7 +610,10 @@ export function AddPageModal({
                   }}
                 >
                   {activeAccounts.map((account) => {
-                    const initials = getInitials(account.displayName, 'FB');
+                    const trimmedAccountName = account.displayName.trim();
+                    const initials = trimmedAccountName
+                      ? getUserInitials(trimmedAccountName)
+                      : 'FB';
                     const pagesLabel = `${account.connectedPagesCount} ${
                       account.connectedPagesCount === 1
                         ? 'page linked'
@@ -696,6 +726,133 @@ export function AddPageModal({
                           <ChevronRightIcon />
                         </div>
                       </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!isLoadingAccounts && expiredAccounts.length > 0 && (
+                <div
+                  data-testid="expired-accounts-list"
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    marginTop: activeAccounts.length > 0 ? SPACING.md : 0,
+                  }}
+                >
+                  {expiredAccounts.map((account) => {
+                    const trimmedName = account.displayName.trim();
+                    const initials = trimmedName
+                      ? getUserInitials(trimmedName)
+                      : 'FB';
+                    const pagesLabel = `${account.connectedPagesCount} ${
+                      account.connectedPagesCount === 1
+                        ? 'page linked'
+                        : 'pages linked'
+                    }`;
+
+                    return (
+                      <div
+                        key={account.id}
+                        data-testid={`expired-account-${account.id}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: SPACING.md,
+                          padding: '12px 14px',
+                          borderRadius: RADII.sm,
+                          opacity: 0.55,
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: SPACING.md,
+                            minWidth: 0,
+                          }}
+                        >
+                          {account.profilePictureUrl ? (
+                            <img
+                              src={account.profilePictureUrl}
+                              alt={account.displayName}
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: RADII.full,
+                                objectFit: 'cover',
+                                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                                flexShrink: 0,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: '36px',
+                                height: '36px',
+                                borderRadius: RADII.full,
+                                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                                color: `var(--text-main, ${THEME.default.text.primary})`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: TYPOGRAPHY.weights.bold,
+                                fontSize: '0.8125rem',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {initials}
+                            </div>
+                          )}
+
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontWeight: TYPOGRAPHY.weights.semibold,
+                                fontSize: '0.9375rem',
+                                color: `var(--text-main, ${THEME.default.text.primary})`,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {account.displayName}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: '0.75rem',
+                                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                                marginTop: '2px',
+                              }}
+                            >
+                              {pagesLabel} · Session expired
+                            </div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          data-testid={`reconnect-account-${account.id}`}
+                          onClick={() => handleReconnectAccount(account)}
+                          style={{
+                            height: '30px',
+                            padding: `0 ${SPACING.md}`,
+                            backgroundColor: 'transparent',
+                            color: PALETTE.accent3,
+                            border: '1px solid rgba(246, 70, 93, 0.35)',
+                            borderRadius: RADII.sm,
+                            fontSize: '0.8125rem',
+                            fontWeight: TYPOGRAPHY.weights.semibold,
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                          }}
+                        >
+                          Reconnect
+                        </button>
+                      </div>
                     );
                   })}
                 </div>

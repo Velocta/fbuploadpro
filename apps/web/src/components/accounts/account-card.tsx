@@ -2,8 +2,14 @@
 
 import React from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, STATUS_SIGNALS, COMPONENT_STYLES } from '@/lib/theme';
 import { getUserInitials } from '@/lib/user-initials';
+import {
+  getAccountHealth,
+  getAccountHealthLabel,
+  getAccountHealthSignal,
+  isTokenExpiringSoon,
+} from './account-health';
 
 export interface FacebookAccountLinkedPageItem {
   id: string;
@@ -37,28 +43,18 @@ export interface AccountCardProps {
 }
 
 /**
- * Kept for existing importers (add-page-modal.tsx, page-card.tsx). The letter
- * computation is shared via getUserInitials from '@/lib/user-initials'; this
- * shim only preserves the per-caller fallback behavior.
+ * Initials for an account or page display name, with a caller-chosen fallback
+ * when the name is blank.
  */
-export function getInitials(name: string | null | undefined, fallback = 'FB'): string {
+function initialsFor(name: string | null | undefined, fallback: string): string {
   if (!name || !name.trim()) return fallback;
   return getUserInitials(name);
-}
-
-export function getAccountRingColor(
-  status: FacebookAccountItem['status'],
-  isExpiringSoon: boolean
-): string {
-  if (status === 'expired') return PALETTE.accent3; // #f6465d
-  if (isExpiringSoon) return PALETTE.primary; // #fad734
-  return PALETTE.accent4; // #2ebd85
 }
 
 function LinkedPageRow({ page }: Readonly<{ page: FacebookAccountLinkedPageItem }>) {
   const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
   const showImg = Boolean(page.profilePictureUrl) && failedUrl !== page.profilePictureUrl;
-  const pageInitials = getInitials(page.pageName, 'PG');
+  const pageInitials = initialsFor(page.pageName, 'PG');
 
   return (
     <div
@@ -290,17 +286,15 @@ export function AccountCard({
   const params = useParams();
   const currentSubdomain = subdomain ?? ((params?.subdomain as string) || '');
 
-  const isExpired = account.status === 'expired';
-  const daysRemaining = account.tokenExpiresAt
-    ? Math.ceil((new Date(account.tokenExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
-  const isExpiringSoon =
-    !isExpired &&
-    daysRemaining !== null &&
-    daysRemaining > 0 &&
-    daysRemaining <= 7;
-
-  const ringColor = getAccountRingColor(account.status, isExpiringSoon);
+  const health = getAccountHealth(account);
+  const isExpired = health === 'expired';
+  const isExpiringSoon = isTokenExpiringSoon(account);
+  const statusSignal =
+    health === 'connected' && isExpiringSoon
+      ? 'queued'
+      : getAccountHealthSignal(health);
+  const statusLabel = getAccountHealthLabel(health);
+  const ringColor = STATUS_SIGNALS[statusSignal].color;
 
   const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(
     forceAvatarError ? (account.profilePictureUrl ?? '__forced__') : null
@@ -320,7 +314,7 @@ export function AccountCard({
     }
   }, [account.createdAt]);
 
-  const initials = getInitials(account.displayName, 'FB');
+  const initials = initialsFor(account.displayName, 'FB');
   const showAvatarImg =
     Boolean(account.profilePictureUrl) &&
     !forceAvatarError &&
@@ -454,15 +448,38 @@ export function AccountCard({
             )}
           </div>
 
-          <span
-            data-testid="account-connected-date"
+          <div
             style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '2px',
             }}
           >
-            Connected {formattedDate}
-          </span>
+            <span
+              data-testid="account-health-dot"
+              style={COMPONENT_STYLES.statusDot(statusSignal)}
+            />
+            <span
+              data-testid="account-health-label"
+              style={{
+                fontSize: '0.75rem',
+                fontWeight: TYPOGRAPHY.weights.medium,
+                color: STATUS_SIGNALS[statusSignal].color,
+              }}
+            >
+              {statusLabel}
+            </span>
+            <span
+              data-testid="account-connected-date"
+              style={{
+                fontSize: '0.75rem',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+              }}
+            >
+              · Connected {formattedDate}
+            </span>
+          </div>
         </div>
       </div>
 

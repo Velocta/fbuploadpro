@@ -8,7 +8,7 @@ import {
   SPACING,
   TYPOGRAPHY,
 } from '@/lib/theme';
-import { getInitials } from '@/components/accounts/account-card';
+import { getUserInitials } from '@/lib/user-initials';
 
 export type FacebookPageStatus =
   | 'active'
@@ -161,7 +161,8 @@ export function PageCard({
     gainedColor = PALETTE.accent3;
   }
 
-  const initials = getInitials(page.pageName, 'PG');
+  const rawPageName = page.pageName.trim();
+  const initials = rawPageName ? getUserInitials(rawPageName) : 'PG';
   const showAvatarImg =
     Boolean(page.profilePictureUrl) &&
     !forceAvatarError &&
@@ -316,7 +317,7 @@ export function PageCard({
                 {page.pageName}
               </h3>
               <span
-                data-testid="page-category"
+                data-testid="page-followers-line"
                 style={{
                   display: 'block',
                   fontSize: '0.75rem',
@@ -327,7 +328,21 @@ export function PageCard({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {page.category || 'Facebook Page'}
+                <span
+                  data-testid="page-current-followers"
+                  style={{
+                    fontWeight: TYPOGRAPHY.weights.semibold,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                  }}
+                >
+                  {currentFollowers.toLocaleString('en-US')}
+                </span>{' '}
+                followers
+                <span data-testid="page-category">
+                  {' '}
+                  · {page.category || 'Facebook Page'}
+                </span>
               </span>
             </div>
           </div>
@@ -398,47 +413,21 @@ export function PageCard({
           paddingTop: SPACING.xs,
         }}
       >
-        {/* Left Column: Followers Count & Gain */}
+        {/* Left Column: Followers Gain (rendered only when non-zero) */}
         <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'baseline',
-              gap: '6px',
-            }}
-          >
-            <span
-              data-testid="page-current-followers"
-              style={{
-                fontSize: '1.0625rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              {currentFollowers.toLocaleString('en-US')}
-            </span>
-            <span
+          {gained !== 0 && (
+            <div
+              data-testid="page-followers-gained"
               style={{
                 fontSize: '0.75rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+                color: gainedColor,
+                fontVariantNumeric: TYPOGRAPHY.tabularNums,
+                marginTop: '2px',
               }}
             >
-              followers
-            </span>
-          </div>
-
-          <div
-            data-testid="page-followers-gained"
-            style={{
-              fontSize: '0.75rem',
-              color: gainedColor,
-              fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              marginTop: '2px',
-            }}
-          >
-            {formattedGained}
-          </div>
+              {formattedGained}
+            </div>
+          )}
         </div>
 
         {/* Right Column: Pure Typographic Status (NO DOT) & Parent Account */}
