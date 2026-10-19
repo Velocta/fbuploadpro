@@ -86,19 +86,21 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
       expect(key).toBe('token-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab');
     });
 
-    it('returns FB_ENCRYPTION_MASTER_KEY when TOKEN_ENCRYPTION_KEY is absent', () => {
-      const key = getTokenEncryptionKey({
-        FB_ENCRYPTION_MASTER_KEY: 'master-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
-      });
-      expect(key).toBe('master-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890');
+    it('ignores FB_ENCRYPTION_MASTER_KEY (fallback removed — TOKEN_ENCRYPTION_KEY is canonical)', () => {
+      // With only the legacy key set and no NODE_ENV, the key is treated as absent
+      expect(() => {
+        getTokenEncryptionKey({
+          FB_ENCRYPTION_MASTER_KEY: 'master-key-1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+        });
+      }).toThrow(DomainError);
     });
 
-    it('prefers TOKEN_ENCRYPTION_KEY over FB_ENCRYPTION_MASTER_KEY', () => {
+    it('falls back to dev key in test env even when only FB_ENCRYPTION_MASTER_KEY is set', () => {
       const key = getTokenEncryptionKey({
-        TOKEN_ENCRYPTION_KEY: 'preferred-token-key-1234567890abcdef1234567890abcdef1234567890abcdef12',
+        NODE_ENV: 'test',
         FB_ENCRYPTION_MASTER_KEY: 'fallback-master-key-1234567890abcdef1234567890abcdef1234567890abcdef12',
       });
-      expect(key).toBe('preferred-token-key-1234567890abcdef1234567890abcdef1234567890abcdef12');
+      expect(key).toBe('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
     });
 
     it('falls back to dev key only in development/test environments when key is absent', () => {
@@ -132,7 +134,7 @@ describe('Web Crypto AES-256-GCM Token Encryption', () => {
 
       expect(() => {
         getTokenEncryptionKey({ NODE_ENV: 'production' });
-      }).toThrow(/TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required/i);
+      }).toThrow(/TOKEN_ENCRYPTION_KEY is required/i);
     });
 
     it('allows valid key in production environment', () => {
