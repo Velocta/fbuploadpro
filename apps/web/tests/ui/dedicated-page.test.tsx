@@ -14,7 +14,8 @@ import {
   PageTabCalendar,
   PageTabPostingTimes,
   PageTabSettings,
-  EnqueueModal,
+  PostComposer,
+  getMediaCapNotice,
   type PageSlotSummary,
   type DedicatedQueueItem,
 } from '@/components/pages/dedicated';
@@ -742,171 +743,172 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
   });
 
   /* ====================================================================
-   * Modal: EnqueueModal
+   * Composer: PostComposer (spec 103 — replaces EnqueueModal)
    * ==================================================================== */
-  describe('EnqueueModal Component', () => {
-    it('does not render when isOpen is false', () => {
-      const { hasAttribute } = render(
-        <EnqueueModal
-          pageId="page-101"
-          subdomain="cyberdyne"
-          slots={sampleSlots}
-          isOpen={false}
-          onClose={vi.fn()}
-          onEnqueued={vi.fn()}
-        />
-      );
+  describe('PostComposer Component', () => {
+    const composerProps = {
+      pageId: 'page-101',
+      subdomain: 'cyberdyne',
+      slots: sampleSlots,
+      onClose: vi.fn(),
+      onSubmitted: vi.fn(),
+    };
 
-      expect(hasAttribute('data-testid', 'enqueue-modal')).toBe(false);
+    it('renders the composer dialog with title and intent selector', () => {
+      const { hasAttribute, hasText } = render(<PostComposer {...composerProps} />);
+
+      expect(hasAttribute('data-testid', 'post-composer')).toBe(true);
+      expect(hasText('Create post')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-intent-selector')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-intent-now')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-intent-schedule')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-intent-queue')).toBe(true);
     });
 
-    it('renders modal dialog when isOpen is true', () => {
+    it('renders 5 format selector buttons', () => {
+      const { hasAttribute } = render(<PostComposer {...composerProps} />);
+
+      expect(hasAttribute('data-testid', 'composer-format-selector')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-format-text')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-format-image')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-format-video')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-format-reel')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-format-story')).toBe(true);
+    });
+
+    it('opens with an empty media area and no pre-selected assets', () => {
+      const { hasAttribute, hasText } = render(<PostComposer {...composerProps} />);
+
+      expect(hasAttribute('data-testid', 'composer-media-area')).toBe(true);
+      expect(hasText('No media selected yet.')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-choose-library-btn')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-upload-new-btn')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-selected-media')).toBe(false);
+    });
+
+    it('shows the computed queue line when a slot covers the format', () => {
+      const { hasAttribute, hasText } = render(<PostComposer {...composerProps} />);
+
+      expect(hasAttribute('data-testid', 'composer-queue-goes-out')).toBe(true);
+      expect(hasText('Goes out at the next posting time for Reels:')).toBe(true);
+    });
+
+    it('disables the queue intent and offers quick-add when no posting times exist', () => {
       const { hasAttribute, hasText } = render(
-        <EnqueueModal
-          pageId="page-101"
-          subdomain="cyberdyne"
-          slots={sampleSlots}
-          isOpen={true}
-          onClose={vi.fn()}
-          onEnqueued={vi.fn()}
-        />
+        <PostComposer {...composerProps} slots={[]} />
       );
 
-      expect(hasAttribute('data-testid', 'enqueue-modal')).toBe(true);
-      expect(hasText('Add Media to Queue')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-slot-select')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-caption-field')).toBe(true);
+      expect(hasText('Set posting times first')).toBe(true);
+      expect(hasAttribute('data-testid', 'posting-time-quick-add')).toBe(true);
     });
 
-    it('maps captionText from media response and renders correctly (Audit Issue 22)', () => {
-      // Direct verification of mapping logic: caption: m.captionText ?? m.caption ?? null
-      const rawApiItems = [
-        {
-          id: 'media-1',
-          name: 'Video 1',
-          mediaType: 'video',
-          thumbnailUrl: 'https://example.com/thumb1.jpg',
-          url: 'https://example.com/video1.mp4',
-          captionText: 'Mapped caption text from captionText',
-          caption: null,
-          firstComment: 'First comment 1',
-        },
-        {
-          id: 'media-2',
-          name: 'Image 2',
-          mediaType: 'image',
-          thumbnailUrl: 'https://example.com/thumb2.jpg',
-          url: 'https://example.com/image2.jpg',
-          captionText: null,
-          caption: 'Fallback caption',
-          firstComment: null,
-        },
-        {
-          id: 'media-3',
-          name: 'Image 3',
-          mediaType: 'image',
-          thumbnailUrl: null,
-          url: 'https://example.com/image3.jpg',
-          captionText: undefined,
-          caption: undefined,
-          firstComment: null,
-        },
+    it('shows an inline notice and quick-add when no slot covers the format', () => {
+      const photoOnly = [
+        { id: 'slot-1', slotTime: '09:00', timezone: 'UTC', isActive: true, allowedFormats: ['image'] },
       ];
-
-      const mapped = rawApiItems.map((m: any) => ({
-        id: m.id,
-        name: m.name,
-        mediaType: m.mediaType,
-        thumbnailUrl: m.thumbnailUrl,
-        url: m.url,
-        caption: m.captionText ?? m.caption ?? null,
-        firstComment: m.firstComment,
-      }));
-
-      expect(mapped[0].caption).toBe('Mapped caption text from captionText');
-      expect(mapped[1].caption).toBe('Fallback caption');
-      expect(mapped[2].caption).toBeNull();
-
-      const { hasText, hasAttribute } = render(
-        <EnqueueModal
-          pageId="page-101"
-          subdomain="cyberdyne"
-          slots={sampleSlots}
-          isOpen={true}
-          onClose={vi.fn()}
-          onEnqueued={vi.fn()}
-        />
-      );
-
-      expect(hasAttribute('data-testid', 'enqueue-modal')).toBe(true);
-      expect(hasText('Add Media to Queue')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-caption-field')).toBe(true);
-    });
-
-    it('renders 5 format selector buttons and toggles format behaviors', () => {
       const { hasAttribute, hasText } = render(
-        <EnqueueModal
-          pageId="page-101"
-          subdomain="cyberdyne"
-          slots={sampleSlots}
-          isOpen={true}
-          onClose={vi.fn()}
-          onEnqueued={vi.fn()}
+        <PostComposer {...composerProps} slots={photoOnly} initialIntent="queue" />
+      );
+
+      expect(hasAttribute('data-testid', 'composer-no-covering-slot-notice')).toBe(true);
+      expect(hasText('No posting time covers Reels yet.')).toBe(true);
+      expect(hasAttribute('data-testid', 'posting-time-quick-add')).toBe(true);
+    });
+
+    it('hides media and link fields appropriately for reel format', () => {
+      const { hasAttribute } = render(<PostComposer {...composerProps} />);
+
+      // Reel: media shown, link hidden, portrait hint visible
+      expect(hasAttribute('data-testid', 'composer-media-area')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-link')).toBe(false);
+      expect(hasAttribute('data-testid', 'composer-reel-hint')).toBe(true);
+    });
+
+    it('pre-fills for edit and locks media in edit mode', () => {
+      const { hasAttribute, hasText } = render(
+        <PostComposer
+          {...composerProps}
+          initialPost={{
+            id: 'item-1',
+            postFormat: 'image',
+            caption: 'Existing caption',
+            scheduledTime: new Date(Date.now() + 3600000).toISOString(),
+            status: 'queued',
+            media: {
+              name: 'photo.jpg',
+              mediaType: 'image',
+              url: 'https://example.com/photo.jpg',
+              thumbnailUrl: null,
+            },
+          }}
         />
       );
 
-      expect(hasAttribute('data-testid', 'enqueue-format-selector')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-format-reel')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-format-video')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-format-image')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-format-story')).toBe(true);
-      expect(hasAttribute('data-testid', 'enqueue-format-text')).toBe(true);
+      expect(hasText('Edit post')).toBe(true);
+      expect(hasAttribute('data-testid', 'composer-selected-media')).toBe(true);
+      expect(hasText('Existing caption')).toBe(true);
     });
 
-    it('hides media picker and shows link input when text format is selected', () => {
-      const tree = renderAndCaptureTree(() =>
-        EnqueueModal({
-          pageId: 'page-101',
-          subdomain: 'cyberdyne',
-          slots: sampleSlots,
-          isOpen: true,
-          onClose: vi.fn(),
-          onEnqueued: vi.fn(),
-        })
+    it('renders a disabled submit until the post is valid', () => {
+      const { html } = render(<PostComposer {...composerProps} />);
+      const submitIdx = html.indexOf('data-testid="submit-post-composer-btn"');
+      expect(submitIdx).toBeGreaterThan(-1);
+      const buttonHtml = html.slice(Math.max(0, submitIdx - 200), submitIdx + 120);
+      expect(buttonHtml).toContain('disabled');
+    });
+
+    it('caps every format at one media item with plain-language notices', () => {
+      // Empty: adds are allowed for every format.
+      expect(getMediaCapNotice('image', 0)).toBeNull();
+      expect(getMediaCapNotice('video', 0)).toBeNull();
+      expect(getMediaCapNotice('reel', 0)).toBeNull();
+      expect(getMediaCapNotice('story', 0)).toBeNull();
+      // One already selected: second adds are blocked with format-specific copy.
+      expect(getMediaCapNotice('image', 1)).toBe(
+        'Photo posts take 1 image. Remove the current one to pick another.'
       );
+      expect(getMediaCapNotice('video', 1)).toBe(
+        'Video posts take 1 video. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('reel', 1)).toBe(
+        'Reels take 1 video. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('story', 1)).toBe(
+        'Stories take 1 file. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('text', 2)).toBeNull();
+    });
 
-      const textFormatBtn = findElementByTestId(tree, 'enqueue-format-text');
-      expect(textFormatBtn).not.toBeNull();
-      textFormatBtn?.props.onClick();
+    it('never allows multi-file selection on the upload input', () => {
+      const { html } = render(<PostComposer {...composerProps} />);
+      const inputMatch = /<input\b[^>]*data-testid="composer-file-input"[^>]*>/.exec(html);
+      expect(inputMatch).not.toBeNull();
+      expect(inputMatch![0]).not.toContain('multiple');
+    });
 
-      const { hasAttribute } = render(
-        <EnqueueModal
-          pageId="page-101"
-          subdomain="cyberdyne"
-          slots={sampleSlots}
-          isOpen={true}
-          onClose={vi.fn()}
-          onEnqueued={vi.fn()}
+    it('locks the format selector in edit mode', () => {
+      const { html, hasText } = render(
+        <PostComposer
+          {...composerProps}
+          initialPost={{
+            id: 'item-1',
+            postFormat: 'image',
+            caption: 'Existing caption',
+            scheduledTime: new Date(Date.now() + 3600000).toISOString(),
+            status: 'queued',
+            media: {
+              name: 'photo.jpg',
+              mediaType: 'image',
+              url: 'https://example.com/photo.jpg',
+              thumbnailUrl: null,
+            },
+          }}
         />
       );
-      expect(hasAttribute('data-testid', 'enqueue-format-text')).toBe(true);
-    });
-
-    it('shows story-no-comment-notice when story format is selected', () => {
-      const tree = renderAndCaptureTree(() =>
-        EnqueueModal({
-          pageId: 'page-101',
-          subdomain: 'cyberdyne',
-          slots: sampleSlots,
-          isOpen: true,
-          onClose: vi.fn(),
-          onEnqueued: vi.fn(),
-        })
-      );
-
-      const storyFormatBtn = findElementByTestId(tree, 'enqueue-format-story');
-      expect(storyFormatBtn).not.toBeNull();
-      storyFormatBtn?.props.onClick();
+      const btnMatch = /<button\b[^>]*data-testid="composer-format-image"[^>]*>/.exec(html);
+      expect(btnMatch).not.toBeNull();
+      expect(btnMatch![0]).toContain(' disabled=""');
+      expect(hasText("Format can't be changed when editing.")).toBe(true);
     });
   });
 
