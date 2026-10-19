@@ -7,6 +7,8 @@ import {
   type PostFormat,
   decryptToken,
   evaluateGraphApiError,
+  UnauthorizedError,
+  ValidationError,
 } from '@fbuploadpro/contracts';
 import { FacebookGraphError, FacebookPublishClient } from './fb-client.js';
 import { settleOutcome } from './settlement.js';
@@ -234,7 +236,7 @@ export async function dispatchItem(
   try {
     const decrypted = await decryptToken(item.encryptedPageToken, masterKey, { allowEmpty: true });
     if (!decrypted) {
-      throw new Error('Access token is missing or page is soft-deleted');
+      throw new UnauthorizedError('Access token is missing or page is soft-deleted');
     }
     accessToken = decrypted;
   } catch (err: unknown) {
@@ -267,7 +269,7 @@ export async function dispatchItem(
 
       case 'image': {
         if (!item.mediaUrl) {
-          throw new Error('Media URL is required for image publishing');
+          throw new ValidationError('Media URL is required for image publishing');
         }
         publishResult = await fbClient.publishPhoto({
           pageId: item.fbPageId,
@@ -280,7 +282,7 @@ export async function dispatchItem(
 
       case 'reel': {
         if (!item.mediaUrl) {
-          throw new Error('Media URL is required for reel publishing');
+          throw new ValidationError('Media URL is required for reel publishing');
         }
         publishResult = await fbClient.publishReel({
           pageId: item.fbPageId,
@@ -293,7 +295,7 @@ export async function dispatchItem(
 
       case 'video': {
         if (!item.mediaUrl) {
-          throw new Error('Media URL is required for video publishing');
+          throw new ValidationError('Media URL is required for video publishing');
         }
         if (typeof fbClient.publishVideo === 'function') {
           publishResult = await fbClient.publishVideo({
@@ -315,7 +317,7 @@ export async function dispatchItem(
 
       case 'story': {
         if (!item.mediaUrl) {
-          throw new Error('Media URL is required for story publishing');
+          throw new ValidationError('Media URL is required for story publishing');
         }
         if (item.mediaType === 'image') {
           if (typeof fbClient.publishPhotoStory === 'function') {
@@ -340,7 +342,7 @@ export async function dispatchItem(
       }
 
       default: {
-        throw new Error(`Unsupported post format: ${String(format)}`);
+        throw new ValidationError(`Unsupported post format: ${String(format)}`);
       }
     }
   } catch (err: unknown) {

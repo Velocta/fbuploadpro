@@ -3,6 +3,7 @@ import {
   type IFacebookPublishClient,
   type GraphRateLimitTelemetry,
   type PublishResult,
+  InternalError,
 } from '@fbuploadpro/contracts';
 
 export type { IFacebookPublishClient, GraphRateLimitTelemetry, PublishResult };
@@ -664,7 +665,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
   ): Promise<void> {
     const videoRes = await this.fetchWithRetry(videoUrl);
     if (!videoRes.ok || !videoRes.body) {
-      throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
+      throw new InternalError(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
     }
 
     const uploadRes = await this.fetchWithRetry(uploadUrl, {
