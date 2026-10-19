@@ -2,8 +2,8 @@
 
 import React from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import type { MediaSmartViewKey, MediaViewMode } from './media-types';
+import { THEME, PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+
 
 export interface SubfolderRowsSectionProps {
   currentSubfolders: MediaFolder[];

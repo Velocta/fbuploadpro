@@ -3,22 +3,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import { MediaAssetCard } from './media-asset-card';
-import { MediaTableRow } from './media-table-row';
 import { MediaPreviewModal } from './media-preview-modal';
 import { BatchActionBar } from './batch-action-bar';
 import { BatchSetCaptionModal } from './batch-set-caption-modal';
 import { MediaImportModal } from './media-import-modal';
 import { NewFolderModal } from './new-folder-modal';
 import { LeavePageGuardDialog } from './leave-page-guard-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
 import { type BatchCaptionMode } from './media-types';
 import {
   type MediaViewMode,
@@ -28,19 +18,12 @@ import {
   type SortOptionKey,
   type MediaSmartViewKey,
 } from './media-types';
-import {
-  buildFolderBreadcrumbs,
-  formatFolderAncestryPath,
-} from './media-library-breadcrumbs';
+import { buildFolderBreadcrumbs } from './media-library-breadcrumbs';
 import { MediaCanvas } from './media-library-grid';
 import { SubfolderRowsSection } from './media-library-subfolders';
 import {
   filterAndSortMediaItems,
   getScopeTagLabel,
-  getEmptyStateInfo,
-  resolveTargetFolderIdForEntry,
-  computeFolderSubtreeImpact,
-  checkServerDuplicateEntries,
 } from './media-library-filters';
 export {
   filterAndSortMediaItems,
@@ -53,13 +36,7 @@ export {
 
 export { buildFolderBreadcrumbs, formatFolderAncestryPath } from './media-library-breadcrumbs';
 import { MediaToolbar } from './media-library-toolbar';
-import {
-  MEDIA_TYPE_LABELS,
-  ASPECT_RATIO_SHORT_VALUES,
-  CAPTION_STATUS_SHORT_VALUES,
-  SORT_OPTION_SHORT_VALUES,
-  type ActiveDropdownKey,
-} from './media-library-filters';
+import { type ActiveDropdownKey } from './media-library-filters';
 import {
   MoveTargetDialog,
   RenameFolderDialog,
@@ -70,13 +47,7 @@ export type { MediaViewMode, MediaTypeFilterKey, AspectRatioFilterKey, CaptionSt
 
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
 
-
-
-export interface FolderSubtreeImpact {
-  descendantFolderIds: string[];
-  subfolderCount: number;
-  totalMediaCount: number;
-}
+export type { FolderSubtreeImpact } from './media-library-filters';
 
 function computeNextSelection(
   prev: string[],
