@@ -1554,9 +1554,12 @@ export const SidebarRail = forwardRef<HTMLButtonElement, SidebarRailProps>(
         style={{
           position: 'absolute',
           top: 0,
+          // M2: the grab strip must sit fully outside the sidebar. It used to
+          // extend 8px into the sidebar over the menu buttons and steal the
+          // right-edge clicks (toggling the sidebar instead of navigating).
           right: '-8px',
           bottom: 0,
-          width: '16px',
+          width: '8px',
           border: 'none',
           padding: 0,
           cursor: isCollapsed ? 'e-resize' : 'w-resize',

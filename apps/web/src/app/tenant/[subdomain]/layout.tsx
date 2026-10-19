@@ -7,6 +7,7 @@ import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb
 import { WorkspaceLifecycleGuard } from '@/components/workspace/workspace-lifecycle-guard';
 import { getServerSessionContext } from '@/lib/auth';
 import { SPACING, THEME } from '@/lib/theme';
+import { getWorkspaceDisplayName } from './workspace-display-name';
 
 interface TenantLayoutProps {
   params: Promise<{ subdomain: string }>;
@@ -26,6 +27,10 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'fbuploadpro.com';
   const useCleanPaths = shouldUseCleanTenantPaths(hostHeader, subdomain, rootDomain);
 
+  // H5/M9: resolve the display name server-side so the sidebar and switcher
+  // never flash (or stick on) the internal slug before the client fetch lands.
+  const workspaceName = await getWorkspaceDisplayName(subdomain);
+
   const user = session
     ? {
         name: session.subdomain || session.email.split('@')[0],
@@ -39,7 +44,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
   return (
     <SidebarProvider>
       <WorkspaceLifecycleGuard userId={session?.userId} userEmail={session?.email} />
-      <WorkspaceSidebar subdomain={subdomain} useCleanPaths={useCleanPaths} user={user} />
+      <WorkspaceSidebar subdomain={subdomain} useCleanPaths={useCleanPaths} user={user} workspaceName={workspaceName ?? undefined} />
       <SidebarInset>
         <header
           data-slot="workspace-topbar"

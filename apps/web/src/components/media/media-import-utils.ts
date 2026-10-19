@@ -278,10 +278,12 @@ export function isItemReadyToImport(item: ImportQueueItem): boolean {
 
 export function isBatchCompleted(queue: ImportQueueItem[], step: string): boolean {
   if (step !== 'progress' || queue.length === 0) return false;
-  const inFlight = queue.filter(
-    (it) => it.status === 'queued' || it.status === 'uploading'
+  // A paused file is still pending: the batch must never report "complete"
+  // while any item is queued, uploading, or paused.
+  const pending = queue.filter(
+    (it) => it.status === 'queued' || it.status === 'uploading' || it.status === 'paused'
   );
-  if (inFlight.length > 0) return false;
+  if (pending.length > 0) return false;
   return queue.some(
     (it) => it.status === 'completed' || it.status === 'failed' || it.status === 'cancelled'
   );

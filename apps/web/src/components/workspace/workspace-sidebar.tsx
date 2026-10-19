@@ -34,6 +34,8 @@ export interface WorkspaceSidebarProps {
   subdomain: string;
   /** True when on the tenant's own subdomain: use clean paths (/accounts). */
   useCleanPaths?: boolean | undefined;
+  /** Server-resolved display name — avoids flashing the internal slug. */
+  workspaceName?: string | undefined;
   user?: {
     name: string;
     email: string;
@@ -41,7 +43,7 @@ export interface WorkspaceSidebarProps {
   } | undefined;
 }
 
-export function WorkspaceSidebar({ subdomain, useCleanPaths = false, user }: Readonly<WorkspaceSidebarProps>) {
+export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceName, user }: Readonly<WorkspaceSidebarProps>) {
   const pathname = usePathname();
   const router = useRouter();
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -488,6 +490,7 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, user }: Rea
           subdomain={subdomain}
           useCleanPaths={useCleanPaths}
           user={user}
+          workspaceName={workspaceName}
           onNavigate={handleNavigate}
         />
       </SidebarFooter>
