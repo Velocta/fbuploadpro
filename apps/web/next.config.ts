@@ -1,8 +1,21 @@
 import type { NextConfig } from 'next';
 
-// Baseline security headers. CSP is intentionally left for a dedicated pass:
-// the app loads Facebook SDKs, R2 media, and Next.js inline scripts, so the
-// policy needs tuning against real traffic (report-only first).
+// Baseline security headers. CSP ships in report-only mode first so violations
+// can be observed against real traffic before enforcement. script-src is
+// intentionally strict ('self' only, no unsafe-inline): Next.js inline scripts
+// will surface as violations in report-only mode; nonces/hashes get added at
+// enforcement time based on observed traffic.
+const cspReportOnly = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "connect-src 'self' https://*.supabase.co https://us.i.posthog.com",
+  "font-src 'self' data:",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+].join('; ');
+
 const securityHeaders = [
   {
     key: 'Strict-Transport-Security',
@@ -14,6 +27,10 @@ const securityHeaders = [
   {
     key: 'Permissions-Policy',
     value: 'camera=(), microphone=(), geolocation=()',
+  },
+  {
+    key: 'Content-Security-Policy-Report-Only',
+    value: cspReportOnly,
   },
 ];
 
