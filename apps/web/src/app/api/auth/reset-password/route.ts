@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { resetUserPassword, resetUserPasswordWithOtp } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
-import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 
 function extractRecoveryToken(token: unknown, code: unknown): string | undefined {
   if (typeof token === 'string' && token.trim()) {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 password reset attempts per 60 seconds)
-    const ipLimit = await checkRateLimit(`reset_pwd:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`reset_pwd:ip:${clientIp}`, 5, RATE_LIMIT_WINDOW_MS);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {

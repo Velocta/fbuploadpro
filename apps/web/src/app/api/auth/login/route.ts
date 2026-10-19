@@ -7,7 +7,7 @@ import {
   setSessionCookie,
 } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
-import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 import {
   findPendingSignup,
   verifyPendingSignupPassword,
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // IP rate limiting to prevent credential brute-force (max 10 login attempts per 60 seconds)
-    const ipLimit = await checkRateLimit(`login:ip:${clientIp}`, 10, 60 * 1000);
+    const ipLimit = await checkRateLimit(`login:ip:${clientIp}`, 10, RATE_LIMIT_WINDOW_MS);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Account identifier rate limiting to prevent brute-force attacks (max 5 attempts per 60s per email)
-    const emailLimit = await checkRateLimit(`login:email:${parseResult.data.email}`, 5, 60 * 1000);
+    const emailLimit = await checkRateLimit(`login:email:${parseResult.data.email}`, 5, RATE_LIMIT_WINDOW_MS);
     if (!emailLimit.allowed) {
       return NextResponse.json(
         {

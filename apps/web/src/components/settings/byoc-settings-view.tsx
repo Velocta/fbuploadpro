@@ -9,6 +9,9 @@ import {
 } from '@/components/pages/dedicated/modal-styles';
 import type { BYOCStatus } from '@fbuploadpro/contracts';
 
+/** How long the "copied" feedback stays visible on the App ID copy button. */
+const COPY_FEEDBACK_DURATION_MS = 2000;
+
 export interface BYOCSettingsViewProps {
   subdomain: string;
   initialCredentials?: CredentialsState | null | undefined;
@@ -918,7 +921,7 @@ export function BYOCSettingsView({
     try {
       await navigator.clipboard.writeText(value);
       setCopiedKey(key);
-      setTimeout(() => setCopiedKey(null), 2000);
+      setTimeout(() => setCopiedKey(null), COPY_FEEDBACK_DURATION_MS);
     } catch {
       // Ignore clipboard error
     }

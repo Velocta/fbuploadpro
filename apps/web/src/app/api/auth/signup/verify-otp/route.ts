@@ -6,14 +6,14 @@ import {
   setSessionCookie,
 } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
-import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
     const clientIp = extractClientIp(request.headers);
 
     // IP rate limiting on OTP verification attempts (10 requests per 60s)
-    const ipLimit = await checkRateLimit(`verify_otp:ip:${clientIp}`, 10, 60 * 1000);
+    const ipLimit = await checkRateLimit(`verify_otp:ip:${clientIp}`, 10, RATE_LIMIT_WINDOW_MS);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
