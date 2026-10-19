@@ -103,6 +103,51 @@ async function fetchWithTimeout(
  * Progress is capped at 95 while bytes are in flight; the caller advances it
  * through the thumbnail/confirm stages so the bar never freezes at 95%.
  */
+interface R2PutContext {
+  xhr: XMLHttpRequest;
+  userSignal: AbortSignal;
+  onProgress: (pct: number) => void;
+  resolve: () => void;
+  reject: (err: Error) => void;
+  settled: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  handleUserAbort: () => void;
+}
+
+function settleR2Put(ctx: R2PutContext, fn: () => void): void {
+  if (ctx.settled) return;
+  ctx.settled = true;
+  if (ctx.timer) clearTimeout(ctx.timer);
+  ctx.timer = null;
+  ctx.userSignal.removeEventListener('abort', ctx.handleUserAbort);
+  fn();
+}
+
+function armR2Watchdog(ctx: R2PutContext): void {
+  if (ctx.timer) clearTimeout(ctx.timer);
+  ctx.timer = setTimeout(() => {
+    ctx.xhr.abort();
+    settleR2Put(ctx, () => ctx.reject(new StepTimeoutError('upload')));
+  }, UPLOAD_INACTIVITY_TIMEOUT_MS);
+}
+
+function resolveR2Put(ctx: R2PutContext): void {
+  if (ctx.xhr.status >= 200 && ctx.xhr.status < 300) {
+    ctx.resolve();
+  } else {
+    ctx.reject(
+      new Error(`Upload failed (server responded ${ctx.xhr.status}). Please try again.`)
+    );
+  }
+}
+
+function reportR2Progress(ctx: R2PutContext, e: ProgressEvent): void {
+  armR2Watchdog(ctx);
+  if (e.lengthComputable) {
+    ctx.onProgress(Math.min(95, Math.round((e.loaded / e.total) * 100)));
+  }
+}
+
 function putFileToR2(
   uploadUrl: string,
   file: File,
@@ -112,64 +157,33 @@ function putFileToR2(
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    let settled = false;
-    let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const cleanup = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-      userSignal.removeEventListener('abort', onUserAbort);
+    const ctx: R2PutContext = {
+      xhr,
+      userSignal,
+      onProgress,
+      resolve,
+      reject,
+      settled: false,
+      timer: null,
+      handleUserAbort: () => {},
     };
-    const settle = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      fn();
-    };
-    const armInactivityWatchdog = () => {
-      if (inactivityTimer) clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        xhr.abort();
-        settle(() => reject(new StepTimeoutError('upload')));
-      }, UPLOAD_INACTIVITY_TIMEOUT_MS);
-    };
-    const onUserAbort = () => {
+    ctx.handleUserAbort = () => {
       xhr.abort();
-      settle(() => reject(new DOMException('Upload aborted', 'AbortError')));
+      settleR2Put(ctx, () => reject(new DOMException('Upload aborted', 'AbortError')));
     };
+
+    xhr.upload.onprogress = (e) => reportR2Progress(ctx, e);
+    xhr.onload = () => settleR2Put(ctx, () => resolveR2Put(ctx));
+    xhr.onerror = () => settleR2Put(ctx, () => reject(new Error(NETWORK_MESSAGE)));
+    // Backstop for unexpected aborts; the watchdog and user-abort paths
+    // already rejected with the right error.
+    xhr.onabort = () =>
+      settleR2Put(ctx, () => reject(new DOMException('Upload aborted', 'AbortError')));
 
     xhr.open('PUT', uploadUrl, true);
     xhr.setRequestHeader('Content-Type', mimeType);
-
-    xhr.upload.onprogress = (e) => {
-      armInactivityWatchdog();
-      if (e.lengthComputable) {
-        const pct = Math.min(95, Math.round((e.loaded / e.total) * 100));
-        onProgress(pct);
-      }
-    };
-
-    xhr.onload = () => {
-      settle(() => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve();
-        } else {
-          reject(new Error(`Upload failed (server responded ${xhr.status}). Please try again.`));
-        }
-      });
-    };
-
-    xhr.onerror = () => {
-      settle(() => reject(new Error(NETWORK_MESSAGE)));
-    };
-
-    xhr.onabort = () => {
-      // The watchdog and user-abort paths already rejected with the right
-      // error; this is only a backstop for unexpected aborts.
-      settle(() => reject(new DOMException('Upload aborted', 'AbortError')));
-    };
-
-    userSignal.addEventListener('abort', onUserAbort);
-    armInactivityWatchdog();
+    userSignal.addEventListener('abort', ctx.handleUserAbort);
+    armR2Watchdog(ctx);
     xhr.send(file);
   });
 }
