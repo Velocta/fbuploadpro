@@ -8,6 +8,7 @@ import {
   parseHtmlMediaCandidates,
   parseJsonPayloadCandidates,
   type RemoteMediaCandidate,
+  InternalError,
 } from '@fbuploadpro/contracts';
 import type { Env } from '../index.js';
 
@@ -41,6 +42,12 @@ const EXTENSION_MIMES: Record<string, string> = {
   '.png': 'image/png',
   '.webp': 'image/webp',
 };
+
+/** Streaming progress is capped here so the bar never hits 100% before post-processing finishes. */
+const DOWNLOAD_PROGRESS_CAP_PERCENT = 95;
+
+/** Minimum interval between download-progress DB updates. */
+const DOWNLOAD_PROGRESS_UPDATE_INTERVAL_MS = 3000;
 
 export function inferMimeFromUrlOrHeader(contentTypeHeader: string | null, targetUrl: string): string {
   const rawMime = (contentTypeHeader ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
@@ -416,9 +423,9 @@ export function createStreamProgressTracker(params: {
       }
 
       if (totalBytesEstimate && totalBytesEstimate > 0) {
-        const currentPercent = Math.min(95, Math.floor((downloadedBytes / totalBytesEstimate) * 100));
+        const currentPercent = Math.min(DOWNLOAD_PROGRESS_CAP_PERCENT, Math.floor((downloadedBytes / totalBytesEstimate) * 100));
         const now = Date.now();
-        if (currentPercent >= lastProgressPercent + 10 || now - lastDbUpdateMs >= 3000) {
+        if (currentPercent >= lastProgressPercent + 10 || now - lastDbUpdateMs >= DOWNLOAD_PROGRESS_UPDATE_INTERVAL_MS) {
           lastProgressPercent = currentPercent;
           lastDbUpdateMs = now;
           await updateJobStatus(db, jobId, {
@@ -606,7 +613,7 @@ export async function persistDownloadedMediaItem(
   });
 
   if (mediaInsertError) {
-    throw new Error(`Failed to save media metadata: ${mediaInsertError.message}`);
+    throw new InternalError(`Failed to save media metadata: ${mediaInsertError.message}`);
   }
 
   const mediaIds = allMediaIds && allMediaIds.length > 0 ? allMediaIds : [mediaId];

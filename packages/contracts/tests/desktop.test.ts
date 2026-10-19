@@ -10,7 +10,7 @@ import {
 
 describe('desktop contracts domain', () => {
   const originalWindow = (globalThis as any).window;
-  const originalNavigator = globalThis.navigator;
+  const originalNavigator = (globalThis as { navigator?: Navigator }).navigator;
 
   function setNavigator(props: { userAgent?: string; platform?: string }) {
     Object.defineProperty(globalThis, 'navigator', {

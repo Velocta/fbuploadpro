@@ -3,6 +3,7 @@ import {
   type IFacebookPublishClient,
   type GraphRateLimitTelemetry,
   type PublishResult,
+  InternalError,
 } from '@fbuploadpro/contracts';
 
 export type { IFacebookPublishClient, GraphRateLimitTelemetry, PublishResult };
@@ -544,6 +545,9 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       throw this.createGraphError(startRes, startData);
     }
 
+    if (!startData.video_id) {
+      throw new FacebookGraphError('Invalid video upload response for story: missing video_id');
+    }
     const videoId = String(startData.video_id);
     const uploadUrl =
       startData.upload_url ?? `${FB_RUPLOAD_BASE_URL}/${videoId}`;
@@ -664,7 +668,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
   ): Promise<void> {
     const videoRes = await this.fetchWithRetry(videoUrl);
     if (!videoRes.ok || !videoRes.body) {
-      throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
+      throw new InternalError(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
     }
 
     const uploadRes = await this.fetchWithRetry(uploadUrl, {

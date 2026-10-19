@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { SignupRequestSchema, isSignupEnabled } from '@fbuploadpro/contracts';
 import { signUpTenantUser } from '@/lib/supabase-auth';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
-import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 signup OTP requests per 60 seconds)
-    const ipLimit = await checkRateLimit(`signup:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`signup:ip:${clientIp}`, 5, RATE_LIMIT_WINDOW_MS);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const canonicalEmail = parseResult.data.email;
 
     // 2. Email identifier rate limiting (max 3 requests per 60 seconds per email)
-    const emailLimit = await checkRateLimit(`signup:email:${canonicalEmail}`, 3, 60 * 1000);
+    const emailLimit = await checkRateLimit(`signup:email:${canonicalEmail}`, 3, RATE_LIMIT_WINDOW_MS);
     if (!emailLimit.allowed) {
       return NextResponse.json(
         {

@@ -10,6 +10,9 @@ import { FormErrorCallout } from '@/components/auth/form-error-callout';
 import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
+/** Delay before redirecting to login after a successful password reset request. */
+const SUCCESS_REDIRECT_DELAY_MS = 2000;
+
 export interface ForgotPasswordPageProps {
   initialSuccess?: boolean | undefined;
 }
@@ -215,7 +218,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
 
       const timer = setTimeout(() => {
         router.push('/login?reset=success');
-      }, 2000);
+      }, SUCCESS_REDIRECT_DELAY_MS);
       return () => clearTimeout(timer);
     } catch {
       setGeneralError("Couldn't update your password. Please try again.");

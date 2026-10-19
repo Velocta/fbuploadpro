@@ -4,14 +4,14 @@ import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { findUserByEmail, resendSignupOtpViaSupabase, getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { getPendingSignup } from '@/lib/otp-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
-import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 resend requests per 60 seconds per IP)
-    const ipLimit = await checkRateLimit(`resend:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`resend:ip:${clientIp}`, 5, RATE_LIMIT_WINDOW_MS);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {

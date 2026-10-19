@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
-import { checkRateLimit, extractClientIp } from '@/lib/rate-limiter';
+import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
   try {
     const clientIp = extractClientIp(request.headers);
 
     // 1. IP rate limiting (max 5 reset requests per 60 seconds)
-    const ipLimit = await checkRateLimit(`forgot:ip:${clientIp}`, 5, 60 * 1000);
+    const ipLimit = await checkRateLimit(`forgot:ip:${clientIp}`, 5, RATE_LIMIT_WINDOW_MS);
     if (!ipLimit.allowed) {
       return NextResponse.json(
         {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Identifier rate limiting (max 3 reset requests per 60 seconds per email)
-    const emailLimit = await checkRateLimit(`forgot:email:${canonicalEmail}`, 3, 60 * 1000);
+    const emailLimit = await checkRateLimit(`forgot:email:${canonicalEmail}`, 3, RATE_LIMIT_WINDOW_MS);
     if (!emailLimit.allowed) {
       return NextResponse.json(
         {

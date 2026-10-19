@@ -10,7 +10,7 @@ const DEV_FALLBACK_ENCRYPTION_KEY =
 
 /**
  * Resolves the 256-bit symmetric encryption key used for securing tokens and secrets at rest.
- * Checks TOKEN_ENCRYPTION_KEY first, then FB_ENCRYPTION_MASTER_KEY.
+ * Reads TOKEN_ENCRYPTION_KEY (the single canonical key).
  *
  * @param env - Optional environment dictionary; defaults to process.env if available.
  * @returns 256-bit encryption key string (64 hex characters or 32 bytes).
@@ -20,7 +20,7 @@ export function getTokenEncryptionKey(env?: Record<string, string | undefined>):
   const globalEnv = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env;
   const envObj = env ?? globalEnv ?? {};
   const nodeEnv = envObj.NODE_ENV;
-  const key = envObj.TOKEN_ENCRYPTION_KEY || envObj.FB_ENCRYPTION_MASTER_KEY;
+  const key = envObj.TOKEN_ENCRYPTION_KEY;
 
   if (key && key.trim().length > 0) {
     const trimmed = key.trim();
@@ -37,7 +37,7 @@ export function getTokenEncryptionKey(env?: Record<string, string | undefined>):
   if (!isDevOrTest) {
     throw new DomainError(
       DomainErrorCode.INTERNAL_ERROR,
-      'TOKEN_ENCRYPTION_KEY or FB_ENCRYPTION_MASTER_KEY is required in production environment'
+      'TOKEN_ENCRYPTION_KEY is required in production environment'
     );
   }
 

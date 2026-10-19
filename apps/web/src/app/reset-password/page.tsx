@@ -7,6 +7,9 @@ import { Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 
+/** Delay before redirecting to the OTP recovery page. */
+const REDIRECT_DELAY_MS = 1500;
+
 export default function ResetPasswordPage() {
   const router = useRouter();
 
@@ -14,7 +17,7 @@ export default function ResetPasswordPage() {
     // Gracefully route visitors to the unified OTP recovery interface
     const timer = setTimeout(() => {
       router.replace('/forgot-password');
-    }, 1500);
+    }, REDIRECT_DELAY_MS);
     return () => clearTimeout(timer);
   }, [router]);
 

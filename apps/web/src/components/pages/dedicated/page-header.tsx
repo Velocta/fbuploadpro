@@ -16,6 +16,9 @@ import {
   getPageStatusRingBorder,
 } from '../page-card';
 
+/** How long the "copied" feedback stays visible on the page-ID copy button. */
+const COPY_FEEDBACK_DURATION_MS = 2000;
+
 export interface DedicatedPageHeaderProps {
   page: FacebookPageItem;
   subdomain: string;
@@ -645,7 +648,7 @@ export function DedicatedPageHeader({
     try {
       await navigator.clipboard.writeText(page.fbPageId);
       setHasCopiedId(true);
-      setTimeout(() => setHasCopiedId(false), 2000);
+      setTimeout(() => setHasCopiedId(false), COPY_FEEDBACK_DURATION_MS);
     } catch {
       // Clipboard fallback
     }
