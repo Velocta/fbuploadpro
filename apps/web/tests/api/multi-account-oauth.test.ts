@@ -542,7 +542,7 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
       }),
     };
 
-    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+    vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     global.fetch = vi.fn().mockResolvedValueOnce(

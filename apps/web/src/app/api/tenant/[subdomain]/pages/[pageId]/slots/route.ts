@@ -10,7 +10,7 @@ import {
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { recomputeSlotScheduledTime } from '@/lib/slot-scheduler';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -53,7 +53,7 @@ export async function handleListQueueSlots(
     const pageRows = (await dbClient.query(
       'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [pageId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
@@ -67,9 +67,9 @@ export async function handleListQueueSlots(
        WHERE fb_page_id = $1 AND user_id = $2
        ORDER BY slot_time ASC`,
       [pageId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -108,8 +108,8 @@ export async function handleListQueueSlots(
     timezone: pageTimezone,
     isActive: Boolean(row.is_active),
     allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   }));
 
   const responsePayload = ListQueueSlotsResponseSchema.parse({
@@ -178,7 +178,7 @@ export async function handleCreateQueueSlot(
     const pageRows = (await dbClient.query(
       'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [pageId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
@@ -193,7 +193,7 @@ export async function handleCreateQueueSlot(
          VALUES ($1, $2, $3, true, $4, now(), now())
          RETURNING id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at`,
         [session.userId, pageId, parsed.data.slotTime, allowedFormats]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       const row = rows[0];
       const responsePayload = PageQueueSlotSchema.parse({
@@ -204,8 +204,8 @@ export async function handleCreateQueueSlot(
         timezone: pageTimezone,
         isActive: Boolean(row.is_active),
         allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : allowedFormats,
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
+        createdAt: new Date(row.created_at as string).toISOString(),
+        updatedAt: new Date(row.updated_at as string).toISOString(),
       });
 
       return NextResponse.json(responsePayload, { status: 201 });
@@ -225,7 +225,7 @@ export async function handleCreateQueueSlot(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -301,7 +301,7 @@ async function realignPendingQueueItemsPostgres(
      WHERE qi.fb_page_id = $1 AND qi.user_id = $2 AND qi.status = 'queued'
      ORDER BY qi.scheduled_time ASC`,
     [pageId, userId]
-  )) as any[];
+  )) as Record<string, unknown>[];
 
   if (!pendingRows || pendingRows.length === 0) {
     return 0;
@@ -312,7 +312,7 @@ async function realignPendingQueueItemsPostgres(
   let realignedCount = 0;
 
   for (const row of pendingRows) {
-    const originalTime = new Date(row.scheduled_time);
+    const originalTime = new Date(row.scheduled_time as string);
     const slotTimeStr = typeof row.slot_time === 'string' ? row.slot_time : String(row.slot_time);
     const newScheduledTime = recomputeSlotScheduledTime({
       originalScheduledTime: originalTime,
@@ -413,7 +413,7 @@ async function updateScheduleTimezonePostgres(
      WHERE id = $2 AND user_id = $3 AND workspace_id = $4
      RETURNING id`,
     [newTimezone, pageId, userId, workspaceId]
-  )) as any[];
+  )) as Record<string, unknown>[];
 
   if (!updatedPages || updatedPages.length === 0) {
     return { notFound: true };
@@ -422,7 +422,7 @@ async function updateScheduleTimezonePostgres(
   const slotRows = (await dbClient.query(
     'SELECT count(*)::int as count FROM page_queue_slots WHERE fb_page_id = $1 AND user_id = $2',
     [pageId, userId]
-  )) as any[];
+  )) as Record<string, unknown>[];
 
   const realignedQueueCount = await realignPendingQueueItemsPostgres(
     dbClient,
@@ -432,7 +432,7 @@ async function updateScheduleTimezonePostgres(
   );
 
   return {
-    updatedCount: slotRows[0]?.count ?? 0,
+    updatedCount: Number(slotRows[0]?.count ?? 0),
     realignedQueueCount,
   };
 }
@@ -555,7 +555,7 @@ export async function handleUpdateQueueScheduleTimezone(
     return NextResponse.json(responsePayload);
   }
 
-  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }

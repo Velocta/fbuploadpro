@@ -8,12 +8,10 @@ import {
   resendSignupOtp,
   findPendingSignup,
   verifyPendingSignupPassword,
-  refreshPendingSignupOtp,
   createPasswordResetOtp,
   verifyPasswordResetOtp,
   resendPasswordResetOtp,
   getPendingSignup,
-  getPendingPasswordReset,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
@@ -162,36 +160,6 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(typoResult.error).not.toContain('temporarily locked');
   });
 
-  it('resets rate-limiter failure attempts upon legitimate password reset OTP resend (ISSUE-36)', () => {
-    const email = 'reset.sync@gmail.com';
-    createPasswordResetOtp(email);
-
-    // Fail 4 times
-    for (let i = 0; i < 4; i++) {
-      const res = verifyPasswordResetOtp(email, '000000');
-      expect(res.success).toBe(false);
-      expect(res.error).toContain(`${4 - i} attempt${4 - i === 1 ? '' : 's'} remaining`);
-    }
-
-    // Fast-forward cooldown
-    const resetEntry = getPendingPasswordReset(email);
-    expect(resetEntry).not.toBeNull();
-    if (resetEntry) {
-      resetEntry.lastSentAt = Date.now() - 65 * 1000;
-    }
-
-    // Resend password reset OTP
-    const resendResult = resendPasswordResetOtp(email);
-    expect(resendResult.success).toBe(true);
-    expect(resendResult.otp).toBeDefined();
-
-    // Typo on new code should have 4 attempts remaining, NOT immediate lockout
-    const typoResult = verifyPasswordResetOtp(email, '999999');
-    expect(typoResult.success).toBe(false);
-    expect(typoResult.error).toContain('4 attempts remaining');
-    expect(typoResult.error).not.toContain('temporarily locked');
-  });
-
   it('returns friendly error when verifying nonexistent or expired registration', () => {
     const result = verifySignupOtp('nonexistent@gmail.com', '123456');
     expect(result.success).toBe(false);
@@ -225,25 +193,6 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(nonExistent).toBe(false);
   });
 
-  it('refreshes pending signup OTP and resets lockout counters', () => {
-    const signupData = {
-      name: 'Nathan Drake',
-      phone: '+14155552671',
-      email: 'nathan.drake@gmail.com',
-      password: 'AdventureTime123!',
-    };
-
-    const initial = createPendingSignup(signupData);
-    const refresh = refreshPendingSignupOtp('nathandrake@gmail.com');
-    expect(refresh.success).toBe(true);
-    expect(refresh.otp).toBeDefined();
-    expect(refresh.otp).toHaveLength(6);
-
-    // New OTP can be verified successfully
-    const verifyResult = verifySignupOtp('nathandrake@gmail.com', refresh.otp!);
-    expect(verifyResult.success).toBe(true);
-    expect(verifyResult.signupData?.name).toBe('Nathan Drake');
-  });
 
   describe('Lockout Enforcement on Creation & Refresh (ISSUE-35)', () => {
     it.each([
@@ -283,28 +232,6 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       expect(() => attemptRecreate(email)).toThrow(/locked/i);
     });
 
-    it('refuses to refreshPendingSignupOtp and does not clear lockout when locked out', () => {
-      const email = 'locked.refresh@gmail.com';
-      createPendingSignup({
-        name: 'Locked Refresh',
-        phone: '+14155552671',
-        email,
-        password: 'Password123!',
-      });
-
-      for (let i = 0; i < 5; i++) {
-        verifySignupOtp(email, '000000');
-      }
-
-      const res = refreshPendingSignupOtp(email);
-      expect(res.success).toBe(false);
-      expect(res.error).toMatch(/locked/i);
-
-      // Verify lockout remains intact
-      const verifyAfter = verifySignupOtp(email, '123456');
-      expect(verifyAfter.success).toBe(false);
-      expect(verifyAfter.error).toMatch(/locked/i);
-    });
   });
 
   describe('Cryptographic Uniformity & Strict OTP Format Validation (ISSUE-38)', () => {

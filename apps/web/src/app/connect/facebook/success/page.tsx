@@ -36,7 +36,7 @@ export default function FacebookConnectSuccessPage() {
           color: `var(--text-dim, ${THEME.default.text.muted})`,
         }}
       >
-        Linked to FbUploadPro via Facebook API.
+        Linked to FBUploadPro via Facebook.
       </div>
     </ConnectStatusLayout>
   );

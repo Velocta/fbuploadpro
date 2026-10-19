@@ -332,7 +332,7 @@ export function MediaAssetCard({
                 backdropFilter: 'blur(8px)',
                 border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
                 borderRadius: RADII.xs,
-                color: '#ffffff',
+                color: PALETTE.text,
                 fontSize: '0.6875rem',
                 fontWeight: TYPOGRAPHY.weights.medium,
                 cursor: 'pointer',
@@ -362,7 +362,7 @@ export function MediaAssetCard({
                   backdropFilter: 'blur(8px)',
                   border: '1px solid var(--border-subtle, rgba(255,255,255,0.15))',
                   borderRadius: RADII.xs,
-                  color: '#ffffff',
+                  color: PALETTE.text,
                   cursor: 'pointer',
                 }}
               >
@@ -482,7 +482,7 @@ export function MediaAssetCard({
               borderRadius: RADII.xs,
               fontSize: '0.625rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
-              color: '#ffffff',
+              color: PALETTE.text,
               fontVariantNumeric: TYPOGRAPHY.tabularNums,
               pointerEvents: 'none',
             }}

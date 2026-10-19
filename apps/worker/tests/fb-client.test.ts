@@ -275,7 +275,7 @@ describe('FacebookPublishClient', () => {
 
     it('throws FacebookGraphError on rate limit error (code 368)', async () => {
       const mockFetch = vi.fn();
-      mockFetch.mockResolvedValueOnce(
+      mockFetch.mockResolvedValue(
         new Response(
           JSON.stringify({
             error: {
@@ -392,7 +392,7 @@ describe('FacebookPublishClient', () => {
           )
         )
         .mockResolvedValueOnce(new Response('binary', { status: 200 }))
-        .mockResolvedValueOnce(
+        .mockResolvedValue(
           new Response(
             JSON.stringify({
               error: { message: 'Transfer aborted', code: 500 },

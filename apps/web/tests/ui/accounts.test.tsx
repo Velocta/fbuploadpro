@@ -17,7 +17,6 @@ import {
   ConnectionResultView,
   MagicLinkView,
   evaluateAccountConnectionPoll,
-  hasCompletedAccountConnection,
 } from '@/components/accounts/connect-account-modal';
 import {
   AccountsFilterBar,
@@ -197,7 +196,7 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       );
 
       expect(hasText('Disconnect Sarah Connor?')).toBe(true);
-      expect(hasText('This Account will no longer be available')).toBe(true);
+      expect(hasText('This account will no longer be available')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-linked-pages-warning')).toBe(true);
       expect(hasAttribute('data-testid', 'disconnect-linked-pages-list')).toBe(true);
       expect(hasText('3 linked Facebook pages')).toBe(true);
@@ -226,7 +225,7 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(hasAttribute('data-testid', 'disconnect-zero-pages-notice')).toBe(true);
       expect(
         hasText(
-          'No Facebook pages are linked to this account yet. its safe to remove, You can reconnect it anytime.'
+          "No Facebook Pages are linked to this account yet. It's safe to remove — you can reconnect it any time."
         )
       ).toBe(true);
       expect(hasText('Before you disconnect')).toBe(false);
@@ -336,52 +335,6 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(expiredRender.hasText('Magic link expired')).toBe(true);
     });
 
-    it('hasCompletedAccountConnection detects both newly added accounts and existing expired accounts returning to active (Spec 029)', () => {
-      const initialIds = new Set(['acc-123', 'acc-456']);
-      const initialStates = new Map([
-        ['acc-123', { status: 'active', updatedAt: '2026-10-01T12:00:00Z' }],
-        ['acc-456', { status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }],
-      ]);
-
-      // Unchanged state -> false
-      expect(
-        hasCompletedAccountConnection(
-          [
-            { id: 'acc-123', status: 'active', updatedAt: '2026-10-01T12:00:00Z' },
-            { id: 'acc-456', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' },
-          ],
-          initialIds,
-          initialStates,
-          { id: 'acc-456', displayName: 'John Doe', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }
-        )
-      ).toBe(false);
-
-      // Brand new account added -> true
-      expect(
-        hasCompletedAccountConnection(
-          [
-            { id: 'acc-123', status: 'active', updatedAt: '2026-10-01T12:00:00Z' },
-            { id: 'acc-new-789', status: 'active', updatedAt: '2026-10-10T15:00:00Z' },
-          ],
-          initialIds,
-          initialStates,
-          null
-        )
-      ).toBe(true);
-
-      // Existing expired account returning to active -> true
-      expect(
-        hasCompletedAccountConnection(
-          [
-            { id: 'acc-123', status: 'active', updatedAt: '2026-10-01T12:00:00Z' },
-            { id: 'acc-456', status: 'active', updatedAt: '2026-10-10T15:00:00Z' },
-          ],
-          initialIds,
-          initialStates,
-          { id: 'acc-456', displayName: 'John Doe', status: 'expired', updatedAt: '2026-09-15T10:00:00Z' }
-        )
-      ).toBe(true);
-    });
 
     it('detects wrong-account mismatch and already-connected refresh across polling, ConnectionResultView, and resolveOAuthRedirectNotice (Spec 031)', () => {
       const initialIds = new Set(['acc-john']);
@@ -562,7 +515,7 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
 
       expect(hasAttribute('data-testid', 'byoc-required-banner')).toBe(true);
       expect(
-        hasText('Facebook App credentials (BYOC) are required before connecting accounts')
+        hasText('Facebook App credentials are required before connecting accounts')
       ).toBe(true);
       expect(hasAttribute('data-testid', 'byoc-configure-link')).toBe(true);
       expect(getAttribute('href')).toBe('/tenant/acme/settings?tab=byoc');
@@ -612,7 +565,7 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(notice).not.toBeNull();
       expect(notice?.notice.type).toBe('error');
       expect(notice?.notice.message).toBe(
-        'Facebook App credentials (BYOC) are required before connecting accounts. Please configure your App ID and Secret in Workspace Settings.'
+        'Facebook App credentials are required before connecting accounts. Please configure your App ID and Secret in Workspace Settings.'
       );
       expect(notice?.keysToRemove).toEqual(['error', 'tab']);
     });

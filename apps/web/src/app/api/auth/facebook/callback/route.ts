@@ -15,7 +15,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
@@ -104,7 +104,7 @@ export async function refreshConnectedPageTokens(
     db && 'from' in db
       ? (db as SupabaseClient<any>)
       : !db || !('query' in db)
-        ? getSupabaseClient()
+        ? getSupabaseAdminClient()
         : null;
   const legacyDb = db && 'query' in db && typeof db.query === 'function' ? db : null;
 
@@ -128,7 +128,7 @@ export async function refreshConnectedPageTokens(
       }
 
       validPages = Array.isArray(linkedPages)
-        ? (linkedPages.filter((p) => Boolean(p?.fb_page_id)) as any[])
+        ? (linkedPages.filter((p) => Boolean((p as Record<string, unknown>)?.fb_page_id)) as Array<{ id: string; fb_page_id?: string; fbPageId?: string; status?: string }>)
         : [];
     } else if (legacyDb) {
       const linkedPages = (await legacyDb.query(
@@ -276,7 +276,7 @@ async function upsertConnectedFacebookAccount(
     db && 'from' in db
       ? (db as SupabaseClient<any>)
       : !db || !('query' in db)
-        ? getSupabaseClient()
+        ? getSupabaseAdminClient()
         : null;
   const legacyDb = db && 'query' in db && typeof db.query === 'function' ? db : null;
 

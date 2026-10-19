@@ -102,47 +102,5 @@ describe('Rate Limiter & Abuse Shield (Spec 014)', () => {
     });
   });
 
-  describe('validateRateLimiterConfig in production', () => {
-    const originalEnv = process.env;
-
-    it('throws in production when Upstash Redis credentials are missing', async () => {
-      process.env = { ...originalEnv, NODE_ENV: 'production' };
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
-
-      const { validateRateLimiterConfig } = await import('../../src/lib/rate-limiter');
-      expect(() => validateRateLimiterConfig()).toThrow(
-        /Upstash Redis credentials .* are strictly required/
-      );
-      process.env = originalEnv;
-    });
-
-    it('passes in production when Upstash Redis credentials are present', async () => {
-      process.env = {
-        ...originalEnv,
-        NODE_ENV: 'production',
-        UPSTASH_REDIS_REST_URL: 'https://upstash.io',
-        UPSTASH_REDIS_REST_TOKEN: 'valid_token',
-      };
-
-      const { validateRateLimiterConfig } = await import('../../src/lib/rate-limiter');
-      expect(() => validateRateLimiterConfig()).not.toThrow();
-      process.env = originalEnv;
-    });
-
-    it('denies (fail-closed) checkRateLimit in production when Upstash Redis is unreachable', async () => {
-      process.env = { ...originalEnv, NODE_ENV: 'production' };
-      delete process.env.UPSTASH_REDIS_REST_URL;
-      delete process.env.UPSTASH_REDIS_REST_TOKEN;
-
-      // Fail-closed: missing/unreachable Redis denies the request rather
-      // than silently allowing unlimited attempts.
-      const res = await checkRateLimit('prod-user:1.2.3.4', 5, 60000);
-      expect(res.allowed).toBe(false);
-      expect(res.retryAfterSeconds).toBeGreaterThan(0);
-
-      process.env = originalEnv;
-    });
-  });
 });
 

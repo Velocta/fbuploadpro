@@ -206,7 +206,6 @@ export function calculateNextVacantSlot(
   return null;
 }
 
-export const findNextAvailableSlot = calculateNextVacantSlot;
 
 /**
  * Recomputes a queued item's scheduled timestamp when changing to a new timezone.

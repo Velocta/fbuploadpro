@@ -77,7 +77,7 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
         };
       }),
     };
-    vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(defaultMockSupabase as any);
+    vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(defaultMockSupabase as any);
 
     const token = await signSessionToken(
       {
@@ -246,7 +246,7 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
           };
         }),
       };
-      const spy = vi.spyOn(authModule, 'getSupabaseClient').mockReturnValue(mockSupabase as any);
+      const spy = vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(mockSupabase as any);
 
       const req = new NextRequest(
         `http://localhost:3000/connect/facebook?token=${magicToken}`

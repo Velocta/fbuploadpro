@@ -100,13 +100,13 @@ The platform adopts a decoupled multi-domain topology:
    - Facebook accounts, imported Facebook Pages, media assets, and publishing queues are strictly scoped to the active tenant user.
    - Zero cross-user data leakage enforced via database compound constraints (`user_id`) and edge routing guards.
 
-### B. Active Construction & Staging Demo Domain (`vinsmokemedia.online`)
-During initial feature assembly, integration testing, and staging, the platform is configured with `vinsmokemedia.online`:
-- **Central Application Gateway**: `https://app.vinsmokemedia.online` (`/login`, `/signup`).
-- **Dedicated Tenant Workspaces**: `https://{username}.vinsmokemedia.online`.
-- **Wildcard Session Cookie**: `.vinsmokemedia.online` (enables cross-subdomain authentication continuity).
-- **Supabase Auth Allowlist**: `https://app.vinsmokemedia.online/**` and `https://*.vinsmokemedia.online/**`.
-- **Vercel Domains**: `app.vinsmokemedia.online` and `*.vinsmokemedia.online` with CNAME `cname.vercel-dns.com`.
+### B. Production Domain (`fbuploadpro.com`)
+The platform is configured with `fbuploadpro.com`:
+- **Central Application Gateway**: `https://app.fbuploadpro.com` (`/login`, `/signup`).
+- **Dedicated Tenant Workspaces**: `https://{username}.fbuploadpro.com`.
+- **Wildcard Session Cookie**: `.fbuploadpro.com` (enables cross-subdomain authentication continuity).
+- **Supabase Auth Allowlist**: `https://app.fbuploadpro.com/**` and `https://*.fbuploadpro.com/**`.
+- **Vercel Domains**: `app.fbuploadpro.com` and `*.fbuploadpro.com` with CNAME `cname.vercel-dns.com`.
 
 ---
 

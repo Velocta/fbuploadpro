@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { BrandMark } from '@/components/brand';
-import { PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, RADII, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 
 const ClockIcon = () => (
   <svg
@@ -112,8 +112,8 @@ export function AuthShowcasePanel() {
               width: '36px',
               height: '36px',
               borderRadius: RADII.sm,
-              backgroundColor: 'var(--bg-subtle, #121419)',
-              border: '1px solid var(--border-subtle, #1f242d)',
+              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -127,7 +127,7 @@ export function AuthShowcasePanel() {
               style={{
                 fontSize: '1.125rem',
                 fontWeight: TYPOGRAPHY.weights.bold,
-                color: 'var(--text-main, #ffffff)',
+                color: `var(--text-main, ${THEME.default.text.primary})`,
                 letterSpacing: TYPOGRAPHY.tracking.h3,
                 lineHeight: 1.25,
               }}
@@ -137,7 +137,7 @@ export function AuthShowcasePanel() {
             <span
               style={{
                 fontSize: '0.8125rem',
-                color: 'var(--text-sub, #9ca3af)',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 lineHeight: 1.3,
               }}
             >
@@ -170,7 +170,7 @@ export function AuthShowcasePanel() {
               fontWeight: TYPOGRAPHY.weights.heavy,
               letterSpacing: TYPOGRAPHY.tracking.h1,
               margin: `0 0 ${SPACING.lg} 0`,
-              color: 'var(--text-main, #ffffff)',
+              color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
             Your pages,<br />
@@ -183,7 +183,7 @@ export function AuthShowcasePanel() {
             style={{
               fontSize: '0.9375rem',
               lineHeight: 1.5,
-              color: 'var(--text-sub, #9ca3af)',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
               maxWidth: '420px',
               margin: `0 0 ${SPACING.xl} 0`,
             }}
@@ -204,7 +204,7 @@ export function AuthShowcasePanel() {
                   paddingBottom: index === FEATURES.length - 1 ? 0 : SPACING.lg,
                   borderBottom:
                     index < FEATURES.length - 1
-                      ? '1px solid var(--border-subtle, #1f242d)'
+                      ? `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`
                       : undefined,
                 }}
               >
@@ -214,7 +214,7 @@ export function AuthShowcasePanel() {
                     style={{
                       fontSize: '0.875rem',
                       fontWeight: TYPOGRAPHY.weights.semibold,
-                      color: 'var(--text-main, #ffffff)',
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
                       lineHeight: 1.3,
                     }}
                   >
@@ -223,7 +223,7 @@ export function AuthShowcasePanel() {
                   <div
                     style={{
                       fontSize: '0.8125rem',
-                      color: 'var(--text-sub, #9ca3af)',
+                      color: `var(--text-sub, ${THEME.default.text.secondary})`,
                       marginTop: SPACING.xs,
                       lineHeight: 1.45,
                     }}
@@ -241,7 +241,7 @@ export function AuthShowcasePanel() {
               marginTop: SPACING.xl,
               marginBottom: SPACING.xl,
               fontSize: '0.75rem',
-              color: 'var(--text-dim, #6b7280)',
+              color: `var(--text-dim, ${THEME.default.text.muted})`,
               letterSpacing: '0.02em',
             }}
           >
@@ -254,12 +254,12 @@ export function AuthShowcasePanel() {
       <div
         style={{
           paddingTop: SPACING.lg,
-          borderTop: '1px solid var(--border-subtle, #1f242d)',
+          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
           fontSize: '0.75rem',
-          color: 'var(--text-dim, #6b7280)',
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
         }}
       >
         <span>Official platform logins · Encrypted end-to-end</span>

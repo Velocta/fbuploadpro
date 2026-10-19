@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { MockStorageProvider, getMockStorageProvider } from '../helpers/mock-storage';
 import {
-  MockStorageProvider,
   R2StorageProvider,
-  getMockStorageProvider,
   getStorageService,
   type R2Config,
 } from '../../src/lib/storage';

@@ -4,7 +4,6 @@ import {
   type DispatchOutcome,
   type FacebookPageStatus,
   type IFacebookPublishClient,
-  type IPublishDispatcher,
   type PostFormat,
   decryptToken,
   evaluateGraphApiError,
@@ -51,6 +50,11 @@ UPDATE queue_items
 SET status = 'publishing', updated_at = now()
 WHERE id = ANY($1);
 `.trim();
+
+// --- Dispatch retry/backoff tuning ---
+const DISPATCH_RETRY_BASE_DELAY_SECONDS = 300;
+const DISPATCH_RETRY_MAX_DELAY_SECONDS = 3600;
+const FIRST_COMMENT_RETRY_DELAY_MS = 500;
 
 function extractRows<T = unknown>(result: unknown): T[] {
   if (Array.isArray(result)) {
@@ -206,7 +210,7 @@ async function postFirstCommentWithRetry(
         warning: `Published post but first comment failed: ${errMsg}`,
       };
     }
-    await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+    await new Promise((resolve) => setTimeout(resolve, attempt * FIRST_COMMENT_RETRY_DELAY_MS));
     return postFirstCommentWithRetry(fbClient, params, attempt + 1, maxAttempts);
   }
 }
@@ -397,7 +401,7 @@ export async function dispatchItem(
       if (graphTelemetry?.estimatedTimeToRegainAccessMinutes && graphTelemetry.estimatedTimeToRegainAccessMinutes > 0) {
         retryDelaySeconds = graphTelemetry.estimatedTimeToRegainAccessMinutes * 60;
       } else {
-        retryDelaySeconds = Math.min(3600, 300 * Math.pow(2, item.retryCount || 0));
+        retryDelaySeconds = Math.min(DISPATCH_RETRY_MAX_DELAY_SECONDS, DISPATCH_RETRY_BASE_DELAY_SECONDS * Math.pow(2, item.retryCount || 0));
       }
 
       if (isRateLimit) {
@@ -462,113 +466,6 @@ export async function dispatchItem(
   return outcome;
 }
 
-/**
- * Records dispatch outcome into queue_items table.
- */
-export async function recordDispatchOutcome(
-  db: Queryable,
-  outcome: DispatchOutcome
-): Promise<void> {
-  const isRetry = outcome.status === 'retry' || outcome.status === 'queued';
-
-  if (typeof db.from === 'function') {
-    if (outcome.status === 'published') {
-      const { error } = await db.from('queue_items').update({
-        status: 'published',
-        fb_post_id: outcome.fbPostId ?? null,
-        fb_comment_id: outcome.fbCommentId ?? null,
-        published_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', outcome.queueItemId);
-      if (error) {
-        throw new Error(`Failed to record published dispatch outcome: ${error.message || JSON.stringify(error)}`);
-      }
-    } else {
-      const { data: currentItem, error: fetchErr } = await db
-        .from('queue_items')
-        .select('retry_count')
-        .eq('id', outcome.queueItemId)
-        .maybeSingle();
-
-      if (fetchErr) {
-        throw new Error(`Failed to fetch current queue_item retry_count: ${fetchErr.message || JSON.stringify(fetchErr)}`);
-      }
-
-      const nextRetryCount = ((currentItem as any)?.retry_count ?? 0) + 1;
-
-      if (isRetry) {
-        const delaySeconds = outcome.retryDelaySeconds ?? 300;
-        const scheduledTime = new Date(Date.now() + delaySeconds * 1000).toISOString();
-        const { error: updateErr } = await db.from('queue_items').update({
-          status: 'queued',
-          retry_count: nextRetryCount,
-          scheduled_time: scheduledTime,
-          updated_at: new Date().toISOString(),
-        }).eq('id', outcome.queueItemId);
-        if (updateErr) {
-          throw new Error(`Failed to record retry dispatch outcome: ${updateErr.message || JSON.stringify(updateErr)}`);
-        }
-      } else {
-        const { error: updateErr } = await db.from('queue_items').update({
-          status: 'failed',
-          retry_count: nextRetryCount,
-          updated_at: new Date().toISOString(),
-        }).eq('id', outcome.queueItemId);
-        if (updateErr) {
-          throw new Error(`Failed to record failed dispatch outcome: ${updateErr.message || JSON.stringify(updateErr)}`);
-        }
-      }
-    }
-    return;
-  }
-
-  if (typeof db.query === 'function') {
-    if (outcome.status === 'published') {
-      await db.query(
-        `UPDATE queue_items
-       SET status = 'published',
-           fb_post_id = $2,
-           fb_comment_id = $3,
-           published_at = now(),
-           updated_at = now()
-       WHERE id = $1`,
-        [outcome.queueItemId, outcome.fbPostId ?? null, outcome.fbCommentId ?? null]
-      );
-    } else if (isRetry) {
-      if (outcome.retryDelaySeconds !== undefined && outcome.retryDelaySeconds !== 300) {
-        await db.query(
-          `UPDATE queue_items
-       SET status = 'queued',
-           retry_count = retry_count + 1,
-           scheduled_time = now() + make_interval(secs => $2),
-           updated_at = now()
-       WHERE id = $1`,
-          [outcome.queueItemId, outcome.retryDelaySeconds]
-        );
-      } else {
-        await db.query(
-          `UPDATE queue_items
-       SET status = 'queued',
-           retry_count = retry_count + 1,
-           scheduled_time = now() + interval '5 minutes',
-           updated_at = now()
-       WHERE id = $1`,
-          [outcome.queueItemId]
-        );
-      }
-    } else {
-      await db.query(
-        `UPDATE queue_items
-       SET status = 'failed',
-           retry_count = retry_count + 1,
-           updated_at = now()
-       WHERE id = $1`,
-        [outcome.queueItemId]
-      );
-    }
-  }
-}
-
 export interface RunDispatchCycleParams {
   db: DispatcherDbClient;
   fbClient?: IFacebookPublishClient;
@@ -629,41 +526,4 @@ export async function runDispatchCycle(
     failed,
     retried,
   };
-}
-
-/**
- * Class implementation of IPublishDispatcher interface.
- */
-export class PublishDispatcher implements IPublishDispatcher {
-  constructor(
-    private readonly db: DispatcherDbClient,
-    private readonly fbClient: IFacebookPublishClient,
-    private readonly masterKey: string
-  ) {}
-
-  async claimDueItems(limit: number = 10, maxPerPage: number = 3): Promise<ClaimedQueueItem[]> {
-    return await claimDueItems(this.db, limit, maxPerPage);
-  }
-
-  async dispatchItem(item: ClaimedQueueItem): Promise<DispatchOutcome> {
-    return await dispatchItem(item, this.fbClient, this.masterKey);
-  }
-
-  async settleOutcome(outcome: DispatchOutcome, item?: ClaimedQueueItem): Promise<void> {
-    if (item) {
-      return await settleOutcome(this.db, item, outcome);
-    }
-    return await recordDispatchOutcome(this.db, outcome);
-  }
-
-  async runDispatchCycle(
-    limit: number = 10
-  ): Promise<{ processed: number; succeeded: number; failed: number; retried: number }> {
-    return await runDispatchCycle({
-      db: this.db,
-      fbClient: this.fbClient,
-      masterKey: this.masterKey,
-      limit,
-    });
-  }
 }

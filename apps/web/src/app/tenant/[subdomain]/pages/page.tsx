@@ -8,6 +8,7 @@ import {
   RADII,
   SPACING,
   TYPOGRAPHY,
+  COMPONENT_STYLES,
 } from '@/lib/theme';
 import {
   PageCard,
@@ -109,6 +110,7 @@ export function PagesScaleToolbar({
   accountOptions,
   attentionCount = 0,
 }: Readonly<PagesScaleToolbarProps>) {
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   return (
     <div
       data-testid="pages-scale-toolbar"
@@ -174,21 +176,17 @@ export function PagesScaleToolbar({
             paddingRight: searchQuery ? '28px' : '10px',
             backgroundColor: 'transparent',
             color: `var(--text-main, ${THEME.default.text.primary})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            border: isSearchFocused
+              ? `1px solid ${PALETTE.primary}`
+              : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
             borderRadius: RADII.sm,
             fontSize: '0.8125rem',
             outline: 'none',
+            boxShadow: isSearchFocused ? '0 0 0 2px rgba(250, 215, 52, 0.15)' : 'none',
             transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = PALETTE.primary;
-            e.currentTarget.style.boxShadow =
-              '0 0 0 2px rgba(250, 215, 52, 0.15)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          onFocus={() => setIsSearchFocused(true)}
+          onBlur={() => setIsSearchFocused(false)}
         />
 
         {searchQuery && (
@@ -371,6 +369,7 @@ export default function TenantPagesPage({
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddHovered, setIsAddHovered] = useState(false);
   const [statusFilter, setStatusFilter] = useState<PageStatusFilter>('all');
   const [accountFilter, setAccountFilter] = useState('all');
 
@@ -610,12 +609,9 @@ export default function TenantPagesPage({
           data-testid="header-add-page-btn"
           onClick={() => setIsAddModalOpen(true)}
           style={{
+            ...COMPONENT_STYLES.primaryButton,
             height: '34px',
-            padding: `0 ${SPACING.md}`,
-            backgroundColor: PALETTE.primary,
-            color: '#000000',
             border: `1px solid ${PALETTE.primary}`,
-            borderRadius: RADII.sm,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.semibold,
             display: 'inline-flex',
@@ -623,14 +619,11 @@ export default function TenantPagesPage({
             gap: '6px',
             cursor: 'pointer',
             boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+            transform: isAddHovered ? 'translateY(-1px)' : 'translateY(0)',
             transition: 'transform 0.12s ease, box-shadow 0.12s ease',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
+          onMouseEnter={() => setIsAddHovered(true)}
+          onMouseLeave={() => setIsAddHovered(false)}
         >
           <svg
             width="14"

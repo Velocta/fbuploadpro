@@ -8,7 +8,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -76,7 +76,7 @@ async function fetchLegacyPages(
         AND p.status != 'disconnected'
       ORDER BY p.created_at DESC`,
       [workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
   }
 
   return (await dbClient.query(
@@ -102,7 +102,7 @@ async function fetchLegacyPages(
       AND p.status != 'disconnected'
     ORDER BY p.created_at DESC`,
     [userId, workspaceId]
-  )) as any[];
+  )) as Record<string, unknown>[];
 }
 
 async function fetchSupabasePages(
@@ -173,7 +173,7 @@ export async function handleListPages(
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     rows = await fetchLegacyPages(dbClient as DatabaseClient, workspaceId, session.userId, session.role);
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

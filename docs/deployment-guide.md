@@ -53,12 +53,12 @@ Navigate to **Project Settings** $\rightarrow$ **API**:
 Navigate to **Authentication** $\rightarrow$ **URL Configuration**:
 1. **Site URL**: Set to your primary application portal gateway:
    ```text
-   https://app.vinsmokemedia.online
+   https://app.fbuploadpro.com
    ```
 2. **Redirect URLs / Allowlist**: Add wildcard rules to permit cross-subdomain tenant authentication:
    ```text
-   https://app.vinsmokemedia.online/**
-   https://*.vinsmokemedia.online/**
+   https://app.fbuploadpro.com/**
+   https://*.fbuploadpro.com/**
    http://localhost:3000/** (for local staging)
    ```
 
@@ -66,7 +66,7 @@ Navigate to **Authentication** $\rightarrow$ **URL Configuration**:
 Navigate to **Authentication** $\rightarrow$ **SMTP Settings**:
 1. Toggle **Enable Custom SMTP** on.
 2. Enter your transactional email provider credentials (Resend, SendGrid, Amazon SES, Postmark, or Mailgun):
-   - **Sender Email**: e.g. `auth@vinsmokemedia.online` or `noreply@vinsmokemedia.online`
+   - **Sender Email**: e.g. `auth@fbuploadpro.com` or `noreply@fbuploadpro.com`
    - **Sender Name**: `FBUploadPro`
    - **Host**: Your SMTP host (e.g. `smtp.resend.com` or `smtp.sendgrid.net`)
    - **Port**: `587`
@@ -107,14 +107,14 @@ Vercel hosts the Next.js 16 App Router application (`apps/web`), multi-tenant su
 ### 2.2 Configure Custom Apex & Wildcard Domains
 Navigate to **Project Settings** $\rightarrow$ **Domains**:
 1. Add Apex Domain:
-   - `vinsmokemedia.online` (serves the public marketing landing page)
+   - `fbuploadpro.com` (serves the public marketing landing page)
 2. Add Application Gateway:
-   - `app.vinsmokemedia.online` (serves central authentication `/login`, `/signup`, `/forgot-password`)
+   - `app.fbuploadpro.com` (serves central authentication `/login`, `/signup`, `/forgot-password`)
 3. Add Wildcard Subdomain:
-   - `*.vinsmokemedia.online` (serves isolated user tenant workspaces `{subdomain}.vinsmokemedia.online`)
+   - `*.fbuploadpro.com` (serves isolated user tenant workspaces `{subdomain}.fbuploadpro.com`)
 
 In your DNS provider (Cloudflare, Namecheap, GoDaddy):
-- Add an `A` record pointing `@` (or `vinsmokemedia.online`) to `76.76.21.21`.
+- Add an `A` record pointing `@` (or `fbuploadpro.com`) to `76.76.21.21`.
 - Add a `CNAME` record pointing `app` to `cname.vercel-dns.com`.
 - Add a `CNAME` record pointing `*` to `cname.vercel-dns.com`.
 
@@ -157,9 +157,9 @@ Cloudflare handles two mission-critical subsystems:
    *This maps to `R2_BUCKET_NAME`.*
 3. Location: Automatic or nearest region. Click **Create Bucket**.
 4. In the created bucket settings (**Settings** $\rightarrow$ **Public Access**):
-   - Under **Custom Domains**, click **Connect Domain** and enter a subdomain (e.g. `media.vinsmokemedia.online`). Cloudflare will automatically configure the SSL certificate and DNS record.
+   - Under **Custom Domains**, click **Connect Domain** and enter a subdomain (e.g. `media.fbuploadpro.com`). Cloudflare will automatically configure the SSL certificate and DNS record.
    - Or, enable the **R2.dev subdomain** for quick staging.
-   - Copy the public HTTPS endpoint without a trailing slash (e.g. `https://media.vinsmokemedia.online`).
+   - Copy the public HTTPS endpoint without a trailing slash (e.g. `https://media.fbuploadpro.com`).
    *This maps to `R2_PUBLIC_URL`.*
 
 ### 3.3 Create R2 S3-Compatible API Credentials
@@ -214,9 +214,9 @@ openssl rand -hex 32
 Run these commands in your local terminal using the GitHub CLI:
 
 ```bash
-gh variable set NEXT_PUBLIC_ROOT_DOMAIN --body "vinsmokemedia.online"
-gh variable set NEXT_PUBLIC_APP_URL --body "https://app.vinsmokemedia.online"
-gh variable set NEXT_PUBLIC_MARKETING_URL --body "https://vinsmokemedia.online"
+gh variable set NEXT_PUBLIC_ROOT_DOMAIN --body "fbuploadpro.com"
+gh variable set NEXT_PUBLIC_APP_URL --body "https://app.fbuploadpro.com"
+gh variable set NEXT_PUBLIC_MARKETING_URL --body "https://fbuploadpro.com"
 gh variable set NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER --body "+15551234567"
 gh variable set NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE --body "Hi! I need assistance with my FBUploadPro account."
 ```
@@ -251,7 +251,7 @@ gh secret set R2_ACCOUNT_ID          # Same value as CLOUDFLARE_ACCOUNT_ID
 gh secret set R2_ACCESS_KEY_ID
 gh secret set R2_SECRET_ACCESS_KEY
 gh secret set R2_BUCKET_NAME         # e.g. "fbuploadpro-media-prod"
-gh secret set R2_PUBLIC_URL          # e.g. "https://media.vinsmokemedia.online"
+gh secret set R2_PUBLIC_URL          # e.g. "https://media.fbuploadpro.com"
 
 # Upstash Redis
 gh secret set UPSTASH_REDIS_REST_URL
@@ -301,9 +301,9 @@ Because Vercel is linked to your GitHub repository:
 
 After the initial deployment is complete, verify each core subsystem:
 
-- [ ] **DNS & SSL**: Open `https://vinsmokemedia.online` (Marketing Landing) and `https://app.vinsmokemedia.online` (App Gateway) in your browser. Verify valid SSL certificates.
-- [ ] **User Registration & OTP**: Go to `https://app.vinsmokemedia.online/signup`, register a new account, and confirm that the 6-digit verification OTP arrives in your inbox.
-- [ ] **Tenant Subdomain Routing**: After verifying OTP, check that you are redirected to `https://[your-username].vinsmokemedia.online`.
+- [ ] **DNS & SSL**: Open `https://fbuploadpro.com` (Marketing Landing) and `https://app.fbuploadpro.com` (App Gateway) in your browser. Verify valid SSL certificates.
+- [ ] **User Registration & OTP**: Go to `https://app.fbuploadpro.com/signup`, register a new account, and confirm that the 6-digit verification OTP arrives in your inbox.
+- [ ] **Tenant Subdomain Routing**: After verifying OTP, check that you are redirected to `https://[your-username].fbuploadpro.com`.
 - [ ] **Facebook BYOC Configuration**: In the tenant workspace, navigate to **Settings** $\rightarrow$ **Facebook BYOC**, enter your Meta App ID & App Secret, and click **Test Credentials** to verify AES-256-GCM encryption and Meta API connectivity.
 - [ ] **Media Library Upload (R2)**: Upload an image or video in the Media Library. Confirm that the file is stored in Cloudflare R2 and served via your custom CDN URL.
 - [ ] **Worker Health**: Inspect worker invocation logs in the Cloudflare Dashboard under **Workers & Pages** $\rightarrow$ `fbuploadpro-worker` $\rightarrow$ **Logs** to confirm that the 1-minute queue poller runs with 0 errors.

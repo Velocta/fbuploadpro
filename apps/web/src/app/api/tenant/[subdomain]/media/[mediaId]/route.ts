@@ -66,8 +66,8 @@ function formatMediaRow(row: any) {
     captionText: row.caption_text,
     width: row.width ? Number(row.width) : null,
     height: row.height ? Number(row.height) : null,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   });
 }
 
@@ -96,7 +96,7 @@ export async function handleGetMedia(
        FROM media_items
        WHERE id = $1 AND user_id = $2`,
       [mediaId, auth.session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
@@ -201,7 +201,7 @@ export async function handleUpdateMedia(
        FROM media_items
        WHERE id = $1 AND user_id = $2`,
       [mediaId, auth.session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!existingMedia || existingMedia.length === 0) {
       return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
@@ -211,7 +211,7 @@ export async function handleUpdateMedia(
       const folderRows = (await dbClient.query(
         `SELECT id FROM media_folders WHERE id = $1 AND user_id = $2`,
         [parsed.data.folderId, auth.session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!folderRows || folderRows.length === 0) {
         return NextResponse.json(
@@ -265,7 +265,7 @@ export async function handleUpdateMedia(
                 created_at, updated_at
     `;
 
-    const updatedRows = (await dbClient.query(updateQuery, values)) as any[];
+    const updatedRows = (await dbClient.query(updateQuery, values)) as Record<string, unknown>[];
     if (!updatedRows || updatedRows.length === 0) {
       return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
     }
@@ -345,7 +345,7 @@ export async function handleUpdateMedia(
     return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
   }
 
-  const previousThumbnailKey = (existingMedia as any).thumbnail_key as string | null | undefined;
+  const previousThumbnailKey = (existingMedia as Record<string, unknown>).thumbnail_key as string | null | undefined;
   if (
     resolvedThumbnailKey !== undefined &&
     previousThumbnailKey &&
@@ -385,7 +385,7 @@ export async function handleDeleteMedia(
        FROM media_items
        WHERE id = $1 AND user_id = $2`,
       [mediaId, auth.session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!rows || rows.length === 0) {
       return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
@@ -432,7 +432,7 @@ export async function handleDeleteMedia(
   }
 
   const storage = storageService ?? getStorageService();
-  const storageKeys = [(item as any).storage_key, (item as any).thumbnail_key].filter(Boolean) as string[];
+  const storageKeys = [(item as Record<string, unknown>).storage_key, (item as Record<string, unknown>).thumbnail_key].filter(Boolean) as string[];
   await Promise.all(
     storageKeys.map((key) =>
       storage.deleteObject(key).catch((err) => {

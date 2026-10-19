@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, RADII, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
 import { AuthShowcasePanel } from '@/components/auth/login-showcase-panel';
 
@@ -20,8 +20,8 @@ const BrandLogo = () => (
       width: '32px',
       height: '32px',
       borderRadius: RADII.sm,
-      backgroundColor: '#12141a',
-      border: '1px solid #1f242d',
+      backgroundColor: THEME.default.surfaces.subtle,
+      border: `1px solid ${PALETTE.neutral}`,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -73,8 +73,8 @@ export function AuthSplitLayout({
         {/* Auth Card Container */}
         <div
           style={{
-            backgroundColor: 'var(--bg-panel, #0b0e14)',
-            border: '1px solid var(--border-subtle, #1f242d)',
+            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
             borderRadius: RADII.md,
             padding: '32px 28px',
             boxSizing: 'border-box',
@@ -88,7 +88,7 @@ export function AuthSplitLayout({
                 fontWeight: TYPOGRAPHY.weights.bold,
                 letterSpacing: TYPOGRAPHY.tracking.h2,
                 margin: `0 0 ${SPACING.xs} 0`,
-                color: 'var(--text-main, #ffffff)',
+                color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
               {title}
@@ -96,7 +96,7 @@ export function AuthSplitLayout({
             <p
               style={{
                 fontSize: '0.875rem',
-                color: 'var(--text-sub, #9ca3af)',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 margin: 0,
                 lineHeight: 1.5,
               }}
@@ -112,7 +112,7 @@ export function AuthSplitLayout({
               style={{
                 marginTop: SPACING.xl,
                 paddingTop: SPACING.lg,
-                borderTop: '1px solid var(--border-subtle, #1f242d)',
+                borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
                 textAlign: 'center',
               }}
             >
@@ -131,8 +131,8 @@ export function AuthSplitLayout({
           min-height: 100vh;
           display: flex;
           width: 100%;
-          background-color: var(--bg-canvas, #000000);
-          color: var(--text-main, #ffffff);
+          background-color: var(--bg-canvas, ${THEME.default.surfaces.canvas});
+          color: var(--text-main, ${THEME.default.text.primary});
           font-family: ${TYPOGRAPHY.fontFamily};
         }
         .auth-showcase-panel {
@@ -144,13 +144,13 @@ export function AuthSplitLayout({
           justify-content: space-between;
           padding: 48px 56px;
           background: radial-gradient(circle at 18% 22%, rgba(250, 215, 52, 0.08) 0%, transparent 60%), #000000;
-          border-right: 1px solid var(--border-subtle, #1f242d);
+          border-right: 1px solid var(--border-subtle, ${THEME.default.borders.hairline});
           box-sizing: border-box;
           position: relative;
         }
         .auth-showcase-panel.auth-showcase-right {
           border-right: none;
-          border-left: 1px solid var(--border-subtle, #1f242d);
+          border-left: 1px solid var(--border-subtle, ${THEME.default.borders.hairline});
           background: radial-gradient(circle at 82% 22%, rgba(250, 215, 52, 0.08) 0%, transparent 60%), #000000;
         }
         .auth-form-panel {
@@ -162,7 +162,7 @@ export function AuthSplitLayout({
           justify-content: center;
           padding: 32px 24px;
           box-sizing: border-box;
-          background-color: var(--bg-canvas, #000000);
+          background-color: var(--bg-canvas, ${THEME.default.surfaces.canvas});
         }
         .auth-form-box {
           max-width: 440px;

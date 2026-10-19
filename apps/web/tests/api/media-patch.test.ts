@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { handleUpdateMedia } from '../../src/app/api/tenant/[subdomain]/media/[mediaId]/route';
-import { MockStorageProvider } from '../../src/lib/storage';
+import { MockStorageProvider } from '../helpers/mock-storage';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';

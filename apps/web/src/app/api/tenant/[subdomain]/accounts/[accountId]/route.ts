@@ -7,7 +7,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -51,14 +51,14 @@ export async function handleDisconnectAccount(
     const countRows = (await dbClient.query(
       'SELECT COUNT(*)::int AS count FROM facebook_pages WHERE facebook_account_id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
     disconnectedPagesCount = Number(countRows?.[0]?.count ?? 0);
 
     // 5. Delete account record (foreign key ON DELETE CASCADE safely removes linked pages)
     const result = (await dbClient.query(
       'DELETE FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3 RETURNING id',
       [accountId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!result || result.length === 0) {
       return NextResponse.json(
@@ -67,7 +67,7 @@ export async function handleDisconnectAccount(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

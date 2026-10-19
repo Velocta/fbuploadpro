@@ -142,10 +142,11 @@ export function NewFolderModal({
                 fontSize: '0.6875rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
                 letterSpacing: '0.04em',
+                textTransform: 'uppercase',
                 color: `var(--text-dim, ${THEME.default.text.muted})`,
               }}
             >
-              FOLDER NAME
+              Folder name
             </label>
             <input
               id="folder-name-input"
@@ -192,10 +193,11 @@ export function NewFolderModal({
                 fontSize: '0.6875rem',
                 fontWeight: TYPOGRAPHY.weights.semibold,
                 letterSpacing: '0.04em',
+                textTransform: 'uppercase',
                 color: `var(--text-dim, ${THEME.default.text.muted})`,
               }}
             >
-              PLACE INSIDE
+              Place inside
             </label>
             <select
               id="place-inside-select"
@@ -259,7 +261,7 @@ export function NewFolderModal({
               style={{
                 padding: `${SPACING.xs} ${SPACING.lg}`,
                 backgroundColor: canSubmit ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
-                color: '#000000',
+                color: PALETTE.background,
                 border: 'none',
                 borderRadius: RADII.xs,
                 fontSize: '0.8125rem',

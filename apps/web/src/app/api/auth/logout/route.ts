@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import {
-  getSupabaseClient,
+  getSupabaseAdminClient,
   getCookieDomain,
   purgeHostOnlySessionCookie,
 } from '@/lib/supabase-auth';
@@ -8,7 +8,7 @@ import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 
 export async function POST(request?: NextRequest) {
   try {
-    const supabase = getSupabaseClient();
+    const supabase = getSupabaseAdminClient();
     if (supabase) {
       await supabase.auth.signOut().catch(() => {});
     }

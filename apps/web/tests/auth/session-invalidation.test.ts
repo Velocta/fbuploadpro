@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { verifySessionToken } from '@fbuploadpro/contracts';
+import { verifySignupOtp } from '../../src/lib/otp-service';
 import {
-  registerTenantUser,
+  signUpTenantUser,
   loginTenantUser,
   resetUserPasswordWithOtp,
   validateSessionActive,
@@ -16,12 +17,14 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
   });
 
   it('signs session tokens with exactly 30 days (2,592,000s) lifetime', async () => {
-    const { token } = await registerTenantUser({
+    const _signup = await signUpTenantUser({
       name: 'Sarah Connor',
       phone: '+14155552671',
       email: 'sarah.session@gmail.com',
       password: 'SecurePassword123!',
     });
+    expect(verifySignupOtp('sarah.session@gmail.com', _signup.simulatedOtp!).success).toBe(true);
+    const { token } = await loginTenantUser({ email: 'sarah.session@gmail.com', password: 'SecurePassword123!' });
 
     const payload = await verifySessionToken(token, SESSION_SECRET);
     expect(payload.exp - payload.iat).toBe(86400 * 30); // 30 days in seconds
@@ -33,12 +36,14 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
     const newPassword = 'UpdatedSecurePassword456!';
 
     // 1. Provision account and capture initial session
-    const { token: initialToken } = await registerTenantUser({
+    const _signup = await signUpTenantUser({
       name: 'John Connor',
       phone: '+14155552671',
       email,
       password: originalPassword,
     });
+    expect(verifySignupOtp(email, _signup.simulatedOtp!).success).toBe(true);
+    const { token: initialToken } = await loginTenantUser({ email, password: originalPassword });
 
     const initialSession = await verifySessionToken(initialToken, SESSION_SECRET);
     const isValidInitially = await validateSessionActive(initialSession);
@@ -75,12 +80,14 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
     const newPassword = 'NewPassword456!';
 
     // Register user
-    const { token: initialToken } = await registerTenantUser({
+    const _signup = await signUpTenantUser({
       name: 'Same Second User',
       phone: '+14155552672',
       email,
-      password,
+      password: 'Password123!',
     });
+    expect(verifySignupOtp(email, _signup.simulatedOtp!).success).toBe(true);
+    const { token: initialToken } = await loginTenantUser({ email, password: 'Password123!' });
 
     const initialSession = await verifySessionToken(initialToken, SESSION_SECRET);
     expect(await validateSessionActive(initialSession)).toBe(true);

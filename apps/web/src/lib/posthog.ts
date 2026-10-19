@@ -32,33 +32,3 @@ export function initPostHog(apiKey: string | undefined | null, host?: string | u
   });
   initialized = true;
 }
-
-/** Capture an exception client-side. No-op if PostHog isn't initialized. */
-export function captureClientException(
-  error: unknown,
-  context?: Record<string, unknown>
-): void {
-  if (!initialized) return;
-  try {
-    posthog.capture('$exception', {
-      $exception_message: error instanceof Error ? error.message : String(error),
-      $exception_stack: error instanceof Error ? error.stack : undefined,
-      ...context,
-    });
-  } catch {
-    // Never let telemetry break the app.
-  }
-}
-
-/** Associate subsequent events with a user. No-op if PostHog isn't initialized. */
-export function identifyPostHogUser(
-  userId: string,
-  traits?: Record<string, unknown>
-): void {
-  if (!initialized) return;
-  try {
-    posthog.identify(userId, traits);
-  } catch {
-    // Never let telemetry break the app.
-  }
-}

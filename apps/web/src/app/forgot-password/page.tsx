@@ -7,7 +7,7 @@ import { Input, Button, Alert } from '@/components/ui';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
-import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 
 export interface ForgotPasswordPageProps {
@@ -84,7 +84,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
         }
 
         setGeneralError(
-          sanitizeAuthErrorMessage(data.error, 'Failed to send verification code. Please try again.')
+          sanitizeAuthErrorMessage(data.error, "Couldn't send the verification code. Please try again.")
         );
         setIsSubmitting(false);
         return;
@@ -95,7 +95,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
       setGeneralError(null);
       setIsSubmitting(false);
     } catch {
-      setGeneralError('Unable to process your request at this moment. Please check your connection and try again.');
+      setGeneralError("Couldn't process your request. Please check your connection and try again.");
       setIsSubmitting(false);
     }
   };
@@ -121,16 +121,16 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
         if (data.cooldownSecondsRemaining) {
           setCooldownSeconds(data.cooldownSecondsRemaining);
         }
-        setGeneralError(sanitizeAuthErrorMessage(data.error, 'Unable to resend code right now.'));
+        setGeneralError(sanitizeAuthErrorMessage(data.error, "Couldn't resend the code right now."));
         setIsResending(false);
         return;
       }
 
       setCooldownSeconds(60);
-      setResendSuccessMessage('A fresh verification code has been dispatched. Any previous codes have been invalidated.');
+      setResendSuccessMessage("We've sent a fresh code. Any earlier codes no longer work.");
       setIsResending(false);
     } catch {
-      setGeneralError('Failed to resend code. Please check your connection.');
+      setGeneralError("Couldn't resend the code. Please check your connection.");
       setIsResending(false);
     }
   };
@@ -198,7 +198,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
       const data = await res.json();
 
       if (!res.ok) {
-        const errorMsg = sanitizeAuthErrorMessage(data.error, 'Failed to update password.');
+        const errorMsg = sanitizeAuthErrorMessage(data.error, "Couldn't update your password. Please try again.");
         if (errorMsg.toLowerCase().includes('code') || errorMsg.toLowerCase().includes('attempt')) {
           setOtpError(errorMsg);
         } else if (errorMsg.toLowerCase().includes('password')) {
@@ -218,7 +218,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
       }, 2000);
       return () => clearTimeout(timer);
     } catch {
-      setGeneralError('Unable to update your password at this moment. Please try again.');
+      setGeneralError("Couldn't update your password. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -232,7 +232,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
           : `Enter the 6-digit verification code sent to ${email} and your new password.`
       }
       footer={
-        <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+        <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
           Remember your password?{' '}
           <Link
             href="/login"
@@ -360,7 +360,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
             <div
               style={{
                 fontSize: '0.8125rem',
-                color: 'var(--success, #10b981)',
+                color: `var(--success, ${PALETTE.accent4})`,
                 marginTop: SPACING.xs,
               }}
             >
@@ -396,7 +396,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: cooldownSeconds > 0 ? 'var(--text-dim, #6b7280)' : PALETTE.primary,
+                color: cooldownSeconds > 0 ? `var(--text-dim, ${THEME.default.text.muted})` : PALETTE.primary,
                 cursor: cooldownSeconds > 0 ? 'not-allowed' : 'pointer',
                 fontWeight: TYPOGRAPHY.weights.medium,
                 padding: '4px 0',
@@ -423,7 +423,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
               style={{
                 background: 'transparent',
                 border: 'none',
-                color: 'var(--text-sub, #9ca3af)',
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
                 cursor: 'pointer',
                 padding: '4px 0',
                 textDecoration: 'underline',

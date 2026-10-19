@@ -10,7 +10,7 @@ import {
   DialogBody,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 
 export interface AccountStateRecord {
   status?: string | undefined;
@@ -144,17 +144,6 @@ export function evaluateAccountConnectionPoll(
 
   return { matched: false };
 }
-
-export function hasCompletedAccountConnection(
-  accounts: AccountSnapshot[],
-  initialIds: Set<string>,
-  initialStates: Map<string, AccountStateRecord>,
-  reconnectingAccount?: ConnectAccountModalProps['reconnectingAccount']
-): boolean {
-  return evaluateAccountConnectionPoll(accounts, initialIds, initialStates, reconnectingAccount)
-    .matched;
-}
-
 export function buildDirectConnectUrl(
   reconnectingAccount?: ConnectAccountModalProps['reconnectingAccount']
 ): string {
@@ -319,13 +308,8 @@ export function MagicLinkView({
           disabled={isGeneratingMagic}
           onClick={onRegenerateLink}
           style={{
-            height: '38px',
+            ...COMPONENT_STYLES.primaryButton,
             width: '100%',
-            padding: `0 ${SPACING.md}`,
-            backgroundColor: PALETTE.primary,
-            color: PALETTE.background,
-            border: 'none',
-            borderRadius: RADII.sm,
             fontSize: '0.8125rem',
             fontWeight: TYPOGRAPHY.weights.semibold,
             cursor: isGeneratingMagic ? 'not-allowed' : 'pointer',
@@ -351,7 +335,7 @@ export function MagicLinkView({
               fontSize: '0.8125rem',
               color: `var(--text-main, ${THEME.default.text.primary})`,
               outline: 'none',
-              fontFamily: 'monospace',
+              fontFamily: TYPOGRAPHY.mono,
               cursor: 'pointer',
             }}
           />
@@ -563,7 +547,7 @@ export function ConnectAccountModal({
         : { method: 'POST' };
       const res = await fetch(`/api/tenant/${subdomain}/accounts/magic-link`, requestInit);
       if (!res.ok) {
-        throw new Error('Failed to generate connection link');
+        throw new Error("Couldn't generate the connection link. Please try again.");
       }
       const data = await res.json();
       setMagicUrl(data.magicUrl);
@@ -571,7 +555,7 @@ export function ConnectAccountModal({
       setView('magic');
     } catch (_err) {
       // Ignored because generation error is handled via user-facing error state
-      setMagicError('Unable to generate magic link. Please try again.');
+      setMagicError("Couldn't generate the magic link. Please try again.");
     } finally {
       setIsGeneratingMagic(false);
     }

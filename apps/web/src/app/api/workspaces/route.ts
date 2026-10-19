@@ -8,7 +8,7 @@ import {
   signSessionToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient, setSessionCookie, ensureWorkspaceForUser } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient, setSessionCookie, ensureWorkspaceForUser } from '@/lib/supabase-auth';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 async function resolveUniqueSubdomain(
-  supabase: NonNullable<ReturnType<typeof getSupabaseClient>>,
+  supabase: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
   userId: string,
   userSubdomain: string | undefined,
   requestedSubdomain?: string
@@ -170,7 +170,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { name, subdomain } = parseResult.data;
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }
@@ -282,7 +282,7 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Target workspace subdomain is required' }, { status: 400 });
   }
 
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }

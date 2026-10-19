@@ -137,6 +137,14 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
                 }),
               })),
             })),
+            upsert: vi.fn(() => ({
+              select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: { id: VALID_UUID, email: 'attacker@gmail.com', name: 'Attacker' },
+                  error: null,
+                }),
+              })),
+            })),
           };
         }
         if (table === 'workspaces') {
@@ -181,7 +189,7 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
 
     authModule._setMockSupabaseClient(mockSupabase as any);
 
-    const res = await authModule.registerTenantUser({
+    const res = await authModule.signUpTenantUser({
       name: 'Attacker',
       email: 'attacker@gmail.com',
       phone: '+15555550199',

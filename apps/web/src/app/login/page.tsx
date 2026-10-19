@@ -7,7 +7,7 @@ import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { LoginShowcasePanel } from '@/components/auth/login-showcase-panel';
 import { PasswordInput } from '@/components/auth/password-input';
 import { FormErrorCallout } from '@/components/auth/form-error-callout';
-import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
@@ -146,7 +146,7 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
         completeAuthRedirect(data.redirectUrl, data.user);
       }
     } catch {
-      setGeneralError('Unable to sign in at this moment. Please check your connection and try again.');
+      setGeneralError("Couldn't sign you in. Please check your connection and try again.");
       setIsSubmitting(false);
     }
   };
@@ -157,7 +157,7 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
       description="Welcome back! Sign in to keep your content flowing across every platform."
       showcase={<LoginShowcasePanel />}
       footer={
-        <span style={{ fontSize: '0.8125rem', color: 'var(--text-sub, #9ca3af)' }}>
+        <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
           Don&apos;t have an account?{' '}
           <Link
             href={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : '/signup'}

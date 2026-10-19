@@ -85,7 +85,7 @@ export async function handleUpdateQueueItem(
        FROM queue_items qi
        WHERE qi.id = $1 AND qi.user_id = $2`,
       [itemId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!existingRows || existingRows.length === 0) {
       return NextResponse.json({ error: 'Queue item not found' }, { status: 404 });
@@ -116,7 +116,7 @@ export async function handleUpdateQueueItem(
     const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
     let newScheduledTime: string;
     try {
-      newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
+      newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time as string | null | undefined);
     } catch (_e) {
       return NextResponse.json(
         { error: 'INVALID_REQUEST', message: 'Invalid scheduled time format' },
@@ -137,7 +137,7 @@ export async function handleUpdateQueueItem(
        WHERE id = $7 AND user_id = $8
        RETURNING id, user_id, fb_page_id, slot_id, media_id, post_format, link_url, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at`,
       [newCaption, newFirstComment, newScheduledTime, newStatus, newPostFormat ?? null, newLinkUrl, itemId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     const updated = updateRows[0];
 
@@ -149,7 +149,7 @@ export async function handleUpdateQueueItem(
          FROM media_items
          WHERE id = $1 AND user_id = $2`,
         [updated.media_id, session.userId]
-      )) as any[];
+      )) as Record<string, unknown>[];
       mediaRecord = mediaRows?.[0] ?? null;
     }
 
@@ -161,7 +161,7 @@ export async function handleUpdateQueueItem(
       mediaId: updated.media_id ?? null,
       postFormat: (updated.post_format as PostFormat) ?? newPostFormat ?? (mediaRecord?.media_type === 'video' ? 'video' : 'image'),
       linkUrl: updated.link_url ?? newLinkUrl ?? null,
-      scheduledTime: new Date(updated.scheduled_time).toISOString(),
+      scheduledTime: new Date(updated.scheduled_time as string).toISOString(),
       caption: updated.caption ?? '',
       firstComment: updated.first_comment ?? null,
       status: updated.status,
@@ -169,9 +169,9 @@ export async function handleUpdateQueueItem(
       maxRetries: Number(updated.max_retries ?? 3),
       fbPostId: updated.fb_post_id ?? null,
       fbCommentId: updated.fb_comment_id ?? null,
-      publishedAt: updated.published_at ? new Date(updated.published_at).toISOString() : null,
-      createdAt: new Date(updated.created_at).toISOString(),
-      updatedAt: new Date(updated.updated_at).toISOString(),
+      publishedAt: updated.published_at ? new Date(updated.published_at as string).toISOString() : null,
+      createdAt: new Date(updated.created_at as string).toISOString(),
+      updatedAt: new Date(updated.updated_at as string).toISOString(),
       ...(mediaRecord
         ? {
             media: {
@@ -229,7 +229,7 @@ export async function handleUpdateQueueItem(
   const newLinkUrl = parsed.data.linkUrl !== undefined ? parsed.data.linkUrl : (existing.link_url ?? null);
   let newScheduledTime: string;
   try {
-    newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time);
+    newScheduledTime = resolveScheduledTime(parsed.data.scheduledTime, existing.scheduled_time as string | null | undefined);
   } catch (_e) {
     return NextResponse.json(
       { error: 'INVALID_REQUEST', message: 'Invalid scheduled time format' },
@@ -281,7 +281,7 @@ export async function handleUpdateQueueItem(
     mediaId: updated.media_id ?? null,
     postFormat: (updated.post_format as PostFormat) ?? newPostFormat ?? (mediaRecord?.media_type === 'video' ? 'video' : 'image'),
     linkUrl: updated.link_url ?? newLinkUrl ?? null,
-    scheduledTime: new Date(updated.scheduled_time).toISOString(),
+    scheduledTime: new Date(updated.scheduled_time as string).toISOString(),
     caption: updated.caption ?? '',
     firstComment: updated.first_comment ?? null,
     status: updated.status,
@@ -289,9 +289,9 @@ export async function handleUpdateQueueItem(
     maxRetries: Number(updated.max_retries ?? 3),
     fbPostId: updated.fb_post_id ?? null,
     fbCommentId: updated.fb_comment_id ?? null,
-    publishedAt: updated.published_at ? new Date(updated.published_at).toISOString() : null,
-    createdAt: new Date(updated.created_at).toISOString(),
-    updatedAt: new Date(updated.updated_at).toISOString(),
+    publishedAt: updated.published_at ? new Date(updated.published_at as string).toISOString() : null,
+    createdAt: new Date(updated.created_at as string).toISOString(),
+    updatedAt: new Date(updated.updated_at as string).toISOString(),
     ...(mediaRecord
       ? {
           media: {
@@ -343,7 +343,7 @@ export async function handleDeleteQueueItem(
     const existingRows = (await dbClient.query(
       `SELECT id, user_id, status FROM queue_items WHERE id = $1 AND user_id = $2`,
       [itemId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!existingRows || existingRows.length === 0) {
       return NextResponse.json({ error: 'Queue item not found' }, { status: 404 });

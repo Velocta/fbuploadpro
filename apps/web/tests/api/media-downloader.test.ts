@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import { handleDownloadMediaFromUrl } from '../../src/app/api/tenant/[subdomain]/downloader/route';
-import { MockStorageProvider } from '../../src/lib/storage';
+import { MockStorageProvider } from '../helpers/mock-storage';
 import { normalizeCloudDriveUrl } from '../../src/lib/media-downloader';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';

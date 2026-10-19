@@ -8,7 +8,7 @@ import {
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleConfirmUpload(
@@ -68,8 +68,8 @@ export async function handleConfirmUpload(
 
     if (
       dbClient &&
-      (('query' in dbClient && typeof (dbClient as any).query === 'function') ||
-        ('withTransaction' in dbClient && typeof (dbClient as any).withTransaction === 'function'))
+      (('query' in dbClient && typeof (dbClient as unknown as Record<string, unknown>).query === 'function') ||
+        ('withTransaction' in dbClient && typeof (dbClient as unknown as Record<string, unknown>).withTransaction === 'function'))
     ) {
       const executeInsert = async (tx: {
         query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>;
@@ -119,7 +119,7 @@ export async function handleConfirmUpload(
         });
       }
     } else {
-      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
       if (!supabase) {
         return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
       }

@@ -108,7 +108,7 @@ export function GeneralSettingsView({
 
       const data = await res.json();
       if (!res.ok) {
-        setValidationError(data?.error || 'Failed to update workspace name.');
+        setValidationError(data?.error || "Couldn't update the workspace name. Please try again.");
         setIsSaving(false);
         return;
       }
@@ -128,7 +128,7 @@ export function GeneralSettingsView({
         );
       }
     } catch {
-      setValidationError('Failed to update workspace name. Please try again.');
+      setValidationError("Couldn't update the workspace name. Please try again.");
     } finally {
       setIsSaving(false);
     }

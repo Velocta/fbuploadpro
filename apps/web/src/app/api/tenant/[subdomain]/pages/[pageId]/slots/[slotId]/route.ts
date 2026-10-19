@@ -7,7 +7,7 @@ import {
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleUpdateQueueSlot(
@@ -59,7 +59,7 @@ export async function handleUpdateQueueSlot(
     const pageRows = (await dbClient.query(
       'SELECT id, timezone FROM facebook_pages WHERE id = $1 AND user_id = $2',
       [pageId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
@@ -84,7 +84,7 @@ export async function handleUpdateQueueSlot(
           pageId,
           session.userId,
         ]
-      )) as any[];
+      )) as Record<string, unknown>[];
 
       if (!updateRows || updateRows.length === 0) {
         return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
@@ -99,8 +99,8 @@ export async function handleUpdateQueueSlot(
         timezone: pageTimezone,
         isActive: Boolean(row.is_active),
         allowedFormats: Array.isArray(row.allowed_formats) ? row.allowed_formats : ['text', 'image', 'reel', 'video', 'story'],
-        createdAt: new Date(row.created_at).toISOString(),
-        updatedAt: new Date(row.updated_at).toISOString(),
+        createdAt: new Date(row.created_at as string).toISOString(),
+        updatedAt: new Date(row.updated_at as string).toISOString(),
       });
 
       return NextResponse.json(responsePayload, { status: 200 });
@@ -120,7 +120,7 @@ export async function handleUpdateQueueSlot(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -220,7 +220,7 @@ export async function handleDeleteQueueSlot(
     const pageRows = (await dbClient.query(
       'SELECT id FROM facebook_pages WHERE id = $1 AND user_id = $2',
       [pageId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!pageRows || pageRows.length === 0) {
       return NextResponse.json({ error: 'Page not found' }, { status: 404 });
@@ -232,7 +232,7 @@ export async function handleDeleteQueueSlot(
        WHERE id = $1 AND fb_page_id = $2 AND user_id = $3
        RETURNING id`,
       [slotId, pageId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!deleteRows || deleteRows.length === 0) {
       return NextResponse.json({ error: 'Slot not found' }, { status: 404 });
@@ -240,7 +240,7 @@ export async function handleDeleteQueueSlot(
 
     return NextResponse.json({ success: true, slotId });
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

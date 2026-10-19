@@ -86,6 +86,13 @@ export function buildMediaFolderHref(
 }
 
 /**
+ * Builds a unique ID for a failed download entry from its batch index.
+ */
+export function makeFailedId(idx: number): string {
+  return `failed-${idx}-${Date.now()}`;
+}
+
+/**
  * Fetches existing workspace folders and selects the root-level "Downloads" folder.
  * If no root-level "Downloads" folder exists yet, automatically provisions it via POST.
  */
@@ -232,7 +239,7 @@ export function validateDownloaderBatchInput(rawInput: string): BatchInputValida
     return {
       valid: false,
       errorMessage:
-        'Please enter at least one valid public link starting with http:// or https://.',
+        'Please enter at least one valid public link.',
       urls: [],
       duplicateCount: deduped.duplicateCount,
       invalidUrls: deduped.invalidUrls,
@@ -278,7 +285,7 @@ function createCancelledOutcome(idx: number, url: string, folderId: string | nul
   return {
     saved: [] as DownloaderSavedEntry[],
     failed: {
-      id: `failed-${idx}-${Date.now()}`,
+      id: makeFailedId(idx),
       url,
       folderId,
       errorMessage: 'Download was cancelled.',
@@ -341,7 +348,7 @@ async function evaluatePollJobStatus(
       outcome: {
         saved: [],
         failed: {
-          id: `failed-${params.idx}-${Date.now()}`,
+          id: makeFailedId(params.idx),
           url: params.url,
           folderId: params.folderId,
           errorMessage: job.error_message || 'Could not save media from this link.',
@@ -429,7 +436,7 @@ async function handlePollIteration(params: {
       outcome: {
         saved: [],
         failed: {
-          id: `failed-${idx}-${Date.now()}`,
+          id: makeFailedId(idx),
           url,
           folderId,
           errorMessage: getPollErrorMessage(pollResult.status),
@@ -540,7 +547,7 @@ async function processSingleBatchUrl(params: {
     return {
       saved: [],
       failed: {
-        id: `failed-${idx}-${Date.now()}`,
+        id: makeFailedId(idx),
         url,
         folderId,
         errorMessage: message,
@@ -551,7 +558,7 @@ async function processSingleBatchUrl(params: {
       return {
         saved: [],
         failed: {
-          id: `failed-${idx}-${Date.now()}`,
+          id: makeFailedId(idx),
           url,
           folderId,
           errorMessage: 'Download was cancelled.',
@@ -562,7 +569,7 @@ async function processSingleBatchUrl(params: {
     return {
       saved: [],
       failed: {
-        id: `failed-${idx}-${Date.now()}`,
+        id: makeFailedId(idx),
         url,
         folderId,
         errorMessage: 'Network connection interrupted while saving this link. Please retry.',
@@ -1912,7 +1919,7 @@ export function MediaDownloader({
                 color: `var(--text-main, ${THEME.default.text.primary})`,
               }}
             >
-              No downloads in this session yet
+              Nothing downloaded yet
             </span>
             <span
               style={{
@@ -1921,7 +1928,7 @@ export function MediaDownloader({
                 maxWidth: '48ch',
               }}
             >
-              Saved videos and images will appear here with their extracted captions and a shortcut to open them in their folder.
+              Paste a link above and it will appear here, ready for your library.
             </span>
           </div>
         ) : (

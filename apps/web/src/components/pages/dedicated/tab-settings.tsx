@@ -8,6 +8,7 @@ import {
   SPACING,
   TYPOGRAPHY,
   STATUS_SIGNALS,
+  COMPONENT_STYLES,
 } from '@/lib/theme';
 import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
 import type { FacebookPageItem } from '../page-card';
@@ -101,7 +102,7 @@ export function PageTabSettings({
               height="20"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#f59e0b"
+              stroke={PALETTE.primary}
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -143,13 +144,11 @@ export function PageTabSettings({
               }
             }}
             style={{
+              ...COMPONENT_STYLES.primaryButton,
               padding: `${SPACING.xs} ${SPACING.md}`,
-              borderRadius: RADII.sm,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
-              backgroundColor: PALETTE.primary,
-              color: '#000000',
-              border: 'none',
+              color: PALETTE.background,
               cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
             }}
@@ -194,7 +193,7 @@ export function PageTabSettings({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            When automation is active, the dispatcher will automatically distribute queued posts into scheduled time slots. Pausing automation suspends publishing without deleting your queue.
+            While auto-publishing is on, queued posts go live at your scheduled times. Pausing automation suspends publishing without deleting your queue.
           </p>
         </div>
 
@@ -231,7 +230,7 @@ export function PageTabSettings({
               fontSize: '0.875rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               backgroundColor: isPaused ? PALETTE.primary : `var(--bg-active, ${THEME.default.surfaces.active})`,
-              color: isPaused ? '#000000' : `var(--text-main, ${THEME.default.text.primary})`,
+              color: isPaused ? PALETTE.background : `var(--text-main, ${THEME.default.text.primary})`,
               border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
               cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
               opacity: isUpdatingStatus ? 0.7 : 1,
@@ -271,7 +270,7 @@ export function PageTabSettings({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Metadata and authentication status securely linked to Facebook Graph API v26.0.
+            Page details and connection status synced with Facebook.
           </p>
         </div>
 
@@ -299,7 +298,7 @@ export function PageTabSettings({
                 fontWeight: TYPOGRAPHY.weights.medium,
                 color: `var(--text-main, ${THEME.default.text.primary})`,
                 marginTop: '4px',
-                fontFamily: 'monospace',
+                fontFamily: TYPOGRAPHY.mono,
               }}
             >
               {page.fbPageId}
@@ -525,7 +524,7 @@ function DisconnectConfirmationDialog({
             lineHeight: 1.5,
           }}
         >
-          This will detach the Facebook Page from your workspace. Queued publications will be cancelled and access tokens will be securely removed.
+          This will disconnect the Facebook Page from your workspace. Any queued posts will be cancelled.
         </p>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm, marginTop: SPACING.sm }}>
@@ -557,7 +556,7 @@ function DisconnectConfirmationDialog({
               fontSize: '0.875rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               backgroundColor: PALETTE.accent3,
-              color: '#ffffff',
+              color: PALETTE.text,
               border: 'none',
               cursor: isDisconnecting ? 'not-allowed' : 'pointer',
               opacity: isDisconnecting ? 0.7 : 1,

@@ -266,7 +266,7 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
     expect(findByRole('alert')).toBe(true);
     expect(hasAttribute('data-testid', 'downloader-url-error')).toBe(true);
     expect(
-      hasText('Please enter at least one valid public link starting with http:// or https://.')
+      hasText('Please enter at least one valid public link.')
     ).toBe(true);
   });
 

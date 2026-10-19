@@ -48,7 +48,7 @@ export default function AccountSuspendedPage() {
             lineHeight: 1.5,
           }}
         >
-          Your account has been suspended. Please contact platform administration to restore access.
+          Your account has been suspended. Please contact support to restore access.
         </p>
       </div>
     </main>

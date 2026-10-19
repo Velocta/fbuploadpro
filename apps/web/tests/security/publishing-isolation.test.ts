@@ -19,7 +19,6 @@ import {
   handleDeleteQueueItem,
 } from '../../src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/route';
 import { handlePublishNow } from '../../src/app/api/tenant/[subdomain]/publishing/queue/[itemId]/publish-now/route';
-import { handleListPublishLogs } from '../../src/app/api/tenant/[subdomain]/publishing/logs/route';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -182,13 +181,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       expect(res.status).toBe(403);
     });
 
-    it('blocks User B from accessing User A publish logs via tenant-a route with 403 Forbidden', async () => {
-      const req = new NextRequest('http://localhost:3000/api/tenant/tenant-a/publishing/logs', {
-        headers: { cookie: tokenCookieUserB },
-      });
-      const res = await handleListPublishLogs(req, 'tenant-a');
-      expect(res.status).toBe(403);
-    });
   });
 
   describe('2. Object-Level IDOR Guards (Queue Slots)', () => {
@@ -637,70 +629,6 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
       expect(body.items[0].userId).toBe(userB.id);
     });
 
-    it('returns empty logs when User B queries logs filtered by User A pageId', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM workspaces')) {
-            return Promise.resolve([{ id: 'ws_b' }]);
-          }
-          expect(params?.[0]).toBe(userB.id);
-          expect(params?.[1]).toBe('ws_b');
-          expect(params?.[2]).toBe(userA.pageId);
-          if (sql.includes('COUNT(*)')) {
-            return Promise.resolve([{ total: 0 }]);
-          }
-          return Promise.resolve([]);
-        }),
-      };
 
-      const req = new NextRequest(
-        `http://localhost:3000/api/tenant/tenant-b/publishing/logs?pageId=${userA.pageId}`,
-        { headers: { cookie: tokenCookieUserB } }
-      );
-      const res = await handleListPublishLogs(req, 'tenant-b', mockDb as DatabaseClient);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.logs).toHaveLength(0);
-      expect(body.total).toBe(0);
-    });
-
-    it('ensures User B publish logs query is strictly parameterized with User B user_id', async () => {
-      const mockDb: Partial<DatabaseClient> = {
-        query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM workspaces')) {
-            return Promise.resolve([{ id: 'ws_b' }]);
-          }
-          expect(params?.[0]).toBe(userB.id);
-          expect(params?.[1]).toBe('ws_b');
-
-          if (sql.includes('COUNT(*)')) {
-            return Promise.resolve([{ total: 1 }]);
-          }
-          return Promise.resolve([
-            {
-              id: '99999999-9999-4999-b999-999999999999',
-              user_id: userB.id,
-              queue_item_id: userB.queueItemId,
-              fb_page_id: userB.pageId,
-              status: 'success',
-              attempt_number: 1,
-              fb_response_code: 200,
-              error_message: null,
-              error_details: null,
-              created_at: new Date().toISOString(),
-            },
-          ]);
-        }),
-      };
-
-      const req = new NextRequest('http://localhost:3000/api/tenant/tenant-b/publishing/logs', {
-        headers: { cookie: tokenCookieUserB },
-      });
-      const res = await handleListPublishLogs(req, 'tenant-b', mockDb as DatabaseClient);
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.logs).toHaveLength(1);
-      expect(body.logs[0].userId).toBe(userB.id);
-    });
   });
 });

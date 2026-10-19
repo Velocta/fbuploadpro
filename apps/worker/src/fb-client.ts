@@ -7,6 +7,51 @@ import {
 
 export type { IFacebookPublishClient, GraphRateLimitTelemetry, PublishResult };
 
+// --- Facebook API endpoints ---
+// Centralized here (not env-overridable): tests inject alternatives via options.baseUrl.
+const FB_GRAPH_API_BASE_URL = 'https://graph.facebook.com/v26.0';
+const FB_RUPLOAD_BASE_URL = 'https://rupload.facebook.com/video-upload/v26.0';
+
+// --- Retry/backoff tuning for Graph API calls ---
+const FB_RETRY_MAX_ATTEMPTS = 3;
+const FB_RETRY_BASE_DELAY_MS = 1000;
+const FB_RETRY_MAX_DELAY_MS = 8000;
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(attempt: number): number {
+  return Math.min(FB_RETRY_MAX_DELAY_MS, FB_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+}
+
+/**
+ * Whether a non-OK Graph API response is worth retrying: HTTP 429/5xx, or a
+ * transient Graph error (e.g. rate-limit 368) reported in the JSON body.
+ * Permanent errors (auth failures, policy violations, duplicates) are never retried.
+ */
+async function isRetryableGraphResponse(res: Response): Promise<boolean> {
+  if (res.status === 429) return true;
+  if (res.status >= 500 && res.status < 600) return true;
+  if (res.status >= 400 && res.status < 500) {
+    try {
+      const data = (await res.clone().json()) as {
+        error?: { code?: number; error_subcode?: number };
+      };
+      const code = data?.error?.code;
+      if (typeof code === 'number') {
+        // Canonical transient classification from contracts: covers rate-limit
+        // codes (4/17/32/341/613/80000-80014) and 368, but not permanent
+        // policy errors (368/4854002 checkpoint, 368/1404082 duplicate).
+        return evaluateGraphApiError(code, data.error?.error_subcode)?.isTransient === true;
+      }
+    } catch {
+      // Unparseable body — not retryable.
+    }
+  }
+  return false;
+}
+
 export interface FacebookGraphErrorData {
   message?: string;
   type?: string;
@@ -203,7 +248,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
   private readonly fetchFn: typeof fetch;
 
   constructor(options?: FacebookPublishClientOptions) {
-    this.baseUrl = trimTrailingSlashes(options?.baseUrl ?? 'https://graph.facebook.com/v26.0');
+    this.baseUrl = trimTrailingSlashes(options?.baseUrl ?? FB_GRAPH_API_BASE_URL);
     this.fetchFn = options?.fetchFn ?? globalThis.fetch;
   }
 
@@ -217,7 +262,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
 
     // Phase 1: Start upload session
     const startUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/video_reels`;
-    const startRes = await this.fetchFn(startUrl, {
+    const startRes = await this.fetchWithRetry(startUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -250,7 +295,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
 
     // Phase 3: Finish upload and publish
     const finishUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/video_reels`;
-    const finishRes = await this.fetchFn(finishUrl, {
+    const finishRes = await this.fetchWithRetry(finishUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -290,7 +335,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     const { pageId, accessToken, imageUrl, caption } = params;
     const url = `${this.baseUrl}/${encodeURIComponent(pageId)}/photos`;
 
-    const res = await this.fetchFn(url, {
+    const res = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -336,7 +381,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       bodyPayload.link = linkUrl;
     }
 
-    const res = await this.fetchFn(url, {
+    const res = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -380,7 +425,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       bodyPayload.title = title;
     }
 
-    const res = await this.fetchFn(url, {
+    const res = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -415,7 +460,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
 
     // Step 1: Upload unpublished photo
     const photoUploadUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/photos`;
-    const photoRes = await this.fetchFn(photoUploadUrl, {
+    const photoRes = await this.fetchWithRetry(photoUploadUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -443,7 +488,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
 
     // Step 2: Publish Photo Story
     const storyUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/photo_stories`;
-    const storyRes = await this.fetchFn(storyUrl, {
+    const storyRes = await this.fetchWithRetry(storyUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -478,7 +523,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
 
     // Step 1: Start Video Story session
     const startUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/video_stories`;
-    const startRes = await this.fetchFn(startUrl, {
+    const startRes = await this.fetchWithRetry(startUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -501,15 +546,14 @@ export class FacebookPublishClient implements IFacebookPublishClient {
 
     const videoId = String(startData.video_id);
     const uploadUrl =
-      startData.upload_url ??
-      `https://rupload.facebook.com/video-upload/v26.0/${videoId}`;
+      startData.upload_url ?? `${FB_RUPLOAD_BASE_URL}/${videoId}`;
 
     // Step 2: Stream video bytes from videoUrl to upload_url
     await this.streamVideoUpload(uploadUrl, accessToken, videoUrl);
 
     // Step 3: Finish Video Story
     const finishUrl = `${this.baseUrl}/${encodeURIComponent(pageId)}/video_stories`;
-    const finishRes = await this.fetchFn(finishUrl, {
+    const finishRes = await this.fetchWithRetry(finishUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -544,7 +588,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     const { postId, accessToken, message } = params;
     const url = `${this.baseUrl}/${encodeURIComponent(postId)}/comments`;
 
-    const res = await this.fetchFn(url, {
+    const res = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -572,6 +616,31 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     return { commentId: String(data.id), ...(telemetry ? { telemetry } : {}) };
   }
 
+  /**
+   * fetch with exponential backoff. Retries network failures, HTTP 429/5xx,
+   * and transient Graph API errors (e.g. rate-limit 368). Returns the last
+   * response when retries are exhausted so callers' existing error handling applies.
+   */
+  private async fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+    let attempt = 0;
+    for (;;) {
+      attempt += 1;
+      let res: Response;
+      try {
+        res = await this.fetchFn(url, init);
+      } catch (err) {
+        if (attempt >= FB_RETRY_MAX_ATTEMPTS) throw err;
+        await sleepMs(retryDelayMs(attempt));
+        continue;
+      }
+      if (res.ok) return res;
+      if (attempt >= FB_RETRY_MAX_ATTEMPTS || !(await isRetryableGraphResponse(res))) {
+        return res;
+      }
+      await sleepMs(retryDelayMs(attempt));
+    }
+  }
+
   private async parseJsonResponse(res: Response): Promise<Record<string, unknown>> {
     try {
       const data = await res.json();
@@ -593,12 +662,12 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     accessToken: string,
     videoUrl: string
   ): Promise<void> {
-    const videoRes = await this.fetchFn(videoUrl);
+    const videoRes = await this.fetchWithRetry(videoUrl);
     if (!videoRes.ok || !videoRes.body) {
       throw new Error(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
     }
 
-    const uploadRes = await this.fetchFn(uploadUrl, {
+    const uploadRes = await this.fetchWithRetry(uploadUrl, {
       method: 'POST',
       headers: {
         Authorization: `OAuth ${accessToken}`,

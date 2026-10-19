@@ -6,7 +6,7 @@ import {
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
@@ -36,7 +36,7 @@ export async function handleInitiateFacebookOAuth(
     }
 
     // 2. Resolve workspace BYOC Facebook credentials
-    const client = dbClient || getSupabaseClient();
+    const client = dbClient || getSupabaseAdminClient();
     const byocResult = await resolveWorkspaceFacebookCredentials(
       client,
       session.subdomain,

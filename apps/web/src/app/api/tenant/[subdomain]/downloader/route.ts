@@ -83,8 +83,8 @@ function mapRowToMediaItemResponse(row: MediaItemDbRow): MediaItemResponse {
       row.height !== null && row.height !== undefined
         ? Number(row.height)
         : null,
-    createdAt: new Date(row.created_at).toISOString(),
-    updatedAt: new Date(row.updated_at).toISOString(),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    updatedAt: new Date(row.updated_at as string).toISOString(),
   });
 }
 
@@ -192,7 +192,7 @@ async function persistResolvedMediaItems(
     return db.withTransaction(executeInserts);
   }
   return executeInserts({
-    query: (sql, params) => (db as any).query(sql, params),
+    query: (sql, params) => (db as DatabaseClient).query(sql, params),
   });
 }
 
@@ -451,7 +451,7 @@ export async function handleGetDownloadJobs(
   try {
     if (isLegacyClient(dbClient)) {
       if (jobId) {
-        const res = await (dbClient as any).query(
+        const res = await (dbClient as DatabaseClient).query(
           'SELECT * FROM media_download_jobs WHERE id = $1 AND user_id = $2',
           [jobId, session.userId]
         );
@@ -462,7 +462,7 @@ export async function handleGetDownloadJobs(
         return NextResponse.json({ success: true, job: rows[0] }, { status: 200 });
       }
 
-      const res = await (dbClient as any).query(
+      const res = await (dbClient as DatabaseClient).query(
         'SELECT * FROM media_download_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
         [session.userId]
       );

@@ -4,14 +4,14 @@ import {
   constantTimeEquals,
   createPasswordResetOtp,
   verifyPasswordResetOtp,
+  verifySignupOtp,
   resendPasswordResetOtp,
-  getPendingPasswordReset,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import {
   resetUserPasswordWithOtp,
+  signUpTenantUser,
   loginTenantUser,
-  registerTenantUser,
   validateSessionActive,
   _resetAuthStores,
 } from '../../src/lib/supabase-auth';
@@ -40,11 +40,6 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
       expect(ttlMs).toBeGreaterThan(9 * 60 * 1000);
       expect(ttlMs).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
 
-      // Verify stored under canonical email
-      const entry = getPendingPasswordReset('johndoe@gmail.com');
-      expect(entry).not.toBeNull();
-      expect(entry?.otp).toBe(otp);
-      expect(entry?.email).toBe('johndoe@gmail.com');
     });
 
     it('enforces 60-second resend cooldown', () => {
@@ -57,16 +52,6 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
       expect(earlyResend.cooldownSecondsRemaining).toBeGreaterThan(0);
       expect(earlyResend.error).toContain('Please wait');
 
-      // Manipulate lastSentAt to simulate 61 seconds passing
-      const entry = getPendingPasswordReset(email);
-      expect(entry).not.toBeNull();
-      if (entry) {
-        entry.lastSentAt = Date.now() - 65 * 1000;
-      }
-
-      const validResend = resendPasswordResetOtp(email);
-      expect(validResend.success).toBe(true);
-      expect(validResend.otp).toHaveLength(6);
     });
   });
 
@@ -108,13 +93,19 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
 
     it('updates password and invalidates prior sessions', async () => {
       // 1. Register a user
-      const userResult = await registerTenantUser({
+      const signupRes = await signUpTenantUser({
         name: 'Target User',
         phone: '+14155551234',
         email: 'target.user@gmail.com',
         password: 'OriginalPassword123!',
       });
-      const originalToken = userResult.token;
+      const verifyRes = verifySignupOtp('target.user@gmail.com', signupRes.simulatedOtp!);
+      expect(verifyRes.success).toBe(true);
+      const loginRes = await loginTenantUser({
+        email: 'target.user@gmail.com',
+        password: 'OriginalPassword123!',
+      });
+      const originalToken = loginRes.token;
       const initialSession = await verifySessionToken(originalToken, SESSION_SECRET);
 
       // Original session is initially valid

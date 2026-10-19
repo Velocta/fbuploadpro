@@ -376,7 +376,7 @@ export function PageTabQueue({
                 maxWidth: '380px',
               }}
             >
-              Enqueue media from your asset library to schedule automated publication to this Facebook Page.
+              Schedule media from your asset library to schedule automated publication to this Facebook Page.
             </p>
           </div>
           <button
@@ -390,7 +390,7 @@ export function PageTabQueue({
               cursor: 'pointer',
             }}
           >
-            Enqueue First Post
+            Schedule First Post
           </button>
         </div>
       )}
@@ -464,7 +464,7 @@ export function PageTabQueue({
                         padding: '2px 4px',
                         fontSize: '0.6875rem',
                         fontWeight: TYPOGRAPHY.weights.semibold,
-                        color: '#ffffff',
+                        color: PALETTE.text,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
                       }}
@@ -612,13 +612,11 @@ export function PageTabQueue({
                       disabled={isItemPublishing}
                       onClick={() => handlePublishNow(item.id)}
                       style={{
+                        ...COMPONENT_STYLES.primaryButton,
                         padding: `${SPACING.xs} ${SPACING.md}`,
-                        borderRadius: RADII.sm,
                         fontSize: '0.8125rem',
                         fontWeight: TYPOGRAPHY.weights.semibold,
-                        backgroundColor: PALETTE.primary,
-                        color: '#000000',
-                        border: 'none',
+                        color: PALETTE.background,
                         cursor: isItemPublishing ? 'not-allowed' : 'pointer',
                         opacity: isItemPublishing ? 0.7 : 1,
                         display: 'inline-flex',
@@ -930,7 +928,7 @@ export function PageTabQueue({
                   fontSize: '0.875rem',
                   fontWeight: TYPOGRAPHY.weights.semibold,
                   backgroundColor: PALETTE.accent3,
-                  color: '#ffffff',
+                  color: PALETTE.text,
                   border: 'none',
                   cursor: 'pointer',
                 }}

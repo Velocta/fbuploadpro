@@ -10,7 +10,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -56,7 +56,7 @@ export async function handleDiscoverPages(
     const accounts = (await dbClient.query(
       'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
       return NextResponse.json(
@@ -69,9 +69,9 @@ export async function handleDiscoverPages(
     importedRows = (await dbClient.query(
       "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND workspace_id = $2 AND status != 'disconnected'",
       [session.userId, workspaceId]
-    )) as any[];
+    )) as Record<string, unknown>[];
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseClient()) as SupabaseClient<Database> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

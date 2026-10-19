@@ -133,7 +133,7 @@ export function LeavePageGuardDialog({
               backgroundColor: PALETTE.primary,
               border: 'none',
               borderRadius: RADII.xs,
-              color: '#000000',
+              color: PALETTE.background,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               cursor: 'pointer',

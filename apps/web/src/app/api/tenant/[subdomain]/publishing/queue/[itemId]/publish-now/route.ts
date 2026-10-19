@@ -22,7 +22,7 @@ export async function handlePublishNow(
     const existingRows = (await dbClient.query(
       `SELECT id, user_id, status FROM queue_items WHERE id = $1 AND user_id = $2`,
       [itemId, session.userId]
-    )) as any[];
+    )) as Record<string, unknown>[];
 
     if (!existingRows || existingRows.length === 0) {
       return NextResponse.json({ error: 'Queue item not found' }, { status: 404 });

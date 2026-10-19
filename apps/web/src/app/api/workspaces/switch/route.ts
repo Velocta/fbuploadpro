@@ -7,7 +7,7 @@ import {
   buildTenantUrl,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseClient, setSessionCookie } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient, setSessionCookie } from '@/lib/supabase-auth';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { subdomain } = parseResult.data;
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 503 });
   }

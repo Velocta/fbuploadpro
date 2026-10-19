@@ -188,7 +188,7 @@ function FacebookNotConnectedForm({
         </div>
 
         <div style={{ paddingLeft: '32px', display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-          {/* APP ID */}
+          {/* App ID */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
             <label
               htmlFor="fb-app-id-input"
@@ -200,7 +200,7 @@ function FacebookNotConnectedForm({
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
               }}
             >
-              APP ID
+              App ID
             </label>
             <input
               id="fb-app-id-input"
@@ -245,7 +245,7 @@ function FacebookNotConnectedForm({
             </span>
           </div>
 
-          {/* APP SECRET */}
+          {/* App Secret */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
             <label
               htmlFor="fb-app-secret-input"
@@ -257,7 +257,7 @@ function FacebookNotConnectedForm({
                 color: `var(--text-sub, ${THEME.default.text.secondary})`,
               }}
             >
-              APP SECRET
+              App Secret
             </label>
             <div
               style={{
@@ -408,9 +408,10 @@ function FacebookConnectedView({
   onEditDetails,
   onDisconnectClick,
 }: Readonly<FacebookConnectedViewProps>) {
+  const [isDisconnectHovered, setIsDisconnectHovered] = useState(false);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-      {/* APP ID */}
+      {/* App ID */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
         <span
           style={{
@@ -421,23 +422,21 @@ function FacebookConnectedView({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          APP ID
+          App ID
         </span>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: `${SPACING.sm} ${SPACING.md}`,
-            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-            borderRadius: RADII.sm,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            padding: `${SPACING.sm} 0`,
+            borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           }}
         >
           <span
             data-testid="fb-saved-app-id"
             style={{
-              fontFamily: 'monospace',
+              fontFamily: TYPOGRAPHY.mono,
               fontSize: '0.875rem',
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
@@ -469,7 +468,7 @@ function FacebookConnectedView({
         </div>
       </div>
 
-      {/* APP SECRET */}
+      {/* App Secret */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
         <span
           style={{
@@ -480,23 +479,21 @@ function FacebookConnectedView({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          APP SECRET
+          App Secret
         </span>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: `${SPACING.sm} ${SPACING.md}`,
-            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-            borderRadius: RADII.sm,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            padding: `${SPACING.sm} 0`,
+            borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           }}
         >
           <span
             data-testid="fb-saved-app-secret"
             style={{
-              fontFamily: 'monospace',
+              fontFamily: TYPOGRAPHY.mono,
               fontSize: '0.875rem',
               color: `var(--text-main, ${THEME.default.text.primary})`,
               letterSpacing: showSecretState2 ? 'normal' : '0.15em',
@@ -562,23 +559,17 @@ function FacebookConnectedView({
           style={{
             height: '38px',
             padding: `0 ${SPACING.md}`,
-            backgroundColor: 'transparent',
+            backgroundColor: isDisconnectHovered ? 'rgba(246, 70, 93, 0.08)' : 'transparent',
             color: PALETTE.accent3,
-            border: '1px solid rgba(246, 70, 93, 0.45)',
+            border: `1px solid ${isDisconnectHovered ? PALETTE.accent3 : 'rgba(246, 70, 93, 0.45)'}`,
             borderRadius: RADII.sm,
             fontWeight: TYPOGRAPHY.weights.semibold,
             fontSize: '0.875rem',
             cursor: 'pointer',
             transition: 'all 0.12s ease',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(246, 70, 93, 0.08)';
-            e.currentTarget.style.borderColor = PALETTE.accent3;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.borderColor = 'rgba(246, 70, 93, 0.45)';
-          }}
+          onMouseEnter={() => setIsDisconnectHovered(true)}
+          onMouseLeave={() => setIsDisconnectHovered(false)}
         >
           Disconnect
         </button>
@@ -662,24 +653,22 @@ function FacebookSetupCard({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          SIGN-IN ADDRESS
+          Sign-in address
         </label>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: `${SPACING.sm} ${SPACING.md}`,
-            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-            borderRadius: RADII.sm,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            padding: `${SPACING.sm} 0`,
+            borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
           }}
         >
           <span
             id="fb-callback-url-display"
             data-testid="fb-signin-address"
             style={{
-              fontFamily: 'monospace',
+              fontFamily: TYPOGRAPHY.mono,
               fontSize: '0.8125rem',
               color: PALETTE.accent1,
               overflow: 'hidden',
@@ -983,7 +972,7 @@ export function BYOCSettingsView({
 
       const data = await res.json();
       if (!res.ok) {
-        showToast(data.error || 'Failed to save credentials.', 'error');
+        showToast(data.error || "Couldn't save your Facebook app details. Please try again.", 'error');
         return;
       }
 
@@ -1000,7 +989,7 @@ export function BYOCSettingsView({
 
       setAppSecret(trimmedSecret || '');
       setIsEditMode(false);
-      showToast('Facebook connected.', 'success');
+      showToast('Your Facebook app is connected.', 'success');
     } catch {
       showToast('Network error while connecting Facebook.', 'error');
     } finally {
@@ -1021,9 +1010,9 @@ export function BYOCSettingsView({
         setAppSecret('');
         setIsEditMode(false);
         setShowDisconnectModal(false);
-        showToast('Facebook disconnected.', 'success');
+        showToast('Your Facebook app has been disconnected.', 'success');
       } else {
-        showToast('Failed to disconnect Facebook.', 'error');
+        showToast("Couldn't disconnect Facebook. Please try again.", 'error');
       }
     } catch {
       showToast('Network error while disconnecting Facebook.', 'error');
@@ -1038,7 +1027,7 @@ export function BYOCSettingsView({
   if (isLoading) {
     return (
       <div style={{ padding: SPACING.xl, color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-        Loading credentials configuration...
+        Loading...
       </div>
     );
   }

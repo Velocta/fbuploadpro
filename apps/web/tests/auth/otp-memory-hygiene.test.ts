@@ -6,7 +6,7 @@ import {
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import {
-  registerTenantUser,
+  signUpTenantUser,
   loginTenantUser,
   _resetAuthStores,
 } from '../../src/lib/supabase-auth';
@@ -74,8 +74,17 @@ describe('Credential Zero-Retention in OTP Staging (AUTH-02 / Spec 017 US3)', ()
     expect(verification.success).toBe(true);
     expect(verification.signupData).toBeDefined();
 
-    // Provision account using staged pre-hashed credential
-    const { user, token } = await registerTenantUser(verification.signupData!);
+    // Provision account using staged pre-hashed credential via live signup flow
+    const staged = verification.signupData!;
+    const signupRes = await signUpTenantUser({
+      name: staged.name,
+      phone: staged.phone,
+      email: staged.email,
+      hashedPassword: staged.hashedPassword,
+    });
+    const verifyRes2 = verifySignupOtp(staged.email, signupRes.simulatedOtp!);
+    expect(verifyRes2.success).toBe(true);
+    const { user, token } = await loginTenantUser({ email: staged.email, password: rawPassword });
     expect(user).toBeDefined();
     expect(user.email).toBe('ripleylogin@gmail.com');
     expect(token).toBeDefined();

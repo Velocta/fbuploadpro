@@ -115,6 +115,7 @@ export function AccountsFilterBar({
   onStatusFilterChange,
   attentionCount = 0,
 }: Readonly<AccountsFilterBarProps>) {
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   return (
     <div
       data-testid="accounts-filter-bar"
@@ -180,20 +181,17 @@ export function AccountsFilterBar({
             paddingRight: searchQuery ? '28px' : '10px',
             backgroundColor: 'transparent',
             color: `var(--text-main, ${THEME.default.text.primary})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            border: isSearchFocused
+              ? `1px solid ${PALETTE.primary}`
+              : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
             borderRadius: RADII.sm,
             fontSize: '0.8125rem',
             outline: 'none',
+            boxShadow: isSearchFocused ? '0 0 0 2px rgba(250, 215, 52, 0.15)' : 'none',
             transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
           }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = PALETTE.primary;
-            e.currentTarget.style.boxShadow = '0 0 0 2px rgba(250, 215, 52, 0.15)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          onFocus={() => setIsSearchFocused(true)}
+          onBlur={() => setIsSearchFocused(false)}
         />
 
         {searchQuery && (
@@ -397,7 +395,7 @@ export function resolveOAuthRedirectNotice(searchParams: {
         notice: {
           type: 'error',
           message:
-            'Facebook App credentials (BYOC) are required before connecting accounts. Please configure your App ID and Secret in Workspace Settings.',
+            'Facebook App credentials are required before connecting accounts. Please configure your App ID and Secret in Workspace Settings.',
         },
         keysToRemove: ['error', 'tab'],
       };
@@ -458,7 +456,7 @@ export function ByocRequiredBanner({ subdomain }: Readonly<ByocRequiredBannerPro
           <line x1="12" y1="16" x2="12.01" y2="16" />
         </svg>
         <span>
-          Facebook App credentials (BYOC) are required before connecting accounts. Configure your Facebook App ID and Secret in Workspace Settings.
+          Facebook App credentials are required before connecting accounts. Configure your Facebook App ID and Secret in Workspace Settings.
         </span>
       </div>
       <Link
@@ -678,6 +676,7 @@ export default function TenantAccountsPage() {
     useState<FacebookAccountItem | null>(null);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isConnectHovered, setIsConnectHovered] = useState(false);
   const [statusFilter, setStatusFilter] = useState<AccountStatusFilter>('all');
 
   // Check BYOC credentials status
@@ -697,7 +696,7 @@ export default function TenantAccountsPage() {
           setByocStatus((prev) => ({
             isConfigured: prev.isConfigured,
             isLoading: false,
-            error: 'Failed to verify Facebook App credentials. Please check your workspace settings.',
+            error: "Couldn't verify your Facebook App credentials. Please try again.",
           }));
         }
       } catch {
@@ -705,7 +704,7 @@ export default function TenantAccountsPage() {
           setByocStatus((prev) => ({
             isConfigured: prev.isConfigured,
             isLoading: false,
-            error: 'Network failure verifying Facebook App credentials.',
+            error: "Couldn't verify your Facebook App credentials. Please check your connection.",
           }));
         }
       }
@@ -806,7 +805,7 @@ export default function TenantAccountsPage() {
       // Ignored because a user-facing notification is displayed instead of throwing
       setBannerNotice({
         type: 'error',
-        message: 'An error occurred while disconnecting the account.',
+        message: "Couldn't disconnect the account. Please try again.",
       });
     } finally {
       setIsDisconnecting(false);
@@ -984,12 +983,9 @@ export default function TenantAccountsPage() {
             disabled={byocStatus.isLoading}
             onClick={handleOpenNewConnect}
             style={{
+              ...COMPONENT_STYLES.primaryButton,
               height: '34px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: PALETTE.primary,
-              color: '#000000',
               border: `1px solid ${PALETTE.primary}`,
-              borderRadius: RADII.sm,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.semibold,
               display: 'inline-flex',
@@ -998,14 +994,11 @@ export default function TenantAccountsPage() {
               cursor: byocStatus.isLoading ? 'not-allowed' : 'pointer',
               opacity: byocStatus.isLoading ? 0.6 : 1,
               boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
+              transform: isConnectHovered && !byocStatus.isLoading ? 'translateY(-1px)' : 'translateY(0)',
               transition: 'transform 0.12s ease, box-shadow 0.12s ease',
             }}
-            onMouseEnter={(e) => {
-              if (!byocStatus.isLoading) e.currentTarget.style.transform = 'translateY(-1px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
+            onMouseEnter={() => setIsConnectHovered(true)}
+            onMouseLeave={() => setIsConnectHovered(false)}
           >
             <svg
               width="14"
