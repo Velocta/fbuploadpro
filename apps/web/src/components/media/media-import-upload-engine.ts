@@ -333,8 +333,7 @@ function scheduleAutoRetry(
     setQueue((prev) => {
       const current = prev.find((it) => it.id === item.id);
       if (
-        !current ||
-        current.status !== 'uploading' ||
+        current?.status !== 'uploading' ||
         current.abortController !== attemptController
       ) {
         return prev;

@@ -29,20 +29,13 @@ function item(id: string, status: ImportQueueItem['status']): ImportQueueItem {
 }
 
 describe('isBatchCompleted (Spec 107 H1)', () => {
-  it('is false while any item is still uploading', () => {
-    const queue = [item('a', 'completed'), item('b', 'uploading')];
-    expect(isBatchCompleted(queue, 'progress')).toBe(false);
-  });
-
-  it('is false while any item is still queued', () => {
-    const queue = [item('a', 'completed'), item('b', 'queued')];
-    expect(isBatchCompleted(queue, 'progress')).toBe(false);
-  });
-
-  it('is false while any item is paused — a paused file is still pending', () => {
-    const queue = [item('a', 'completed'), item('b', 'paused')];
-    expect(isBatchCompleted(queue, 'progress')).toBe(false);
-  });
+  it.each([['uploading'], ['queued'], ['paused']] as const)(
+    'is false while any item is still %s — a %s file is still pending',
+    (status) => {
+      const queue = [item('a', 'completed'), item('b', status)];
+      expect(isBatchCompleted(queue, 'progress')).toBe(false);
+    }
+  );
 
   it('is false when every item is paused', () => {
     const queue = [item('a', 'paused')];
