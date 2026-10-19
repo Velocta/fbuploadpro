@@ -578,6 +578,85 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
 
   const isEmpty = items.length === 0;
 
+  function renderListBody(): React.ReactNode {
+    if (isEmpty) {
+      return (
+        <QueueEmptyStates
+          pageId={pageId}
+          subdomain={subdomain}
+          slots={slots}
+          onSlotsChanged={setSlots}
+          onCreatePost={onOpenAddQueue}
+          onBulkAdd={() => setBulkOpen(true)}
+          checklistDismissed={checklistDismissed}
+          onDismissChecklist={dismissChecklist}
+        />
+      );
+    }
+    if (visibleItems.length === 0) {
+      return (
+        <p
+          style={{
+            margin: 0,
+            padding: `${SPACING.xl} 0`,
+            textAlign: 'center',
+            fontSize: '0.875rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          Nothing here.
+        </p>
+      );
+    }
+    return (
+      <ul
+        aria-label="Posts"
+        style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}
+      >
+        {visibleItems.map((item) => {
+          const bucket = bucketFor(item);
+          const reorderable =
+            (item.status === 'queued' || item.status === 'publishing') &&
+            (filter === 'all' || filter === 'queued' || filter === 'scheduled');
+          return (
+            <QueueRow
+              key={item.id}
+              item={item}
+              timeZone={timeZone}
+              bucket={bucket}
+              selectable={selecting}
+              selected={selection.has(item.id)}
+              onToggleSelect={toggleSelect}
+              reorderable={reorderable}
+              isDragOver={dragOverId === item.id}
+              onDragStart={setDragId}
+              onDragOverRow={(id) => {
+                if (dragId && id !== dragId) setDragOverId(id);
+              }}
+              onDropOnRow={handleDropOnRow}
+              onDragEnd={() => {
+                setDragId(null);
+                setDragOverId(null);
+              }}
+              onMove={handleMove}
+              onEdit={setEditItem}
+              onReschedule={setRescheduleItem}
+              onDelete={(target) => void handleDelete(target)}
+              onRetry={(target) => void handleRetry(target)}
+              retryBlocked={connectionExpired === true}
+              failedReason={
+                bucket === 'failed'
+                  ? getFailedReason(item, connectionExpired === true)
+                  : null
+              }
+              busyAction={busyRow?.id === item.id ? busyRow.action : null}
+            />
+          );
+        })}
+      </ul>
+    );
+  }
+
   return (
     <div
       data-testid="content-tab"
@@ -683,73 +762,7 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         </>
       )}
 
-      {isEmpty ? (
-        <QueueEmptyStates
-          pageId={pageId}
-          subdomain={subdomain}
-          slots={slots}
-          onSlotsChanged={setSlots}
-          onCreatePost={onOpenAddQueue}
-          onBulkAdd={() => setBulkOpen(true)}
-          checklistDismissed={checklistDismissed}
-          onDismissChecklist={dismissChecklist}
-        />
-      ) : visibleItems.length === 0 ? (
-        <p
-          style={{
-            margin: 0,
-            padding: `${SPACING.xl} 0`,
-            textAlign: 'center',
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          Nothing here.
-        </p>
-      ) : (
-        <div role="list" aria-label="Posts">
-          {visibleItems.map((item) => {
-            const bucket = bucketFor(item);
-            const reorderable =
-              (item.status === 'queued' || item.status === 'publishing') &&
-              (filter === 'all' || filter === 'queued' || filter === 'scheduled');
-            return (
-              <QueueRow
-                key={item.id}
-                item={item}
-                timeZone={timeZone}
-                bucket={bucket}
-                selectable={selecting}
-                selected={selection.has(item.id)}
-                onToggleSelect={toggleSelect}
-                reorderable={reorderable}
-                isDragOver={dragOverId === item.id}
-                onDragStart={setDragId}
-                onDragOverRow={(id) => {
-                  if (dragId && id !== dragId) setDragOverId(id);
-                }}
-                onDropOnRow={handleDropOnRow}
-                onDragEnd={() => {
-                  setDragId(null);
-                  setDragOverId(null);
-                }}
-                onMove={handleMove}
-                onEdit={setEditItem}
-                onReschedule={setRescheduleItem}
-                onDelete={(target) => void handleDelete(target)}
-                onRetry={(target) => void handleRetry(target)}
-                retryBlocked={connectionExpired === true}
-                failedReason={
-                  bucket === 'failed'
-                    ? getFailedReason(item, connectionExpired === true)
-                    : null
-                }
-                busyAction={busyRow?.id === item.id ? busyRow.action : null}
-              />
-            );
-          })}
-        </div>
-      )}
+      {renderListBody()}
 
       {/* Reschedule dialog */}
       {rescheduleItem && (

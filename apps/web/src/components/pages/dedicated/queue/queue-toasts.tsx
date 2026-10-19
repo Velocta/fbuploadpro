@@ -41,9 +41,8 @@ export function QueueToasts({ toasts, onDismiss }: Readonly<QueueToastsProps>) {
       }}
     >
       {toasts.map((toast) => (
-        <div
+        <output
           key={toast.id}
-          role="status"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -85,7 +84,7 @@ export function QueueToasts({ toasts, onDismiss }: Readonly<QueueToastsProps>) {
           >
             ×
           </button>
-        </div>
+        </output>
       ))}
     </div>
   );

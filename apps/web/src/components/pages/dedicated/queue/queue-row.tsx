@@ -248,8 +248,7 @@ export function QueueRow({
   const actionsDisabled = busyAction !== null;
 
   return (
-    <div
-      role="listitem"
+    <li
       data-testid={`queue-row-${item.id}`}
       onDragOver={(event) => {
         event.preventDefault();
@@ -260,6 +259,7 @@ export function QueueRow({
         onDropOnRow(item.id);
       }}
       style={{
+        listStyle: 'none',
         display: 'flex',
         alignItems: 'flex-start',
         gap: SPACING.sm,
@@ -273,7 +273,7 @@ export function QueueRow({
           <Checkbox
             checked={selected}
             onCheckedChange={() => onToggleSelect(item.id)}
-            aria-label={`Select post${caption ? `: ${caption.slice(0, 40)}` : ''}`}
+            aria-label={caption ? `Select post: ${caption.slice(0, 40)}` : 'Select post'}
           />
         </span>
       )}
@@ -434,6 +434,6 @@ export function QueueRow({
           </Button>
         </div>
       </div>
-    </div>
+    </li>
   );
 }
