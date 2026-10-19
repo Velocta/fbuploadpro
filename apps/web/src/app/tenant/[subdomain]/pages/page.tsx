@@ -18,6 +18,8 @@ import {
 import { PagesEmptyState } from '@/components/pages/pages-empty-state';
 import { AddPageModal } from '@/components/pages/add-page-modal';
 import type { FacebookAccountItem } from '@/components/accounts/account-card';
+import { getAccountHealth } from '@/components/accounts/account-health';
+import { buildDirectConnectUrl } from '@/components/accounts/connect-account-modal';
 
 export type PageStatusFilter = 'all' | 'active' | 'needs_attention' | 'paused';
 
@@ -342,7 +344,7 @@ export function computeSituationalSubtitle(
   }
   return `${totalCount} connected ${
     totalCount === 1 ? 'page' : 'pages'
-  } · All operational`;
+  }`;
 }
 
 export interface TenantPagesPageProps {
@@ -368,14 +370,21 @@ export default function TenantPagesPage({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
+  // Workspace Facebook-app credentials — checked only when an expired
+  // account needs reconnecting, to decide whether OAuth can start directly.
+  const [byocStatus, setByocStatus] = useState<{
+    isConfigured: boolean;
+    isLoading: boolean;
+  }>({ isConfigured: false, isLoading: false });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddHovered, setIsAddHovered] = useState(false);
   const [statusFilter, setStatusFilter] = useState<PageStatusFilter>('all');
   const [accountFilter, setAccountFilter] = useState('all');
 
   const fetchPagesAndAccounts = useCallback(async () => {
-    if (!subdomain) return;
     try {
+      if (!subdomain) return;
       const [pagesRes, accountsRes] = await Promise.all([
         fetch(`/api/tenant/${subdomain}/pages`),
         fetch(`/api/tenant/${subdomain}/accounts`),
@@ -393,6 +402,8 @@ export default function TenantPagesPage({
     } catch (_err) {
       // Preserve existing state on network error
     } finally {
+      // Always clear the loading state so the skeleton can never hang,
+      // including the no-subdomain early return above.
       setIsLoading(false);
     }
   }, [subdomain]);
@@ -402,6 +413,64 @@ export default function TenantPagesPage({
       void fetchPagesAndAccounts();
     }
   }, [initialPages, fetchPagesAndAccounts]);
+
+  const expiredAccount = useMemo(
+    () => accounts.find((a) => getAccountHealth(a) === 'expired') ?? null,
+    [accounts]
+  );
+
+  // Check workspace Facebook-app credentials only while an expired account
+  // is present, so Reconnect can start OAuth directly when possible.
+  useEffect(() => {
+    if (!subdomain || !expiredAccount) return;
+    let isMounted = true;
+    setByocStatus({ isConfigured: false, isLoading: true });
+    async function checkByoc() {
+      try {
+        const res = await fetch(`/api/tenant/${subdomain}/settings/byoc`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            setByocStatus({
+              isConfigured: Boolean(data.fbAppId && data.hasSecret),
+              isLoading: false,
+            });
+          }
+        } else if (isMounted) {
+          setByocStatus({ isConfigured: false, isLoading: false });
+        }
+      } catch {
+        if (isMounted) {
+          setByocStatus({ isConfigured: false, isLoading: false });
+        }
+      }
+    }
+    void checkByoc();
+    return () => {
+      isMounted = false;
+    };
+  }, [subdomain, expiredAccount]);
+
+  const handleReconnect = useCallback(
+    (account: FacebookAccountItem) => {
+      if (byocStatus.isLoading) return;
+      if (!byocStatus.isConfigured) {
+        // No workspace app credentials: send the user to Settings → Facebook,
+        // which explains why the app details are needed before reconnecting.
+        router.push(`/tenant/${subdomain}/settings?tab=byoc&notice=reconnect`);
+        return;
+      }
+      // Credentials present: start the OAuth reconnect immediately.
+      window.location.href = buildDirectConnectUrl({
+        id: account.id,
+        fbAccountId: account.fbAccountId,
+        displayName: account.displayName,
+        status: account.status,
+        updatedAt: account.updatedAt,
+      });
+    },
+    [byocStatus, router, subdomain]
+  );
 
   const sortedPages = useMemo(() => sortPagesAttentionFirst(pages), [pages]);
 
@@ -643,6 +712,50 @@ export default function TenantPagesPage({
         </button>
       </div>
 
+      {/* Expired connection banner */}
+      {expiredAccount && (
+        <div
+          data-testid="pages-expired-connection-banner"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: SPACING.md,
+            flexWrap: 'wrap',
+            padding: `${SPACING.md} ${SPACING.lg}`,
+            marginBottom: SPACING.lg,
+            backgroundColor: 'rgba(246, 70, 93, 0.08)',
+            border: '1px solid rgba(246, 70, 93, 0.25)',
+            borderRadius: RADII.sm,
+          }}
+        >
+          <span
+            style={{
+              fontSize: '0.875rem',
+              fontWeight: TYPOGRAPHY.weights.medium,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+            }}
+          >
+            Your Facebook connection expired. Reconnect to resume publishing.
+          </span>
+          <button
+            type="button"
+            data-testid="pages-reconnect-btn"
+            disabled={byocStatus.isLoading}
+            onClick={() => handleReconnect(expiredAccount)}
+            style={{
+              ...COMPONENT_STYLES.primaryButton,
+              height: '34px',
+              fontSize: '0.8125rem',
+              opacity: byocStatus.isLoading ? 0.6 : 1,
+              cursor: byocStatus.isLoading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {byocStatus.isLoading ? 'Checking…' : 'Reconnect'}
+          </button>
+        </div>
+      )}
+
       {/* Confirmation Banner */}
       {bannerMessage && (
         <div
@@ -706,6 +819,7 @@ export default function TenantPagesPage({
         onNavigateToAccounts={() =>
           router.push(`/tenant/${subdomain}/accounts`)
         }
+        onReconnectAccount={handleReconnect}
       />
     </div>
   );

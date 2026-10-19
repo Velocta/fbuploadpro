@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 import { StatusDot, Button } from '@/components/ui';
 import {
@@ -334,7 +335,7 @@ function FacebookNotConnectedForm({
                 color: `var(--text-dim, ${THEME.default.text.muted})`,
               }}
             >
-              Only you can see this — we keep it safe and never show it again.
+              Only you can see this — it stays hidden until you choose to show it.
             </span>
           </div>
 
@@ -466,7 +467,7 @@ function FacebookConnectedView({
               e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
             }}
           >
-            {copiedKey === 'appId' ? 'Copied' : 'Copy'}
+            {copiedKey === 'appId' ? 'App ID copied' : 'Copy App ID'}
           </button>
         </div>
       </div>
@@ -533,7 +534,7 @@ function FacebookConnectedView({
             color: `var(--text-dim, ${THEME.default.text.muted})`,
           }}
         >
-          Only you can see this — we keep it safe and never show it again.
+          Only you can see this — it stays hidden until you choose to show it.
         </span>
       </div>
 
@@ -586,7 +587,7 @@ function FacebookConnectedView({
           color: `var(--text-dim, ${THEME.default.text.muted})`,
         }}
       >
-        Connected on {formatConnectedDate(connectedAt)}.
+        {`Connected on ${formatConnectedDate(connectedAt)}.`}
       </span>
     </div>
   );
@@ -1027,10 +1028,36 @@ export function BYOCSettingsView({
   const hasSavedCredentials = Boolean(credentials?.fbAppId && credentials?.hasSecret);
   const isConnectedState = hasSavedCredentials && !isEditMode;
 
+  const searchParams = useSearchParams();
+  const showReconnectNotice = searchParams.get('notice') === 'reconnect';
+
   if (isLoading) {
     return (
-      <div style={{ padding: SPACING.xl, color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-        Loading...
+      <div
+        data-testid="byoc-loading"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.sm,
+          padding: SPACING.xl,
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          fontSize: '0.875rem',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: '16px',
+            height: '16px',
+            borderRadius: RADII.full,
+            border: `2px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+            borderTopColor: PALETTE.primary,
+            animation: 'spin 0.8s linear infinite',
+            display: 'inline-block',
+            flexShrink: 0,
+          }}
+        />
+        <span>Loading your Facebook app details…</span>
       </div>
     );
   }
@@ -1083,6 +1110,30 @@ export function BYOCSettingsView({
             ×
           </button>
         </output>
+      )}
+
+      {/* Reconnect inline notice (navigated here from the expired-connection flow) */}
+      {showReconnectNotice && (
+        <div
+          data-testid="byoc-reconnect-notice"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.sm,
+            padding: `${SPACING.sm} ${SPACING.md}`,
+            backgroundColor: 'rgba(250, 215, 52, 0.08)',
+            border: '1px solid rgba(250, 215, 52, 0.25)',
+            borderRadius: RADII.sm,
+            fontSize: '0.875rem',
+            lineHeight: 1.5,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          <span>
+            Facebook requires an app to reconnect accounts. Add your App ID and
+            App Secret below, then reconnect.
+          </span>
+        </div>
       )}
 
       {/* Card 1: Connect Facebook */}

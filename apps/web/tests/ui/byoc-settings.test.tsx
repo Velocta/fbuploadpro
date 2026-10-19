@@ -10,8 +10,18 @@ import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { render } from '../components/setup';
 
+// Hoisted mutable search params for the next/navigation mock below.
+const searchParamsState = vi.hoisted(() => ({
+  current: new URLSearchParams(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => searchParamsState.current,
+}));
+
 describe('Settings Views Suite (Facebook Settings & General)', () => {
   beforeEach(() => {
+    searchParamsState.current = new URLSearchParams();
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -56,9 +66,33 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
   });
 
   describe('BYOCSettingsView - State 1 (Not Connected)', () => {
-    it('renders loading placeholder when initialLoading is true', () => {
-      const { hasText } = render(<BYOCSettingsView subdomain="acme" initialLoading={true} />);
-      expect(hasText('Loading...')).toBe(true);
+    it('renders loading indicator when initialLoading is true', () => {
+      const { hasText, hasAttribute } = render(<BYOCSettingsView subdomain="acme" initialLoading={true} />);
+      expect(hasAttribute('data-testid', 'byoc-loading')).toBe(true);
+      expect(hasText('Loading your Facebook app details…')).toBe(true);
+      expect(hasText('Loading...')).toBe(false);
+    });
+
+    it('shows the reconnect inline notice when navigated from the expired-connection flow (Spec 102)', () => {
+      searchParamsState.current = new URLSearchParams('notice=reconnect');
+      const { hasText, hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={null} />
+      );
+
+      expect(hasAttribute('data-testid', 'byoc-reconnect-notice')).toBe(true);
+      expect(
+        hasText(
+          'Facebook requires an app to reconnect accounts. Add your App ID and App Secret below, then reconnect.'
+        )
+      ).toBe(true);
+    });
+
+    it('hides the reconnect inline notice during a normal visit (Spec 102)', () => {
+      const { hasAttribute } = render(
+        <BYOCSettingsView subdomain="acme" initialCredentials={null} />
+      );
+
+      expect(hasAttribute('data-testid', 'byoc-reconnect-notice')).toBe(false);
     });
 
     it('renders Connect Facebook card with Not connected status badge', () => {
@@ -99,7 +133,7 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       expect(hasAttribute('data-testid', 'fb-app-secret-input')).toBe(true);
       expect(hasAttribute('placeholder', 'Enter your App Secret')).toBe(true);
       expect(hasText('Show')).toBe(true);
-      expect(hasText('Only you can see this — we keep it safe and never show it again.')).toBe(true);
+      expect(hasText('Only you can see this — it stays hidden until you choose to show it.')).toBe(true);
 
       expect(hasText('Connect Facebook')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-connect-btn')).toBe(true);
@@ -157,11 +191,12 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
       expect(hasText('App ID')).toBe(true);
       expect(hasText('987654321098765')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-copy-app-id-btn')).toBe(true);
+      expect(hasText('Copy App ID')).toBe(true);
 
       expect(hasText('App Secret')).toBe(true);
       expect(hasText('••••••••••••••••••••••••')).toBe(true);
       expect(hasAttribute('data-testid', 'fb-state2-secret-toggle')).toBe(true);
-      expect(hasText('Only you can see this — we keep it safe and never show it again.')).toBe(true);
+      expect(hasText('Only you can see this — it stays hidden until you choose to show it.')).toBe(true);
     });
 
     it('displays Edit details, Disconnect buttons, and formatted Connected date', () => {

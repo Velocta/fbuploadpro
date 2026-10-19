@@ -7,9 +7,14 @@ import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import {
   AccountCard,
-  getAccountRingColor,
   type FacebookAccountItem,
 } from '@/components/accounts/account-card';
+import {
+  getAccountHealth,
+  getAccountHealthSignal,
+  isTokenExpiringSoon,
+} from '@/components/accounts/account-health';
+import { STATUS_SIGNALS } from '@/lib/theme';
 import { AccountsEmptyState } from '@/components/accounts/accounts-empty-state';
 import { DisconnectAccountDialog } from '@/components/accounts/disconnect-account-dialog';
 import {
@@ -117,10 +122,33 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(hasAttribute('data-testid', 'account-disconnect-button')).toBe(true);
     });
 
-    it('computes correct avatar status ring color based on status and expiration', () => {
-      expect(getAccountRingColor('active', false)).toBe('#2ebd85');
-      expect(getAccountRingColor('active', true)).toBe('#fad734');
-      expect(getAccountRingColor('expired', false)).toBe('#f6465d');
+    it('derives the avatar status ring from the single health model (Spec 102)', () => {
+      // connected -> operational green, expiring soon -> queued amber,
+      // expired -> critical red
+      expect(
+        getAccountHealthSignal(getAccountHealth({ status: 'active' }))
+      ).toBe('operational');
+      expect(STATUS_SIGNALS.operational.color).toBe('#2ebd85');
+      expect(STATUS_SIGNALS.queued.color).toBe('#fad734');
+      expect(STATUS_SIGNALS.critical.color).toBe('#f6465d');
+      expect(
+        isTokenExpiringSoon({
+          status: 'active',
+          tokenExpiresAt: new Date(Date.now() + 3 * 86400000).toISOString(),
+        })
+      ).toBe(true);
+      expect(
+        getAccountHealthSignal(getAccountHealth({ status: 'expired' }))
+      ).toBe('critical');
+    });
+
+    it('renders the single health status string on every card (Spec 102)', () => {
+      const active = render(<AccountCard account={mockActiveAccount} />);
+      expect(active.hasAttribute('data-testid', 'account-health-label')).toBe(true);
+      expect(active.hasText('Connected')).toBe(true);
+
+      const expired = render(<AccountCard account={mockExpiredAccount} />);
+      expect(expired.hasText('Session expired')).toBe(true);
     });
 
     it('falls back to monogram initials avatar when forceAvatarError is true (Spec 031)', () => {
