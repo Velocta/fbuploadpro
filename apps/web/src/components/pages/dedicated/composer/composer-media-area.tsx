@@ -78,8 +78,27 @@ export function getMediaItemError(item: ComposerMediaItem, format: PostFormat): 
   }
 }
 
-function formatAcceptsMultiple(format: PostFormat): boolean {
-  return format === 'image';
+/**
+ * Single-media cap: every format takes at most one media item.
+ * 2026-10-19 decision — Shahzeb capped Photo at 1 image (was "one or more");
+ * multi-photo/carousel is future work.
+ * Returns the plain-language notice to show when the cap blocks an add,
+ * or null when the add is allowed. Never silently drops.
+ */
+export function getMediaCapNotice(format: PostFormat, currentCount: number): string | null {
+  if (currentCount === 0) return null;
+  switch (format) {
+    case 'image':
+      return 'Photo posts take 1 image. Remove the current one to pick another.';
+    case 'video':
+      return 'Video posts take 1 video. Remove the current one to pick another.';
+    case 'reel':
+      return 'Reels take 1 video. Remove the current one to pick another.';
+    case 'story':
+      return 'Stories take 1 file. Remove the current one to pick another.';
+    default:
+      return null;
+  }
 }
 
 export function ComposerMediaArea({
@@ -95,6 +114,7 @@ export function ComposerMediaArea({
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [capNotice, setCapNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const openLibraryPicker = async () => {
@@ -126,24 +146,26 @@ export function ComposerMediaArea({
 
   const addItems = (incoming: ComposerMediaItem[]) => {
     if (incoming.length === 0) return;
-    if (formatAcceptsMultiple(format)) {
-      const existingIds = new Set(items.map((i) => i.id));
-      onItemsChange([...items, ...incoming.filter((i) => !existingIds.has(i.id))]);
-    } else {
-      // Single-media formats: the newest pick replaces the previous one.
-      const newest = incoming.at(-1);
-      if (newest) onItemsChange([newest]);
+    const blocked = getMediaCapNotice(format, items.length);
+    if (blocked) {
+      setCapNotice(blocked);
+      return;
     }
+    setCapNotice(null);
+    // Single-media formats: the newest pick replaces the previous one.
+    const newest = incoming.at(-1);
+    if (newest) onItemsChange([newest]);
   };
 
   const handlePickFromLibrary = (item: ComposerMediaItem) => {
     const alreadySelected = items.some((i) => i.id === item.id);
     if (alreadySelected) {
       onItemsChange(items.filter((i) => i.id !== item.id));
+      setCapNotice(null);
       return;
     }
     addItems([item]);
-    if (!formatAcceptsMultiple(format)) setIsPickerOpen(false);
+    setIsPickerOpen(false);
   };
 
   const handleUploadClick = () => {
@@ -171,6 +193,7 @@ export function ComposerMediaArea({
 
   const handleRemove = (id: string) => {
     onItemsChange(items.filter((i) => i.id !== id));
+    setCapNotice(null);
   };
 
   const acceptAttr = format === 'image' ? 'image/*' : 'video/*,image/*';
@@ -260,6 +283,11 @@ export function ComposerMediaArea({
           No media selected yet.
         </p>
       )}
+      {capNotice && !readOnly && (
+        <p data-testid="composer-media-cap-notice" style={{ ...composerHintStyle, margin: 0 }}>
+          {capNotice}
+        </p>
+      )}
       {!readOnly && (
         <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap' }}>
           <button
@@ -282,7 +310,7 @@ export function ComposerMediaArea({
             ref={fileInputRef}
             type="file"
             accept={acceptAttr}
-            multiple={formatAcceptsMultiple(format)}
+            data-testid="composer-file-input"
             onChange={handleFilesChosen}
             style={{ display: 'none' }}
             aria-hidden="true"

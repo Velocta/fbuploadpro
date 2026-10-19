@@ -15,9 +15,11 @@ const FORMATS: Array<{ id: PostFormat; label: string; testId: string }> = [
 export interface FormatSelectorProps {
   value: PostFormat;
   onChange: (format: PostFormat) => void;
+  /** Edit mode: the format is locked to the post's original format. */
+  disabled?: boolean;
 }
 
-export function FormatSelector({ value, onChange }: Readonly<FormatSelectorProps>) {
+export function FormatSelector({ value, onChange, disabled = false }: Readonly<FormatSelectorProps>) {
   return (
     <div
       data-testid="composer-format-selector"
@@ -31,9 +33,13 @@ export function FormatSelector({ value, onChange }: Readonly<FormatSelectorProps
           type="button"
           role="tab"
           aria-selected={value === format.id}
+          aria-disabled={disabled}
+          disabled={disabled}
           data-testid={format.testId}
-          onClick={() => onChange(format.id)}
-          style={segmentedOptionStyle(value === format.id)}
+          onClick={() => {
+            if (!disabled) onChange(format.id);
+          }}
+          style={segmentedOptionStyle(value === format.id, disabled)}
         >
           {format.label}
         </button>

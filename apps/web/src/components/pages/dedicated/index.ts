@@ -17,6 +17,7 @@ export {
   type ComposerMediaAreaProps,
   type ComposerMediaItem,
   getMediaItemError,
+  getMediaCapNotice,
 } from './composer/composer-media-area';
 export { ComposerCaption, type ComposerCaptionProps, CAPTION_CHAR_LIMIT } from './composer/composer-caption';
 export { ComposerLink, type ComposerLinkProps, isValidLink } from './composer/composer-link';

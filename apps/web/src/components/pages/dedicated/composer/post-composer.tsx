@@ -564,7 +564,12 @@ export function PostComposer({
 
           <div style={composerFieldStyle}>
             <span style={composerLabelStyle}>Format</span>
-            <FormatSelector value={format} onChange={setFormat} />
+            <FormatSelector value={format} onChange={setFormat} disabled={isEdit} />
+            {isEdit && (
+              <span data-testid="composer-format-locked-hint" style={composerHintStyle}>
+                Format can&apos;t be changed when editing.
+              </span>
+            )}
             {format === 'reel' && (
               <span data-testid="composer-reel-hint" style={composerHintStyle}>
                 Portrait works best for reels.

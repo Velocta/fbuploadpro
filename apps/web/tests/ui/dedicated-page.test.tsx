@@ -15,6 +15,7 @@ import {
   PageTabPostingTimes,
   PageTabSettings,
   PostComposer,
+  getMediaCapNotice,
   type PageSlotSummary,
   type DedicatedQueueItem,
 } from '@/components/pages/dedicated';
@@ -854,6 +855,60 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(submitIdx).toBeGreaterThan(-1);
       const buttonHtml = html.slice(Math.max(0, submitIdx - 200), submitIdx + 120);
       expect(buttonHtml).toContain('disabled');
+    });
+
+    it('caps every format at one media item with plain-language notices', () => {
+      // Empty: adds are allowed for every format.
+      expect(getMediaCapNotice('image', 0)).toBeNull();
+      expect(getMediaCapNotice('video', 0)).toBeNull();
+      expect(getMediaCapNotice('reel', 0)).toBeNull();
+      expect(getMediaCapNotice('story', 0)).toBeNull();
+      // One already selected: second adds are blocked with format-specific copy.
+      expect(getMediaCapNotice('image', 1)).toBe(
+        'Photo posts take 1 image. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('video', 1)).toBe(
+        'Video posts take 1 video. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('reel', 1)).toBe(
+        'Reels take 1 video. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('story', 1)).toBe(
+        'Stories take 1 file. Remove the current one to pick another.'
+      );
+      expect(getMediaCapNotice('text', 2)).toBeNull();
+    });
+
+    it('never allows multi-file selection on the upload input', () => {
+      const { html } = render(<PostComposer {...composerProps} />);
+      const inputMatch = /<input\b[^>]*data-testid="composer-file-input"[^>]*>/.exec(html);
+      expect(inputMatch).not.toBeNull();
+      expect(inputMatch![0]).not.toContain('multiple');
+    });
+
+    it('locks the format selector in edit mode', () => {
+      const { html, hasText } = render(
+        <PostComposer
+          {...composerProps}
+          initialPost={{
+            id: 'item-1',
+            postFormat: 'image',
+            caption: 'Existing caption',
+            scheduledTime: new Date(Date.now() + 3600000).toISOString(),
+            status: 'queued',
+            media: {
+              name: 'photo.jpg',
+              mediaType: 'image',
+              url: 'https://example.com/photo.jpg',
+              thumbnailUrl: null,
+            },
+          }}
+        />
+      );
+      const btnMatch = /<button\b[^>]*data-testid="composer-format-image"[^>]*>/.exec(html);
+      expect(btnMatch).not.toBeNull();
+      expect(btnMatch![0]).toContain(' disabled=""');
+      expect(hasText("Format can't be changed when editing.")).toBe(true);
     });
   });
 
