@@ -419,8 +419,8 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
   /* ====================================================================
    * Phase 3: PageTabQueue (T004)
    * ==================================================================== */
-  describe('PageTabQueue Component', () => {
-    it('renders queue items list with thumbnail, caption, first comment, and status indicator', () => {
+  describe('PageTabQueue Component (Spec 105)', () => {
+    it('renders queue rows with caption, format, status, and row actions', () => {
       const { hasText, hasAttribute } = render(
         <PageTabQueue
           page={samplePage}
@@ -432,14 +432,41 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
         />
       );
 
-      expect(hasAttribute('data-testid', 'page-tab-queue')).toBe(true);
-      expect(hasAttribute('data-testid', 'queue-item-q-item-1')).toBe(true);
+      expect(hasAttribute('data-testid', 'content-tab')).toBe(true);
+      expect(hasAttribute('data-testid', 'queue-row-q-item-1')).toBe(true);
       expect(hasText('Cutting-edge autonomous manufacturing video teaser.')).toBe(true);
-      expect(hasText('Read the full blueprint at https://skynet.tech')).toBe(true);
-      expect(hasAttribute('data-testid', 'queue-status-q-item-1')).toBe(true);
+      expect(hasText('Video')).toBe(true);
+      expect(hasText('Queued')).toBe(true);
+      expect(hasText('Edit')).toBe(true);
+      expect(hasText('Reschedule')).toBe(true);
+      expect(hasText('Delete')).toBe(true);
+      expect(hasText('1 post queued')).toBe(true);
+      expect(hasAttribute('data-testid', 'queue-summary')).toBe(true);
     });
 
-    it('renders empty state when queue has no items', () => {
+    it('renders all five filter tabs with counts', () => {
+      const { hasText, hasAttribute } = render(
+        <PageTabQueue
+          page={samplePage}
+          queueItems={sampleQueueItems}
+          onPublishNow={vi.fn()}
+          onUpdateItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+        />
+      );
+
+      for (const filter of ['all', 'queued', 'scheduled', 'published', 'failed']) {
+        expect(hasAttribute('data-testid', `queue-filter-${filter}`)).toBe(true);
+      }
+      expect(hasText('All')).toBe(true);
+      expect(hasText('Queued')).toBe(true);
+      expect(hasText('Scheduled')).toBe(true);
+      expect(hasText('Published')).toBe(true);
+      expect(hasText('Failed')).toBe(true);
+    });
+
+    it('renders empty state with checklist and entry buttons when queue has no items', () => {
       const onOpenAddQueue = vi.fn();
       const { hasText, hasAttribute } = render(
         <PageTabQueue
@@ -453,45 +480,40 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       );
 
       expect(hasAttribute('data-testid', 'queue-empty-state')).toBe(true);
-      expect(hasText('Publishing queue is empty')).toBe(true);
-      expect(hasAttribute('data-testid', 'empty-add-queue-button')).toBe(true);
+      expect(hasText('Get your queue running')).toBe(true);
+      expect(hasText('Set posting times')).toBe(true);
+      expect(hasText('Add media')).toBe(true);
+      expect(hasText('Create your first posts')).toBe(true);
+      expect(hasText('Nothing here yet.')).toBe(true);
+      expect(hasText('Create post')).toBe(true);
+      expect(hasText('Bulk add')).toBe(true);
     });
 
-    it('triggers onPublishNow when Publish Now is clicked on queued item', async () => {
-      const onPublishNow = vi.fn().mockResolvedValue(undefined);
-
-      const tree = renderAndCaptureTree(() =>
-        PageTabQueue({
-          page: samplePage,
-          queueItems: sampleQueueItems,
-          onPublishNow,
-          onUpdateItem: vi.fn(),
-          onDeleteItem: vi.fn(),
-          onOpenAddQueue: vi.fn(),
-        })
+    it('shows the failed banner, plain-language reason, and Retry on failed posts', () => {
+      const failedItem: DedicatedQueueItem = {
+        ...sampleQueueItems[0],
+        id: 'q-item-3',
+        status: 'failed',
+        retryCount: 3,
+        maxRetries: 3,
+      };
+      const { hasText, hasAttribute } = render(
+        <PageTabQueue
+          page={samplePage}
+          queueItems={[...sampleQueueItems, failedItem]}
+          onPublishNow={vi.fn()}
+          onUpdateItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+        />
       );
 
-      const publishBtn = findElementByTestId(tree, 'publish-now-btn-q-item-1');
-      await publishBtn?.props.onClick();
-
-      expect(onPublishNow).toHaveBeenCalledWith('q-item-1');
-    });
-
-    it('filters queue items by status buttons', () => {
-      const tree = renderAndCaptureTree(() =>
-        PageTabQueue({
-          page: samplePage,
-          queueItems: sampleQueueItems,
-          onPublishNow: vi.fn(),
-          onUpdateItem: vi.fn(),
-          onDeleteItem: vi.fn(),
-          onOpenAddQueue: vi.fn(),
-        })
-      );
-
-      const publishedFilterBtn = findElementByTestId(tree, 'filter-published-btn');
-      expect(publishedFilterBtn).not.toBeNull();
-      publishedFilterBtn?.props.onClick();
+      expect(hasAttribute('data-testid', 'queue-failed-banner')).toBe(true);
+      expect(hasText('1 post failed to publish.')).toBe(true);
+      expect(hasText('Review')).toBe(true);
+      expect(hasText('Failed')).toBe(true);
+      expect(hasText("Tried 3 times and still couldn't publish.")).toBe(true);
+      expect(hasText('Retry')).toBe(true);
     });
   });
 
