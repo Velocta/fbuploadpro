@@ -15,8 +15,6 @@ export interface Env {
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
   TOKEN_ENCRYPTION_KEY?: string;
-  FB_ENCRYPTION_MASTER_KEY?: string;
-  MASTER_ENCRYPTION_KEY?: string;
   FB_GRAPH_API_URL?: string;
   SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_URL?: string;
@@ -75,6 +73,12 @@ function initWorkerDb(env: Env, optionsDb?: any): any {
 // How often (in minutes) stuck-item recovery runs. Coupled to the worker's "* * * * *" cron.
 const RECOVERY_INTERVAL_MINUTES = 5;
 
+/** Default dispatch concurrency when DISPATCH_CONCURRENCY is not set. */
+const DEFAULT_DISPATCH_CONCURRENCY = 25;
+
+/** Max download jobs returned by the recent-jobs listing. */
+const RECENT_DOWNLOAD_JOBS_LIMIT = 50;
+
 async function recoverStuckPublishingItems(db: any, env?: Env): Promise<void> {
   const currentMinute = new Date().getMinutes();
   if (currentMinute % RECOVERY_INTERVAL_MINUTES === 0 && typeof db.rpc === 'function') {
@@ -121,7 +125,7 @@ export async function handleScheduled(
   _ctx?: ExecutionContext,
   options?: ScheduledOptions
 ): Promise<void> {
-  const masterKey = env.TOKEN_ENCRYPTION_KEY || env.FB_ENCRYPTION_MASTER_KEY || env.MASTER_ENCRYPTION_KEY;
+  const masterKey = env.TOKEN_ENCRYPTION_KEY;
   if (!masterKey) {
     console.warn('[Scheduled] TOKEN_ENCRYPTION_KEY is not configured; skipping cycle');
     return;
@@ -147,7 +151,7 @@ export async function handleScheduled(
 
     // 2. Direct dispatch (Cloudflare Queues were never provisioned; direct
     //    execution is the design)
-    const concurrency = Number(env.DISPATCH_CONCURRENCY || 25);
+    const concurrency = Number(env.DISPATCH_CONCURRENCY || DEFAULT_DISPATCH_CONCURRENCY);
     await runDispatchCycle({
       db,
       fbClient,
@@ -306,7 +310,7 @@ async function handleListDownloadJobs(
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .limit(RECENT_DOWNLOAD_JOBS_LIMIT);
 
   if (error) {
     return new Response(

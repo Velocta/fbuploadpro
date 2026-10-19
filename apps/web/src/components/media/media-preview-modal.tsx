@@ -26,6 +26,12 @@ export interface CapturedVideoFrame {
 const FALLBACK_WEBP_DATA_URL =
   'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
 
+/** Safety timeout for canvas.toBlob() — resolves null if the browser hangs. */
+const CANVAS_TO_BLOB_TIMEOUT_MS = 60;
+
+/** How long the "frame saved" success message stays visible. */
+const FRAME_SUCCESS_DURATION_MS = 3000;
+
 export async function captureVideoFrameAsWebp(
   videoElement: HTMLVideoElement | null
 ): Promise<CapturedVideoFrame> {
@@ -66,7 +72,7 @@ export async function captureVideoFrameAsWebp(
         resolve(null);
         return;
       }
-      const timer = setTimeout(() => resolve(null), 60);
+      const timer = setTimeout(() => resolve(null), CANVAS_TO_BLOB_TIMEOUT_MS);
       try {
         canvas.toBlob(
           (b) => {
@@ -636,7 +642,7 @@ export function MediaPreviewModal({
       const captured = await captureVideoFrameAsWebp(videoRef.current);
       await onUpdateThumbnail(item.id, captured);
       setFrameSuccessMessage('Frame captured as thumbnail');
-      setTimeout(() => setFrameSuccessMessage(null), 3000);
+      setTimeout(() => setFrameSuccessMessage(null), FRAME_SUCCESS_DURATION_MS);
     } finally {
       setIsCapturingFrame(false);
     }

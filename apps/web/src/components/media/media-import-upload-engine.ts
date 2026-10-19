@@ -22,6 +22,9 @@ interface UseImportUploadParams {
   onUploadSuccess?: (item: MediaItemResponse) => void;
 }
 
+/** Base delay for upload retry backoff (doubles with each retry). */
+const UPLOAD_RETRY_BASE_DELAY_MS = 1000;
+
 export function useImportUpload({
   subdomain,
   selectedFolderId,
@@ -180,7 +183,7 @@ const uploadFile = useCallback(
                 : it
             )
           );
-        }, 1000 * Math.pow(2, item.retryCount));
+        }, UPLOAD_RETRY_BASE_DELAY_MS * Math.pow(2, item.retryCount));
       } else {
         setQueue((prev) =>
           prev.map((it) =>

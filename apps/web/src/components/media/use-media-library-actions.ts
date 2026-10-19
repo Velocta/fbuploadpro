@@ -5,6 +5,9 @@ import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import type { BatchCaptionMode } from './media-types';
 import { readInternalDropPayload } from './media-library-helpers';
 
+/** How long success toasts stay visible before auto-dismissing. */
+const TOAST_AUTO_DISMISS_MS = 3500;
+
 /**
  * Data-mutation handlers for the media library, extracted from
  * media-library-explorer.tsx. No behavior changes — moved verbatim.
@@ -82,7 +85,7 @@ export function useMediaLibraryActions(params: MediaLibraryActionsParams) {
   const showToast = useCallback(
     (msg: string) => {
       setToastMessage(msg);
-      setTimeout(() => setToastMessage(null), 3500);
+      setTimeout(() => setToastMessage(null), TOAST_AUTO_DISMISS_MS);
     },
     [setToastMessage]
   );

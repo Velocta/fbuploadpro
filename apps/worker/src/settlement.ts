@@ -1,4 +1,5 @@
 import type { ClaimedQueueItem, DispatchOutcome } from '@fbuploadpro/contracts';
+import { InternalError } from '@fbuploadpro/contracts';
 import type { DispatcherDbClient, Queryable } from './dispatcher.js';
 
 export const UPDATE_QUEUE_ITEM_PUBLISHED_SQL = `
@@ -109,7 +110,7 @@ async function settleSupabaseOutcome(
       updated_at: new Date().toISOString(),
     }).eq('id', item.id);
     if (updateError) {
-      throw new Error(`Failed to update queue_item status to published: ${updateError.message || JSON.stringify(updateError)}`);
+      throw new InternalError(`Failed to update queue_item status to published: ${updateError.message || JSON.stringify(updateError)}`);
     }
 
     const publishLogsTable = supabase.from('publish_logs');
@@ -125,7 +126,7 @@ async function settleSupabaseOutcome(
         error_details: outcome.errorMessage ? { warning: outcome.errorMessage } : null,
       });
       if (logError) {
-        throw new Error(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
+        throw new InternalError(`Failed to insert success publish_log: ${logError.message || JSON.stringify(logError)}`);
       }
     }
   } else {
@@ -146,7 +147,7 @@ async function settleSupabaseOutcome(
 
     const { error: itemUpdateError } = await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
     if (itemUpdateError) {
-      throw new Error(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
+      throw new InternalError(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
     }
 
     const publishLogsTable = supabase.from('publish_logs');
@@ -162,7 +163,7 @@ async function settleSupabaseOutcome(
         error_details: errorDetails,
       });
       if (logInsertError) {
-        throw new Error(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
+        throw new InternalError(`Failed to insert ${isRetry ? 'retry' : 'failure'} publish_log: ${logInsertError.message || JSON.stringify(logInsertError)}`);
       }
     }
   }
@@ -197,7 +198,7 @@ async function settleSupabaseOutcome(
     }
     const { error: pageUpdateError } = await pageQuery;
     if (pageUpdateError) {
-      throw new Error(`Failed to update facebook_pages status: ${pageUpdateError.message || JSON.stringify(pageUpdateError)}`);
+      throw new InternalError(`Failed to update facebook_pages status: ${pageUpdateError.message || JSON.stringify(pageUpdateError)}`);
     }
   }
 
@@ -334,32 +335,61 @@ async function settleLegacyOutcome(
 /**
  * Atomically settles outcome of a queue item publication.
  */
+/**
+ * Type guard: DispatchOutcome has queueItemId, ClaimedQueueItem does not.
+ */
+function isDispatchOutcome(x: ClaimedQueueItem | DispatchOutcome): x is DispatchOutcome {
+  return 'queueItemId' in x;
+}
+
+/**
+ * Builds a placeholder ClaimedQueueItem for outcome-only settlement calls.
+ * The empty strings are intentional: downstream code treats falsy userId/pageId
+ * as "no item context" and takes safe fallback paths (e.g., skips the RPC
+ * fast-path in settleSupabaseOutcome). Only queueItemId (as id) is meaningful.
+ */
+function buildPlaceholderItem(queueItemId: string): ClaimedQueueItem {
+  return {
+    id: queueItemId,
+    userId: '',
+    pageId: '',
+    mediaId: null,
+    caption: '',
+    firstComment: null,
+    retryCount: 0,
+    maxRetries: 3,
+    mediaType: null,
+    mediaUrl: null,
+    storageKey: null,
+    fbPageId: '',
+    encryptedPageToken: '',
+    pageName: '',
+    postFormat: 'reel',
+  };
+}
+
 export async function settleOutcome(
   db: DispatcherDbClient | Queryable,
   itemOrOutcome: ClaimedQueueItem | DispatchOutcome,
   maybeOutcome?: DispatchOutcome
 ): Promise<void> {
-  const item: ClaimedQueueItem = maybeOutcome
-    ? (itemOrOutcome as ClaimedQueueItem)
-    : ({
-        id: (itemOrOutcome as DispatchOutcome).queueItemId,
-        userId: '',
-        pageId: '',
-        mediaId: '',
-        caption: '',
-        firstComment: null,
-        retryCount: 0,
-        maxRetries: 3,
-        mediaType: 'video',
-        mediaUrl: '',
-        storageKey: '',
-        fbPageId: '',
-        encryptedPageToken: '',
-        pageName: '',
-        postFormat: 'reel',
-      } as ClaimedQueueItem);
+  // When maybeOutcome is provided, itemOrOutcome is the ClaimedQueueItem.
+  // Otherwise it's a DispatchOutcome and we build a placeholder item.
+  const item: ClaimedQueueItem =
+    maybeOutcome !== undefined && !isDispatchOutcome(itemOrOutcome)
+      ? itemOrOutcome
+      : buildPlaceholderItem(
+          isDispatchOutcome(itemOrOutcome) ? itemOrOutcome.queueItemId : itemOrOutcome.id
+        );
 
-  const outcome: DispatchOutcome = maybeOutcome ?? (itemOrOutcome as DispatchOutcome);
+  let outcome: DispatchOutcome;
+  if (maybeOutcome !== undefined) {
+    outcome = maybeOutcome;
+  } else if (isDispatchOutcome(itemOrOutcome)) {
+    outcome = itemOrOutcome;
+  } else {
+    throw new InternalError('settleOutcome: expected a DispatchOutcome when outcome argument is omitted');
+  }
 
   if (
     ('from' in db && typeof (db as any).from === 'function') ||

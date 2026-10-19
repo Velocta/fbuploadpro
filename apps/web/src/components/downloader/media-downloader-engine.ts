@@ -11,6 +11,9 @@ import type {
 } from './media-downloader';
 import { makeFailedId } from './media-downloader-helpers';
 
+/** Delay between download poll iterations (gives the backend time to progress). */
+const DOWNLOAD_POLL_DELAY_MS = 1500;
+
 /**
  * Async download engine for the media downloader, extracted from
  * media-downloader.tsx. No behavior changes — moved verbatim.
@@ -179,7 +182,7 @@ async function handlePollIteration(params: {
     return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
   }
 
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((r) => setTimeout(r, DOWNLOAD_POLL_DELAY_MS));
 
   if (signal?.aborted) {
     return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
