@@ -30,22 +30,25 @@ function detectBrowserTimezone(): string {
   }
 }
 
+// TODO(102): consolidate with components/accounts/account-health.ts after #629 merges.
+// Mirrors the single account-health model: Connected / Expired / Error.
 function getSettingsStatusDetails(status: string) {
   const isPaused = status === 'paused';
-  const isNeedsAttention =
-    status === 'invalid_token' ||
+  const isExpired = status === 'invalid_token';
+  const isError =
     status === 'page_checkpoint' ||
     status === 'fb_rate_limited';
+  const isNeedsAttention = isExpired || isError;
 
   let signal: (typeof STATUS_SIGNALS)[keyof typeof STATUS_SIGNALS] = STATUS_SIGNALS.operational;
-  let label = 'Active & Operational';
+  let label = 'Connected';
 
-  if (isNeedsAttention) {
+  if (isExpired) {
     signal = STATUS_SIGNALS.critical;
-    label = 'Re-Authentication Required';
-  } else if (isPaused) {
-    signal = STATUS_SIGNALS.queued;
-    label = 'Automation Paused';
+    label = 'Expired';
+  } else if (isError) {
+    signal = STATUS_SIGNALS.critical;
+    label = 'Error';
   }
 
   return { isPaused, isNeedsAttention, statusSignal: signal, statusLabel: label };
