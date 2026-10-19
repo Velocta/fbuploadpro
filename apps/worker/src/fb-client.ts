@@ -544,6 +544,9 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       throw this.createGraphError(startRes, startData);
     }
 
+    if (!startData.video_id) {
+      throw new FacebookGraphError('Invalid video upload response for story: missing video_id');
+    }
     const videoId = String(startData.video_id);
     const uploadUrl =
       startData.upload_url ?? `${FB_RUPLOAD_BASE_URL}/${videoId}`;
