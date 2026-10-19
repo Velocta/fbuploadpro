@@ -88,3 +88,15 @@ export function formatMediaDetails(
   return parts.length > 0 ? parts.join(' · ') : '—';
 }
 
+
+export type MediaViewMode = 'grid' | 'table';
+export type MediaTypeFilterKey = 'all' | 'video' | 'image';
+export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1' | '4:5';
+export type CaptionStatusFilterKey = 'all' | 'has_caption' | 'empty_caption';
+export type SortOptionKey =
+  | 'created_at:desc'
+  | 'created_at:asc'
+  | 'name:asc'
+  | 'file_size:desc';
+
+export type MediaSmartViewKey = 'everything' | 'needs_caption';
