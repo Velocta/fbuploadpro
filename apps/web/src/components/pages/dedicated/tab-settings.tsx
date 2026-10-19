@@ -11,6 +11,7 @@ import {
   COMPONENT_STYLES,
 } from '@/lib/theme';
 import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from './modal-styles';
+import { ScheduleTimezoneModal } from './schedule-timezone-modal';
 import type { FacebookPageItem } from '../page-card';
 
 export interface PageTabSettingsProps {
@@ -18,6 +19,15 @@ export interface PageTabSettingsProps {
   subdomain: string;
   onStatusToggle: (nextStatus: 'active' | 'paused') => Promise<void>;
   onDisconnectPage: () => Promise<void>;
+  onUpdateTimezone?: (newTimezone: string) => Promise<void>;
+}
+
+function detectBrowserTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
 }
 
 function getSettingsStatusDetails(status: string) {
@@ -41,22 +51,23 @@ function getSettingsStatusDetails(status: string) {
   return { isPaused, isNeedsAttention, statusSignal: signal, statusLabel: label };
 }
 
-function getAutomationButtonLabel(isUpdating: boolean, isPaused: boolean): string {
-  if (isUpdating) return 'Updating...';
-  return isPaused ? 'Resume Automation' : 'Pause Automation';
-}
-
 export function PageTabSettings({
   page,
   subdomain: _subdomain,
   onStatusToggle,
   onDisconnectPage,
+  onUpdateTimezone,
 }: Readonly<PageTabSettingsProps>) {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [isTimezoneModalOpen, setIsTimezoneModalOpen] = useState(false);
+  const [timezoneSlotsCount, setTimezoneSlotsCount] = useState(0);
+  const [timezonePendingCount, setTimezonePendingCount] = useState(0);
+  const [timezoneOverride, setTimezoneOverride] = useState<string | null>(null);
 
   const { isPaused, isNeedsAttention, statusSignal, statusLabel } = getSettingsStatusDetails(page.status);
+  const displayedTimezone = timezoneOverride || page.timezone || detectBrowserTimezone();
 
   const handleToggleAutomation = async () => {
     setIsUpdatingStatus(true);
@@ -65,6 +76,49 @@ export function PageTabSettings({
     } finally {
       setIsUpdatingStatus(false);
     }
+  };
+
+  const handleOpenTimezoneModal = async () => {
+    setIsTimezoneModalOpen(true);
+    // Load real counts for the impact-review step; non-blocking on failure.
+    try {
+      const slotsRes = await fetch(`/api/tenant/${_subdomain}/pages/${page.id}/slots`);
+      if (slotsRes.ok) {
+        const slotsData = await slotsRes.json().catch(() => ({}));
+        setTimezoneSlotsCount(Array.isArray(slotsData.slots) ? slotsData.slots.length : 0);
+      }
+    } catch {
+      // Keep defaults
+    }
+    try {
+      const queueRes = await fetch(`/api/tenant/${_subdomain}/publishing/queue?pageId=${page.id}`);
+      if (queueRes.ok) {
+        const queueData = await queueRes.json().catch(() => ({}));
+        const items = Array.isArray(queueData.items) ? queueData.items : [];
+        setTimezonePendingCount(
+          items.filter((item: { status?: string }) => item.status === 'queued' || item.status === 'publishing').length
+        );
+      }
+    } catch {
+      // Keep defaults
+    }
+  };
+
+  const handleConfirmTimezone = async (newTimezone: string) => {
+    if (onUpdateTimezone) {
+      await onUpdateTimezone(newTimezone);
+    } else {
+      const res = await fetch(`/api/tenant/${_subdomain}/pages/${page.id}/slots`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timezone: newTimezone }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Couldn't update the schedule timezone. Please try again.");
+      }
+    }
+    setTimezoneOverride(newTimezone);
   };
 
   const handleConfirmDisconnect = async () => {
@@ -79,6 +133,45 @@ export function PageTabSettings({
 
   return (
     <div data-testid="page-tab-settings" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}>
+      {/* Timezone line */}
+      <div
+        data-testid="settings-timezone-line"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: '0.8125rem',
+          color: `var(--text-sub, ${THEME.default.text.secondary})`,
+        }}
+      >
+        <span>Times shown in</span>
+        <span
+          style={{
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          {displayedTimezone}
+        </span>
+        <span aria-hidden="true">—</span>
+        <button
+          type="button"
+          data-testid="settings-change-timezone-btn"
+          onClick={() => void handleOpenTimezoneModal()}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            fontSize: '0.8125rem',
+            color: PALETTE.primary,
+            textDecoration: 'underline',
+            cursor: 'pointer',
+          }}
+        >
+          Change
+        </button>
+      </div>
+
       {/* Checkpoint Reactivation Banner */}
       {(page.status === 'page_checkpoint' || (page.status as string) === 'checkpoint_required') && (
         <div
@@ -115,10 +208,10 @@ export function PageTabSettings({
             </svg>
             <div>
               <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '0.875rem' }}>
-                Facebook Checkpoint Verification Required
+                Facebook checkpoint verification required
               </div>
               <div style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-                Facebook requires identity verification in the mobile app or browser before automated publishing can proceed.
+                Finish Facebook&apos;s identity check in the Facebook app or browser before automatic posting can continue.
               </div>
             </div>
           </div>
@@ -153,7 +246,7 @@ export function PageTabSettings({
               whiteSpace: 'nowrap',
             }}
           >
-            {isUpdatingStatus ? 'Reactivating...' : 'Mark Verified & Reactivate Page'}
+            {isUpdatingStatus ? 'Reactivating...' : 'Mark verified and reactivate page'}
           </button>
         </div>
       )}
@@ -183,7 +276,7 @@ export function PageTabSettings({
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
-            Automation Master Switch
+            Automation
           </h4>
           <p
             style={{
@@ -193,55 +286,65 @@ export function PageTabSettings({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            While auto-publishing is on, queued posts go live at your scheduled times. Pausing automation suspends publishing without deleting your queue.
+            When automation is on, queued posts publish at your posting times. Pausing stops publishing without deleting your queue.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: statusSignal.dot,
-                boxShadow: statusSignal.halo,
-              }}
-            />
-            <span
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: statusSignal.color,
-              }}
-            >
-              {isPaused ? 'Paused' : 'Active'}
-            </span>
-          </div>
-
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
           <button
             type="button"
+            role="switch"
+            aria-checked={!isPaused}
+            aria-label="Automation"
             data-testid="toggle-automation-btn"
             disabled={isUpdatingStatus}
             onClick={handleToggleAutomation}
             style={{
-              padding: `${SPACING.xs} ${SPACING.lg}`,
-              borderRadius: RADII.sm,
-              fontSize: '0.875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              backgroundColor: isPaused ? PALETTE.primary : `var(--bg-active, ${THEME.default.surfaces.active})`,
-              color: isPaused ? PALETTE.background : `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+              width: '36px',
+              height: '20px',
+              borderRadius: RADII.full,
+              backgroundColor: !isPaused
+                ? PALETTE.primary
+                : `var(--bg-active, ${THEME.default.surfaces.active})`,
+              border: `1px solid ${
+                !isPaused
+                  ? PALETTE.primary
+                  : `var(--border-subtle, ${THEME.default.borders.hairline})`
+              }`,
+              position: 'relative',
               cursor: isUpdatingStatus ? 'not-allowed' : 'pointer',
-              opacity: isUpdatingStatus ? 0.7 : 1,
+              padding: 0,
+              transition: 'background-color 0.15s ease, border-color 0.15s ease',
             }}
           >
-            {getAutomationButtonLabel(isUpdatingStatus, isPaused)}
+            <span
+              style={{
+                position: 'absolute',
+                top: '2px',
+                left: !isPaused ? '18px' : '2px',
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                backgroundColor: !isPaused
+                  ? PALETTE.background
+                  : `var(--text-sub, ${THEME.default.text.secondary})`,
+                transition: 'left 0.15s ease, background-color 0.15s ease',
+              }}
+            />
           </button>
+          <span
+            style={{
+              fontSize: '0.8125rem',
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              color: `var(--text-main, ${THEME.default.text.primary})`,
+            }}
+          >
+            {isUpdatingStatus ? 'Updating…' : isPaused ? 'Off' : 'On'}
+          </span>
         </div>
       </div>
 
-      {/* 2. Page & Token Health Details */}
+      {/* 2. Page Connection Details */}
       <div
         data-testid="settings-token-card"
         style={{
@@ -261,7 +364,7 @@ export function PageTabSettings({
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
-            Facebook Page Credentials & Health
+            Facebook page connection
           </h4>
           <p
             style={{
@@ -270,7 +373,7 @@ export function PageTabSettings({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Page details and connection status synced with Facebook.
+            Your page details and connection status.
           </p>
         </div>
 
@@ -357,7 +460,7 @@ export function PageTabSettings({
             }}
           >
             <span style={{ fontSize: '0.75rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
-              Authentication Status
+              Connection status
             </span>
             <div
               style={{
@@ -403,7 +506,7 @@ export function PageTabSettings({
               lineHeight: 1.4,
             }}
           >
-            The access token for this Facebook Page has expired or requires renewal. Please visit the Facebook Accounts section to refresh the connection.
+            Your Facebook connection expired or needs attention. Reconnect it in the Facebook Accounts section to resume publishing.
           </div>
         )}
       </div>
@@ -443,7 +546,7 @@ export function PageTabSettings({
               color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            Detaching this page halts automated scheduling, removes encrypted credentials, and cancels any queued posts waiting to be published.
+            Disconnecting this page stops automatic posting and cancels any queued posts.
           </p>
         </div>
 
@@ -472,6 +575,15 @@ export function PageTabSettings({
         isDisconnecting={isDisconnecting}
         onCancel={() => setIsDisconnectDialogOpen(false)}
         onConfirm={handleConfirmDisconnect}
+      />
+
+      <ScheduleTimezoneModal
+        isOpen={isTimezoneModalOpen}
+        activeTimezone={displayedTimezone}
+        slotsCount={timezoneSlotsCount}
+        pendingQueueCount={timezonePendingCount}
+        onClose={() => setIsTimezoneModalOpen(false)}
+        onConfirmTimezone={handleConfirmTimezone}
       />
     </div>
   );

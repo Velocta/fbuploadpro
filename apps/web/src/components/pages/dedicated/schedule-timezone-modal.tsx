@@ -83,7 +83,7 @@ export function Step1TimezoneSelector({
             color: `var(--text-main, ${THEME.default.text.primary})`,
           }}
         >
-          Select Schedule Timezone
+          Change timezone
         </h3>
         <p
           style={{
@@ -92,7 +92,7 @@ export function Step1TimezoneSelector({
             color: `var(--text-sub, ${THEME.default.text.secondary})`,
           }}
         >
-          Choose the primary geographic timezone for this page&apos;s publishing schedule.
+          Choose the timezone this page&apos;s posting times and queue use.
         </p>
       </div>
 
@@ -130,7 +130,7 @@ export function Step1TimezoneSelector({
                 fontWeight: TYPOGRAPHY.weights.semibold,
               }}
             >
-              Current Active Timezone
+              Current timezone
             </div>
             <div
               style={{
@@ -396,7 +396,7 @@ export function Step1TimezoneSelector({
             transition: 'background-color 0.15s ease',
           }}
         >
-          Next: Review Shift
+          Review change
         </button>
       </div>
     </div>
@@ -444,7 +444,7 @@ export function Step2ReviewImpact({
             marginBottom: '2px',
           }}
         >
-          Step 2 of 2: Impact Review
+          Step 2 of 2: Review impact
         </div>
         <h3
           id="timezone-modal-title"
@@ -455,7 +455,7 @@ export function Step2ReviewImpact({
             color: `var(--text-main, ${THEME.default.text.primary})`,
           }}
         >
-          Review Schedule Timezone Shift
+          Review timezone change
         </h3>
         <p
           style={{
@@ -492,7 +492,7 @@ export function Step2ReviewImpact({
               fontWeight: TYPOGRAPHY.weights.semibold,
             }}
           >
-            Current Timezone
+            Current timezone
           </div>
           <div
             style={{
@@ -540,7 +540,7 @@ export function Step2ReviewImpact({
               fontWeight: TYPOGRAPHY.weights.semibold,
             }}
           >
-            New Timezone
+            New timezone
           </div>
           <div
             style={{
@@ -649,7 +649,7 @@ export function Step2ReviewImpact({
               textTransform: 'uppercase',
             }}
           >
-            Recurring Slots
+            Posting times
           </div>
           <div
             style={{
@@ -682,7 +682,7 @@ export function Step2ReviewImpact({
               textTransform: 'uppercase',
             }}
           >
-            Pending Queue Items
+            Queued posts
           </div>
           <div
             style={{
@@ -758,7 +758,7 @@ export function Step2ReviewImpact({
             transition: 'opacity 0.15s ease',
           }}
         >
-          {isSubmitting ? 'Updating Timezone...' : 'Update Schedule Timezone'}
+          {isSubmitting ? 'Updating…' : 'Update timezone'}
         </button>
       </div>
     </div>

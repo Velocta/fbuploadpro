@@ -347,41 +347,6 @@ function renderDedicatedSubtitle(
   );
 }
 
-function renderStatusToggleContent(isPaused: boolean, isUpdatingStatus: boolean) {
-  if (isPaused) {
-    return (
-      <>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <polygon points="5 3 19 12 5 21 5 3" />
-        </svg>
-        <span>{isUpdatingStatus ? 'Resuming...' : 'Resume Automation'}</span>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <rect x="6" y="4" width="4" height="16" />
-        <rect x="14" y="4" width="4" height="16" />
-      </svg>
-      <span>{isUpdatingStatus ? 'Pausing...' : 'Pause Automation'}</span>
-    </>
-  );
-}
-
 interface PageMoreMenuRenderProps {
   dropdownRef: React.RefObject<HTMLDivElement | null>;
   isDropdownOpen: boolean;
@@ -635,15 +600,6 @@ export function DedicatedPageHeader({
 
   useDropdownDismiss(isDropdownOpen, setIsDropdownOpen, dropdownRef);
 
-  const handleToggle = async () => {
-    setIsUpdatingStatus(true);
-    try {
-      await onStatusToggle(statusInfo.isPaused ? 'active' : 'paused');
-    } finally {
-      setIsUpdatingStatus(false);
-    }
-  };
-
   const handleCopyId = async () => {
     try {
       await navigator.clipboard.writeText(page.fbPageId);
@@ -830,42 +786,20 @@ export function DedicatedPageHeader({
             flexWrap: 'wrap',
           }}
         >
-          {/* Pause / Resume Automation Button (34px height) */}
-          <button
-            type="button"
-            data-testid="header-status-toggle-btn"
-            disabled={isUpdatingStatus || statusInfo.isNeedsAttention}
-            onClick={handleToggle}
+          {/* Automation status text (the switch lives in Settings) */}
+          <span
+            data-testid="header-automation-status"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
               height: '34px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: statusInfo.isPaused
-                ? 'rgba(250, 215, 52, 0.1)'
-                : `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              color: statusInfo.isPaused
-                ? PALETTE.primary
-                : `var(--text-main, ${THEME.default.text.primary})`,
-              border: `1px solid ${
-                statusInfo.isPaused
-                  ? 'rgba(250, 215, 52, 0.3)'
-                  : `var(--border-subtle, ${THEME.default.borders.hairline})`
-              }`,
-              borderRadius: RADII.sm,
               fontSize: '0.8125rem',
               fontWeight: TYPOGRAPHY.weights.medium,
-              cursor:
-                isUpdatingStatus || statusInfo.isNeedsAttention
-                  ? 'not-allowed'
-                  : 'pointer',
-              transition:
-                'background-color 0.12s ease, border-color 0.12s ease',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
             }}
           >
-            {renderStatusToggleContent(statusInfo.isPaused, isUpdatingStatus)}
-          </button>
+            {statusInfo.isPaused ? 'Automation off' : 'Automation on'}
+          </span>
 
           {/* Primary Action: Queue Post (34px height) */}
           <button
