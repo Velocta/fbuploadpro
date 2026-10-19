@@ -466,6 +466,13 @@ export function ConnectionResultView({
 const EMPTY_IDS: string[] = [];
 const EMPTY_ACCOUNTS: AccountSnapshot[] = [];
 
+/** How long the "copied" feedback stays visible on copy buttons. */
+const COPY_FEEDBACK_DURATION_MS = 2000;
+/** Delay before auto-closing the modal after a successful connection. */
+const SUCCESS_AUTO_CLOSE_DELAY_MS = 1500;
+/** How often to poll for magic-link connection status. */
+const MAGIC_LINK_POLL_INTERVAL_MS = 3000;
+
 export function ConnectAccountModal({
   subdomain,
   open,
@@ -567,7 +574,7 @@ export function ConnectAccountModal({
     try {
       await navigator.clipboard.writeText(magicUrl);
       setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
+      setTimeout(() => setCopySuccess(false), COPY_FEEDBACK_DURATION_MS);
     } catch (_err) {
       // Ignored because clipboard write failure falls back to manual link selection
       setCopySuccess(false);
@@ -624,7 +631,7 @@ export function ConnectAccountModal({
         onAccountConnected();
         setTimeout(() => {
           onOpenChange(false);
-        }, 1500);
+        }, SUCCESS_AUTO_CLOSE_DELAY_MS);
       }
     } catch (_e) {
       // Ignored because polling failures are silently retried on the next cycle
@@ -637,7 +644,7 @@ export function ConnectAccountModal({
 
     const pollInterval = setInterval(() => {
       void pollAccounts();
-    }, 3000);
+    }, MAGIC_LINK_POLL_INTERVAL_MS);
 
     return () => clearInterval(pollInterval);
   }, [view, open, isLinkExpired, pollAccounts]);

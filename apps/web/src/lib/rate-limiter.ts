@@ -73,6 +73,12 @@ function getUpstashLimiter(maxRequests: number, windowMs: number): Ratelimit {
 }
 
 const CLEANUP_INTERVAL_MS = 60 * 1000;
+
+/**
+ * Default sliding-window size for auth rate limits (1 minute).
+ * Call sites pass this as the window for checkRateLimit().
+ */
+export const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 let lastCleanup = Date.now();
 
 function cleanupStores(): void {

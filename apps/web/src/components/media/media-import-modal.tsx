@@ -13,6 +13,9 @@ import {
 export const MAX_CONCURRENT_UPLOADS = 3;
 export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
 
+/** Base delay for upload retry backoff (doubles with each retry). */
+const UPLOAD_RETRY_BASE_DELAY_MS = 1000;
+
 const EXTENSION_TO_MIME: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
@@ -1716,7 +1719,7 @@ export function MediaImportModal({
                   : it
               )
             );
-          }, 1000 * Math.pow(2, item.retryCount));
+          }, UPLOAD_RETRY_BASE_DELAY_MS * Math.pow(2, item.retryCount));
         } else {
           setQueue((prev) =>
             prev.map((it) =>

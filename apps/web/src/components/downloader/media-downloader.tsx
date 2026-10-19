@@ -31,6 +31,9 @@ import { deriveDefaultCaption, formatBytes } from '@/lib/upload-queue-helpers';
 
 export const DEFAULT_DOWNLOADS_FOLDER_NAME = 'Downloads';
 
+/** Delay between download poll iterations (gives the backend time to progress). */
+const DOWNLOAD_POLL_DELAY_MS = 1500;
+
 export interface DownloaderBatchProgressState {
   status: 'idle' | 'downloading' | 'completed' | 'cancelled';
   totalLinks: number;
@@ -419,7 +422,7 @@ async function handlePollIteration(params: {
     return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };
   }
 
-  await new Promise((r) => setTimeout(r, 1500));
+  await new Promise((r) => setTimeout(r, DOWNLOAD_POLL_DELAY_MS));
 
   if (signal?.aborted) {
     return { done: true, outcome: createCancelledOutcome(idx, url, folderId) };

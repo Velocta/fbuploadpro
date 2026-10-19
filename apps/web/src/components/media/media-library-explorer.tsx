@@ -23,6 +23,9 @@ import { type BatchCaptionMode } from './media-types';
 
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
 
+/** How long success toasts stay visible before auto-dismissing. */
+const TOAST_AUTO_DISMISS_MS = 3500;
+
 export type MediaViewMode = 'grid' | 'table';
 export type MediaTypeFilterKey = 'all' | 'video' | 'image';
 export type AspectRatioFilterKey = 'all' | '9:16' | '16:9' | '1:1' | '4:5';
@@ -2155,7 +2158,7 @@ export function MediaLibraryExplorer({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    setTimeout(() => setToastMessage(null), TOAST_AUTO_DISMISS_MS);
   };
 
   // Breadcrumbs
