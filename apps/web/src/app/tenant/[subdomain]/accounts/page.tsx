@@ -4,6 +4,10 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useParams } from 'next/navigation';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+import {
+  getAccountHealth,
+  type AccountHealth,
+} from '@/components/accounts/account-health';
 import { AccountCard, type FacebookAccountItem } from '@/components/accounts/account-card';
 import { AccountsEmptyState } from '@/components/accounts/accounts-empty-state';
 import { ConnectAccountModal } from '@/components/accounts/connect-account-modal';
@@ -59,12 +63,17 @@ export function filterAccountsList(
   });
 }
 
+/**
+ * Accounts tab subtitle derived from the single account-health model
+ * (Spec 102: `getAccountHealth`). Never a blanket "All operational" —
+ * the subtitle reflects the real per-account state.
+ */
 export function computeAccountsSubtitle(
-  totalCount: number,
+  accounts: FacebookAccountItem[],
   filteredCount: number,
-  attentionCount: number,
   isFiltered: boolean
-): React.ReactNode {
+): string {
+  const totalCount = accounts.length;
   if (totalCount === 0) {
     return 'Connect your first Facebook account to manage pages and publish reels.';
   }
@@ -73,25 +82,30 @@ export function computeAccountsSubtitle(
       totalCount === 1 ? 'account' : 'accounts'
     }`;
   }
-  if (attentionCount > 0) {
-    return (
-      <span>
-        {totalCount} connected {totalCount === 1 ? 'account' : 'accounts'} ·{' '}
-        <span
-          style={{
-            color: PALETTE.accent3,
-            fontWeight: TYPOGRAPHY.weights.medium,
-          }}
-        >
-          {attentionCount} {attentionCount === 1 ? 'requires' : 'require'}{' '}
-          reconnecting
-        </span>
-      </span>
+  const healthCounts: Record<AccountHealth, number> = {
+    connected: 0,
+    expired: 0,
+    error: 0,
+  };
+  for (const account of accounts) {
+    healthCounts[getAccountHealth(account)] += 1;
+  }
+  const parts: string[] = [`${healthCounts.connected} connected`];
+  if (healthCounts.expired > 0) {
+    parts.push(
+      `${healthCounts.expired} ${
+        healthCounts.expired === 1 ? 'session expired' : 'sessions expired'
+      }`
     );
   }
-  return `${totalCount} connected ${
-    totalCount === 1 ? 'account' : 'accounts'
-  } · All operational`;
+  if (healthCounts.error > 0) {
+    parts.push(
+      `${healthCounts.error} ${
+        healthCounts.error === 1 ? 'connection error' : 'connection errors'
+      }`
+    );
+  }
+  return parts.join(' · ');
 }
 
 export interface AccountsFilterBarProps {
@@ -421,6 +435,10 @@ interface ByocRequiredBannerProps {
 }
 
 export function ByocRequiredBanner({ subdomain }: Readonly<ByocRequiredBannerProps>) {
+  // Visible feedback the moment the link is clicked (M8) — Next.js client
+  // navigation renders immediately and the new page replaces this one, so
+  // the "Opening settings…" state is what the user sees during the hop.
+  const [isNavigating, setIsNavigating] = useState(false);
   return (
     <div
       data-testid="byoc-required-banner"
@@ -462,6 +480,8 @@ export function ByocRequiredBanner({ subdomain }: Readonly<ByocRequiredBannerPro
       <Link
         href={`/tenant/${subdomain}/settings?tab=byoc`}
         data-testid="byoc-configure-link"
+        onClick={() => setIsNavigating(true)}
+        aria-disabled={isNavigating}
         style={{
           ...COMPONENT_STYLES.secondaryButton(),
           textDecoration: 'none',
@@ -473,9 +493,11 @@ export function ByocRequiredBanner({ subdomain }: Readonly<ByocRequiredBannerPro
           whiteSpace: 'nowrap',
           color: `var(--text-main, ${THEME.default.text.primary})`,
           border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          opacity: isNavigating ? 0.6 : 1,
+          pointerEvents: isNavigating ? 'none' : 'auto',
         }}
       >
-        Configure in Settings
+        {isNavigating ? 'Opening settings…' : 'Configure in Settings'}
       </Link>
     </div>
   );
@@ -492,6 +514,7 @@ export function ByocConfigPromptModal({
   open,
   onClose,
 }: Readonly<ByocConfigPromptModalProps>) {
+  const [isNavigating, setIsNavigating] = useState(false);
   if (!open) return null;
 
   return (
@@ -628,7 +651,11 @@ export function ByocConfigPromptModal({
           <Link
             href={`/tenant/${subdomain}/settings?tab=byoc`}
             data-testid="byoc-prompt-settings-link"
-            onClick={onClose}
+            onClick={() => {
+              setIsNavigating(true);
+              onClose();
+            }}
+            aria-disabled={isNavigating}
             style={{
               ...COMPONENT_STYLES.primaryButton,
               textDecoration: 'none',
@@ -637,9 +664,11 @@ export function ByocConfigPromptModal({
               justifyContent: 'center',
               height: '36px',
               padding: `0 ${SPACING.md}`,
+              opacity: isNavigating ? 0.6 : 1,
+              pointerEvents: isNavigating ? 'none' : 'auto',
             }}
           >
-            Configure in Settings
+            {isNavigating ? 'Opening settings…' : 'Configure in Settings'}
           </Link>
         </div>
       </div>
@@ -826,13 +855,8 @@ export default function TenantAccountsPage() {
   const isFiltered = searchQuery.trim().length > 0 || statusFilter !== 'all';
   const situationalSubtitle = useMemo(
     () =>
-      computeAccountsSubtitle(
-        accounts.length,
-        filteredAccounts.length,
-        attentionCount,
-        isFiltered
-      ),
-    [accounts.length, filteredAccounts.length, attentionCount, isFiltered]
+      computeAccountsSubtitle(accounts, filteredAccounts.length, isFiltered),
+    [accounts, filteredAccounts.length, isFiltered]
   );
 
   let contentNode: React.ReactNode;
