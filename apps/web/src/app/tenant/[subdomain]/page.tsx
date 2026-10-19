@@ -1,5 +1,6 @@
 import React from 'react';
 import { THEME, SPACING, RADII, TYPOGRAPHY } from '@/lib/theme';
+import { getWorkspaceDisplayName } from './workspace-display-name';
 
 interface TenantIndexPageProps {
   params: Promise<{ subdomain: string }>;
@@ -7,6 +8,8 @@ interface TenantIndexPageProps {
 
 export default async function TenantIndexPage({ params }: Readonly<TenantIndexPageProps>) {
   const { subdomain } = await params;
+  // H5: the heading must show the workspace display name, never the internal slug.
+  const workspaceName = (await getWorkspaceDisplayName(subdomain)) ?? subdomain;
 
   return (
     <div
@@ -35,7 +38,7 @@ export default async function TenantIndexPage({ params }: Readonly<TenantIndexPa
             color: `var(--text-main, ${THEME.default.text.primary})`,
           }}
         >
-          Workspace: {subdomain}
+          Workspace: {workspaceName}
         </h1>
         <p
           style={{

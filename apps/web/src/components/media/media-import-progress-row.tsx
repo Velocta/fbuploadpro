@@ -269,6 +269,21 @@ export function ImportProgressRow({
             >
               Resume
             </button>
+            <button
+              type="button"
+              data-testid={`cancel-paused-${item.id}`}
+              onClick={() => onCancel(item.id)}
+              aria-label={`Cancel ${item.name}`}
+              style={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                color: `var(--text-dim, ${THEME.default.text.muted})`,
+                cursor: 'pointer',
+                fontSize: '0.6875rem',
+              }}
+            >
+              ✕
+            </button>
           </div>
         )}
 

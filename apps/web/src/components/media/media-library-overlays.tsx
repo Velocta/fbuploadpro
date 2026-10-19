@@ -73,6 +73,7 @@ export interface MediaLibraryOverlaysProps {
   handleDeleteFolder: (folderId: string) => Promise<void>;
   handleBatchDelete: () => Promise<void>;
   handleBatchMoveSubmit: (destinationId: string | null) => Promise<void>;
+  onUploadSuccess: (item: MediaItemResponse) => void;
   refreshLibraryData: () => Promise<void>;
   showToast: (msg: string) => void;
 }
@@ -126,6 +127,7 @@ export function MediaLibraryOverlays({
   handleDeleteFolder,
   handleBatchDelete,
   handleBatchMoveSubmit,
+  onUploadSuccess,
   refreshLibraryData,
   showToast,
 }: Readonly<MediaLibraryOverlaysProps>) {
@@ -185,9 +187,7 @@ export function MediaLibraryOverlays({
           setIsImportModalOpen(false);
           setStagedFilesForImport([]);
         }}
-        onUploadSuccess={() => {
-          void refreshLibraryData();
-        }}
+        onUploadSuccess={onUploadSuccess}
         onActiveUploadsChange={(count, furthest) => {
           setActiveUploadsCount(count);
           setFurthestAlongUpload(furthest);

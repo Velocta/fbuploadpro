@@ -191,6 +191,22 @@ export function MediaLibraryExplorer({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Open the file picker reliably: showPicker() is the programmatic opener
+  // that browsers honor; fall back to click() where it is unavailable.
+  const handleUploadClick = useCallback(() => {
+    const input = fileInputRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        // Fall through to click() when the browser rejects showPicker.
+      }
+    }
+    input.click();
+  }, []);
+
   const handleInterceptNavigation = useCallback((href: string) => {
     setPendingNavigationUrl(href);
     setIsLeaveGuardOpen(true);
@@ -246,6 +262,18 @@ export function MediaLibraryExplorer({
       void refreshLibraryData();
     }
   }, [refreshLibraryData, initialMediaItems]);
+
+  // Grid refresh (M11): show the confirmed item immediately instead of
+  // waiting on a refetch round-trip, then refresh to pick up server fields.
+  const handleUploadSuccess = useCallback(
+    (item: MediaItemResponse) => {
+      setMediaItems((prev) =>
+        prev.some((m) => m.id === item.id) ? prev : [item, ...prev]
+      );
+      void refreshLibraryData();
+    },
+    [refreshLibraryData]
+  );
 
   // Breadcrumbs
   const breadcrumbs = useMemo(
@@ -334,7 +362,7 @@ export function MediaLibraryExplorer({
           setIsImportModalOpen(true);
         }}
         onNewFolderClick={() => setIsNewFolderOpen(true)}
-        onUploadClick={() => fileInputRef.current?.click()}
+        onUploadClick={handleUploadClick}
       />
 
       {/* 2. Toolbar (Single divider-separated row, 3 zones, NO boxes) */}
@@ -466,6 +494,7 @@ export function MediaLibraryExplorer({
         handleDeleteFolder={handleDeleteFolder}
         handleBatchDelete={handleBatchDelete}
         handleBatchMoveSubmit={handleBatchMoveSubmit}
+        onUploadSuccess={handleUploadSuccess}
         refreshLibraryData={refreshLibraryData}
         showToast={showToast}
       />

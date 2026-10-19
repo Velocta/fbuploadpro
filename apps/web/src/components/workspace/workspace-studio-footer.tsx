@@ -35,6 +35,8 @@ export interface WorkspaceStudioFooterProps {
   subdomain: string;
   /** True when on the tenant's own subdomain: use clean paths (/accounts). */
   useCleanPaths?: boolean | undefined;
+  /** Server-resolved display name — used until the workspace list loads. */
+  workspaceName?: string | undefined;
   user?: {
     name: string;
     email: string;
@@ -70,11 +72,17 @@ export function broadcastLogout(): void {
   broadcastAuthEvent({ type: 'LOGOUT' });
 }
 
-function resolveActiveWorkspace(workspaces: WorkspaceItem[], currentSubdomain: string): WorkspaceItem {
+function resolveActiveWorkspace(
+  workspaces: WorkspaceItem[],
+  currentSubdomain: string,
+  fallbackName?: string | undefined
+): WorkspaceItem {
   return (
     workspaces.find((w) => w.subdomain.toLowerCase() === currentSubdomain.toLowerCase()) || {
       id: 'active',
-      name: currentSubdomain,
+      // Never present the bare internal slug as the workspace name when a
+      // display name is known.
+      name: fallbackName || currentSubdomain,
       subdomain: currentSubdomain,
     }
   );
@@ -474,6 +482,7 @@ export function PopoverActionsList({
 export function WorkspaceStudioFooter({
   subdomain,
   useCleanPaths = false,
+  workspaceName,
   user,
   onNavigate,
 }: Readonly<WorkspaceStudioFooterProps>) {
@@ -490,7 +499,7 @@ export function WorkspaceStudioFooter({
   const [workspaces, setWorkspaces] = useState<WorkspaceItem[]>([
     {
       id: 'current',
-      name: subdomain,
+      name: workspaceName || subdomain,
       subdomain,
     },
   ]);
@@ -498,7 +507,7 @@ export function WorkspaceStudioFooter({
 
   const displayName = user?.name || subdomain;
   const displayEmail = user?.email || `${subdomain}@fbuploadpro.com`;
-  const activeWorkspace = resolveActiveWorkspace(workspaces, subdomain);
+  const activeWorkspace = resolveActiveWorkspace(workspaces, subdomain, workspaceName);
   const isSettingsActive = pathname ? normalizeTenantPath(pathname, subdomain).startsWith('/settings') : false;
 
   useEffect(() => {
