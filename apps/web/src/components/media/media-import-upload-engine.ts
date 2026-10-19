@@ -174,6 +174,176 @@ function putFileToR2(
   });
 }
 
+interface PresignedUpload {
+  mediaUploadUrl: string;
+  mediaKey: string;
+  mediaId: string;
+  thumbnailUploadUrl: string | null;
+  thumbnailKey: string | null;
+  publicMediaUrl: string;
+  publicThumbnailUrl: string | null;
+}
+
+interface ThumbnailResult {
+  blob: Blob | null;
+  width: number | null;
+  height: number | null;
+  duration: number | null;
+}
+
+/** Step 1: request the presigned R2 URLs. */
+async function requestPresignedUpload(
+  subdomain: string,
+  item: ImportQueueItem,
+  userSignal: AbortSignal
+): Promise<PresignedUpload> {
+  const presignRes = await fetchWithTimeout(
+    `/api/tenant/${subdomain}/media/upload-url`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: item.name,
+        fileSize: item.size,
+        mimeType: item.mimeType,
+      }),
+    },
+    PRESIGN_TIMEOUT_MS,
+    userSignal
+  );
+
+  if (!presignRes.ok) {
+    throw new Error("Couldn't start the upload. Please try again.");
+  }
+
+  const presignData = await presignRes.json();
+  const mediaUploadUrl = presignData.mediaUploadUrl || presignData.uploadUrl;
+  if (!mediaUploadUrl) {
+    throw new Error('Upload URL missing from presign response');
+  }
+
+  return {
+    mediaUploadUrl,
+    mediaKey: presignData.mediaKey || presignData.storageKey,
+    mediaId: presignData.mediaId,
+    thumbnailUploadUrl: presignData.thumbnailUploadUrl || null,
+    thumbnailKey: presignData.thumbnailKey || null,
+    publicMediaUrl: presignData.publicMediaUrl || presignData.url || '',
+    publicThumbnailUrl: presignData.publicThumbnailUrl || presignData.thumbnailUrl || null,
+  };
+}
+
+/** Step 3: PUT the client-generated thumbnail (best effort — falls back to the type icon). */
+async function uploadThumbnail(
+  presigned: PresignedUpload,
+  thumbData: ThumbnailResult,
+  userSignal: AbortSignal
+): Promise<string | null> {
+  if (!thumbData.blob || !presigned.thumbnailUploadUrl) return null;
+  try {
+    const thumbRes = await fetchWithTimeout(
+      presigned.thumbnailUploadUrl,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'image/webp' },
+        body: thumbData.blob,
+      },
+      THUMBNAIL_UPLOAD_TIMEOUT_MS,
+      userSignal
+    );
+    if (userSignal.aborted) throw new DOMException('Upload aborted', 'AbortError');
+    return thumbRes.ok ? presigned.publicThumbnailUrl : null;
+  } catch {
+    if (userSignal.aborted) throw new DOMException('Upload aborted', 'AbortError');
+    // Ignore thumbnail upload error; fall back to type icon
+    return null;
+  }
+}
+
+/** Step 4: confirm the upload so it lands in the library. */
+async function confirmMediaUpload(
+  subdomain: string,
+  selectedFolderId: string | null,
+  item: ImportQueueItem,
+  presigned: PresignedUpload,
+  thumbData: ThumbnailResult,
+  uploadedThumbnailUrl: string | null,
+  userSignal: AbortSignal
+): Promise<MediaItemResponse> {
+  const confirmRes = await fetchWithTimeout(
+    `/api/tenant/${subdomain}/media/confirm`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mediaId: presigned.mediaId,
+        name: item.name,
+        fileSize: item.size,
+        mimeType: item.mimeType,
+        mediaType: item.mediaType,
+        storageKey: presigned.mediaKey,
+        folderId: selectedFolderId,
+        url: presigned.publicMediaUrl,
+        thumbnailKey: uploadedThumbnailUrl ? presigned.thumbnailKey : null,
+        thumbnailUrl: uploadedThumbnailUrl,
+        durationSeconds: thumbData.duration,
+        aspectRatio: classifyAspectRatio(thumbData.width || 0, thumbData.height || 0),
+        width: thumbData.width,
+        height: thumbData.height,
+        captionText: deriveDefaultCaption(item.name),
+      }),
+    },
+    CONFIRM_TIMEOUT_MS,
+    userSignal
+  );
+
+  if (!confirmRes.ok) {
+    throw new Error("Upload finished but we couldn't save it to your library. Please try again.");
+  }
+
+  const confirmData = await confirmRes.json();
+  return confirmData.item as MediaItemResponse;
+}
+
+/**
+ * Requeue a failed attempt after backoff. The timer only fires when this
+ * exact attempt is still the live one — a pause, cancel, or manual retry in
+ * the meantime leaves the queue untouched.
+ */
+function scheduleAutoRetry(
+  setQueue: React.Dispatch<React.SetStateAction<ImportQueueItem[]>>,
+  item: ImportQueueItem,
+  attemptController: AbortController
+): void {
+  setTimeout(() => {
+    setQueue((prev) => {
+      const current = prev.find((it) => it.id === item.id);
+      if (
+        !current ||
+        current.status !== 'uploading' ||
+        current.abortController !== attemptController
+      ) {
+        return prev;
+      }
+      return prev.map((it) =>
+        it.id === item.id ? { ...it, status: 'queued', retryCount: it.retryCount + 1 } : it
+      );
+    });
+  }, UPLOAD_RETRY_BASE_DELAY_MS * Math.pow(2, item.retryCount));
+}
+
+function markUploadFailed(
+  setQueue: React.Dispatch<React.SetStateAction<ImportQueueItem[]>>,
+  item: ImportQueueItem,
+  message: string
+): void {
+  setQueue((prev) =>
+    prev.map((it) =>
+      it.id === item.id ? { ...it, status: 'failed', validationError: message } : it
+    )
+  );
+}
+
 export function useImportUpload({
   subdomain,
   selectedFolderId,
@@ -209,102 +379,29 @@ const uploadFile = useCallback(
 
     try {
       // 1. Request presigned upload URL
-      const presignRes = await fetchWithTimeout(
-        `/api/tenant/${subdomain}/media/upload-url`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileName: item.name,
-            fileSize: item.size,
-            mimeType: item.mimeType,
-          }),
-        },
-        PRESIGN_TIMEOUT_MS,
-        userSignal
-      );
-
-      if (!presignRes.ok) {
-        throw new Error("Couldn't start the upload. Please try again.");
-      }
-
-      const presignData = await presignRes.json();
-      const mediaUploadUrl = presignData.mediaUploadUrl || presignData.uploadUrl;
-      const mediaKey = presignData.mediaKey || presignData.storageKey;
-      const mediaId = presignData.mediaId;
-      const thumbnailUploadUrl = presignData.thumbnailUploadUrl;
-      const thumbnailKey = presignData.thumbnailKey;
-      const publicMediaUrl = presignData.publicMediaUrl || presignData.url || '';
-      const publicThumbnailUrl = presignData.publicThumbnailUrl || presignData.thumbnailUrl || null;
-
-      if (!mediaUploadUrl) {
-        throw new Error('Upload URL missing from presign response');
-      }
+      const presigned = await requestPresignedUpload(subdomain, item, userSignal);
 
       // 2. Direct R2 upload via XHR for real progress events (watchdog aborts stalls)
-      await putFileToR2(mediaUploadUrl, item.file, item.mimeType, userSignal, (pct) =>
+      await putFileToR2(presigned.mediaUploadUrl, item.file, item.mimeType, userSignal, (pct) =>
         updateItemProgress(item.id, pct)
       );
       updateItemProgress(item.id, PROGRESS_XHR_DONE);
 
       // 3. Client-side thumbnail generation (already self-times-out in 3s)
       const thumbData = await generateThumbnailBlob(item.file, item.mediaType);
-      let uploadedThumbnailUrl: string | null = null;
-
-      if (thumbData.blob && thumbnailUploadUrl) {
-        try {
-          const thumbRes = await fetchWithTimeout(
-            thumbnailUploadUrl,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': 'image/webp' },
-              body: thumbData.blob,
-            },
-            THUMBNAIL_UPLOAD_TIMEOUT_MS,
-            userSignal
-          );
-          if (thumbRes.ok) uploadedThumbnailUrl = publicThumbnailUrl;
-        } catch {
-          // Ignore thumbnail upload error; fall back to type icon
-        }
-        if (userSignal.aborted) throw new DOMException('Upload aborted', 'AbortError');
-      }
+      const uploadedThumbnailUrl = await uploadThumbnail(presigned, thumbData, userSignal);
       updateItemProgress(item.id, PROGRESS_THUMBNAIL_DONE);
 
       // 4. Confirm upload to Supabase DB
-      const confirmRes = await fetchWithTimeout(
-        `/api/tenant/${subdomain}/media/confirm`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            mediaId,
-            name: item.name,
-            fileSize: item.size,
-            mimeType: item.mimeType,
-            mediaType: item.mediaType,
-            storageKey: mediaKey,
-            folderId: selectedFolderId,
-            url: publicMediaUrl,
-            thumbnailKey: uploadedThumbnailUrl ? thumbnailKey : null,
-            thumbnailUrl: uploadedThumbnailUrl,
-            durationSeconds: thumbData.duration,
-            aspectRatio: classifyAspectRatio(thumbData.width || 0, thumbData.height || 0),
-            width: thumbData.width,
-            height: thumbData.height,
-            captionText: deriveDefaultCaption(item.name),
-          }),
-        },
-        CONFIRM_TIMEOUT_MS,
+      const uploadedItem = await confirmMediaUpload(
+        subdomain,
+        selectedFolderId,
+        item,
+        presigned,
+        thumbData,
+        uploadedThumbnailUrl,
         userSignal
       );
-
-      if (!confirmRes.ok) {
-        throw new Error("Upload finished but we couldn't save it to your library. Please try again.");
-      }
-
-      const confirmData = await confirmRes.json();
-      const uploadedItem = confirmData.item as MediaItemResponse;
 
       setQueue((prev) =>
         prev.map((it) =>
@@ -328,35 +425,12 @@ const uploadFile = useCallback(
         return;
       }
 
-      const message = resolveUploadErrorMessage(err);
-
-      // Auto-retry up to N times with exponential backoff. The timer only
-      // requeues when this exact attempt is still the live one; a pause,
-      // cancel, or manual retry in the meantime cancels the retry.
+      // Auto-retry up to N times with exponential backoff; otherwise surface
+      // the real error in plain language with the manual Retry button.
       if (item.retryCount < UPLOAD_MAX_AUTO_RETRIES) {
-        setTimeout(() => {
-          setQueue((prev) => {
-            const current = prev.find((it) => it.id === item.id);
-            if (
-              !current ||
-              current.status !== 'uploading' ||
-              current.abortController !== attemptController
-            ) {
-              return prev;
-            }
-            return prev.map((it) =>
-              it.id === item.id
-                ? { ...it, status: 'queued', retryCount: it.retryCount + 1 }
-                : it
-            );
-          });
-        }, UPLOAD_RETRY_BASE_DELAY_MS * Math.pow(2, item.retryCount));
+        scheduleAutoRetry(setQueue, item, attemptController);
       } else {
-        setQueue((prev) =>
-          prev.map((it) =>
-            it.id === item.id ? { ...it, status: 'failed', validationError: message } : it
-          )
-        );
+        markUploadFailed(setQueue, item, resolveUploadErrorMessage(err));
       }
     }
   },
