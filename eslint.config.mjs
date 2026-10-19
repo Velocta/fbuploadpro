@@ -76,21 +76,4 @@ export default [
       "@typescript-eslint/no-unused-vars": "off"
     }
   },
-  {
-    // packages/contracts tests aren't in any tsconfig (would break the build
-    // if added) and exceed the default-project file limit — lint them without
-    // type-aware rules rather than erroring.
-    files: ["packages/contracts/tests/**/*.ts"],
-    languageOptions: {
-      parserOptions: {
-        projectService: false,
-      },
-    },
-    rules: {
-      "@typescript-eslint/no-floating-promises": "off",
-      "@typescript-eslint/no-misused-promises": "off",
-      "@typescript-eslint/await-thenable": "off",
-      "@typescript-eslint/no-unnecessary-condition": "off"
-    }
-  }
 ];
