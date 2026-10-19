@@ -524,14 +524,45 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(hasText('Expired')).toBe(true);
     });
 
-    it('computeAccountsSubtitle generates contextual subtitles across states', () => {
-      expect(computeAccountsSubtitle(0, 0, 0, false)).toBe(
+    it('computeAccountsSubtitle derives from the shared account-health model', () => {
+      const disconnectedAccount: FacebookAccountItem = {
+        ...mockExpiredAccount,
+        id: 'acc-789',
+        status: 'disconnected',
+      };
+      expect(computeAccountsSubtitle([], 0, false)).toBe(
         'Connect your first Facebook account to manage pages and publish reels.'
       );
-      expect(computeAccountsSubtitle(5, 2, 0, true)).toBe('Showing 2 of 5 accounts');
-      expect(computeAccountsSubtitle(1, 1, 0, true)).toBe('Showing 1 of 1 account');
-      expect(computeAccountsSubtitle(3, 3, 0, false)).toBe('3 connected accounts · All operational');
-      expect(computeAccountsSubtitle(1, 1, 0, false)).toBe('1 connected account · All operational');
+      expect(computeAccountsSubtitle([mockActiveAccount], 1, true)).toBe(
+        'Showing 1 of 1 account'
+      );
+      expect(
+        computeAccountsSubtitle(
+          [mockActiveAccount, mockExpiredAccount, disconnectedAccount],
+          2,
+          true
+        )
+      ).toBe('Showing 2 of 3 accounts');
+      expect(computeAccountsSubtitle([mockActiveAccount], 1, false)).toBe(
+        '1 connected'
+      );
+      expect(
+        computeAccountsSubtitle([mockActiveAccount, mockExpiredAccount], 2, false)
+      ).toBe('1 connected · 1 session expired');
+      expect(
+        computeAccountsSubtitle(
+          [mockActiveAccount, mockExpiredAccount, disconnectedAccount],
+          3,
+          false
+        )
+      ).toBe('1 connected · 1 session expired · 1 connection error');
+      expect(
+        computeAccountsSubtitle(
+          [mockExpiredAccount, { ...mockExpiredAccount, id: 'acc-999' }],
+          2,
+          false
+        )
+      ).toBe('0 connected · 2 sessions expired');
     });
   });
 
