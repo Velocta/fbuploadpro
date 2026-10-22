@@ -1,5 +1,7 @@
 import {
   decryptToken,
+  InternalError,
+  ValidationError,
   type DatabaseDestinationRow,
   type DatabaseSocialAccountRow,
   type DatabaseUnifiedQueueItemRow,
@@ -227,7 +229,7 @@ async function processPublishMessage(
 ): Promise<ProcessResult> {
   const body = message.body;
   if (!isPublishQueueMessage(body)) {
-    throw new Error('Malformed publish queue message body');
+    throw new ValidationError('Malformed publish queue message body');
   }
 
   const itemRow = await loadRowById(deps.db, 'queue_items', body.itemId);
@@ -245,23 +247,23 @@ async function processPublishMessage(
 
   const destinationRow = await loadRowById(deps.db, 'destinations', item.destination_id);
   if (!destinationRow) {
-    throw new Error(`Destination ${item.destination_id} for queue item ${item.id} not found`);
+    throw new InternalError(`Destination ${item.destination_id} for queue item ${item.id} not found`);
   }
   const destination = destinationRow as unknown as DatabaseDestinationRow;
 
   const accountRow = await loadRowById(deps.db, 'social_accounts', destination.account_id);
   if (!accountRow) {
-    throw new Error(`Social account ${destination.account_id} for queue item ${item.id} not found`);
+    throw new InternalError(`Social account ${destination.account_id} for queue item ${item.id} not found`);
   }
   const account = accountRow as unknown as DatabaseSocialAccountRow;
 
   const publisher = deps.registry.get(item.platform);
   if (!publisher) {
-    throw new Error(`No publisher registered for platform "${item.platform}"`);
+    throw new InternalError(`No publisher registered for platform "${item.platform}"`);
   }
 
   if (!deps.masterKey) {
-    throw new Error('TOKEN_ENCRYPTION_KEY is not configured');
+    throw new InternalError('TOKEN_ENCRYPTION_KEY is not configured');
   }
   const masterKey = deps.masterKey;
 
@@ -448,6 +450,6 @@ export async function handleQueueBatch(
       return handleDlqBatch(batch, deps);
     default:
       console.error(`[consumer] unknown queue "${batch.queue}"; leaving batch un-acked`);
-      throw new Error(`Unknown queue: ${batch.queue}`);
+      throw new InternalError(`Unknown queue: ${batch.queue}`);
   }
 }
