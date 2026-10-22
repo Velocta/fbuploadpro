@@ -504,9 +504,8 @@ function PlatformDisconnectModal({
           cursor: 'default',
         }}
       />
-      <div
-        role="dialog"
-        aria-modal="true"
+      <dialog
+        open
         aria-labelledby={`${testIdPrefix}-disconnect-title`}
         data-testid={`${testIdPrefix}-disconnect-modal`}
         style={{
@@ -514,6 +513,7 @@ function PlatformDisconnectModal({
           maxWidth: '480px',
           position: 'relative',
           zIndex: 1,
+          margin: 0,
         }}
       >
         <h2
@@ -578,7 +578,7 @@ function PlatformDisconnectModal({
             {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
           </button>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

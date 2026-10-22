@@ -37,7 +37,7 @@ export function resolveCallbackOrigin(): string {
 
 /** Build one callback address for a platform. */
 export function getPlatformCallbackUrl(
-  platform: CallbackPlatform | string,
+  platform: CallbackPlatform,
   kind: CallbackKind,
   origin: string = resolveCallbackOrigin()
 ): string {
@@ -48,7 +48,7 @@ export function getPlatformCallbackUrl(
 
 /** Build all three callback addresses a platform's settings may ask for. */
 export function getPlatformCallbackUrls(
-  platform: CallbackPlatform | string,
+  platform: CallbackPlatform,
   origin: string = resolveCallbackOrigin()
 ): PlatformCallbackUrls {
   return {

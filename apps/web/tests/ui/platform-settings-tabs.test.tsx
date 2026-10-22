@@ -453,9 +453,9 @@ describe('Spec 123 Part B: YouTube, X and TikTok explanation tabs', () => {
       const View = c.view;
       const { html, hasText, hasAttribute, getAttribute } = render(<View subdomain="acme" />);
 
-      expect((html.match(/<input/g) || []).length).toBe(0);
-      expect((html.match(/<textarea/g) || []).length).toBe(0);
-      expect((html.match(/<select/g) || []).length).toBe(0);
+      expect(html.match(/<input/g) || []).toHaveLength(0);
+      expect(html.match(/<textarea/g) || []).toHaveLength(0);
+      expect(html.match(/<select/g) || []).toHaveLength(0);
       expect(hasAttribute('data-testid', c.card)).toBe(true);
       expect(hasText(c.text)).toBe(true);
       expect(hasText('Go to Accounts')).toBe(true);
