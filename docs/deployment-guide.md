@@ -309,3 +309,15 @@ After the initial deployment is complete, verify each core subsystem:
 - [ ] **Worker Health**: Inspect worker invocation logs in the Cloudflare Dashboard under **Workers & Pages** $\rightarrow$ `fbuploadpro-worker` $\rightarrow$ **Logs** to confirm that the 1-minute queue poller runs with 0 errors.
 - [ ] **WhatsApp Support Button**: Verify that the floating green WhatsApp support button is visible at the bottom-right corner of all public and tenant pages, and clicking it opens WhatsApp with the pre-filled support message.
 
+
+---
+
+## Health Checks (Spec 116)
+
+Three tiers, cheapest first:
+
+- **`GET /api/live`** (web, public): static `{status:"ok"}` — process liveness only, no dependencies.
+- **`GET /api/health`** (web, public) and **`GET /health`** (worker, public): readiness probes. Web checks the database (PostgREST `workspaces` probe, 2s budget; a missing service-role key fails the probe instead of being masked by the anon-key fallback), Supabase Auth reachability (`/auth/v1/health`, 1s budget), and config presence as booleans only (session secret valid, token encryption key present and well-formed, R2 configured). Worker checks its database plus env presence. Payloads contain enums/booleans only — never hosts, values, or error detail. `200` when all checks pass, `503` otherwise.
+- **`GET /api/internal/health`** (web, authenticated): the detailed tier. Requires a `Bearer` token matching the `INTERNAL_HEALTH_TOKEN` environment variable, or a signed admin session. Reports database latency, worker heartbeat age (from the `worker_heartbeats` table — stale when the last successful tick is over 3 minutes old), queue backlog (due count, oldest due age, items stuck in `publishing` beyond 10 minutes), an R2 `HeadBucket` probe, and stored Facebook page/account status counts. It never calls the Facebook Graph API.
+
+The worker upserts its heartbeat row on **every** scheduled tick, including ticks that skip dispatch (for example when `TOKEN_ENCRYPTION_KEY` is missing — the skip reason is recorded). `deploy-worker.yml` runs a post-deploy smoke `curl` of the worker `/health` endpoint when the `WORKER_HEALTH_URL` repository variable is set (for example `https://fbuploadpro-worker.<account-subdomain>.workers.dev/health`). Point an external uptime monitor at `/api/live`, `/api/health`, and the worker `/health` URL for alerting.

@@ -64,3 +64,24 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
 
+      - name: Smoke check worker /health (spec 116)
+        if: steps.check-credentials.outputs.has_token == 'true'
+        env:
+          WORKER_HEALTH_URL: ${{ vars.WORKER_HEALTH_URL }}
+        run: |
+          if [ -z "$WORKER_HEALTH_URL" ]; then
+            echo "WORKER_HEALTH_URL repository variable is not set; skipping post-deploy smoke check."
+            exit 0
+          fi
+          echo "Probing $WORKER_HEALTH_URL"
+          for attempt in 1 2 3 4 5; do
+            if curl --fail --silent --show-error --max-time 10 "$WORKER_HEALTH_URL"; then
+              echo "Worker /health smoke check passed."
+              exit 0
+            fi
+            echo "Attempt $attempt failed; retrying in 10s..."
+            sleep 10
+          done
+          echo "Worker /health smoke check failed after 5 attempts."
+          exit 1
+

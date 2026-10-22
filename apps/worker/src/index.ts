@@ -4,6 +4,12 @@ import {
   runDispatchCycle,
   type DispatcherDbClient,
 } from './dispatcher.js';
+import {
+  isTokenEncryptionKeyWellFormed,
+  recordHeartbeat,
+} from './heartbeat.js';
+
+export { recordHeartbeat, WORKER_HEARTBEAT_NAME } from './heartbeat.js';
 
 export interface Env {
   ENVIRONMENT?: string;
@@ -125,14 +131,22 @@ export async function handleScheduled(
   _ctx?: ExecutionContext,
   options?: ScheduledOptions
 ): Promise<void> {
+  const db = initWorkerDb(env, options?.db);
   const masterKey = env.TOKEN_ENCRYPTION_KEY;
+
+  // Heartbeat on EVERY tick (spec 116), including the skip paths below, so a
+  // silently-skipping pipeline is visible instead of reporting healthy.
   if (!masterKey) {
     console.warn('[Scheduled] TOKEN_ENCRYPTION_KEY is not configured; skipping cycle');
+    await recordHeartbeat(db, {
+      success: false,
+      skipReason: 'missing_token_encryption_key',
+    });
     return;
   }
 
-  const db = initWorkerDb(env, options?.db);
   if (!db) {
+    console.warn('[Scheduled] Database client is not configured; skipping cycle');
     return;
   }
 
@@ -152,16 +166,111 @@ export async function handleScheduled(
     // 2. Direct dispatch (Cloudflare Queues were never provisioned; direct
     //    execution is the design)
     const concurrency = Number(env.DISPATCH_CONCURRENCY || DEFAULT_DISPATCH_CONCURRENCY);
-    await runDispatchCycle({
+    const result = await runDispatchCycle({
       db,
       fbClient,
       masterKey,
       limit: options?.limit ?? 10,
       concurrency,
     });
-  } finally {
-    // Stateless cleanup
+
+    await recordHeartbeat(db, {
+      success: true,
+      claimed: result.processed,
+      settled: result.succeeded + result.failed + result.retried,
+    });
+  } catch (err) {
+    await recordHeartbeat(db, { success: false, skipReason: 'dispatch_error' });
+    throw err;
   }
+}
+
+export interface WorkerHealthPayload {
+  status: 'ok' | 'unhealthy';
+  timestamp: string;
+  worker: 'fbuploadpro-worker';
+  checks: {
+    database: boolean;
+    config: boolean;
+  };
+}
+
+const WORKER_HEALTH_TIMEOUT_MS = 2000;
+
+interface WorkerProbeDb {
+  from: (table: string) => {
+    select: (
+      columns: string,
+      options: { head: boolean; count: string }
+    ) => Promise<{ error: unknown }>;
+  };
+}
+
+async function probeWorkerDatabase(
+  db: WorkerProbeDb | null,
+  timeoutMs: number
+): Promise<boolean> {
+  if (!db || typeof db.from !== 'function') return false;
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const probePromise = db
+      .from('workspaces')
+      .select('id', { head: true, count: 'exact' });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(
+        () => reject(new Error('Health probe timeout exceeded budget')),
+        timeoutMs
+      );
+    });
+    const { error } = await Promise.race([probePromise, timeoutPromise]);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error(
+      '[health] worker database probe failed:',
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  } finally {
+    if (timerId) clearTimeout(timerId);
+  }
+}
+
+/**
+ * Worker health probe (spec 116): mirrors the web DB probe (workspaces
+ * head query, 2s budget) plus env-presence booleans. Sanitized — booleans
+ * only, never hosts, values, or error detail (logged server-side only).
+ */
+export async function probeWorkerHealth(
+  env: Env,
+  injectedDb?: unknown,
+  timeoutMs = WORKER_HEALTH_TIMEOUT_MS
+): Promise<{ statusCode: number; payload: WorkerHealthPayload }> {
+  const timestamp = new Date().toISOString();
+  const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+  const config = Boolean(
+    supabaseUrl &&
+      env.SUPABASE_SERVICE_ROLE_KEY &&
+      isTokenEncryptionKeyWellFormed(env.TOKEN_ENCRYPTION_KEY)
+  );
+
+  const testDb =
+    env.ENVIRONMENT === 'production'
+      ? null
+      : ((env as unknown as { __TEST_DB__?: unknown }).__TEST_DB__ ?? null);
+  const db = (initWorkerDb(env, injectedDb) ?? testDb) as WorkerProbeDb | null;
+  const database = await probeWorkerDatabase(db, timeoutMs);
+
+  const ok = database && config;
+  return {
+    statusCode: ok ? 200 : 503,
+    payload: {
+      status: ok ? 'ok' : 'unhealthy',
+      timestamp,
+      worker: 'fbuploadpro-worker',
+      checks: { database, config },
+    },
+  };
 }
 
 async function authenticateWorkerRequest(
@@ -439,18 +548,13 @@ export default {
       corsHeaders['Vary'] = 'Origin';
     }
 
-    // 2. Healthcheck
+    // 2. Healthcheck (spec 116: real DB probe + env-presence booleans)
     if (request.method === 'GET' && url.pathname === '/health') {
-      return new Response(
-        JSON.stringify({
-          status: 'ok',
-          worker: 'fbuploadpro-worker',
-        }),
-        {
-          status: 200,
-          headers: corsHeaders,
-        }
-      );
+      const result = await probeWorkerHealth(env);
+      return new Response(JSON.stringify(result.payload), {
+        status: result.statusCode,
+        headers: { ...corsHeaders, 'Cache-Control': 'no-store' },
+      });
     }
 
     // 3. Media Download API
