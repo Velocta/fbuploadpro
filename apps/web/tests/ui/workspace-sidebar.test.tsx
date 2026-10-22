@@ -413,7 +413,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     }
 
     const allAccountsLeaves = findAllLeavesByText(capturedTree, 'Accounts');
-    expect(allAccountsLeaves.length).toBe(6);
+    expect(allAccountsLeaves).toHaveLength(6);
 
     // Index 0: Facebook, Index 1: Instagram, Index 2: Threads, Index 3: X, Index 4: TikTok, Index 5: YouTube
     // Spec 110: navigation target lives in the anchor href; the click handler
