@@ -132,8 +132,8 @@ directories in audits, and do not propose their removal.
 ### E. Theme Token & Design System Enforcement (`apps/web/src/lib/theme.ts`)
 - **Mandatory Centralized Theme Authority**: All visual styling, colors, borders, spacing, radii, typography, and shadows in `apps/web` MUST be referenced strictly from `apps/web/src/lib/theme.ts` (or CSS custom properties in `globals.css`).
 - **Never Declare, Always Reference**: AI agents are strictly prohibited from declaring ad-hoc hex color literals, RGB/HSL strings, or arbitrary border/shadow definitions inside component files.
-- **Permanent Ban on Capsule Pill Badges**: Never wrap status tags or text inside rounded capsule bubbles (`rounded-full bg-* border`). Status must be signaled exclusively via unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS` or `COMPONENT_STYLES.statusDot`).
-- **Full Specification & Immutability**: Detailed compliance and code patterns are governed by `.agents/rules/theme-standards.md` and `DESIGN.md`. Agents must NEVER modify `DESIGN.md` (permanently frozen).
+- **Status Presentation (Colour + Icon + Text)**: Status must be signaled as colour + icon + text together (spec 129 OD-3) — state never travels by colour alone. Colours and labels come from `STATUS_SIGNALS`; never present status as a bare coloured dot.
+- **Full Specification**: Detailed compliance and code patterns are governed by `.agents/rules/theme-standards.md` and the design-token source in `apps/web/tokens/` (the single source of truth since 2026-10-22, spec 129; the former `DESIGN.md` was deleted and superseded by the token system).
 
 ### F. Desktop Application Shell & Native Rust Backend (`apps/desktop`)
 - **Thin Client / Fat Server IP Isolation (Principle 26)**:

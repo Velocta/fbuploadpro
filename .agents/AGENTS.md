@@ -70,7 +70,7 @@ When implementing tasks, adhere strictly to domain standards across monorepo bou
 
 | Scope | Package / Target | Enforced Standard |
 | :--- | :--- | :--- |
-| **Frontend Web** | `apps/web` | Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference from `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; zero capsule pill badges; NEVER modify `DESIGN.md`), *Taste Skill* anti-slop craft & *Impeccable* quality floor. |
+| **Frontend Web** | `apps/web` | Next.js 16 App Router, React 19 standards (zero `set-state-in-effect`), strict theme token enforcement (ALWAYS reference tokens from `apps/web/tokens/` via the generated `apps/web/src/lib/theme.ts`; NEVER declare ad-hoc styles/colors; status = colour + icon + text), *Taste Skill* anti-slop craft & *Impeccable* quality floor. |
 | **Desktop App Shell** | `apps/desktop` | Tauri v2 + Rust. Thin Client / Fat Server IP Isolation (Principle 26), Cargo release profile symbol stripping (`strip = true`, `opt-level = 3`), typed IPC commands via `@fbuploadpro/contracts`, zero client-side storage of raw tokens or publishing secrets. |
 | **Browser Companion Shell** | `apps/extension` | Manifest V3 via WXT. Scoped permissions (`activeTab`, `storage`), zero inline script injection, typed contracts via `@fbuploadpro/contracts`, edge API integration via `apps/worker`. |
 | **Edge Worker Runtime** | `apps/worker` | Cloudflare Workers edge runtime. Clean architecture, strict Zod schema validation, multi-tenant compound isolation (`user_id`), edge V8 isolate purity (zero Node TCP sockets in worker). |
@@ -135,17 +135,15 @@ The agent operates with specialized skills loaded directly into its execution en
   - For GitHub issues, autonomous merging (`gh pr merge --squash --delete-branch`) is permitted once all quality and SonarQube checks pass cleanly.
   - **PRs with Only File Changes (CI Exemption)**: If a PR contains only file changes (such as documentation, markdown files, specifications, or agent rules under `docs/**`, `.agents/**`, `.specify/**`, `*.md`) with no executable code or dependencies, there is no need to check for CI or wait for CI/SonarQube quality gates before merging.
   - **Post-Merge Main Repo Checks (Supabase Migrations Gate)**: If a merged Pull Request includes any SQL migration files under `supabase/migrations/**`, the agent MUST check the status of post-merge deployment on `main` (specifically inspecting check-runs on `main` via `gh api repos/:owner/:repo/commits/main/check-runs --jq '.check_runs[] | select(.app.slug == "supabase")'` for the Supabase deployment check) and verify that database migrations apply with 100% success and 0 errors. If the deployment fails, the agent must immediately inspect the failure logs and remediate any database migration failure. If a PR does NOT contain SQL migration files, post-merge migration checks on `main` MUST be skipped.
-- **Strict Theme & Design System Authority (`apps/web/src/lib/theme.ts`)**:
-  - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) and [`DESIGN.md`](DESIGN.md).
+- **Strict Theme & Design System Authority (design tokens in `apps/web/tokens/`)**:
+  - The single source of truth for all frontend styling, colors, hairlines, spacing, radii, and shadows is the DTCG token source in [`apps/web/tokens/`](apps/web/tokens/). [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) and `apps/web/src/styles/tokens.generated.css` are GENERATED from those tokens (Style Dictionary, `tokens:build`) — never hand-edit them; CI runs `tokens:check` and fails on drift.
   - All components MUST import and reference styling properties from `@web/lib/theme` or CSS variables (`globals.css`).
   - NEVER declare, invent, or hardcode ad-hoc hex codes, custom borders, arbitrary shadows, or capsule pill badges anywhere in frontend components.
-  - Status indicators must strictly use unboxed 6px luminous dots with micro-halos (`STATUS_SIGNALS` or `COMPONENT_STYLES.statusDot`).
+  - Status indicators must present colour + icon + text together (`STATUS_SIGNALS` supplies colours and labels) — state never travels by colour alone (spec 129 OD-3).
   - Enforced by `.agents/rules/theme-standards.md`.
-- **Absolute Immutability of `DESIGN.md` (Never Modify `DESIGN.md`)**:
-  - AI agents and automated tools MUST NEVER make any changes, edits, reformatting, overwrites, or truncations to [`DESIGN.md`](DESIGN.md).
-  - `DESIGN.md` is permanently frozen and locked as the repository's immutable design system specification.
-  - All frontend code and theme configurations in `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css` must strictly conform to `DESIGN.md` without modifying the root design specification document itself.
-  - Only the human project lead may directly alter or update `DESIGN.md`.
+- **`DESIGN.md` Deleted (2026-10-22, spec 129)**:
+  - The repo-root `DESIGN.md` was deleted at the project lead's direction and superseded by the token system above. It is not an authority and must not be recreated or cited as one.
+  - The former "never modify DESIGN.md" immutability clause is void.
 - **Post-PR Vercel Preview Link Protocol**:
   - UI previews are validated directly via Vercel Preview Deployments generated automatically for every Pull Request. All UI components are verified directly within `apps/web`.
   - When a Pull Request is opened or updated, the agent MUST only surface and present the live Vercel preview deployment URL if the PR includes UI changes (e.g. pages, layouts, styles, components in `apps/web`) for interactive user inspection and review prior to requesting merge approval. For non-UI PRs (pure backend, database migrations, devops, or documentation), do not show a preview link.

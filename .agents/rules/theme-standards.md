@@ -1,13 +1,18 @@
 # Theme Standards & Design System Enforcement
 
-**Canonical Authority**: [`apps/web/src/lib/theme.ts`](apps/web/src/lib/theme.ts) & [`apps/web/src/app/globals.css`](apps/web/src/app/globals.css)  
-**System Specification**: [`DESIGN.md`](DESIGN.md)
+**Source of Truth (tokens)**: `apps/web/tokens/` — W3C DTCG JSON (`primitive.json`, `semantic.json`, `component.json`)  
+**Generated Outputs (never hand-edit)**: `apps/web/src/lib/theme.ts` & `apps/web/src/styles/tokens.generated.css`  
+**Legacy Preserved Presets**: `apps/web/src/lib/component-styles.ts` (see §3)
 
 ---
 
-## 0. Absolute Immutability of `DESIGN.md` (Never Modify `DESIGN.md`)
+## 0. The Token System Is the Authority (DESIGN.md deleted 2026-10-22)
 
-> **CRITICAL DIRECTIVE**: AI agents and automated tools MUST NEVER edit, rewrite, reformat, overwrite, or truncate [`DESIGN.md`](DESIGN.md). `DESIGN.md` is permanently frozen as the repository's immutable design system specification. All frontend code, theme configurations, and components MUST strictly conform to `DESIGN.md` via `apps/web/src/lib/theme.ts` and `apps/web/src/app/globals.css`. Only the human project lead may directly edit `DESIGN.md`.
+> **DIRECTIVE (spec 129, Shahzeb's order 2026-10-22)**: The design system lives **in code**, not in a prose document. The token files in `apps/web/tokens/` are the single source of truth for every frontend styling value. `apps/web/src/lib/theme.ts` and `apps/web/src/styles/tokens.generated.css` are **generated** from those tokens by Style Dictionary (`tokens:build`) and must never be hand-edited; CI runs `tokens:check` and fails on any drift between the token source and the committed generated outputs.
+>
+> Historical note: the repo-root `DESIGN.md` ("Binance Precision") was **deleted on 2026-10-22** (spec 129, PR-F1) and superseded by this token system. It is not an authority, must not be recreated, and must not be cited as one. The old "never modify DESIGN.md" immutability clause is void — there is no DESIGN.md.
+
+To change a design value: edit the token JSON in `apps/web/tokens/`, run `pnpm --filter @fbuploadpro/web tokens:build`, and commit the token change **and** the regenerated outputs together.
 
 ---
 
@@ -15,7 +20,7 @@
 
 AI agents and software engineers operating in this workspace MUST follow this non-negotiable directive:
 
-> **ALL visual tokens, colors, borders, typography metrics, spacing units, corner radii, elevation shadows, and status signals MUST be imported and referenced directly from `apps/web/src/lib/theme.ts` (or consumed via CSS variables from `globals.css`). NEVER declare, invent, or hardcode ad-hoc styling literals in component files.**
+> **ALL visual tokens, colors, borders, typography metrics, spacing units, corner radii, elevation shadows, and status signals MUST be imported and referenced directly from `apps/web/src/lib/theme.ts` (or consumed via CSS variables from the generated token CSS). NEVER declare, invent, or hardcode ad-hoc styling literals in component files. Components consume semantic tokens only; primitives in the token JSON are never referenced directly from component code.**
 
 ---
 
@@ -29,7 +34,7 @@ AI agents and software engineers operating in this workspace MUST follow this no
   <button style={{ backgroundColor: '#fad734', color: '#000000' }}>Submit</button>
   <span style={{ color: '#2ebd85' }}>Active</span>
   ```
-* ✅ **MANDATED**: Importing from `PALETTE`, `THEME`, or `COMPONENT_STYLES`:
+* ✅ **MANDATED**: Importing from `PALETTE`, `THEME`, or the legacy presets in `apps/web/src/lib/component-styles.ts` (`COMPONENT_STYLES`, re-exported from `apps/web/src/lib/theme.ts`):
   ```tsx
   // COMPLIANT: Referencing canonical tokens
   import { PALETTE, THEME, COMPONENT_STYLES } from '@/lib/theme';
@@ -45,26 +50,26 @@ AI agents and software engineers operating in this workspace MUST follow this no
 
 ---
 
-### B. Status Indicators & Badges (Permanent Ban on Capsule Pills)
-* ❌ **FORBIDDEN**: Wrapping status text or tags inside rounded capsule pill bubbles:
+### B. Status Indicators (Colour + Icon + Text — spec 129 OD-3)
+* **DECIDED 2026-10-22 (OD-3, research pattern)**: Status is ALWAYS presented as **colour + icon + text** together. State never travels by colour alone (UX Rule 27). Use the `STATUS_SIGNALS` colours and labels alongside an icon and visible text (tags/badges per the UI decision matrix).
+* ❌ **FORBIDDEN**: Colour-only status — a bare coloured dot, or status text coloured with no icon/label pairing:
   ```tsx
-  // VIOLATION: Capsule pill badge bubble
-  <span style={{ backgroundColor: '#e6f4ea', color: '#137333', borderRadius: '9999px', padding: '2px 8px' }}>
-    Active
-  </span>
+  // VIOLATION: Colour alone carries the state
+  <span style={{ width: '6px', height: '6px', borderRadius: '9999px', backgroundColor: '#2ebd85' }} />
   ```
-* ✅ **MANDATED**: Unboxed 6px luminous micro-dots with ambient halos from `STATUS_SIGNALS` or `COMPONENT_STYLES.statusDot`:
+* ✅ **MANDATED**: Colour + icon + text, using `STATUS_SIGNALS` for the colour and label:
   ```tsx
-  // COMPLIANT: Unboxed luminous signal
-  import { STATUS_SIGNALS, COMPONENT_STYLES, THEME } from '@/lib/theme';
+  // COMPLIANT: Colour + icon + text
+  import { STATUS_SIGNALS, THEME } from '@/lib/theme';
 
   <div style={{ display: 'flex', alignItems: 'center', gap: THEME.default.spacing.sm }}>
-    <span style={COMPONENT_STYLES.statusDot('operational')} />
+    <StatusIcon status="operational" color={STATUS_SIGNALS.operational.color} />
     <span style={{ color: THEME.default.text.primary, fontWeight: 600, fontSize: '0.875rem' }}>
       {STATUS_SIGNALS.operational.label}
     </span>
   </div>
   ```
+  The former luminous-micro-dot mandate is **superseded** by this section (OD-3). The legacy `COMPONENT_STYLES.statusDot` preset survives only until its consumers convert to the primitives (deletion tracked in spec 129 T23); do not build new status UI on it.
 
 ---
 
@@ -105,6 +110,8 @@ AI agents and software engineers operating in this workspace MUST follow this no
 
 ## 3. Quick Reference: Token Hierarchy in `apps/web/src/lib/theme.ts`
 
+`apps/web/src/lib/theme.ts` is **generated** from `apps/web/tokens/` — this table describes its export surface; the values themselves live in the token JSON.
+
 | Token Group | Export Name | Sample Keys | Usage |
 | :--- | :--- | :--- | :--- |
 | **Primitives** | `PALETTE` | `primary`, `accent1`, `accent2`, `accent3`, `accent4`, `background`, `text`, `neutral` | Raw 8-color palette anchors |
@@ -112,11 +119,15 @@ AI agents and software engineers operating in this workspace MUST follow this no
 | **Spacing** | `SPACING` | `xs` (4px), `sm` (8px), `md` (12px), `lg` (16px), `xl` (24px), `xxl` (32px), `xxxl` (48px) | Padding, margin, gap |
 | **Radii** | `RADII` | `xs` (4px), `sm` (6px), `md` (8px), `full` (9999px) | Corner curvature |
 | **Typography** | `TYPOGRAPHY` | `fontFamily`, `tabularNums`, `tracking.*`, `weights.*` | Fonts, letter-spacing, numbers |
-| **Status** | `STATUS_SIGNALS` | `operational`, `queued`, `critical`, `idle` | 6px luminous signals & labels |
-| **Component Presets** | `COMPONENT_STYLES` | `primaryButton`, `secondaryButton()`, `input()`, `card()`, `statusDot()` | Reusable component style objects |
+| **Status** | `STATUS_SIGNALS` | `operational`, `queued`, `critical`, `idle` | Status colours & labels — always presented as colour + icon + text (§2.B) |
+| **Scales** | `MOTION`, `Z_INDEX`, `BREAKPOINTS` | durations/easings, named z steps, one breakpoint set | Motion, stacking, responsive boundaries |
+| **Component Presets (legacy)** | `COMPONENT_STYLES` | `primaryButton`, `secondaryButton()`, `input()`, `card()`, `statusDot()` | Preserved verbatim in `apps/web/src/lib/component-styles.ts`; superseded by the `components/shared/ui/` primitives and deleted preset-by-preset as consumers convert (spec 129 T23) |
 
 ---
 
-## 4. Verification & Linting Gate
+## 4. Verification & Enforcement Gate
 
-Any pull request or code review that introduces hardcoded color literals (e.g., regex `#[0-9a-fA-F]{3,8}`) in component JSX/TSX files outside `theme.ts` violates repository quality standards and will be blocked.
+Enforcement is mechanical, not prose (spec 129 §5.4):
+
+- **Token parity**: CI runs `tokens:check` (regenerate → diff → fail). A hand-edited generated file, or a token edit without regeneration, is a red build.
+- **Literal ban**: Any pull request or code review that introduces hardcoded color literals (e.g., regex `#[0-9a-fA-F]{3,8}`) in component JSX/TSX files outside the token source and the generated files violates repository quality standards and will be blocked (guardrail/lint wiring: PR-F1 parity + PR-F2 enforcement).
