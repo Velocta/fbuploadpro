@@ -1,11 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { isKnownPlatform } from '@/lib/connect/registry';
-import { extractExternalAccountId } from '@/lib/connect/platform-callback';
-import {
-  markSocialAccountRevoked,
-  type ConnectDbClient,
-} from '@/lib/connect/persist';
-import { resolveConnectDbClient } from '@/lib/connect/session';
+import { processPlatformRevocation } from '@/lib/connect/platform-callback';
+import type { ConnectDbClient } from '@/lib/connect/persist';
 
 /**
  * POST /api/connect/[platform]/deauthorize — stable public address a
@@ -22,34 +18,13 @@ export async function handleConnectDeauthorize(
   if (!isKnownPlatform(platformParam)) {
     return NextResponse.json({ error: 'Unknown platform' }, { status: 404 });
   }
-  const platform = platformParam;
 
-  const externalAccountId = await extractExternalAccountId(request);
-  console.info('[connect/deauthorize] Received deauthorization notice', {
-    platform,
-    identified: Boolean(externalAccountId),
-  });
-
-  if (externalAccountId) {
-    const client = resolveConnectDbClient(dbClient);
-    if (client) {
-      const { updated } = await markSocialAccountRevoked(
-        client,
-        platform,
-        externalAccountId
-      );
-      console.info('[connect/deauthorize] Accounts marked revoked', {
-        platform,
-        updated,
-      });
-    } else {
-      console.error(
-        '[connect/deauthorize] No database client available to record revocation',
-        { platform }
-      );
-    }
-  }
-
+  await processPlatformRevocation(
+    request,
+    platformParam,
+    'deauthorize',
+    dbClient
+  );
   return NextResponse.json({ received: true });
 }
 

@@ -9,9 +9,25 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import {
   ByocGate,
+  checkByocCredentials,
   isByocGateBlocking,
   type ByocGateStatus,
 } from '@/components/connect/byoc-gate';
+import {
+  connectNoticeMessage,
+  mapProviderDenial,
+} from '@/lib/connect/errors';
+import {
+  getPlatformConnectConfig,
+  hasPlatformConnectConfig,
+  isByocPlatform,
+  listRegisteredPlatforms,
+  PLATFORM_LABELS,
+} from '@/lib/connect/registry';
+import {
+  socialStatusLabel,
+  socialStatusSignal,
+} from '@/components/accounts/social-accounts-list';
 import {
   DestinationPicker,
   destinationSubtitle,
@@ -136,6 +152,112 @@ describe('ByocGate rendering', () => {
       </ByocGate>
     );
     expect(html).not.toMatch(/oauth|scope|endpoint/i);
+  });
+});
+
+describe('checkByocCredentials', () => {
+  function fakeResponse(ok: boolean, body: unknown): Response {
+    return {
+      ok,
+      json: async () => body,
+    } as Response;
+  }
+
+  it('reports credentials present when the route returns an app ID and a saved secret', async () => {
+    const fetcher = async () =>
+      fakeResponse(true, { appId: 'app-123', hasSecret: true });
+    const status = await checkByocCredentials(
+      'acme',
+      'instagram',
+      fetcher as typeof fetch
+    );
+    expect(status).toEqual({
+      isLoading: false,
+      hasCredentials: true,
+      error: null,
+    });
+  });
+
+  it('reports credentials missing when the secret has not been saved', async () => {
+    const fetcher = async () =>
+      fakeResponse(true, { appId: 'app-123', hasSecret: false });
+    const status = await checkByocCredentials(
+      'acme',
+      'threads',
+      fetcher as typeof fetch
+    );
+    expect(status.hasCredentials).toBe(false);
+    expect(status.error).toBeNull();
+    expect(isByocGateBlocking(status)).toBe(true);
+  });
+
+  it('reports an error status on a failed request or a thrown fetch', async () => {
+    const failing = async () => fakeResponse(false, {});
+    const failedStatus = await checkByocCredentials(
+      'acme',
+      'instagram',
+      failing as typeof fetch
+    );
+    expect(failedStatus.error).toBeTruthy();
+    expect(isByocGateBlocking(failedStatus)).toBe(false);
+
+    const throwing = async () => {
+      throw new Error('offline');
+    };
+    const thrownStatus = await checkByocCredentials(
+      'acme',
+      'instagram',
+      throwing as unknown as typeof fetch
+    );
+    expect(thrownStatus.error).toBeTruthy();
+  });
+
+  it('asks the frozen Part A credentials route for the platform', async () => {
+    let requestedUrl = '';
+    const fetcher = async (input: RequestInfo | URL) => {
+      requestedUrl = String(input);
+      return fakeResponse(true, { appId: null, hasSecret: false });
+    };
+    await checkByocCredentials('acme', 'threads', fetcher as typeof fetch);
+    expect(requestedUrl).toBe(
+      '/api/tenant/acme/settings/platform-credentials/threads'
+    );
+  });
+});
+
+describe('Connect helpers', () => {
+  it('maps provider denials to plain-language notice codes', () => {
+    expect(mapProviderDenial('access_denied')).toBe('denied');
+    expect(mapProviderDenial('user_cancelled')).toBe('denied');
+    expect(mapProviderDenial('server_error')).toBe('connect_failed');
+    expect(mapProviderDenial(null)).toBe('connect_failed');
+    expect(connectNoticeMessage('denied')).toBe(
+      'Connection canceled. No changes were made.'
+    );
+    expect(connectNoticeMessage('something-unknown')).toBe(
+      connectNoticeMessage('connect_failed')
+    );
+  });
+
+  it('knows the BYOC platforms and labels every platform', () => {
+    expect(isByocPlatform('instagram')).toBe(true);
+    expect(isByocPlatform('threads')).toBe(true);
+    expect(isByocPlatform('youtube')).toBe(false);
+    expect(isByocPlatform('x')).toBe(false);
+    expect(PLATFORM_LABELS.tiktok).toBe('TikTok');
+    expect(hasPlatformConnectConfig('myspace')).toBe(false);
+    expect(getPlatformConnectConfig('myspace')).toBeNull();
+    expect(Array.isArray(listRegisteredPlatforms())).toBe(true);
+  });
+
+  it('labels social account and destination statuses in plain language', () => {
+    expect(socialStatusSignal('active')).toBe('operational');
+    expect(socialStatusSignal('expired')).toBe('queued');
+    expect(socialStatusSignal('revoked')).toBe('critical');
+    expect(socialStatusSignal('disconnected')).toBe('idle');
+    expect(socialStatusLabel('active')).toBe('Connected');
+    expect(socialStatusLabel('expired')).toContain('reconnect');
+    expect(socialStatusLabel('disconnected')).toBe('Disconnected');
   });
 });
 

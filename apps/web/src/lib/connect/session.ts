@@ -3,7 +3,7 @@
  * same pattern as the tenant settings routes (fbup_session cookie,
  * verifySessionToken, canAccessTenant).
  */
-import type { NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import {
   canAccessTenant,
   getSessionSecret,
@@ -11,6 +11,7 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { ConnectDbClient } from './persist';
 
 export async function extractConnectSession(
@@ -37,4 +38,68 @@ export function sessionCanAccessTenant(
   subdomain: string
 ): boolean {
   return canAccessTenant(session, subdomain).allowed;
+}
+
+export type SocialRouteContext =
+  | {
+      session: SessionPayload;
+      client: ConnectDbClient;
+      workspaceId: string;
+      errorResponse?: never;
+    }
+  | { errorResponse: NextResponse; session?: never; client?: never; workspaceId?: never };
+
+/**
+ * Shared guard for the tenant social-accounts routes: session, tenant
+ * access, database client, and workspace resolution in one place.
+ */
+export async function resolveSocialRouteContext(
+  request: NextRequest,
+  subdomain: string,
+  dbClient?: ConnectDbClient
+): Promise<SocialRouteContext> {
+  const session = await extractConnectSession(request);
+  if (!session) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      ),
+    };
+  }
+  if (!sessionCanAccessTenant(session, subdomain)) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      ),
+    };
+  }
+
+  const client = resolveConnectDbClient(dbClient);
+  if (!client) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Database service unavailable' },
+        { status: 503 }
+      ),
+    };
+  }
+
+  const workspaceId = await resolveTenantWorkspaceId(
+    client,
+    subdomain,
+    session.userId,
+    session.role
+  );
+  if (!workspaceId) {
+    return {
+      errorResponse: NextResponse.json(
+        { error: 'Workspace not found' },
+        { status: 404 }
+      ),
+    };
+  }
+
+  return { session, client, workspaceId };
 }

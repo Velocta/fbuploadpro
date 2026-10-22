@@ -64,50 +64,15 @@ export interface SocialAccountsListProps {
   subdomain: string;
 }
 
-export function SocialAccountsList({
+export interface SocialAccountsListViewProps {
+  subdomain: string;
+  accounts: SocialAccountItem[];
+}
+
+export function SocialAccountsListView({
   subdomain,
-}: Readonly<SocialAccountsListProps>) {
-  const [accounts, setAccounts] = useState<SocialAccountItem[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    if (!subdomain) return;
-    let isMounted = true;
-    async function load() {
-      try {
-        const res = await fetch(`/api/tenant/${subdomain}/accounts/social`);
-        if (res.ok) {
-          const data = (await res.json()) as {
-            accounts?: SocialAccountItem[];
-          };
-          if (isMounted) {
-            setAccounts(Array.isArray(data.accounts) ? data.accounts : []);
-          }
-        } else {
-          console.warn(
-            '[social-accounts-list] Failed to load connected accounts:',
-            res.status
-          );
-        }
-      } catch (err) {
-        console.warn(
-          '[social-accounts-list] Failed to load connected accounts:',
-          err
-        );
-      } finally {
-        if (isMounted) setIsLoaded(true);
-      }
-    }
-    void load();
-    return () => {
-      isMounted = false;
-    };
-  }, [subdomain]);
-
-  if (!isLoaded || accounts.length === 0) {
-    return null;
-  }
-
+  accounts,
+}: Readonly<SocialAccountsListViewProps>) {
   return (
     <section
       data-testid="social-accounts-list"
@@ -242,4 +207,51 @@ export function SocialAccountsList({
       </div>
     </section>
   );
+}
+
+export function SocialAccountsList({
+  subdomain,
+}: Readonly<SocialAccountsListProps>) {
+  const [accounts, setAccounts] = useState<SocialAccountItem[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!subdomain) return;
+    let isMounted = true;
+    async function load() {
+      try {
+        const res = await fetch(`/api/tenant/${subdomain}/accounts/social`);
+        if (res.ok) {
+          const data = (await res.json()) as {
+            accounts?: SocialAccountItem[];
+          };
+          if (isMounted) {
+            setAccounts(Array.isArray(data.accounts) ? data.accounts : []);
+          }
+        } else {
+          console.warn(
+            '[social-accounts-list] Failed to load connected accounts:',
+            res.status
+          );
+        }
+      } catch (err) {
+        console.warn(
+          '[social-accounts-list] Failed to load connected accounts:',
+          err
+        );
+      } finally {
+        if (isMounted) setIsLoaded(true);
+      }
+    }
+    void load();
+    return () => {
+      isMounted = false;
+    };
+  }, [subdomain]);
+
+  if (!isLoaded || accounts.length === 0) {
+    return null;
+  }
+
+  return <SocialAccountsListView subdomain={subdomain} accounts={accounts} />;
 }

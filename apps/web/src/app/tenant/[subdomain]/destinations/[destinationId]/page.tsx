@@ -44,6 +44,84 @@ interface DestinationDetail {
   };
 }
 
+export function DestinationSummary({
+  destination,
+}: Readonly<{ destination: DestinationDetail }>) {
+  return (
+    <div style={{ marginTop: SPACING.lg }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.md,
+          flexWrap: 'wrap',
+        }}
+      >
+        <h1
+          data-testid="destination-name"
+          style={{
+            margin: 0,
+            fontSize: '1.5rem',
+            fontWeight: TYPOGRAPHY.weights.bold,
+            letterSpacing: TYPOGRAPHY.tracking.h1,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          {destination.name}
+        </h1>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: SPACING.xs,
+            fontSize: '0.8125rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          <span
+            style={COMPONENT_STYLES.statusDot(
+              socialStatusSignal(destination.status)
+            )}
+          />
+          {socialStatusLabel(destination.status)}
+        </span>
+      </div>
+
+      <div
+        style={{
+          marginTop: SPACING.md,
+          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
+          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          borderRadius: RADII.md,
+          padding: `${SPACING.md} ${SPACING.lg}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: SPACING.xs,
+          fontSize: '0.875rem',
+          color: `var(--text-main, ${THEME.default.text.primary})`,
+        }}
+      >
+        <p style={{ margin: 0 }}>
+          Platform:{' '}
+          {PLATFORM_LABELS[destination.platform] ?? destination.platform}
+        </p>
+        <p style={{ margin: 0 }}>
+          Connected through: {destination.account.displayName}
+        </p>
+        {destination.handle && (
+          <p style={{ margin: 0 }}>
+            Handle:{' '}
+            {destination.handle.startsWith('@')
+              ? destination.handle
+              : `@${destination.handle}`}
+          </p>
+        )}
+        <p style={{ margin: 0 }}>Posting timezone: {destination.timezone}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function DestinationSectionPage() {
   const params = useParams();
   const subdomain = (params?.subdomain as string) || '';
@@ -142,77 +220,7 @@ export default function DestinationSectionPage() {
       )}
 
       {!isLoading && destination && (
-        <div style={{ marginTop: SPACING.lg }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.md,
-              flexWrap: 'wrap',
-            }}
-          >
-            <h1
-              data-testid="destination-name"
-              style={{
-                margin: 0,
-                fontSize: '1.5rem',
-                fontWeight: TYPOGRAPHY.weights.bold,
-                letterSpacing: TYPOGRAPHY.tracking.h1,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              {destination.name}
-            </h1>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
-                fontSize: '0.8125rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              }}
-            >
-              <span
-                style={COMPONENT_STYLES.statusDot(
-                  socialStatusSignal(destination.status)
-                )}
-              />
-              {socialStatusLabel(destination.status)}
-            </span>
-          </div>
-
-          <div
-            style={{
-              marginTop: SPACING.md,
-              backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.md,
-              padding: `${SPACING.md} ${SPACING.lg}`,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.xs,
-              fontSize: '0.875rem',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            <p style={{ margin: 0 }}>
-              Platform:{' '}
-              {PLATFORM_LABELS[destination.platform] ?? destination.platform}
-            </p>
-            <p style={{ margin: 0 }}>
-              Connected through: {destination.account.displayName}
-            </p>
-            {destination.handle && (
-              <p style={{ margin: 0 }}>
-                Handle:{' '}
-                {destination.handle.startsWith('@')
-                  ? destination.handle
-                  : `@${destination.handle}`}
-              </p>
-            )}
-            <p style={{ margin: 0 }}>Posting timezone: {destination.timezone}</p>
-          </div>
-        </div>
+        <DestinationSummary destination={destination} />
       )}
     </div>
   );

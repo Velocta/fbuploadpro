@@ -1,14 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import {
   fetchSocialAccountsWithDestinations,
   type ConnectDbClient,
 } from '@/lib/connect/persist';
-import {
-  extractConnectSession,
-  resolveConnectDbClient,
-  sessionCanAccessTenant,
-} from '@/lib/connect/session';
+import { resolveSocialRouteContext } from '@/lib/connect/session';
 
 /**
  * GET /api/tenant/[subdomain]/accounts/social — the unified Accounts list
@@ -20,39 +15,15 @@ export async function handleListSocialAccounts(
   subdomain: string,
   dbClient?: ConnectDbClient
 ): Promise<NextResponse> {
-  const session = await extractConnectSession(request);
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  if (!sessionCanAccessTenant(session, subdomain)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
-  const client = resolveConnectDbClient(dbClient);
-  if (!client) {
-    return NextResponse.json(
-      { error: 'Database service unavailable' },
-      { status: 503 }
-    );
-  }
-
-  const workspaceId = await resolveTenantWorkspaceId(
-    client,
-    subdomain,
-    session.userId,
-    session.role
-  );
-  if (!workspaceId) {
-    return NextResponse.json(
-      { error: 'Workspace not found' },
-      { status: 404 }
-    );
+  const context = await resolveSocialRouteContext(request, subdomain, dbClient);
+  if (context.errorResponse) {
+    return context.errorResponse;
   }
 
   try {
     const accounts = await fetchSocialAccountsWithDestinations(
-      client,
-      workspaceId
+      context.client,
+      context.workspaceId
     );
     return NextResponse.json({ accounts });
   } catch (err) {

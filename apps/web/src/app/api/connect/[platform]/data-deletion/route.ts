@@ -1,11 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { isKnownPlatform } from '@/lib/connect/registry';
-import { extractExternalAccountId } from '@/lib/connect/platform-callback';
-import {
-  markSocialAccountRevoked,
-  type ConnectDbClient,
-} from '@/lib/connect/persist';
-import { resolveConnectDbClient } from '@/lib/connect/session';
+import { processPlatformRevocation } from '@/lib/connect/platform-callback';
+import type { ConnectDbClient } from '@/lib/connect/persist';
 
 /**
  * POST /api/connect/[platform]/data-deletion — stable public address a
@@ -23,38 +19,22 @@ export async function handleConnectDataDeletion(
   if (!isKnownPlatform(platformParam)) {
     return NextResponse.json({ error: 'Unknown platform' }, { status: 404 });
   }
-  const platform = platformParam;
 
-  const externalAccountId = await extractExternalAccountId(request);
   const confirmationCode = crypto
     .randomUUID()
     .replaceAll('-', '')
     .slice(0, 16);
-  console.info('[connect/data-deletion] Received data deletion request', {
-    platform,
+  const { externalAccountId } = await processPlatformRevocation(
+    request,
+    platformParam,
+    'data-deletion',
+    dbClient
+  );
+  console.info('[connect/data-deletion] Confirmation issued', {
+    platform: platformParam,
     identified: Boolean(externalAccountId),
     confirmationCode,
   });
-
-  if (externalAccountId) {
-    const client = resolveConnectDbClient(dbClient);
-    if (client) {
-      const { updated } = await markSocialAccountRevoked(
-        client,
-        platform,
-        externalAccountId
-      );
-      console.info('[connect/data-deletion] Accounts marked revoked', {
-        platform,
-        updated,
-      });
-    } else {
-      console.error(
-        '[connect/data-deletion] No database client available to record revocation',
-        { platform }
-      );
-    }
-  }
 
   const statusUrl = new URL('/accounts', request.url);
   return NextResponse.json({

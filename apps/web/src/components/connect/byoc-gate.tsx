@@ -142,6 +142,45 @@ export function ByocGatePrompt({
   );
 }
 
+/**
+ * Checks the workspace's app details for a platform through Part A's
+ * credentials route. A failed request is reported as an error status —
+ * callers fail open on it (see isByocGateBlocking).
+ */
+export async function checkByocCredentials(
+  subdomain: string,
+  platform: ByocGatePlatform,
+  fetcher: typeof fetch = fetch
+): Promise<ByocGateStatus> {
+  try {
+    const res = await fetcher(
+      `/api/tenant/${subdomain}/settings/platform-credentials/${platform}`
+    );
+    if (!res.ok) {
+      return {
+        isLoading: false,
+        hasCredentials: false,
+        error: "Couldn't verify your app details just now.",
+      };
+    }
+    const data = (await res.json()) as {
+      hasSecret?: boolean;
+      appId?: string | null;
+    };
+    return {
+      isLoading: false,
+      hasCredentials: Boolean(data.appId && data.hasSecret),
+      error: null,
+    };
+  } catch {
+    return {
+      isLoading: false,
+      hasCredentials: false,
+      error: "Couldn't verify your app details just now.",
+    };
+  }
+}
+
 export interface ByocGateProps {
   platform: ByocGatePlatform;
   platformName: string;
@@ -167,40 +206,9 @@ export function ByocGate({
   useEffect(() => {
     if (initialStatus || !subdomain) return;
     let isMounted = true;
-    async function checkCredentials() {
-      try {
-        const res = await fetch(
-          `/api/tenant/${subdomain}/settings/platform-credentials/${platform}`
-        );
-        if (!isMounted) return;
-        if (res.ok) {
-          const data = (await res.json()) as {
-            hasSecret?: boolean;
-            appId?: string | null;
-          };
-          setStatus({
-            isLoading: false,
-            hasCredentials: Boolean(data.appId && data.hasSecret),
-            error: null,
-          });
-        } else {
-          // Fail open: a failed check never blocks the connect action.
-          setStatus({
-            isLoading: false,
-            hasCredentials: false,
-            error: "Couldn't verify your app details just now.",
-          });
-        }
-      } catch {
-        if (!isMounted) return;
-        setStatus({
-          isLoading: false,
-          hasCredentials: false,
-          error: "Couldn't verify your app details just now.",
-        });
-      }
-    }
-    void checkCredentials();
+    void checkByocCredentials(subdomain, platform).then((result) => {
+      if (isMounted) setStatus(result);
+    });
     return () => {
       isMounted = false;
     };

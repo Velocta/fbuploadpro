@@ -5,6 +5,12 @@
  * one is present. Platform-specific refinements belong to spec 124+.
  */
 import type { NextRequest } from 'next/server';
+import type { Platform } from '@fbuploadpro/contracts';
+import {
+  markSocialAccountRevoked,
+  type ConnectDbClient,
+} from './persist';
+import { resolveConnectDbClient } from './session';
 
 function decodeSignedRequestPayload(
   signedRequest: string
@@ -38,6 +44,47 @@ function pickAccountId(
     if (typeof value === 'number') return String(value);
   }
   return null;
+}
+
+/**
+ * Shared body of the deauthorize / data-deletion callbacks: identify the
+ * account from the request when possible and mark its rows revoked.
+ */
+export async function processPlatformRevocation(
+  request: NextRequest,
+  platform: Platform,
+  logLabel: string,
+  dbClient?: ConnectDbClient
+): Promise<{ externalAccountId: string | null; updated: number }> {
+  const externalAccountId = await extractExternalAccountId(request);
+  console.info(`[connect/${logLabel}] Received platform notice`, {
+    platform,
+    identified: Boolean(externalAccountId),
+  });
+
+  if (!externalAccountId) {
+    return { externalAccountId: null, updated: 0 };
+  }
+
+  const client = resolveConnectDbClient(dbClient);
+  if (!client) {
+    console.error(
+      `[connect/${logLabel}] No database client available to record revocation`,
+      { platform }
+    );
+    return { externalAccountId, updated: 0 };
+  }
+
+  const { updated } = await markSocialAccountRevoked(
+    client,
+    platform,
+    externalAccountId
+  );
+  console.info(`[connect/${logLabel}] Accounts marked revoked`, {
+    platform,
+    updated,
+  });
+  return { externalAccountId, updated };
 }
 
 export async function extractExternalAccountId(

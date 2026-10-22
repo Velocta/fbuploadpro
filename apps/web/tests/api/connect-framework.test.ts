@@ -14,15 +14,21 @@ import {
   type DiscoveredDestination,
   type ExchangedAccount,
 } from '@/lib/connect/registry';
-import { verifyConnectState } from '@/lib/connect/state';
+import {
+  createConnectStatePayload,
+  signConnectState,
+  signPendingDestinations,
+  verifyConnectState,
+} from '@/lib/connect/state';
 import { CONNECT_NOTICE_MESSAGES } from '@/lib/connect/errors';
-import { handleConnectInitiate } from '@/app/api/connect/[platform]/route';
-import { handleConnectCallback } from '@/app/api/connect/[platform]/callback/route';
-import { handleConnectComplete } from '@/app/api/connect/[platform]/complete/route';
-import { handleConnectDeauthorize } from '@/app/api/connect/[platform]/deauthorize/route';
-import { handleConnectDataDeletion } from '@/app/api/connect/[platform]/data-deletion/route';
-import { handleListSocialAccounts } from '@/app/api/tenant/[subdomain]/accounts/social/route';
-import { handleGetSocialDestination } from '@/app/api/tenant/[subdomain]/accounts/social/[destinationId]/route';
+import { handleConnectInitiate, GET as initiateGET } from '@/app/api/connect/[platform]/route';
+import { handleConnectCallback, GET as callbackGET } from '@/app/api/connect/[platform]/callback/route';
+import { handleConnectComplete, POST as completePOST } from '@/app/api/connect/[platform]/complete/route';
+import { handleConnectDeauthorize, POST as deauthorizePOST } from '@/app/api/connect/[platform]/deauthorize/route';
+import { handleConnectDataDeletion, POST as dataDeletionPOST } from '@/app/api/connect/[platform]/data-deletion/route';
+import { handleListSocialAccounts, GET as socialListGET } from '@/app/api/tenant/[subdomain]/accounts/social/route';
+import { handleGetSocialDestination, GET as socialDetailGET } from '@/app/api/tenant/[subdomain]/accounts/social/[destinationId]/route';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const TEST_SECRET = 'test_session_secret_at_least_32_chars_long_value';
 const TEST_ENCRYPTION_KEY =
@@ -220,6 +226,31 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
         { externalDestinationId: 'x-dest-1', name: 'Fixture X', handle: 'fixturex' },
       ],
     });
+    registerPlatformConnectConfig({
+      platform: 'threads',
+      authorizeUrl: 'https://fixture-threads.example/authorize',
+      clientIdSource: 'byoc',
+      scopes: ['threads_basic'],
+      usePkce: false,
+      destinationMode: 'single-confirm',
+      exchangeCode: async () => {
+        throw new Error('fixture exchange failure');
+      },
+      fetchDestinations: async () => [],
+    });
+    registerPlatformConnectConfig({
+      platform: 'tiktok',
+      authorizeUrl: 'https://fixture-tiktok.example/authorize',
+      clientIdSource: 'global',
+      scopes: ['user.info.basic'],
+      usePkce: false,
+      destinationMode: 'picker',
+      exchangeCode: async () => ({
+        ...FIXTURE_ACCOUNT,
+        externalAccountId: 'ext-tt-1',
+      }),
+      fetchDestinations: async () => [],
+    });
   });
 
   beforeEach(async () => {
@@ -229,6 +260,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
     process.env.CONNECT_X_CLIENT_ID = 'x_global_client_id';
+    process.env.CONNECT_TIKTOK_CLIENT_ID = 'tiktok_global_client_id';
 
     db = new FakeDb();
     dbClient = db as unknown as DatabaseClient;
@@ -396,6 +428,212 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     }
   });
 
+  async function manualState(platform: 'instagram' | 'threads' | 'tiktok' | 'x'): Promise<string> {
+    const payload = createConnectStatePayload({
+      workspaceId,
+      tenantSubdomain: subdomain,
+      userId,
+      platform,
+    });
+    return signConnectState(payload, TEST_SECRET);
+  }
+
+  it('completes a PKCE flow end to end when the verifier cookie is present', async () => {
+    const initReq = new NextRequest(
+      `http://localhost:3000/api/connect/x?subdomain=${subdomain}`,
+      { headers: { cookie: sessionCookie } }
+    );
+    const initRes = await handleConnectInitiate(initReq, 'x', dbClient);
+    const state = new URL(initRes.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    const pkce = cookieValue(initRes, 'fbup_connect_pkce');
+    expect(pkce).toBeTruthy();
+
+    const cbReq = new NextRequest(
+      `http://localhost:3000/api/connect/x/callback?code=x_code&state=${encodeURIComponent(state)}`,
+      { headers: { cookie: `fbup_connect_pkce=${encodeURIComponent(pkce ?? '')}` } }
+    );
+    const cbRes = await handleConnectCallback(cbReq, 'x', dbClient);
+    expect(cbRes.status).toBe(307);
+    expect(cbRes.headers.get('location')).toContain(`/tenant/${subdomain}/connect/x`);
+    expect(cookieValue(cbRes, 'fbup_connect_pending')).toBeTruthy();
+    const row = [...db.accounts.values()].find((a) => a.platform === 'x');
+    expect(row?.external_account_id).toBe('ext-x-1');
+  });
+
+  it('rejects a PKCE callback when the verifier cookie is missing', async () => {
+    const initReq = new NextRequest(
+      `http://localhost:3000/api/connect/x?subdomain=${subdomain}`,
+      { headers: { cookie: sessionCookie } }
+    );
+    const initRes = await handleConnectInitiate(initReq, 'x', dbClient);
+    const state = new URL(initRes.headers.get('location') ?? '').searchParams.get('state') ?? '';
+
+    const cbReq = new NextRequest(
+      `http://localhost:3000/api/connect/x/callback?code=x_code&state=${encodeURIComponent(state)}`
+    );
+    const cbRes = await handleConnectCallback(cbReq, 'x', dbClient);
+    expect(cbRes.headers.get('location')).toContain('notice=expired_link');
+    expect(db.accounts.size).toBe(0);
+  });
+
+  it('surfaces a plain-language failure when the code exchange fails', async () => {
+    db.credentials.set('threads', {
+      client_id: 'fixture_threads_app_id',
+      encrypted_client_secret: await encryptToken('fixture_threads_secret', TEST_ENCRYPTION_KEY),
+    });
+    const state = await manualState('threads');
+    const req = new NextRequest(
+      `http://localhost:3000/api/connect/threads/callback?code=abc&state=${encodeURIComponent(state)}`
+    );
+    const res = await handleConnectCallback(req, 'threads', dbClient);
+    expect(res.headers.get('location')).toContain('notice=connect_failed');
+    expect(db.accounts.size).toBe(0);
+  });
+
+  it('surfaces nothing_found when the platform returns no destinations', async () => {
+    const state = await manualState('tiktok');
+    const req = new NextRequest(
+      `http://localhost:3000/api/connect/tiktok/callback?code=abc&state=${encodeURIComponent(state)}`
+    );
+    const res = await handleConnectCallback(req, 'tiktok', dbClient);
+    expect(res.headers.get('location')).toContain('notice=nothing_found');
+  });
+
+  it('asks for credentials first when the workspace has none saved at callback time', async () => {
+    db.credentials.delete('instagram');
+    const state = await manualState('instagram');
+    const req = new NextRequest(
+      `http://localhost:3000/api/connect/instagram/callback?code=abc&state=${encodeURIComponent(state)}`
+    );
+    const res = await handleConnectCallback(req, 'instagram', dbClient);
+    expect(res.headers.get('location')).toContain('notice=credentials_required');
+  });
+
+  it('rejects a callback whose state belongs to a different platform', async () => {
+    const { state } = await initiateInstagram();
+    const req = new NextRequest(
+      `http://localhost:3000/api/connect/threads/callback?code=abc&state=${encodeURIComponent(state)}`
+    );
+    const res = await handleConnectCallback(req, 'threads', dbClient);
+    expect(res.headers.get('location')).toContain('notice=expired_link');
+  });
+
+  it('reports a missing reply when the callback has no code', async () => {
+    const { state } = await initiateInstagram();
+    const req = new NextRequest(
+      `http://localhost:3000/api/connect/instagram/callback?state=${encodeURIComponent(state)}`
+    );
+    const res = await handleConnectCallback(req, 'instagram', dbClient);
+    expect(res.headers.get('location')).toContain('notice=missing_reply');
+  });
+
+  it('initiate guards: unknown platform, unregistered platform, forbidden tenant, missing global app', async () => {
+    const unknownRes = await handleConnectInitiate(
+      new NextRequest(`http://localhost:3000/api/connect/myspace?subdomain=${subdomain}`, {
+        headers: { cookie: sessionCookie },
+      }),
+      'myspace',
+      dbClient
+    );
+    expect(unknownRes.headers.get('location')).toContain('error=connect_failed');
+
+    const unregisteredRes = await handleConnectInitiate(
+      new NextRequest(`http://localhost:3000/api/connect/facebook?subdomain=${subdomain}`, {
+        headers: { cookie: sessionCookie },
+      }),
+      'facebook',
+      dbClient
+    );
+    expect(unregisteredRes.headers.get('location')).toContain('error=connect_failed');
+
+    const forbiddenRes = await handleConnectInitiate(
+      new NextRequest('http://localhost:3000/api/connect/instagram?subdomain=other-tenant', {
+        headers: { cookie: sessionCookie },
+      }),
+      'instagram',
+      dbClient
+    );
+    expect(forbiddenRes.status).toBe(403);
+
+    delete process.env.CONNECT_X_CLIENT_ID;
+    const noGlobalRes = await handleConnectInitiate(
+      new NextRequest(`http://localhost:3000/api/connect/x?subdomain=${subdomain}`, {
+        headers: { cookie: sessionCookie },
+      }),
+      'x',
+      dbClient
+    );
+    expect(noGlobalRes.headers.get('location')).toContain('error=connect_failed');
+  });
+
+  it('initiate sends BYOC platforms without saved details to Settings first', async () => {
+    db.credentials.delete('instagram');
+    const res = await handleConnectInitiate(
+      new NextRequest(`http://localhost:3000/api/connect/instagram?subdomain=${subdomain}`, {
+        headers: { cookie: sessionCookie },
+      }),
+      'instagram',
+      dbClient
+    );
+    const location = res.headers.get('location') ?? '';
+    expect(location).toContain('/settings');
+    expect(location).toContain('error=credentials_required');
+  });
+
+  it('complete rejects a pending flow for another tenant and an empty pick', async () => {
+    const foreignPending = await signPendingDestinations(
+      {
+        accountId: 'acct-foreign',
+        workspaceId,
+        tenantSubdomain: 'other-tenant',
+        platform: 'instagram',
+        destinations: FIXTURE_DESTINATIONS,
+        exp: Math.floor(Date.now() / 1000) + 900,
+      },
+      TEST_SECRET
+    );
+    const foreignRes = await handleConnectComplete(
+      new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
+        method: 'POST',
+        headers: {
+          cookie: `${sessionCookie}; fbup_connect_pending=${foreignPending}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ destinationIds: ['dest-1001'] }),
+      }),
+      'instagram',
+      dbClient
+    );
+    expect(foreignRes.status).toBe(403);
+
+    const { state } = await initiateInstagram();
+    const callbackRes = await runCallback(state);
+    const pending = cookieValue(callbackRes, 'fbup_connect_pending');
+    const emptyRes = await handleConnectComplete(
+      new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
+        method: 'POST',
+        headers: {
+          cookie: `${sessionCookie}; fbup_connect_pending=${encodeURIComponent(pending ?? '')}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ destinationIds: [] }),
+      }),
+      'instagram',
+      dbClient
+    );
+    expect(emptyRes.status).toBe(400);
+  });
+
+  it('complete rejects an expired or missing pending cookie', async () => {
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
+      method: 'POST',
+      headers: { cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ destinationIds: ['dest-1001'] }),
+    });
+    const res = await handleConnectComplete(req, 'instagram', dbClient);
+    expect(res.status).toBe(410);
+  });
+
   it('deauthorize marks the matching account revoked', async () => {
     const { state } = await initiateInstagram();
     await runCallback(state);
@@ -517,6 +755,106 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     expect(res.status).toBe(401);
   });
 
+  it('deauthorize identifies the account from a Meta-style signed_request form post', async () => {
+    const { state } = await initiateInstagram();
+    await runCallback(state);
+    expect([...db.accounts.values()][0].status).toBe('active');
+
+    const payloadJson = JSON.stringify({ user_id: 'ext-acct-1', algorithm: 'HMAC-SHA256' });
+    const payloadB64 = Buffer.from(payloadJson)
+      .toString('base64')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '');
+    const form = new URLSearchParams({ signed_request: `fakesig.${payloadB64}` });
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+    const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
+    expect(res.status).toBe(200);
+    expect([...db.accounts.values()][0].status).toBe('revoked');
+  });
+
+  it('deauthorize without an identifiable account still answers 200 and changes nothing', async () => {
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ unrelated: true }),
+    });
+    const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { received: boolean };
+    expect(data.received).toBe(true);
+  });
+
+  it('rejects unknown platforms on the public callbacks', async () => {
+    const req = new NextRequest('http://localhost:3000/api/connect/myspace/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user_id: 'x' }),
+    });
+    const res = await handleConnectDeauthorize(req, 'myspace', dbClient);
+    expect(res.status).toBe(404);
+  });
+
+  it('route wrappers delegate with params from context', async () => {
+    const loginRedirect = await initiateGET(
+      new NextRequest(`http://localhost:3000/api/connect/instagram?subdomain=${subdomain}`),
+      { params: Promise.resolve({ platform: 'instagram' }) }
+    );
+    expect(loginRedirect.headers.get('location')).toBe('http://localhost:3000/login');
+
+    const callbackFallback = await callbackGET(
+      new NextRequest('http://localhost:3000/api/connect/instagram/callback'),
+      { params: Promise.resolve({ platform: 'instagram' }) }
+    );
+    expect(callbackFallback.headers.get('location')).toContain('/accounts?error=connect_failed');
+
+    const completeRes = await completePOST(
+      new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ destinationIds: [] }),
+      }),
+      { params: Promise.resolve({ platform: 'instagram' }) }
+    );
+    expect(completeRes.status).toBe(401);
+
+    const deauthRes = await deauthorizePOST(
+      new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ platform: 'instagram' }) }
+    );
+    expect(deauthRes.status).toBe(200);
+
+    const deletionRes = await dataDeletionPOST(
+      new NextRequest('http://localhost:3000/api/connect/instagram/data-deletion', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+      { params: Promise.resolve({ platform: 'instagram' }) }
+    );
+    expect(deletionRes.status).toBe(200);
+
+    const listRes = await socialListGET(
+      new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/accounts/social`),
+      { params: Promise.resolve({ subdomain }) }
+    );
+    expect(listRes.status).toBe(401);
+
+    const detailRes = await socialDetailGET(
+      new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/accounts/social/abc`),
+      { params: Promise.resolve({ subdomain, destinationId: 'abc' }) }
+    );
+    expect(detailRes.status).toBe(401);
+  });
+
   it('contains no platform_credentials writes anywhere in the new connect code', () => {
     const roots = [
       path.resolve(__dirname, '../../src/lib/connect'),
@@ -539,5 +877,243 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
         /platform_credentials[\s\S]{0,300}?\.(insert|update|upsert)\s*\(/
       );
     }
+  });
+});
+
+/**
+ * The same framework flow driven through a Supabase-shaped client, covering
+ * the production persistence path (the fake above covers the legacy path).
+ */
+class FakeSupabaseBuilder {
+  mode: 'select' | 'upsert' | 'update' = 'select';
+  rowsToWrite: Array<Record<string, unknown>> = [];
+  updateValues: Record<string, unknown> = {};
+  filters: Array<[string, unknown]> = [];
+
+  constructor(
+    private readonly tables: Map<string, Array<Record<string, unknown>>>,
+    private readonly table: string,
+    private readonly nextId: (prefix: string) => string
+  ) {}
+
+  select(): this {
+    return this;
+  }
+
+  upsert(rows: Record<string, unknown> | Array<Record<string, unknown>>): this {
+    this.mode = 'upsert';
+    this.rowsToWrite = Array.isArray(rows) ? rows : [rows];
+    return this;
+  }
+
+  update(values: Record<string, unknown>): this {
+    this.mode = 'update';
+    this.updateValues = values;
+    return this;
+  }
+
+  eq(key: string, value: unknown): this {
+    this.filters.push([key, value]);
+    return this;
+  }
+
+  order(): this {
+    return this;
+  }
+
+  private tableRows(): Array<Record<string, unknown>> {
+    if (!this.tables.has(this.table)) this.tables.set(this.table, []);
+    return this.tables.get(this.table) ?? [];
+  }
+
+  private matches(row: Record<string, unknown>): boolean {
+    return this.filters.every(([key, value]) => row[key] === value);
+  }
+
+  private executeList(): { data: Array<Record<string, unknown>>; error: null } {
+    const rows = this.tableRows();
+    if (this.mode === 'upsert') {
+      const written: Array<Record<string, unknown>> = [];
+      for (const incoming of this.rowsToWrite) {
+        const conflictKeys =
+          this.table === 'social_accounts'
+            ? ['workspace_id', 'platform', 'external_account_id']
+            : ['account_id', 'external_destination_id'];
+        const existing = rows.find((row) =>
+          conflictKeys.every((key) => row[key] === incoming[key])
+        );
+        if (existing) {
+          Object.assign(existing, incoming);
+          written.push(existing);
+        } else {
+          const row = {
+            id: this.nextId(this.table),
+            created_at: new Date().toISOString(),
+            ...incoming,
+          };
+          rows.push(row);
+          written.push(row);
+        }
+      }
+      return { data: written, error: null };
+    }
+    if (this.mode === 'update') {
+      const updated: Array<Record<string, unknown>> = [];
+      for (const row of rows) {
+        if (this.matches(row)) {
+          Object.assign(row, this.updateValues);
+          updated.push(row);
+        }
+      }
+      return { data: updated, error: null };
+    }
+    return { data: rows.filter((row) => this.matches(row)), error: null };
+  }
+
+  private executeSingle(): {
+    data: Record<string, unknown> | null;
+    error: null;
+  } {
+    const { data } = this.executeList();
+    return { data: data[0] ?? null, error: null };
+  }
+
+  maybeSingle() {
+    return Promise.resolve(this.executeSingle());
+  }
+
+  single() {
+    return Promise.resolve(this.executeSingle());
+  }
+
+  then<TResult>(
+    onFulfilled: (value: { data: Array<Record<string, unknown>>; error: null }) => TResult
+  ) {
+    return Promise.resolve(this.executeList()).then(onFulfilled);
+  }
+}
+
+describe('Connect framework via a Supabase-shaped client', () => {
+  const tables = new Map<string, Array<Record<string, unknown>>>();
+  let seq = 0;
+  const nextId = (prefix: string) => `${prefix}-sb-${++seq}`;
+  const supabase = {
+    from: (table: string) => new FakeSupabaseBuilder(tables, table, nextId),
+  } as unknown as SupabaseClient<any>;
+  let sessionCookie = '';
+
+  beforeEach(async () => {
+    process.env.SESSION_SECRET = TEST_SECRET;
+    process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+    process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+    delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
+    tables.clear();
+    tables.set('workspaces', [{ id: workspaceId, subdomain, owner_id: userId }]);
+    tables.set('platform_credentials', [
+      {
+        workspace_id: workspaceId,
+        platform: 'instagram',
+        client_id: 'sb_ig_app_id',
+        encrypted_client_secret: await encryptToken('sb_ig_secret', TEST_ENCRYPTION_KEY),
+      },
+    ]);
+    const token = await signSessionToken(
+      {
+        userId,
+        email: 'alexander@gmail.com',
+        name: 'Alex Acme',
+        subdomain,
+        role: 'user',
+        status: 'active',
+      },
+      TEST_SECRET
+    );
+    sessionCookie = `fbup_session=${token}`;
+  });
+
+  it('completes initiate → callback → complete → list → detail → deauthorize', async () => {
+    const initReq = new NextRequest(
+      `http://localhost:3000/api/connect/instagram?subdomain=${subdomain}`,
+      { headers: { cookie: sessionCookie } }
+    );
+    const initRes = await handleConnectInitiate(initReq, 'instagram', supabase);
+    expect(initRes.status).toBe(307);
+    const state = new URL(initRes.headers.get('location') ?? '').searchParams.get('state') ?? '';
+
+    const cbRes = await handleConnectCallback(
+      new NextRequest(
+        `http://localhost:3000/api/connect/instagram/callback?code=abc&state=${encodeURIComponent(state)}`
+      ),
+      'instagram',
+      supabase
+    );
+    expect(cbRes.status).toBe(307);
+    const pendingCookie = cbRes.headers
+      .getSetCookie()
+      .find((entry) => entry.startsWith('fbup_connect_pending='))
+      ?.slice('fbup_connect_pending='.length)
+      .split(';')[0];
+    expect(pendingCookie).toBeTruthy();
+
+    const accountRows = tables.get('social_accounts') ?? [];
+    expect(accountRows).toHaveLength(1);
+    expect(accountRows[0].encrypted_access_token).not.toBe('fixture_access_token_plain');
+    expect(
+      await decryptToken(String(accountRows[0].encrypted_access_token), TEST_ENCRYPTION_KEY)
+    ).toBe('fixture_access_token_plain');
+
+    const completeRes = await handleConnectComplete(
+      new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
+        method: 'POST',
+        headers: {
+          cookie: `${sessionCookie}; fbup_connect_pending=${pendingCookie}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ destinationIds: ['dest-2002'] }),
+      }),
+      'instagram',
+      supabase
+    );
+    expect(completeRes.status).toBe(200);
+    const destinationRows = tables.get('destinations') ?? [];
+    expect(destinationRows).toHaveLength(1);
+    expect(destinationRows[0].external_destination_id).toBe('dest-2002');
+
+    const listRes = await handleListSocialAccounts(
+      new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/accounts/social`, {
+        headers: { cookie: sessionCookie },
+      }),
+      subdomain,
+      supabase
+    );
+    expect(listRes.status).toBe(200);
+    const listData = (await listRes.json()) as {
+      accounts: Array<{ platform: string; destinations: Array<{ id: string; name: string }> }>;
+    };
+    expect(listData.accounts).toHaveLength(1);
+    expect(listData.accounts[0].destinations[0].name).toBe('My Brand');
+
+    const detailRes = await handleGetSocialDestination(
+      new NextRequest(
+        `http://localhost:3000/api/tenant/${subdomain}/accounts/social/${listData.accounts[0].destinations[0].id}`,
+        { headers: { cookie: sessionCookie } }
+      ),
+      subdomain,
+      listData.accounts[0].destinations[0].id,
+      supabase
+    );
+    expect(detailRes.status).toBe(200);
+
+    const deauthRes = await handleConnectDeauthorize(
+      new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ user_id: 'ext-acct-1' }),
+      }),
+      'instagram',
+      supabase
+    );
+    expect(deauthRes.status).toBe(200);
+    expect((tables.get('social_accounts') ?? [])[0].status).toBe('revoked');
   });
 });
