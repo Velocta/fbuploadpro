@@ -1,12 +1,13 @@
 'use client';
 
 import React from 'react';
-import { PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { SPACING } from '@/lib/theme';
 import {
   PlatformCredentialsView,
   PlatformSetupCard,
   SettingsGuideStep,
   GuideDivider,
+  MetaDashboardLink,
   type PlatformCredentialsState,
 } from '@/components/settings/platform-credentials-view';
 import { getPlatformCallbackUrls } from '@/lib/platforms/callback-urls';
@@ -29,30 +30,6 @@ export interface InstagramSettingsViewProps {
   initialShowDisconnectModal?: boolean | undefined;
 }
 
-function MetaDashboardLink() {
-  return (
-    <a
-      href="https://developers.facebook.com"
-      target="_blank"
-      rel="noopener noreferrer"
-      data-testid="instagram-meta-dashboard-link"
-      style={{
-        color: PALETTE.accent1,
-        fontWeight: TYPOGRAPHY.weights.semibold,
-        textDecoration: 'none',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.textDecoration = 'underline';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.textDecoration = 'none';
-      }}
-    >
-      Meta App Dashboard →
-    </a>
-  );
-}
-
 export function InstagramSetupGuide() {
   return (
     <div
@@ -60,7 +37,7 @@ export function InstagramSetupGuide() {
       style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}
     >
       <SettingsGuideStep number={1} title="Create your Meta app">
-        Open your <MetaDashboardLink /> and choose Create app. Give your app a name, add your
+        Open your <MetaDashboardLink testIdPrefix="instagram" /> and choose Create app. Give your app a name, add your
         email address if asked, and choose the option for connecting an Instagram account. When
         your app is ready, you will see its home screen.
       </SettingsGuideStep>
