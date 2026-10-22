@@ -139,6 +139,53 @@ export function GeneralSettingsView({
     : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`;
 
   return (
+    <>
+      {/* Workspace Settings General Tab layout classes — evicted verbatim from globals.css (spec 129 T12). */}
+      <style>{`
+        .workspace-name-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 10px 14px;
+          background-color: var(--bg-canvas);
+          border-radius: var(--radius-sm, 6px);
+          border: 1px solid var(--border-subtle);
+        }
+        .workspace-name-edit-container {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+        }
+        .workspace-name-edit-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+        @media (max-width: 639px) {
+          .workspace-name-row {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+          }
+          .workspace-name-edit-btn {
+            width: 100%;
+          }
+          .workspace-name-edit-container {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+          }
+          .workspace-name-edit-actions {
+            width: 100%;
+          }
+          .workspace-name-action-btn {
+            flex: 1 1 0;
+            width: 100%;
+          }
+        }
+      `}</style>
     <div
       style={{
         display: 'flex',
@@ -347,5 +394,6 @@ export function GeneralSettingsView({
         </div>
       </div>
     </div>
+    </>
   );
 }

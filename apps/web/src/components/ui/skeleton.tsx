@@ -55,6 +55,34 @@ export function Skeleton({
   const resolvedHeight = height !== undefined ? (typeof height === 'number' ? `${height}px` : height) : getDefaultHeight();
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        @keyframes fbu-shimmer {
+          0% {
+            background-position: -200% 0;
+          }
+          100% {
+            background-position: 200% 0;
+          }
+        }
+        .fbu-skeleton-shimmer {
+          background: linear-gradient(
+            90deg,
+            var(--bg-subtle) 25%,
+            var(--bg-hover) 37%,
+            var(--bg-subtle) 63%
+          );
+          background-size: 200% 100%;
+          animation: fbu-shimmer 1.4s ease infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .fbu-skeleton-shimmer {
+            animation: none !important;
+            background: var(--bg-subtle) !important;
+          }
+        }
+      `}</style>
     <div
       className={`fbu-skeleton fbu-skeleton-${variant} fbu-skeleton-shimmer ${className}`}
       aria-hidden="true"
@@ -68,5 +96,6 @@ export function Skeleton({
       }}
       {...props}
     />
+    </>
   );
 }

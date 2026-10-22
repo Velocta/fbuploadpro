@@ -1,0 +1,10 @@
+# Inline-style ratchet (spec 129 §5.4 / T15).
+#
+# The number below is the count of `style={{` occurrences across apps/web/src
+# (grep -ro "style={{" --include="*.ts" --include="*.tsx"), measured at
+# PR-F2 time. The regression guardrails FAIL if the live count rises above
+# this number — inline styles only ever come OUT, surface by surface
+# (specs 130–136), never back in. When a change lowers the count, update
+# this file in the same PR; the guardrail fails on a stale (too-high)
+# number too, so the ratchet cannot silently loosen.
+1659

@@ -55,6 +55,13 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
   };
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        .fbu-switch-button:focus-visible {
+          box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
+        }
+      `}</style>
     <div
       className={`fbu-switch-wrapper ${className}`}
         style={{
@@ -148,6 +155,7 @@ export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(function Switch
           </div>
         )}
       </div>
+    </>
     );
   });
 
