@@ -5,12 +5,16 @@ import {
   SaveBYOCCredentialsRequestSchema,
   verifySessionToken,
   canAccessTenant,
-  encryptToken,
   decryptToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/supabase-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import {
+  deleteCredentials,
+  getCredentials,
+  saveCredentials,
+} from '@/lib/server/platform-credentials';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -48,16 +52,12 @@ export async function GET(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    const { data: byoc } = await supabase
-      .from('workspace_byoc_credentials')
-      .select('workspace_id, fb_app_id, encrypted_fb_app_secret, status, last_tested_at, created_at, updated_at')
-      .eq('workspace_id', workspaceId)
-      .maybeSingle();
+    const byoc = await getCredentials(workspaceId, 'facebook', supabase);
 
     let decryptedSecret = '';
-    if (byoc?.encrypted_fb_app_secret) {
+    if (byoc?.encryptedClientSecret) {
       try {
-        decryptedSecret = await decryptToken(byoc.encrypted_fb_app_secret, getTokenEncryptionKey());
+        decryptedSecret = await decryptToken(byoc.encryptedClientSecret, getTokenEncryptionKey());
       } catch (err) {
         console.error('[BYOC Settings API] Failed to decrypt app secret for settings view:', err);
       }
@@ -66,75 +66,17 @@ export async function GET(
     return NextResponse.json({
       workspaceId,
       subdomain,
-      fbAppId: byoc?.fb_app_id || '',
+      fbAppId: byoc?.clientId || '',
       fbAppSecret: decryptedSecret,
-      hasSecret: Boolean(byoc?.encrypted_fb_app_secret),
+      hasSecret: Boolean(byoc?.encryptedClientSecret),
       status: byoc?.status || 'unverified',
-      lastTestedAt: byoc?.last_tested_at || null,
-      connectedAt: byoc?.created_at || byoc?.updated_at || null,
+      lastTestedAt: byoc?.lastTestedAt || null,
+      connectedAt: byoc?.createdAt || byoc?.updatedAt || null,
     });
   } catch (err) {
     console.error('[BYOC Settings API] Unhandled GET exception:', err);
     return NextResponse.json({ error: 'Failed to retrieve BYOC settings' }, { status: 500 });
   }
-}
-
-async function saveOrUpdateBYOCCredentials(
-  supabase: any,
-  workspaceId: string,
-  userId: string,
-  data: { fbAppId: string; fbAppSecret?: string | undefined }
-): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
-  const encryptionKey = getTokenEncryptionKey();
-
-  if (data.fbAppSecret && data.fbAppSecret.length > 0) {
-    const encryptedSecret = await encryptToken(data.fbAppSecret, encryptionKey);
-
-    const { error: upsertErr } = await supabase.from('workspace_byoc_credentials').upsert(
-      {
-        workspace_id: workspaceId,
-        user_id: userId,
-        fb_app_id: data.fbAppId,
-        encrypted_fb_app_secret: encryptedSecret,
-        status: 'unverified',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'workspace_id' }
-    );
-
-    if (upsertErr) {
-      console.error('[BYOC Settings API] Upsert credentials error:', upsertErr);
-      return { ok: false, error: 'Failed to save credentials', status: 500 };
-    }
-    return { ok: true };
-  }
-
-  // First verify that existing credentials with secret exist
-  const { data: existingCreds } = await supabase
-    .from('workspace_byoc_credentials')
-    .select('encrypted_fb_app_secret')
-    .eq('workspace_id', workspaceId)
-    .maybeSingle();
-
-  if (!existingCreds?.encrypted_fb_app_secret) {
-    return { ok: false, error: 'Enter your Facebook App Secret to complete setup.', status: 400 };
-  }
-
-  const { error: updateErr } = await supabase
-    .from('workspace_byoc_credentials')
-    .update({
-      fb_app_id: data.fbAppId,
-      status: 'unverified',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('workspace_id', workspaceId);
-
-  if (updateErr) {
-    console.error('[BYOC Settings API] Update credentials error:', updateErr);
-    return { ok: false, error: 'Failed to update credentials', status: 500 };
-  }
-
-  return { ok: true };
 }
 
 export async function PUT(
@@ -178,11 +120,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    const saveResult = await saveOrUpdateBYOCCredentials(
-      supabase,
+    const saveResult = await saveCredentials(
       workspaceId,
-      session.userId,
-      parseResult.data
+      'facebook',
+      { clientId: parseResult.data.fbAppId, clientSecret: parseResult.data.fbAppSecret },
+      supabase
     );
 
     if (!saveResult.ok) {
@@ -227,16 +169,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
     }
 
-    // Delete ONLY the App ID and App Secret (workspace_byoc_credentials row)
+    // Delete ONLY the App ID and App Secret (the platform_credentials row for facebook)
     // Connected accounts, Facebook pages, media items, and scheduled posts remain 100% intact.
-    const { error: deleteErr } = await supabase
-      .from('workspace_byoc_credentials')
-      .delete()
-      .eq('workspace_id', workspaceId);
+    const deleteResult = await deleteCredentials(workspaceId, 'facebook', supabase);
 
-    if (deleteErr) {
-      console.error('[BYOC Settings API] Delete credentials error:', deleteErr);
-      return NextResponse.json({ error: 'Failed to disconnect Facebook' }, { status: 500 });
+    if (!deleteResult.ok) {
+      return NextResponse.json({ error: deleteResult.error }, { status: deleteResult.status });
     }
 
     return NextResponse.json({

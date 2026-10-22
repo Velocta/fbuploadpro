@@ -61,11 +61,11 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
         if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_123' }]);
         }
-        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+        if (typeof sql === 'string' && sql.includes('FROM platform_credentials')) {
           return Promise.resolve([
             {
-              fb_app_id: 'fb_app_id_byoc_workspace',
-              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              client_id: 'fb_app_id_byoc_workspace',
+              encrypted_client_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
@@ -99,12 +99,12 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
         if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_123' }]);
         }
-        if (typeof sql === 'string' && sql.includes('workspace_byoc_credentials')) {
+        if (typeof sql === 'string' && sql.includes('platform_credentials')) {
           return Promise.resolve([
             {
               workspace_id: 'ws_123',
-              fb_app_id: 'fb_app_id_byoc_workspace',
-              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              client_id: 'fb_app_id_byoc_workspace',
+              encrypted_client_secret: validEncryptedFbAppSecret,
               status: 'valid',
             },
           ]);
@@ -191,11 +191,11 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
         if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_123' }]);
         }
-        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+        if (typeof sql === 'string' && sql.includes('FROM platform_credentials')) {
           return Promise.resolve([
             {
-              fb_app_id: 'fb_app_id_123',
-              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              client_id: 'fb_app_id_123',
+              encrypted_client_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
@@ -275,11 +275,11 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
         if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_prod_99' }]);
         }
-        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+        if (typeof sql === 'string' && sql.includes('FROM platform_credentials')) {
           return Promise.resolve([
             {
-              fb_app_id: 'fb_app_id_123',
-              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              client_id: 'fb_app_id_123',
+              encrypted_client_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
@@ -400,11 +400,11 @@ describe('Facebook OAuth Initiation & Callback Handlers (User Story 1 - T058)', 
         if (typeof sql === 'string' && sql.includes('FROM workspaces')) {
           return Promise.resolve([{ id: 'ws_123' }]);
         }
-        if (typeof sql === 'string' && sql.includes('FROM workspace_byoc_credentials')) {
+        if (typeof sql === 'string' && sql.includes('FROM platform_credentials')) {
           return Promise.resolve([
             {
-              fb_app_id: 'fb_app_id_123',
-              encrypted_fb_app_secret: validEncryptedFbAppSecret,
+              client_id: 'fb_app_id_123',
+              encrypted_client_secret: validEncryptedFbAppSecret,
             },
           ]);
         }
