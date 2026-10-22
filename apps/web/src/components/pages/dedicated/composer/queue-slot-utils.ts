@@ -1,5 +1,6 @@
 import { type PostFormat, deriveDefaultCaptionFromFilename } from '@fbuploadpro/contracts';
 import type { PageSlotSummary } from '../tab-dashboard';
+import { pluralFormatLabel } from './format-labels';
 
 /**
  * Pure helpers for resolving a page's recurring posting slots against a post
@@ -179,6 +180,20 @@ export function formatSlotShort(date: Date, timeZone: string | null | undefined)
     minute: '2-digit',
     hour12: true,
   }).format(date);
+}
+
+/**
+ * Queue-intent line, e.g. "Goes out at the next posting time for Stories:
+ * Tue 9:00 AM UTC." — the slot's timezone is always labelled so the time is
+ * never misread as local time.
+ */
+export function queueGoesOutLine(
+  format: PostFormat,
+  occurrence: Date,
+  timeZone: string | null | undefined
+): string {
+  const tz = resolveValidTimezone(timeZone);
+  return `Goes out at the next posting time for ${pluralFormatLabel(format)}: ${formatSlotShort(occurrence, tz)} ${tz}.`;
 }
 
 /** Converts a Date to a datetime-local input value ("2026-10-21T09:00") in the timezone. */
