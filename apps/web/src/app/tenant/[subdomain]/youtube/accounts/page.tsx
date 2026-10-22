@@ -14,6 +14,7 @@ export default function YouTubeAccountsPage() {
       platformName="YouTube"
       subdomain={subdomain}
       icon={<YouTubeIcon size={24} />}
+      description="You connect your channel through our publishing partner — there is nothing to set up or paste here. When you connect, you sign in with YouTube, approve the connection, and pick your channel."
     />
   );
 }

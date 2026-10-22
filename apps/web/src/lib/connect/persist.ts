@@ -1,0 +1,442 @@
+/**
+ * Connect-flow persistence (Spec 123, Part C).
+ *
+ * Writes only `social_accounts` and `destinations` (spec 120 unified
+ * schema). Tokens are encrypted with encryptToken before they touch the
+ * database. Reconnecting the same platform account re-binds the existing
+ * row: the upsert keys on UNIQUE(workspace_id, platform,
+ * external_account_id), so a reconnect never creates a duplicate account.
+ *
+ * `platform_credentials` is only ever READ here (to resolve a BYOC
+ * workspace's client ID/secret for the code exchange). Writes to that table
+ * belong to the settings credentials service (spec 123 Part A).
+ */
+import {
+  decryptToken,
+  encryptToken,
+  getTokenEncryptionKey,
+  type DatabaseClient,
+  type Platform,
+} from '@fbuploadpro/contracts';
+import { getRouteSupabase, isLegacyClient } from '@/lib/route-auth';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type {
+  DiscoveredDestination,
+  ExchangedAccount,
+} from './registry';
+
+export type ConnectDbClient = DatabaseClient | SupabaseClient<any>;
+
+export interface SocialDestinationView {
+  id: string;
+  externalDestinationId: string;
+  name: string;
+  handle: string | null;
+  avatarUrl: string | null;
+  timezone: string;
+  status: string;
+}
+
+export interface SocialAccountView {
+  id: string;
+  platform: Platform;
+  externalAccountId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: string;
+  tokenExpiresAt: string | null;
+  destinations: SocialDestinationView[];
+}
+
+export interface DestinationDetailView extends SocialDestinationView {
+  platform: Platform;
+  account: {
+    id: string;
+    displayName: string;
+    platform: Platform;
+    status: string;
+  };
+}
+
+function tokenExpiresAtIso(expiresIn?: number | null): string | null {
+  if (!expiresIn || expiresIn <= 0) return null;
+  return new Date(Date.now() + expiresIn * 1000).toISOString();
+}
+
+/**
+ * Upserts the connected account on (workspace_id, platform,
+ * external_account_id). A reconnect updates tokens/expiry/status on the
+ * SAME row and returns its id.
+ */
+export async function persistConnectedAccount(
+  client: ConnectDbClient | null | undefined,
+  input: {
+    workspaceId: string;
+    platform: Platform;
+    exchanged: ExchangedAccount;
+  }
+): Promise<{ accountId: string }> {
+  const encryptionKey = getTokenEncryptionKey();
+  const encryptedAccessToken = await encryptToken(
+    input.exchanged.accessToken,
+    encryptionKey
+  );
+  const encryptedRefreshToken = input.exchanged.refreshToken
+    ? await encryptToken(input.exchanged.refreshToken, encryptionKey)
+    : null;
+  const expiresAt = tokenExpiresAtIso(input.exchanged.expiresIn);
+  const scopes = input.exchanged.scopes ?? [];
+  const nowIso = new Date().toISOString();
+
+  if (isLegacyClient(client ?? undefined)) {
+    const rows = (await (client as DatabaseClient).query(
+      `INSERT INTO social_accounts (
+         workspace_id, platform, external_account_id, display_name, avatar_url,
+         encrypted_access_token, encrypted_refresh_token, token_expires_at,
+         scopes, status, metadata, updated_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', '{}'::jsonb, now())
+       ON CONFLICT (workspace_id, platform, external_account_id) DO UPDATE SET
+         display_name = EXCLUDED.display_name,
+         avatar_url = EXCLUDED.avatar_url,
+         encrypted_access_token = EXCLUDED.encrypted_access_token,
+         encrypted_refresh_token = COALESCE(EXCLUDED.encrypted_refresh_token, social_accounts.encrypted_refresh_token),
+         token_expires_at = EXCLUDED.token_expires_at,
+         scopes = EXCLUDED.scopes,
+         status = 'active',
+         updated_at = now()
+       RETURNING id`,
+      [
+        input.workspaceId,
+        input.platform,
+        input.exchanged.externalAccountId,
+        input.exchanged.displayName,
+        input.exchanged.avatarUrl ?? null,
+        encryptedAccessToken,
+        encryptedRefreshToken,
+        expiresAt,
+        scopes,
+      ]
+    )) as Array<{ id: string }>;
+    const accountId = rows?.[0]?.id;
+    if (!accountId) {
+      throw new Error('Failed to persist connected account');
+    }
+    return { accountId };
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) {
+    throw new Error('Database service unavailable');
+  }
+  const { data, error } = await supabase
+    .from('social_accounts')
+    .upsert(
+      {
+        workspace_id: input.workspaceId,
+        platform: input.platform,
+        external_account_id: input.exchanged.externalAccountId,
+        display_name: input.exchanged.displayName,
+        avatar_url: input.exchanged.avatarUrl ?? null,
+        encrypted_access_token: encryptedAccessToken,
+        encrypted_refresh_token: encryptedRefreshToken,
+        token_expires_at: expiresAt,
+        scopes,
+        status: 'active',
+        metadata: {},
+        updated_at: nowIso,
+      },
+      { onConflict: 'workspace_id,platform,external_account_id' }
+    )
+    .select('id')
+    .single();
+  if (error || !data?.id) {
+    throw new Error(
+      `Failed to persist connected account: ${error?.message ?? 'unknown error'}`
+    );
+  }
+  return { accountId: data.id as string };
+}
+
+/**
+ * Inserts the destinations the user picked, ignoring conflicts on
+ * (account_id, external_destination_id) so re-picking an already-added
+ * destination is a no-op rather than a duplicate.
+ */
+export async function persistPickedDestinations(
+  client: ConnectDbClient | null | undefined,
+  input: {
+    workspaceId: string;
+    accountId: string;
+    platform: Platform;
+    destinations: DiscoveredDestination[];
+  }
+): Promise<{ inserted: number }> {
+  if (input.destinations.length === 0) {
+    return { inserted: 0 };
+  }
+
+  if (isLegacyClient(client ?? undefined)) {
+    let inserted = 0;
+    for (const destination of input.destinations) {
+      const rows = (await (client as DatabaseClient).query(
+        `INSERT INTO destinations (
+           workspace_id, account_id, platform, external_destination_id,
+           name, handle, avatar_url, status, metadata
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', '{}'::jsonb)
+         ON CONFLICT (account_id, external_destination_id) DO NOTHING
+         RETURNING id`,
+        [
+          input.workspaceId,
+          input.accountId,
+          input.platform,
+          destination.externalDestinationId,
+          destination.name,
+          destination.handle ?? null,
+          destination.avatarUrl ?? null,
+        ]
+      )) as Array<{ id: string }>;
+      if (rows?.[0]?.id) inserted += 1;
+    }
+    return { inserted };
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) {
+    throw new Error('Database service unavailable');
+  }
+  const rows = input.destinations.map((destination) => ({
+    workspace_id: input.workspaceId,
+    account_id: input.accountId,
+    platform: input.platform,
+    external_destination_id: destination.externalDestinationId,
+    name: destination.name,
+    handle: destination.handle ?? null,
+    avatar_url: destination.avatarUrl ?? null,
+    status: 'active',
+    metadata: {},
+  }));
+  const { data, error } = await supabase
+    .from('destinations')
+    .upsert(rows, {
+      onConflict: 'account_id,external_destination_id',
+      ignoreDuplicates: true,
+    })
+    .select('id');
+  if (error) {
+    throw new Error(`Failed to persist destinations: ${error.message}`);
+  }
+  return { inserted: Array.isArray(data) ? data.length : 0 };
+}
+
+/**
+ * Reads (never writes) the workspace's BYOC app credentials for a platform
+ * from `platform_credentials`, decrypting the secret in memory only.
+ */
+export async function resolvePlatformClientCredentials(
+  client: ConnectDbClient | null | undefined,
+  workspaceId: string,
+  platform: Platform
+): Promise<{ clientId: string; clientSecret: string } | null> {
+  const encryptionKey = getTokenEncryptionKey();
+
+  if (isLegacyClient(client ?? undefined)) {
+    const rows = (await (client as DatabaseClient).query(
+      `SELECT client_id, encrypted_client_secret
+       FROM platform_credentials
+       WHERE workspace_id = $1 AND platform = $2
+       LIMIT 1`,
+      [workspaceId, platform]
+    )) as Array<{ client_id?: string; encrypted_client_secret?: string }>;
+    const row = rows?.[0];
+    if (!row?.client_id || !row?.encrypted_client_secret) return null;
+    return {
+      clientId: row.client_id,
+      clientSecret: await decryptToken(row.encrypted_client_secret, encryptionKey),
+    };
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('platform_credentials')
+    .select('client_id, encrypted_client_secret')
+    .eq('workspace_id', workspaceId)
+    .eq('platform', platform)
+    .maybeSingle();
+  if (error || !data?.client_id || !data?.encrypted_client_secret) {
+    return null;
+  }
+  return {
+    clientId: data.client_id as string,
+    clientSecret: await decryptToken(
+      data.encrypted_client_secret as string,
+      encryptionKey
+    ),
+  };
+}
+
+/** Marks every matching account row revoked (deauthorize / data-deletion callbacks). */
+export async function markSocialAccountRevoked(
+  client: ConnectDbClient | null | undefined,
+  platform: Platform,
+  externalAccountId: string
+): Promise<{ updated: number }> {
+  if (isLegacyClient(client ?? undefined)) {
+    const rows = (await (client as DatabaseClient).query(
+      `UPDATE social_accounts
+       SET status = 'revoked', updated_at = now()
+       WHERE platform = $1 AND external_account_id = $2
+       RETURNING id`,
+      [platform, externalAccountId]
+    )) as Array<{ id: string }>;
+    return { updated: Array.isArray(rows) ? rows.length : 0 };
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) return { updated: 0 };
+  const { data, error } = await supabase
+    .from('social_accounts')
+    .update({ status: 'revoked', updated_at: new Date().toISOString() })
+    .eq('platform', platform)
+    .eq('external_account_id', externalAccountId)
+    .select('id');
+  if (error) {
+    console.error('[connect] Failed to mark account revoked:', error.message);
+    return { updated: 0 };
+  }
+  return { updated: Array.isArray(data) ? data.length : 0 };
+}
+
+function mapDestinationRow(row: Record<string, any>): SocialDestinationView {
+  return {
+    id: row.id,
+    externalDestinationId:
+      row.external_destination_id ?? row.externalDestinationId,
+    name: row.name,
+    handle: row.handle ?? null,
+    avatarUrl: row.avatar_url ?? row.avatarUrl ?? null,
+    timezone: row.timezone ?? 'UTC',
+    status: row.status ?? 'active',
+  };
+}
+
+/** All social accounts in the workspace, each with its destinations. */
+export async function fetchSocialAccountsWithDestinations(
+  client: ConnectDbClient | null | undefined,
+  workspaceId: string
+): Promise<SocialAccountView[]> {
+  let accountRows: Array<Record<string, any>> = [];
+  let destinationRows: Array<Record<string, any>> = [];
+
+  if (isLegacyClient(client ?? undefined)) {
+    const legacy = client as DatabaseClient;
+    accountRows = (await legacy.query(
+      `SELECT * FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC`,
+      [workspaceId]
+    )) as Array<Record<string, any>>;
+    destinationRows = (await legacy.query(
+      `SELECT * FROM destinations WHERE workspace_id = $1 ORDER BY created_at ASC`,
+      [workspaceId]
+    )) as Array<Record<string, any>>;
+  } else {
+    const supabase = getRouteSupabase(client ?? undefined);
+    if (!supabase) return [];
+    const { data: accounts, error: accountsError } = await supabase
+      .from('social_accounts')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false });
+    if (accountsError) {
+      throw new Error(
+        `Failed to load connected accounts: ${accountsError.message}`
+      );
+    }
+    const { data: destinations, error: destinationsError } = await supabase
+      .from('destinations')
+      .select('*')
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: true });
+    if (destinationsError) {
+      throw new Error(
+        `Failed to load destinations: ${destinationsError.message}`
+      );
+    }
+    accountRows = (accounts ?? []) as Array<Record<string, any>>;
+    destinationRows = (destinations ?? []) as Array<Record<string, any>>;
+  }
+
+  const destinationsByAccount = new Map<string, SocialDestinationView[]>();
+  for (const row of destinationRows) {
+    const accountId = row.account_id ?? row.accountId;
+    const list = destinationsByAccount.get(accountId) ?? [];
+    list.push(mapDestinationRow(row));
+    destinationsByAccount.set(accountId, list);
+  }
+
+  return accountRows.map((row) => ({
+    id: row.id,
+    platform: (row.platform ?? 'facebook') as Platform,
+    externalAccountId: row.external_account_id ?? row.externalAccountId,
+    displayName: row.display_name ?? row.displayName,
+    avatarUrl: row.avatar_url ?? row.avatarUrl ?? null,
+    status: row.status ?? 'active',
+    tokenExpiresAt: row.token_expires_at ?? row.tokenExpiresAt ?? null,
+    destinations: destinationsByAccount.get(row.id) ?? [],
+  }));
+}
+
+/** One destination plus its owning account, scoped to the workspace. */
+export async function fetchDestinationDetail(
+  client: ConnectDbClient | null | undefined,
+  workspaceId: string,
+  destinationId: string
+): Promise<DestinationDetailView | null> {
+  if (isLegacyClient(client ?? undefined)) {
+    const rows = (await (client as DatabaseClient).query(
+      `SELECT d.*, a.display_name AS account_display_name, a.status AS account_status
+       FROM destinations d
+       JOIN social_accounts a ON a.id = d.account_id
+       WHERE d.id = $1 AND d.workspace_id = $2
+       LIMIT 1`,
+      [destinationId, workspaceId]
+    )) as Array<Record<string, any>>;
+    const row = rows?.[0];
+    if (!row) return null;
+    return {
+      ...mapDestinationRow(row),
+      platform: (row.platform ?? 'facebook') as Platform,
+      account: {
+        id: row.account_id ?? row.accountId,
+        displayName: row.account_display_name ?? row.accountDisplayName,
+        platform: (row.platform ?? 'facebook') as Platform,
+        status: row.account_status ?? row.accountStatus ?? 'active',
+      },
+    };
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) return null;
+  const { data: destination, error } = await supabase
+    .from('destinations')
+    .select('*')
+    .eq('id', destinationId)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  if (error || !destination) return null;
+  const { data: account } = await supabase
+    .from('social_accounts')
+    .select('id, display_name, platform, status')
+    .eq('id', destination.account_id)
+    .maybeSingle();
+  if (!account) return null;
+  return {
+    ...mapDestinationRow(destination as Record<string, any>),
+    platform: destination.platform as Platform,
+    account: {
+      id: account.id as string,
+      displayName: account.display_name as string,
+      platform: account.platform as Platform,
+      status: (account.status as string) ?? 'active',
+    },
+  };
+}
