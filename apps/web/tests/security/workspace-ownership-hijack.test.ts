@@ -481,22 +481,22 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
               upsert: upsertSpy,
             };
           }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  maybeSingle: vi.fn().mockResolvedValue({
+          if (table === 'platform_credentials') {
+            const credsBuilder: any = {
+              eq: vi.fn(() => credsBuilder),
+              maybeSingle: vi.fn().mockResolvedValue({
                     data: {
                       workspace_id: '00000000-0000-4000-a000-000000000099',
-                      fb_app_id: '123456789',
-                      encrypted_fb_app_secret: 'enc_secret',
+                      client_id: '123456789',
+                      encrypted_client_secret: 'enc_secret',
                       status: 'valid',
                       last_tested_at: '2026-10-14T00:00:00Z',
                     },
                     error: null,
-                  }),
-                })),
-              })),
+              }),
+            };
+            return {
+              select: vi.fn(() => credsBuilder),
             };
           }
           return {};

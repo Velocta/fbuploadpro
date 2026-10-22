@@ -187,19 +187,19 @@ describe('Multi-Account Facebook OAuth Connection (User Story 1 - T059 & Spec 03
           };
         }
 
-        if (table === 'workspace_byoc_credentials') {
-          return {
-            select: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                maybeSingle: vi.fn().mockResolvedValue({
-                  data: {
-                    fb_app_id: 'fb_app_id_123',
-                    encrypted_fb_app_secret: validEncryptedFbAppSecret,
-                  },
-                  error: null,
-                }),
-              }),
+        if (table === 'platform_credentials') {
+          const credsBuilder: any = {
+            eq: vi.fn(() => credsBuilder),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                client_id: 'fb_app_id_123',
+                encrypted_client_secret: validEncryptedFbAppSecret,
+              },
+              error: null,
             }),
+          };
+          return {
+            select: vi.fn().mockReturnValue(credsBuilder),
           };
         }
 

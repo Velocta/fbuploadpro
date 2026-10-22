@@ -37,7 +37,7 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
       const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
-          if (sql.includes('FROM workspace_byoc_credentials')) return Promise.resolve([]);
+          if (sql.includes('FROM platform_credentials')) return Promise.resolve([]);
           return Promise.resolve([]);
         }),
       } as unknown as DatabaseClient;
@@ -54,8 +54,8 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
       const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
-          if (sql.includes('FROM workspace_byoc_credentials')) {
-            return Promise.resolve([{ fb_app_id: 'app_123', encrypted_fb_app_secret: '' }]);
+          if (sql.includes('FROM platform_credentials')) {
+            return Promise.resolve([{ client_id: 'app_123', encrypted_client_secret: '' }]);
           }
           return Promise.resolve([]);
         }),
@@ -73,11 +73,11 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
       const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
-          if (sql.includes('FROM workspace_byoc_credentials')) {
+          if (sql.includes('FROM platform_credentials')) {
             return Promise.resolve([
               {
-                fb_app_id: 'app_1234567890',
-                encrypted_fb_app_secret: encryptedSecret,
+                client_id: 'app_1234567890',
+                encrypted_client_secret: encryptedSecret,
               },
             ]);
           }
@@ -98,11 +98,11 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
       const mockLegacyClient = {
         query: vi.fn().mockImplementation((sql: string) => {
           if (sql.includes('FROM workspaces')) return Promise.resolve([{ id: workspaceId }]);
-          if (sql.includes('FROM workspace_byoc_credentials')) {
+          if (sql.includes('FROM platform_credentials')) {
             return Promise.resolve([
               {
-                fb_app_id: 'app_1234567890',
-                encrypted_fb_app_secret: 'invalid:corrupted:ciphertext',
+                client_id: 'app_1234567890',
+                encrypted_client_secret: 'invalid:corrupted:ciphertext',
               },
             ]);
           }
@@ -134,16 +134,18 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
               }),
             };
           }
-          if (table === 'workspace_byoc_credentials') {
+          if (table === 'platform_credentials') {
             return {
               select: () => ({
                 eq: () => ({
+                  eq: () => ({
                   maybeSingle: vi.fn().mockResolvedValue({
                     data: {
-                      fb_app_id: 'fb_app_9999',
-                      encrypted_fb_app_secret: encryptedSecret,
+                      client_id: 'fb_app_9999',
+                      encrypted_client_secret: encryptedSecret,
                     },
                     error: null,
+                  }),
                   }),
                 }),
               }),
@@ -176,13 +178,15 @@ describe('resolveWorkspaceFacebookCredentials suite', () => {
               }),
             };
           }
-          if (table === 'workspace_byoc_credentials') {
+          if (table === 'platform_credentials') {
             return {
               select: () => ({
                 eq: () => ({
+                  eq: () => ({
                   maybeSingle: vi.fn().mockResolvedValue({
                     data: null,
                     error: { message: 'Row not found' },
+                  }),
                   }),
                 }),
               }),

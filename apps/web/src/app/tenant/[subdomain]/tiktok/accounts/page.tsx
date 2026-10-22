@@ -14,6 +14,7 @@ export default function TikTokAccountsPage() {
       platformName="TikTok"
       subdomain={subdomain}
       icon={<TikTokIcon size={24} />}
+      description="You connect your account through our publishing partner — there is nothing to set up or paste here. When you connect, you sign in with TikTok and approve the connection."
     />
   );
 }
