@@ -14,6 +14,7 @@ export default function XTwitterAccountsPage() {
       platformName="X (Twitter)"
       subdomain={subdomain}
       icon={<XTwitterIcon size={24} />}
+      description="Simply sign in with X and approve the connection — there are no keys to create or paste. Your account is connected in a couple of clicks."
     />
   );
 }
