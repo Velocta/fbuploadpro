@@ -111,6 +111,17 @@ export function getPageStatusRingBorder(status: FacebookPageStatus): string {
   return `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`;
 }
 
+/**
+ * Short, human-comparable form of a page's Facebook Page ID.
+ * Pages can share a display name (and even followers and category), so the
+ * ID suffix is the distinguishing line that tells two same-named pages apart.
+ */
+export function formatPageIdSuffix(fbPageId: string): string {
+  const trimmed = fbPageId.trim();
+  if (!trimmed) return '';
+  return trimmed.length <= 6 ? trimmed : `…${trimmed.slice(-6)}`;
+}
+
 export function computeFollowersGained(
   page: Pick<FacebookPageItem, 'currentFollowers' | 'startingFollowers'> & {
     followersGained?: number | undefined;
@@ -344,6 +355,22 @@ export function PageCard({
                   · {page.category || 'Facebook Page'}
                 </span>
               </span>
+              {formatPageIdSuffix(page.fbPageId) && (
+                <span
+                  data-testid="page-id-line"
+                  style={{
+                    display: 'block',
+                    fontSize: '0.75rem',
+                    color: `var(--text-dim, ${THEME.default.text.muted})`,
+                    marginTop: '2px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Page ID {formatPageIdSuffix(page.fbPageId)}
+                </span>
+              )}
             </div>
           </div>
 

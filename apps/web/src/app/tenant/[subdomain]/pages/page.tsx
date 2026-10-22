@@ -370,12 +370,14 @@ export default function TenantPagesPage({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
 
-  // Workspace Facebook-app credentials — checked only when an expired
-  // account needs reconnecting, to decide whether OAuth can start directly.
+  // Workspace Facebook-app credentials — the single configured signal reused
+  // by Reconnect (can OAuth start directly?), the Add Page dialog, and the
+  // empty state (is guidance about adding the App ID and Secret needed?).
   const [byocStatus, setByocStatus] = useState<{
     isConfigured: boolean;
     isLoading: boolean;
-  }>({ isConfigured: false, isLoading: false });
+    isChecked: boolean;
+  }>({ isConfigured: false, isLoading: false, isChecked: false });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddHovered, setIsAddHovered] = useState(false);
@@ -419,12 +421,13 @@ export default function TenantPagesPage({
     [accounts]
   );
 
-  // Check workspace Facebook-app credentials only while an expired account
-  // is present, so Reconnect can start OAuth directly when possible.
+  // Check workspace Facebook-app credentials on load, so Reconnect can start
+  // OAuth directly when possible and the Add Page / empty-state surfaces can
+  // show guidance at the point of need when the details are missing.
   useEffect(() => {
-    if (!subdomain || !expiredAccount) return;
+    if (!subdomain) return;
     let isMounted = true;
-    setByocStatus({ isConfigured: false, isLoading: true });
+    setByocStatus({ isConfigured: false, isLoading: true, isChecked: false });
     async function checkByoc() {
       try {
         const res = await fetch(`/api/tenant/${subdomain}/settings/byoc`);
@@ -434,14 +437,15 @@ export default function TenantPagesPage({
             setByocStatus({
               isConfigured: Boolean(data.fbAppId && data.hasSecret),
               isLoading: false,
+              isChecked: true,
             });
           }
         } else if (isMounted) {
-          setByocStatus({ isConfigured: false, isLoading: false });
+          setByocStatus({ isConfigured: false, isLoading: false, isChecked: true });
         }
       } catch {
         if (isMounted) {
-          setByocStatus({ isConfigured: false, isLoading: false });
+          setByocStatus({ isConfigured: false, isLoading: false, isChecked: true });
         }
       }
     }
@@ -449,7 +453,7 @@ export default function TenantPagesPage({
     return () => {
       isMounted = false;
     };
-  }, [subdomain, expiredAccount]);
+  }, [subdomain]);
 
   const handleReconnect = useCallback(
     (account: FacebookAccountItem) => {
@@ -516,6 +520,12 @@ export default function TenantPagesPage({
     [pages.length, filteredPages.length, attentionCount, isFiltered]
   );
 
+  // Undefined until the credentials check has completed, so guidance surfaces
+  // never claim the App ID and Secret are missing before that is known.
+  const facebookAppConfigured = byocStatus.isChecked
+    ? byocStatus.isConfigured
+    : undefined;
+
   const handleSelectPage = (page: FacebookPageItem) => {
     router.push(`/tenant/${subdomain}/pages/${page.id}`);
   };
@@ -556,7 +566,11 @@ export default function TenantPagesPage({
     );
   } else if (pages.length === 0) {
     contentNode = (
-      <PagesEmptyState onAddPage={() => setIsAddModalOpen(true)} />
+      <PagesEmptyState
+        onAddPage={() => setIsAddModalOpen(true)}
+        subdomain={subdomain}
+        facebookAppConfigured={facebookAppConfigured}
+      />
     );
   } else if (filteredPages.length === 0) {
     contentNode = (
@@ -818,6 +832,10 @@ export default function TenantPagesPage({
         onSuccess={handlePagesImported}
         onNavigateToAccounts={() =>
           router.push(`/tenant/${subdomain}/accounts`)
+        }
+        facebookAppConfigured={facebookAppConfigured}
+        onNavigateToSettingsFacebook={() =>
+          router.push(`/tenant/${subdomain}/settings?tab=byoc`)
         }
         onReconnectAccount={handleReconnect}
       />

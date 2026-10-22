@@ -1,13 +1,26 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
 
 interface AccountsEmptyStateProps {
   onConnect: () => void;
+  /** Disable the connect action (for example while credentials are checked). */
+  isConnectDisabled?: boolean | undefined;
+  /** The workspace's Facebook App ID and Secret are known to be missing. */
+  credentialsMissing?: boolean | undefined;
+  /** Where to add the missing App ID and Secret (Settings → Facebook). */
+  settingsHref?: string | undefined;
 }
 
-export function AccountsEmptyState({ onConnect }: Readonly<AccountsEmptyStateProps>) {
+export function AccountsEmptyState({
+  onConnect,
+  isConnectDisabled = false,
+  credentialsMissing = false,
+  settingsHref,
+}: Readonly<AccountsEmptyStateProps>) {
+  const isDisabled = isConnectDisabled || credentialsMissing;
   return (
     <div
       data-testid="accounts-empty-state"
@@ -73,12 +86,18 @@ export function AccountsEmptyState({ onConnect }: Readonly<AccountsEmptyStatePro
         type="button"
         data-testid="empty-connect-button"
         onClick={onConnect}
+        disabled={isDisabled}
+        aria-describedby={
+          credentialsMissing ? 'empty-connect-disabled-reason' : undefined
+        }
         style={{
           ...COMPONENT_STYLES.primaryButton,
           display: 'inline-flex',
           alignItems: 'center',
           gap: SPACING.xs,
           padding: `0 ${SPACING.lg}`,
+          opacity: isDisabled ? 0.5 : 1,
+          cursor: isDisabled ? 'not-allowed' : 'pointer',
         }}
       >
         <svg
@@ -97,6 +116,36 @@ export function AccountsEmptyState({ onConnect }: Readonly<AccountsEmptyStatePro
         </svg>
         <span>Connect Facebook Account</span>
       </button>
+
+      {credentialsMissing && (
+        <p
+          id="empty-connect-disabled-reason"
+          data-testid="empty-connect-disabled-reason"
+          style={{
+            margin: `${SPACING.md} 0 0 0`,
+            fontSize: '0.8125rem',
+            lineHeight: 1.5,
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            maxWidth: '420px',
+          }}
+        >
+          Add your Facebook App ID and App Secret first — connecting is
+          paused until they are saved.{' '}
+          {settingsHref && (
+            <Link
+              href={settingsHref}
+              data-testid="empty-connect-settings-link"
+              style={{
+                color: PALETTE.primary,
+                fontWeight: TYPOGRAPHY.weights.semibold,
+                textDecoration: 'underline',
+              }}
+            >
+              Add them in Settings
+            </Link>
+          )}
+        </p>
+      )}
 
       <p
         style={{

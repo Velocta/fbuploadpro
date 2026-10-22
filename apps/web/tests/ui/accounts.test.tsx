@@ -28,6 +28,7 @@ import {
   ByocConfigPromptModal,
   ByocRequiredBanner,
   computeAccountsSubtitle,
+  isConnectGatedByMissingCredentials,
   filterAccountsList,
   resolveOAuthRedirectNotice,
   sortAccountsExpiredFirst,
@@ -206,6 +207,64 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       expect(hasText('We only request permissions to publish reels and manage your pages')).toBe(true);
       expect(hasText('Connect Facebook Account')).toBe(true);
       expect(hasAttribute('data-testid', 'empty-connect-button')).toBe(true);
+    });
+
+    it('gates Connect with a visible reason and Settings link when the App ID and Secret are missing (Spec 109)', () => {
+      expect(
+        isConnectGatedByMissingCredentials({
+          isLoading: false,
+          isConfigured: false,
+          error: null,
+        })
+      ).toBe(true);
+      expect(
+        isConnectGatedByMissingCredentials({
+          isLoading: true,
+          isConfigured: false,
+          error: null,
+        })
+      ).toBe(false);
+      expect(
+        isConnectGatedByMissingCredentials({
+          isLoading: false,
+          isConfigured: true,
+          error: null,
+        })
+      ).toBe(false);
+      expect(
+        isConnectGatedByMissingCredentials({
+          isLoading: false,
+          isConfigured: false,
+          error: "Couldn't verify your Facebook App credentials. Please try again.",
+        })
+      ).toBe(false);
+
+      const gated = render(
+        <AccountsEmptyState
+          onConnect={vi.fn()}
+          isConnectDisabled={true}
+          credentialsMissing={true}
+          settingsHref="/tenant/acme/settings?tab=byoc"
+        />
+      );
+      expect(gated.hasAttribute('data-testid', 'empty-connect-button')).toBe(true);
+      expect(gated.hasAttribute('disabled')).toBe(true);
+      expect(
+        gated.hasAttribute('data-testid', 'empty-connect-disabled-reason')
+      ).toBe(true);
+      expect(
+        gated.hasText('Add your Facebook App ID and App Secret first')
+      ).toBe(true);
+      expect(
+        gated.hasAttribute('data-testid', 'empty-connect-settings-link')
+      ).toBe(true);
+      expect(gated.html).toContain('href="/tenant/acme/settings?tab=byoc"');
+
+      const ungated = render(<AccountsEmptyState onConnect={vi.fn()} />);
+      expect(ungated.hasAttribute('disabled')).toBe(false);
+      expect(
+        ungated.hasAttribute('data-testid', 'empty-connect-disabled-reason')
+      ).toBe(false);
     });
   });
 

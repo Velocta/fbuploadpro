@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import {
   THEME,
   PALETTE,
@@ -12,11 +13,22 @@ import {
 
 export interface PagesEmptyStateProps {
   onAddPage: () => void;
+  /** Workspace subdomain, used for the Settings → Facebook link. */
+  subdomain?: string | undefined;
+  /**
+   * Whether the workspace's Facebook App ID and Secret are configured.
+   * `false` = known missing (show guidance); `undefined` = not checked yet.
+   */
+  facebookAppConfigured?: boolean | undefined;
 }
 
 export function PagesEmptyState({
   onAddPage,
+  subdomain,
+  facebookAppConfigured,
 }: Readonly<PagesEmptyStateProps>) {
+  const showMissingAppGuidance =
+    facebookAppConfigured === false && Boolean(subdomain);
   return (
     <div
       data-testid="pages-empty-state"
@@ -78,6 +90,40 @@ export function PagesEmptyState({
         Choose one of your connected Facebook accounts and select the pages you
         want to manage and publish reels to.
       </p>
+
+      {showMissingAppGuidance && (
+        <div
+          data-testid="pages-empty-facebook-app-guidance"
+          style={{
+            margin: `0 0 ${SPACING.xl} 0`,
+            padding: '10px 12px',
+            backgroundColor: 'rgba(250, 215, 52, 0.08)',
+            border: '1px solid rgba(250, 215, 52, 0.25)',
+            borderRadius: RADII.sm,
+            fontSize: '0.8125rem',
+            lineHeight: 1.5,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            maxWidth: '420px',
+          }}
+        >
+          <p style={{ margin: `0 0 ${SPACING.xs} 0` }}>
+            No account connected yet? First add your Facebook App ID and App
+            Secret in Workspace Settings, under Facebook. Then connect your
+            account and add its pages here.
+          </p>
+          <Link
+            href={`/tenant/${subdomain}/settings?tab=byoc`}
+            data-testid="pages-empty-settings-facebook-link"
+            style={{
+              color: PALETTE.primary,
+              fontWeight: TYPOGRAPHY.weights.semibold,
+              textDecoration: 'underline',
+            }}
+          >
+            Add App ID and Secret in Settings
+          </Link>
+        </div>
+      )}
 
       <button
         type="button"
