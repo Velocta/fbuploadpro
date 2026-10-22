@@ -109,92 +109,100 @@ class FakeDb {
   });
 
   private queryData = async (sql: string, params: unknown[] = []) => {
-    if (sql.includes('INSERT INTO social_accounts')) {
-      const [
-        wsId, platform, externalAccountId, displayName, avatarUrl,
-        encAccess, encRefresh, expiresAt, scopes,
-      ] = params as [string, string, string, string, string | null, string, string | null, string | null, string[]];
-      const key = `${wsId}|${platform}|${externalAccountId}`;
-      const existing = this.accounts.get(key);
-      if (existing) {
-        existing.display_name = displayName;
-        existing.avatar_url = avatarUrl;
-        existing.encrypted_access_token = encAccess;
-        existing.encrypted_refresh_token = encRefresh ?? existing.encrypted_refresh_token;
-        existing.token_expires_at = expiresAt;
-        existing.scopes = scopes;
-        existing.status = 'active';
-        return [{ id: existing.id }];
-      }
-      const row: SocialAccountStoreRow = {
-        id: this.nextId('acct'),
-        workspace_id: wsId,
-        platform,
-        external_account_id: externalAccountId,
-        display_name: displayName,
-        avatar_url: avatarUrl,
-        encrypted_access_token: encAccess,
-        encrypted_refresh_token: encRefresh,
-        token_expires_at: expiresAt,
-        scopes,
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      this.accounts.set(key, row);
-      return [{ id: row.id }];
-    }
-    if (sql.includes('INSERT INTO destinations')) {
-      const [wsId, accountId, platform, externalDestinationId, name, handle, avatarUrl] =
-        params as [string, string, string, string, string, string | null, string | null];
-      const key = `${accountId}|${externalDestinationId}`;
-      if (this.destinations.has(key)) return [];
-      const row: DestinationStoreRow = {
-        id: this.nextId('dest-row'),
-        workspace_id: wsId,
-        account_id: accountId,
-        platform,
-        external_destination_id: externalDestinationId,
-        name,
-        handle,
-        avatar_url: avatarUrl,
-        timezone: 'UTC',
-        status: 'active',
-        created_at: new Date().toISOString(),
-      };
-      this.destinations.set(key, row);
-      return [{ id: row.id }];
-    }
-    if (sql.includes('UPDATE social_accounts')) {
-      const [platform, externalAccountId] = params as [string, string];
-      const updated: Array<{ id: string }> = [];
-      for (const row of this.accounts.values()) {
-        if (row.platform === platform && row.external_account_id === externalAccountId) {
-          row.status = 'revoked';
-          updated.push({ id: row.id });
-        }
-      }
-      return updated;
-    }
-    if (sql.includes('JOIN social_accounts')) {
-      const [destinationId, wsId] = params as [string, string];
-      for (const row of this.destinations.values()) {
-        if (row.id === destinationId && row.workspace_id === wsId) {
-          const account = [...this.accounts.values()].find((a) => a.id === row.account_id);
-          return [{
-            ...row,
-            account_display_name: account?.display_name ?? '',
-            account_status: account?.status ?? 'active',
-          }];
-        }
-      }
-      return [];
-    }
+    if (sql.includes('INSERT INTO social_accounts')) return this.upsertAccount(params);
+    if (sql.includes('INSERT INTO destinations')) return this.insertDestination(params);
+    if (sql.includes('UPDATE social_accounts')) return this.revokeAccounts(params);
+    if (sql.includes('JOIN social_accounts')) return this.destinationDetail(params);
     if (sql.includes('FROM destinations')) {
       return [...this.destinations.values()].filter((r) => r.workspace_id === params[0]);
     }
     if (sql.includes('FROM social_accounts')) {
       return [...this.accounts.values()].filter((r) => r.workspace_id === params[0]);
+    }
+    return [];
+  };
+
+  private upsertAccount = (params: unknown[]) => {
+    const [
+      wsId, platform, externalAccountId, displayName, avatarUrl,
+      encAccess, encRefresh, expiresAt, scopes,
+    ] = params as [string, string, string, string, string | null, string, string | null, string | null, string[]];
+    const key = `${wsId}|${platform}|${externalAccountId}`;
+    const existing = this.accounts.get(key);
+    if (existing) {
+      existing.display_name = displayName;
+      existing.avatar_url = avatarUrl;
+      existing.encrypted_access_token = encAccess;
+      existing.encrypted_refresh_token = encRefresh ?? existing.encrypted_refresh_token;
+      existing.token_expires_at = expiresAt;
+      existing.scopes = scopes;
+      existing.status = 'active';
+      return [{ id: existing.id }];
+    }
+    const row: SocialAccountStoreRow = {
+      id: this.nextId('acct'),
+      workspace_id: wsId,
+      platform,
+      external_account_id: externalAccountId,
+      display_name: displayName,
+      avatar_url: avatarUrl,
+      encrypted_access_token: encAccess,
+      encrypted_refresh_token: encRefresh,
+      token_expires_at: expiresAt,
+      scopes,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    this.accounts.set(key, row);
+    return [{ id: row.id }];
+  };
+
+  private insertDestination = (params: unknown[]) => {
+    const [wsId, accountId, platform, externalDestinationId, name, handle, avatarUrl] =
+      params as [string, string, string, string, string, string | null, string | null];
+    const key = `${accountId}|${externalDestinationId}`;
+    if (this.destinations.has(key)) return [];
+    const row: DestinationStoreRow = {
+      id: this.nextId('dest-row'),
+      workspace_id: wsId,
+      account_id: accountId,
+      platform,
+      external_destination_id: externalDestinationId,
+      name,
+      handle,
+      avatar_url: avatarUrl,
+      timezone: 'UTC',
+      status: 'active',
+      created_at: new Date().toISOString(),
+    };
+    this.destinations.set(key, row);
+    return [{ id: row.id }];
+  };
+
+  private revokeAccounts = (params: unknown[]) => {
+    const [platform, externalAccountId] = params as [string, string];
+    const updated: Array<{ id: string }> = [];
+    for (const row of this.accounts.values()) {
+      if (row.platform === platform && row.external_account_id === externalAccountId) {
+        row.status = 'revoked';
+        updated.push({ id: row.id });
+      }
+    }
+    return updated;
+  };
+
+  private destinationDetail = (params: unknown[]) => {
+    const [destinationId, wsId] = params as [string, string];
+    for (const row of this.destinations.values()) {
+      if (row.id === destinationId && row.workspace_id === wsId) {
+        const account = [...this.accounts.values()].find((a) => a.id === row.account_id);
+        return [{
+          ...row,
+          account_display_name: account?.display_name ?? '',
+          account_status: account?.status ?? 'active',
+        }];
+      }
     }
     return [];
   };
@@ -369,11 +377,11 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
 
     expect(db.accounts.size).toBe(1);
     const row = [...db.accounts.values()][0];
-    expect(row.external_account_id).toBe('ext-acct-1');
-    expect(row.encrypted_access_token).not.toBe('fixture_access_token_plain');
-    expect(row.encrypted_access_token).not.toContain('fixture_access_token_plain');
+    expect(row.external_account_id).toBe(FIXTURE_ACCOUNT.externalAccountId);
+    expect(row.encrypted_access_token).not.toBe(FIXTURE_ACCOUNT.accessToken);
+    expect(row.encrypted_access_token).not.toContain(FIXTURE_ACCOUNT.accessToken);
     expect(await decryptToken(row.encrypted_access_token, TEST_ENCRYPTION_KEY)).toBe(
-      'fixture_access_token_plain'
+      FIXTURE_ACCOUNT.accessToken
     );
     expect(row.token_expires_at).toBeTruthy();
     expect(row.scopes).toEqual(['basic', 'publish']);
@@ -691,7 +699,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ user_id: 'ext-acct-1' }),
+      body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
     });
     const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
     expect(res.status).toBe(200);
@@ -705,7 +713,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     const req = new NextRequest('http://localhost:3000/api/connect/instagram/data-deletion', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ user_id: 'ext-acct-1' }),
+      body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
     });
     const res = await handleConnectDataDeletion(req, 'instagram', dbClient);
     expect(res.status).toBe(200);
@@ -809,7 +817,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     await runCallback(state);
     expect([...db.accounts.values()][0].status).toBe('active');
 
-    const payloadJson = JSON.stringify({ user_id: 'ext-acct-1', algorithm: 'HMAC-SHA256' });
+    const payloadJson = JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId, algorithm: 'HMAC-SHA256' });
     const payloadB64 = Buffer.from(payloadJson)
       .toString('base64')
       .replaceAll('+', '-')
@@ -980,43 +988,50 @@ class FakeSupabaseBuilder {
   }
 
   private executeList(): { data: Array<Record<string, unknown>>; error: null } {
+    if (this.mode === 'upsert') return { data: this.executeUpsert(), error: null };
+    if (this.mode === 'update') return { data: this.executeUpdate(), error: null };
+    return {
+      data: this.tableRows().filter((row) => this.matches(row)),
+      error: null,
+    };
+  }
+
+  private executeUpsert(): Array<Record<string, unknown>> {
     const rows = this.tableRows();
-    if (this.mode === 'upsert') {
-      const written: Array<Record<string, unknown>> = [];
-      for (const incoming of this.rowsToWrite) {
-        const conflictKeys =
-          this.table === 'social_accounts'
-            ? ['workspace_id', 'platform', 'external_account_id']
-            : ['account_id', 'external_destination_id'];
-        const existing = rows.find((row) =>
-          conflictKeys.every((key) => row[key] === incoming[key])
-        );
-        if (existing) {
-          Object.assign(existing, incoming);
-          written.push(existing);
-        } else {
-          const row = {
-            id: this.nextId(this.table),
-            created_at: new Date().toISOString(),
-            ...incoming,
-          };
-          rows.push(row);
-          written.push(row);
-        }
+    const conflictKeys =
+      this.table === 'social_accounts'
+        ? ['workspace_id', 'platform', 'external_account_id']
+        : ['account_id', 'external_destination_id'];
+    const written: Array<Record<string, unknown>> = [];
+    for (const incoming of this.rowsToWrite) {
+      const existing = rows.find((row) =>
+        conflictKeys.every((key) => row[key] === incoming[key])
+      );
+      if (existing) {
+        Object.assign(existing, incoming);
+        written.push(existing);
+      } else {
+        const row = {
+          id: this.nextId(this.table),
+          created_at: new Date().toISOString(),
+          ...incoming,
+        };
+        rows.push(row);
+        written.push(row);
       }
-      return { data: written, error: null };
     }
-    if (this.mode === 'update') {
-      const updated: Array<Record<string, unknown>> = [];
-      for (const row of rows) {
-        if (this.matches(row)) {
-          Object.assign(row, this.updateValues);
-          updated.push(row);
-        }
+    return written;
+  }
+
+  private executeUpdate(): Array<Record<string, unknown>> {
+    const updated: Array<Record<string, unknown>> = [];
+    for (const row of this.tableRows()) {
+      if (this.matches(row)) {
+        Object.assign(row, this.updateValues);
+        updated.push(row);
       }
-      return { data: updated, error: null };
     }
-    return { data: rows.filter((row) => this.matches(row)), error: null };
+    return updated;
   }
 
   private executeSingle(): {
@@ -1106,10 +1121,10 @@ describe('Connect framework via a Supabase-shaped client', () => {
 
     const accountRows = tables.get('social_accounts') ?? [];
     expect(accountRows).toHaveLength(1);
-    expect(accountRows[0].encrypted_access_token).not.toBe('fixture_access_token_plain');
+    expect(accountRows[0].encrypted_access_token).not.toBe(FIXTURE_ACCOUNT.accessToken);
     expect(
       await decryptToken(String(accountRows[0].encrypted_access_token), TEST_ENCRYPTION_KEY)
-    ).toBe('fixture_access_token_plain');
+    ).toBe(FIXTURE_ACCOUNT.accessToken);
 
     const completeRes = await handleConnectComplete(
       new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
@@ -1157,7 +1172,7 @@ describe('Connect framework via a Supabase-shaped client', () => {
       new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ user_id: 'ext-acct-1' }),
+        body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
       }),
       'instagram',
       supabase

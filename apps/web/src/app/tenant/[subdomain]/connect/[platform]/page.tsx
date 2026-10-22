@@ -23,6 +23,17 @@ interface ConnectPickerPageProps {
   searchParams: Promise<{ notice?: string }>;
 }
 
+function resolveNoticeCode(
+  notice: string | undefined,
+  platform: string | null,
+  hasPending: boolean
+): ConnectNoticeCode | null {
+  if (notice) return notice as ConnectNoticeCode;
+  if (!platform) return 'connect_failed';
+  if (!hasPending) return 'expired_link';
+  return null;
+}
+
 function pickerHeading(
   noticeCode: ConnectNoticeCode | null,
   mode: 'picker' | 'single-confirm',
@@ -84,13 +95,7 @@ export default async function ConnectPickerPage({
     }
   }
 
-  const noticeCode: ConnectNoticeCode | null = notice
-    ? (notice as ConnectNoticeCode)
-    : !platform
-      ? 'connect_failed'
-      : !pending
-        ? 'expired_link'
-        : null;
+  const noticeCode = resolveNoticeCode(notice, platform, Boolean(pending));
 
   const mode =
     (platform
