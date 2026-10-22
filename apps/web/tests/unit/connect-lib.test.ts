@@ -1,0 +1,340 @@
+/**
+ * @file connect-lib.test.ts
+ * @description Spec 123 Part C: branch-level tests for the connect
+ * framework library (state envelopes, persistence edge cases, platform
+ * callback parsing, registry guards).
+ */
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
+import {
+  decryptToken,
+  encryptToken,
+  type DatabaseClient,
+} from '@fbuploadpro/contracts';
+import {
+  signConnectEnvelope,
+  signConnectState,
+  signPendingDestinations,
+  signPkceCookie,
+  verifyConnectState,
+  verifyPendingDestinations,
+  verifyPkceCookie,
+  createConnectStatePayload,
+  generatePkcePair,
+  buildConnectCallbackUrl,
+} from '@/lib/connect/state';
+import {
+  fetchDestinationDetail,
+  markSocialAccountRevoked,
+  persistConnectedAccount,
+  persistPickedDestinations,
+  resolvePlatformClientCredentials,
+} from '@/lib/connect/persist';
+import { extractExternalAccountId } from '@/lib/connect/platform-callback';
+import {
+  clearPlatformConnectConfigsForTests,
+  registerPlatformConnectConfig,
+} from '@/lib/connect/registry';
+import { handleConnectDeauthorize } from '@/app/api/connect/[platform]/deauthorize/route';
+
+const TEST_SECRET = 'test_session_secret_at_least_32_chars_long_value';
+const TEST_ENCRYPTION_KEY =
+  '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const workspaceId = '22222222-2222-4222-a222-222222222222';
+const userId = '11111111-1111-4111-a111-111111111111';
+
+describe('Connect state envelopes', () => {
+  beforeEach(() => {
+    process.env.SESSION_SECRET = TEST_SECRET;
+    process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+  });
+
+  it('rejects malformed tokens, bad signatures, and expired payloads', async () => {
+    await expect(verifyConnectState('no-dot-here', TEST_SECRET)).rejects.toThrow();
+    await expect(verifyConnectState('abc.zzz', TEST_SECRET)).rejects.toThrow();
+    await expect(verifyConnectState('abc.', TEST_SECRET)).rejects.toThrow();
+
+    const payload = createConnectStatePayload({
+      workspaceId,
+      tenantSubdomain: 'acme',
+      userId,
+      platform: 'instagram',
+    });
+    const signed = await signConnectState(payload, TEST_SECRET);
+    await expect(verifyConnectState(signed, 'a-different-secret-value-32-chars!!')).rejects.toThrow();
+
+    const expired = await signConnectEnvelope(
+      { ...payload, exp: Math.floor(Date.now() / 1000) - 10 },
+      TEST_SECRET
+    );
+    await expect(verifyConnectState(expired, TEST_SECRET)).rejects.toThrow(
+      'expired'
+    );
+  });
+
+  it('rejects a state payload with missing fields', async () => {
+    const incomplete = await signConnectEnvelope(
+      { platform: 'instagram', exp: Math.floor(Date.now() / 1000) + 600 },
+      TEST_SECRET
+    );
+    await expect(verifyConnectState(incomplete, TEST_SECRET)).rejects.toThrow(
+      'incomplete'
+    );
+  });
+
+  it('round-trips PKCE cookies and pending destinations, rejecting incomplete payloads', async () => {
+    const { verifier, challenge } = await generatePkcePair();
+    expect(verifier.length).toBeGreaterThanOrEqual(43);
+    expect(challenge).not.toBe(verifier);
+
+    const cookie = await signPkceCookie(
+      {
+        nonce: 'nonce-1',
+        platform: 'x',
+        codeVerifier: verifier,
+        exp: Math.floor(Date.now() / 1000) + 600,
+      },
+      TEST_SECRET
+    );
+    const parsed = await verifyPkceCookie(cookie, TEST_SECRET);
+    expect(parsed.codeVerifier).toBe(verifier);
+
+    const incompleteCookie = await signConnectEnvelope(
+      { nonce: 'nonce-1', exp: Math.floor(Date.now() / 1000) + 600 },
+      TEST_SECRET
+    );
+    await expect(verifyPkceCookie(incompleteCookie, TEST_SECRET)).rejects.toThrow();
+
+    const pending = await signPendingDestinations(
+      {
+        accountId: 'acct-1',
+        workspaceId,
+        tenantSubdomain: 'acme',
+        platform: 'instagram',
+        destinations: [],
+        exp: Math.floor(Date.now() / 1000) + 900,
+      },
+      TEST_SECRET
+    );
+    const parsedPending = await verifyPendingDestinations(pending, TEST_SECRET);
+    expect(parsedPending.destinations).toEqual([]);
+
+    const badPending = await signConnectEnvelope(
+      {
+        accountId: 'acct-1',
+        workspaceId,
+        platform: 'instagram',
+        destinations: 'not-an-array',
+        exp: Math.floor(Date.now() / 1000) + 900,
+      },
+      TEST_SECRET
+    );
+    await expect(verifyPendingDestinations(badPending, TEST_SECRET)).rejects.toThrow();
+  });
+
+  it('builds the frozen callback URL from the request origin', () => {
+    expect(buildConnectCallbackUrl('http://localhost:3000/api/connect/x', 'x')).toBe(
+      'http://localhost:3000/api/connect/x/callback'
+    );
+    expect(
+      buildConnectCallbackUrl(new URL('https://app.example.com/tenant/acme'), 'threads')
+    ).toBe('https://app.example.com/api/connect/threads/callback');
+  });
+});
+
+describe('Registry guards', () => {
+  it('refuses a duplicate platform registration', () => {
+    clearPlatformConnectConfigsForTests();
+    const config = {
+      platform: 'tiktok' as const,
+      authorizeUrl: 'https://fixture.example/authorize',
+      clientIdSource: 'global' as const,
+      scopes: [],
+      usePkce: false,
+      destinationMode: 'picker' as const,
+      exchangeCode: async () => {
+        throw new Error('unused');
+      },
+      fetchDestinations: async () => [],
+    };
+    registerPlatformConnectConfig(config);
+    expect(() => registerPlatformConnectConfig(config)).toThrow(
+      'already registered'
+    );
+    clearPlatformConnectConfigsForTests();
+  });
+});
+
+describe('Persistence edge cases (legacy client)', () => {
+  const stored: { accounts: unknown[]; inserted: unknown[] } = {
+    accounts: [],
+    inserted: [],
+  };
+
+  function makeLegacyClient(
+    handler: (sql: string, params: unknown[]) => unknown[]
+  ): DatabaseClient {
+    return { query: vi.fn(async (sql: string, params: unknown[] = []) => handler(sql, params)) } as unknown as DatabaseClient;
+  }
+
+  beforeEach(() => {
+    process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+    stored.accounts = [];
+    stored.inserted = [];
+  });
+
+  it('persists a minimal account with null refresh token, expiry, and scopes', async () => {
+    let captured: unknown[] = [];
+    const client = makeLegacyClient((sql, params) => {
+      if (sql.includes('INSERT INTO social_accounts')) {
+        captured = params;
+        return [{ id: 'acct-min' }];
+      }
+      return [];
+    });
+    const result = await persistConnectedAccount(client, {
+      workspaceId,
+      platform: 'threads',
+      exchanged: {
+        externalAccountId: 'ext-min',
+        displayName: 'Minimal',
+        accessToken: 'plain-token',
+      },
+    });
+    expect(result.accountId).toBe('acct-min');
+    expect(captured[6]).toBeNull(); // encrypted refresh token
+    expect(captured[7]).toBeNull(); // token_expires_at
+    expect(captured[8]).toEqual([]); // scopes
+    expect(await decryptToken(String(captured[5]), TEST_ENCRYPTION_KEY)).toBe(
+      'plain-token'
+    );
+  });
+
+  it('fails loudly when the account insert returns no row', async () => {
+    const client = makeLegacyClient(() => []);
+    await expect(
+      persistConnectedAccount(client, {
+        workspaceId,
+        platform: 'threads',
+        exchanged: {
+          externalAccountId: 'ext-min',
+          displayName: 'Minimal',
+          accessToken: 'plain-token',
+        },
+      })
+    ).rejects.toThrow('Failed to persist connected account');
+  });
+
+  it('persists no destinations for an empty pick without touching the database', async () => {
+    const client = makeLegacyClient(() => {
+      throw new Error('should not be called');
+    });
+    const result = await persistPickedDestinations(client, {
+      workspaceId,
+      accountId: 'acct-1',
+      platform: 'instagram',
+      destinations: [],
+    });
+    expect(result.inserted).toBe(0);
+  });
+
+  it('reports zero revocations when no account matches', async () => {
+    const client = makeLegacyClient(() => []);
+    const result = await markSocialAccountRevoked(client, 'instagram', 'nobody');
+    expect(result.updated).toBe(0);
+  });
+
+  it('returns null for a missing destination and missing credentials', async () => {
+    const client = makeLegacyClient(() => []);
+    expect(await fetchDestinationDetail(client, workspaceId, 'missing')).toBeNull();
+    expect(
+      await resolvePlatformClientCredentials(client, workspaceId, 'instagram')
+    ).toBeNull();
+  });
+
+  it('decrypts stored credentials for the exchange', async () => {
+    const encrypted = await encryptToken('the-secret', TEST_ENCRYPTION_KEY);
+    const client = makeLegacyClient((sql) => {
+      if (sql.includes('FROM platform_credentials')) {
+        return [{ client_id: 'app-9', encrypted_client_secret: encrypted }];
+      }
+      return [];
+    });
+    const resolved = await resolvePlatformClientCredentials(
+      client,
+      workspaceId,
+      'threads'
+    );
+    expect(resolved).toEqual({ clientId: 'app-9', clientSecret: 'the-secret' });
+  });
+});
+
+describe('Platform callback payload parsing', () => {
+  it('reads the account ID from a JSON body', async () => {
+    const req = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userId: 12345 }),
+    });
+    expect(await extractExternalAccountId(req)).toBe('12345');
+  });
+
+  it('reads the account ID from a form field', async () => {
+    const form = new URLSearchParams({ user_id: 'form-user-7' });
+    const req = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+    expect(await extractExternalAccountId(req)).toBe('form-user-7');
+  });
+
+  it('reads the account ID from a JSON signed_request payload', async () => {
+    const payloadB64 = Buffer.from(JSON.stringify({ user_id: 'signed-user-3' }))
+      .toString('base64')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '');
+    const req = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ signed_request: `sig.${payloadB64}` }),
+    });
+    expect(await extractExternalAccountId(req)).toBe('signed-user-3');
+  });
+
+  it('returns null for malformed bodies and unknown content types', async () => {
+    const badJson = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'this is not json',
+    });
+    expect(await extractExternalAccountId(badJson)).toBeNull();
+
+    const plain = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: 'user_id=abc',
+    });
+    expect(await extractExternalAccountId(plain)).toBeNull();
+
+    const badSigned = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ signed_request: 'only-one-part' }),
+    });
+    expect(await extractExternalAccountId(badSigned)).toBeNull();
+  });
+
+  it('deauthorize still answers 200 when the body cannot be parsed', async () => {
+    const req = new NextRequest('http://localhost:3000/api/connect/threads/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'not json at all',
+    });
+    const res = await handleConnectDeauthorize(req, 'threads', {
+      query: vi.fn(async () => []),
+    } as unknown as DatabaseClient);
+    expect(res.status).toBe(200);
+  });
+});

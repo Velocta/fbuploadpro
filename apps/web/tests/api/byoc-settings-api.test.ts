@@ -1,11 +1,32 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { encryptToken, signSessionToken } from '@fbuploadpro/contracts';
+import { signSessionToken } from '@fbuploadpro/contracts';
 import { GET as getBYOC, PUT as saveBYOC, DELETE as deleteBYOC } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
 import * as authModule from '@/lib/supabase-auth';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
+/** Chainable select builder: any number of .eq() calls, then .maybeSingle(). */
+function selectChain(result: { data: unknown; error: unknown }) {
+  const builder: any = {
+    eq: vi.fn(() => builder),
+    maybeSingle: vi.fn().mockResolvedValue(result),
+  };
+  return builder;
+}
+
+function workspaceFound(workspaceId: string) {
+  return {
+    select: () => selectChain({ data: { id: workspaceId }, error: null }),
+  };
+}
+
+function workspaceMissing() {
+  return {
+    select: () => selectChain({ data: null, error: null }),
+  };
+}
 
 describe('Facebook BYOC Settings API Routes', () => {
   const userId = '11111111-1111-4111-a111-111111111111';
@@ -64,17 +85,7 @@ describe('Facebook BYOC Settings API Routes', () => {
     it('returns 404 when workspace is not found for tenant', async () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
+          if (table === 'workspaces') return workspaceMissing();
           return {};
         }),
       };
@@ -90,25 +101,9 @@ describe('Facebook BYOC Settings API Routes', () => {
     it('returns 200 with unverified status and empty fields when no BYOC credentials exist', async () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                }),
-              }),
-            };
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
+            return { select: () => selectChain({ data: null, error: null }) };
           }
           return {};
         }),
@@ -130,34 +125,22 @@ describe('Facebook BYOC Settings API Routes', () => {
     it('returns 200 with credentials info when BYOC is saved', async () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
             return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
+              select: () =>
+                selectChain({
+                  data: {
+                    workspace_id: workspaceId,
+                    platform: 'facebook',
+                    client_id: '123456789012345',
+                    encrypted_client_secret: 'enc_secret_abc',
+                    status: 'valid',
+                    last_tested_at: '2026-10-14T10:00:00Z',
+                    created_at: '2026-10-14T09:00:00Z',
+                  },
+                  error: null,
                 }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: {
-                      workspace_id: workspaceId,
-                      fb_app_id: '123456789012345',
-                      encrypted_fb_app_secret: 'enc_secret_abc',
-                      status: 'valid',
-                      last_tested_at: '2026-10-14T10:00:00Z',
-                      created_at: '2026-10-14T09:00:00Z',
-                    },
-                    error: null,
-                  }),
-                }),
-              }),
             };
           }
           return {};
@@ -194,25 +177,9 @@ describe('Facebook BYOC Settings API Routes', () => {
     it('returns 400 when omitting secret on first-time setup without existing secret', async () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                }),
-              }),
-            };
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
+            return { select: () => selectChain({ data: null, error: null }) };
           }
           return {};
         }),
@@ -234,21 +201,9 @@ describe('Facebook BYOC Settings API Routes', () => {
       const upsertMock = vi.fn().mockResolvedValue({ error: null });
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              upsert: upsertMock,
-            };
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
+            return { upsert: upsertMock };
           }
           return {};
         }),
@@ -271,41 +226,33 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(upsertMock).toHaveBeenCalledWith(
         expect.objectContaining({
           workspace_id: workspaceId,
-          user_id: userId,
-          fb_app_id: '123456789012345',
+          platform: 'facebook',
+          client_id: '123456789012345',
           status: 'unverified',
         }),
-        { onConflict: 'workspace_id' }
+        { onConflict: 'workspace_id,platform' }
       );
+      const upsertArg = upsertMock.mock.calls[0][0];
+      expect(upsertArg.encrypted_client_secret).toBeTruthy();
+      expect(upsertArg.encrypted_client_secret).not.toBe('super_secret_fb_key_999');
+      expect(upsertArg).not.toHaveProperty('user_id');
     });
 
     it('returns 200 when updating fbAppId without changing existing secret', async () => {
+      const finalEqMock = vi.fn().mockResolvedValue({ error: null });
       const updateMock = vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
+        eq: vi.fn().mockReturnValue({ eq: finalEqMock }),
       });
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
             return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
+              select: () =>
+                selectChain({
+                  data: { encrypted_client_secret: 'already_encrypted' },
+                  error: null,
                 }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: { encrypted_fb_app_secret: 'already_encrypted' },
-                    error: null,
-                  }),
-                }),
-              }),
               update: updateMock,
             };
           }
@@ -325,7 +272,7 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(json.success).toBe(true);
       expect(updateMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          fb_app_id: '987654321098765',
+          client_id: '987654321098765',
           status: 'unverified',
         })
       );
@@ -353,17 +300,7 @@ describe('Facebook BYOC Settings API Routes', () => {
     it('returns 404 when workspace is not found for tenant', async () => {
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
+          if (table === 'workspaces') return workspaceMissing();
           return {};
         }),
       };
@@ -377,26 +314,15 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(res.status).toBe(404);
     });
 
-    it('returns 200 with success when deleting credentials from workspace_byoc_credentials', async () => {
-      const deleteEqMock = vi.fn().mockResolvedValue({ error: null });
-      const deleteMock = vi.fn().mockReturnValue({ eq: deleteEqMock });
+    it('returns 200 with success when deleting credentials from platform_credentials', async () => {
+      const platformEqMock = vi.fn().mockResolvedValue({ error: null });
+      const workspaceEqMock = vi.fn().mockReturnValue({ eq: platformEqMock });
+      const deleteMock = vi.fn().mockReturnValue({ eq: workspaceEqMock });
       const mockSupabase = {
         from: vi.fn((table: string) => {
-          if (table === 'workspaces') {
-            return {
-              select: () => ({
-                eq: () => ({
-                  eq: () => ({
-                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: workspaceId }, error: null }),
-                  }),
-                }),
-              }),
-            };
-          }
-          if (table === 'workspace_byoc_credentials') {
-            return {
-              delete: deleteMock,
-            };
+          if (table === 'workspaces') return workspaceFound(workspaceId);
+          if (table === 'platform_credentials') {
+            return { delete: deleteMock };
           }
           return {};
         }),
@@ -413,8 +339,8 @@ describe('Facebook BYOC Settings API Routes', () => {
       expect(json.success).toBe(true);
       expect(json.disconnected).toBe(true);
       expect(deleteMock).toHaveBeenCalledTimes(1);
-      expect(deleteEqMock).toHaveBeenCalledWith('workspace_id', workspaceId);
+      expect(workspaceEqMock).toHaveBeenCalledWith('workspace_id', workspaceId);
+      expect(platformEqMock).toHaveBeenCalledWith('platform', 'facebook');
     });
   });
 });
-

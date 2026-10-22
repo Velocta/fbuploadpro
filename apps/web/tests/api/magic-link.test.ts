@@ -57,14 +57,14 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
             }),
           };
         }
-        if (table === 'workspace_byoc_credentials') {
+        if (table === 'platform_credentials') {
           return {
             select: vi.fn().mockReturnThis(),
             eq: vi.fn().mockReturnThis(),
             maybeSingle: vi.fn().mockResolvedValue({
               data: {
-                fb_app_id: 'fb_app_id_123',
-                encrypted_fb_app_secret: validEncryptedFbAppSecret,
+                client_id: 'fb_app_id_123',
+                encrypted_client_secret: validEncryptedFbAppSecret,
               },
               error: null,
             }),
@@ -200,7 +200,7 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
       expect(statePayload.isMagic).toBe(true);
     });
 
-    it('resolves workspace BYOC app_id if configured in workspace_byoc_credentials', async () => {
+    it('resolves workspace BYOC app_id if configured in platform_credentials', async () => {
       const now = Math.floor(Date.now() / 1000);
       const magicToken = await signMagicLinkToken(
         {
@@ -226,14 +226,14 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
               }),
             };
           }
-          if (table === 'workspace_byoc_credentials') {
+          if (table === 'platform_credentials') {
             return {
               select: vi.fn().mockReturnThis(),
               eq: vi.fn().mockReturnThis(),
               maybeSingle: vi.fn().mockResolvedValue({
                 data: {
-                  fb_app_id: 'byoc_custom_fb_app_999',
-                  encrypted_fb_app_secret: validEncryptedFbAppSecret,
+                  client_id: 'byoc_custom_fb_app_999',
+                  encrypted_client_secret: validEncryptedFbAppSecret,
                 },
                 error: null,
               }),
@@ -346,11 +346,11 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
           if (sql.includes('FROM workspaces')) {
             return Promise.resolve([{ id: 'workspace_acme_123' }]);
           }
-          if (sql.includes('FROM workspace_byoc_credentials')) {
+          if (sql.includes('FROM platform_credentials')) {
             return Promise.resolve([
               {
-                fb_app_id: 'fb_app_id_123',
-                encrypted_fb_app_secret: validEncryptedFbAppSecret,
+                client_id: 'fb_app_id_123',
+                encrypted_client_secret: validEncryptedFbAppSecret,
               },
             ]);
           }
