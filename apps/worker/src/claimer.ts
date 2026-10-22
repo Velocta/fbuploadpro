@@ -30,18 +30,23 @@ export const CLAIM_MAX_PER_DESTINATION = 3;
 /**
  * Per-tick round cap, per (platform, lane).
  *
- * Arithmetic vs the < 30 s tick goal (spec 122's load-proof criterion):
- * at the launch registry (one platform — Facebook, spec 122) a tick runs
- * at most 2 lanes × 4 rounds = 8 claim RPCs, and each full round adds
- * 500 / 100 = 5 `sendBatch` calls, so ≤ 8 RPC + 40 sendBatch HTTPS
- * round-trips per tick. Even at a pessimistic ~250 ms per round-trip
- * that is ~12 s of sequential I/O in the absolute worst case (every
- * round full on both lanes), and typical ticks stop after the first
- * short round. The cap bounds tick duration independently of backlog
- * depth: un-claimed backlog simply stays `queued` for the next tick
- * (1-minute cadence), and consumers drain the queues in parallel.
+ * TUNED 4 → 1 by the spec 122 load-proof harness (see
+ * apps/worker/load-harness/results/): the original arithmetic assumed
+ * ~250 ms per claim RPC, sized for a one-platform registry. Measured on
+ * the harness database at a 1M-item backlog, one unified
+ * `claim_due_queue_items` call costs ~1.1–1.6 s (the D5-amended RPC makes
+ * three passes over the due set), independent of the round limit. With
+ * six registered platforms a tick runs 12 (platform, lane) pairs, so a
+ * cap of 4 meant up to 48 sequential claim RPCs ≈ 55–75 s per tick —
+ * over the < 30 s tick criterion (spec 119 §5.2) at depth. At a cap of
+ * 1 a tick is ≤ 12 claim RPCs, and claim capacity is still
+ * 12 × 500 = 6,000 items/tick ≈ 8.6M items/day at the 1-minute tick
+ * cadence — far above the consumer drain rate the harness certifies.
+ * The cap bounds tick duration independently of backlog depth:
+ * un-claimed backlog simply stays `queued` for the next tick, and
+ * consumers drain the queues in parallel.
  */
-export const MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK = 4;
+export const MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK = 1;
 
 /** Cloudflare Queues `sendBatch` accepts at most 100 messages per call. */
 export const SEND_BATCH_CHUNK_SIZE = 100;
