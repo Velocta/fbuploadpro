@@ -2,6 +2,7 @@ import {
   decryptToken,
   encryptToken,
   getTokenRefreshConfig,
+  InternalError,
   isTokenRefreshDue,
   type DatabaseSocialAccountRow,
   type Platform,
@@ -367,7 +368,7 @@ async function refreshOneAccount(
         .select('id')
     );
     if (rows.length === 0) {
-      throw new Error('persist matched no row — the refresh lease was lost before persist');
+      throw new InternalError('persist matched no row — the refresh lease was lost before persist');
     }
   } catch (err) {
     // The platform may already have spent the old refresh token (X
@@ -399,7 +400,7 @@ export async function runRefreshCycle(
 ): Promise<RefreshCycleResult> {
   const masterKey = env.TOKEN_ENCRYPTION_KEY;
   if (!masterKey) {
-    throw new Error('TOKEN_ENCRYPTION_KEY is not configured; cannot run token refresh cycle');
+    throw new InternalError('TOKEN_ENCRYPTION_KEY is not configured; cannot run token refresh cycle');
   }
 
   const result: RefreshCycleResult = {
