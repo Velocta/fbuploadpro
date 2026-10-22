@@ -704,9 +704,11 @@ export function PlatformCredentialsView({
       showToast(`Your ${displayName} app is connected.`, 'success');
     } catch (err) {
       showToast(
-        err instanceof Error
-          ? err.message
-          : `Couldn't save your ${displayName} app details. Please try again.`,
+        err instanceof TypeError
+          ? `Network error while connecting ${displayName}.`
+          : err instanceof Error
+            ? err.message
+            : `Couldn't save your ${displayName} app details. Please try again.`,
         'error'
       );
     } finally {
