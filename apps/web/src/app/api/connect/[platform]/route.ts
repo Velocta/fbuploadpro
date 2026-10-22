@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { buildTenantUrl } from '@fbuploadpro/contracts';
-import { getSessionSecret } from '@fbuploadpro/contracts';
+import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import {
   getPlatformConnectConfig,

@@ -22,8 +22,11 @@ import {
   COMPONENT_STYLES,
 } from '@/lib/theme';
 import { formatPageIdSuffix } from '@/components/pages/page-card';
-import type { DiscoveredDestination } from '@/lib/connect/registry';
-import { PLATFORM_LABELS, type Platform } from '@/lib/connect/registry';
+import {
+  PLATFORM_LABELS,
+  type DiscoveredDestination,
+  type Platform,
+} from '@/lib/connect/registry';
 
 export type DestinationPickResult =
   | { ok: true; accountsUrl: string }
