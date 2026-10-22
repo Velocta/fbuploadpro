@@ -164,13 +164,39 @@ fi
 while IFS= read -r match; do
   file="${match%%:*}"
   cleaned="$(printf '%s' "$match" | sed -E 's/\$\{[^}]*\}//g')"
-  for tok in $(printf '%s' "$cleaned" | grep -oE "[^[:space:]\"'\`{}<>=]+" || true); do
+  # Tokenize WITHOUT splitting on "=" (PR-F3 fix): attribute-variant brackets
+  # (data-[state=open]:, data-[side=top]:, group-data-[collapsible=icon]:)
+  # legitimately contain "=" and are variants, not values (spec 129 §5.4,
+  # PR-F3 coordinator ruling). The old "[^...<>=]+" pattern mangled such a
+  # token to "data-[state", flagged it, and made it un-allowlistable.
+  # Delimiters here are quotes, backticks, braces, parens, commas and angle
+  # brackets; whitespace splitting happens via word expansion.
+  for tok in $(printf '%s' "$cleaned" | tr "\"'\`{}(),<>" ' ' || true); do
     case "$tok" in
       *' '*|'') continue ;;
     esac
-    if printf '%s' "$tok" | grep -qE -e '-\[' -e '^!' -e '[a-zA-Z]!$'; then
+    # Strip attribute-variant bracket segments before testing: the ban
+    # targets arbitrary VALUES; the utility a permitted variant modifies is
+    # still checked once its variant segment is removed (so
+    # data-[state=open]:text-[13px] still fails). Two variant forms exist:
+    # attribute-with-value ([...=...], e.g. data-[state=open]:) and the
+    # boolean-presence form of data-/aria- variants (data-[inset]:,
+    # data-[disabled]:, group-data-[collapsible=icon]: is the =-form).
+    stripped="$(printf '%s' "$tok" | sed -E -e 's/\[[^]]*=[^]]*\]/V/g' -e 's/(^|:)([a-zA-Z-]*data|aria)-\[[a-zA-Z][a-zA-Z0-9_-]*\]/\1V/g')"
+    is_violation=0
+    if printf '%s' "$tok" | grep -qE -e '^!' -e '[a-zA-Z]!$'; then
+      is_violation=1
+    elif printf '%s' "$stripped" | grep -qE -e '-\['; then
+      is_violation=1
+    elif printf '%s' "$stripped" | grep -qE -e '(^|:)\[[a-zA-Z][a-zA-Z-]*:[^]]*\]'; then
+      # Leading-bracket arbitrary PROPERTY (e.g. [mask-type:luminance]),
+      # standalone or behind a variant prefix: a value smuggled as a CSS
+      # property. Previously uncaught (the old pattern required "-[").
+      is_violation=1
+    fi
+    if [ "$is_violation" -eq 1 ]; then
       if ! awk -v f="$file" -v t="$tok" '$1=="arbitrary-allow" && $2==f && $3==t { found=1 } END { exit !found }' "$DS_BASELINE" 2>/dev/null; then
-        violation "Tailwind arbitrary value / important modifier banned: ${tok} in ${match} -- use token-backed utilities only (spec 129 §5.4); exceptions need an arbitrary-allow line in apps/web/design-system-baseline.txt"
+        violation "Tailwind arbitrary value / important modifier banned: ${tok} in ${match} -- use token-backed utilities only (spec 129 §5.4); attribute variants such as data-[state=open]: are permitted, arbitrary values and arbitrary properties are not; exceptions need an arbitrary-allow line in apps/web/design-system-baseline.txt"
       fi
     fi
   done
