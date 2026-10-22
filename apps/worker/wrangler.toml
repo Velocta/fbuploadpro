@@ -4,7 +4,45 @@ compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-crons = ["* * * * *", "0 2 * * *"]
+crons = ["* * * * *"]
 
-[vars]
-DISPATCH_CONCURRENCY = "25"
+# Spec 121: publish pipeline queues. The queues themselves are provisioned
+# with wrangler before the deploy that binds them (see PR ops steps):
+#   wrangler queues create publish-fast
+#   wrangler queues create publish-heavy
+#   wrangler queues create publish-fast-dlq
+#   wrangler queues create publish-heavy-dlq
+
+[[queues.producers]]
+queue = "publish-fast"
+binding = "PUBLISH_FAST_QUEUE"
+
+[[queues.producers]]
+queue = "publish-heavy"
+binding = "PUBLISH_HEAVY_QUEUE"
+
+[[queues.consumers]]
+queue = "publish-fast"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+max_concurrency = 20
+dead_letter_queue = "publish-fast-dlq"
+
+[[queues.consumers]]
+queue = "publish-heavy"
+max_batch_size = 5
+max_batch_timeout = 5
+max_retries = 3
+max_concurrency = 10
+dead_letter_queue = "publish-heavy-dlq"
+
+[[queues.consumers]]
+queue = "publish-fast-dlq"
+max_batch_size = 10
+max_concurrency = 5
+
+[[queues.consumers]]
+queue = "publish-heavy-dlq"
+max_batch_size = 10
+max_concurrency = 5
