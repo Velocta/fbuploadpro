@@ -20,3 +20,7 @@ export * from './domain/desktop.js';
 export * from './domain/workspace.js';
 export * from './domain/database.js';
 export * from './publishing/bulk.js';
+export * from './publishing/publisher.js';
+export * from './publishing/lanes.js';
+export * from './publishing/limits.js';
+export * from './publishing/token-refresh.js';
