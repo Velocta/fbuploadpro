@@ -12,6 +12,7 @@ import React, {
   isValidElement,
   Children,
 } from 'react';
+import Link from 'next/link';
 import { PALETTE, THEME, SPACING, RADII, TYPOGRAPHY } from '../../lib/theme';
 import { Tooltip } from './tooltip';
 
@@ -994,6 +995,13 @@ export interface SidebarMenuButtonProps
   leftIcon?: React.ReactNode | undefined;
   rightIcon?: React.ReactNode | undefined;
   asChild?: boolean | undefined;
+  /**
+   * When set, the item renders as a Next.js `<Link>` instead of a
+   * `<button>`, so a single click navigates via client-side routing (with
+   * Link's built-in prefetching) and never depends on a JavaScript click
+   * handler completing (spec 110).
+   */
+  href?: string | undefined;
 }
 
 export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
@@ -1006,6 +1014,10 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
       leftIcon,
       rightIcon,
       asChild = false,
+      href,
+      onClick,
+      onMouseEnter,
+      onMouseLeave,
       className,
       style,
       children,
@@ -1154,20 +1166,56 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
       </>
     );
 
-    const buttonElement =
-      asChild && isValidElement(children) ? (
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        cloneElement(children as React.ReactElement<any>, {
-          'data-slot': 'sidebar-menu-button',
-          'data-sidebar': 'menu-button',
-          'data-size': size,
-          'data-active': isActive ? 'true' : 'false',
-          'data-collapsed': isCollapsed ? 'true' : 'false',
-          role: 'menuitem',
-          'aria-current': isActive ? 'page' : undefined,
-          style: buttonStyle,
-        })
-      ) : (
+    let buttonElement: React.ReactElement;
+    if (href && !asChild) {
+      const linkHref = href;
+      // Remaining props are plain anchor attributes (href and the mouse/click
+      // handlers were destructured out above). They are re-typed to Link's own
+      // props — minus href, passed explicitly — because this repo's
+      // exactOptionalPropertyTypes rejects ButtonHTMLAttributes optionals
+      // when spread into next/link.
+      buttonElement = (
+        <Link
+          ref={ref as React.Ref<HTMLAnchorElement>}
+          href={linkHref}
+          role="menuitem"
+          data-slot="sidebar-menu-button"
+          data-sidebar="menu-button"
+          data-size={size}
+          data-active={isActive ? 'true' : 'false'}
+          data-collapsed={isCollapsed ? 'true' : 'false'}
+          aria-current={isActive ? 'page' : undefined}
+          onClick={(e) => {
+            onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseEnter={(e) => {
+            setIsHovered(true);
+            onMouseEnter?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseLeave={(e) => {
+            setIsHovered(false);
+            onMouseLeave?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          className={className}
+          style={buttonStyle}
+          {...(props as unknown as Omit<React.ComponentProps<typeof Link>, 'href'>)}
+        >
+          {innerContent}
+        </Link>
+      );
+    } else if (asChild && isValidElement(children)) {
+      buttonElement = cloneElement(children as React.ReactElement<any>, {
+        'data-slot': 'sidebar-menu-button',
+        'data-sidebar': 'menu-button',
+        'data-size': size,
+        'data-active': isActive ? 'true' : 'false',
+        'data-collapsed': isCollapsed ? 'true' : 'false',
+        role: 'menuitem',
+        'aria-current': isActive ? 'page' : undefined,
+        style: buttonStyle,
+      });
+    } else {
+      buttonElement = (
         <button
           ref={ref}
           type="button"
@@ -1178,8 +1226,9 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           data-active={isActive ? 'true' : 'false'}
           data-collapsed={isCollapsed ? 'true' : 'false'}
           aria-current={isActive ? 'page' : undefined}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          onClick={onClick}
+          onMouseEnter={onMouseEnter ?? (() => setIsHovered(true))}
+          onMouseLeave={onMouseLeave ?? (() => setIsHovered(false))}
           className={className}
           style={buttonStyle}
           {...props}
@@ -1187,6 +1236,7 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           {innerContent}
         </button>
       );
+    }
 
     if (isCollapsed && tooltip) {
       return (
@@ -1438,11 +1488,30 @@ export interface SidebarMenuSubButtonProps
   isActive?: boolean | undefined;
   size?: 'sm' | 'md' | undefined;
   asChild?: boolean | undefined;
+  /**
+   * When set, the item renders as a Next.js `<Link>` instead of a
+   * `<button>`, so a single click navigates via client-side routing (with
+   * Link's built-in prefetching) and never depends on a JavaScript click
+   * handler completing (spec 110).
+   */
+  href?: string | undefined;
 }
 
 export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSubButtonProps>(
   function SidebarMenuSubButton(
-    { isActive = false, size = 'md', asChild = false, className, style, children, ...props },
+    {
+      isActive = false,
+      size = 'md',
+      asChild = false,
+      href,
+      onClick,
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      style,
+      children,
+      ...props
+    },
     ref
   ) {
     const { state, isMobile } = useSidebar();
@@ -1499,6 +1568,112 @@ export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSub
     }
 
     return (
+      <SidebarMenuSubControl
+        ref={ref}
+        href={href}
+        isActive={isActive}
+        size={size}
+        className={className}
+        style={subButtonStyle}
+        restProps={props}
+        onClick={onClick}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onHoverChange={setIsHovered}
+      >
+        {children}
+      </SidebarMenuSubControl>
+    );
+  }
+);
+
+interface SidebarMenuSubControlProps {
+  href?: string | undefined;
+  isActive: boolean;
+  size: 'sm' | 'md';
+  className?: string | undefined;
+  style: React.CSSProperties;
+  restProps: React.ButtonHTMLAttributes<HTMLButtonElement>;
+  onClick?: React.MouseEventHandler<HTMLButtonElement> | undefined;
+  onMouseEnter?: React.MouseEventHandler<HTMLButtonElement> | undefined;
+  onMouseLeave?: React.MouseEventHandler<HTMLButtonElement> | undefined;
+  onHoverChange: (hovered: boolean) => void;
+  children: React.ReactNode;
+}
+
+/**
+ * Renders the sub-menu leaf element for SidebarMenuSubButton: a Next.js
+ * <Link> (client-side routing) when `href` is set (spec 110), otherwise a
+ * plain button. Extracted so SidebarMenuSubButton stays within the
+ * cognitive-complexity budget.
+ */
+const SidebarMenuSubControl = forwardRef<HTMLButtonElement, SidebarMenuSubControlProps>(
+  function SidebarMenuSubControl(
+    {
+      href,
+      isActive,
+      size,
+      className,
+      style,
+      restProps,
+      onClick,
+      onMouseEnter,
+      onMouseLeave,
+      onHoverChange,
+      children,
+    },
+    ref
+  ) {
+    const content = (
+      <span
+        style={{
+          flex: 1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {children}
+      </span>
+    );
+
+    if (href) {
+      const linkHref = href;
+      // restProps are plain anchor attributes here (href and the mouse/click
+      // handlers were destructured out above); re-typed to Link's own props
+      // minus href for the same exactOptionalPropertyTypes reason documented
+      // on SidebarMenuButton's Link branch.
+      return (
+        <Link
+          ref={ref as React.Ref<HTMLAnchorElement>}
+          href={linkHref}
+          role="menuitem"
+          data-slot="sidebar-menu-sub-button"
+          data-sidebar="menu-sub-button"
+          data-size={size}
+          data-active={isActive ? 'true' : 'false'}
+          aria-current={isActive ? 'page' : undefined}
+          onClick={(e) => {
+            onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseEnter={(e) => {
+            onHoverChange(true);
+            onMouseEnter?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseLeave={(e) => {
+            onHoverChange(false);
+            onMouseLeave?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          className={className}
+          style={style}
+          {...(restProps as unknown as Omit<React.ComponentProps<typeof Link>, 'href'>)}
+        >
+          {content}
+        </Link>
+      );
+    }
+
+    return (
       <button
         ref={ref}
         type="button"
@@ -1508,22 +1683,14 @@ export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSub
         data-size={size}
         data-active={isActive ? 'true' : 'false'}
         aria-current={isActive ? 'page' : undefined}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onClick={onClick}
+        onMouseEnter={onMouseEnter ?? (() => onHoverChange(true))}
+        onMouseLeave={onMouseLeave ?? (() => onHoverChange(false))}
         className={className}
-        style={subButtonStyle}
-        {...props}
+        style={style}
+        {...restProps}
       >
-        <span
-          style={{
-            flex: 1,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {children}
-        </span>
+        {content}
       </button>
     );
   }

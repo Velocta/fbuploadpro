@@ -21,6 +21,21 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+// Render next/link as a plain anchor tagged with data-next-link, so tests can
+// prove leaves render through Next.js Link (client-side routing) rather than
+// hand-rolled raw <a> elements (which would force full page reloads).
+vi.mock('next/link', async () => {
+  const ReactModule = await import('react');
+  type MockLinkProps = {
+    href: string;
+    children?: React.ReactNode;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>;
+  return {
+    default: ({ href, children, ...props }: MockLinkProps) =>
+      ReactModule.createElement('a', { href, 'data-next-link': 'true', ...props }, children),
+  };
+});
+
 describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & Spec 052)', () => {
   it('renders FBUploadPro branding in SidebarHeader and Option A studio footer card in SidebarFooter (Spec 052)', () => {
     mockPathname = '/tenant/acme';
@@ -145,8 +160,8 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     );
 
     expect(html).toContain('aria-current="page"');
-    const buttons = findTags('button');
-    const activeMediaBtn = buttons.find(
+    const anchors = findTags('a');
+    const activeMediaBtn = anchors.find(
       (b) => b.innerHTML.includes('Media Library') && b.attributes['data-active'] === 'true'
     );
     expect(activeMediaBtn).toBeDefined();
@@ -164,8 +179,8 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     );
 
     expect(html).toContain('aria-current="page"');
-    const buttons = findTags('button');
-    const activeDownloaderBtn = buttons.find(
+    const anchors = findTags('a');
+    const activeDownloaderBtn = anchors.find(
       (b) => b.innerHTML.includes('Downloader') && b.attributes['data-active'] === 'true'
     );
     expect(activeDownloaderBtn).toBeDefined();
@@ -183,14 +198,14 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     );
 
     expect(html).toContain('aria-current="page"');
-    const buttons = findTags('button');
-    const activeFdolaBtn = buttons.find(
+    const anchors = findTags('a');
+    const activeFdolaBtn = anchors.find(
       (b) => b.innerHTML.includes('Fdola Studio') && b.attributes['data-active'] === 'true'
     );
     expect(activeFdolaBtn).toBeDefined();
   });
 
-  it('renders Pages directly below Accounts inside the collapsible Facebook sidebar menu and navigates to /tenant/{subdomain}/pages when clicked', () => {
+  it('renders Pages directly below Accounts inside the collapsible Facebook sidebar menu as a Next.js Link anchor to /tenant/{subdomain}/pages (Spec 110)', () => {
     mockPathname = '/tenant/acme';
     mockPush.mockClear();
 
@@ -203,7 +218,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
       return capturedTree;
     }
 
-    const { hasText, html } = render(
+    const { hasText, html, findTags } = render(
       <SidebarProvider>
         <CaptureSidebar />
       </SidebarProvider>
@@ -220,32 +235,48 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(accountsIdx).toBeGreaterThan(facebookIdx);
     expect(pagesIdx).toBeGreaterThan(accountsIdx);
 
-    // Locate the Pages sub-button in the captured tree and invoke its onClick handler
-    function findButtonByText(node: React.ReactNode, text: string): any {
+    // Spec 110: the Pages leaf renders through next/link with the tenant
+    // href — a single click navigates via Link's client-side routing.
+    // data-next-link is stamped by the next/link test double and would be
+    // absent if the leaf were a raw <a> (full page reload).
+    const anchors = findTags('a');
+    const pagesAnchor = anchors.find(
+      (a) => a.attributes['href'] === '/tenant/acme/pages' && a.attributes['data-sidebar'] === 'menu-sub-button'
+    );
+    expect(pagesAnchor).toBeDefined();
+    expect(pagesAnchor?.attributes['data-next-link']).toBe('true');
+
+    // Locate the Pages leaf in the captured tree: it must carry the href and
+    // its click handler must neither preventDefault nor substitute a
+    // router.push (either would re-break single-click navigation).
+    function findLeafByText(node: React.ReactNode, text: string): any {
       if (!node || typeof node !== 'object') return null;
       if (Array.isArray(node)) {
         for (const item of node) {
-          const found = findButtonByText(item, text);
+          const found = findLeafByText(item, text);
           if (found) return found;
         }
         return null;
       }
       if (React.isValidElement(node)) {
         const props = node.props as Record<string, any>;
-        if (props.children === text && typeof props.onClick === 'function') {
+        if (props.children === text && typeof props.href === 'string') {
           return node;
         }
         if (props.children) {
-          return findButtonByText(props.children, text);
+          return findLeafByText(props.children, text);
         }
       }
       return null;
     }
 
-    const pagesSubBtn = findButtonByText(capturedTree, 'Pages');
-    expect(pagesSubBtn).not.toBeNull();
-    pagesSubBtn.props.onClick();
-    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/pages');
+    const pagesLeaf = findLeafByText(capturedTree, 'Pages');
+    expect(pagesLeaf).not.toBeNull();
+    expect(pagesLeaf.props.href).toBe('/tenant/acme/pages');
+    const preventDefault = vi.fn();
+    pagesLeaf.props.onClick({ preventDefault });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it('marks Pages as active when pathname is /tenant/acme/pages or /tenant/acme/pages/[pageId]', () => {
@@ -259,8 +290,8 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
       </SidebarProvider>
     );
 
-    const listButtons = listRender.findTags('button');
-    const activePagesBtnOnList = listButtons.find(
+    const listAnchors = listRender.findTags('a');
+    const activePagesBtnOnList = listAnchors.find(
       (b) => b.innerHTML.includes('Pages') && b.attributes['data-active'] === 'true'
     );
     expect(activePagesBtnOnList).toBeDefined();
@@ -276,11 +307,11 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
       </SidebarProvider>
     );
 
-    const detailButtons = detailRender.findTags('button');
-    const activePagesBtnOnDetail = detailButtons.find(
+    const detailAnchors = detailRender.findTags('a');
+    const activePagesBtnOnDetail = detailAnchors.find(
       (b) => b.innerHTML.includes('Pages') && b.attributes['data-active'] === 'true'
     );
-    const activeAccountsBtnOnDetail = detailButtons.find(
+    const activeAccountsBtnOnDetail = detailAnchors.find(
       (b) => b.innerHTML.includes('Accounts') && b.attributes['data-active'] === 'true'
     );
     expect(activePagesBtnOnDetail).toBeDefined();
@@ -357,7 +388,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(html).toContain('sidebar-testing-note-instagram');
   });
 
-  it('navigates to /tenant/{subdomain}/{platform}/accounts when an upcoming platform Accounts sub-item is clicked', () => {
+  it('renders upcoming platform Accounts sub-items as Next.js Link anchors to /tenant/{subdomain}/{platform}/accounts (Spec 110)', () => {
     mockPathname = '/tenant/acme/threads/accounts';
     mockPush.mockClear();
 
@@ -379,38 +410,77 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(hasText('Threads')).toBe(true);
     expect(hasText('Being tested — not available for public use')).toBe(true);
 
-    function findAllButtonsByText(node: React.ReactNode, text: string, list: any[] = []): any[] {
+    function findAllLeavesByText(node: React.ReactNode, text: string, list: any[] = []): any[] {
       if (!node || typeof node !== 'object') return list;
       if (Array.isArray(node)) {
         for (const item of node) {
-          findAllButtonsByText(item, text, list);
+          findAllLeavesByText(item, text, list);
         }
         return list;
       }
       if (React.isValidElement(node)) {
         const props = node.props as Record<string, any>;
-        if (props.children === text && typeof props.onClick === 'function') {
+        if (props.children === text && typeof props.href === 'string') {
           list.push(node);
         }
         if (props.children) {
-          findAllButtonsByText(props.children, text, list);
+          findAllLeavesByText(props.children, text, list);
         }
       }
       return list;
     }
 
-    const allAccountsButtons = findAllButtonsByText(capturedTree, 'Accounts');
-    expect(allAccountsButtons.length).toBe(6);
+    const allAccountsLeaves = findAllLeavesByText(capturedTree, 'Accounts');
+    expect(allAccountsLeaves).toHaveLength(6);
 
     // Index 0: Facebook, Index 1: Instagram, Index 2: Threads, Index 3: X, Index 4: TikTok, Index 5: YouTube
-    mockPush.mockClear();
-    allAccountsButtons[2].props.onClick();
-    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/threads/accounts');
+    // Spec 110: navigation target lives in the Link href; the click handler
+    // must not preventDefault or substitute a router.push.
+    expect(allAccountsLeaves[0].props.href).toBe('/tenant/acme/accounts');
+    expect(allAccountsLeaves[1].props.href).toBe('/tenant/acme/instagram/accounts');
+    expect(allAccountsLeaves[2].props.href).toBe('/tenant/acme/threads/accounts');
 
-    mockPush.mockClear();
-    allAccountsButtons[1].props.onClick();
-    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/instagram/accounts');
+    const preventDefault = vi.fn();
+    allAccountsLeaves[2].props.onClick({ preventDefault });
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
 
+  it('renders every primary leaf item as a Next.js Link anchor with its tenant href and keeps the Facebook parent as a collapsible toggle button (Spec 110)', () => {
+    mockPathname = '/tenant/acme';
+    const { findTags, html } = render(
+      <SidebarProvider>
+        <WorkspaceSidebar
+          subdomain="acme"
+          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
+        />
+      </SidebarProvider>
+    );
+
+    const anchors = findTags('a');
+    const anchorHrefs = anchors.map((a) => a.attributes['href']);
+    expect(anchorHrefs).toContain('/tenant/acme/');
+    expect(anchorHrefs).toContain('/tenant/acme/media');
+    expect(anchorHrefs).toContain('/tenant/acme/downloader');
+    expect(anchorHrefs).toContain('/tenant/acme/fdola-studio');
+    expect(anchorHrefs).toContain('/tenant/acme/accounts');
+    expect(anchorHrefs).toContain('/tenant/acme/pages');
+
+    // Every anchor in the sidebar comes from next/link (data-next-link is
+    // stamped by the test double): no raw <a> remains, so no leaf click can
+    // degrade into a full page reload.
+    expect(anchors.length).toBeGreaterThan(0);
+    expect(anchors.every((a) => a.attributes['data-next-link'] === 'true')).toBe(true);
+
+    // The Facebook parent is a genuine toggle, not a route: it stays a
+    // <button> wired to the collapsible trigger, initially expanded.
+    expect(html).toContain('data-slot="collapsible-trigger"');
+    expect(html).toContain('aria-expanded="true"');
+    const buttons = findTags('button');
+    const facebookToggle = buttons.find((b) => b.innerHTML.includes('Facebook'));
+    expect(facebookToggle).toBeDefined();
+    expect(facebookToggle?.attributes['data-slot']).toBe('collapsible-trigger');
+    expect(facebookToggle?.attributes['type']).toBe('button');
   });
 });
 

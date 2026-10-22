@@ -4,7 +4,22 @@
  */
 
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Render next/link as a plain anchor tagged with data-next-link, so tests can
+// prove a leaf was rendered through Next.js Link (client-side routing) rather
+// than a hand-rolled raw <a> (which would force a full page reload).
+vi.mock('next/link', async () => {
+  const ReactModule = await import('react');
+  type MockLinkProps = {
+    href: string;
+    children?: React.ReactNode;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>;
+  return {
+    default: ({ href, children, ...props }: MockLinkProps) =>
+      ReactModule.createElement('a', { href, 'data-next-link': 'true', ...props }, children),
+  };
+});
 import {
   SidebarProvider,
   Sidebar,
@@ -375,6 +390,66 @@ describe('Sidebar Component Suite (Spec 014 & Spec 025)', () => {
       expect(hasAttribute('data-slot', 'sidebar-menu-sub-item')).toBe(true);
       expect(hasAttribute('data-slot', 'sidebar-menu-sub-button')).toBe(true);
       expect(hasAttribute('role', 'menu')).toBe(true);
+    });
+
+    it('renders SidebarMenuButton and SidebarMenuSubButton as Next.js Link anchors when href is set, and as buttons when it is not (Spec 110)', () => {
+      const { findTags } = render(
+        <SidebarProvider>
+          <Sidebar>
+            <SidebarContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton href="/tenant/acme/media" isActive>
+                    Media Library
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton>Toggle Only</SidebarMenuButton>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton href="/tenant/acme/pages" isActive>
+                        Pages
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton>Plain Sub Item</SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarContent>
+          </Sidebar>
+        </SidebarProvider>
+      );
+
+      const anchors = findTags('a');
+      const menuAnchor = anchors.find((a) => a.attributes['data-sidebar'] === 'menu-button');
+      expect(menuAnchor?.attributes['href']).toBe('/tenant/acme/media');
+      expect(menuAnchor?.attributes['data-active']).toBe('true');
+      expect(menuAnchor?.attributes['aria-current']).toBe('page');
+      // data-next-link is stamped by the next/link test double: it proves the
+      // rendered anchor comes from Next.js Link, so a click is a client-side
+      // transition, not a raw-anchor full page reload.
+      expect(menuAnchor?.attributes['data-next-link']).toBe('true');
+      const subAnchor = anchors.find((a) => a.attributes['data-sidebar'] === 'menu-sub-button');
+      expect(subAnchor?.attributes['href']).toBe('/tenant/acme/pages');
+      expect(subAnchor?.attributes['data-active']).toBe('true');
+      expect(subAnchor?.attributes['data-next-link']).toBe('true');
+
+      // Without href the primitives keep rendering <button type="button">
+      // (genuine toggles such as collapsible parents and the footer switcher).
+      const buttons = findTags('button');
+      expect(
+        buttons.some(
+          (b) => b.innerHTML.includes('Toggle Only') && b.attributes['data-sidebar'] === 'menu-button'
+        )
+      ).toBe(true);
+      expect(
+        buttons.some(
+          (b) =>
+            b.innerHTML.includes('Plain Sub Item') && b.attributes['data-sidebar'] === 'menu-sub-button'
+        )
+      ).toBe(true);
     });
 
     it('renders SidebarMenuAction when expanded and hides when collapsed', () => {
