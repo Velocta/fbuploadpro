@@ -12,9 +12,8 @@ import {
 } from '@/lib/theme';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { formatSlotLong, formatSlotShort } from '../composer/queue-slot-utils';
 import { formatLabel } from '../bulk/bulk-utils';
-import { resolveFormat } from './queue-logic';
+import { formatQueueRowTime, resolveFormat } from './queue-logic';
 import type { DedicatedQueueItem } from './queue-types';
 
 export type QueueRowBucket = 'queued' | 'scheduled' | 'published' | 'failed';
@@ -205,22 +204,6 @@ const STATUS_LABEL: Record<QueueRowBucket, string> = {
   failed: 'Failed',
 };
 
-function timeText(item: DedicatedQueueItem, bucket: QueueRowBucket, timeZone: string): string {
-  const date = new Date(item.scheduledTime);
-  if (Number.isNaN(date.getTime())) return '';
-  switch (bucket) {
-    case 'queued':
-    case 'failed':
-      return formatSlotShort(date, timeZone);
-    case 'scheduled':
-      return `Scheduled for ${formatSlotLong(date, timeZone)}`;
-    case 'published': {
-      const published = item.publishedAt ? new Date(item.publishedAt) : date;
-      return `Published ${formatSlotLong(Number.isNaN(published.getTime()) ? date : published, timeZone)}`;
-    }
-  }
-}
-
 export function QueueRow({
   item,
   timeZone,
@@ -321,7 +304,7 @@ export function QueueRow({
               color: `var(--text-main, ${THEME.default.text.primary})`,
             }}
           >
-            {timeText(item, bucket, timeZone)}
+            {formatQueueRowTime(item, bucket, timeZone)}
           </span>
         </div>
 

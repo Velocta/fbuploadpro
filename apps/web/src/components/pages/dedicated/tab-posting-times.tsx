@@ -536,8 +536,30 @@ function PostingTimesEmptyState({ onOpenAddModal }: Readonly<EmptyStateProps>) {
   );
 }
 
+export interface PostingTimeFormInitialState {
+  timeInput: string;
+  selectedFormats: string[];
+}
+
+/**
+ * Initial form state for the Add/Edit posting-time dialog, always derived
+ * from the slot being edited (or the defaults for Add). The dialog is only
+ * mounted while open, so this runs fresh on every open — an Edit can never
+ * inherit the value typed into a previous Add.
+ */
+export function getPostingTimeFormInitialState(
+  slotToEdit?: PageSlotSummary | null
+): PostingTimeFormInitialState {
+  return {
+    timeInput: slotToEdit?.slotTime.slice(0, 5) || '09:00',
+    selectedFormats:
+      slotToEdit?.allowedFormats && slotToEdit.allowedFormats.length > 0
+        ? [...slotToEdit.allowedFormats]
+        : [...ALL_POST_FORMATS.map((format) => format.id)],
+  };
+}
+
 interface AddEditModalProps {
-  isOpen: boolean;
   onClose: () => void;
   activeTimezone: string;
   slotToEdit?: PageSlotSummary | null;
@@ -549,23 +571,19 @@ interface AddEditModalProps {
 }
 
 function AddEditPostingTimeModal({
-  isOpen,
   onClose,
   activeTimezone,
   slotToEdit,
   onSave,
 }: Readonly<AddEditModalProps>) {
-  const [timeInput, setTimeInput] = useState(() => slotToEdit?.slotTime.slice(0, 5) || '09:00');
-  const [selectedFormats, setSelectedFormats] = useState<string[]>(() => {
-    if (slotToEdit?.allowedFormats && slotToEdit.allowedFormats.length > 0) {
-      return slotToEdit.allowedFormats;
-    }
-    return ['reel', 'image', 'video', 'story', 'text'];
-  });
+  const [timeInput, setTimeInput] = useState(
+    () => getPostingTimeFormInitialState(slotToEdit).timeInput
+  );
+  const [selectedFormats, setSelectedFormats] = useState<string[]>(
+    () => getPostingTimeFormInitialState(slotToEdit).selectedFormats
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   const isEditing = Boolean(slotToEdit);
 
@@ -1110,14 +1128,18 @@ export function PageTabPostingTimes({
         </div>
       )}
 
-      {/* Add / Edit Modal with Format Selection */}
-      <AddEditPostingTimeModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        activeTimezone={activeTimezone}
-        slotToEdit={editingSlot}
-        onSave={handleSaveModal}
-      />
+      {/* Add / Edit Modal with Format Selection. Mounted only while open so
+          its form state initializes fresh from the target slot on every
+          open — a closed dialog holds no state that could leak into the
+          next one. */}
+      {isModalOpen && (
+        <AddEditPostingTimeModal
+          onClose={() => setIsModalOpen(false)}
+          activeTimezone={activeTimezone}
+          slotToEdit={editingSlot}
+          onSave={handleSaveModal}
+        />
+      )}
 
       {/* Delete Confirmation Modal */}
       <DeleteSlotConfirmModal

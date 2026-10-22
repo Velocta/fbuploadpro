@@ -4,6 +4,7 @@ import type { DedicatedQueueItem, QueueFilter } from './queue-types';
 import {
   resolveFormat,
   formatPlural,
+  formatQueueRowTime,
   describeSlotCoverage,
   matchSlotForTime,
   isSlotBased,
@@ -354,6 +355,41 @@ describe('computeRetryTime', () => {
       now
     );
     expect(retry).toBeNull();
+  });
+});
+
+describe('formatQueueRowTime', () => {
+  it('labels scheduled rows with the page timezone', () => {
+    const item = makeItem({ scheduledTime: '2026-10-27T15:00:00.000Z' });
+    expect(formatQueueRowTime(item, 'scheduled', TZ)).toBe(
+      'Scheduled for Tue, Oct 27 at 3:00 PM UTC'
+    );
+  });
+
+  it('labels queued and failed rows with the page timezone', () => {
+    const item = makeItem({ scheduledTime: '2026-10-27T15:00:00.000Z' });
+    expect(formatQueueRowTime(item, 'queued', TZ)).toBe('Tue 3:00 PM UTC');
+    expect(formatQueueRowTime(item, 'failed', TZ)).toBe('Tue 3:00 PM UTC');
+  });
+
+  it('labels published rows with the page timezone', () => {
+    const item = makeItem({
+      status: 'published',
+      scheduledTime: '2026-10-27T15:00:00.000Z',
+      publishedAt: '2026-10-27T15:00:05.000Z',
+    });
+    expect(formatQueueRowTime(item, 'published', TZ)).toBe('Published Tue, Oct 27 at 3:00 PM UTC');
+  });
+
+  it('converts into a non-UTC timezone and labels it with that timezone', () => {
+    const item = makeItem({ scheduledTime: '2026-10-27T15:00:00.000Z' });
+    expect(formatQueueRowTime(item, 'scheduled', 'Asia/Karachi')).toBe(
+      'Scheduled for Tue, Oct 27 at 8:00 PM Asia/Karachi'
+    );
+  });
+
+  it('returns an empty string for an invalid scheduled time', () => {
+    expect(formatQueueRowTime(makeItem({ scheduledTime: 'not-a-date' }), 'queued', TZ)).toBe('');
   });
 });
 

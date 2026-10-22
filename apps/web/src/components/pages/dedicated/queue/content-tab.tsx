@@ -24,7 +24,12 @@ import { QueueRow, type QueueRowBucket } from './queue-row';
 import { QueueRescheduleDialog } from './queue-reschedule-dialog';
 import { QueueFailedBanner } from './queue-failed-banner';
 import { QueueEmptyStates } from './queue-empty-states';
-import { QueueToasts, type QueueToast } from './queue-toasts';
+import {
+  QueueToasts,
+  QUEUE_REORDER_ERROR_MESSAGE,
+  QUEUE_REORDER_SUCCESS_MESSAGE,
+  type QueueToast,
+} from './queue-toasts';
 import {
   resolveFormat,
   filterItems,
@@ -344,11 +349,11 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         )
       );
       if (results.some((ok) => !ok)) {
-        pushToast("Couldn't save the new order.", { tone: 'error' });
+        pushToast(QUEUE_REORDER_ERROR_MESSAGE, { tone: 'error' });
         void refreshItems();
         return;
       }
-      pushToast('Queue reordered — posting times updated.');
+      pushToast(QUEUE_REORDER_SUCCESS_MESSAGE);
       // Backstop: let the page route refresh its queue data so the
       // dashboard/calendar tabs don't show stale times until reload.
       onMutated?.();

@@ -12,6 +12,7 @@ import {
 } from '@/lib/theme';
 import type { FacebookPageItem } from '../page-card';
 import type { PostFormat } from '@fbuploadpro/contracts';
+import { formatSlotDisplay } from './tab-posting-times';
 
 export interface PageQueueItemSummary {
   id: string;
@@ -483,33 +484,38 @@ export function PageTabDashboard({
             </div>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.sm }}>
-              {activeSlots.map((slot) => (
-                <div
-                  key={slot.id}
-                  data-testid="dashboard-slot-pill"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: `${SPACING.xs} ${SPACING.md}`,
-                    backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                    border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                    borderRadius: RADII.sm,
-                    fontSize: '0.875rem',
-                    fontWeight: TYPOGRAPHY.weights.medium,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                  }}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <span>{slot.slotTime}</span>
-                  <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-                    {slot.timezone}
-                  </span>
-                </div>
-              ))}
+              {activeSlots.map((slot) => {
+                const formatted = formatSlotDisplay(slot.slotTime);
+                return (
+                  <div
+                    key={slot.id}
+                    data-testid="dashboard-slot-pill"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: `${SPACING.xs} ${SPACING.md}`,
+                      backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
+                      border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+                      borderRadius: RADII.sm,
+                      fontSize: '0.875rem',
+                      fontWeight: TYPOGRAPHY.weights.medium,
+                      color: `var(--text-main, ${THEME.default.text.primary})`,
+                    }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span>
+                      {formatted.time12} {formatted.ampm}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
+                      {slot.timezone}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
