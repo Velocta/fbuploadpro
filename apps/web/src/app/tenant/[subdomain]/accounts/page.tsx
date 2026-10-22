@@ -108,6 +108,19 @@ export function computeAccountsSubtitle(
   return parts.join(' · ');
 }
 
+/**
+ * Connect is gated only when the Facebook App ID and Secret are known to be
+ * missing — not while the check is running, and not when the check failed
+ * (the retry banner covers that case instead).
+ */
+export function isConnectGatedByMissingCredentials(status: {
+  isLoading: boolean;
+  isConfigured: boolean;
+  error: string | null;
+}): boolean {
+  return !status.isLoading && !status.isConfigured && !status.error;
+}
+
 export interface AccountsFilterBarProps {
   searchQuery: string;
   onSearchChange: (value: string) => void;
@@ -848,6 +861,13 @@ export default function TenantAccountsPage() {
   );
   const existingAccountIds = useMemo(() => accounts.map((a) => a.id), [accounts]);
 
+  // Connect is gated while the App ID and Secret are known to be missing:
+  // the action is disabled and the reason is shown next to it, instead of
+  // letting a user start a connect flow that cannot succeed.
+  const isConnectGated = isConnectGatedByMissingCredentials(byocStatus);
+  const isConnectDisabled = byocStatus.isLoading || isConnectGated;
+  const settingsFacebookHref = `/tenant/${subdomain}/settings?tab=byoc`;
+
   const attentionCount = useMemo(
     () => accounts.filter((a) => a.status === 'expired').length,
     [accounts]
@@ -885,7 +905,14 @@ export default function TenantAccountsPage() {
       </div>
     );
   } else if (accounts.length === 0) {
-    contentNode = <AccountsEmptyState onConnect={handleOpenNewConnect} />;
+    contentNode = (
+      <AccountsEmptyState
+        onConnect={handleOpenNewConnect}
+        isConnectDisabled={isConnectDisabled}
+        credentialsMissing={isConnectGated}
+        settingsHref={settingsFacebookHref}
+      />
+    );
   } else if (filteredAccounts.length === 0) {
     contentNode = (
       <div
@@ -1001,10 +1028,21 @@ export default function TenantAccountsPage() {
         </div>
 
         {accounts.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: SPACING.xs,
+            }}
+          >
           <button
             type="button"
             data-testid="header-connect-button"
-            disabled={byocStatus.isLoading}
+            disabled={isConnectDisabled}
+            aria-describedby={
+              isConnectGated ? 'header-connect-gated-reason' : undefined
+            }
             onClick={handleOpenNewConnect}
             style={{
               ...COMPONENT_STYLES.primaryButton,
@@ -1015,10 +1053,10 @@ export default function TenantAccountsPage() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              cursor: byocStatus.isLoading ? 'not-allowed' : 'pointer',
-              opacity: byocStatus.isLoading ? 0.6 : 1,
+              cursor: isConnectDisabled ? 'not-allowed' : 'pointer',
+              opacity: isConnectDisabled ? 0.6 : 1,
               boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-              transform: isConnectHovered && !byocStatus.isLoading ? 'translateY(-1px)' : 'translateY(0)',
+              transform: isConnectHovered && !isConnectDisabled ? 'translateY(-1px)' : 'translateY(0)',
               transition: 'transform 0.12s ease, box-shadow 0.12s ease',
             }}
             onMouseEnter={() => setIsConnectHovered(true)}
@@ -1040,6 +1078,31 @@ export default function TenantAccountsPage() {
             </svg>
             <span>Connect Account</span>
           </button>
+          {isConnectGated && (
+            <span
+              id="header-connect-gated-reason"
+              data-testid="header-connect-gated-reason"
+              style={{
+                fontSize: '0.75rem',
+                lineHeight: 1.4,
+                color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              }}
+            >
+              Add your App ID and Secret first.{' '}
+              <Link
+                href={settingsFacebookHref}
+                data-testid="header-connect-settings-link"
+                style={{
+                  color: PALETTE.primary,
+                  fontWeight: TYPOGRAPHY.weights.semibold,
+                  textDecoration: 'underline',
+                }}
+              >
+                Add them in Settings
+              </Link>
+            </span>
+          )}
+          </div>
         )}
       </div>
 

@@ -11,6 +11,7 @@ import {
   PageCard,
   computeFollowersGained,
   formatFollowersGained,
+  formatPageIdSuffix,
   getPageAttentionMessage,
   getPageStatusLabel,
   getPageStatusColor,
@@ -21,6 +22,8 @@ import {
 import { PagesEmptyState } from '@/components/pages/pages-empty-state';
 import {
   AddPageModal,
+  buildAccountsHref,
+  buildSettingsFacebookHref,
   getActiveAccounts,
   getExpiredAccounts,
   getSelectablePageIds,
@@ -179,6 +182,46 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(hasText('Active')).toBe(true);
       expect(html).toContain(PALETTE.accent4);
       expect(hasAttribute('data-testid', 'page-attention-banner')).toBe(false);
+    });
+
+    it('distinguishes duplicate page names with the Page ID suffix line (Spec 109)', () => {
+      expect(formatPageIdSuffix('61594571856866')).toBe('…856866');
+      expect(formatPageIdSuffix('123')).toBe('123');
+      expect(formatPageIdSuffix('')).toBe('');
+
+      const first = render(
+        <PageCard
+          page={{
+            ...baseActivePage,
+            id: 'page-dup-1',
+            pageName: 'Sunnie James',
+            fbPageId: '111111222222',
+            category: 'Model',
+            currentFollowers: 0,
+            followersGained: 0,
+          }}
+          subdomain="acme"
+        />
+      );
+      const second = render(
+        <PageCard
+          page={{
+            ...baseActivePage,
+            id: 'page-dup-2',
+            pageName: 'Sunnie James',
+            fbPageId: '999999333333',
+            category: 'Model',
+            currentFollowers: 0,
+            followersGained: 0,
+          }}
+          subdomain="acme"
+        />
+      );
+
+      expect(first.hasAttribute('data-testid', 'page-id-line')).toBe(true);
+      expect(first.hasText('Page ID …222222')).toBe(true);
+      expect(second.hasText('Page ID …333333')).toBe(true);
+      expect(first.hasText('Page ID …333333')).toBe(false);
     });
 
     it('falls back to monogram initials when profilePictureUrl is missing or image errors (forceAvatarError)', () => {
@@ -440,6 +483,119 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
       expect(hasAttribute('data-testid', 'no-active-accounts-notice')).toBe(true);
       expect(hasText('No active Facebook accounts connected')).toBe(true);
       expect(hasAttribute('data-testid', 'go-to-accounts-btn')).toBe(true);
+    });
+
+    it('"Go to Facebook Accounts" is a real link to the Accounts route and still runs the navigation callback (Spec 109)', () => {
+      expect(buildAccountsHref('acme')).toBe('/tenant/acme/accounts');
+      expect(buildSettingsFacebookHref('acme')).toBe(
+        '/tenant/acme/settings?tab=byoc'
+      );
+
+      const onNavigateToAccounts = vi.fn();
+      const onOpenChange = vi.fn();
+      const rendered = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={onOpenChange}
+          accounts={[]}
+          onNavigateToAccounts={onNavigateToAccounts}
+        />
+      );
+      // The navigation target is the element's own href, not only a
+      // callback fired while the dialog is closing.
+      expect(rendered.html).toContain('href="/tenant/acme/accounts"');
+
+      const tree = renderAndCaptureTree(() =>
+        AddPageModal({
+          subdomain: 'acme',
+          open: true,
+          onOpenChange,
+          accounts: [],
+          onNavigateToAccounts,
+        })
+      );
+      const link = findElementByTestId(tree, 'go-to-accounts-btn');
+      expect(link).not.toBeNull();
+      expect(link?.props.href).toBe('/tenant/acme/accounts');
+      link?.props.onClick();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+      expect(onNavigateToAccounts).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows missing-app guidance with a Settings → Facebook link at the point of need, and hides it once configured (Spec 109)', () => {
+      const missing = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[]}
+          facebookAppConfigured={false}
+        />
+      );
+      expect(missing.hasAttribute('data-testid', 'facebook-app-guidance')).toBe(true);
+      expect(
+        missing.hasText(
+          'add your Facebook App ID and App Secret in Workspace Settings, under Facebook'
+        )
+      ).toBe(true);
+      expect(
+        missing.hasAttribute('data-testid', 'go-to-settings-facebook-link')
+      ).toBe(true);
+      expect(missing.html).toContain('href="/tenant/acme/settings?tab=byoc"');
+
+      const configured = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[]}
+          facebookAppConfigured={true}
+        />
+      );
+      expect(configured.hasAttribute('data-testid', 'facebook-app-guidance')).toBe(false);
+
+      const unchecked = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[]}
+        />
+      );
+      expect(unchecked.hasAttribute('data-testid', 'facebook-app-guidance')).toBe(false);
+    });
+
+    it('disambiguates duplicate discovered page names with the Page ID suffix (Spec 109)', () => {
+      const duplicates: DiscoveredPageItem[] = [
+        {
+          fbPageId: '111111222222',
+          pageName: 'Sunnie James',
+          category: 'Model',
+          currentFollowers: 0,
+          isImported: false,
+        },
+        {
+          fbPageId: '999999333333',
+          pageName: 'Sunnie James',
+          category: 'Model',
+          currentFollowers: 0,
+          isImported: false,
+        },
+      ];
+      const { hasText } = render(
+        <AddPageModal
+          subdomain="acme"
+          open={true}
+          onOpenChange={vi.fn()}
+          accounts={[sampleActiveAccount]}
+          initialStep="select-pages"
+          initialSelectedAccount={sampleActiveAccount}
+          initialDiscoveredPages={duplicates}
+        />
+      );
+      expect(hasText('Page ID …222222')).toBe(true);
+      expect(hasText('Page ID …333333')).toBe(true);
     });
 
     it('Step 1 never shows the no-accounts claim when an expired-but-linked account exists (Spec 102)', () => {
@@ -937,6 +1093,34 @@ describe('Facebook Pages UI Suite (Spec 032)', () => {
   });
 
   describe('PagesEmptyState Component', () => {
+    it('shows missing-app guidance with a Settings → Facebook link only when the details are known to be missing (Spec 109)', () => {
+      const missing = render(
+        <PagesEmptyState
+          onAddPage={vi.fn()}
+          subdomain="acme"
+          facebookAppConfigured={false}
+        />
+      );
+      expect(
+        missing.hasAttribute('data-testid', 'pages-empty-facebook-app-guidance')
+      ).toBe(true);
+      expect(
+        missing.hasAttribute('data-testid', 'pages-empty-settings-facebook-link')
+      ).toBe(true);
+      expect(missing.html).toContain('href="/tenant/acme/settings?tab=byoc"');
+
+      const configured = render(
+        <PagesEmptyState
+          onAddPage={vi.fn()}
+          subdomain="acme"
+          facebookAppConfigured={true}
+        />
+      );
+      expect(
+        configured.hasAttribute('data-testid', 'pages-empty-facebook-app-guidance')
+      ).toBe(false);
+    });
+
     it('invokes onAddPage when the empty state Add Page button is clicked', () => {
       const onAddPage = vi.fn();
       const tree = renderAndCaptureTree(() =>

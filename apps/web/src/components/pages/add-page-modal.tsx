@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import { getUserInitials } from '@/lib/user-initials';
 import { getAccountHealth } from '@/components/accounts/account-health';
 import { type FacebookAccountItem } from '@/components/accounts/account-card';
 import { buildDirectConnectUrl } from '@/components/accounts/connect-account-modal';
+import { formatPageIdSuffix } from '@/components/pages/page-card';
 
 export interface DiscoveredPageItem {
   fbPageId: string;
@@ -41,11 +43,26 @@ export interface AddPageModalProps {
   accounts?: FacebookAccountItem[] | undefined;
   onSuccess?: ((importedCount: number) => void) | undefined;
   onNavigateToAccounts?: (() => void) | undefined;
+  /**
+   * Whether the workspace's Facebook App ID and Secret are configured.
+   * `false` = known missing (show guidance at the point of need);
+   * `undefined` = not checked yet (show no guidance claim).
+   */
+  facebookAppConfigured?: boolean | undefined;
+  onNavigateToSettingsFacebook?: (() => void) | undefined;
   onReconnectAccount?: ((account: FacebookAccountItem) => void) | undefined;
   initialStep?: 'select-account' | 'select-pages' | undefined;
   initialSelectedAccount?: FacebookAccountItem | null | undefined;
   initialDiscoveredPages?: DiscoveredPageItem[] | undefined;
   initialSelectedPageIds?: string[] | undefined;
+}
+
+export function buildAccountsHref(subdomain: string): string {
+  return `/tenant/${subdomain}/accounts`;
+}
+
+export function buildSettingsFacebookHref(subdomain: string): string {
+  return `/tenant/${subdomain}/settings?tab=byoc`;
 }
 
 export function getActiveAccounts(
@@ -291,6 +308,8 @@ export function AddPageModal({
   accounts,
   onSuccess,
   onNavigateToAccounts,
+  facebookAppConfigured,
+  onNavigateToSettingsFacebook,
   onReconnectAccount,
   initialStep = 'select-account',
   initialSelectedAccount = null,
@@ -418,14 +437,27 @@ export function AddPageModal({
     setIsSubmitting(false);
   };
 
+  // Navigation itself is the Link's href (below) so it cannot be lost when
+  // the dialog closes and unmounts the button; this handler only closes the
+  // dialog and lets a parent-supplied navigation hook run alongside.
   const handleGoToAccounts = () => {
     handleDialogOpenChange(false);
-    if (onNavigateToAccounts) {
-      onNavigateToAccounts();
-    } else if (typeof window !== 'undefined') {
-      window.location.href = `/tenant/${subdomain}/accounts`;
-    }
+    onNavigateToAccounts?.();
   };
+
+  const handleGoToSettingsFacebook = () => {
+    handleDialogOpenChange(false);
+    onNavigateToSettingsFacebook?.();
+  };
+
+  const accountsHref = buildAccountsHref(subdomain);
+  const settingsFacebookHref = buildSettingsFacebookHref(subdomain);
+  // Point-of-need guidance applies only when the user still needs to connect
+  // or reconnect an account and the app details are known to be missing.
+  const showMissingAppGuidance =
+    step === 'select-account' &&
+    facebookAppConfigured === false &&
+    activeAccounts.length === 0;
 
   const handleReconnectAccount = (account: FacebookAccountItem) => {
     if (onReconnectAccount) {
@@ -537,6 +569,40 @@ export function AddPageModal({
 
           {step === 'select-account' && (
             <div>
+              {showMissingAppGuidance && (
+                <div
+                  data-testid="facebook-app-guidance"
+                  style={{
+                    padding: '10px 12px',
+                    marginBottom: SPACING.md,
+                    backgroundColor: 'rgba(250, 215, 52, 0.08)',
+                    border: '1px solid rgba(250, 215, 52, 0.25)',
+                    borderRadius: RADII.sm,
+                    fontSize: '0.8125rem',
+                    lineHeight: 1.5,
+                    color: `var(--text-main, ${THEME.default.text.primary})`,
+                  }}
+                >
+                  <p style={{ margin: `0 0 ${SPACING.xs} 0` }}>
+                    Before you can connect an account, add your Facebook App
+                    ID and App Secret in Workspace Settings, under Facebook.
+                    Then come back here to connect your account.
+                  </p>
+                  <Link
+                    href={settingsFacebookHref}
+                    data-testid="go-to-settings-facebook-link"
+                    onClick={handleGoToSettingsFacebook}
+                    style={{
+                      color: PALETTE.primary,
+                      fontWeight: TYPOGRAPHY.weights.semibold,
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Add App ID and Secret in Settings
+                  </Link>
+                </div>
+              )}
+
               {isLoadingAccounts && (
                 <div
                   data-testid="loading-accounts-state"
@@ -584,8 +650,8 @@ export function AddPageModal({
                     Connect a Facebook account first so you can discover and add
                     its pages to your workspace.
                   </p>
-                  <button
-                    type="button"
+                  <Link
+                    href={accountsHref}
                     data-testid="go-to-accounts-btn"
                     onClick={handleGoToAccounts}
                     style={{
@@ -593,10 +659,11 @@ export function AddPageModal({
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: SPACING.xs,
+                      textDecoration: 'none',
                     }}
                   >
                     Go to Facebook Accounts
-                  </button>
+                  </Link>
                 </div>
               )}
 
@@ -1089,6 +1156,9 @@ export function AddPageModal({
                             >
                               {page.category || 'Facebook Page'} •{' '}
                               {followers.toLocaleString('en-US')} followers
+                              {formatPageIdSuffix(page.fbPageId)
+                                ? ` · Page ID ${formatPageIdSuffix(page.fbPageId)}`
+                                : ''}
                             </div>
                           </div>
 
