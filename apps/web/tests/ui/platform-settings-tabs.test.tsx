@@ -109,46 +109,26 @@ describe('Spec 123 Part B: Settings page tabs', () => {
     expect(hasAttribute('data-testid', 'workspace-about-card')).toBe(true);
   });
 
-  it('routes ?tab=facebook to the Facebook tab', () => {
-    searchParamsState.current = new URLSearchParams('tab=facebook');
-    const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
-    expect(activeTabTestId(findTags('button'))).toBe('settings-tab-facebook');
-    expect(hasAttribute('data-testid', 'byoc-loading')).toBe(true);
-  });
+  const routingCases: Array<{ param: string; tab: string; panelTestId: string }> = [
+    { param: 'general', tab: 'general', panelTestId: 'workspace-about-card' },
+    { param: 'facebook', tab: 'facebook', panelTestId: 'byoc-loading' },
+    // Legacy value: every existing link with ?tab=byoc must keep working.
+    { param: 'byoc', tab: 'facebook', panelTestId: 'byoc-loading' },
+    { param: 'instagram', tab: 'instagram', panelTestId: 'instagram-loading' },
+    { param: 'threads', tab: 'threads', panelTestId: 'threads-loading' },
+    { param: 'youtube', tab: 'youtube', panelTestId: 'youtube-connect-info-card' },
+    { param: 'x', tab: 'x', panelTestId: 'x-connect-info-card' },
+    { param: 'tiktok', tab: 'tiktok', panelTestId: 'tiktok-connect-info-card' },
+  ];
 
-  it('routes the legacy ?tab=byoc value to the Facebook tab', () => {
-    searchParamsState.current = new URLSearchParams('tab=byoc');
-    const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
-    expect(activeTabTestId(findTags('button'))).toBe('settings-tab-facebook');
-    expect(hasAttribute('data-testid', 'byoc-loading')).toBe(true);
-  });
-
-  it('routes ?tab=instagram to the Instagram tab', () => {
-    searchParamsState.current = new URLSearchParams('tab=instagram');
-    const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
-    expect(activeTabTestId(findTags('button'))).toBe('settings-tab-instagram');
-    expect(hasAttribute('data-testid', 'instagram-loading')).toBe(true);
-  });
-
-  it('routes ?tab=threads to the Threads tab', () => {
-    searchParamsState.current = new URLSearchParams('tab=threads');
-    const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
-    expect(activeTabTestId(findTags('button'))).toBe('settings-tab-threads');
-    expect(hasAttribute('data-testid', 'threads-loading')).toBe(true);
-  });
-
-  it('routes ?tab=youtube, ?tab=x and ?tab=tiktok to their explanation tabs', () => {
-    for (const [tab, card] of [
-      ['youtube', 'youtube-connect-info-card'],
-      ['x', 'x-connect-info-card'],
-      ['tiktok', 'tiktok-connect-info-card'],
-    ] as const) {
-      searchParamsState.current = new URLSearchParams(`tab=${tab}`);
+  for (const { param, tab, panelTestId } of routingCases) {
+    it(`routes ?tab=${param} to the ${tab} tab`, () => {
+      searchParamsState.current = new URLSearchParams(`tab=${param}`);
       const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
       expect(activeTabTestId(findTags('button'))).toBe(`settings-tab-${tab}`);
-      expect(hasAttribute('data-testid', card)).toBe(true);
-    }
-  });
+      expect(hasAttribute('data-testid', panelTestId)).toBe(true);
+    });
+  }
 
   it('falls back to General for an unknown ?tab= value', () => {
     searchParamsState.current = new URLSearchParams('tab=nonsense');

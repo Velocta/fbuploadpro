@@ -12,6 +12,16 @@ import {
 /** How long the "copied" feedback stays visible on a copy button. */
 const COPY_FEEDBACK_DURATION_MS = 2000;
 
+/** Shared hover behaviour for the small text buttons in these views. */
+const HOVER_TEXT_HANDLERS = {
+  onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
+  },
+  onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
+  },
+};
+
 export type PlatformCredentialStatus = 'unverified' | 'valid' | 'invalid';
 
 export interface PlatformCredentialsState {
@@ -274,8 +284,9 @@ export function PlatformSetupCard({
       await navigator.clipboard.writeText(value);
       setCopiedKey(key);
       setTimeout(() => setCopiedKey(null), COPY_FEEDBACK_DURATION_MS);
-    } catch {
+    } catch (err) {
       // Clipboard unavailable; the address stays visible for manual copying.
+      console.error('[PlatformSetupCard] Failed to copy the setup address:', err);
     }
   };
 
@@ -367,12 +378,7 @@ export function PlatformSetupCard({
                 marginLeft: SPACING.sm,
                 transition: 'color 0.15s ease',
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-              }}
+              {...HOVER_TEXT_HANDLERS}
             >
               {copiedKey === address.key ? 'Copied' : 'Copy'}
             </button>
@@ -472,14 +478,6 @@ function PlatformCredentialsForm({
   const helperStyle: React.CSSProperties = {
     fontSize: '0.75rem',
     color: `var(--text-dim, ${THEME.default.text.muted})`,
-  };
-  const hoverTextHandlers = {
-    onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-    },
-    onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-    },
   };
 
   return (
@@ -612,7 +610,7 @@ function PlatformCredentialsForm({
                   fontWeight: TYPOGRAPHY.weights.medium,
                   transition: 'color 0.15s ease',
                 }}
-                {...hoverTextHandlers}
+                {...HOVER_TEXT_HANDLERS}
               >
                 {showSecret ? 'Hide' : 'Show'}
               </button>
@@ -720,14 +718,6 @@ function PlatformConnectedView({
     fontWeight: TYPOGRAPHY.weights.medium,
     transition: 'color 0.15s ease',
   };
-  const hoverTextHandlers = {
-    onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-    },
-    onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-    },
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
@@ -749,7 +739,7 @@ function PlatformConnectedView({
             data-testid={`${testIdPrefix}-copy-app-id-btn`}
             onClick={onCopyAppId}
             style={smallButtonStyle}
-            {...hoverTextHandlers}
+            {...HOVER_TEXT_HANDLERS}
           >
             {copiedKey === 'appId' ? 'App ID copied' : 'Copy App ID'}
           </button>
@@ -777,7 +767,7 @@ function PlatformConnectedView({
             data-testid={`${testIdPrefix}-state2-secret-toggle`}
             onClick={onToggleSecret}
             style={smallButtonStyle}
-            {...hoverTextHandlers}
+            {...HOVER_TEXT_HANDLERS}
           >
             {showSecretState2 ? 'Hide' : 'Show'}
           </button>
@@ -1027,8 +1017,9 @@ export function PlatformCredentialsView({
             setAppSecret(data.appSecret);
           }
         }
-      } catch {
+      } catch (err) {
         // Keep the form usable when saved details cannot be loaded.
+        console.error('[PlatformCredentials] Failed to load saved app details:', err);
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -1045,8 +1036,9 @@ export function PlatformCredentialsView({
       await navigator.clipboard.writeText(value);
       setCopiedKey(key);
       setTimeout(() => setCopiedKey(null), COPY_FEEDBACK_DURATION_MS);
-    } catch {
+    } catch (err) {
       // Clipboard unavailable; the value stays visible for manual copying.
+      console.error('[PlatformCredentials] Failed to copy the App ID:', err);
     }
   };
 
@@ -1075,7 +1067,7 @@ export function PlatformCredentialsView({
         appId: trimmedId,
         appSecret: trimmedSecret || prev?.appSecret || '',
         hasSecret: true,
-        status: data.status || 'unverified',
+        status: data.status,
         lastTestedAt: prev?.lastTestedAt ?? null,
         connectedAt: data.connectedAt || prev?.connectedAt || new Date().toISOString(),
       }));
@@ -1112,7 +1104,7 @@ export function PlatformCredentialsView({
     }
   };
 
-  const hasSavedCredentials = Boolean(credentials?.appId && credentials?.hasSecret);
+  const hasSavedCredentials = Boolean(credentials?.appId && credentials.hasSecret);
   const isConnectedState = hasSavedCredentials && !isEditMode;
 
   const searchParams = useSearchParams();
