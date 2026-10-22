@@ -4,7 +4,8 @@ compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-crons = ["* * * * *"]
+# "* * * * *" = claimer tick; "*/15 * * * *" = token-refresh job (spec 121 D6).
+crons = ["* * * * *", "*/15 * * * *"]
 
 # Spec 121: publish pipeline queues. The queues themselves are provisioned
 # with wrangler before the deploy that binds them (see PR ops steps):
