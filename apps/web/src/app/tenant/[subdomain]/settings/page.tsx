@@ -5,8 +5,36 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { THEME, PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
+import { InstagramSettingsView } from '@/components/settings/instagram-settings-view';
+import { ThreadsSettingsView } from '@/components/settings/threads-settings-view';
+import { YouTubeSettingsView } from '@/components/settings/youtube-settings-view';
+import { XSettingsView } from '@/components/settings/x-settings-view';
+import { TikTokSettingsView } from '@/components/settings/tiktok-settings-view';
 
-type SettingsTab = 'general' | 'byoc';
+type SettingsTab = 'general' | 'facebook' | 'instagram' | 'threads' | 'youtube' | 'x' | 'tiktok';
+
+const SETTINGS_TAB_IDS: SettingsTab[] = [
+  'general',
+  'facebook',
+  'instagram',
+  'threads',
+  'youtube',
+  'x',
+  'tiktok',
+];
+
+/**
+ * Resolve a ?tab= value to a tab. The legacy 'byoc' value keeps landing on
+ * the Facebook tab so existing links (Accounts, Pages, sign-in redirects)
+ * keep working unchanged.
+ */
+function resolveSettingsTab(param: string | null): SettingsTab {
+  if (param === 'byoc') return 'facebook';
+  if (param && (SETTINGS_TAB_IDS as string[]).includes(param)) {
+    return param as SettingsTab;
+  }
+  return 'general';
+}
 
 export default function WorkspaceSettingsPage() {
   const params = useParams();
@@ -14,15 +42,14 @@ export default function WorkspaceSettingsPage() {
   const router = useRouter();
 
   const subdomain = (params?.subdomain as string) || '';
-  const initialTab = (searchParams.get('tab') as SettingsTab) || 'general';
-  const [activeTab, setActiveTab] = useState<SettingsTab>(
-    initialTab === 'byoc' ? 'byoc' : 'general'
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
+    resolveSettingsTab(searchParams.get('tab'))
   );
 
   useEffect(() => {
-    const tabParam = searchParams.get('tab') as SettingsTab | null;
-    if (tabParam === 'byoc' || tabParam === 'general') {
-      setActiveTab(tabParam);
+    const tabParam = searchParams.get('tab');
+    if (tabParam) {
+      setActiveTab(resolveSettingsTab(tabParam));
     }
   }, [searchParams]);
 
@@ -33,7 +60,12 @@ export default function WorkspaceSettingsPage() {
 
   const tabs: Array<{ id: SettingsTab; label: string }> = [
     { id: 'general', label: 'General' },
-    { id: 'byoc', label: 'Facebook' },
+    { id: 'facebook', label: 'Facebook' },
+    { id: 'instagram', label: 'Instagram' },
+    { id: 'threads', label: 'Threads' },
+    { id: 'youtube', label: 'YouTube' },
+    { id: 'x', label: 'X' },
+    { id: 'tiktok', label: 'TikTok' },
   ];
 
   return (
@@ -71,6 +103,7 @@ export default function WorkspaceSettingsPage() {
           display: 'flex',
           gap: SPACING.lg,
           borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+          flexWrap: 'wrap',
         }}
       >
         {tabs.map((tab) => {
@@ -117,8 +150,23 @@ export default function WorkspaceSettingsPage() {
         {activeTab === 'general' && (
           <GeneralSettingsView subdomain={subdomain} />
         )}
-        {activeTab === 'byoc' && (
+        {activeTab === 'facebook' && (
           <BYOCSettingsView subdomain={subdomain} />
+        )}
+        {activeTab === 'instagram' && (
+          <InstagramSettingsView subdomain={subdomain} />
+        )}
+        {activeTab === 'threads' && (
+          <ThreadsSettingsView subdomain={subdomain} />
+        )}
+        {activeTab === 'youtube' && (
+          <YouTubeSettingsView subdomain={subdomain} />
+        )}
+        {activeTab === 'x' && (
+          <XSettingsView subdomain={subdomain} />
+        )}
+        {activeTab === 'tiktok' && (
+          <TikTokSettingsView subdomain={subdomain} />
         )}
       </div>
     </div>
