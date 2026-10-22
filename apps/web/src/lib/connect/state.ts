@@ -237,10 +237,7 @@ export async function signPkceCookie(
   payload: PkceCookiePayload,
   secret: string
 ): Promise<string> {
-  return signConnectEnvelope(
-    payload as unknown as Record<string, unknown>,
-    secret
-  );
+  return signConnectState(payload as unknown as ConnectStatePayload, secret);
 }
 
 export async function verifyPkceCookie(
@@ -258,10 +255,7 @@ export async function signPendingDestinations(
   payload: PendingDestinationsPayload,
   secret: string
 ): Promise<string> {
-  return signConnectEnvelope(
-    payload as unknown as Record<string, unknown>,
-    secret
-  );
+  return signPkceCookie(payload as unknown as PkceCookiePayload, secret);
 }
 
 export async function verifyPendingDestinations(
@@ -276,7 +270,7 @@ export async function verifyPendingDestinations(
     throw new Error('Pending destinations payload is incomplete');
   }
   if (!Array.isArray(payload.destinations)) {
-    throw new Error('Pending destinations payload is incomplete');
+    throw new TypeError('Pending destinations payload is incomplete');
   }
   return payload;
 }

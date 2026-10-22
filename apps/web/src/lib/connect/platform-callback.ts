@@ -275,20 +275,22 @@ export async function processPlatformRevocation(
     return { externalAccountId: null, updated: 0 };
   }
 
-  let updated = 0;
-  const seenWorkspaces = new Set<string>();
-  for (const candidate of candidates) {
-    if (seenWorkspaces.has(candidate.workspaceId)) continue;
-    seenWorkspaces.add(candidate.workspaceId);
-    updated += await revokeForWorkspaceIfVerified(
-      client,
-      platform,
-      externalAccountId,
-      candidate.workspaceId,
-      signed,
-      logLabel
-    );
-  }
+  const workspaceIds = [
+    ...new Set(candidates.map((candidate) => candidate.workspaceId)),
+  ];
+  const perWorkspace = await Promise.all(
+    workspaceIds.map((workspaceId) =>
+      revokeForWorkspaceIfVerified(
+        client,
+        platform,
+        externalAccountId,
+        workspaceId,
+        signed,
+        logLabel
+      )
+    )
+  );
+  const updated = perWorkspace.reduce((sum, n) => sum + n, 0);
 
   if (updated === 0) {
     return { externalAccountId: null, updated: 0 };

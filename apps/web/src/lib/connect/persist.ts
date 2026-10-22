@@ -182,28 +182,30 @@ export async function persistPickedDestinations(
   }
 
   if (isLegacyClient(client ?? undefined)) {
-    let inserted = 0;
-    for (const destination of input.destinations) {
-      const rows = (await (client as DatabaseClient).query(
-        `INSERT INTO destinations (
-           workspace_id, account_id, platform, external_destination_id,
-           name, handle, avatar_url, status, metadata
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', '{}'::jsonb)
-         ON CONFLICT (account_id, external_destination_id) DO NOTHING
-         RETURNING id`,
-        [
-          input.workspaceId,
-          input.accountId,
-          input.platform,
-          destination.externalDestinationId,
-          destination.name,
-          destination.handle ?? null,
-          destination.avatarUrl ?? null,
-        ]
-      )) as Array<{ id: string }>;
-      if (rows?.[0]?.id) inserted += 1;
-    }
-    return { inserted };
+    const legacy = client as DatabaseClient;
+    const insertResults = await Promise.all(
+      input.destinations.map(async (destination): Promise<number> => {
+        const rows = (await legacy.query(
+          `INSERT INTO destinations (
+             workspace_id, account_id, platform, external_destination_id,
+             name, handle, avatar_url, status, metadata
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', '{}'::jsonb)
+           ON CONFLICT (account_id, external_destination_id) DO NOTHING
+           RETURNING id`,
+          [
+            input.workspaceId,
+            input.accountId,
+            input.platform,
+            destination.externalDestinationId,
+            destination.name,
+            destination.handle ?? null,
+            destination.avatarUrl ?? null,
+          ]
+        )) as Array<{ id: string }>;
+        return rows?.[0]?.id ? 1 : 0;
+      })
+    );
+    return { inserted: insertResults.reduce((sum, n) => sum + n, 0) };
   }
 
   const supabase = getRouteSupabase(client ?? undefined);
