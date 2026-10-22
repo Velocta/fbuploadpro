@@ -8,6 +8,7 @@ import {
   canAccessTenant,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
+import { applyCspHeaders, generateNonce } from './lib/csp';
 
 export const config = {
   matcher: [
@@ -153,7 +154,8 @@ function handleDirectTenantPathOnApex(
   request: NextRequest,
   pathSubdomain: string,
   pathname: string,
-  session: SessionPayload | null
+  session: SessionPayload | null,
+  nonce: string
 ): NextResponse {
   if (!session) {
     return buildLoginRedirectWithCleanReturn(request);
@@ -174,6 +176,7 @@ function handleDirectTenantPathOnApex(
   }
 
   const requestHeaders = buildTenantHeaders(request, pathSubdomain, pathname, session);
+  requestHeaders.set('x-nonce', nonce);
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
@@ -181,6 +184,7 @@ function handleDirectTenantPathOnApex(
 }
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
+  const nonce = generateNonce();
   const { pathname } = request.nextUrl;
   const host = request.headers.get('host') || '';
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || 'localhost:3000';
@@ -195,11 +199,16 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     pathname === '/favicon.ico' ||
     pathname.endsWith('.ico')
   ) {
-    return NextResponse.next({
-      request: {
-        headers: stripUserHeaders(request),
-      },
-    });
+    const requestHeaders = stripUserHeaders(request);
+    requestHeaders.set('x-nonce', nonce);
+    return applyCspHeaders(
+      NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      }),
+      nonce
+    );
   }
 
   // Extract subdomain and determine routing target
@@ -211,7 +220,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       const pathSubdomain = pathname.split('/')[2];
       if (pathSubdomain) {
         const session = await resolveSession(request, sessionSecret);
-        return handleDirectTenantPathOnApex(request, pathSubdomain, pathname, session);
+        return applyCspHeaders(
+          handleDirectTenantPathOnApex(request, pathSubdomain, pathname, session, nonce),
+          nonce
+        );
       }
     }
 
@@ -230,9 +242,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
         );
 
         if (isBouncedFromWorkspace) {
+          const bouncedHeaders = stripUserHeaders(request);
+          bouncedHeaders.set('x-nonce', nonce);
           const response = NextResponse.next({
             request: {
-              headers: stripUserHeaders(request),
+              headers: bouncedHeaders,
             },
           });
           response.cookies.set('fbup_session', '', {
@@ -247,20 +261,25 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
               maxAge: 0,
             });
           }
-          return response;
+          return applyCspHeaders(response, nonce);
         }
 
-        return buildAuthenticatedWorkspaceRedirect(request, session, host, rootDomain);
+        return applyCspHeaders(
+          buildAuthenticatedWorkspaceRedirect(request, session, host, rootDomain),
+          nonce
+        );
       }
 
       if (!session && subdomain === 'app' && pathname === '/') {
-        return NextResponse.redirect(new URL('/login', request.url));
+        return applyCspHeaders(NextResponse.redirect(new URL('/login', request.url)), nonce);
       }
 
       if (isLogoutSuccess) {
+        const logoutHeaders = stripUserHeaders(request);
+        logoutHeaders.set('x-nonce', nonce);
         const response = NextResponse.next({
           request: {
-            headers: stripUserHeaders(request),
+            headers: logoutHeaders,
           },
         });
         response.cookies.set('fbup_session', '', {
@@ -279,15 +298,20 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
             sameSite: 'lax',
           });
         }
-        return response;
+        return applyCspHeaders(response, nonce);
       }
     }
 
-    return NextResponse.next({
-      request: {
-        headers: stripUserHeaders(request),
-      },
-    });
+    const apexHeaders = stripUserHeaders(request);
+    apexHeaders.set('x-nonce', nonce);
+    return applyCspHeaders(
+      NextResponse.next({
+        request: {
+          headers: apexHeaders,
+        },
+      }),
+      nonce
+    );
   }
 
   // Customer tenant subdomains only host private workspace routes (/, /accounts, etc.).
@@ -301,17 +325,23 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   if (isAuthRoute) {
     const gatewayUrl = new URL(request.url);
     gatewayUrl.host = `app.${rootDomain}`;
-    return NextResponse.redirect(gatewayUrl, 307);
+    return applyCspHeaders(NextResponse.redirect(gatewayUrl, 307), nonce);
   }
 
   const session = await resolveSession(request, sessionSecret);
 
   if (!session) {
-    return buildLoginRedirectWithCleanReturn(request, `app.${rootDomain}`);
+    return applyCspHeaders(
+      buildLoginRedirectWithCleanReturn(request, `app.${rootDomain}`),
+      nonce
+    );
   }
 
   if (session.status === 'suspended') {
-    return NextResponse.redirect(new URL('/account-suspended', request.url), 307);
+    return applyCspHeaders(
+      NextResponse.redirect(new URL('/account-suspended', request.url), 307),
+      nonce
+    );
   }
 
   const access = canAccessTenant(session, subdomain);
@@ -320,14 +350,15 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
       const authorizedUrl = new URL(request.url);
       authorizedUrl.host = `${session.subdomain}.${rootDomain}`;
       authorizedUrl.searchParams.set('notice', 'tenant_redirect');
-      return NextResponse.redirect(authorizedUrl, 307);
+      return applyCspHeaders(NextResponse.redirect(authorizedUrl, 307), nonce);
     }
-    return NextResponse.redirect(new URL('/login', request.url), 307);
+    return applyCspHeaders(NextResponse.redirect(new URL('/login', request.url), 307), nonce);
   }
 
   // Rewrite to tenant workspace path (/tenant/[subdomain]/*)
   const rewriteUrl = getTenantRewriteUrl(subdomain, pathname, request.url);
   const requestHeaders = buildTenantHeaders(request, subdomain, pathname, session);
+  requestHeaders.set('x-nonce', nonce);
 
   const response = NextResponse.rewrite(rewriteUrl, {
     request: {
@@ -335,5 +366,5 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  return applyNoStoreHeaders(response);
+  return applyCspHeaders(applyNoStoreHeaders(response), nonce);
 }
