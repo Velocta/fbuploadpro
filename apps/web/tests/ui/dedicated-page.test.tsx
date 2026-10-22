@@ -372,7 +372,28 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasText('+4200')).toBe(true);
       expect(hasText('Cutting-edge autonomous manufacturing video teaser.')).toBe(true);
       expect(hasText('09:00')).toBe(true);
-      expect(hasText('15:00')).toBe(true);
+      expect(hasText('03:00')).toBe(true);
+      expect(hasText('PM')).toBe(true);
+    });
+
+    it('renders Daily Posting Times chips in 12h form without seconds (QA #18)', () => {
+      const slotsWithSeconds: PageSlotSummary[] = [
+        { id: 'slot-sec', slotTime: '09:00:00', timezone: 'UTC', isActive: true },
+      ];
+      const { hasText, html } = render(
+        <PageTabDashboard
+          page={samplePage}
+          queueItems={sampleQueueItems}
+          slots={slotsWithSeconds}
+          onPublishNow={vi.fn()}
+          onSwitchTab={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+        />
+      );
+
+      expect(hasText('09:00 AM')).toBe(true);
+      expect(hasText('UTC')).toBe(true);
+      expect(html).not.toContain('09:00:00');
     });
 
     it('triggers immediate publication when Publish Now is clicked', async () => {
@@ -442,6 +463,22 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(hasText('Delete')).toBe(true);
       expect(hasText('1 post queued')).toBe(true);
       expect(hasAttribute('data-testid', 'queue-summary')).toBe(true);
+    });
+
+    it('labels queue row times with the page timezone (QA #11)', () => {
+      const { hasText } = render(
+        <PageTabQueue
+          page={samplePage}
+          queueItems={sampleQueueItems}
+          onPublishNow={vi.fn()}
+          onUpdateItem={vi.fn()}
+          onDeleteItem={vi.fn()}
+          onOpenAddQueue={vi.fn()}
+        />
+      );
+
+      expect(hasText('Thu 9:00 AM UTC')).toBe(true);
+      expect(hasText('Published Thu, Oct 15 at 3:00 PM UTC')).toBe(true);
     });
 
     it('renders all five filter tabs with counts', () => {

@@ -21,6 +21,12 @@ export interface QueueToastsProps {
   onDismiss: (id: number) => void;
 }
 
+/** Shown after a queue reorder (arrows or drag) saves successfully. */
+export const QUEUE_REORDER_SUCCESS_MESSAGE = 'Queue reordered — posting times updated.';
+
+/** Shown when a queue reorder could not be saved on the server. */
+export const QUEUE_REORDER_ERROR_MESSAGE = "Couldn't save the new order.";
+
 /** Bottom-center toast stack with optional action (e.g. Undo). */
 export function QueueToasts({ toasts, onDismiss }: Readonly<QueueToastsProps>) {
   if (toasts.length === 0) return null;

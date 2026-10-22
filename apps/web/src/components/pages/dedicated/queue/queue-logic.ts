@@ -5,6 +5,8 @@ import {
   slotCoversFormat,
   getNextSlotForFormat,
   getNextOccurrence,
+  formatSlotLong,
+  formatSlotShort,
 } from '../composer/queue-slot-utils';
 import { formatLabel } from '../bulk/bulk-utils';
 
@@ -28,6 +30,39 @@ export function describeSlotCoverage(slot: PageSlotSummary): string {
   const allowed = slot.allowedFormats;
   if (!allowed || allowed.length === 0) return 'all formats';
   return allowed.map((f) => formatPlural(f as PostFormat)).join(', ');
+}
+
+// ---------------------------------------------------------------------------
+// Row time text
+// ---------------------------------------------------------------------------
+
+export type QueueRowTimeBucket = 'queued' | 'scheduled' | 'published' | 'failed';
+
+/**
+ * Queue row time text with the page timezone labelled, matching the other
+ * page surfaces (e.g. "Scheduled for Tue, Oct 27 at 3:00 PM UTC"). Without
+ * the label the time reads as browser-local time.
+ */
+export function formatQueueRowTime(
+  item: DedicatedQueueItem,
+  bucket: QueueRowTimeBucket,
+  timeZone: string
+): string {
+  const date = new Date(item.scheduledTime);
+  if (Number.isNaN(date.getTime())) return '';
+  const label = timeZone || 'UTC';
+  switch (bucket) {
+    case 'queued':
+    case 'failed':
+      return `${formatSlotShort(date, timeZone)} ${label}`;
+    case 'scheduled':
+      return `Scheduled for ${formatSlotLong(date, timeZone)} ${label}`;
+    case 'published': {
+      const published = item.publishedAt ? new Date(item.publishedAt) : date;
+      const when = Number.isNaN(published.getTime()) ? date : published;
+      return `Published ${formatSlotLong(when, timeZone)} ${label}`;
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
