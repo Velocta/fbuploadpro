@@ -12,6 +12,11 @@ import {
   recordHeartbeat,
 } from './heartbeat.js';
 import { createWorkerPublisherRegistry } from './registry.js';
+import {
+  runRefreshCycle,
+  TOKEN_REFRESH_CRON,
+  type RefreshDbClient,
+} from './refresh.js';
 
 export { recordHeartbeat, WORKER_HEARTBEAT_NAME } from './heartbeat.js';
 export {
@@ -29,6 +34,13 @@ export {
   buildDlqSettleArgs,
 } from './consumers.js';
 export { createWorkerPublisherRegistry } from './registry.js';
+export {
+  runRefreshCycle,
+  TOKEN_REFRESH_CRON,
+  CLAIM_TICK_CRON,
+  REFRESH_LEASE_TTL_MS,
+} from './refresh.js';
+export type { RefreshCycleResult, RefreshDbClient } from './refresh.js';
 
 export interface Env {
   ENVIRONMENT?: string;
@@ -83,9 +95,11 @@ function queuesFromEnv(env: Env, overrides?: ClaimerQueues): ClaimerQueues {
 }
 
 /**
- * Scheduled handler (spec 121 claimer): heartbeat first on EVERY tick —
- * including the skip paths — then claim rounds that only claim and
- * enqueue. The tick never publishes; consumers do the publishing.
+ * Scheduled handler: heartbeat first on EVERY tick — including the
+ * skip paths — then branch on `controller.cron`: the refresh cron runs
+ * the token-refresh cycle (refresh.ts), anything else runs the claimer
+ * (claim rounds that only claim and enqueue; the tick never publishes,
+ * consumers do the publishing).
  */
 export async function handleScheduled(
   controller: ScheduledController,
@@ -112,6 +126,29 @@ export async function handleScheduled(
   }
 
   const registry = options?.registry ?? createWorkerPublisherRegistry();
+
+  // Cron routing (spec 121 Scope 9): the refresh cron runs ONLY the
+  // token-refresh cycle; every other cron (the `* * * * *` claim tick)
+  // runs the claimer exactly as before. The refresh cycle deliberately
+  // writes no heartbeat row: the heartbeat is claimer-owned and a full
+  // write from here would zero the claimer's claimed/settled counters
+  // and stamp a false claim success. Refresh reports through its own
+  // structured counter log line + PostHog captures (see refresh.ts);
+  // the shared skip-path heartbeats above still fire for both crons.
+  if (controller.cron === TOKEN_REFRESH_CRON) {
+    try {
+      await runRefreshCycle(
+        db as unknown as RefreshDbClient,
+        registry,
+        env,
+        options?.now ?? new Date(controller.scheduledTime)
+      );
+    } catch (err) {
+      console.error('[Scheduled] token refresh cycle failed:', err);
+      throw err;
+    }
+    return;
+  }
 
   try {
     const result = await runClaimTick({
