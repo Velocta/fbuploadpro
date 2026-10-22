@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { NextRequest } from 'next/server';
+import { signSessionToken } from '@fbuploadpro/contracts';
 import {
   CSP_HEADER_NAME,
   CSP_REPORT_PATH,
@@ -163,6 +164,63 @@ describe('middleware CSP headers', () => {
       expectCspHeaders(res);
     }
   );
+
+  // Regression (verification gate on PR #639): Next 16's renderer derives
+  // the script nonce from the CSP header forwarded on the REQUEST
+  // (content-security-policy[-report-only]) — it has no reader of x-nonce.
+  // Middleware responses expose the forwarded request headers as
+  // `x-middleware-request-<name>` entries, which is how they are asserted.
+  describe('forwarded request CSP header (Next renderer nonce source)', () => {
+    const forwardedRequestHeader = (res: Awaited<ReturnType<typeof middleware>>) =>
+      res.headers.get(`x-middleware-request-${CSP_HEADER_NAME.toLowerCase()}`);
+
+    it.each([
+      ['apex request', 'http://localhost:3000/', 'localhost:3000'],
+      ['/api request', 'http://localhost:3000/api/health', 'localhost:3000'],
+    ])(
+      'forwards the same CSP (same nonce) on the request for a %s',
+      async (_label, url, host) => {
+        const res = await middleware(new NextRequest(url, { headers: { host } }));
+        const responseCsp = res.headers.get(CSP_HEADER_NAME);
+        expect(responseCsp).not.toBeNull();
+        expect(forwardedRequestHeader(res)).toBe(responseCsp);
+      }
+    );
+
+    it('forwards the CSP request header on the tenant rewrite path', async () => {
+      const testSecret = 'csp-regression-session-secret-minimum-32-chars';
+      process.env.SESSION_SECRET = testSecret;
+      const token = await signSessionToken(
+        {
+          userId: '11111111-1111-4111-a111-111111111111',
+          email: 'regularuser@gmail.com',
+          name: 'Acme User',
+          subdomain: 'acme',
+          role: 'user',
+          status: 'active',
+        },
+        testSecret
+      );
+      const res = await middleware(
+        new NextRequest('http://acme.localhost:3000/', {
+          headers: { host: 'acme.localhost:3000', cookie: `fbup_session=${token}` },
+        })
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get('x-middleware-rewrite')).not.toBeNull();
+      expect(forwardedRequestHeader(res)).toBe(res.headers.get(CSP_HEADER_NAME));
+    });
+
+    it('overwrites a client-supplied CSP request header', async () => {
+      const req = new NextRequest('http://localhost:3000/', {
+        headers: { host: 'localhost:3000', [CSP_HEADER_NAME]: "default-src *" },
+      });
+      const res = await middleware(req);
+      const forwarded = forwardedRequestHeader(res);
+      expect(forwarded).toBe(res.headers.get(CSP_HEADER_NAME));
+      expect(forwarded).not.toContain('default-src *');
+    });
+  });
 
   it('uses a different nonce for each request', async () => {
     const first = await middleware(

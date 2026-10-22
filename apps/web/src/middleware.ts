@@ -8,7 +8,12 @@ import {
   canAccessTenant,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { applyCspHeaders, generateNonce } from './lib/csp';
+import {
+  applyCspHeaders,
+  buildContentSecurityPolicy,
+  CSP_HEADER_NAME,
+  generateNonce,
+} from './lib/csp';
 
 export const config = {
   matcher: [
@@ -112,6 +117,19 @@ function stripUserHeaders(request: NextRequest): Headers {
   return requestHeaders;
 }
 
+// Next.js derives the nonce for its own framework scripts from the CSP
+// header carried on the forwarded REQUEST (named by CSP_HEADER_NAME), not
+// from x-nonce — Next 16 has no reader of x-nonce. Both are set here with
+// the same nonce: the request CSP header drives Next's renderer, and
+// x-nonce stays for app code that reads the nonce via headers() (e.g. a
+// future inline script). Headers.set overwrites any client-supplied CSP
+// request header, so clients cannot inject their own policy or nonce.
+function setCspRequestHeaders(requestHeaders: Headers, nonce: string): Headers {
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set(CSP_HEADER_NAME, buildContentSecurityPolicy(nonce));
+  return requestHeaders;
+}
+
 function buildTenantHeaders(
   request: NextRequest,
   subdomain: string,
@@ -176,7 +194,7 @@ function handleDirectTenantPathOnApex(
   }
 
   const requestHeaders = buildTenantHeaders(request, pathSubdomain, pathname, session);
-  requestHeaders.set('x-nonce', nonce);
+  setCspRequestHeaders(requestHeaders, nonce);
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
@@ -200,7 +218,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     pathname.endsWith('.ico')
   ) {
     const requestHeaders = stripUserHeaders(request);
-    requestHeaders.set('x-nonce', nonce);
+    setCspRequestHeaders(requestHeaders, nonce);
     return applyCspHeaders(
       NextResponse.next({
         request: {
@@ -243,7 +261,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
         if (isBouncedFromWorkspace) {
           const bouncedHeaders = stripUserHeaders(request);
-          bouncedHeaders.set('x-nonce', nonce);
+          setCspRequestHeaders(bouncedHeaders, nonce);
           const response = NextResponse.next({
             request: {
               headers: bouncedHeaders,
@@ -276,7 +294,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
       if (isLogoutSuccess) {
         const logoutHeaders = stripUserHeaders(request);
-        logoutHeaders.set('x-nonce', nonce);
+        setCspRequestHeaders(logoutHeaders, nonce);
         const response = NextResponse.next({
           request: {
             headers: logoutHeaders,
@@ -303,7 +321,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     }
 
     const apexHeaders = stripUserHeaders(request);
-    apexHeaders.set('x-nonce', nonce);
+    setCspRequestHeaders(apexHeaders, nonce);
     return applyCspHeaders(
       NextResponse.next({
         request: {
@@ -358,7 +376,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // Rewrite to tenant workspace path (/tenant/[subdomain]/*)
   const rewriteUrl = getTenantRewriteUrl(subdomain, pathname, request.url);
   const requestHeaders = buildTenantHeaders(request, subdomain, pathname, session);
-  requestHeaders.set('x-nonce', nonce);
+  setCspRequestHeaders(requestHeaders, nonce);
 
   const response = NextResponse.rewrite(rewriteUrl, {
     request: {
