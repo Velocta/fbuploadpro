@@ -22,7 +22,7 @@ function createMockDb(options: {
     const filters: Record<string, unknown> = {};
     const builder: Record<string, unknown> = {};
     const resolveCount = () => {
-      if (table === 'queue_items') {
+      if (table === 'legacy_queue_items') {
         return {
           count: filters.status === 'publishing' ? (options.stuckCount ?? 0) : (options.dueCount ?? 0),
           error: null,
@@ -48,7 +48,7 @@ function createMockDb(options: {
       if (table === 'worker_heartbeats') {
         return { data: options.heartbeat, error: null };
       }
-      if (table === 'queue_items') {
+      if (table === 'legacy_queue_items') {
         return {
           data: options.oldestScheduledTime
             ? { scheduled_time: options.oldestScheduledTime }

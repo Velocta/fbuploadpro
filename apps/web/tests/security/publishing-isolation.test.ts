@@ -457,7 +457,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from updating User A queue item by ID with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM queue_items')) {
+          if (sql.includes('FROM legacy_queue_items')) {
             // WHERE qi.id = $1 AND qi.user_id = $2
             if (params && params[0] === userA.queueItemId && params[1] === userB.id) {
               return Promise.resolve([]);
@@ -489,7 +489,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from deleting User A queue item by ID with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM queue_items')) {
+          if (sql.includes('FROM legacy_queue_items')) {
             if (params && params[0] === userA.queueItemId && params[1] === userB.id) {
               return Promise.resolve([]);
             }
@@ -519,7 +519,7 @@ describe('Multi-Tenant Publishing Security & Isolation Audit (T144)', () => {
     it('blocks User B from triggering publish-now on User A queue item with 404 Not Found', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-          if (sql.includes('FROM queue_items')) {
+          if (sql.includes('FROM legacy_queue_items')) {
             if (params && params[0] === userA.queueItemId && params[1] === userB.id) {
               return Promise.resolve([]);
             }

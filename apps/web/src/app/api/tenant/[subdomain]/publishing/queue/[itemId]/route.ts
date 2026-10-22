@@ -82,7 +82,7 @@ export async function handleUpdateQueueItem(
     // 4. Check existing item
     const existingRows = (await dbClient.query(
       `SELECT qi.id, qi.user_id, qi.fb_page_id, qi.slot_id, qi.media_id, qi.post_format, qi.link_url, qi.scheduled_time, qi.caption, qi.first_comment, qi.status, qi.retry_count, qi.max_retries, qi.fb_post_id, qi.fb_comment_id, qi.published_at, qi.created_at, qi.updated_at
-       FROM queue_items qi
+       FROM legacy_queue_items qi
        WHERE qi.id = $1 AND qi.user_id = $2`,
       [itemId, session.userId]
     )) as Record<string, unknown>[];
@@ -126,7 +126,7 @@ export async function handleUpdateQueueItem(
     const newStatus = parsed.data.status ?? existing.status;
 
     const updateRows = (await dbClient.query(
-      `UPDATE queue_items
+      `UPDATE legacy_queue_items
        SET caption = $1,
            first_comment = $2,
            scheduled_time = $3,
@@ -197,7 +197,7 @@ export async function handleUpdateQueueItem(
   }
 
   const { data: existing, error: existErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .select('*')
     .eq('id', itemId)
     .eq('user_id', session.userId)
@@ -251,7 +251,7 @@ export async function handleUpdateQueueItem(
   }
 
   const { data: updated, error: updateErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .update(updatePayload)
     .eq('id', itemId)
     .eq('user_id', session.userId)
@@ -341,7 +341,7 @@ export async function handleDeleteQueueItem(
   if (isLegacyClient(dbClient)) {
     // 3. Check existing item
     const existingRows = (await dbClient.query(
-      `SELECT id, user_id, status FROM queue_items WHERE id = $1 AND user_id = $2`,
+      `SELECT id, user_id, status FROM legacy_queue_items WHERE id = $1 AND user_id = $2`,
       [itemId, session.userId]
     )) as Record<string, unknown>[];
 
@@ -359,7 +359,7 @@ export async function handleDeleteQueueItem(
 
     // 4. Delete item
     await dbClient.query(
-      `DELETE FROM queue_items WHERE id = $1 AND user_id = $2`,
+      `DELETE FROM legacy_queue_items WHERE id = $1 AND user_id = $2`,
       [itemId, session.userId]
     );
 
@@ -372,7 +372,7 @@ export async function handleDeleteQueueItem(
   }
 
   const { data: existing, error: existErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .select('id, user_id, status')
     .eq('id', itemId)
     .eq('user_id', session.userId)
@@ -390,7 +390,7 @@ export async function handleDeleteQueueItem(
   }
 
   const { error: deleteErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .delete()
     .eq('id', itemId)
     .eq('user_id', session.userId);

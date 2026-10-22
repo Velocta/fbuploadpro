@@ -43,7 +43,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
             updatedParams = params;
             return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
           }
-          if (sql.includes('UPDATE queue_items')) {
+          if (sql.includes('UPDATE legacy_queue_items')) {
             skippedSql = sql;
             skippedQueueParams = params;
             return Promise.resolve([]);
@@ -106,7 +106,7 @@ describe('Facebook Granular Disconnection & Multi-Tenant Governance (User Story 
               update: vi.fn().mockReturnValue(pageBuilder),
             };
           }
-          if (table === 'queue_items') {
+          if (table === 'legacy_queue_items') {
             return {
               update: queueUpdateMock.mockReturnValue({
                 eq: queueEqMock.mockReturnValue({
