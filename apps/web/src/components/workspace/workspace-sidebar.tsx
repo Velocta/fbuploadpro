@@ -82,15 +82,15 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
   };
 
   /**
-   * Click observer for leaf items, which render as real anchors (spec 110).
-   * The anchor's native default action performs the navigation, so this
-   * handler must never preventDefault or substitute its own router.push —
-   * it only paints the active state immediately and closes the mobile
-   * drawer. Previously every leaf was a <button> whose sole navigation
-   * path was handleNavigate above: the optimistic setState painted the
-   * highlight first and navigation depended entirely on the imperative
-   * router.push that followed it, so a delayed/interrupted push left the
-   * item highlighted without navigating (QA #5 / audit M2).
+   * Click observer for leaf items, which render as Next.js <Link>s
+   * (spec 110). The Link performs the (client-side) navigation itself, so
+   * this handler must never preventDefault or substitute its own
+   * router.push — it only paints the active state immediately and closes
+   * the mobile drawer. Previously every leaf was a <button> whose sole
+   * navigation path was handleNavigate above: the optimistic setState
+   * painted the highlight first and navigation depended entirely on the
+   * imperative router.push that followed it, so a delayed/interrupted push
+   * left the item highlighted without navigating (QA #5 / audit M2).
    */
   const handleLeafClick = (href: string) => {
     setOptimisticPathname(href);
@@ -99,6 +99,13 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
     }
   };
 
+  /**
+   * Hover prefetch for the collapsible parent toggles only: in
+   * icon-collapsed mode they still navigate via handleNavigate
+   * (router.push), so warming the router cache on hover is genuinely used
+   * there. Leaf items are Next.js <Link>s and prefetch natively — they do
+   * not use this.
+   */
   const handlePrefetch = (href: string) => {
     try {
       router.prefetch(href);
@@ -114,7 +121,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
         <Link
           href={homeHref}
           onClick={() => handleLeafClick(homeHref)}
-          onMouseEnter={() => handlePrefetch(homeHref)}
           data-slot="sidebar-header-branding"
           data-testid="sidebar-branding-link"
           aria-label="FBUploadPro Studio"
@@ -187,7 +193,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                   tooltip="Home"
                   href={homeHref}
                   onClick={() => handleLeafClick(homeHref)}
-                  onMouseEnter={() => handlePrefetch(homeHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -215,7 +220,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                   tooltip="Media Library"
                   href={mediaHref}
                   onClick={() => handleLeafClick(mediaHref)}
-                  onMouseEnter={() => handlePrefetch(mediaHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -243,7 +247,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                   tooltip="Downloader"
                   href={downloaderHref}
                   onClick={() => handleLeafClick(downloaderHref)}
-                  onMouseEnter={() => handlePrefetch(downloaderHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -272,7 +275,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                   tooltip="Fdola Studio"
                   href={fdolaStudioHref}
                   onClick={() => handleLeafClick(fdolaStudioHref)}
-                  onMouseEnter={() => handlePrefetch(fdolaStudioHref)}
                   leftIcon={
                     <svg
                       width="16"
@@ -377,7 +379,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                           isActive={isAccountsActive}
                           href={accountsHref}
                           onClick={() => handleLeafClick(accountsHref)}
-                          onMouseEnter={() => handlePrefetch(accountsHref)}
                         >
                           Accounts
                         </SidebarMenuSubButton>
@@ -387,7 +388,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                           isActive={isPagesActive}
                           href={pagesHref}
                           onClick={() => handleLeafClick(pagesHref)}
-                          onMouseEnter={() => handlePrefetch(pagesHref)}
                         >
                           Pages
                         </SidebarMenuSubButton>
@@ -475,7 +475,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
                               isActive={isAccountsSubActive}
                               href={platformAccountsHref}
                               onClick={() => handleLeafClick(platformAccountsHref)}
-                              onMouseEnter={() => handlePrefetch(platformAccountsHref)}
                             >
                               Accounts
                             </SidebarMenuSubButton>

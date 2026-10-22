@@ -12,6 +12,7 @@ import React, {
   isValidElement,
   Children,
 } from 'react';
+import Link from 'next/link';
 import { PALETTE, THEME, SPACING, RADII, TYPOGRAPHY } from '../../lib/theme';
 import { Tooltip } from './tooltip';
 
@@ -995,9 +996,10 @@ export interface SidebarMenuButtonProps
   rightIcon?: React.ReactNode | undefined;
   asChild?: boolean | undefined;
   /**
-   * When set, the item renders as a real anchor (`<a href>`) instead of a
-   * `<button>`, so navigation is the click's native default action and does
-   * not depend on a JavaScript click handler completing (spec 110).
+   * When set, the item renders as a Next.js `<Link>` instead of a
+   * `<button>`, so a single click navigates via client-side routing (with
+   * Link's built-in prefetching) and never depends on a JavaScript click
+   * handler completing (spec 110).
    */
   href?: string | undefined;
 }
@@ -1166,10 +1168,16 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
 
     let buttonElement: React.ReactElement;
     if (href && !asChild) {
+      const linkHref = href;
+      // Remaining props are plain anchor attributes (href and the mouse/click
+      // handlers were destructured out above). They are re-typed to Link's own
+      // props — minus href, passed explicitly — because this repo's
+      // exactOptionalPropertyTypes rejects ButtonHTMLAttributes optionals
+      // when spread into next/link.
       buttonElement = (
-        <a
+        <Link
           ref={ref as React.Ref<HTMLAnchorElement>}
-          href={href}
+          href={linkHref}
           role="menuitem"
           data-slot="sidebar-menu-button"
           data-sidebar="menu-button"
@@ -1190,10 +1198,10 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           }}
           className={className}
           style={buttonStyle}
-          {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+          {...(props as unknown as Omit<React.ComponentProps<typeof Link>, 'href'>)}
         >
           {innerContent}
-        </a>
+        </Link>
       );
     } else if (asChild && isValidElement(children)) {
       buttonElement = cloneElement(children as React.ReactElement<any>, {
@@ -1481,9 +1489,10 @@ export interface SidebarMenuSubButtonProps
   size?: 'sm' | 'md' | undefined;
   asChild?: boolean | undefined;
   /**
-   * When set, the item renders as a real anchor (`<a href>`) instead of a
-   * `<button>`, so navigation is the click's native default action and does
-   * not depend on a JavaScript click handler completing (spec 110).
+   * When set, the item renders as a Next.js `<Link>` instead of a
+   * `<button>`, so a single click navigates via client-side routing (with
+   * Link's built-in prefetching) and never depends on a JavaScript click
+   * handler completing (spec 110).
    */
   href?: string | undefined;
 }
@@ -1593,9 +1602,10 @@ interface SidebarMenuSubControlProps {
 }
 
 /**
- * Renders the sub-menu leaf element for SidebarMenuSubButton: a real anchor
- * when `href` is set (spec 110), otherwise a plain button. Extracted so
- * SidebarMenuSubButton stays within the cognitive-complexity budget.
+ * Renders the sub-menu leaf element for SidebarMenuSubButton: a Next.js
+ * <Link> (client-side routing) when `href` is set (spec 110), otherwise a
+ * plain button. Extracted so SidebarMenuSubButton stays within the
+ * cognitive-complexity budget.
  */
 const SidebarMenuSubControl = forwardRef<HTMLButtonElement, SidebarMenuSubControlProps>(
   function SidebarMenuSubControl(
@@ -1628,10 +1638,15 @@ const SidebarMenuSubControl = forwardRef<HTMLButtonElement, SidebarMenuSubContro
     );
 
     if (href) {
+      const linkHref = href;
+      // restProps are plain anchor attributes here (href and the mouse/click
+      // handlers were destructured out above); re-typed to Link's own props
+      // minus href for the same exactOptionalPropertyTypes reason documented
+      // on SidebarMenuButton's Link branch.
       return (
-        <a
+        <Link
           ref={ref as React.Ref<HTMLAnchorElement>}
-          href={href}
+          href={linkHref}
           role="menuitem"
           data-slot="sidebar-menu-sub-button"
           data-sidebar="menu-sub-button"
@@ -1651,10 +1666,10 @@ const SidebarMenuSubControl = forwardRef<HTMLButtonElement, SidebarMenuSubContro
           }}
           className={className}
           style={style}
-          {...(restProps as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+          {...(restProps as unknown as Omit<React.ComponentProps<typeof Link>, 'href'>)}
         >
           {content}
-        </a>
+        </Link>
       );
     }
 

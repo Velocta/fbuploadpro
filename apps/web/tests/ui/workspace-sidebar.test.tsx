@@ -21,6 +21,21 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+// Render next/link as a plain anchor tagged with data-next-link, so tests can
+// prove leaves render through Next.js Link (client-side routing) rather than
+// hand-rolled raw <a> elements (which would force full page reloads).
+vi.mock('next/link', async () => {
+  const ReactModule = await import('react');
+  type MockLinkProps = {
+    href: string;
+    children?: React.ReactNode;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>;
+  return {
+    default: ({ href, children, ...props }: MockLinkProps) =>
+      ReactModule.createElement('a', { href, 'data-next-link': 'true', ...props }, children),
+  };
+});
+
 describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & Spec 052)', () => {
   it('renders FBUploadPro branding in SidebarHeader and Option A studio footer card in SidebarFooter (Spec 052)', () => {
     mockPathname = '/tenant/acme';
@@ -190,7 +205,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(activeFdolaBtn).toBeDefined();
   });
 
-  it('renders Pages directly below Accounts inside the collapsible Facebook sidebar menu as a real anchor to /tenant/{subdomain}/pages (Spec 110)', () => {
+  it('renders Pages directly below Accounts inside the collapsible Facebook sidebar menu as a Next.js Link anchor to /tenant/{subdomain}/pages (Spec 110)', () => {
     mockPathname = '/tenant/acme';
     mockPush.mockClear();
 
@@ -220,13 +235,16 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(accountsIdx).toBeGreaterThan(facebookIdx);
     expect(pagesIdx).toBeGreaterThan(accountsIdx);
 
-    // Spec 110: the Pages leaf is a real anchor whose href IS the navigation
-    // target — a single click navigates via the anchor's default action.
+    // Spec 110: the Pages leaf renders through next/link with the tenant
+    // href — a single click navigates via Link's client-side routing.
+    // data-next-link is stamped by the next/link test double and would be
+    // absent if the leaf were a raw <a> (full page reload).
     const anchors = findTags('a');
     const pagesAnchor = anchors.find(
       (a) => a.attributes['href'] === '/tenant/acme/pages' && a.attributes['data-sidebar'] === 'menu-sub-button'
     );
     expect(pagesAnchor).toBeDefined();
+    expect(pagesAnchor?.attributes['data-next-link']).toBe('true');
 
     // Locate the Pages leaf in the captured tree: it must carry the href and
     // its click handler must neither preventDefault nor substitute a
@@ -370,7 +388,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(html).toContain('sidebar-testing-note-instagram');
   });
 
-  it('renders upcoming platform Accounts sub-items as real anchors to /tenant/{subdomain}/{platform}/accounts (Spec 110)', () => {
+  it('renders upcoming platform Accounts sub-items as Next.js Link anchors to /tenant/{subdomain}/{platform}/accounts (Spec 110)', () => {
     mockPathname = '/tenant/acme/threads/accounts';
     mockPush.mockClear();
 
@@ -416,7 +434,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(allAccountsLeaves).toHaveLength(6);
 
     // Index 0: Facebook, Index 1: Instagram, Index 2: Threads, Index 3: X, Index 4: TikTok, Index 5: YouTube
-    // Spec 110: navigation target lives in the anchor href; the click handler
+    // Spec 110: navigation target lives in the Link href; the click handler
     // must not preventDefault or substitute a router.push.
     expect(allAccountsLeaves[0].props.href).toBe('/tenant/acme/accounts');
     expect(allAccountsLeaves[1].props.href).toBe('/tenant/acme/instagram/accounts');
@@ -428,7 +446,7 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('renders every primary leaf item as a real anchor with its tenant href and keeps the Facebook parent as a collapsible toggle button (Spec 110)', () => {
+  it('renders every primary leaf item as a Next.js Link anchor with its tenant href and keeps the Facebook parent as a collapsible toggle button (Spec 110)', () => {
     mockPathname = '/tenant/acme';
     const { findTags, html } = render(
       <SidebarProvider>
@@ -439,13 +457,20 @@ describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & S
       </SidebarProvider>
     );
 
-    const anchorHrefs = findTags('a').map((a) => a.attributes['href']);
+    const anchors = findTags('a');
+    const anchorHrefs = anchors.map((a) => a.attributes['href']);
     expect(anchorHrefs).toContain('/tenant/acme/');
     expect(anchorHrefs).toContain('/tenant/acme/media');
     expect(anchorHrefs).toContain('/tenant/acme/downloader');
     expect(anchorHrefs).toContain('/tenant/acme/fdola-studio');
     expect(anchorHrefs).toContain('/tenant/acme/accounts');
     expect(anchorHrefs).toContain('/tenant/acme/pages');
+
+    // Every anchor in the sidebar comes from next/link (data-next-link is
+    // stamped by the test double): no raw <a> remains, so no leaf click can
+    // degrade into a full page reload.
+    expect(anchors.length).toBeGreaterThan(0);
+    expect(anchors.every((a) => a.attributes['data-next-link'] === 'true')).toBe(true);
 
     // The Facebook parent is a genuine toggle, not a route: it stays a
     // <button> wired to the collapsible trigger, initially expanded.

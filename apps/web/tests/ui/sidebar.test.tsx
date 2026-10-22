@@ -4,7 +4,22 @@
  */
 
 import React from 'react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Render next/link as a plain anchor tagged with data-next-link, so tests can
+// prove a leaf was rendered through Next.js Link (client-side routing) rather
+// than a hand-rolled raw <a> (which would force a full page reload).
+vi.mock('next/link', async () => {
+  const ReactModule = await import('react');
+  type MockLinkProps = {
+    href: string;
+    children?: React.ReactNode;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>;
+  return {
+    default: ({ href, children, ...props }: MockLinkProps) =>
+      ReactModule.createElement('a', { href, 'data-next-link': 'true', ...props }, children),
+  };
+});
 import {
   SidebarProvider,
   Sidebar,
@@ -377,7 +392,7 @@ describe('Sidebar Component Suite (Spec 014 & Spec 025)', () => {
       expect(hasAttribute('role', 'menu')).toBe(true);
     });
 
-    it('renders SidebarMenuButton and SidebarMenuSubButton as real anchors when href is set, and as buttons when it is not (Spec 110)', () => {
+    it('renders SidebarMenuButton and SidebarMenuSubButton as Next.js Link anchors when href is set, and as buttons when it is not (Spec 110)', () => {
       const { findTags } = render(
         <SidebarProvider>
           <Sidebar>
@@ -412,9 +427,14 @@ describe('Sidebar Component Suite (Spec 014 & Spec 025)', () => {
       expect(menuAnchor?.attributes['href']).toBe('/tenant/acme/media');
       expect(menuAnchor?.attributes['data-active']).toBe('true');
       expect(menuAnchor?.attributes['aria-current']).toBe('page');
+      // data-next-link is stamped by the next/link test double: it proves the
+      // rendered anchor comes from Next.js Link, so a click is a client-side
+      // transition, not a raw-anchor full page reload.
+      expect(menuAnchor?.attributes['data-next-link']).toBe('true');
       const subAnchor = anchors.find((a) => a.attributes['data-sidebar'] === 'menu-sub-button');
       expect(subAnchor?.attributes['href']).toBe('/tenant/acme/pages');
       expect(subAnchor?.attributes['data-active']).toBe('true');
+      expect(subAnchor?.attributes['data-next-link']).toBe('true');
 
       // Without href the primitives keep rendering <button type="button">
       // (genuine toggles such as collapsible parents and the footer switcher).
