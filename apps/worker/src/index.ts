@@ -197,6 +197,45 @@ export interface WorkerHealthPayload {
 
 const WORKER_HEALTH_TIMEOUT_MS = 2000;
 
+interface WorkerProbeDb {
+  from: (table: string) => {
+    select: (
+      columns: string,
+      options: { head: boolean; count: string }
+    ) => Promise<{ error: unknown }>;
+  };
+}
+
+async function probeWorkerDatabase(
+  db: WorkerProbeDb | null,
+  timeoutMs: number
+): Promise<boolean> {
+  if (!db || typeof db.from !== 'function') return false;
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const probePromise = db
+      .from('workspaces')
+      .select('id', { head: true, count: 'exact' });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(
+        () => reject(new Error('Health probe timeout exceeded budget')),
+        timeoutMs
+      );
+    });
+    const { error } = await Promise.race([probePromise, timeoutPromise]);
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error(
+      '[health] worker database probe failed:',
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  } finally {
+    if (timerId) clearTimeout(timerId);
+  }
+}
+
 /**
  * Worker health probe (spec 116): mirrors the web DB probe (workspaces
  * head query, 2s budget) plus env-presence booleans. Sanitized — booleans
@@ -215,44 +254,12 @@ export async function probeWorkerHealth(
       isTokenEncryptionKeyWellFormed(env.TOKEN_ENCRYPTION_KEY)
   );
 
-  let database = false;
   const testDb =
     env.ENVIRONMENT === 'production'
       ? null
       : ((env as unknown as { __TEST_DB__?: unknown }).__TEST_DB__ ?? null);
-  const db = (initWorkerDb(env, injectedDb) ?? testDb) as {
-    from: (table: string) => {
-      select: (
-        columns: string,
-        options: { head: boolean; count: string }
-      ) => Promise<{ error: unknown }>;
-    };
-  } | null;
-
-  if (db && typeof db.from === 'function') {
-    let timerId: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const probePromise = db
-        .from('workspaces')
-        .select('id', { head: true, count: 'exact' });
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        timerId = setTimeout(
-          () => reject(new Error('Health probe timeout exceeded budget')),
-          timeoutMs
-        );
-      });
-      const { error } = await Promise.race([probePromise, timeoutPromise]);
-      if (error) throw error;
-      database = true;
-    } catch (err) {
-      console.error(
-        '[health] worker database probe failed:',
-        err instanceof Error ? err.message : err
-      );
-    } finally {
-      if (timerId) clearTimeout(timerId);
-    }
-  }
+  const db = (initWorkerDb(env, injectedDb) ?? testDb) as WorkerProbeDb | null;
+  const database = await probeWorkerDatabase(db, timeoutMs);
 
   const ok = database && config;
   return {

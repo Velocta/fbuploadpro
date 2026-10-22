@@ -60,6 +60,14 @@ export function isTokenKeyConfigured(
   return new TextEncoder().encode(trimmed).length === 32;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 47) {
+    end--;
+  }
+  return value.slice(0, end);
+}
+
 function isValidUrl(value: string): boolean {
   try {
     new URL(value);
@@ -108,7 +116,7 @@ async function defaultCheckAuth(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AUTH_PROBE_TIMEOUT_MS);
   try {
-    const res = await fetchFn(`${url.replace(/\/+$/, '')}/auth/v1/health`, {
+    const res = await fetchFn(`${trimTrailingSlashes(url)}/auth/v1/health`, {
       method: 'GET',
       headers: { apikey: anonKey },
       signal: controller.signal,
@@ -161,28 +169,26 @@ export async function probeHealth(
       timeoutMs,
       () => false
     );
-  } else {
+  } else if (isPlaceholder(env.SUPABASE_SERVICE_ROLE_KEY)) {
     // Masking fix: getSupabaseAdminClient() falls back to the anon key when
     // the service-role key is missing, which would report a broken service
     // key as healthy. The health probe refuses to trust that fallback.
-    if (isPlaceholder(env.SUPABASE_SERVICE_ROLE_KEY)) {
-      console.error('Diagnostic probe failure: service-role key is not configured');
-      database = false;
-    } else {
-      database = await probeDatabaseWithTimeout(
-        async () => {
-          const supabase = getSupabaseAdminClient();
-          if (!supabase) throw new Error('Supabase client is not configured');
-          return supabase
-            .from('workspaces')
-            .select('id', { head: true, count: 'exact' });
-        },
-        timeoutMs,
-        (result) => Boolean((result as { error?: unknown }).error)
-      );
-      if (!database) {
-        console.error('Diagnostic probe failure: database probe did not succeed');
-      }
+    console.error('Diagnostic probe failure: service-role key is not configured');
+    database = false;
+  } else {
+    database = await probeDatabaseWithTimeout(
+      async () => {
+        const supabase = getSupabaseAdminClient();
+        if (!supabase) throw new Error('Supabase client is not configured');
+        return await supabase
+          .from('workspaces')
+          .select('id', { head: true, count: 'exact' });
+      },
+      timeoutMs,
+      (result) => Boolean((result as { error?: unknown }).error)
+    );
+    if (!database) {
+      console.error('Diagnostic probe failure: database probe did not succeed');
     }
   }
 

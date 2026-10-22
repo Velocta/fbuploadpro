@@ -120,19 +120,113 @@ async function countByStatus(
   table: string,
   statuses: readonly string[]
 ): Promise<Record<string, number>> {
-  const result: Record<string, number> = {};
-  for (const status of statuses) {
-    try {
-      const { count, error } = await db
-        .from(table)
-        .select('id', { head: true, count: 'exact' })
-        .eq('status', status);
-      result[status] = error ? 0 : (count ?? 0);
-    } catch {
-      result[status] = 0;
-    }
+  const entries = await Promise.all(
+    statuses.map(async (status) => {
+      try {
+        const { count, error } = await db
+          .from(table)
+          .select('id', { head: true, count: 'exact' })
+          .eq('status', status);
+        return [status, error ? 0 : (count ?? 0)] as const;
+      } catch {
+        return [status, 0] as const;
+      }
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
+type HeartbeatCheck = InternalHealthPayload['checks']['heartbeat'];
+type QueueCheck = InternalHealthPayload['checks']['queue'];
+
+const EMPTY_HEARTBEAT: HeartbeatCheck = {
+  ok: false,
+  ageSeconds: null,
+  lastRunAt: null,
+  lastSuccessAt: null,
+  lastSkipReason: null,
+  claimed: 0,
+  settled: 0,
+};
+
+const EMPTY_QUEUE: QueueCheck = {
+  dueCount: 0,
+  oldestDueAgeSeconds: null,
+  stuckPublishingCount: 0,
+};
+
+async function checkHeartbeat(db: any, now: Date): Promise<HeartbeatCheck> {
+  try {
+    const { data, error } = await db
+      .from('worker_heartbeats')
+      .select(
+        'last_run_at, last_success_at, last_claimed_count, last_settled_count, last_skip_reason'
+      )
+      .eq('worker_name', 'fbuploadpro-worker')
+      .maybeSingle();
+    if (error || !data) return EMPTY_HEARTBEAT;
+    const lastSuccessAt = data.last_success_at as string | null;
+    const ageSeconds = lastSuccessAt
+      ? Math.max(
+          0,
+          Math.floor((now.getTime() - new Date(lastSuccessAt).getTime()) / 1000)
+        )
+      : null;
+    return {
+      ok: ageSeconds !== null && ageSeconds <= HEARTBEAT_STALE_SECONDS,
+      ageSeconds,
+      lastRunAt: data.last_run_at ?? null,
+      lastSuccessAt,
+      lastSkipReason: data.last_skip_reason ?? null,
+      claimed: Number(data.last_claimed_count ?? 0),
+      settled: Number(data.last_settled_count ?? 0),
+    };
+  } catch {
+    return EMPTY_HEARTBEAT;
   }
-  return result;
+}
+
+async function checkQueue(db: any, now: Date): Promise<QueueCheck> {
+  try {
+    const timestamp = now.toISOString();
+    const stuckBefore = new Date(
+      now.getTime() - STUCK_PUBLISHING_MINUTES * 60 * 1000
+    ).toISOString();
+    const dueQuery = await db
+      .from('queue_items')
+      .select('id', { head: true, count: 'exact' })
+      .eq('status', 'queued')
+      .lte('scheduled_time', timestamp);
+    const stuckQuery = await db
+      .from('queue_items')
+      .select('id', { head: true, count: 'exact' })
+      .eq('status', 'publishing')
+      .lte('updated_at', stuckBefore);
+    const { data: oldest } = await db
+      .from('queue_items')
+      .select('scheduled_time')
+      .eq('status', 'queued')
+      .lte('scheduled_time', timestamp)
+      .order('scheduled_time', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    let oldestDueAgeSeconds: number | null = null;
+    if (oldest?.scheduled_time) {
+      oldestDueAgeSeconds = Math.max(
+        0,
+        Math.floor(
+          (now.getTime() - new Date(oldest.scheduled_time).getTime()) / 1000
+        )
+      );
+    }
+    return {
+      dueCount: dueQuery.error ? 0 : (dueQuery.count ?? 0),
+      oldestDueAgeSeconds,
+      stuckPublishingCount: stuckQuery.error ? 0 : (stuckQuery.count ?? 0),
+    };
+  } catch {
+    return EMPTY_QUEUE;
+  }
 }
 
 export async function probeInternalHealth(
@@ -142,30 +236,21 @@ export async function probeInternalHealth(
   const timestamp = now.toISOString();
   const db = deps?.db ?? getSupabaseAdminClient();
 
-  const emptyPayload = (
-    status: InternalHealthPayload['status']
-  ): InternalHealthPayload => ({
-    status,
-    timestamp,
-    checks: {
-      database: { ok: false, latencyMs: null },
-      heartbeat: {
-        ok: false,
-        ageSeconds: null,
-        lastRunAt: null,
-        lastSuccessAt: null,
-        lastSkipReason: null,
-        claimed: 0,
-        settled: 0,
-      },
-      queue: { dueCount: 0, oldestDueAgeSeconds: null, stuckPublishingCount: 0 },
-      storage: { ok: false },
-      facebook: { pagesByStatus: {}, accountsByStatus: {} },
-    },
-  });
-
   if (!db) {
-    return { statusCode: 503, payload: emptyPayload('unhealthy') };
+    return {
+      statusCode: 503,
+      payload: {
+        status: 'unhealthy',
+        timestamp,
+        checks: {
+          database: { ok: false, latencyMs: null },
+          heartbeat: EMPTY_HEARTBEAT,
+          queue: EMPTY_QUEUE,
+          storage: { ok: false },
+          facebook: { pagesByStatus: {}, accountsByStatus: {} },
+        },
+      },
+    };
   }
 
   // Database + latency
@@ -181,79 +266,8 @@ export async function probeInternalHealth(
   }
   const latencyMs = dbOk ? Date.now() - dbStart : null;
 
-  // Worker heartbeat age
-  let heartbeat = emptyPayload('ok').checks.heartbeat;
-  try {
-    const { data, error } = await db
-      .from('worker_heartbeats')
-      .select(
-        'last_run_at, last_success_at, last_claimed_count, last_settled_count, last_skip_reason'
-      )
-      .eq('worker_name', 'fbuploadpro-worker')
-      .maybeSingle();
-    if (!error && data) {
-      const lastSuccessAt = data.last_success_at as string | null;
-      const ageSeconds = lastSuccessAt
-        ? Math.max(
-            0,
-            Math.floor((now.getTime() - new Date(lastSuccessAt).getTime()) / 1000)
-          )
-        : null;
-      heartbeat = {
-        ok: ageSeconds !== null && ageSeconds <= HEARTBEAT_STALE_SECONDS,
-        ageSeconds,
-        lastRunAt: data.last_run_at ?? null,
-        lastSuccessAt,
-        lastSkipReason: data.last_skip_reason ?? null,
-        claimed: Number(data.last_claimed_count ?? 0),
-        settled: Number(data.last_settled_count ?? 0),
-      };
-    }
-  } catch {
-    // heartbeat stays not-ok
-  }
-
-  // Queue backlog: due items + stuck in publishing beyond the recovery threshold
-  let queue = emptyPayload('ok').checks.queue;
-  try {
-    const stuckBefore = new Date(
-      now.getTime() - STUCK_PUBLISHING_MINUTES * 60 * 1000
-    ).toISOString();
-    const dueQuery = await db
-      .from('queue_items')
-      .select('id', { head: true, count: 'exact' })
-      .eq('status', 'queued')
-      .lte('scheduled_time', timestamp);
-    const stuckQuery = await db
-      .from('queue_items')
-      .select('id', { head: true, count: 'exact' })
-      .eq('status', 'publishing')
-      .lte('updated_at', stuckBefore);
-    let oldestDueAgeSeconds: number | null = null;
-    const { data: oldest } = await db
-      .from('queue_items')
-      .select('scheduled_time')
-      .eq('status', 'queued')
-      .lte('scheduled_time', timestamp)
-      .order('scheduled_time', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (oldest?.scheduled_time) {
-      oldestDueAgeSeconds = Math.max(
-        0,
-        Math.floor(
-          (now.getTime() - new Date(oldest.scheduled_time).getTime()) / 1000
-        )
-      );
-    }
-    queue = {
-      dueCount: dueQuery.error ? 0 : (dueQuery.count ?? 0),
-      oldestDueAgeSeconds,
-      stuckPublishingCount: stuckQuery.error ? 0 : (stuckQuery.count ?? 0),
-    };
-  } catch {
-    // queue stays zeroed
-  }
+  const heartbeat = await checkHeartbeat(db, now);
+  const queue = await checkQueue(db, now);
 
   const storageOk = deps?.checkStorage
     ? await deps.checkStorage()
@@ -265,11 +279,12 @@ export async function probeInternalHealth(
   ]);
 
   const unhealthy = !dbOk || !heartbeat.ok || !storageOk;
-  const status: InternalHealthPayload['status'] = unhealthy
-    ? 'unhealthy'
-    : queue.stuckPublishingCount > 0
-      ? 'degraded'
-      : 'ok';
+  let status: InternalHealthPayload['status'] = 'ok';
+  if (unhealthy) {
+    status = 'unhealthy';
+  } else if (queue.stuckPublishingCount > 0) {
+    status = 'degraded';
+  }
 
   return {
     statusCode: unhealthy ? 503 : 200,

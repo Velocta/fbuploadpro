@@ -184,7 +184,7 @@ describe('Web Application Health Probe (/api/health)', () => {
 
 describe('Web Application Liveness Probe (/api/live)', () => {
   it('returns static ok with no dependencies', async () => {
-    const res = await liveGET();
+    const res = liveGET();
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ status: 'ok' });
   });
