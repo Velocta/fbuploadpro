@@ -151,7 +151,7 @@ async function fetchQueueCountsLegacy(
          COUNT(*) FILTER (WHERE status = 'publishing') AS publishing,
          COUNT(*) FILTER (WHERE status = 'published') AS published,
          COUNT(*) FILTER (WHERE status = 'failed') AS failed
-       FROM queue_items
+       FROM legacy_queue_items
        WHERE page_id = $1 AND user_id = $2`,
       [pageId, userId]
     )) as Record<string, unknown>[];
@@ -200,7 +200,7 @@ async function fetchQueueCountsFallback(
 ): Promise<QueueStatusCounts | null> {
   try {
     const { data: rows } = await supabase
-      .from('queue_items')
+      .from('legacy_queue_items')
       .select('status')
       .eq('page_id', pageId)
       .eq('user_id', userId);
@@ -384,7 +384,7 @@ export async function handleDisconnectPage(
     }
 
     await dbClient.query(
-      `UPDATE queue_items
+      `UPDATE legacy_queue_items
        SET status = 'skipped',
            updated_at = now()
        WHERE user_id = $1 AND fb_page_id = $2 AND status = 'queued'`,
@@ -416,7 +416,7 @@ export async function handleDisconnectPage(
     }
 
     await supabase
-      .from('queue_items')
+      .from('legacy_queue_items')
       .update({ status: 'skipped', updated_at: new Date().toISOString() })
       .eq('user_id', session.userId)
       .eq('fb_page_id', pageId)

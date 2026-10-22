@@ -108,7 +108,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 404 Not Found if queue item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('FROM queue_items')) {
+          if (sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -133,7 +133,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 400 Bad Request if trying to update an already published queue item', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -165,7 +165,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       const updatedTime = '2026-10-08T20:00:00.000Z';
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items qi')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items qi')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -193,7 +193,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE queue_items')) {
+          if (sql.includes('UPDATE legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -256,7 +256,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('works with the Next.js PATCH route handler wrapper', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -265,7 +265,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE queue_items')) {
+          if (sql.includes('UPDATE legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -346,7 +346,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 404 Not Found if item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -367,7 +367,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 400 Bad Request if trying to delete an already published queue item', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -394,7 +394,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 200 OK removing item from queue', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -403,7 +403,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('DELETE FROM queue_items')) {
+          if (sql.includes('DELETE FROM legacy_queue_items')) {
             return Promise.resolve([{ id: itemId }]);
           }
           return Promise.resolve([]);
@@ -443,7 +443,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 404 Not Found if item does not belong to user or does not exist', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -464,7 +464,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
     it('returns 400 Bad Request if trying to publish-now an already published queue item', async () => {
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -492,7 +492,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
       let updateExecutedWithNow = false;
       const mockDb: Partial<DatabaseClient> = {
         query: vi.fn().mockImplementation((sql: string) => {
-          if (sql.includes('SELECT') && sql.includes('FROM queue_items')) {
+          if (sql.includes('SELECT') && sql.includes('FROM legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: itemId,
@@ -501,7 +501,7 @@ describe('Publishing Queue Actions Route Handlers (T128, T129)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE queue_items') && sql.includes("status = 'queued'")) {
+          if (sql.includes('UPDATE legacy_queue_items') && sql.includes("status = 'queued'")) {
             updateExecutedWithNow = true;
             return Promise.resolve([{ id: itemId }]);
           }

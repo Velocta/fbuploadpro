@@ -3,7 +3,7 @@ import { InternalError } from '@fbuploadpro/contracts';
 import type { DispatcherDbClient, Queryable } from './dispatcher.js';
 
 export const UPDATE_QUEUE_ITEM_PUBLISHED_SQL = `
-UPDATE queue_items
+UPDATE legacy_queue_items
 SET status = 'published',
     fb_post_id = $2,
     fb_comment_id = $3,
@@ -13,7 +13,7 @@ WHERE id = $1;
 `.trim();
 
 export const UPDATE_QUEUE_ITEM_RETRY_SQL = `
-UPDATE queue_items
+UPDATE legacy_queue_items
 SET status = 'queued',
     retry_count = retry_count + 1,
     scheduled_time = now() + interval '5 minutes',
@@ -22,7 +22,7 @@ WHERE id = $1;
 `.trim();
 
 export const UPDATE_QUEUE_ITEM_FAILED_SQL = `
-UPDATE queue_items
+UPDATE legacy_queue_items
 SET status = 'failed',
     retry_count = retry_count + 1,
     updated_at = now()
@@ -33,7 +33,7 @@ WHERE id = $1;
 const DEFAULT_RETRY_DELAY_SECONDS = 300;
 
 export const INSERT_PUBLISH_LOG_SQL = `
-INSERT INTO publish_logs (
+INSERT INTO legacy_publish_logs (
     user_id,
     queue_item_id,
     fb_page_id,
@@ -102,7 +102,7 @@ async function settleSupabaseOutcome(
   }
 
   if (outcome.status === 'published') {
-    const { error: updateError } = await supabase.from('queue_items').update({
+    const { error: updateError } = await supabase.from('legacy_queue_items').update({
       status: 'published',
       fb_post_id: outcome.fbPostId ?? null,
       fb_comment_id: outcome.fbCommentId ?? null,
@@ -113,7 +113,7 @@ async function settleSupabaseOutcome(
       throw new InternalError(`Failed to update queue_item status to published: ${updateError.message || JSON.stringify(updateError)}`);
     }
 
-    const publishLogsTable = supabase.from('publish_logs');
+    const publishLogsTable = supabase.from('legacy_publish_logs');
     if (typeof publishLogsTable?.insert === 'function') {
       const { error: logError } = await publishLogsTable.insert({
         user_id: item.userId,
@@ -145,12 +145,12 @@ async function settleSupabaseOutcome(
           updated_at: new Date().toISOString(),
         };
 
-    const { error: itemUpdateError } = await supabase.from('queue_items').update(itemUpdate).eq('id', item.id);
+    const { error: itemUpdateError } = await supabase.from('legacy_queue_items').update(itemUpdate).eq('id', item.id);
     if (itemUpdateError) {
       throw new InternalError(`Failed to update queue_item status to ${itemUpdate.status}: ${itemUpdateError.message || JSON.stringify(itemUpdateError)}`);
     }
 
-    const publishLogsTable = supabase.from('publish_logs');
+    const publishLogsTable = supabase.from('legacy_publish_logs');
     if (typeof publishLogsTable?.insert === 'function') {
       const { error: logInsertError } = await publishLogsTable.insert({
         user_id: item.userId,

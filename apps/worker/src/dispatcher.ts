@@ -24,7 +24,7 @@ export interface DispatcherDbClient extends Queryable {
 }
 
 export const RECOVER_STUCK_ITEMS_SQL = `
-UPDATE queue_items
+UPDATE legacy_queue_items
 SET status = 'queued', updated_at = now()
 WHERE status = 'publishing' AND updated_at <= now() - INTERVAL '10 minutes';
 `.trim();
@@ -33,7 +33,7 @@ export const CLAIM_DUE_ITEMS_SQL = `
 SELECT qi.id, qi.user_id, qi.fb_page_id, qi.media_id, qi.caption, qi.first_comment, qi.retry_count, qi.max_retries,
        m.media_type, m.url as media_url, m.storage_key,
        fp.fb_page_id as external_page_id, fp.encrypted_access_token, fp.page_name
-FROM queue_items qi
+FROM legacy_queue_items qi
 JOIN media_items m ON m.id = qi.media_id AND m.user_id = qi.user_id
 JOIN facebook_pages fp ON fp.id = qi.fb_page_id AND fp.user_id = qi.user_id
 WHERE qi.status = 'queued'
@@ -48,7 +48,7 @@ FOR UPDATE SKIP LOCKED;
 `.trim();
 
 export const UPDATE_CLAIMED_STATUS_SQL = `
-UPDATE queue_items
+UPDATE legacy_queue_items
 SET status = 'publishing', updated_at = now()
 WHERE id = ANY($1);
 `.trim();

@@ -20,7 +20,7 @@ export async function handlePublishNow(
   if (isLegacyClient(dbClient)) {
     // 3. Check existing item
     const existingRows = (await dbClient.query(
-      `SELECT id, user_id, status FROM queue_items WHERE id = $1 AND user_id = $2`,
+      `SELECT id, user_id, status FROM legacy_queue_items WHERE id = $1 AND user_id = $2`,
       [itemId, session.userId]
     )) as Record<string, unknown>[];
 
@@ -38,7 +38,7 @@ export async function handlePublishNow(
 
     // 4. Update scheduled_time to now() and status to 'queued'
     await dbClient.query(
-      `UPDATE queue_items
+      `UPDATE legacy_queue_items
        SET scheduled_time = now(),
            status = 'queued',
            updated_at = now()
@@ -61,7 +61,7 @@ export async function handlePublishNow(
   }
 
   const { data: existing, error: existErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .select('id, user_id, status')
     .eq('id', itemId)
     .eq('user_id', session.userId)
@@ -79,7 +79,7 @@ export async function handlePublishNow(
   }
 
   const { error: updateErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .update({
       scheduled_time: new Date().toISOString(),
       status: 'queued',

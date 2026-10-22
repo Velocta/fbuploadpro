@@ -296,7 +296,7 @@ async function realignPendingQueueItemsPostgres(
 ): Promise<number> {
   const pendingRows = (await dbClient.query(
     `SELECT qi.id, qi.scheduled_time, s.slot_time
-     FROM queue_items qi
+     FROM legacy_queue_items qi
      JOIN page_queue_slots s ON s.id = qi.slot_id
      WHERE qi.fb_page_id = $1 AND qi.user_id = $2 AND qi.status = 'queued'
      ORDER BY qi.scheduled_time ASC`,
@@ -324,7 +324,7 @@ async function realignPendingQueueItemsPostgres(
     occupiedTimes.add(newScheduledTime.getTime());
 
     await dbClient.query(
-      `UPDATE queue_items
+      `UPDATE legacy_queue_items
        SET scheduled_time = $1, updated_at = now()
        WHERE id = $2`,
       [newScheduledTime.toISOString(), row.id]
@@ -342,7 +342,7 @@ async function realignPendingQueueItemsSupabase(
   newTimezone: string
 ): Promise<number> {
   const { data: queueData, error: queueErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .select('id, scheduled_time, slot_id')
     .eq('fb_page_id', pageId)
     .eq('user_id', userId)
@@ -388,7 +388,7 @@ async function realignPendingQueueItemsSupabase(
     occupiedTimes.add(newScheduledTime.getTime());
 
     await supabase
-      .from('queue_items')
+      .from('legacy_queue_items')
       .update({
         scheduled_time: newScheduledTime.toISOString(),
         updated_at: now.toISOString(),

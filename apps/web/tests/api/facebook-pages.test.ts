@@ -749,7 +749,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
           if (sql.includes('UPDATE facebook_pages')) {
             return Promise.resolve([{ id: pageId, fb_page_id: 'page_1001' }]);
           }
-          if (sql.includes('UPDATE queue_items')) {
+          if (sql.includes('UPDATE legacy_queue_items')) {
             return Promise.resolve([]);
           }
           return Promise.resolve([]);
@@ -776,7 +776,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
       expect(executedStatements[0]!.sql).toContain("encrypted_access_token = ''");
       expect(executedStatements[0]!.params).toEqual([pageId, userId, 'ws_123']);
 
-      expect(executedStatements[1]!.sql).toContain('UPDATE queue_items');
+      expect(executedStatements[1]!.sql).toContain('UPDATE legacy_queue_items');
       expect(executedStatements[1]!.sql).toContain("SET status = 'skipped'");
       expect(executedStatements[1]!.params).toEqual([userId, pageId]);
     });
@@ -819,7 +819,7 @@ describe('Facebook Pages Discovery, Import, Follower Tracking & Soft-Delete (Spe
               }),
             };
           }
-          if (table === 'queue_items') {
+          if (table === 'legacy_queue_items') {
             return {
               update: vi.fn((payload: any) => {
                 if (payload.status === 'skipped') {

@@ -193,17 +193,17 @@ async function checkQueue(db: any, now: Date): Promise<QueueCheck> {
       now.getTime() - STUCK_PUBLISHING_MINUTES * 60 * 1000
     ).toISOString();
     const dueQuery = await db
-      .from('queue_items')
+      .from('legacy_queue_items')
       .select('id', { head: true, count: 'exact' })
       .eq('status', 'queued')
       .lte('scheduled_time', timestamp);
     const stuckQuery = await db
-      .from('queue_items')
+      .from('legacy_queue_items')
       .select('id', { head: true, count: 'exact' })
       .eq('status', 'publishing')
       .lte('updated_at', stuckBefore);
     const { data: oldest } = await db
-      .from('queue_items')
+      .from('legacy_queue_items')
       .select('scheduled_time')
       .eq('status', 'queued')
       .lte('scheduled_time', timestamp)
