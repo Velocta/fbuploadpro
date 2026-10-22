@@ -6,6 +6,8 @@ import {
   getPlatformConnectConfig,
   isByocPlatform,
   isKnownPlatform,
+  type Platform,
+  type PlatformConnectConfig,
 } from '@/lib/connect/registry';
 import {
   buildConnectCallbackUrl,
@@ -25,6 +27,62 @@ import {
   resolveConnectDbClient,
   sessionCanAccessTenant,
 } from '@/lib/connect/session';
+
+type ClientIdResolution =
+  | { clientId: string }
+  | { redirect: NextResponse };
+
+/**
+ * Resolves the client ID for a connect attempt: platform override, then
+ * the workspace's own app details (BYOC), then our global app (env). A
+ * BYOC workspace without saved details is sent to Settings first.
+ */
+async function resolveInitiateClientId(
+  client: ConnectDbClient,
+  config: PlatformConnectConfig,
+  platform: Platform,
+  workspaceId: string,
+  request: NextRequest,
+  subdomain: string,
+  rootDomain: string,
+  accountsUrl: URL
+): Promise<ClientIdResolution> {
+  let clientId: string | null = null;
+  if (config.resolveClientId) {
+    clientId = await config.resolveClientId({ workspaceId });
+  } else if (config.clientIdSource === 'byoc') {
+    const credentials = await resolvePlatformClientCredentials(
+      client,
+      workspaceId,
+      platform
+    );
+    clientId = credentials?.clientId ?? null;
+    if (!clientId && isByocPlatform(platform)) {
+      const settingsUrl = buildTenantUrl(
+        subdomain,
+        '/settings',
+        request.url,
+        rootDomain
+      );
+      settingsUrl.searchParams.set('tab', platform);
+      settingsUrl.searchParams.set('error', 'credentials_required');
+      return { redirect: NextResponse.redirect(settingsUrl) };
+    }
+  } else {
+    const envName =
+      config.globalClientIdEnv ?? `CONNECT_${platform.toUpperCase()}_CLIENT_ID`;
+    clientId = process.env[envName] ?? null;
+  }
+
+  if (!clientId) {
+    console.error(
+      `[connect] No client ID available for platform "${platform}" in workspace ${workspaceId}.`
+    );
+    accountsUrl.searchParams.set('error', 'connect_failed');
+    return { redirect: NextResponse.redirect(accountsUrl) };
+  }
+  return { clientId };
+}
 
 /**
  * GET /api/connect/[platform] — starts a platform connect flow.
@@ -95,42 +153,20 @@ export async function handleConnectInitiate(
     );
   }
 
-  // Resolve the client ID: platform override, then the workspace's own app
-  // details (BYOC), then our global app (env).
-  let clientId: string | null = null;
-  if (config.resolveClientId) {
-    clientId = await config.resolveClientId({ workspaceId });
-  } else if (config.clientIdSource === 'byoc') {
-    const credentials = await resolvePlatformClientCredentials(
-      client,
-      workspaceId,
-      platform
-    );
-    clientId = credentials?.clientId ?? null;
-    if (!clientId && isByocPlatform(platform)) {
-      const settingsUrl = buildTenantUrl(
-        subdomain,
-        '/settings',
-        request.url,
-        rootDomain
-      );
-      settingsUrl.searchParams.set('tab', platform);
-      settingsUrl.searchParams.set('error', 'credentials_required');
-      return NextResponse.redirect(settingsUrl);
-    }
-  } else {
-    const envName =
-      config.globalClientIdEnv ?? `CONNECT_${platform.toUpperCase()}_CLIENT_ID`;
-    clientId = process.env[envName] ?? null;
+  const resolution = await resolveInitiateClientId(
+    client,
+    config,
+    platform,
+    workspaceId,
+    request,
+    subdomain,
+    rootDomain,
+    accountsUrl
+  );
+  if ('redirect' in resolution) {
+    return resolution.redirect;
   }
-
-  if (!clientId) {
-    console.error(
-      `[connect] No client ID available for platform "${platform}" in workspace ${workspaceId}.`
-    );
-    accountsUrl.searchParams.set('error', 'connect_failed');
-    return NextResponse.redirect(accountsUrl);
-  }
+  const clientId = resolution.clientId;
 
   const sessionSecret = getSessionSecret();
   const statePayload = createConnectStatePayload({

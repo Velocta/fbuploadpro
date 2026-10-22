@@ -66,6 +66,101 @@ export function confirmButtonLabel(
   return `Add selected (${selectedCount})`;
 }
 
+interface DestinationRowProps {
+  destination: DiscoveredDestination;
+  isSingleConfirm: boolean;
+  isChecked: boolean;
+  isDuplicateName: boolean;
+  onToggle: (externalDestinationId: string) => void;
+}
+
+function DestinationRow({
+  destination,
+  isSingleConfirm,
+  isChecked,
+  isDuplicateName,
+  onToggle,
+}: Readonly<DestinationRowProps>) {
+  const subtitle = destinationSubtitle(destination, isDuplicateName);
+  const rowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: SPACING.md,
+    padding: '10px 12px',
+    backgroundColor:
+      isChecked && !isSingleConfirm
+        ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
+        : 'transparent',
+    borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+  };
+  const content = (
+    <>
+      {!isSingleConfirm && (
+        <input
+          type="checkbox"
+          data-testid={`destination-checkbox-${destination.externalDestinationId}`}
+          checked={isChecked}
+          onChange={() => onToggle(destination.externalDestinationId)}
+          style={{
+            width: '16px',
+            height: '16px',
+            accentColor: PALETTE.primary,
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        />
+      )}
+      <DestinationAvatar
+        name={destination.name}
+        avatarUrl={destination.avatarUrl ?? null}
+      />
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            fontSize: '0.875rem',
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {destination.name}
+        </div>
+        {subtitle && (
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: `var(--text-sub, ${THEME.default.text.secondary})`,
+              marginTop: '2px',
+            }}
+          >
+            {subtitle}
+          </div>
+        )}
+      </div>
+    </>
+  );
+  if (isSingleConfirm) {
+    return (
+      <div
+        data-testid={`destination-row-${destination.externalDestinationId}`}
+        style={rowStyle}
+      >
+        {content}
+      </div>
+    );
+  }
+  return (
+    <label
+      data-testid={`destination-row-${destination.externalDestinationId}`}
+      style={{ ...rowStyle, cursor: 'pointer' }}
+    >
+      {content}
+    </label>
+  );
+}
+
 export interface DestinationPickerProps {
   platform: Platform;
   subdomain: string;
@@ -204,91 +299,18 @@ export function DestinationPicker({
           borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
         }}
       >
-        {rows.map((destination) => {
-          const isChecked = selectedIds.includes(
-            destination.externalDestinationId
-          );
-          const isDuplicateName = duplicateNames.has(
-            destination.name.trim().toLowerCase()
-          );
-          const subtitle = destinationSubtitle(destination, isDuplicateName);
-          const rowContent = (
-            <>
-              {!isSingleConfirm && (
-                <input
-                  type="checkbox"
-                  data-testid={`destination-checkbox-${destination.externalDestinationId}`}
-                  checked={isChecked}
-                  onChange={() => handleToggle(destination.externalDestinationId)}
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    accentColor: PALETTE.primary,
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                />
-              )}
-              <DestinationAvatar
-                name={destination.name}
-                avatarUrl={destination.avatarUrl ?? null}
-              />
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div
-                  style={{
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    fontSize: '0.875rem',
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {destination.name}
-                </div>
-                {subtitle && (
-                  <div
-                    style={{
-                      fontSize: '0.75rem',
-                      color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                      marginTop: '2px',
-                    }}
-                  >
-                    {subtitle}
-                  </div>
-                )}
-              </div>
-            </>
-          );
-          const rowStyle: React.CSSProperties = {
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.md,
-            padding: '10px 12px',
-            backgroundColor:
-              isChecked && !isSingleConfirm
-                ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-                : 'transparent',
-            borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          };
-          return isSingleConfirm ? (
-            <div
-              key={destination.externalDestinationId}
-              data-testid={`destination-row-${destination.externalDestinationId}`}
-              style={rowStyle}
-            >
-              {rowContent}
-            </div>
-          ) : (
-            <label
-              key={destination.externalDestinationId}
-              data-testid={`destination-row-${destination.externalDestinationId}`}
-              style={{ ...rowStyle, cursor: 'pointer' }}
-            >
-              {rowContent}
-            </label>
-          );
-        })}
+        {rows.map((destination) => (
+          <DestinationRow
+            key={destination.externalDestinationId}
+            destination={destination}
+            isSingleConfirm={isSingleConfirm}
+            isChecked={selectedIds.includes(destination.externalDestinationId)}
+            isDuplicateName={duplicateNames.has(
+              destination.name.trim().toLowerCase()
+            )}
+            onToggle={handleToggle}
+          />
+        ))}
       </div>
 
       {errorMessage && (

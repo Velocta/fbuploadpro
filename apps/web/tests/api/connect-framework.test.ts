@@ -105,6 +105,10 @@ class FakeDb {
       const row = this.credentials.get(String(params[1]));
       return row ? [row] : [];
     }
+    return this.queryData(sql, params);
+  });
+
+  private queryData = async (sql: string, params: unknown[] = []) => {
     if (sql.includes('INSERT INTO social_accounts')) {
       const [
         wsId, platform, externalAccountId, displayName, avatarUrl,
@@ -193,7 +197,7 @@ class FakeDb {
       return [...this.accounts.values()].filter((r) => r.workspace_id === params[0]);
     }
     return [];
-  });
+  };
 }
 
 describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {

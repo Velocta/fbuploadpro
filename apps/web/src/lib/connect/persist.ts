@@ -27,6 +27,9 @@ import type {
 
 export type ConnectDbClient = DatabaseClient | SupabaseClient<any>;
 
+/** Rows always carry a platform; this only guards malformed legacy data. */
+const FALLBACK_PLATFORM: Platform = 'facebook';
+
 export interface SocialDestinationView {
   id: string;
   externalDestinationId: string;
@@ -375,7 +378,7 @@ export async function fetchSocialAccountsWithDestinations(
 
   return accountRows.map((row) => ({
     id: row.id,
-    platform: (row.platform ?? 'facebook') as Platform,
+    platform: (row.platform ?? FALLBACK_PLATFORM) as Platform,
     externalAccountId: row.external_account_id ?? row.externalAccountId,
     displayName: row.display_name ?? row.displayName,
     avatarUrl: row.avatar_url ?? row.avatarUrl ?? null,
@@ -404,11 +407,11 @@ export async function fetchDestinationDetail(
     if (!row) return null;
     return {
       ...mapDestinationRow(row),
-      platform: (row.platform ?? 'facebook') as Platform,
+      platform: (row.platform ?? FALLBACK_PLATFORM) as Platform,
       account: {
         id: row.account_id ?? row.accountId,
         displayName: row.account_display_name ?? row.accountDisplayName,
-        platform: (row.platform ?? 'facebook') as Platform,
+        platform: (row.platform ?? FALLBACK_PLATFORM) as Platform,
         status: row.account_status ?? row.accountStatus ?? 'active',
       },
     };
