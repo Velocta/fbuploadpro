@@ -81,7 +81,12 @@ const RECOVERY_TICK = new Date(2026, 0, 1, 10, 10); // minute 10
 // ==========================================
 
 describe('Claimer (spec 121)', () => {
-  it('loops claim rounds per lane until a short round, chunking sendBatch at 100', async () => {
+  // SUPERSEDED by the spec 122 load-proof tuning (claim round cap 4 → 1,
+  // see claimer.ts): this test previously asserted multi-round looping
+  // within one tick (500 + 120 = 620 claimed). At cap 1 a tick claims
+  // exactly one round per lane; the remaining backlog stays queued for
+  // the next tick. Chunking at 100 per sendBatch call is unchanged.
+  it('claims one round per lane per tick (cap 1), chunking sendBatch at 100', async () => {
     const registry = createPublisherRegistry();
     const publisher = fakePublisher('facebook', async () => ({ status: 'published' }));
     registry.register(publisher);
@@ -106,11 +111,12 @@ describe('Claimer (spec 121)', () => {
       now: NON_RECOVERY_TICK,
     });
 
-    expect(result.claimed).toBe(620);
-    expect(result.enqueuedFast).toBe(620);
+    expect(result.claimed).toBe(500);
+    expect(result.enqueuedFast).toBe(500);
     expect(result.enqueuedHeavy).toBe(0);
-    // Chunk sizes: round 1 → 5×100, round 2 → 100 + 20.
-    expect(fastQ.batches.map((b) => b.length)).toEqual([100, 100, 100, 100, 100, 100, 20]);
+    // Chunk sizes: the single round → 5×100. The 120-item second round is
+    // NOT claimed this tick (cap 1); it remains for the next tick.
+    expect(fastQ.batches.map((b) => b.length)).toEqual([100, 100, 100, 100, 100]);
     expect(heavyQ.sendBatch).not.toHaveBeenCalled();
     // Message payload carries ids + derivable fields only.
     expect(fastQ.batches[0]?.[0]).toEqual({
