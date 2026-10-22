@@ -33,8 +33,6 @@ jobs:
           NEXT_PUBLIC_MARKETING_URL: ${{ vars.NEXT_PUBLIC_MARKETING_URL || secrets.NEXT_PUBLIC_MARKETING_URL }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
-          FACEBOOK_APP_ID: ${{ secrets.FACEBOOK_APP_ID || vars.FACEBOOK_APP_ID }}
-          FACEBOOK_APP_SECRET: ${{ secrets.FACEBOOK_APP_SECRET }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || vars.R2_ACCOUNT_ID }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
