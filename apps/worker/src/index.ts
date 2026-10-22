@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import type { PublisherRegistry } from '@fbuploadpro/contracts';
+import { InternalError, type PublisherRegistry } from '@fbuploadpro/contracts';
 import {
   runClaimTick,
   type ClaimerDbClient,
@@ -184,7 +184,7 @@ export async function handleQueue(
 ): Promise<void> {
   const db = initWorkerDb(env, options?.db);
   if (!db) {
-    throw new Error('Database client is not configured; cannot consume queue batch');
+    throw new InternalError('Database client is not configured; cannot consume queue batch');
   }
   const registry = options?.registry ?? createWorkerPublisherRegistry();
   await handleQueueBatch(batch, {

@@ -1,5 +1,6 @@
 import {
   getLaneKindSet,
+  InternalError,
   PUBLISH_LANE_FAST,
   PUBLISH_LANE_HEAVY,
   type Platform,
@@ -110,7 +111,7 @@ interface ClaimedRow {
 function queueForLane(queues: ClaimerQueues, lane: PublishLane): LaneQueueProducer {
   const queue = lane === PUBLISH_LANE_FAST ? queues.fast : queues.heavy;
   if (!queue) {
-    throw new Error(
+    throw new InternalError(
       `Queue producer binding for lane "${lane}" is not configured`
     );
   }
