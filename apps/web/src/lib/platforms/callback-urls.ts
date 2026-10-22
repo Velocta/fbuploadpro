@@ -41,7 +41,8 @@ export function getPlatformCallbackUrl(
   kind: CallbackKind,
   origin: string = resolveCallbackOrigin()
 ): string {
-  const base = origin.replace(/\/+$/, '');
+  let base = origin;
+  while (base.endsWith('/')) base = base.slice(0, -1);
   return `${base}${CALLBACK_PATHS[kind](platform)}`;
 }
 

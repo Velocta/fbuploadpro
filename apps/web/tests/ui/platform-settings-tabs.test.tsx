@@ -67,12 +67,20 @@ function activeTabTestId(htmlTags: Array<{ attributes: Record<string, string> }>
 }
 
 function stripToVisibleText(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/https?:\/\/\S+/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&#x27;/g, "'")
-    .replace(/&quot;/g, '"')
+  const withoutTags = html
+    .split('<')
+    .map((chunk) => {
+      const closeIdx = chunk.indexOf('>');
+      return closeIdx >= 0 ? chunk.slice(closeIdx + 1) : chunk;
+    })
+    .join(' ');
+  return withoutTags
+    .split(/\s+/)
+    .filter((word) => !word.startsWith('http://') && !word.startsWith('https://'))
+    .join(' ')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&#x27;', "'")
+    .replaceAll('&quot;', '"')
     .toLowerCase();
 }
 
