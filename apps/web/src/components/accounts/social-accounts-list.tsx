@@ -209,6 +209,31 @@ export function SocialAccountsListView({
   );
 }
 
+/** Loads the unified accounts list; returns null when the load fails. */
+export async function loadSocialAccounts(
+  subdomain: string,
+  fetcher: typeof fetch = fetch
+): Promise<SocialAccountItem[] | null> {
+  try {
+    const res = await fetcher(`/api/tenant/${subdomain}/accounts/social`);
+    if (!res.ok) {
+      console.warn(
+        '[social-accounts-list] Failed to load connected accounts:',
+        res.status
+      );
+      return null;
+    }
+    const data = (await res.json()) as { accounts?: SocialAccountItem[] };
+    return Array.isArray(data.accounts) ? data.accounts : [];
+  } catch (err) {
+    console.warn(
+      '[social-accounts-list] Failed to load connected accounts:',
+      err
+    );
+    return null;
+  }
+}
+
 export function SocialAccountsList({
   subdomain,
 }: Readonly<SocialAccountsListProps>) {
@@ -218,32 +243,11 @@ export function SocialAccountsList({
   useEffect(() => {
     if (!subdomain) return;
     let isMounted = true;
-    async function load() {
-      try {
-        const res = await fetch(`/api/tenant/${subdomain}/accounts/social`);
-        if (res.ok) {
-          const data = (await res.json()) as {
-            accounts?: SocialAccountItem[];
-          };
-          if (isMounted) {
-            setAccounts(Array.isArray(data.accounts) ? data.accounts : []);
-          }
-        } else {
-          console.warn(
-            '[social-accounts-list] Failed to load connected accounts:',
-            res.status
-          );
-        }
-      } catch (err) {
-        console.warn(
-          '[social-accounts-list] Failed to load connected accounts:',
-          err
-        );
-      } finally {
-        if (isMounted) setIsLoaded(true);
-      }
-    }
-    void load();
+    void loadSocialAccounts(subdomain).then((loaded) => {
+      if (!isMounted) return;
+      if (loaded) setAccounts(loaded);
+      setIsLoaded(true);
+    });
     return () => {
       isMounted = false;
     };

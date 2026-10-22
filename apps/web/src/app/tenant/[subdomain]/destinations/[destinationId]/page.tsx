@@ -122,6 +122,36 @@ export function DestinationSummary({
   );
 }
 
+export type DestinationLoadResult =
+  | { destination: DestinationDetail; error?: never }
+  | { destination?: never; error: string };
+
+/** Loads one destination + owning account for the section landing. */
+export async function loadDestinationDetail(
+  subdomain: string,
+  destinationId: string,
+  fetcher: typeof fetch = fetch
+): Promise<DestinationLoadResult> {
+  try {
+    const res = await fetcher(
+      `/api/tenant/${subdomain}/accounts/social/${destinationId}`
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { destination?: DestinationDetail };
+      if (data.destination) {
+        return { destination: data.destination };
+      }
+      return { error: "We couldn't find this destination." };
+    }
+    if (res.status === 404) {
+      return { error: "We couldn't find this destination." };
+    }
+    return { error: "Couldn't load this destination. Please try again." };
+  } catch {
+    return { error: "Couldn't load this destination. Please try again." };
+  }
+}
+
 export default function DestinationSectionPage() {
   const params = useParams();
   const subdomain = (params?.subdomain as string) || '';
@@ -136,34 +166,15 @@ export default function DestinationSectionPage() {
   useEffect(() => {
     if (!subdomain || !destinationId) return;
     let isMounted = true;
-    async function load() {
-      try {
-        const res = await fetch(
-          `/api/tenant/${subdomain}/accounts/social/${destinationId}`
-        );
-        if (!isMounted) return;
-        if (res.ok) {
-          const data = (await res.json()) as {
-            destination?: DestinationDetail;
-          };
-          setDestination(data.destination ?? null);
-          if (!data.destination) {
-            setLoadError("We couldn't find this destination.");
-          }
-        } else if (res.status === 404) {
-          setLoadError("We couldn't find this destination.");
-        } else {
-          setLoadError("Couldn't load this destination. Please try again.");
-        }
-      } catch {
-        if (isMounted) {
-          setLoadError("Couldn't load this destination. Please try again.");
-        }
-      } finally {
-        if (isMounted) setIsLoading(false);
+    void loadDestinationDetail(subdomain, destinationId).then((result) => {
+      if (!isMounted) return;
+      if (result.destination) {
+        setDestination(result.destination);
+      } else {
+        setLoadError(result.error);
       }
-    }
-    void load();
+      setIsLoading(false);
+    });
     return () => {
       isMounted = false;
     };

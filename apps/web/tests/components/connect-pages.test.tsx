@@ -30,6 +30,7 @@ vi.mock('next/navigation', () => ({
 import ConnectPickerPage from '@/app/tenant/[subdomain]/connect/[platform]/page';
 import DestinationSectionPage, {
   DestinationSummary,
+  loadDestinationDetail,
 } from '@/app/tenant/[subdomain]/destinations/[destinationId]/page';
 import {
   SocialAccountsList,
@@ -135,6 +136,61 @@ describe('Destination dedicated-section landing page', () => {
     expect(hasText('@mybrand')).toBe(true);
     expect(hasText('Posting timezone:')).toBe(true);
     expect(hasText('Connected')).toBe(true);
+  });
+});
+
+describe('loadDestinationDetail', () => {
+  function fakeResponse(ok: boolean, body: unknown, status = 200): Response {
+    return { ok, status, json: async () => body } as Response;
+  }
+
+  it('returns the destination on success', async () => {
+    const fetcher = async () =>
+      fakeResponse(true, { destination: { id: 'd1', name: 'My Brand' } });
+    const result = await loadDestinationDetail(
+      'acme',
+      'd1',
+      fetcher as typeof fetch
+    );
+    expect(result.destination?.name).toBe('My Brand');
+  });
+
+  it('reports not found for a 404 and for an empty payload', async () => {
+    const notFound = async () => fakeResponse(false, {}, 404);
+    const missing = await loadDestinationDetail(
+      'acme',
+      'nope',
+      notFound as typeof fetch
+    );
+    expect(missing.error).toContain("couldn't find");
+
+    const empty = async () => fakeResponse(true, {});
+    const emptyResult = await loadDestinationDetail(
+      'acme',
+      'd1',
+      empty as typeof fetch
+    );
+    expect(emptyResult.error).toContain("couldn't find");
+  });
+
+  it('reports a plain retry message for other failures', async () => {
+    const failing = async () => fakeResponse(false, {}, 500);
+    const failed = await loadDestinationDetail(
+      'acme',
+      'd1',
+      failing as typeof fetch
+    );
+    expect(failed.error).toContain('try again');
+
+    const throwing = async () => {
+      throw new Error('offline');
+    };
+    const thrown = await loadDestinationDetail(
+      'acme',
+      'd1',
+      throwing as unknown as typeof fetch
+    );
+    expect(thrown.error).toContain('try again');
   });
 });
 

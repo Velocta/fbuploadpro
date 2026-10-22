@@ -95,9 +95,11 @@ class FakeDb {
     return `${prefix}-${this.seq}`;
   }
 
+  workspaceMissing = false;
+
   query = vi.fn(async (sql: string, params: unknown[] = []) => {
     if (sql.includes('FROM workspaces')) {
-      return [{ id: workspaceId }];
+      return this.workspaceMissing ? [] : [{ id: workspaceId }];
     }
     if (sql.includes('FROM platform_credentials')) {
       const row = this.credentials.get(String(params[1]));
@@ -622,6 +624,49 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
       dbClient
     );
     expect(emptyRes.status).toBe(400);
+  });
+
+  it('initiate returns 404 when the workspace cannot be found', async () => {
+    db.workspaceMissing = true;
+    const res = await handleConnectInitiate(
+      new NextRequest(`http://localhost:3000/api/connect/instagram?subdomain=${subdomain}`, {
+        headers: { cookie: sessionCookie },
+      }),
+      'instagram',
+      dbClient
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('social list returns 404 when the workspace cannot be found', async () => {
+    db.workspaceMissing = true;
+    const res = await handleListSocialAccounts(
+      new NextRequest(`http://localhost:3000/api/tenant/${subdomain}/accounts/social`, {
+        headers: { cookie: sessionCookie },
+      }),
+      subdomain,
+      dbClient
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it('complete rejects a malformed JSON body', async () => {
+    const { state } = await initiateInstagram();
+    const callbackRes = await runCallback(state);
+    const pending = cookieValue(callbackRes, 'fbup_connect_pending');
+    const res = await handleConnectComplete(
+      new NextRequest('http://localhost:3000/api/connect/instagram/complete', {
+        method: 'POST',
+        headers: {
+          cookie: `${sessionCookie}; fbup_connect_pending=${encodeURIComponent(pending ?? '')}`,
+          'content-type': 'application/json',
+        },
+        body: 'this is not json',
+      }),
+      'instagram',
+      dbClient
+    );
+    expect(res.status).toBe(400);
   });
 
   it('complete rejects an expired or missing pending cookie', async () => {

@@ -23,6 +23,28 @@ interface ConnectPickerPageProps {
   searchParams: Promise<{ notice?: string }>;
 }
 
+function pickerHeading(
+  noticeCode: ConnectNoticeCode | null,
+  mode: 'picker' | 'single-confirm',
+  platformName: string
+): string {
+  if (noticeCode) return `Connect ${platformName}`;
+  if (mode === 'single-confirm') return `Add this ${platformName} destination`;
+  return 'Choose what to add';
+}
+
+function pickerSubheading(
+  noticeCode: ConnectNoticeCode | null,
+  mode: 'picker' | 'single-confirm',
+  platformName: string
+): string {
+  if (noticeCode) return connectNoticeMessage(noticeCode);
+  if (mode === 'single-confirm') {
+    return `Check this is the ${platformName} destination you want to post to, then add it.`;
+  }
+  return `Pick the ${platformName} destinations you want to post to. You can add more later.`;
+}
+
 /**
  * Post-connect destination picker page (Spec 123, Part C).
  *
@@ -95,11 +117,7 @@ export default async function ConnectPickerPage({
           color: `var(--text-main, ${THEME.default.text.primary})`,
         }}
       >
-        {noticeCode
-          ? `Connect ${platformName}`
-          : mode === 'single-confirm'
-            ? `Add this ${platformName} destination`
-            : `Choose what to add`}
+        {pickerHeading(noticeCode, mode, platformName)}
       </h1>
       <p
         style={{
@@ -109,11 +127,7 @@ export default async function ConnectPickerPage({
           lineHeight: 1.5,
         }}
       >
-        {noticeCode
-          ? connectNoticeMessage(noticeCode)
-          : mode === 'single-confirm'
-            ? `Check this is the ${platformName} destination you want to post to, then add it.`
-            : `Pick the ${platformName} destinations you want to post to. You can add more later.`}
+        {pickerSubheading(noticeCode, mode, platformName)}
       </p>
 
       {noticeCode || !pending || !platform ? (

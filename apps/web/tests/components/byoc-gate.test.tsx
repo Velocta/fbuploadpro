@@ -32,7 +32,9 @@ import {
   DestinationPicker,
   destinationSubtitle,
   findDuplicateDestinationNames,
+  submitDestinationPick,
 } from '@/components/connect/destination-picker';
+import { loadSocialAccounts } from '@/components/accounts/social-accounts-list';
 import { render } from './setup';
 
 describe('isByocGateBlocking (PR #641 semantics)', () => {
@@ -258,6 +260,76 @@ describe('Connect helpers', () => {
     expect(socialStatusLabel('active')).toBe('Connected');
     expect(socialStatusLabel('expired')).toContain('reconnect');
     expect(socialStatusLabel('disconnected')).toBe('Disconnected');
+  });
+});
+
+describe('Connect data helpers', () => {
+  function fakeResponse(ok: boolean, body: unknown, status = 200): Response {
+    return { ok, status, json: async () => body } as Response;
+  }
+
+  it('submitDestinationPick returns the Accounts URL on success', async () => {
+    const fetcher = async () =>
+      fakeResponse(true, { accountsUrl: '/tenant/acme/accounts' });
+    const result = await submitDestinationPick(
+      'instagram',
+      'acme',
+      ['dest-1'],
+      fetcher as typeof fetch
+    );
+    expect(result).toEqual({ ok: true, accountsUrl: '/tenant/acme/accounts' });
+  });
+
+  it('submitDestinationPick falls back to the Accounts path and reports failures plainly', async () => {
+    const noUrl = async () => fakeResponse(true, {});
+    const fallback = await submitDestinationPick(
+      'x',
+      'acme',
+      ['dest-1'],
+      noUrl as typeof fetch
+    );
+    expect(fallback).toEqual({ ok: true, accountsUrl: '/tenant/acme/accounts' });
+
+    const failing = async () => fakeResponse(false, {}, 500);
+    const failed = await submitDestinationPick(
+      'x',
+      'acme',
+      ['dest-1'],
+      failing as typeof fetch
+    );
+    expect(failed.ok).toBe(false);
+
+    const throwing = async () => {
+      throw new Error('offline');
+    };
+    const thrown = await submitDestinationPick(
+      'x',
+      'acme',
+      ['dest-1'],
+      throwing as unknown as typeof fetch
+    );
+    expect(thrown.ok).toBe(false);
+  });
+
+  it('loadSocialAccounts returns accounts, an empty list, or null on failure', async () => {
+    const withData = async () =>
+      fakeResponse(true, { accounts: [{ id: 'a1' }] });
+    expect(
+      await loadSocialAccounts('acme', withData as typeof fetch)
+    ).toHaveLength(1);
+
+    const empty = async () => fakeResponse(true, {});
+    expect(await loadSocialAccounts('acme', empty as typeof fetch)).toEqual([]);
+
+    const failing = async () => fakeResponse(false, {}, 500);
+    expect(await loadSocialAccounts('acme', failing as typeof fetch)).toBeNull();
+
+    const throwing = async () => {
+      throw new Error('offline');
+    };
+    expect(
+      await loadSocialAccounts('acme', throwing as unknown as typeof fetch)
+    ).toBeNull();
   });
 });
 

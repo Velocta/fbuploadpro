@@ -25,6 +25,47 @@ import { formatPageIdSuffix } from '@/components/pages/page-card';
 import type { DiscoveredDestination } from '@/lib/connect/registry';
 import { PLATFORM_LABELS, type Platform } from '@/lib/connect/registry';
 
+export type DestinationPickResult =
+  | { ok: true; accountsUrl: string }
+  | { ok: false; error: string };
+
+/** Confirms the pick with the connect complete route. */
+export async function submitDestinationPick(
+  platform: Platform,
+  subdomain: string,
+  destinationIds: string[],
+  fetcher: typeof fetch = fetch
+): Promise<DestinationPickResult> {
+  try {
+    const res = await fetcher(`/api/connect/${platform}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destinationIds }),
+    });
+    if (!res.ok) {
+      return { ok: false, error: "Couldn't save your choices. Please try again." };
+    }
+    const data = (await res.json()) as { accountsUrl?: string };
+    return {
+      ok: true,
+      accountsUrl: data.accountsUrl ?? `/tenant/${subdomain}/accounts`,
+    };
+  } catch {
+    return { ok: false, error: "Couldn't save your choices. Please try again." };
+  }
+}
+
+export function confirmButtonLabel(
+  isSaving: boolean,
+  isSingleConfirm: boolean,
+  platformName: string,
+  selectedCount: number
+): string {
+  if (isSaving) return 'Adding…';
+  if (isSingleConfirm) return `Add this ${platformName} destination`;
+  return `Add selected (${selectedCount})`;
+}
+
 export interface DestinationPickerProps {
   platform: Platform;
   subdomain: string;
@@ -139,25 +180,17 @@ export function DestinationPicker({
     if (selectedIds.length === 0 || isSaving) return;
     setIsSaving(true);
     setErrorMessage(null);
-    try {
-      const res = await fetch(`/api/connect/${platform}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ destinationIds: selectedIds }),
-      });
-      if (!res.ok) {
-        setErrorMessage("Couldn't save your choices. Please try again.");
-        setIsSaving(false);
-        return;
-      }
-      const data = (await res.json()) as { accountsUrl?: string };
-      window.location.assign(
-        data.accountsUrl ?? `/tenant/${subdomain}/accounts`
-      );
-    } catch {
-      setErrorMessage("Couldn't save your choices. Please try again.");
-      setIsSaving(false);
+    const result = await submitDestinationPick(
+      platform,
+      subdomain,
+      selectedIds
+    );
+    if (result.ok) {
+      window.location.assign(result.accountsUrl);
+      return;
     }
+    setErrorMessage(result.error);
+    setIsSaving(false);
   };
 
   const rows = isSingleConfirm ? confirmTarget : destinations;
@@ -296,11 +329,12 @@ export function DestinationPicker({
             opacity: selectedIds.length === 0 || isSaving ? 0.6 : 1,
           }}
         >
-          {isSaving
-            ? 'Adding…'
-            : isSingleConfirm
-              ? `Add this ${platformName} destination`
-              : `Add selected (${selectedIds.length})`}
+          {confirmButtonLabel(
+            isSaving,
+            isSingleConfirm,
+            platformName,
+            selectedIds.length
+          )}
         </button>
       </div>
     </div>

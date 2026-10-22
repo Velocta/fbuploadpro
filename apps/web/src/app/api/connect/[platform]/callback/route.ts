@@ -3,6 +3,8 @@ import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
 import {
   getPlatformConnectConfig,
   isKnownPlatform,
+  type Platform,
+  type PlatformConnectConfig,
 } from '@/lib/connect/registry';
 import {
   buildConnectCallbackUrl,
@@ -12,6 +14,7 @@ import {
   CONNECT_PENDING_TTL_SECONDS,
   PENDING_COOKIE_NAME,
   PKCE_COOKIE_NAME,
+  type ConnectStatePayload,
 } from '@/lib/connect/state';
 import {
   persistConnectedAccount,
@@ -20,6 +23,140 @@ import {
 } from '@/lib/connect/persist';
 import { resolveConnectDbClient } from '@/lib/connect/session';
 import { mapProviderDenial, type ConnectNoticeCode } from '@/lib/connect/errors';
+
+/**
+ * Reads the PKCE verifier for this flow from its signed cookie, matched to
+ * the state nonce. Returns null when the cookie is absent, invalid, or
+ * belongs to a different flow.
+ */
+async function resolvePkceVerifier(
+  request: NextRequest,
+  stateNonce: string,
+  platform: string,
+  sessionSecret: string
+): Promise<string | null> {
+  const pkceCookie = request.cookies.get(PKCE_COOKIE_NAME)?.value;
+  if (!pkceCookie) return null;
+  try {
+    const pkcePayload = await verifyPkceCookie(pkceCookie, sessionSecret);
+    if (pkcePayload.nonce === stateNonce && pkcePayload.platform === platform) {
+      return pkcePayload.codeVerifier;
+    }
+  } catch (err) {
+    console.error('[connect/callback] PKCE cookie invalid:', err);
+  }
+  return null;
+}
+
+/**
+ * Resolves the client credentials for the code exchange: the workspace's
+ * own app details for BYOC platforms, our global app otherwise. Returns
+ * null when a BYOC workspace has no details saved.
+ */
+async function resolveExchangeCredentials(
+  client: ConnectDbClient,
+  config: PlatformConnectConfig,
+  platform: string,
+  workspaceId: string
+): Promise<{ clientId: string; clientSecret: string | null } | null> {
+  let clientId = '';
+  if (config.resolveClientId) {
+    clientId = (await config.resolveClientId({ workspaceId })) ?? '';
+  }
+  if (config.clientIdSource === 'byoc') {
+    const credentials = await resolvePlatformClientCredentials(
+      client,
+      workspaceId,
+      config.platform
+    );
+    if (!credentials) return null;
+    return {
+      clientId: credentials.clientId,
+      clientSecret: credentials.clientSecret,
+    };
+  }
+  if (!clientId) {
+    const idEnv =
+      config.globalClientIdEnv ?? `CONNECT_${platform.toUpperCase()}_CLIENT_ID`;
+    const secretEnv =
+      config.globalClientSecretEnv ??
+      `CONNECT_${platform.toUpperCase()}_CLIENT_SECRET`;
+    clientId = process.env[idEnv] ?? '';
+    return { clientId, clientSecret: process.env[secretEnv] ?? null };
+  }
+  return { clientId, clientSecret: null };
+}
+
+type ExchangeOutcome =
+  | { notice: ConnectNoticeCode }
+  | {
+      accountId: string;
+      destinations: NonNullable<
+        Awaited<ReturnType<PlatformConnectConfig['fetchDestinations']>>
+      >;
+    };
+
+/**
+ * Runs the platform exchange, persists the account, and discovers its
+ * destinations. Any failure becomes a plain-language notice code.
+ */
+async function exchangePersistAndDiscover(
+  client: ConnectDbClient,
+  config: PlatformConnectConfig,
+  platform: Platform,
+  statePayload: ConnectStatePayload,
+  code: string,
+  redirectUri: string,
+  codeVerifier: string | null,
+  clientId: string,
+  clientSecret: string | null
+): Promise<ExchangeOutcome> {
+  let exchanged;
+  try {
+    exchanged = await config.exchangeCode(code, {
+      code,
+      redirectUri,
+      codeVerifier,
+      clientId,
+      clientSecret,
+      workspaceId: statePayload.workspaceId,
+      userId: statePayload.userId,
+    });
+  } catch (err) {
+    console.error(
+      `[connect/callback] Code exchange failed for platform "${platform}":`,
+      err
+    );
+    return { notice: 'connect_failed' };
+  }
+
+  let accountId: string;
+  try {
+    const persisted = await persistConnectedAccount(client, {
+      workspaceId: statePayload.workspaceId,
+      platform,
+      exchanged,
+    });
+    accountId = persisted.accountId;
+  } catch (err) {
+    console.error('[connect/callback] Failed to persist account:', err);
+    return { notice: 'connect_failed' };
+  }
+
+  try {
+    const destinations = await config.fetchDestinations(
+      exchanged.accessToken,
+      exchanged
+    );
+    return { accountId, destinations: destinations ?? [] };
+  } catch (err) {
+    console.error(
+      `[connect/callback] Destination discovery failed for platform "${platform}":`,
+      err
+    );
+    return { notice: 'connect_failed' };
+  }
+}
 
 function pickerRedirect(
   request: NextRequest,
@@ -137,20 +274,12 @@ export async function handleConnectCallback(
   // matched to the state nonce.
   let codeVerifier: string | null = null;
   if (config.usePkce) {
-    const pkceCookie = request.cookies.get(PKCE_COOKIE_NAME)?.value;
-    if (pkceCookie) {
-      try {
-        const pkcePayload = await verifyPkceCookie(pkceCookie, sessionSecret);
-        if (
-          pkcePayload.nonce === statePayload.nonce &&
-          pkcePayload.platform === platform
-        ) {
-          codeVerifier = pkcePayload.codeVerifier;
-        }
-      } catch (err) {
-        console.error('[connect/callback] PKCE cookie invalid:', err);
-      }
-    }
+    codeVerifier = await resolvePkceVerifier(
+      request,
+      statePayload.nonce,
+      platform,
+      sessionSecret
+    );
     if (!codeVerifier) {
       return pickerRedirect(
         request,
@@ -162,107 +291,46 @@ export async function handleConnectCallback(
     }
   }
 
-  // Client credentials for the exchange: the workspace's own app details
-  // for BYOC platforms, our global app otherwise.
-  let clientId = '';
-  let clientSecret: string | null = null;
-  if (config.resolveClientId) {
-    clientId =
-      (await config.resolveClientId({ workspaceId: statePayload.workspaceId })) ??
-      '';
-  }
-  if (config.clientIdSource === 'byoc') {
-    const credentials = await resolvePlatformClientCredentials(
-      client,
-      statePayload.workspaceId,
-      platform
+  const credentials = await resolveExchangeCredentials(
+    client,
+    config,
+    platform,
+    statePayload.workspaceId
+  );
+  if (!credentials) {
+    return pickerRedirect(
+      request,
+      statePayload.tenantSubdomain,
+      platform,
+      rootDomain,
+      'credentials_required'
     );
-    if (!credentials) {
-      return pickerRedirect(
-        request,
-        statePayload.tenantSubdomain,
-        platform,
-        rootDomain,
-        'credentials_required'
-      );
-    }
-    clientId = credentials.clientId;
-    clientSecret = credentials.clientSecret;
-  } else if (!clientId) {
-    const idEnv =
-      config.globalClientIdEnv ?? `CONNECT_${platform.toUpperCase()}_CLIENT_ID`;
-    const secretEnv =
-      config.globalClientSecretEnv ??
-      `CONNECT_${platform.toUpperCase()}_CLIENT_SECRET`;
-    clientId = process.env[idEnv] ?? '';
-    clientSecret = process.env[secretEnv] ?? null;
   }
+  const { clientId, clientSecret } = credentials;
 
   const redirectUri = buildConnectCallbackUrl(request.url, platform);
 
-  let exchanged;
-  try {
-    exchanged = await config.exchangeCode(code, {
-      code,
-      redirectUri,
-      codeVerifier,
-      clientId,
-      clientSecret,
-      workspaceId: statePayload.workspaceId,
-      userId: statePayload.userId,
-    });
-  } catch (err) {
-    console.error(
-      `[connect/callback] Code exchange failed for platform "${platform}":`,
-      err
-    );
+  const outcome = await exchangePersistAndDiscover(
+    client,
+    config,
+    platform,
+    statePayload,
+    code,
+    redirectUri,
+    codeVerifier,
+    clientId,
+    clientSecret
+  );
+  if ('notice' in outcome) {
     return pickerRedirect(
       request,
       statePayload.tenantSubdomain,
       platform,
       rootDomain,
-      'connect_failed'
+      outcome.notice
     );
   }
-
-  let accountId: string;
-  try {
-    const persisted = await persistConnectedAccount(client, {
-      workspaceId: statePayload.workspaceId,
-      platform,
-      exchanged,
-    });
-    accountId = persisted.accountId;
-  } catch (err) {
-    console.error('[connect/callback] Failed to persist account:', err);
-    return pickerRedirect(
-      request,
-      statePayload.tenantSubdomain,
-      platform,
-      rootDomain,
-      'connect_failed'
-    );
-  }
-
-  let destinations;
-  try {
-    destinations = await config.fetchDestinations(
-      exchanged.accessToken,
-      exchanged
-    );
-  } catch (err) {
-    console.error(
-      `[connect/callback] Destination discovery failed for platform "${platform}":`,
-      err
-    );
-    return pickerRedirect(
-      request,
-      statePayload.tenantSubdomain,
-      platform,
-      rootDomain,
-      'connect_failed'
-    );
-  }
+  const { accountId, destinations } = outcome;
 
   if (!destinations || destinations.length === 0) {
     return pickerRedirect(
