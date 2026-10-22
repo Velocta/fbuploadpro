@@ -9,12 +9,18 @@ export interface PlatformPlaceholderAccountsProps {
   platformName: string;
   subdomain: string;
   icon?: React.ReactNode;
+  /** Overrides the default body copy (e.g. the platform's connect model). */
+  description?: string;
+  /** Optional connect area rendered above the return button (e.g. a gated connect action). */
+  connectArea?: React.ReactNode;
 }
 
 export function PlatformPlaceholderAccounts({
   platformName,
   subdomain,
   icon,
+  description,
+  connectArea,
 }: Readonly<PlatformPlaceholderAccountsProps>) {
   const router = useRouter();
 
@@ -109,9 +115,12 @@ export function PlatformPlaceholderAccounts({
             maxWidth: '380px',
           }}
         >
-          {platformName} integration is currently undergoing testing and verification.
-          Account connectivity and publishing tools for this channel will be enabled once public validation completes.
+          {description ??
+            `${platformName} integration is currently undergoing testing and verification. Account connectivity and publishing tools for this channel will be enabled once public validation completes.`}
         </p>
+
+        {/* Connect Area (e.g. point-of-need credentials gate) */}
+        {connectArea}
 
         {/* Primary Action Button */}
         <div style={{ marginTop: SPACING.sm, width: '100%' }}>
