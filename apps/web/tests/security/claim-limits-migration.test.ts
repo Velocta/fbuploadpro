@@ -16,6 +16,8 @@
  *    active, and re-asserts service-role-only grants.
  * 4. Adds the D6 refresh-lease column pair to BOTH social_accounts and
  *    destinations, with the conditional-update protocol documented.
+ * 5. Extends worker_heartbeats with the per-lane enqueued / DLQ counters
+ *    spec 121 Scope 7 requires, same shape as the spec 116 counters.
  * Live-database verification (all 37 migrations applied in order to a
  * local PG16 scratch database, then behavioural fixtures for at-cap
  * deferral, headroom, the IG hourly calls cap, the metadata override,
@@ -104,5 +106,20 @@ describe('Spec 121 PR-B: claim limits + refresh lease migration', () => {
       /ALTER TABLE public\.destinations\s+ADD COLUMN refresh_lease_owner TEXT NULL,\s+ADD COLUMN refresh_lease_expires_at TIMESTAMPTZ NULL;/,
     );
     expect(sql).toMatch(/refresh_lease_owner IS NULL\s+OR refresh_lease_expires_at < now\(\)/);
+  });
+
+  it('extends worker_heartbeats with per-lane enqueued/DLQ counters', () => {
+    expect(sql).toMatch(
+      /ADD COLUMN last_enqueued_fast INT NOT NULL DEFAULT 0 CHECK \(last_enqueued_fast >= 0\)/,
+    );
+    expect(sql).toMatch(
+      /ADD COLUMN last_enqueued_heavy INT NOT NULL DEFAULT 0 CHECK \(last_enqueued_heavy >= 0\)/,
+    );
+    expect(sql).toMatch(
+      /ADD COLUMN last_dlq_fast INT NOT NULL DEFAULT 0 CHECK \(last_dlq_fast >= 0\)/,
+    );
+    expect(sql).toMatch(
+      /ADD COLUMN last_dlq_heavy INT NOT NULL DEFAULT 0 CHECK \(last_dlq_heavy >= 0\)/,
+    );
   });
 });

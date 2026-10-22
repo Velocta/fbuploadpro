@@ -9,6 +9,9 @@
 --   2. Add the refresh-lease columns used by the D6 token-refresh job's
 --      per-connection single-flight lease to public.social_accounts and
 --      public.destinations.
+--   3. Extend public.worker_heartbeats with the per-lane enqueued / DLQ
+--      counters spec 121 Scope 7 requires (the spec 116 table only has
+--      aggregate claimed/settled counters).
 -- Nothing else is modified. No existing migration is edited.
 --
 -- -----------------------------------------------------------------------------
@@ -479,3 +482,26 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION public.claim_due_queue_items(public.platform, TEXT[], INT, INT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_due_queue_items(public.platform, TEXT[], INT, INT) TO service_role;
+
+-- -----------------------------------------------------------------------------
+-- 4. worker_heartbeats per-lane counters (spec 121 Scope 7)
+-- -----------------------------------------------------------------------------
+-- The claimer/consumer heartbeat upsert (worker PR) writes per-lane
+-- enqueued counts and per-lane DLQ-arrival counts each tick, alongside the
+-- existing aggregate claimed/settled counters from spec 116. Additive
+-- only, same shape as the existing counters (NOT NULL, DEFAULT 0,
+-- CHECK >= 0), so existing rows and writers are unaffected.
+ALTER TABLE public.worker_heartbeats
+  ADD COLUMN last_enqueued_fast INT NOT NULL DEFAULT 0 CHECK (last_enqueued_fast >= 0),
+  ADD COLUMN last_enqueued_heavy INT NOT NULL DEFAULT 0 CHECK (last_enqueued_heavy >= 0),
+  ADD COLUMN last_dlq_fast INT NOT NULL DEFAULT 0 CHECK (last_dlq_fast >= 0),
+  ADD COLUMN last_dlq_heavy INT NOT NULL DEFAULT 0 CHECK (last_dlq_heavy >= 0);
+
+COMMENT ON COLUMN public.worker_heartbeats.last_enqueued_fast IS
+  'Spec 121 Scope 7: items enqueued to the publish-fast lane on the last tick.';
+COMMENT ON COLUMN public.worker_heartbeats.last_enqueued_heavy IS
+  'Spec 121 Scope 7: items enqueued to the publish-heavy lane on the last tick.';
+COMMENT ON COLUMN public.worker_heartbeats.last_dlq_fast IS
+  'Spec 121 Scope 7: publish-fast DLQ arrivals observed on the last tick.';
+COMMENT ON COLUMN public.worker_heartbeats.last_dlq_heavy IS
+  'Spec 121 Scope 7: publish-heavy DLQ arrivals observed on the last tick.';
