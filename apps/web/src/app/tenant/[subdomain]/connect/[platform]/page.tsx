@@ -23,6 +23,31 @@ interface ConnectPickerPageProps {
   searchParams: Promise<{ notice?: string }>;
 }
 
+type PendingDestinations = Awaited<
+  ReturnType<typeof verifyPendingDestinations>
+>;
+
+async function readPendingDestinations(
+  platform: string,
+  subdomain: string
+): Promise<PendingDestinations | null> {
+  const cookieStore = await cookies();
+  const pendingCookie = cookieStore.get(PENDING_COOKIE_NAME)?.value;
+  if (!pendingCookie) return null;
+  try {
+    const parsed = await verifyPendingDestinations(
+      pendingCookie,
+      getSessionSecret()
+    );
+    if (parsed.platform === platform && parsed.tenantSubdomain === subdomain) {
+      return parsed;
+    }
+  } catch (err) {
+    console.error('[connect/picker] Pending cookie invalid:', err);
+  }
+  return null;
+}
+
 function resolveNoticeCode(
   notice: string | undefined,
   platform: string | null,
@@ -73,26 +98,9 @@ export default async function ConnectPickerPage({
   const platformName = platform ? PLATFORM_LABELS[platform] : 'Platform';
   const accountsHref = `/tenant/${subdomain}/accounts`;
 
-  let pending = null;
+  let pending: PendingDestinations | null = null;
   if (platform && !notice) {
-    const cookieStore = await cookies();
-    const pendingCookie = cookieStore.get(PENDING_COOKIE_NAME)?.value;
-    if (pendingCookie) {
-      try {
-        const parsed = await verifyPendingDestinations(
-          pendingCookie,
-          getSessionSecret()
-        );
-        if (
-          parsed.platform === platform &&
-          parsed.tenantSubdomain === subdomain
-        ) {
-          pending = parsed;
-        }
-      } catch (err) {
-        console.error('[connect/picker] Pending cookie invalid:', err);
-      }
-    }
+    pending = await readPendingDestinations(platform, subdomain);
   }
 
   const noticeCode = resolveNoticeCode(notice, platform, Boolean(pending));

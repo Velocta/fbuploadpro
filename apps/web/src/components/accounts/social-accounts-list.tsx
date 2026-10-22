@@ -69,6 +69,121 @@ export interface SocialAccountsListViewProps {
   accounts: SocialAccountItem[];
 }
 
+function SocialDestinationLink({
+  subdomain,
+  destination,
+}: Readonly<{
+  subdomain: string;
+  destination: SocialDestinationItem;
+}>) {
+  return (
+    <Link
+      href={`/tenant/${subdomain}/destinations/${destination.id}`}
+      data-testid={`social-destination-${destination.id}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACING.sm,
+        padding: `${SPACING.xs} 0`,
+        textDecoration: 'none',
+        color: `var(--text-main, ${THEME.default.text.primary})`,
+        fontSize: '0.875rem',
+      }}
+    >
+      <span style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
+        {destination.name}
+      </span>
+      {destination.handle && (
+        <span
+          style={{
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+            fontSize: '0.8125rem',
+          }}
+        >
+          {destination.handle.startsWith('@')
+            ? destination.handle
+            : `@${destination.handle}`}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function SocialAccountBlock({
+  subdomain,
+  account,
+  isFirst,
+}: Readonly<{
+  subdomain: string;
+  account: SocialAccountItem;
+  isFirst: boolean;
+}>) {
+  return (
+    <div
+      data-testid={`social-account-${account.id}`}
+      style={{
+        borderTop: isFirst
+          ? 'none'
+          : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
+        padding: `${SPACING.md} ${SPACING.lg}`,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.sm,
+          marginBottom: SPACING.sm,
+        }}
+      >
+        <span
+          style={COMPONENT_STYLES.statusDot(socialStatusSignal(account.status))}
+        />
+        <span
+          style={{
+            fontSize: '0.9375rem',
+            fontWeight: TYPOGRAPHY.weights.semibold,
+            color: `var(--text-main, ${THEME.default.text.primary})`,
+          }}
+        >
+          {account.displayName}
+        </span>
+        <span
+          style={{
+            fontSize: '0.8125rem',
+            color: `var(--text-sub, ${THEME.default.text.secondary})`,
+          }}
+        >
+          {PLATFORM_LABELS[account.platform] ?? account.platform} ·{' '}
+          {socialStatusLabel(account.status)}
+        </span>
+      </div>
+
+      {account.destinations.length === 0 ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: '0.8125rem',
+            color: `var(--text-dim, ${THEME.default.text.muted})`,
+          }}
+        >
+          No destinations added yet.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {account.destinations.map((destination) => (
+            <SocialDestinationLink
+              key={destination.id}
+              subdomain={subdomain}
+              destination={destination}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SocialAccountsListView({
   subdomain,
   accounts,
@@ -107,102 +222,12 @@ export function SocialAccountsListView({
         }}
       >
         {accounts.map((account, accountIndex) => (
-          <div
+          <SocialAccountBlock
             key={account.id}
-            data-testid={`social-account-${account.id}`}
-            style={{
-              borderTop:
-                accountIndex === 0
-                  ? 'none'
-                  : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              padding: `${SPACING.md} ${SPACING.lg}`,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.sm,
-                marginBottom: SPACING.sm,
-              }}
-            >
-              <span
-                style={COMPONENT_STYLES.statusDot(
-                  socialStatusSignal(account.status)
-                )}
-              />
-              <span
-                style={{
-                  fontSize: '0.9375rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                }}
-              >
-                {account.displayName}
-              </span>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
-                {PLATFORM_LABELS[account.platform] ?? account.platform} ·{' '}
-                {socialStatusLabel(account.status)}
-              </span>
-            </div>
-
-            {account.destinations.length === 0 ? (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '0.8125rem',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                }}
-              >
-                No destinations added yet.
-              </p>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                {account.destinations.map((destination) => (
-                  <Link
-                    key={destination.id}
-                    href={`/tenant/${subdomain}/destinations/${destination.id}`}
-                    data-testid={`social-destination-${destination.id}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: SPACING.sm,
-                      padding: `${SPACING.xs} 0`,
-                      textDecoration: 'none',
-                      color: `var(--text-main, ${THEME.default.text.primary})`,
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    <span style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
-                      {destination.name}
-                    </span>
-                    {destination.handle && (
-                      <span
-                        style={{
-                          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                          fontSize: '0.8125rem',
-                        }}
-                      >
-                        {destination.handle.startsWith('@')
-                          ? destination.handle
-                          : `@${destination.handle}`}
-                      </span>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+            subdomain={subdomain}
+            account={account}
+            isFirst={accountIndex === 0}
+          />
         ))}
       </div>
     </section>

@@ -37,6 +37,10 @@ import {
 import { loadSocialAccounts } from '@/components/accounts/social-accounts-list';
 import { render } from './setup';
 
+function fakeResponse(ok: boolean, body: unknown, status = 200): Response {
+  return { ok, status, json: async () => body } as Response;
+}
+
 describe('isByocGateBlocking (PR #641 semantics)', () => {
   it('blocks when the check finished and details are missing', () => {
     const status: ByocGateStatus = {
@@ -158,12 +162,6 @@ describe('ByocGate rendering', () => {
 });
 
 describe('checkByocCredentials', () => {
-  function fakeResponse(ok: boolean, body: unknown): Response {
-    return {
-      ok,
-      json: async () => body,
-    } as Response;
-  }
 
   it('reports credentials present when the route returns an app ID and a saved secret', async () => {
     const fetcher = async () =>
@@ -264,9 +262,6 @@ describe('Connect helpers', () => {
 });
 
 describe('Connect data helpers', () => {
-  function fakeResponse(ok: boolean, body: unknown, status = 200): Response {
-    return { ok, status, json: async () => body } as Response;
-  }
 
   it('submitDestinationPick returns the Accounts URL on success', async () => {
     const fetcher = async () =>

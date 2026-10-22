@@ -408,7 +408,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     expect(data.accountsUrl).toBe(`/tenant/${subdomain}/accounts`);
     expect(data.addedCount).toBe(2);
     const storedIds = [...db.destinations.values()].map((d) => d.external_destination_id);
-    expect(storedIds.sort()).toEqual(['dest-1001', 'dest-3003']);
+    expect(storedIds.sort((a, b) => a.localeCompare(b))).toEqual(['dest-1001', 'dest-3003']);
   });
 
   it('reconnect re-binds the same social_accounts row instead of duplicating it', async () => {
@@ -780,7 +780,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
       }>;
     };
     expect(data.accounts).toHaveLength(2);
-    const platforms = data.accounts.map((a) => a.platform).sort();
+    const platforms = data.accounts.map((a) => a.platform).sort((a, b) => a.localeCompare(b));
     expect(platforms).toEqual(['instagram', 'youtube']);
     const instagram = data.accounts.find((a) => a.platform === 'instagram');
     expect(instagram?.destinations).toHaveLength(1);

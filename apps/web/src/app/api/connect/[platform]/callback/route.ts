@@ -96,21 +96,34 @@ type ExchangeOutcome =
       >;
     };
 
+interface ExchangeArgs {
+  client: ConnectDbClient;
+  config: PlatformConnectConfig;
+  platform: Platform;
+  statePayload: ConnectStatePayload;
+  code: string;
+  redirectUri: string;
+  codeVerifier: string | null;
+  clientId: string;
+  clientSecret: string | null;
+}
+
 /**
  * Runs the platform exchange, persists the account, and discovers its
  * destinations. Any failure becomes a plain-language notice code.
  */
-async function exchangePersistAndDiscover(
-  client: ConnectDbClient,
-  config: PlatformConnectConfig,
-  platform: Platform,
-  statePayload: ConnectStatePayload,
-  code: string,
-  redirectUri: string,
-  codeVerifier: string | null,
-  clientId: string,
-  clientSecret: string | null
-): Promise<ExchangeOutcome> {
+async function exchangePersistAndDiscover(args: ExchangeArgs): Promise<ExchangeOutcome> {
+  const {
+    client,
+    config,
+    platform,
+    statePayload,
+    code,
+    redirectUri,
+    codeVerifier,
+    clientId,
+    clientSecret,
+  } = args;
   let exchanged;
   try {
     exchanged = await config.exchangeCode(code, {
@@ -310,7 +323,7 @@ export async function handleConnectCallback(
 
   const redirectUri = buildConnectCallbackUrl(request.url, platform);
 
-  const outcome = await exchangePersistAndDiscover(
+  const outcome = await exchangePersistAndDiscover({
     client,
     config,
     platform,
@@ -319,8 +332,8 @@ export async function handleConnectCallback(
     redirectUri,
     codeVerifier,
     clientId,
-    clientSecret
-  );
+    clientSecret,
+  });
   if ('notice' in outcome) {
     return pickerRedirect(
       request,

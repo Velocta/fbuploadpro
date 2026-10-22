@@ -32,21 +32,35 @@ type ClientIdResolution =
   | { clientId: string }
   | { redirect: NextResponse };
 
+interface ResolveInitiateClientIdArgs {
+  client: ConnectDbClient;
+  config: PlatformConnectConfig;
+  platform: Platform;
+  workspaceId: string;
+  request: NextRequest;
+  subdomain: string;
+  rootDomain: string;
+  accountsUrl: URL;
+}
+
 /**
  * Resolves the client ID for a connect attempt: platform override, then
  * the workspace's own app details (BYOC), then our global app (env). A
  * BYOC workspace without saved details is sent to Settings first.
  */
 async function resolveInitiateClientId(
-  client: ConnectDbClient,
-  config: PlatformConnectConfig,
-  platform: Platform,
-  workspaceId: string,
-  request: NextRequest,
-  subdomain: string,
-  rootDomain: string,
-  accountsUrl: URL
+  args: ResolveInitiateClientIdArgs
 ): Promise<ClientIdResolution> {
+  const {
+    client,
+    config,
+    platform,
+    workspaceId,
+    request,
+    subdomain,
+    rootDomain,
+    accountsUrl,
+  } = args;
   let clientId: string | null = null;
   if (config.resolveClientId) {
     clientId = await config.resolveClientId({ workspaceId });
@@ -153,7 +167,7 @@ export async function handleConnectInitiate(
     );
   }
 
-  const resolution = await resolveInitiateClientId(
+  const resolution = await resolveInitiateClientId({
     client,
     config,
     platform,
@@ -161,8 +175,8 @@ export async function handleConnectInitiate(
     request,
     subdomain,
     rootDomain,
-    accountsUrl
-  );
+    accountsUrl,
+  });
   if ('redirect' in resolution) {
     return resolution.redirect;
   }
