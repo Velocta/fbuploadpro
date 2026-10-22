@@ -140,7 +140,7 @@ async function exchangePersistAndDiscover(args: ExchangeArgs): Promise<ExchangeO
       `[connect/callback] Code exchange failed for platform "${platform}":`,
       err
     );
-    return { notice: 'connect_failed' };
+    return { notice: NOTICE_CONNECT_FAILED };
   }
 
   let accountId: string;
@@ -153,7 +153,7 @@ async function exchangePersistAndDiscover(args: ExchangeArgs): Promise<ExchangeO
     accountId = persisted.accountId;
   } catch (err) {
     console.error('[connect/callback] Failed to persist account:', err);
-    return { notice: 'connect_failed' };
+    return { notice: NOTICE_CONNECT_FAILED };
   }
 
   try {
@@ -167,9 +167,11 @@ async function exchangePersistAndDiscover(args: ExchangeArgs): Promise<ExchangeO
       `[connect/callback] Destination discovery failed for platform "${platform}":`,
       err
     );
-    return { notice: 'connect_failed' };
+    return { notice: NOTICE_CONNECT_FAILED };
   }
 }
+
+const NOTICE_CONNECT_FAILED: ConnectNoticeCode = 'connect_failed';
 
 function pickerRedirect(
   request: NextRequest,
@@ -217,7 +219,7 @@ export async function handleConnectCallback(
 
   if (!stateParam) {
     const fallback = new URL('/accounts', request.url);
-    fallback.searchParams.set('error', 'connect_failed');
+    fallback.searchParams.set('error', NOTICE_CONNECT_FAILED);
     return NextResponse.redirect(fallback);
   }
 
@@ -227,7 +229,7 @@ export async function handleConnectCallback(
   } catch (err) {
     console.error('[connect/callback] State verification failed:', err);
     const fallback = new URL('/accounts', request.url);
-    fallback.searchParams.set('error', 'connect_failed');
+    fallback.searchParams.set('error', NOTICE_CONNECT_FAILED);
     return NextResponse.redirect(fallback);
   }
 
@@ -271,7 +273,7 @@ export async function handleConnectCallback(
       statePayload.tenantSubdomain,
       platform,
       rootDomain,
-      'connect_failed'
+      NOTICE_CONNECT_FAILED
     );
   }
 

@@ -28,6 +28,8 @@ import {
   sessionCanAccessTenant,
 } from '@/lib/connect/session';
 
+const CONNECT_FAILED = 'connect_failed';
+
 type ClientIdResolution =
   | { clientId: string }
   | { redirect: NextResponse };
@@ -92,7 +94,7 @@ async function resolveInitiateClientId(
     console.error(
       `[connect] No client ID available for platform "${platform}" in workspace ${workspaceId}.`
     );
-    accountsUrl.searchParams.set('error', 'connect_failed');
+    accountsUrl.searchParams.set('error', CONNECT_FAILED);
     return { redirect: NextResponse.redirect(accountsUrl) };
   }
   return { clientId };
@@ -132,7 +134,7 @@ export async function handleConnectInitiate(
   );
 
   if (!isKnownPlatform(platformParam)) {
-    accountsUrl.searchParams.set('error', 'connect_failed');
+    accountsUrl.searchParams.set('error', CONNECT_FAILED);
     return NextResponse.redirect(accountsUrl);
   }
   const platform = platformParam;
@@ -142,7 +144,7 @@ export async function handleConnectInitiate(
     console.error(
       `[connect] No connect config registered for platform "${platform}".`
     );
-    accountsUrl.searchParams.set('error', 'connect_failed');
+    accountsUrl.searchParams.set('error', CONNECT_FAILED);
     return NextResponse.redirect(accountsUrl);
   }
 

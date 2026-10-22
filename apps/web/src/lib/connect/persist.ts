@@ -30,6 +30,9 @@ export type ConnectDbClient = DatabaseClient | SupabaseClient<any>;
 /** Rows always carry a platform; this only guards malformed legacy data. */
 const FALLBACK_PLATFORM: Platform = 'facebook';
 
+/** Default status for freshly persisted accounts and destinations. */
+const STATUS_ACTIVE = 'active';
+
 export interface SocialDestinationView {
   id: string;
   externalDestinationId: string;
@@ -144,7 +147,7 @@ export async function persistConnectedAccount(
         encrypted_refresh_token: encryptedRefreshToken,
         token_expires_at: expiresAt,
         scopes,
-        status: 'active',
+        status: STATUS_ACTIVE,
         metadata: {},
         updated_at: nowIso,
       },
@@ -215,7 +218,7 @@ export async function persistPickedDestinations(
     name: destination.name,
     handle: destination.handle ?? null,
     avatar_url: destination.avatarUrl ?? null,
-    status: 'active',
+    status: STATUS_ACTIVE,
     metadata: {},
   }));
   const { data, error } = await supabase
@@ -319,7 +322,7 @@ function mapDestinationRow(row: Record<string, any>): SocialDestinationView {
     handle: row.handle ?? null,
     avatarUrl: row.avatar_url ?? row.avatarUrl ?? null,
     timezone: row.timezone ?? 'UTC',
-    status: row.status ?? 'active',
+    status: row.status ?? STATUS_ACTIVE,
   };
 }
 
@@ -382,7 +385,7 @@ export async function fetchSocialAccountsWithDestinations(
     externalAccountId: row.external_account_id ?? row.externalAccountId,
     displayName: row.display_name ?? row.displayName,
     avatarUrl: row.avatar_url ?? row.avatarUrl ?? null,
-    status: row.status ?? 'active',
+    status: row.status ?? STATUS_ACTIVE,
     tokenExpiresAt: row.token_expires_at ?? row.tokenExpiresAt ?? null,
     destinations: destinationsByAccount.get(row.id) ?? [],
   }));
@@ -412,7 +415,7 @@ export async function fetchDestinationDetail(
         id: row.account_id ?? row.accountId,
         displayName: row.account_display_name ?? row.accountDisplayName,
         platform: (row.platform ?? FALLBACK_PLATFORM) as Platform,
-        status: row.account_status ?? row.accountStatus ?? 'active',
+        status: row.account_status ?? row.accountStatus ?? STATUS_ACTIVE,
       },
     };
   }
@@ -439,7 +442,7 @@ export async function fetchDestinationDetail(
       id: account.id as string,
       displayName: account.display_name as string,
       platform: account.platform as Platform,
-      status: (account.status as string) ?? 'active',
+      status: (account.status as string) ?? STATUS_ACTIVE,
     },
   };
 }
