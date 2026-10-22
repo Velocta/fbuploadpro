@@ -274,6 +274,17 @@ async function uploadThumbnail(
   }
 }
 
+/**
+ * Parse the confirm response. The confirm API returns the media item
+ * directly as the response body (see
+ * `app/api/tenant/[subdomain]/media/confirm/route.ts`: it responds with
+ * `MediaItemResponseSchema.parse(...)` unwrapped) — there is no
+ * `{ item: ... }` envelope.
+ */
+export function parseConfirmUploadResponse(confirmData: unknown): MediaItemResponse {
+  return confirmData as MediaItemResponse;
+}
+
 /** Step 4: confirm the upload so it lands in the library. */
 async function confirmMediaUpload(
   subdomain: string,
@@ -316,7 +327,7 @@ async function confirmMediaUpload(
   }
 
   const confirmData = await confirmRes.json();
-  return confirmData.item as MediaItemResponse;
+  return parseConfirmUploadResponse(confirmData);
 }
 
 /**
