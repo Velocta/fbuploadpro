@@ -14,6 +14,13 @@ import type { Platform } from '../domain/database.js';
 // read from the platform) overrides the default for that destination
 // via `resolvePublishLimit` — no schema or code change needed when a
 // platform reports a different cap for a specific account.
+//
+// Canonical source (A-1, ratified by Shahzeb 2026-10-22): this config is
+// the canonical defaults for the D5 posting limits. The
+// destination_claim_limits seed in supabase/migrations is the
+// enforcement copy the claim RPC reads. The parity test at
+// packages/contracts/tests/publishing/limits-parity.test.ts fails CI
+// if the two drift.
 
 /** One rolling-window cap: at most `maxCount` events per `windowSeconds`. */
 export interface PublishLimitWindow {
