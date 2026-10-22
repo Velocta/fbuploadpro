@@ -226,6 +226,91 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
     });
   });
 
+  describe('edge branches', () => {
+    it('GET returns hasSecret with an empty secret when decryption fails', async () => {
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        makeSupabase({
+          workspaceId,
+          credsRow: {
+            workspace_id: workspaceId,
+            platform: 'threads',
+            client_id: '111222333',
+            encrypted_client_secret: 'not-a-valid-ciphertext',
+            status: 'unverified',
+            last_tested_at: null,
+            created_at: '2026-10-14T09:00:00Z',
+            updated_at: '2026-10-14T09:00:00Z',
+          },
+        }) as any
+      );
+
+      const res = await getPlatformCredentials(
+        reqFor('threads', { headers: { cookie: validSessionCookie } }),
+        ctx('threads')
+      );
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.appId).toBe('111222333');
+      expect(json.appSecret).toBe('');
+      expect(json.hasSecret).toBe(true);
+    });
+
+    it('GET returns 503 when the database service is unavailable', async () => {
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(null);
+      const res = await getPlatformCredentials(
+        reqFor('instagram', { headers: { cookie: validSessionCookie } }),
+        ctx('instagram')
+      );
+      expect(res.status).toBe(503);
+    });
+
+    it('PUT returns 400 for an invalid JSON body', async () => {
+      const res = await savePlatformCredentials(
+        reqFor('instagram', {
+          method: 'PUT',
+          headers: { cookie: validSessionCookie, 'Content-Type': 'application/json' },
+          body: '{not json',
+        }),
+        ctx('instagram')
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('PUT returns 404 when the workspace is not found', async () => {
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        makeSupabase({ workspaceId: null }) as any
+      );
+      const res = await savePlatformCredentials(
+        reqFor('instagram', {
+          method: 'PUT',
+          headers: { cookie: validSessionCookie, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ appId: '123456789', appSecret: 'some-secret-value' }),
+        }),
+        ctx('instagram')
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it('DELETE returns 404 when the workspace is not found', async () => {
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        makeSupabase({ workspaceId: null }) as any
+      );
+      const res = await deletePlatformCredentials(
+        reqFor('threads', { method: 'DELETE', headers: { cookie: validSessionCookie } }),
+        ctx('threads')
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it('DELETE returns 403 when session subdomain does not match request tenant', async () => {
+      const res = await deletePlatformCredentials(
+        reqFor('instagram', { method: 'DELETE', headers: { cookie: otherTenantSessionCookie } }),
+        ctx('instagram')
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
   describe('PUT', () => {
     it('returns 400 when appId is empty', async () => {
       const res = await savePlatformCredentials(

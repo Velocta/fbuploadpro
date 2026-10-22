@@ -80,6 +80,9 @@ export type PlatformCredentialsMutationResult =
 
 type CredentialsClient = DatabaseClient | SupabaseClient<any> | null | undefined;
 
+/** Outcome of a low-level write: success, a database error, or no database available. */
+type WriteOutcome = 'ok' | 'error' | 'unavailable';
+
 const CREDENTIAL_COLUMNS =
   'id, workspace_id, platform, client_id, encrypted_client_secret, status, last_tested_at, created_at, updated_at';
 
@@ -125,6 +128,207 @@ export const SavePlatformCredentialsRequestSchema = z.object({
 });
 export type SavePlatformCredentialsRequest = z.infer<typeof SavePlatformCredentialsRequestSchema>;
 
+function legacyDb(client: CredentialsClient): DatabaseClient | null {
+  return isLegacyClient(client ?? undefined) ? (client as DatabaseClient) : null;
+}
+
+function supabaseDb(client: CredentialsClient): SupabaseClient<any> | null {
+  if (legacyDb(client)) return null;
+  return getRouteSupabase(client ?? undefined);
+}
+
+async function fetchRow(
+  workspaceId: string,
+  platform: ByocPlatform,
+  client: CredentialsClient
+): Promise<CredentialsRowShape | null> {
+  const legacy = legacyDb(client);
+  if (legacy) {
+    try {
+      const rows = (await legacy.query(
+        `SELECT ${CREDENTIAL_COLUMNS}
+         FROM platform_credentials
+         WHERE workspace_id = $1 AND platform = $2
+         LIMIT 1`,
+        [workspaceId, platform]
+      )) as CredentialsRowShape[];
+      return rows?.[0] ?? null;
+    } catch (err) {
+      console.error('[Platform Credentials] Failed to read credentials (legacy client):', err);
+      return null;
+    }
+  }
+
+  const supabase = supabaseDb(client);
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('platform_credentials')
+      .select(CREDENTIAL_COLUMNS)
+      .eq('workspace_id', workspaceId)
+      .eq('platform', platform)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as CredentialsRowShape;
+  } catch (err) {
+    console.error('[Platform Credentials] Failed to read credentials:', err);
+    return null;
+  }
+}
+
+async function upsertRow(
+  workspaceId: string,
+  platform: ByocPlatform,
+  clientId: string,
+  encryptedClientSecret: string,
+  now: string,
+  client: CredentialsClient
+): Promise<WriteOutcome> {
+  const legacy = legacyDb(client);
+  if (legacy) {
+    try {
+      await legacy.query(
+        `INSERT INTO platform_credentials (workspace_id, platform, client_id, encrypted_client_secret, status, updated_at)
+         VALUES ($1, $2, $3, $4, 'unverified', $5)
+         ON CONFLICT (workspace_id, platform) DO UPDATE SET
+           client_id = EXCLUDED.client_id,
+           encrypted_client_secret = EXCLUDED.encrypted_client_secret,
+           status = 'unverified',
+           updated_at = EXCLUDED.updated_at`,
+        [workspaceId, platform, clientId, encryptedClientSecret, now]
+      );
+      return 'ok';
+    } catch (err) {
+      console.error('[Platform Credentials] Failed to save credentials (legacy client):', err);
+      return 'error';
+    }
+  }
+
+  const supabase = supabaseDb(client);
+  if (!supabase) return 'unavailable';
+
+  const { error } = await supabase.from('platform_credentials').upsert(
+    {
+      workspace_id: workspaceId,
+      platform,
+      client_id: clientId,
+      encrypted_client_secret: encryptedClientSecret,
+      status: 'unverified',
+      updated_at: now,
+    },
+    { onConflict: 'workspace_id,platform' }
+  );
+  if (error) {
+    console.error('[Platform Credentials] Upsert credentials error:', error);
+    return 'error';
+  }
+  return 'ok';
+}
+
+async function updateRow(
+  workspaceId: string,
+  platform: ByocPlatform,
+  patch: { client_id: string; status: PlatformCredentialStatus },
+  client: CredentialsClient,
+  now: string
+): Promise<WriteOutcome>;
+async function updateRow(
+  workspaceId: string,
+  platform: ByocPlatform,
+  patch: { status: PlatformCredentialStatus; last_tested_at: string },
+  client: CredentialsClient,
+  now: string
+): Promise<WriteOutcome>;
+async function updateRow(
+  workspaceId: string,
+  platform: ByocPlatform,
+  patch: { client_id?: string; status: PlatformCredentialStatus; last_tested_at?: string },
+  client: CredentialsClient,
+  now: string
+): Promise<WriteOutcome> {
+  const legacy = legacyDb(client);
+  if (legacy) {
+    try {
+      if (patch.last_tested_at !== undefined) {
+        await legacy.query(
+          `UPDATE platform_credentials
+           SET status = $3, last_tested_at = $4, updated_at = $5
+           WHERE workspace_id = $1 AND platform = $2`,
+          [workspaceId, platform, patch.status, patch.last_tested_at, now]
+        );
+      } else {
+        await legacy.query(
+          `UPDATE platform_credentials
+           SET client_id = $3, status = $4, updated_at = $5
+           WHERE workspace_id = $1 AND platform = $2`,
+          [workspaceId, platform, patch.client_id, patch.status, now]
+        );
+      }
+      return 'ok';
+    } catch (err) {
+      console.error('[Platform Credentials] Failed to update credentials (legacy client):', err);
+      return 'error';
+    }
+  }
+
+  const supabase = supabaseDb(client);
+  if (!supabase) return 'unavailable';
+
+  const { error } = await supabase
+    .from('platform_credentials')
+    .update({ ...patch, updated_at: now })
+    .eq('workspace_id', workspaceId)
+    .eq('platform', platform);
+  if (error) {
+    console.error('[Platform Credentials] Update credentials error:', error);
+    return 'error';
+  }
+  return 'ok';
+}
+
+async function deleteRow(
+  workspaceId: string,
+  platform: ByocPlatform,
+  client: CredentialsClient
+): Promise<WriteOutcome> {
+  const legacy = legacyDb(client);
+  if (legacy) {
+    try {
+      await legacy.query(
+        `DELETE FROM platform_credentials WHERE workspace_id = $1 AND platform = $2`,
+        [workspaceId, platform]
+      );
+      return 'ok';
+    } catch (err) {
+      console.error('[Platform Credentials] Failed to delete credentials (legacy client):', err);
+      return 'error';
+    }
+  }
+
+  const supabase = supabaseDb(client);
+  if (!supabase) return 'unavailable';
+
+  const { error } = await supabase
+    .from('platform_credentials')
+    .delete()
+    .eq('workspace_id', workspaceId)
+    .eq('platform', platform);
+  if (error) {
+    console.error('[Platform Credentials] Delete credentials error:', error);
+    return 'error';
+  }
+  return 'ok';
+}
+
+function outcomeToResult(outcome: WriteOutcome, errorMessage: string): PlatformCredentialsMutationResult {
+  if (outcome === 'ok') return { ok: true };
+  if (outcome === 'unavailable') {
+    return { ok: false, error: 'Database service unavailable', status: 503 };
+  }
+  return { ok: false, error: errorMessage, status: 500 };
+}
+
 /**
  * Returns the stored credentials row for a workspace + BYOC platform, or
  * null when none has been saved yet. Throws UnsupportedPlatformError for
@@ -136,42 +340,8 @@ export async function getCredentials(
   client?: CredentialsClient
 ): Promise<PlatformCredentialsRecord | null> {
   assertByocPlatform(platform);
-
-  if (isLegacyClient(client ?? undefined)) {
-    const legacyClient = client as DatabaseClient;
-    try {
-      const rows = (await legacyClient.query(
-        `SELECT ${CREDENTIAL_COLUMNS}
-         FROM platform_credentials
-         WHERE workspace_id = $1 AND platform = $2
-         LIMIT 1`,
-        [workspaceId, platform]
-      )) as CredentialsRowShape[];
-      const row = rows?.[0];
-      return row ? toRecord(row, workspaceId, platform) : null;
-    } catch (err) {
-      console.error('[Platform Credentials] Failed to read credentials (legacy client):', err);
-      return null;
-    }
-  }
-
-  const supabase = getRouteSupabase(client ?? undefined);
-  if (!supabase) return null;
-
-  try {
-    const { data, error } = await supabase
-      .from('platform_credentials')
-      .select(CREDENTIAL_COLUMNS)
-      .eq('workspace_id', workspaceId)
-      .eq('platform', platform)
-      .maybeSingle();
-
-    if (error || !data) return null;
-    return toRecord(data as CredentialsRowShape, workspaceId, platform);
-  } catch (err) {
-    console.error('[Platform Credentials] Failed to read credentials:', err);
-    return null;
-  }
+  const row = await fetchRow(workspaceId, platform, client);
+  return row ? toRecord(row, workspaceId, platform) : null;
 }
 
 /**
@@ -189,109 +359,38 @@ export async function saveCredentials(
   client?: CredentialsClient
 ): Promise<PlatformCredentialsMutationResult> {
   assertByocPlatform(platform);
-  const label = PLATFORM_LABELS[platform];
   const now = new Date().toISOString();
   const hasNewSecret = Boolean(input.clientSecret && input.clientSecret.length > 0);
 
   if (!hasNewSecret) {
-    const existing = await getCredentials(workspaceId, platform, client);
-    if (!existing?.encryptedClientSecret) {
+    const existing = await fetchRow(workspaceId, platform, client);
+    if (!existing?.encrypted_client_secret) {
       return {
         ok: false,
-        error: `Enter your ${label} App Secret to complete setup.`,
+        error: `Enter your ${PLATFORM_LABELS[platform]} App Secret to complete setup.`,
         status: 400,
       };
     }
+    const outcome = await updateRow(
+      workspaceId,
+      platform,
+      { client_id: input.clientId, status: 'unverified' },
+      client,
+      now
+    );
+    return outcomeToResult(outcome, 'Failed to update credentials');
   }
 
-  if (isLegacyClient(client ?? undefined)) {
-    const legacyClient = client as DatabaseClient;
-    try {
-      if (hasNewSecret) {
-        const encryptedSecret = await encryptToken(
-          input.clientSecret as string,
-          getTokenEncryptionKey()
-        );
-        await legacyClient.query(
-          `INSERT INTO platform_credentials (workspace_id, platform, client_id, encrypted_client_secret, status, updated_at)
-           VALUES ($1, $2, $3, $4, 'unverified', $5)
-           ON CONFLICT (workspace_id, platform) DO UPDATE SET
-             client_id = EXCLUDED.client_id,
-             encrypted_client_secret = EXCLUDED.encrypted_client_secret,
-             status = 'unverified',
-             updated_at = EXCLUDED.updated_at`,
-          [workspaceId, platform, input.clientId, encryptedSecret, now]
-        );
-        return { ok: true };
-      }
-
-      await legacyClient.query(
-        `UPDATE platform_credentials
-         SET client_id = $3, status = 'unverified', updated_at = $4
-         WHERE workspace_id = $1 AND platform = $2`,
-        [workspaceId, platform, input.clientId, now]
-      );
-      return { ok: true };
-    } catch (err) {
-      console.error('[Platform Credentials] Failed to save credentials (legacy client):', err);
-      return {
-        ok: false,
-        error: hasNewSecret ? 'Failed to save credentials' : 'Failed to update credentials',
-        status: 500,
-      };
-    }
-  }
-
-  const supabase = getRouteSupabase(client ?? undefined);
-  if (!supabase) {
-    return { ok: false, error: 'Database service unavailable', status: 503 };
-  }
-
+  let encryptedSecret: string;
   try {
-    if (hasNewSecret) {
-      const encryptedSecret = await encryptToken(
-        input.clientSecret as string,
-        getTokenEncryptionKey()
-      );
-
-      const { error: upsertErr } = await supabase.from('platform_credentials').upsert(
-        {
-          workspace_id: workspaceId,
-          platform,
-          client_id: input.clientId,
-          encrypted_client_secret: encryptedSecret,
-          status: 'unverified',
-          updated_at: now,
-        },
-        { onConflict: 'workspace_id,platform' }
-      );
-
-      if (upsertErr) {
-        console.error('[Platform Credentials] Upsert credentials error:', upsertErr);
-        return { ok: false, error: 'Failed to save credentials', status: 500 };
-      }
-      return { ok: true };
-    }
-
-    const { error: updateErr } = await supabase
-      .from('platform_credentials')
-      .update({
-        client_id: input.clientId,
-        status: 'unverified',
-        updated_at: now,
-      })
-      .eq('workspace_id', workspaceId)
-      .eq('platform', platform);
-
-    if (updateErr) {
-      console.error('[Platform Credentials] Update credentials error:', updateErr);
-      return { ok: false, error: 'Failed to update credentials', status: 500 };
-    }
-    return { ok: true };
+    encryptedSecret = await encryptToken(input.clientSecret as string, getTokenEncryptionKey());
   } catch (err) {
-    console.error('[Platform Credentials] Failed to save credentials:', err);
+    console.error('[Platform Credentials] Failed to encrypt client secret:', err);
     return { ok: false, error: 'Failed to save credentials', status: 500 };
   }
+
+  const outcome = await upsertRow(workspaceId, platform, input.clientId, encryptedSecret, now, client);
+  return outcomeToResult(outcome, 'Failed to save credentials');
 }
 
 /**
@@ -306,43 +405,8 @@ export async function deleteCredentials(
   client?: CredentialsClient
 ): Promise<PlatformCredentialsMutationResult> {
   assertByocPlatform(platform);
-  const label = PLATFORM_LABELS[platform];
-
-  if (isLegacyClient(client ?? undefined)) {
-    const legacyClient = client as DatabaseClient;
-    try {
-      await legacyClient.query(
-        `DELETE FROM platform_credentials WHERE workspace_id = $1 AND platform = $2`,
-        [workspaceId, platform]
-      );
-      return { ok: true };
-    } catch (err) {
-      console.error('[Platform Credentials] Failed to delete credentials (legacy client):', err);
-      return { ok: false, error: `Failed to disconnect ${label}`, status: 500 };
-    }
-  }
-
-  const supabase = getRouteSupabase(client ?? undefined);
-  if (!supabase) {
-    return { ok: false, error: 'Database service unavailable', status: 503 };
-  }
-
-  try {
-    const { error: deleteErr } = await supabase
-      .from('platform_credentials')
-      .delete()
-      .eq('workspace_id', workspaceId)
-      .eq('platform', platform);
-
-    if (deleteErr) {
-      console.error('[Platform Credentials] Delete credentials error:', deleteErr);
-      return { ok: false, error: `Failed to disconnect ${label}`, status: 500 };
-    }
-    return { ok: true };
-  } catch (err) {
-    console.error('[Platform Credentials] Failed to delete credentials:', err);
-    return { ok: false, error: `Failed to disconnect ${label}`, status: 500 };
-  }
+  const outcome = await deleteRow(workspaceId, platform, client);
+  return outcomeToResult(outcome, `Failed to disconnect ${PLATFORM_LABELS[platform]}`);
 }
 
 /**
@@ -356,48 +420,12 @@ export async function updateCredentialsTestResult(
   client?: CredentialsClient
 ): Promise<PlatformCredentialsMutationResult> {
   assertByocPlatform(platform);
-  const testedAt = result.lastTestedAt ?? new Date().toISOString();
-  const now = new Date().toISOString();
-
-  if (isLegacyClient(client ?? undefined)) {
-    const legacyClient = client as DatabaseClient;
-    try {
-      await legacyClient.query(
-        `UPDATE platform_credentials
-         SET status = $3, last_tested_at = $4, updated_at = $5
-         WHERE workspace_id = $1 AND platform = $2`,
-        [workspaceId, platform, result.status, testedAt, now]
-      );
-      return { ok: true };
-    } catch (err) {
-      console.error('[Platform Credentials] Failed to update test result (legacy client):', err);
-      return { ok: false, error: 'Failed to update credentials status', status: 500 };
-    }
-  }
-
-  const supabase = getRouteSupabase(client ?? undefined);
-  if (!supabase) {
-    return { ok: false, error: 'Database service unavailable', status: 503 };
-  }
-
-  try {
-    const { error: updateErr } = await supabase
-      .from('platform_credentials')
-      .update({
-        status: result.status,
-        last_tested_at: testedAt,
-        updated_at: now,
-      })
-      .eq('workspace_id', workspaceId)
-      .eq('platform', platform);
-
-    if (updateErr) {
-      console.error('[Platform Credentials] Update test result error:', updateErr);
-      return { ok: false, error: 'Failed to update credentials status', status: 500 };
-    }
-    return { ok: true };
-  } catch (err) {
-    console.error('[Platform Credentials] Failed to update test result:', err);
-    return { ok: false, error: 'Failed to update credentials status', status: 500 };
-  }
+  const outcome = await updateRow(
+    workspaceId,
+    platform,
+    { status: result.status, last_tested_at: result.lastTestedAt ?? new Date().toISOString() },
+    client,
+    new Date().toISOString()
+  );
+  return outcomeToResult(outcome, 'Failed to update credentials status');
 }

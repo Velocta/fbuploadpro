@@ -235,7 +235,139 @@ describe('platform-credentials service', () => {
     });
   });
 
+  describe('supabase error paths', () => {
+    function createErrorSupabase() {
+      const builder: any = {
+        select: vi.fn(() => builder),
+        eq: vi.fn(() => builder),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: { message: 'db down' } }),
+        upsert: vi.fn().mockResolvedValue({ error: { message: 'db down' } }),
+        update: vi.fn(() => builder),
+        delete: vi.fn(() => builder),
+        then: (resolve: (value: { error: { message: string } }) => void) =>
+          resolve({ error: { message: 'db down' } }),
+      };
+      return { from: vi.fn(() => builder) } as any;
+    }
+
+    it('get returns null when the read errors', async () => {
+      const record = await getCredentials(WORKSPACE_ID, 'instagram', createErrorSupabase());
+      expect(record).toBeNull();
+    });
+
+    it('save with a secret reports a 500 when the write errors', async () => {
+      const result = await saveCredentials(
+        WORKSPACE_ID,
+        'instagram',
+        { clientId: 'app-1', clientSecret: 'secret-value-123' },
+        createErrorSupabase()
+      );
+      expect(result).toEqual({ ok: false, error: 'Failed to save credentials', status: 500 });
+    });
+
+    it('delete reports a 500 naming the platform when the delete errors', async () => {
+      const result = await deleteCredentials(WORKSPACE_ID, 'threads', createErrorSupabase());
+      expect(result).toEqual({ ok: false, error: 'Failed to disconnect Threads', status: 500 });
+    });
+
+    it('test-result update reports a 500 when the update errors', async () => {
+      const result = await updateCredentialsTestResult(
+        WORKSPACE_ID,
+        'facebook',
+        { status: 'invalid' },
+        createErrorSupabase()
+      );
+      expect(result).toEqual({ ok: false, error: 'Failed to update credentials status', status: 500 });
+    });
+  });
+
   describe('legacy DatabaseClient path', () => {
+    function createLegacyClient(existingSecret?: string) {
+      const queries: Array<{ sql: string; params: unknown[] }> = [];
+      const query = vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queries.push({ sql, params });
+        if (sql.includes('FROM platform_credentials')) {
+          return Promise.resolve(
+            existingSecret
+              ? [{ client_id: 'legacy-app', encrypted_client_secret: existingSecret }]
+              : []
+          );
+        }
+        return Promise.resolve([]);
+      });
+      return { client: { query } as unknown as DatabaseClient, queries };
+    }
+
+    it('saves credentials via INSERT ... ON CONFLICT', async () => {
+      const { client, queries } = createLegacyClient();
+      const result = await saveCredentials(
+        WORKSPACE_ID,
+        'threads',
+        { clientId: 'threads-app', clientSecret: 'threads-secret-123' },
+        client
+      );
+      expect(result.ok).toBe(true);
+      const insert = queries.find((q) => q.sql.includes('INSERT INTO platform_credentials'));
+      expect(insert).toBeDefined();
+      expect(insert!.sql).toContain('ON CONFLICT (workspace_id, platform)');
+      expect(insert!.params[0]).toBe(WORKSPACE_ID);
+      expect(insert!.params[1]).toBe('threads');
+      expect(insert!.params[2]).toBe('threads-app');
+      expect(insert!.params[3]).not.toBe('threads-secret-123');
+    });
+
+    it('updates only the client id when no new secret is supplied', async () => {
+      const existing = await encryptToken('keep-me-secret', TEST_ENCRYPTION_KEY);
+      const { client, queries } = createLegacyClient(existing);
+      const result = await saveCredentials(WORKSPACE_ID, 'facebook', { clientId: 'new-fb-app' }, client);
+      expect(result.ok).toBe(true);
+      const update = queries.find((q) => q.sql.includes('UPDATE platform_credentials'));
+      expect(update).toBeDefined();
+      expect(update!.sql).toContain('client_id = $3');
+      expect(update!.params[2]).toBe('new-fb-app');
+    });
+
+    it('deletes via a platform-scoped DELETE', async () => {
+      const { client, queries } = createLegacyClient();
+      const result = await deleteCredentials(WORKSPACE_ID, 'instagram', client);
+      expect(result.ok).toBe(true);
+      const del = queries.find((q) => q.sql.includes('DELETE FROM platform_credentials'));
+      expect(del).toBeDefined();
+      expect(del!.params).toEqual([WORKSPACE_ID, 'instagram']);
+    });
+
+    it('records a test result via UPDATE with status and timestamp', async () => {
+      const { client, queries } = createLegacyClient();
+      const result = await updateCredentialsTestResult(
+        WORKSPACE_ID,
+        'facebook',
+        { status: 'valid', lastTestedAt: '2026-10-22T10:00:00Z' },
+        client
+      );
+      expect(result.ok).toBe(true);
+      const update = queries.find((q) => q.sql.includes('UPDATE platform_credentials'));
+      expect(update).toBeDefined();
+      expect(update!.sql).toContain('last_tested_at = $4');
+      expect(update!.params[2]).toBe('valid');
+      expect(update!.params[3]).toBe('2026-10-22T10:00:00Z');
+    });
+
+    it('returns null when the legacy read fails', async () => {
+      const failing = {
+        query: vi.fn().mockRejectedValue(new Error('connection lost')),
+      } as unknown as DatabaseClient;
+      const record = await getCredentials(WORKSPACE_ID, 'facebook', failing);
+      expect(record).toBeNull();
+    });
+
+    it('reports a 500 when a legacy write fails', async () => {
+      const failing = {
+        query: vi.fn().mockRejectedValue(new Error('connection lost')),
+      } as unknown as DatabaseClient;
+      const result = await deleteCredentials(WORKSPACE_ID, 'facebook', failing);
+      expect(result).toEqual({ ok: false, error: 'Failed to disconnect Facebook', status: 500 });
+    });
+
     it('reads facebook credentials from platform_credentials via SQL', async () => {
       const encrypted = await encryptToken('legacy-secret-1', TEST_ENCRYPTION_KEY);
       const query = vi.fn().mockImplementation((sql: string) => {
