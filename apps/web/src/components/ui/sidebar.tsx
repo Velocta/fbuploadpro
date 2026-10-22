@@ -994,6 +994,12 @@ export interface SidebarMenuButtonProps
   leftIcon?: React.ReactNode | undefined;
   rightIcon?: React.ReactNode | undefined;
   asChild?: boolean | undefined;
+  /**
+   * When set, the item renders as a real anchor (`<a href>`) instead of a
+   * `<button>`, so navigation is the click's native default action and does
+   * not depend on a JavaScript click handler completing (spec 110).
+   */
+  href?: string | undefined;
 }
 
 export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
@@ -1006,6 +1012,10 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
       leftIcon,
       rightIcon,
       asChild = false,
+      href,
+      onClick,
+      onMouseEnter,
+      onMouseLeave,
       className,
       style,
       children,
@@ -1155,7 +1165,35 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
     );
 
     const buttonElement =
-      asChild && isValidElement(children) ? (
+      href && !asChild ? (
+        <a
+          ref={ref as React.Ref<HTMLAnchorElement>}
+          href={href}
+          role="menuitem"
+          data-slot="sidebar-menu-button"
+          data-sidebar="menu-button"
+          data-size={size}
+          data-active={isActive ? 'true' : 'false'}
+          data-collapsed={isCollapsed ? 'true' : 'false'}
+          aria-current={isActive ? 'page' : undefined}
+          onClick={(e) => {
+            onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseEnter={(e) => {
+            setIsHovered(true);
+            onMouseEnter?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseLeave={(e) => {
+            setIsHovered(false);
+            onMouseLeave?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          className={className}
+          style={buttonStyle}
+          {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+        >
+          {innerContent}
+        </a>
+      ) : asChild && isValidElement(children) ? (
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         cloneElement(children as React.ReactElement<any>, {
           'data-slot': 'sidebar-menu-button',
@@ -1178,8 +1216,9 @@ export const SidebarMenuButton = forwardRef<HTMLButtonElement, SidebarMenuButton
           data-active={isActive ? 'true' : 'false'}
           data-collapsed={isCollapsed ? 'true' : 'false'}
           aria-current={isActive ? 'page' : undefined}
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
+          onClick={onClick}
+          onMouseEnter={onMouseEnter ?? (() => setIsHovered(true))}
+          onMouseLeave={onMouseLeave ?? (() => setIsHovered(false))}
           className={className}
           style={buttonStyle}
           {...props}
@@ -1438,11 +1477,29 @@ export interface SidebarMenuSubButtonProps
   isActive?: boolean | undefined;
   size?: 'sm' | 'md' | undefined;
   asChild?: boolean | undefined;
+  /**
+   * When set, the item renders as a real anchor (`<a href>`) instead of a
+   * `<button>`, so navigation is the click's native default action and does
+   * not depend on a JavaScript click handler completing (spec 110).
+   */
+  href?: string | undefined;
 }
 
 export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSubButtonProps>(
   function SidebarMenuSubButton(
-    { isActive = false, size = 'md', asChild = false, className, style, children, ...props },
+    {
+      isActive = false,
+      size = 'md',
+      asChild = false,
+      href,
+      onClick,
+      onMouseEnter,
+      onMouseLeave,
+      className,
+      style,
+      children,
+      ...props
+    },
     ref
   ) {
     const { state, isMobile } = useSidebar();
@@ -1498,6 +1555,50 @@ export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSub
       });
     }
 
+    const subButtonContent = (
+      <span
+        style={{
+          flex: 1,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {children}
+      </span>
+    );
+
+    if (href) {
+      return (
+        <a
+          ref={ref as React.Ref<HTMLAnchorElement>}
+          href={href}
+          role="menuitem"
+          data-slot="sidebar-menu-sub-button"
+          data-sidebar="menu-sub-button"
+          data-size={size}
+          data-active={isActive ? 'true' : 'false'}
+          aria-current={isActive ? 'page' : undefined}
+          onClick={(e) => {
+            onClick?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseEnter={(e) => {
+            setIsHovered(true);
+            onMouseEnter?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          onMouseLeave={(e) => {
+            setIsHovered(false);
+            onMouseLeave?.(e as unknown as React.MouseEvent<HTMLButtonElement>);
+          }}
+          className={className}
+          style={subButtonStyle}
+          {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
+        >
+          {subButtonContent}
+        </a>
+      );
+    }
+
     return (
       <button
         ref={ref}
@@ -1508,22 +1609,14 @@ export const SidebarMenuSubButton = forwardRef<HTMLButtonElement, SidebarMenuSub
         data-size={size}
         data-active={isActive ? 'true' : 'false'}
         aria-current={isActive ? 'page' : undefined}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onClick={onClick}
+        onMouseEnter={onMouseEnter ?? (() => setIsHovered(true))}
+        onMouseLeave={onMouseLeave ?? (() => setIsHovered(false))}
         className={className}
         style={subButtonStyle}
         {...props}
       >
-        <span
-          style={{
-            flex: 1,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {children}
-        </span>
+        {subButtonContent}
       </button>
     );
   }

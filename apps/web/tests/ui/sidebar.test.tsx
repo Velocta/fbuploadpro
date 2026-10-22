@@ -377,6 +377,61 @@ describe('Sidebar Component Suite (Spec 014 & Spec 025)', () => {
       expect(hasAttribute('role', 'menu')).toBe(true);
     });
 
+    it('renders SidebarMenuButton and SidebarMenuSubButton as real anchors when href is set, and as buttons when it is not (Spec 110)', () => {
+      const { findTags } = render(
+        <SidebarProvider>
+          <Sidebar>
+            <SidebarContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton href="/tenant/acme/media" isActive>
+                    Media Library
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton>Toggle Only</SidebarMenuButton>
+                  <SidebarMenuSub>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton href="/tenant/acme/pages" isActive>
+                        Pages
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton>Plain Sub Item</SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </SidebarMenuSub>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarContent>
+          </Sidebar>
+        </SidebarProvider>
+      );
+
+      const anchors = findTags('a');
+      const menuAnchor = anchors.find((a) => a.attributes['data-sidebar'] === 'menu-button');
+      expect(menuAnchor?.attributes['href']).toBe('/tenant/acme/media');
+      expect(menuAnchor?.attributes['data-active']).toBe('true');
+      expect(menuAnchor?.attributes['aria-current']).toBe('page');
+      const subAnchor = anchors.find((a) => a.attributes['data-sidebar'] === 'menu-sub-button');
+      expect(subAnchor?.attributes['href']).toBe('/tenant/acme/pages');
+      expect(subAnchor?.attributes['data-active']).toBe('true');
+
+      // Without href the primitives keep rendering <button type="button">
+      // (genuine toggles such as collapsible parents and the footer switcher).
+      const buttons = findTags('button');
+      expect(
+        buttons.some(
+          (b) => b.innerHTML.includes('Toggle Only') && b.attributes['data-sidebar'] === 'menu-button'
+        )
+      ).toBe(true);
+      expect(
+        buttons.some(
+          (b) =>
+            b.innerHTML.includes('Plain Sub Item') && b.attributes['data-sidebar'] === 'menu-sub-button'
+        )
+      ).toBe(true);
+    });
+
     it('renders SidebarMenuAction when expanded and hides when collapsed', () => {
       const expanded = render(
         <SidebarProvider>
