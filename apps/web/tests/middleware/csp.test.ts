@@ -143,32 +143,26 @@ describe('middleware CSP headers', () => {
     return csp as string;
   }
 
-  it('sets Report-Only CSP with a nonce on an apex request', async () => {
-    const req = new NextRequest('http://localhost:3000/', {
-      headers: { host: 'localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.status).toBe(200);
-    expectCspHeaders(res);
-  });
-
-  it('sets the header on a tenant unauthenticated redirect (307)', async () => {
-    const req = new NextRequest('http://acme.localhost:3000/dashboard', {
-      headers: { host: 'acme.localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.status).toBe(307);
-    expectCspHeaders(res);
-  });
-
-  it('sets the header on /api requests', async () => {
-    const req = new NextRequest('http://localhost:3000/api/health', {
-      headers: { host: 'localhost:3000' },
-    });
-    const res = await middleware(req);
-    expect(res.status).toBe(200);
-    expectCspHeaders(res);
-  });
+  it.each([
+    ['apex request', 'http://localhost:3000/', 'localhost:3000', 200],
+    [
+      'tenant unauthenticated redirect',
+      'http://acme.localhost:3000/dashboard',
+      'acme.localhost:3000',
+      307,
+    ],
+    ['/api request', 'http://localhost:3000/api/health', 'localhost:3000', 200],
+  ])(
+    'sets Report-Only CSP with a nonce on a %s',
+    async (_label, url, host, expectedStatus) => {
+      const req = new NextRequest(url, {
+        headers: { host },
+      });
+      const res = await middleware(req);
+      expect(res.status).toBe(expectedStatus);
+      expectCspHeaders(res);
+    }
+  );
 
   it('uses a different nonce for each request', async () => {
     const first = await middleware(

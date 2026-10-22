@@ -24,7 +24,7 @@ export function generateNonce(): string {
   crypto.getRandomValues(bytes);
   let binary = '';
   bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
+    binary += String.fromCodePoint(byte);
   });
   return btoa(binary);
 }
@@ -51,8 +51,11 @@ export function applyCspHeaders(response: NextResponse, nonce: string): NextResp
 }
 
 function truncateField(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  return String(value).slice(0, MAX_FIELD_LENGTH);
+  if (typeof value === 'string') return value.slice(0, MAX_FIELD_LENGTH);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value).slice(0, MAX_FIELD_LENGTH);
+  }
+  return '';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
