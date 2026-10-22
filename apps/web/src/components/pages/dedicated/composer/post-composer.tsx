@@ -20,11 +20,12 @@ import {
   getNextSlotForFormat,
   getNextOccurrence,
   formatSlotLong,
-  formatSlotShort,
+  queueGoesOutLine,
   toDateTimeLocalValue,
   parseDateTimeLocalValue,
   hasRealCaption,
 } from './queue-slot-utils';
+import { FORMAT_LABELS, pluralFormatLabel } from './format-labels';
 import {
   composerLabelStyle,
   composerHintStyle,
@@ -32,7 +33,7 @@ import {
   composerFieldStyle,
   composerInputStyle,
 } from './composer-styles';
-import { SPACING, COMPONENT_STYLES, TYPOGRAPHY } from '@/lib/theme';
+import { SPACING, COMPONENT_STYLES, TYPOGRAPHY, PALETTE } from '@/lib/theme';
 
 /** Subset of a queue item needed to pre-fill the composer for editing. */
 export interface ComposerInitialPost {
@@ -65,14 +66,6 @@ export interface PostComposerProps {
   /** Called with the success message to toast after a successful submit. */
   onSubmitted: (message: string) => void;
 }
-
-const FORMAT_LABELS: Record<PostFormat, string> = {
-  text: 'Text',
-  image: 'Photo',
-  video: 'Video',
-  reel: 'Reel',
-  story: 'Story',
-};
 
 const SINGLE_MEDIA_FORMATS: ReadonlySet<PostFormat> = new Set(['video', 'reel', 'story']);
 
@@ -174,7 +167,7 @@ function computeValidationError(ctx: ValidationContext): string | null {
   if (ctx.intent === 'schedule' && !ctx.isScheduleInFuture) return 'Pick a time in the future.';
   if (ctx.intent === 'queue' && !ctx.hasActiveSlots) return 'Set posting times first.';
   if (ctx.intent === 'queue' && !ctx.hasCoveringSlot) {
-    return `No posting time covers ${FORMAT_LABELS[ctx.format]}s yet.`;
+    return `No posting time covers ${pluralFormatLabel(ctx.format)} yet.`;
   }
   return null;
 }
@@ -225,7 +218,7 @@ function renderQueueIntentBody(props: IntentSectionProps): React.ReactNode {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
         <p data-testid="composer-no-covering-slot-notice" style={{ ...composerHintStyle, margin: 0 }}>
-          No posting time covers {FORMAT_LABELS[format]}s yet.
+          No posting time covers {pluralFormatLabel(format)} yet.
         </p>
         <PostingTimeQuickAdd pageId={props.pageId} subdomain={props.subdomain} onAdded={props.onSlotAdded} />
       </div>
@@ -233,8 +226,7 @@ function renderQueueIntentBody(props: IntentSectionProps): React.ReactNode {
   }
   return (
     <p data-testid="composer-queue-goes-out" style={{ ...composerHintStyle, margin: 0 }}>
-      Goes out at the next posting time for {FORMAT_LABELS[format]}s:{' '}
-      {formatSlotShort(nextSlotOccurrence, nextSlotForFormat.timezone)}.
+      {queueGoesOutLine(format, nextSlotOccurrence, nextSlotForFormat.timezone)}
     </p>
   );
 }
@@ -301,6 +293,8 @@ interface SubmitSectionProps {
   scheduleDate: Date | null;
   isScheduleInFuture: boolean;
   scheduleTimezone: string;
+  /** Queue-intent explanatory line repeated under the submit button, or null. */
+  queueNote: string | null;
   isSubmitDisabled: boolean;
   isSubmitting: boolean;
   onClose: () => void;
@@ -311,6 +305,7 @@ function SubmitSection(props: Readonly<SubmitSectionProps>): React.ReactElement 
   const showNowNote = intent === 'now' && !isEdit;
   const scheduleNoteDate =
     intent === 'schedule' && !isEdit && props.isScheduleInFuture ? props.scheduleDate : null;
+  const queueNote = intent === 'queue' && !isEdit ? props.queueNote : null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, alignItems: 'flex-end' }}>
       {error && (
@@ -356,6 +351,11 @@ function SubmitSection(props: Readonly<SubmitSectionProps>): React.ReactElement 
       {scheduleNoteDate && (
         <span style={composerHintStyle}>
           Goes out {formatSlotLong(scheduleNoteDate, props.scheduleTimezone)}.
+        </span>
+      )}
+      {queueNote && (
+        <span data-testid="composer-queue-submit-note" style={composerHintStyle}>
+          {queueNote}
         </span>
       )}
     </div>
@@ -577,6 +577,39 @@ export function PostComposer({
             )}
           </div>
 
+          {format === 'text' && items.length > 0 && (
+            <div data-testid="composer-text-media-notice" style={composerFieldStyle}>
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}
+                >
+                  <span style={composerErrorStyle}>{getMediaItemError(item, format)}</span>
+                  <span style={composerHintStyle}>{item.name}</span>
+                  {!isEdit && (
+                    <button
+                      type="button"
+                      data-testid={`composer-text-remove-media-${item.id}`}
+                      onClick={() => setItems(items.filter((i) => i.id !== item.id))}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        textAlign: 'left',
+                        fontSize: '0.75rem',
+                        fontWeight: TYPOGRAPHY.weights.semibold,
+                        color: PALETTE.accent3,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           {format !== 'text' && (
             <ComposerMediaArea
               pageId={pageId}
@@ -618,6 +651,11 @@ export function PostComposer({
             scheduleDate={scheduleDate}
             isScheduleInFuture={isScheduleInFuture}
             scheduleTimezone={scheduleTimezone}
+            queueNote={
+              nextSlotForFormat && nextSlotOccurrence
+                ? queueGoesOutLine(format, nextSlotOccurrence, nextSlotForFormat.timezone)
+                : null
+            }
             isSubmitDisabled={isSubmitDisabled}
             isSubmitting={isSubmitting}
             onClose={onClose}

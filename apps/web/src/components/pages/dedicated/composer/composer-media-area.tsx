@@ -101,6 +101,49 @@ export function getMediaCapNotice(format: PostFormat, currentCount: number): str
   }
 }
 
+/** A cap notice together with the format it was raised under. */
+export interface CapNoticeState {
+  format: PostFormat;
+  message: string;
+}
+
+/**
+ * The notice to show for the CURRENT format. A notice raised under a
+ * previous format (e.g. Photo) must never stay visible after switching to
+ * another format (e.g. Video) where it does not apply.
+ */
+export function capNoticeForFormat(notice: CapNoticeState | null, format: PostFormat): string | null {
+  if (!notice || notice.format !== format) return null;
+  return notice.message;
+}
+
+export interface MediaSelectionResult {
+  items: ComposerMediaItem[];
+  /** Cap notice to surface when the add was blocked, otherwise null. */
+  capNotice: string | null;
+  /** True when the single-media cap blocked the add (nothing was dropped silently). */
+  blocked: boolean;
+}
+
+/**
+ * Selection after adding media — used both for library picks and for
+ * in-composer imports, so an imported file becomes the selected media just
+ * like a manual pick. Every format takes at most one item: when one is
+ * already selected the add is blocked and the cap notice explains why,
+ * instead of the new file being silently dropped.
+ */
+export function resolveSelectionAfterAdd(
+  current: ComposerMediaItem[],
+  incoming: ComposerMediaItem[],
+  format: PostFormat
+): MediaSelectionResult {
+  if (incoming.length === 0) return { items: current, capNotice: null, blocked: false };
+  const blockedNotice = getMediaCapNotice(format, current.length);
+  if (blockedNotice) return { items: current, capNotice: blockedNotice, blocked: true };
+  const newest = incoming.at(-1);
+  return { items: newest ? [newest] : current, capNotice: null, blocked: false };
+}
+
 export function ComposerMediaArea({
   subdomain,
   format,
@@ -114,7 +157,7 @@ export function ComposerMediaArea({
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [capNotice, setCapNotice] = useState<string | null>(null);
+  const [capNotice, setCapNotice] = useState<CapNoticeState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const openLibraryPicker = async () => {
@@ -145,17 +188,18 @@ export function ComposerMediaArea({
   };
 
   const addItems = (incoming: ComposerMediaItem[]) => {
-    if (incoming.length === 0) return;
-    const blocked = getMediaCapNotice(format, items.length);
-    if (blocked) {
-      setCapNotice(blocked);
+    const result = resolveSelectionAfterAdd(items, incoming, format);
+    if (result.blocked) {
+      // Tag the notice with the format that raised it so it can never leak
+      // into another format's view after a format switch.
+      setCapNotice(result.capNotice ? { format, message: result.capNotice } : null);
       return;
     }
     setCapNotice(null);
-    // Single-media formats: the newest pick replaces the previous one.
-    const newest = incoming.at(-1);
-    if (newest) onItemsChange([newest]);
+    if (incoming.length > 0) onItemsChange(result.items);
   };
+
+  const visibleCapNotice = capNoticeForFormat(capNotice, format);
 
   const handlePickFromLibrary = (item: ComposerMediaItem) => {
     const alreadySelected = items.some((i) => i.id === item.id);
@@ -283,9 +327,9 @@ export function ComposerMediaArea({
           No media selected yet.
         </p>
       )}
-      {capNotice && !readOnly && (
+      {visibleCapNotice && !readOnly && (
         <p data-testid="composer-media-cap-notice" style={{ ...composerHintStyle, margin: 0 }}>
-          {capNotice}
+          {visibleCapNotice}
         </p>
       )}
       {!readOnly && (

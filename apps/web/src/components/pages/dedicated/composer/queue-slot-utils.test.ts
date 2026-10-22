@@ -5,6 +5,7 @@ import {
   slotCoversFormat,
   formatSlotShort,
   formatSlotLong,
+  queueGoesOutLine,
   toDateTimeLocalValue,
   parseDateTimeLocalValue,
   hasRealCaption,
@@ -138,6 +139,28 @@ describe('display formatters', () => {
   it('renders in the requested timezone', () => {
     // 09:00 UTC = 2:00 PM in Asia/Karachi
     expect(formatSlotShort(date, 'Asia/Karachi')).toBe('Tue 2:00 PM');
+  });
+});
+
+describe('queueGoesOutLine (QA #11 composer half, #14)', () => {
+  const date = new Date('2026-10-20T09:00:00.000Z'); // a Tuesday
+
+  it('labels the timezone and pluralizes Stories correctly', () => {
+    expect(queueGoesOutLine('story', date, 'UTC')).toBe(
+      'Goes out at the next posting time for Stories: Tue 9:00 AM UTC.'
+    );
+  });
+
+  it('labels non-UTC slot timezones with the time in that timezone', () => {
+    expect(queueGoesOutLine('reel', date, 'Asia/Karachi')).toBe(
+      'Goes out at the next posting time for Reels: Tue 2:00 PM Asia/Karachi.'
+    );
+  });
+
+  it('falls back to UTC on an invalid timezone', () => {
+    expect(queueGoesOutLine('image', date, 'Not/AZone')).toBe(
+      'Goes out at the next posting time for Photos: Tue 9:00 AM UTC.'
+    );
   });
 });
 

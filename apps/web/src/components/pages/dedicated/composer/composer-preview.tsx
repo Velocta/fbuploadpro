@@ -9,14 +9,20 @@ import {
 } from './composer-styles';
 import { SPACING, RADII, THEME, TYPOGRAPHY } from '@/lib/theme';
 import type { ComposerMediaItem } from './composer-media-area';
+import { FORMAT_LABELS } from './format-labels';
 
-const FORMAT_LABELS: Record<PostFormat, string> = {
-  text: 'Text',
-  image: 'Photo',
-  video: 'Video',
-  reel: 'Reel',
-  story: 'Story',
-};
+/**
+ * Media shown in the preview, derived from the CURRENT format: text posts
+ * publish no media, so retained media from a previous format never leaks
+ * into a text preview.
+ */
+export function getPreviewMedia(
+  format: PostFormat,
+  mediaItems: ComposerMediaItem[]
+): ComposerMediaItem | undefined {
+  if (format === 'text') return undefined;
+  return mediaItems.at(0);
+}
 
 export interface ComposerPreviewProps {
   pageName: string;
@@ -34,7 +40,7 @@ export function ComposerPreview({
   link,
   mediaItems,
 }: Readonly<ComposerPreviewProps>) {
-  const firstMedia: ComposerMediaItem | undefined = mediaItems.at(0);
+  const firstMedia = getPreviewMedia(format, mediaItems);
   const thumb = firstMedia ? firstMedia.thumbnailUrl || firstMedia.url : undefined;
   const trimmedLink = link.trim();
   let linkDomain: string | null = null;
