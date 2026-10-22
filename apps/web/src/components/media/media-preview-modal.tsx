@@ -117,6 +117,29 @@ export interface MediaPreviewModalProps {
   onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
 }
 
+/**
+ * Still-image source for the preview pane. The full-size `item.url` is
+ * primary; when it fails to load, fall back to `item.thumbnailUrl` — the
+ * same source the grid/table thumbnails render (they use
+ * `thumbnailUrl || url` and render fine for assets whose preview pane
+ * previously stayed black). Returns null when neither source is usable,
+ * so the caller can show the placeholder instead of a black pane.
+ */
+export function resolvePreviewImageSrc(
+  item: Pick<MediaItemResponse, 'url' | 'thumbnailUrl'>,
+  failedSrcs: ReadonlySet<string>
+): string | null {
+  if (!failedSrcs.has(item.url)) return item.url;
+  if (
+    item.thumbnailUrl &&
+    item.thumbnailUrl !== item.url &&
+    !failedSrcs.has(item.thumbnailUrl)
+  ) {
+    return item.thumbnailUrl;
+  }
+  return null;
+}
+
 interface PreviewMediaViewerProps {
   item: MediaItemResponse;
   isVideo: boolean;
@@ -148,6 +171,129 @@ function PreviewMediaViewer({
   onScrubberChange,
   onCaptureFrame,
 }: Readonly<PreviewMediaViewerProps>) {
+  // The pane background is pitch black, so a media element that fails (or,
+  // for video, has not painted a frame yet) is indistinguishable from a
+  // black image. Track the failed source and fall back to the thumbnail —
+  // the exact source the grid renders — then to a placeholder, mirroring
+  // MediaAssetCard/MediaTableRow. Keyed by URL so a different asset is
+  // never affected by a previous asset's failure.
+  const [failedSrcs, setFailedSrcs] = useState<ReadonlySet<string>>(new Set());
+  const markSrcFailed = (src: string) => {
+    setFailedSrcs((prev) => {
+      if (prev.has(src)) return prev;
+      const next = new Set(prev);
+      next.add(src);
+      return next;
+    });
+  };
+
+  const imageSrc = isVideo ? null : resolvePreviewImageSrc(item, failedSrcs);
+  const videoFailed = isVideo && failedSrcs.has(item.url);
+  const showVideoFallbackStill =
+    videoFailed &&
+    item.thumbnailUrl !== null &&
+    !failedSrcs.has(item.thumbnailUrl);
+
+  const mediaStyle: React.CSSProperties = {
+    maxWidth: '100%',
+    maxHeight: '440px',
+    objectFit: 'contain',
+    borderRadius: RADII.xs,
+  };
+
+  let mediaContent: React.ReactNode;
+  if (isVideo && !videoFailed) {
+    mediaContent = (
+      <video
+        ref={videoRef}
+        data-testid="modal-video-player"
+        src={item.url}
+        // Poster is the captured-frame thumbnail: without it the video
+        // element paints black until playback, even though the thumbnail
+        // renders fine in the grid.
+        poster={item.thumbnailUrl ?? undefined}
+        preload="metadata"
+        controls={false}
+        playsInline
+        onTimeUpdate={onTimeUpdate}
+        onEnded={onEnded}
+        onError={() => markSrcFailed(item.url)}
+        style={mediaStyle}
+      >
+        <track kind="captions" />
+      </video>
+    );
+  } else if (isVideo && showVideoFallbackStill) {
+    mediaContent = (
+      <img
+        data-testid="modal-video-fallback-still"
+        src={item.thumbnailUrl ?? undefined}
+        alt={item.name}
+        onError={() => {
+          if (item.thumbnailUrl) markSrcFailed(item.thumbnailUrl);
+        }}
+        style={mediaStyle}
+      />
+    );
+  } else if (!isVideo && imageSrc) {
+    mediaContent = (
+      <img
+        data-testid="modal-image-preview"
+        src={imageSrc}
+        alt={item.name}
+        onError={() => markSrcFailed(imageSrc)}
+        style={mediaStyle}
+      />
+    );
+  } else {
+    mediaContent = (
+      <div
+        data-testid="modal-preview-placeholder"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '100%',
+          minHeight: '200px',
+          color: `var(--text-dim, ${THEME.default.text.muted})`,
+        }}
+      >
+        {isVideo ? (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <polygon points="10 8 16 12 10 16 10 8" />
+          </svg>
+        ) : (
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+            <circle cx="9" cy="9" r="2" />
+            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+          </svg>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -172,36 +318,7 @@ function PreviewMediaViewer({
           borderRadius: RADII.xs,
         }}
       >
-        {isVideo ? (
-          <video
-            ref={videoRef}
-            data-testid="modal-video-player"
-            src={item.url}
-            controls={false}
-            playsInline
-            onTimeUpdate={onTimeUpdate}
-            onEnded={onEnded}
-            style={{
-              maxWidth: '100%',
-              maxHeight: '440px',
-              objectFit: 'contain',
-              borderRadius: RADII.xs,
-            }}
-          >
-            <track kind="captions" />
-          </video>
-        ) : (
-          <img
-            src={item.url}
-            alt={item.name}
-            style={{
-              maxWidth: '100%',
-              maxHeight: '440px',
-              objectFit: 'contain',
-              borderRadius: RADII.xs,
-            }}
-          />
-        )}
+        {mediaContent}
       </div>
 
       {isVideo && (
