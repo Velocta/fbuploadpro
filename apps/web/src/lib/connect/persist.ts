@@ -281,31 +281,94 @@ export async function resolvePlatformClientCredentials(
   };
 }
 
-/** Marks every matching account row revoked (deauthorize / data-deletion callbacks). */
-export async function markSocialAccountRevoked(
+export interface SocialAccountCandidate {
+  id: string;
+  workspaceId: string;
+}
+
+/**
+ * Finds the account rows a platform callback could refer to, by platform
+ * and the platform-side account ID. Public callbacks are unauthenticated,
+ * so callers must verify the caller's authenticity per row (via the owning
+ * workspace) before acting on any of these rows.
+ */
+export async function findSocialAccountsByExternalId(
   client: ConnectDbClient | null | undefined,
   platform: Platform,
   externalAccountId: string
+): Promise<SocialAccountCandidate[]> {
+  if (isLegacyClient(client ?? undefined)) {
+    const rows = (await (client as DatabaseClient).query(
+      `SELECT id, workspace_id
+       FROM social_accounts
+       WHERE platform = $1 AND external_account_id = $2`,
+      [platform, externalAccountId]
+    )) as Array<{ id?: string; workspace_id?: string; workspaceId?: string }>;
+    return (rows ?? [])
+      .filter((row) => row.id && (row.workspace_id ?? row.workspaceId))
+      .map((row) => ({
+        id: row.id as string,
+        workspaceId: (row.workspace_id ?? row.workspaceId) as string,
+      }));
+  }
+
+  const supabase = getRouteSupabase(client ?? undefined);
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('social_accounts')
+    .select('id, workspace_id')
+    .eq('platform', platform)
+    .eq('external_account_id', externalAccountId);
+  if (error) {
+    console.error('[connect] Failed to find accounts:', error.message);
+    return [];
+  }
+  return ((data ?? []) as Array<Record<string, any>>)
+    .filter((row) => row.id && row.workspace_id)
+    .map((row) => ({ id: row.id as string, workspaceId: row.workspace_id as string }));
+}
+
+/**
+ * Marks matching account rows revoked (deauthorize / data-deletion
+ * callbacks). When a workspaceId is given, only that workspace's row is
+ * revoked — public callbacks must pass it so one workspace's verified
+ * notice can never change another workspace's account.
+ */
+export async function markSocialAccountRevoked(
+  client: ConnectDbClient | null | undefined,
+  platform: Platform,
+  externalAccountId: string,
+  workspaceId?: string
 ): Promise<{ updated: number }> {
   if (isLegacyClient(client ?? undefined)) {
     const rows = (await (client as DatabaseClient).query(
-      `UPDATE social_accounts
-       SET status = 'revoked', updated_at = now()
-       WHERE platform = $1 AND external_account_id = $2
-       RETURNING id`,
-      [platform, externalAccountId]
+      workspaceId
+        ? `UPDATE social_accounts
+           SET status = 'revoked', updated_at = now()
+           WHERE platform = $1 AND external_account_id = $2 AND workspace_id = $3
+           RETURNING id`
+        : `UPDATE social_accounts
+           SET status = 'revoked', updated_at = now()
+           WHERE platform = $1 AND external_account_id = $2
+           RETURNING id`,
+      workspaceId
+        ? [platform, externalAccountId, workspaceId]
+        : [platform, externalAccountId]
     )) as Array<{ id: string }>;
     return { updated: Array.isArray(rows) ? rows.length : 0 };
   }
 
   const supabase = getRouteSupabase(client ?? undefined);
   if (!supabase) return { updated: 0 };
-  const { data, error } = await supabase
+  let updateQuery = supabase
     .from('social_accounts')
     .update({ status: 'revoked', updated_at: new Date().toISOString() })
     .eq('platform', platform)
-    .eq('external_account_id', externalAccountId)
-    .select('id');
+    .eq('external_account_id', externalAccountId);
+  if (workspaceId) {
+    updateQuery = updateQuery.eq('workspace_id', workspaceId);
+  }
+  const { data, error } = await updateQuery.select('id');
   if (error) {
     console.error('[connect] Failed to mark account revoked:', error.message);
     return { updated: 0 };

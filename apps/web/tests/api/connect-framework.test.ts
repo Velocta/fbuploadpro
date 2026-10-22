@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createHmac } from 'node:crypto';
 import {
   decryptToken,
   encryptToken,
@@ -102,7 +103,9 @@ class FakeDb {
       return this.workspaceMissing ? [] : [{ id: workspaceId }];
     }
     if (sql.includes('FROM platform_credentials')) {
-      const row = this.credentials.get(String(params[1]));
+      const row =
+        this.credentials.get(`${String(params[0])}|${String(params[1])}`) ??
+        this.credentials.get(String(params[1]));
       return row ? [row] : [];
     }
     return this.queryData(sql, params);
@@ -113,6 +116,11 @@ class FakeDb {
     if (sql.includes('INSERT INTO destinations')) return this.insertDestination(params);
     if (sql.includes('UPDATE social_accounts')) return this.revokeAccounts(params);
     if (sql.includes('JOIN social_accounts')) return this.destinationDetail(params);
+    if (sql.includes('FROM social_accounts') && sql.includes('external_account_id')) {
+      return [...this.accounts.values()].filter(
+        (r) => r.platform === params[0] && r.external_account_id === params[1]
+      );
+    }
     if (sql.includes('FROM destinations')) {
       return [...this.destinations.values()].filter((r) => r.workspace_id === params[0]);
     }
@@ -181,10 +189,14 @@ class FakeDb {
   };
 
   private revokeAccounts = (params: unknown[]) => {
-    const [platform, externalAccountId] = params as [string, string];
+    const [platform, externalAccountId, wsId] = params as [string, string, string?];
     const updated: Array<{ id: string }> = [];
     for (const row of this.accounts.values()) {
-      if (row.platform === platform && row.external_account_id === externalAccountId) {
+      if (
+        row.platform === platform &&
+        row.external_account_id === externalAccountId &&
+        (!wsId || row.workspace_id === wsId)
+      ) {
         row.status = 'revoked';
         updated.push({ id: row.id });
       }
@@ -313,6 +325,35 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
       `http://localhost:3000/api/connect/instagram/callback?code=fixture_code&state=${encodeURIComponent(state)}`
     );
     return handleConnectCallback(req, 'instagram', dbClient);
+  }
+
+  const FIXTURE_APP_SECRET = 'fixture_ig_secret';
+
+  function base64UrlEncode(buffer: Buffer): string {
+    return buffer
+      .toString('base64')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '');
+  }
+
+  /** Builds a Meta-style signed_request: base64url(HMAC-SHA256(payload segment, secret)) + '.' + base64url(payload). */
+  function buildSignedRequest(
+    payload: Record<string, unknown>,
+    secret: string
+  ): string {
+    const payloadB64 = base64UrlEncode(Buffer.from(JSON.stringify(payload)));
+    const signature = createHmac('sha256', secret).update(payloadB64).digest();
+    return `${base64UrlEncode(signature)}.${payloadB64}`;
+  }
+
+  function signedBodyForFixtureAccount(secret: string = FIXTURE_APP_SECRET): string {
+    return JSON.stringify({
+      signed_request: buildSignedRequest(
+        { user_id: FIXTURE_ACCOUNT.externalAccountId, algorithm: 'HMAC-SHA256' },
+        secret
+      ),
+    });
   }
 
   function cookieValue(res: Response, name: string): string | null {
@@ -691,7 +732,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     expect(res.status).toBe(410);
   });
 
-  it('deauthorize marks the matching account revoked', async () => {
+  it('deauthorize marks the matching account revoked for a correctly signed request', async () => {
     const { state } = await initiateInstagram();
     await runCallback(state);
     expect([...db.accounts.values()][0].status).toBe('active');
@@ -699,21 +740,21 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
+      body: signedBodyForFixtureAccount(),
     });
     const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
     expect(res.status).toBe(200);
     expect([...db.accounts.values()][0].status).toBe('revoked');
   });
 
-  it('data-deletion answers with a confirmation code and revokes the account', async () => {
+  it('data-deletion answers with a confirmation code and revokes the account for a correctly signed request', async () => {
     const { state } = await initiateInstagram();
     await runCallback(state);
 
     const req = new NextRequest('http://localhost:3000/api/connect/instagram/data-deletion', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
+      body: signedBodyForFixtureAccount(),
     });
     const res = await handleConnectDataDeletion(req, 'instagram', dbClient);
     expect(res.status).toBe(200);
@@ -812,7 +853,7 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     expect(res.status).toBe(401);
   });
 
-  it('deauthorize identifies the account from a Meta-style signed_request form post', async () => {
+  it('deauthorize ignores a signed_request whose signature cannot be verified', async () => {
     const { state } = await initiateInstagram();
     await runCallback(state);
     expect([...db.accounts.values()][0].status).toBe('active');
@@ -831,7 +872,87 @@ describe('Connect framework (Spec 123 Part C) with a fixture platform', () => {
     });
     const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
     expect(res.status).toBe(200);
+    expect([...db.accounts.values()][0].status).toBe('active');
+  });
+
+  it('deauthorize revokes the account from a correctly signed form post', async () => {
+    const { state } = await initiateInstagram();
+    await runCallback(state);
+    expect([...db.accounts.values()][0].status).toBe('active');
+
+    const form = new URLSearchParams({
+      signed_request: buildSignedRequest(
+        { user_id: FIXTURE_ACCOUNT.externalAccountId, algorithm: 'HMAC-SHA256' },
+        FIXTURE_APP_SECRET
+      ),
+    });
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: form.toString(),
+    });
+    const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
+    expect(res.status).toBe(200);
     expect([...db.accounts.values()][0].status).toBe('revoked');
+  });
+
+  it('deauthorize does not revoke for a request signed with the wrong secret', async () => {
+    const { state } = await initiateInstagram();
+    await runCallback(state);
+    expect([...db.accounts.values()][0].status).toBe('active');
+
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: signedBodyForFixtureAccount('some_other_secret'),
+    });
+    const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
+    expect(res.status).toBe(200);
+    expect([...db.accounts.values()][0].status).toBe('active');
+  });
+
+  it('deauthorize never revokes for a bare unsigned account ID', async () => {
+    const { state } = await initiateInstagram();
+    await runCallback(state);
+    expect([...db.accounts.values()][0].status).toBe('active');
+
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
+    });
+    const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
+    expect(res.status).toBe(200);
+    expect([...db.accounts.values()][0].status).toBe('active');
+  });
+
+  it('a signature valid for one workspace does not revoke another workspace account with the same external ID', async () => {
+    const { state } = await initiateInstagram();
+    await runCallback(state);
+
+    const otherWorkspaceId = '33333333-3333-4333-a333-333333333333';
+    const mainRow = [...db.accounts.values()][0];
+    db.accounts.set(`${otherWorkspaceId}|instagram|${FIXTURE_ACCOUNT.externalAccountId}`, {
+      ...mainRow,
+      id: 'acct-other-workspace',
+      workspace_id: otherWorkspaceId,
+      status: 'active',
+    });
+    db.credentials.set(`${otherWorkspaceId}|instagram`, {
+      client_id: 'other_workspace_app_id',
+      encrypted_client_secret: await encryptToken('other_workspace_secret', TEST_ENCRYPTION_KEY),
+    });
+
+    const req = new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: signedBodyForFixtureAccount(),
+    });
+    const res = await handleConnectDeauthorize(req, 'instagram', dbClient);
+    expect(res.status).toBe(200);
+    const rows = [...db.accounts.values()];
+    expect(rows.find((r) => r.workspace_id === workspaceId)?.status).toBe('revoked');
+    expect(rows.find((r) => r.workspace_id === otherWorkspaceId)?.status).toBe('active');
   });
 
   it('deauthorize without an identifiable account still answers 200 and changes nothing', async () => {
@@ -1168,11 +1289,25 @@ describe('Connect framework via a Supabase-shaped client', () => {
     );
     expect(detailRes.status).toBe(200);
 
+    const sbPayloadB64 = Buffer.from(
+      JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId, algorithm: 'HMAC-SHA256' })
+    )
+      .toString('base64')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '');
+    const sbSignature = createHmac('sha256', 'sb_ig_secret')
+      .update(sbPayloadB64)
+      .digest()
+      .toString('base64')
+      .replaceAll('+', '-')
+      .replaceAll('/', '_')
+      .replace(/=+$/, '');
     const deauthRes = await handleConnectDeauthorize(
       new NextRequest('http://localhost:3000/api/connect/instagram/deauthorize', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ user_id: FIXTURE_ACCOUNT.externalAccountId }),
+        body: JSON.stringify({ signed_request: `${sbSignature}.${sbPayloadB64}` }),
       }),
       'instagram',
       supabase
