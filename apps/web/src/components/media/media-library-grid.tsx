@@ -99,7 +99,7 @@ export function MediaCanvas({
               size="sm"
               data-testid="media-error-retry-btn"
               onClick={onRetry}
-              className="h-10 md:h-8"
+              className="h-11 lg:h-8"
             >
               Retry
             </Button>
