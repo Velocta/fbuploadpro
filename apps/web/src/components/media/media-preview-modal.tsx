@@ -11,8 +11,8 @@
  * (Delete / Cancel / Save changes), and `video-frame-capture.ts` (the
  * pure capture utility) — and this shell owns only the dialog itself:
  * shared/ui Dialog composition (focus trap/return, Esc, backdrop —
- * the legacy hand-rolled <dialog> layer and the subtree's last legacy
- * `components/ui/dialog` import die here), the name/caption drafts,
+ * the legacy hand-rolled <dialog> layer and the subtree's last
+ * legacy-ui dialog import die here), the name/caption drafts,
  * Previous/Next wiring, and the action lockouts.
  *
  * EXTERNAL CONTRACT — FROZEN in PR-133-3 (plan.md sequencing):
