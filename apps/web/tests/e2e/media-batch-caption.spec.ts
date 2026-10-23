@@ -149,8 +149,32 @@ test.describe('media batch caption', () => {
       await expectMinTouchHeight(page.getByTestId('new-folder-name-input'));
       await expectMinTouchHeight(page.getByTestId('submit-create-folder'));
       await maybeScreenshot(page, `dialog-new-folder-${width}`);
+      // The "Place inside" Select panel must render above the dialog
+      // and stay inside the viewport (portal stacking proof).
+      await page.getByTestId('place-inside-select').click();
+      const libraryOption = page.getByRole('option', { name: 'Library' });
+      await expect(libraryOption).toBeVisible();
+      await expectWithinViewport(libraryOption, page);
+      await maybeScreenshot(page, `dialog-new-folder-select-${width}`);
+      await libraryOption.click();
       await page.keyboard.press('Escape');
       await expect(folderDialog).toBeHidden();
+
+      // Move dialog (batch bar → Move): same Select stacking proof.
+      await page.getByTestId('batch-move-btn').click();
+      const moveDialog = page.getByTestId('move-target-dialog');
+      await expect(moveDialog).toBeVisible();
+      await expectWithinViewport(moveDialog, page);
+      await expectMinTouchHeight(page.getByTestId('move-destination-select'));
+      await page.getByTestId('move-destination-select').click();
+      const moveLibraryOption = page.getByRole('option', { name: 'Library' });
+      await expect(moveLibraryOption).toBeVisible();
+      await expectWithinViewport(moveLibraryOption, page);
+      await maybeScreenshot(page, `dialog-move-select-${width}`);
+      await moveLibraryOption.click();
+      await page.keyboard.press('Escape');
+      await expect(moveDialog).toBeHidden();
+      await page.getByTestId('batch-clear-btn').click();
     }
   });
 });
