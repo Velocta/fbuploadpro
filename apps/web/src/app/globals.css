@@ -263,8 +263,49 @@
   ::selection {
     background-color: var(--color-alpha-gold-focus);
   }
+}
 
-  /* Reduced motion: CSS-driven motion collapses. (Inline-style animations
+/* ============================================================================
+ * COMPONENTS — opt-in class hooks for the primitives layer
+ * (apps/web/src/components/shared/ui, spec 129 PR-F3) land here. Surfaces may
+ * not add page-layout classes to the global file.
+ * ========================================================================== */
+@layer components {
+  /* 44px hit area (spec 142, F05/F08): expands a small visual control's
+     touch target to 44px in both dimensions WITHOUT changing its layout
+     box or glyph size. The pseudo-element is centred on the control:
+     its inset is (size − 44px) / 2 on each axis, so a 24px box gains
+     10px per side, a 44px-wide / 24px-tall track gains 10px top/bottom
+     and nothing horizontally, and a control already at 44px on an axis
+     gains nothing on that axis. The pseudo carries no background, so
+     nothing paints outside the visual control. Consumers: Checkbox,
+     Switch, Tag remove. (Menu/Select rows, Tabs triggers and dialog /
+     banner dismiss controls use real 44px geometry instead — a pseudo
+     there would overlap neighbouring rows.) */
+  .hit-area-44 {
+    position: relative;
+  }
+  .hit-area-44::after {
+    content: "";
+    position: absolute;
+    inset: calc((100% - 44px) / 2);
+  }
+}
+
+/* ============================================================================
+ * OVERRIDES — the sole home of important declarations in this file. Every declaration
+ * here must carry a comment citing why nothing weaker works. It also hosts
+ * the reduced-motion collapse (spec 142, F12), which must outrank the
+ * utilities layer to take effect. (The 31 legacy important-flagged
+ * occurrences were evicted to their components or removed as dead —
+ * spec 129 T13, see PR-F2.)
+ * ========================================================================== */
+@layer overrides {
+  /* Reduced motion: CSS-driven motion collapses. This block lives in the
+     overrides layer (spec 142, F12) — NOT in base — because Tailwind
+     animations/transitions are emitted as utilities, and a later cascade
+     layer outranks an earlier one for normal declarations: in base, the
+     utilities layer could defeat this collapse. (Inline-style animations
      are not reachable from CSS without important declarations; they convert
      with their surfaces in specs 130–136.) */
   @media (prefers-reduced-motion: reduce) {
@@ -276,21 +317,4 @@
       transition-duration: 0.01ms;
     }
   }
-}
-
-/* ============================================================================
- * COMPONENTS — opt-in class hooks for the primitives layer
- * (apps/web/src/components/shared/ui, spec 129 PR-F3) land here. Surfaces may
- * not add page-layout classes to the global file.
- * ========================================================================== */
-@layer components {
-}
-
-/* ============================================================================
- * OVERRIDES — the sole home of important declarations in this file. Every declaration
- * here must carry a comment citing why nothing weaker works. Currently: none
- * needed (the 31 legacy occurrences were evicted to their components or
- * removed as dead — spec 129 T13, see PR-F2).
- * ========================================================================== */
-@layer overrides {
 }

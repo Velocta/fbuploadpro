@@ -19,6 +19,20 @@ describe("Toast (single Sonner-based system)", () => {
     expect(document.querySelectorAll("[data-sonner-toaster]")).toHaveLength(1);
   });
 
+  it("spec 142 F05: toast action and cancel buttons are 44px tall", async () => {
+    render(<Toast />);
+    act(() => {
+      toast("Post removed", {
+        action: { label: "Undo", onClick: () => undefined },
+        cancel: { label: "Dismiss", onClick: () => undefined },
+      });
+    });
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    expect(undo.className).toContain("h-11");
+    const dismiss = await screen.findByRole("button", { name: "Dismiss" });
+    expect(dismiss.className).toContain("h-11");
+  });
+
   it("shows a non-critical result toast with its message", async () => {
     render(<Toast />);
     act(() => {

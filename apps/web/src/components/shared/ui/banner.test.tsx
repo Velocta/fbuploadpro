@@ -20,6 +20,23 @@ describe("Banner", () => {
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeTruthy();
   });
 
+  it("spec 142 F14/F05: row wraps, action gets its own compact row, dismiss is 44px", () => {
+    render(
+      <Banner
+        variant="info"
+        title="Scheduled"
+        action={<button type="button">Reconnect</button>}
+        onDismiss={() => undefined}
+      />
+    );
+    const banner = screen.getByRole("status");
+    expect(banner.className).toContain("flex-wrap");
+    const actionButton = screen.getByRole("button", { name: "Reconnect" });
+    expect(actionButton.parentElement?.className).toContain("max-sm:w-full");
+    expect(actionButton.parentElement?.className).toContain("max-sm:order-last");
+    expect(screen.getByRole("button", { name: "Dismiss banner" }).className).toContain("size-11");
+  });
+
   it("info banner is a status, and dismiss fires onDismiss", () => {
     const onDismiss = vi.fn();
     render(<Banner variant="info" title="Scheduled" onDismiss={onDismiss} />);

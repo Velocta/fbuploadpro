@@ -4,9 +4,12 @@
  * Dialog — shadcn base on Radix Dialog. Mechanics (Radix, correct by
  * construction): focus moves into the dialog on open, Tab is trapped, Esc
  * cancels, closing returns focus to the trigger (UI Rule 18 / matrix §30).
- * Adapted: token overlay/panel, the named z-index step, close control is a
- * full 32px target, and no entry animation classes from outside the token
- * motion scale.
+ * Adapted: token overlay/panel, the named z-index step, and no entry
+ * animation classes from outside the token motion scale. Geometry
+ * (spec 142 F04/F05): on phones the panel sits in 16px viewport gutters
+ * (`inset-x-4`, centred `max-w-lg` panel from `sm` up), its height is
+ * bounded by the dynamic viewport (`max-h-dvh`) with internal scrolling
+ * so the footer stays reachable, and the close control is a 44px target.
  */
 import * as React from "react";
 import { XIcon } from "lucide-react";
@@ -55,7 +58,7 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-dialog grid max-h-screen w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-line bg-panel p-6 text-ink shadow-modal duration-base outline-none",
+          "fixed inset-x-4 top-1/2 z-dialog grid max-h-dvh -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-line bg-panel p-6 text-ink shadow-modal duration-base outline-none sm:right-auto sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2",
           className
         )}
         {...props}
@@ -64,7 +67,7 @@ function DialogContent({
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-sm text-ink-sub outline-none transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none"
+            className="absolute top-1 right-1 inline-flex size-11 items-center justify-center rounded-sm text-ink-sub outline-none transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none"
           >
             <XIcon className="size-4" aria-hidden />
             <span className="sr-only">Close</span>

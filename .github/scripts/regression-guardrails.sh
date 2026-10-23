@@ -597,6 +597,112 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Check 16: responsive @media width literals must match the token
+# breakpoint scale (spec 139 / mobile audit M-G1).
+# @media (min|max)-width px literals in apps/web/src/**/*.{css,tsx} must
+# be one of 480 / 768 / 1024 / 1280. Pre-existing legacy literals are
+# frozen per file+literal in apps/web/responsive-media-baseline.txt
+# (same discipline as checks 9/12-15): any increase or new file+literal
+# fails with file:line; a decrease fails until the baseline entry is
+# removed in the same PR (the baseline burns down as surfaces 130-136
+# rebuild — do NOT add entries). The finder parses each @media PRELUDE
+# (from the @media token to its opening brace) instead of a single
+# line, so multi-line preludes are caught; inside a prelude it
+# inspects every parenthesised width feature — (min|max)-width: … and
+# the range form (width <= …) — and extracts EVERY length literal in
+# the feature's value, so resolved values such as
+# (max-width: max(1025px, 100vw)) and non-px units (vw/em/rem) cannot
+# slip past the way the old first-px-on-the-@media-line regex allowed.
+# A literal is on-scale only if it is exactly one of
+# 480px / 768px / 1024px / 1280px.
+# A missing baseline file grants ZERO exemptions (every off-scale
+# literal then fails with file:line) rather than failing on the
+# missing file itself — that keeps the synthetic fixture trees of
+# .github/scripts/tests/check-10-multiline.sh, which plant no @media
+# literals and scaffold only the baselines they exercise, green
+# without weakening enforcement on any real literal. The diff awk
+# below classifies its two inputs by FILENAME (not NR==FNR) so an
+# EMPTY sorted baseline is not mistaken for the current counts.
+# ---------------------------------------------------------------------------
+RESP_BASELINE="apps/web/responsive-media-baseline.txt"
+RESP_ALLOWED=" 480px 768px 1024px 1280px "
+  RESP_OCCURRENCES="$(mktemp)"
+  RESP_COUNTS_RAW="$(mktemp)"
+  while IFS= read -r rfile; do
+    [ -n "$rfile" ] || continue
+    awk -v allowed="$RESP_ALLOWED" '
+      function emit_group(grp,   rest, lit) {
+        if (grp !~ /(min|max)-width[[:space:]]*:/ && grp !~ /width[[:space:]]*:/ && grp !~ /width[[:space:]]*[<>=]/) return
+        rest = grp
+        while (match(rest, /[0-9]+(\.[0-9]+)?(px|vw|em|rem)/)) {
+          lit = substr(rest, RSTART, RLENGTH)
+          rest = substr(rest, RSTART + RLENGTH)
+          if (index(allowed, " " lit " ") == 0)
+            printf "%s:%d %s\n", FILENAME, startline, lit
+        }
+      }
+      function emit_prelude(pre,   depth, i, c, gs) {
+        depth = 0; gs = 0
+        for (i = 1; i <= length(pre); i++) {
+          c = substr(pre, i, 1)
+          if (c == "(") { if (depth == 0) gs = i; depth++ }
+          else if (c == ")") {
+            depth--
+            if (depth == 0 && gs > 0) { emit_group(substr(pre, gs, i - gs + 1)); gs = 0 }
+          }
+        }
+      }
+      {
+        line = $0
+        if (inpre) { buf = buf " " line; line = "" }
+        while (1) {
+          if (inpre) {
+            b = index(buf, "{")
+            if (b == 0) break
+            emit_prelude(substr(buf, 1, b - 1))
+            line = substr(buf, b + 1)
+            buf = ""; inpre = 0
+            if (length(line) == 0) break
+          } else {
+            idx = index(line, "@media")
+            if (idx == 0) break
+            inpre = 1; startline = FNR; buf = substr(line, idx); line = ""
+          }
+        }
+      }
+    ' "$rfile" >> "$RESP_OCCURRENCES"
+  done < <(find apps/web/src -type f \( -name '*.css' -o -name '*.tsx' -o -name '*.ts' \) 2>/dev/null | sort)
+  awk '{ f = $1; sub(/:[0-9]+$/, "", f); print f, $2 }' "$RESP_OCCURRENCES" > "$RESP_COUNTS_RAW"
+  RESP_CURRENT="$(mktemp)"
+  sort "$RESP_COUNTS_RAW" | uniq -c | awk '{print $2, $3, $1}' | sort > "$RESP_CURRENT"
+  RESP_BASE_SORTED="$(mktemp)"
+  if [ -f "$RESP_BASELINE" ]; then
+    grep -E '^apps/web/src/' "$RESP_BASELINE" | sort | uniq -c | awk '{print $2, $3, $1}' | sort > "$RESP_BASE_SORTED"
+  fi
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    lit="$(printf '%s' "$change" | awk '{print $3}')"
+    old_n="$(printf '%s' "$change" | awk '{print $4}')"
+    new_n="$(printf '%s' "$change" | awk '{print $5}')"
+    if [ "$kind" = "INCREASE" ]; then
+      while IFS= read -r occ; do
+        [ -z "$occ" ] && continue
+        violation "responsive @media literal off the token breakpoint scale: ${occ} -- @media widths must be one of 480px/768px/1024px/1280px (spec 139 M-G1); ${fname} ${lit} count is ${new_n}, baseline is ${old_n} -- do NOT add baseline entries; use a token breakpoint"
+      done < <(awk -v f="$fname" -v l="$lit" '$2==l && index($1, f":")==1 {print $1}' "$RESP_OCCURRENCES")
+    else
+      violation "responsive baseline STALE: ${fname} ${lit} dropped from ${old_n} to ${new_n} -- remove the entry from apps/web/responsive-media-baseline.txt in this PR (spec 139 M-G1 burn-down)"
+    fi
+  done < <(awk '
+    FILENAME==ARGV[1] { base[$1" "$2]=$3; seen[$1" "$2]=1; next }
+    { cur[$1" "$2]=$3; seen[$1" "$2]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$RESP_BASE_SORTED" "$RESP_CURRENT")
+  rm -f "$RESP_OCCURRENCES" "$RESP_COUNTS_RAW" "$RESP_CURRENT" "$RESP_BASE_SORTED"
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 count="$(wc -l < "$VIOLATIONS_FILE" | tr -d ' ')"

@@ -78,6 +78,17 @@ function fakeBatch(queue: string, messages: ReturnType<typeof fakeMessage>[]) {
   };
 }
 
+// Real DB ids are UUIDs (spec 139 B15 boundary validation parses them);
+// fixtures use fixed valid UUIDs so validated loads accept them.
+const WS_ID = '11111111-1111-4111-8111-111111111111';
+const ITEM_ID = '22222222-2222-4222-8222-222222222222';
+const DEST_ID = '33333333-3333-4333-8333-333333333333';
+const ACCT_ID = '44444444-4444-4444-8444-444444444444';
+const ITEM_LIVE_ID = '55555555-5555-4555-8555-555555555555';
+const ITEM_DONE_ID = '66666666-6666-4666-8666-666666666666';
+const claimRowId = (i: number) =>
+  `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+
 const NON_RECOVERY_TICK = new Date(2026, 0, 1, 10, 7); // minute 7
 const RECOVERY_TICK = new Date(2026, 0, 1, 10, 10); // minute 10
 
@@ -102,7 +113,7 @@ describe('Claimer (spec 121)', () => {
       if (kindSet.includes('video')) return { data: [], error: null }; // heavy lane empty
       const count = fastRounds.shift() ?? 0;
       return {
-        data: Array.from({ length: count }, (_, i) => ({ id: `item-${count}-${i}` })),
+        data: Array.from({ length: count }, (_, i) => ({ id: claimRowId(i) })),
         error: null,
       };
     });
@@ -123,11 +134,13 @@ describe('Claimer (spec 121)', () => {
     // NOT claimed this tick (cap 1); it remains for the next tick.
     expect(fastQ.batches.map((b) => b.length)).toEqual([100, 100, 100, 100, 100]);
     expect(heavyQ.sendBatch).not.toHaveBeenCalled();
-    // Message payload carries ids + derivable fields only.
+    // Message payload carries ids + derivable fields only, plus the
+    // schemaVersion stamped by PublishQueueMessageSchema (spec 139 B15).
     expect(fastQ.batches[0]?.[0]).toEqual({
-      itemId: 'item-500-0',
+      itemId: claimRowId(0),
       platform: 'facebook',
       lane: 'publish-fast',
+      schemaVersion: 1,
     });
     // The tick never publishes.
     expect(publisher.publish).not.toHaveBeenCalled();
@@ -145,7 +158,7 @@ describe('Claimer (spec 121)', () => {
     const registry = createPublisherRegistry();
     registry.register(fakePublisher('facebook', async () => ({ status: 'published' })));
     const rpc = vi.fn(async (_fn: string, _args?: Record<string, unknown>) => ({
-      data: Array.from({ length: 500 }, (_, i) => ({ id: `item-${i}` })),
+      data: Array.from({ length: 500 }, (_, i) => ({ id: claimRowId(i) })),
       error: null,
     }));
     const fastQ = makeQueueProducer();
@@ -172,7 +185,7 @@ describe('Claimer (spec 121)', () => {
         return { data: null, error: new Error('facebook claim boom') };
       }
       // instagram: one row per lane
-      return { data: [{ id: `ig-${String(args?.p_platform)}-1` }], error: null };
+      return { data: [{ id: claimRowId(1) }], error: null };
     });
     const fastQ = makeQueueProducer();
     const heavyQ = makeQueueProducer();
@@ -208,7 +221,7 @@ describe('Claimer (spec 121)', () => {
       const kindSet = (args?.p_lane_kind_set as string[]) ?? [];
       if (kindSet.includes('video')) return { data: [], error: null }; // heavy empty
       return {
-        data: Array.from({ length: 150 }, (_, i) => ({ id: `item-${i}` })),
+        data: Array.from({ length: 150 }, (_, i) => ({ id: claimRowId(i) })),
         error: null,
       };
     });
@@ -286,9 +299,9 @@ async function makeItem(
   overrides: Partial<DatabaseUnifiedQueueItemRow> = {}
 ): Promise<DatabaseUnifiedQueueItemRow> {
   return {
-    id: 'item-1',
-    workspace_id: 'ws-1',
-    destination_id: 'dest-1',
+    id: ITEM_ID,
+    workspace_id: WS_ID,
+    destination_id: DEST_ID,
     platform: 'facebook',
     kind: 'text',
     platform_format: null,
@@ -327,9 +340,9 @@ async function makeConsumerDb(opts: {
   const encryptedAccess = await encryptToken('plain-access-token', MASTER_KEY);
   const encryptedDest = await encryptToken('plain-page-token', MASTER_KEY);
   const destination: DatabaseDestinationRow = {
-    id: 'dest-1',
-    workspace_id: 'ws-1',
-    account_id: 'acct-1',
+    id: DEST_ID,
+    workspace_id: WS_ID,
+    account_id: ACCT_ID,
     platform: 'facebook',
     external_destination_id: 'page-123',
     name: 'Page',
@@ -346,8 +359,8 @@ async function makeConsumerDb(opts: {
     ...opts.destination,
   };
   const account: DatabaseSocialAccountRow = {
-    id: 'acct-1',
-    workspace_id: 'ws-1',
+    id: ACCT_ID,
+    workspace_id: WS_ID,
     platform: 'facebook',
     external_account_id: 'user-123',
     display_name: 'User',
@@ -440,9 +453,9 @@ describe('Publish consumers (spec 121)', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_queue_item_id: 'item-1',
-      p_workspace_id: 'ws-1',
-      p_destination_id: 'dest-1',
+      p_queue_item_id: ITEM_ID,
+      p_workspace_id: WS_ID,
+      p_destination_id: DEST_ID,
       p_outcome_status: 'published',
       p_external_post_id: 'post-42',
       p_external_comment_id: 'comment-7',
@@ -589,6 +602,162 @@ describe('Publish consumers (spec 121)', () => {
       })
     ).rejects.toThrow('db down');
     expect(message.ack).not.toHaveBeenCalled();
+  });
+});
+
+// ==========================================
+// Publish consumers — spec 139 B12 intra-batch concurrency
+// ==========================================
+
+describe('Publish consumers — spec 139 B12 intra-batch concurrency', () => {
+  it('processes a batch concurrently: wall-clock tracks the slowest item, not the sum of latencies', async () => {
+    const LATENCY_MS = 200;
+    const items = await Promise.all(
+      [1000, 1001, 1002, 1003, 1004].map((i) => makeItem({ id: claimRowId(i) }))
+    );
+    const { db, settleCalls, upserts } = await makeConsumerDb({
+      item: items[0] as DatabaseUnifiedQueueItemRow,
+      extraItems: items.slice(1),
+    });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const publisher = fakePublisher('facebook', async (item) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+      inFlight--;
+      return {
+        status: 'published',
+        externalPostId: `post-${item.id}`,
+      } satisfies PublishOutcome;
+    });
+    const messages = items.map((item) =>
+      fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' })
+    );
+
+    const startedAt = Date.now();
+    await handlePublishBatch(fakeBatch('publish-fast', messages) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    // Every item settled with its own outcome and was acked.
+    expect(settleCalls).toHaveLength(items.length);
+    expect(
+      settleCalls.every((c) => c.p_outcome_status === 'published')
+    ).toBe(true);
+    for (const message of messages) {
+      expect(message.ack).toHaveBeenCalledTimes(1);
+    }
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.last_settled_count).toBe(items.length);
+    // All items were in flight at once: the cap is the batch size.
+    expect(maxInFlight).toBe(items.length);
+    // Serial processing would take >= items.length * LATENCY_MS
+    // (1,000ms); concurrent wall-clock is ~the slowest item plus
+    // overhead — asserted with a 2.5x tolerance band under the serial
+    // floor and comfortably above a single item's latency.
+    expect(elapsedMs).toBeGreaterThanOrEqual(LATENCY_MS);
+    expect(elapsedMs).toBeLessThan((LATENCY_MS * items.length) / 2);
+  });
+
+  it('settles every item with its own outcome in a mixed batch, even when the first item throws', async () => {
+    const throwId = claimRowId(2000);
+    const publishedId = claimRowId(2001);
+    const failedId = claimRowId(2002);
+    const retryId = claimRowId(2003);
+    // The throwing item is FIRST in batch order: under the old serial
+    // loop with abort-on-error semantics (or a naive Promise.all) the
+    // remaining items would never settle — here every one must.
+    const items = await Promise.all(
+      [throwId, publishedId, failedId, retryId].map((id) => makeItem({ id }))
+    );
+    const { db, settleCalls, upserts } = await makeConsumerDb({
+      item: items[0] as DatabaseUnifiedQueueItemRow,
+      extraItems: items.slice(1),
+    });
+    const publisher = fakePublisher('facebook', async (item) => {
+      if (item.id === throwId) throw new Error('publisher boom');
+      if (item.id === failedId) {
+        return {
+          status: 'failed',
+          error: { kind: 'permanent', code: '100', message: 'invalid parameter' },
+        } satisfies PublishOutcome;
+      }
+      if (item.id === retryId) {
+        return {
+          status: 'retry',
+          retryDelaySeconds: 60,
+          error: { kind: 'retryable', code: '4', message: 'rate limited' },
+        } satisfies PublishOutcome;
+      }
+      return {
+        status: 'published',
+        externalPostId: 'post-ok',
+      } satisfies PublishOutcome;
+    });
+    const messages = items.map((item) =>
+      fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' })
+    );
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: { body?: string }) => {
+        bodies.push(init?.body ?? '');
+        return { ok: true };
+      })
+    );
+    try {
+      await expect(
+        handlePublishBatch(fakeBatch('publish-fast', messages) as never, {
+          db: db as never,
+          registry: registryWith(publisher),
+          masterKey: MASTER_KEY,
+          env: { POSTHOG_KEY: 'test-key' },
+        })
+      ).rejects.toThrow('publisher boom');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // Every non-throwing item settled with its OWN outcome mapping.
+    const settleByItem = new Map(
+      settleCalls.map((c) => [c.p_queue_item_id as string, c])
+    );
+    expect(settleByItem.size).toBe(3);
+    expect(settleByItem.get(publishedId)).toMatchObject({
+      p_outcome_status: 'published',
+      p_external_post_id: 'post-ok',
+    });
+    expect(settleByItem.get(failedId)).toMatchObject({
+      p_outcome_status: 'failed',
+      p_error_code: '100',
+    });
+    expect(settleByItem.get(retryId)).toMatchObject({
+      p_outcome_status: 'queued',
+      p_retry_delay_seconds: 60,
+      p_error_code: '4',
+    });
+    // The throwing item never settled and stays un-acked for retry;
+    // the other three were acked exactly once.
+    expect(settleByItem.has(throwId)).toBe(false);
+    const ackCountByItemId = new Map(
+      messages.map((m) => [m.body.itemId, m.ack.mock.calls.length])
+    );
+    expect(ackCountByItemId.get(throwId)).toBe(0);
+    expect(ackCountByItemId.get(publishedId)).toBe(1);
+    expect(ackCountByItemId.get(failedId)).toBe(1);
+    expect(ackCountByItemId.get(retryId)).toBe(1);
+    // The settled heartbeat counts only the three settled items, and
+    // the throwing item's error went through the capture path.
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.last_settled_count).toBe(3);
+    expect(
+      bodies.some((b) => b.includes('$exception') && b.includes('publish_message_failed'))
+    ).toBe(true);
   });
 });
 
@@ -828,7 +997,7 @@ describe('DLQ consumers (spec 121)', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_queue_item_id: 'item-1',
+      p_queue_item_id: ITEM_ID,
       p_outcome_status: 'failed',
       p_error_code: DLQ_ERROR_CODE,
     });
@@ -898,8 +1067,8 @@ describe('DLQ consumers (spec 121)', () => {
   });
 
   it('counts only actual settlements in the heartbeat DLQ counter for a mixed batch', async () => {
-    const live = await makeItem({ id: 'item-live', status: 'publishing' });
-    const done = await makeItem({ id: 'item-done', status: 'published' });
+    const live = await makeItem({ id: ITEM_LIVE_ID, status: 'publishing' });
+    const done = await makeItem({ id: ITEM_DONE_ID, status: 'published' });
     const { db, settleCalls, upserts } = await makeConsumerDb({
       item: live,
       extraItems: [done],
@@ -919,7 +1088,7 @@ describe('DLQ consumers (spec 121)', () => {
     });
 
     expect(settleCalls).toHaveLength(1);
-    expect(settleCalls[0]).toMatchObject({ p_queue_item_id: 'item-live' });
+    expect(settleCalls[0]).toMatchObject({ p_queue_item_id: ITEM_LIVE_ID });
     expect(liveMsg.ack).toHaveBeenCalledTimes(1);
     expect(doneMsg.ack).toHaveBeenCalledTimes(1);
     expect(upserts).toHaveLength(1);

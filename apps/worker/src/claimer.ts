@@ -1,8 +1,10 @@
 import {
   getLaneKindSet,
   InternalError,
+  PublishQueueMessageSchema,
   PUBLISH_LANE_FAST,
   PUBLISH_LANE_HEAVY,
+  ValidationError,
   type Platform,
   type PublishLane,
   type PublisherRegistry,
@@ -67,11 +69,19 @@ export const ALL_PLATFORMS: readonly Platform[] = [
   'tiktok',
 ];
 
-/** Queue message payload: the item id plus fields derivable from its row. Never tokens or media bytes. */
+/**
+ * Queue message payload: the item id plus fields derivable from its row.
+ * Never tokens or media bytes. `schemaVersion` is stamped by
+ * `PublishQueueMessageSchema` when the claimer builds the message (spec
+ * 139 B15 — the audit found no message version field); consumers accept
+ * messages with or without it, so in-flight unversioned messages stay
+ * valid.
+ */
 export interface PublishQueueMessage {
   itemId: string;
   platform: Platform;
   lane: PublishLane;
+  schemaVersion?: number;
 }
 
 export interface ClaimerDbClient {
@@ -113,10 +123,6 @@ export interface ClaimTickResult {
   enqueuedFast: number;
   enqueuedHeavy: number;
   recovered: number;
-}
-
-interface ClaimedRow {
-  id: string;
 }
 
 function queueForLane(queues: ClaimerQueues, lane: PublishLane): LaneQueueProducer {
@@ -170,21 +176,62 @@ async function claimAndEnqueueLane(
       markCaptured(claimError);
       throw claimError;
     }
-    const rows = (Array.isArray(data) ? data : []) as ClaimedRow[];
+    if (data !== null && data !== undefined && !Array.isArray(data)) {
+      const payloadError = new ValidationError(
+        `claim_due_queue_items returned a non-array payload for platform "${platform}"`
+      );
+      captureWorkerError(
+        deps.env ?? {},
+        payloadError,
+        { site: 'runClaimTick', kind: 'claim_row_validation_failed', platform, lane },
+        deps.waitUntil
+      );
+      markCaptured(payloadError);
+      throw payloadError;
+    }
+    const rows = Array.isArray(data) ? data : [];
     if (rows.length === 0) return;
 
     result.claimed += rows.length;
 
+    // Boundary validation (spec 139 B15): the claim RPC returns a
+    // PROJECTION of the queue_items row (see
+    // `ClaimedUnifiedQueueItemRpcResult`), and the claimer consumes
+    // exactly one field from it — the item id. Each claimed row is
+    // therefore validated ONCE, at load, by parsing the queue message
+    // it becomes through the contracts `PublishQueueMessageSchema`:
+    // that enforces the claimed id is a real queue-item UUID and stamps
+    // the `schemaVersion` the audit found missing. A malformed row
+    // fails LOUDLY — PostHog capture plus a typed `ValidationError`,
+    // isolated to this (platform, lane) pair by the caller's wrapper —
+    // and is never silently enqueued or skipped. The full
+    // item/account/destination rows are validated by the consumers
+    // when they re-load them before publishing.
+    //
     // The claiming lane is authoritative at enqueue time: an item is
     // enqueued to the lane under whose kind set it was claimed. (The
     // contracts kind sets are kind-only — forced by the claim RPC
     // signature — while routePublishLaneForItem remains the per-item
     // truth for consumers/diagnostics.)
-    const messages: PublishQueueMessage[] = rows.map((row) => ({
-      itemId: row.id,
-      platform,
-      lane,
-    }));
+    const messages: PublishQueueMessage[] = rows.map((row) => {
+      const itemId = (row as { id?: unknown } | null)?.id;
+      const parsed = PublishQueueMessageSchema.safeParse({ itemId, platform, lane });
+      if (!parsed.success) {
+        const validationError = new ValidationError(
+          `Malformed claim_due_queue_items row for platform "${platform}" failed boundary validation`,
+          { platform, lane, issues: parsed.error.issues }
+        );
+        captureWorkerError(
+          deps.env ?? {},
+          validationError,
+          { site: 'runClaimTick', kind: 'claim_row_validation_failed', platform, lane },
+          deps.waitUntil
+        );
+        markCaptured(validationError);
+        throw validationError;
+      }
+      return parsed.data;
+    });
     for (let i = 0; i < messages.length; i += SEND_BATCH_CHUNK_SIZE) {
       const chunk = messages.slice(i, i + SEND_BATCH_CHUNK_SIZE);
       try {

@@ -184,8 +184,8 @@ class FakeRefreshDb {
 
 async function makeAccount(overrides: Partial<FakeAccount> = {}): Promise<FakeAccount> {
   return {
-    id: 'acct-1',
-    workspace_id: 'ws-1',
+    id: acctUuid(1),
+    workspace_id: WS_ID,
     platform: 'x',
     external_account_id: 'user-1',
     display_name: 'User',
@@ -239,6 +239,13 @@ function registryWith(publisher: Publisher) {
   return registry;
 }
 
+// Real DB ids are UUIDs (spec 139 B15 boundary validation parses them);
+// fixtures use fixed valid UUIDs. acctUuid(n) keeps the zero-padded
+// numeric ordering the cursor-pagination tests rely on.
+const WS_ID = '11111111-1111-4111-8111-111111111111';
+const acctUuid = (n: number) =>
+  `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+
 const ENV = { TOKEN_ENCRYPTION_KEY: MASTER_KEY, POSTHOG_KEY: 'test-key' };
 
 // ==========================================
@@ -270,7 +277,7 @@ describe('Token refresh job (spec 121 D6)', () => {
 
   it('SINGLE-WRITER: two concurrent runs over one X account perform exactly one rotation and one atomic persist', async () => {
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeAccount());
+    db.accounts.set(acctUuid(1), await makeAccount());
     const publisher = fakePublisher('x', async () => {
       // Widen the race window: the refresh itself is slow, but the
       // lease was acquired before the call, so the loser never gets here.
@@ -290,7 +297,7 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(a.refreshed + b.refreshed).toBe(1);
     expect(a.skippedLease + b.skippedLease).toBe(1);
 
-    const stored = db.accounts.get('acct-1') as FakeAccount;
+    const stored = db.accounts.get(acctUuid(1)) as FakeAccount;
     expect(await decryptToken(stored.encrypted_access_token, MASTER_KEY)).toBe('new-access');
     expect(
       await decryptToken(stored.encrypted_refresh_token as string, MASTER_KEY)
@@ -317,7 +324,7 @@ describe('Token refresh job (spec 121 D6)', () => {
       new Date(NOW.getTime() + REFRESH_LEASE_TTL_MS).toISOString()
     );
     const persist = db.updates[1] as RecordedUpdate;
-    expect(persist.matchedIds).toEqual(['acct-1']);
+    expect(persist.matchedIds).toEqual([acctUuid(1)]);
     expect(typeof persist.values.encrypted_access_token).toBe('string');
     expect(typeof persist.values.encrypted_refresh_token).toBe('string');
     expect(persist.values.encrypted_refresh_token).not.toBe(oldRefreshCiphertext);
@@ -328,7 +335,7 @@ describe('Token refresh job (spec 121 D6)', () => {
 
   it('invalid_grant / auth failure marks the account expired, releases the lease, raises PostHog, and never retries', async () => {
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeAccount());
+    db.accounts.set(acctUuid(1), await makeAccount());
     const publisher = fakePublisher('x', async () => {
       throw new Error('invalid_grant: refresh token revoked');
     });
@@ -343,7 +350,7 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(result.expired).toBe(1);
     expect(result.refreshed).toBe(0);
     expect(publisher.refreshTokens).toHaveBeenCalledTimes(1);
-    const stored = db.accounts.get('acct-1') as FakeAccount;
+    const stored = db.accounts.get(acctUuid(1)) as FakeAccount;
     expect(stored.status).toBe('expired');
     expect(stored.refresh_lease_owner).toBeNull();
     expect(stored.refresh_lease_expires_at).toBeNull();
@@ -380,7 +387,7 @@ describe('Token refresh job (spec 121 D6)', () => {
 
     expect(result.deferredTransient).toBe(1);
     expect(result.expired).toBe(0);
-    const stored = db.accounts.get('acct-1') as FakeAccount;
+    const stored = db.accounts.get(acctUuid(1)) as FakeAccount;
     expect(stored.status).toBe('active');
     expect(stored.encrypted_access_token).toBe(account.encrypted_access_token);
     expect(stored.encrypted_refresh_token).toBe(account.encrypted_refresh_token);
@@ -395,7 +402,7 @@ describe('Token refresh job (spec 121 D6)', () => {
         (body) =>
           body.includes('$exception') &&
           body.includes('refresh_transient_failed') &&
-          body.includes('acct-1')
+          body.includes(acctUuid(1))
       )
     ).toBe(true);
   });
@@ -403,7 +410,7 @@ describe('Token refresh job (spec 121 D6)', () => {
   it('skips an account whose lease is held by a live other owner', async () => {
     const db = new FakeRefreshDb();
     db.accounts.set(
-      'acct-1',
+      acctUuid(1),
       await makeAccount({
         refresh_lease_owner: 'other-run',
         refresh_lease_expires_at: '2026-10-22T12:04:00.000Z',
@@ -421,13 +428,13 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(result.skippedLease).toBe(1);
     expect(result.refreshed).toBe(0);
     expect(publisher.refreshTokens).not.toHaveBeenCalled();
-    expect(db.accounts.get('acct-1')?.refresh_lease_owner).toBe('other-run');
+    expect(db.accounts.get(acctUuid(1))?.refresh_lease_owner).toBe('other-run');
   });
 
   it('takes over an expired lease and refreshes', async () => {
     const db = new FakeRefreshDb();
     db.accounts.set(
-      'acct-1',
+      acctUuid(1),
       await makeAccount({
         refresh_lease_owner: 'dead-run',
         refresh_lease_expires_at: '2026-10-22T11:59:00.000Z',
@@ -444,13 +451,13 @@ describe('Token refresh job (spec 121 D6)', () => {
 
     expect(result.refreshed).toBe(1);
     expect(publisher.refreshTokens).toHaveBeenCalledTimes(1);
-    expect(db.accounts.get('acct-1')?.refresh_lease_owner).toBeNull();
+    expect(db.accounts.get(acctUuid(1))?.refresh_lease_owner).toBeNull();
   });
 
   it('Facebook lapse: a lapsed token flips to expired with NO publisher call', async () => {
     const db = new FakeRefreshDb();
     db.accounts.set(
-      'acct-1',
+      acctUuid(1),
       await makeAccount({
         platform: 'facebook',
         encrypted_refresh_token: null,
@@ -469,13 +476,13 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(result.expired).toBe(1);
     expect(publisher.refreshTokens).not.toHaveBeenCalled();
     expect(publisher.publish).not.toHaveBeenCalled();
-    expect(db.accounts.get('acct-1')?.status).toBe('expired');
+    expect(db.accounts.get(acctUuid(1))?.status).toBe('expired');
   });
 
   it('Facebook inside the lapse window but not yet lapsed stays active', async () => {
     const db = new FakeRefreshDb();
     db.accounts.set(
-      'acct-1',
+      acctUuid(1),
       await makeAccount({
         platform: 'facebook',
         encrypted_refresh_token: null,
@@ -493,12 +500,12 @@ describe('Token refresh job (spec 121 D6)', () => {
 
     expect(result.expired).toBe(0);
     expect(publisher.refreshTokens).not.toHaveBeenCalled();
-    expect(db.accounts.get('acct-1')?.status).toBe('active');
+    expect(db.accounts.get(acctUuid(1))?.status).toBe('active');
   });
 
   it('unregistered platform is skipped with zero calls and zero writes', async () => {
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeAccount());
+    db.accounts.set(acctUuid(1), await makeAccount());
     const registry = createPublisherRegistry(); // empty — no modules until 122/124–127
 
     const result = await runRefreshCycle(db as unknown as RefreshDbClient, registry, ENV, NOW);
@@ -511,7 +518,7 @@ describe('Token refresh job (spec 121 D6)', () => {
 
   it('provider-managed platforms are never due and never refreshed', async () => {
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeAccount({ platform: 'youtube' }));
+    db.accounts.set(acctUuid(1), await makeAccount({ platform: 'youtube' }));
     const publisher = fakePublisher('youtube');
 
     const result = await runRefreshCycle(
@@ -527,7 +534,7 @@ describe('Token refresh job (spec 121 D6)', () => {
 
   it('a scan failure (e.g. lease columns not yet migrated) aborts loudly and expires nothing', async () => {
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeAccount());
+    db.accounts.set(acctUuid(1), await makeAccount());
     db.failScan = true;
     const publisher = fakePublisher('x');
 
@@ -535,14 +542,14 @@ describe('Token refresh job (spec 121 D6)', () => {
       runRefreshCycle(db as unknown as RefreshDbClient, registryWith(publisher), ENV, NOW)
     ).rejects.toThrow('does not exist');
     expect(publisher.refreshTokens).not.toHaveBeenCalled();
-    expect(db.accounts.get('acct-1')?.status).toBe('active');
+    expect(db.accounts.get(acctUuid(1))?.status).toBe('active');
     expect(fetchBodies.some((body) => body.includes('$exception'))).toBe(true);
   });
 
   it('LEASE TIMING (spec 139): lease expiry is computed from the acquisition moment, not the stale cycle-start snapshot', async () => {
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeAccount({ id: 'acct-1' }));
-    db.accounts.set('acct-2', await makeAccount({ id: 'acct-2' }));
+    db.accounts.set(acctUuid(1), await makeAccount({ id: acctUuid(1) }));
+    db.accounts.set(acctUuid(2), await makeAccount({ id: acctUuid(2) }));
     const publisher = fakePublisher('x', async () => {
       // Simulate a long cycle: by the time the SECOND account's lease
       // is acquired, the wall clock has moved 3 minutes past the
@@ -568,7 +575,7 @@ describe('Token refresh job (spec 121 D6)', () => {
     // Second acquire: expiry is acquisition-time + TTL — a full TTL
     // from NOW+3min, NOT the part-expired NOW+TTL the stale snapshot
     // would have minted.
-    const second = acquires.find((u) => u.matchedIds.includes('acct-2')) as RecordedUpdate;
+    const second = acquires.find((u) => u.matchedIds.includes(acctUuid(2))) as RecordedUpdate;
     expect(second.values.refresh_lease_expires_at).toBe(
       new Date(NOW.getTime() + 3 * 60 * 1000 + REFRESH_LEASE_TTL_MS).toISOString()
     );
@@ -579,11 +586,11 @@ describe('Token refresh job (spec 121 D6)', () => {
     // Five due X accounts interleaved (by id) with three accounts
     // whose tokens expire far beyond the refresh horizon — those
     // must never be scanned.
-    const dueIds = ['acct-01', 'acct-03', 'acct-05', 'acct-07', 'acct-09'];
+    const dueIds = [acctUuid(1), acctUuid(3), acctUuid(5), acctUuid(7), acctUuid(9)];
     for (const id of dueIds) {
       db.accounts.set(id, await makeAccount({ id }));
     }
-    for (const id of ['acct-02', 'acct-04', 'acct-06']) {
+    for (const id of [acctUuid(2), acctUuid(4), acctUuid(6)]) {
       db.accounts.set(
         id,
         await makeAccount({ id, token_expires_at: '2027-10-22T12:10:00.000Z' })
@@ -614,8 +621,8 @@ describe('Token refresh job (spec 121 D6)', () => {
       expect(select.limit).toBe(2);
     }
     expect(db.selects[0]?.ops.some((op) => op.op === 'gt')).toBe(false);
-    expect(db.selects[1]?.ops).toContainEqual({ op: 'gt', column: 'id', value: 'acct-03' });
-    expect(db.selects[2]?.ops).toContainEqual({ op: 'gt', column: 'id', value: 'acct-07' });
+    expect(db.selects[1]?.ops).toContainEqual({ op: 'gt', column: 'id', value: acctUuid(3) });
+    expect(db.selects[2]?.ops).toContainEqual({ op: 'gt', column: 'id', value: acctUuid(7) });
     // The production defaults are sane and bounded.
     expect(REFRESH_SCAN_PAGE_SIZE).toBeGreaterThan(0);
     expect(REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE).toBeGreaterThanOrEqual(REFRESH_SCAN_PAGE_SIZE);
@@ -624,7 +631,7 @@ describe('Token refresh job (spec 121 D6)', () => {
 
   it('BOUNDED DUE-SCAN (spec 139): the per-cycle work bound stops the scan; the remainder waits for a later cycle', async () => {
     const db = new FakeRefreshDb();
-    for (const id of ['acct-1', 'acct-2', 'acct-3', 'acct-4', 'acct-5']) {
+    for (const id of [acctUuid(1), acctUuid(2), acctUuid(3), acctUuid(4), acctUuid(5)]) {
       db.accounts.set(id, await makeAccount({ id }));
     }
     const publisher = fakePublisher('x');
@@ -661,7 +668,7 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(result.expired).toBe(0);
     expect(result.refreshed).toBe(0);
     expect(publisher.refreshTokens).not.toHaveBeenCalled();
-    const stored = db.accounts.get('acct-1') as FakeAccount;
+    const stored = db.accounts.get(acctUuid(1)) as FakeAccount;
     expect(stored.status).toBe('active');
     expect(stored.refresh_lease_owner).toBeNull();
     expect(stored.encrypted_access_token).toBe('not-valid-ciphertext');
@@ -671,7 +678,7 @@ describe('Token refresh job (spec 121 D6)', () => {
       fetchBodies.some(
         (body) =>
           body.includes('refresh_decrypt_failed') &&
-          body.includes('acct-1') &&
+          body.includes(acctUuid(1)) &&
           body.includes('ValidationError')
       )
     ).toBe(true);

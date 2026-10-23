@@ -37,6 +37,20 @@ describe("Select", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
+  it("spec 142 F01/F02/F09: 44px trigger, 16px-below-sm text, 44px items, available-height panel", async () => {
+    const user = userEvent.setup();
+    render(<TestSelect />);
+    const trigger = screen.getByRole("combobox", { name: "Platform" });
+    expect(trigger.className).toContain("h-11");
+    expect(trigger.className).toContain("text-base");
+    expect(trigger.className).toContain("sm:text-body");
+    await user.click(trigger);
+    const listbox = screen.getByRole("listbox");
+    expect(listbox.className).toContain("max-h-(--radix-select-content-available-height)");
+    expect(listbox.className).not.toContain("max-h-96");
+    expect(screen.getByRole("option", { name: "Facebook" }).className).toContain("min-h-11");
+  });
+
   it("keyboard: arrows move through options, Enter selects, value is announced on the trigger", async () => {
     const user = userEvent.setup();
     render(<TestSelect />);

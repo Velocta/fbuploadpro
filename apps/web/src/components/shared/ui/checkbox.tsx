@@ -3,8 +3,9 @@
 /**
  * Checkbox — shadcn base on Radix Checkbox (checked + indeterminate states,
  * full keyboard behaviour: Space toggles, focus-visible ring). Adapted:
- * the root is a 24px target (UI Rule 8 floor) rather than shadcn's 16px
- * glyph — the hit area is the box itself. A single checkbox is an opt-in
+ * the visual box is 24px rather than shadcn's 16px glyph, and the global
+ * `hit-area-44` utility expands its hit area to 44px without changing
+ * the layout box (spec 142 F08). A single checkbox is an opt-in
  * applied on submit (matrix §14); immediate-effect settings use Switch.
  */
 import * as React from "react";
@@ -18,7 +19,7 @@ function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxP
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer size-6 shrink-0 rounded-xs border border-line-strong bg-canvas outline-none transition-colors duration-fast focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-brand-rose data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-on-primary data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-on-primary",
+        "peer hit-area-44 size-6 shrink-0 rounded-xs border border-line-strong bg-canvas outline-none transition-colors duration-fast focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-brand-rose data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-on-primary data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-on-primary",
         className
       )}
       {...props}

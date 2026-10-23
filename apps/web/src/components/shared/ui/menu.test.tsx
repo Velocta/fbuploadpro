@@ -42,6 +42,17 @@ describe("Menu (dropdown menu)", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
+  it("spec 142 F09: items are 44px rows and the panel uses Radix available height", async () => {
+    const user = userEvent.setup();
+    render(<TestMenu />);
+    await user.click(screen.getByRole("button", { name: "Actions" }));
+    const menu = screen.getByRole("menu");
+    expect(menu.className).toContain("max-h-(--radix-dropdown-menu-content-available-height)");
+    expect(menu.className).not.toContain("max-h-96");
+    expect(screen.getByRole("menuitem", { name: "Duplicate" }).className).toContain("min-h-11");
+    expect(screen.getByRole("menuitem", { name: "Delete" }).className).toContain("min-h-11");
+  });
+
   it("Esc closes the menu and returns focus to the trigger", async () => {
     const user = userEvent.setup();
     render(<TestMenu />);

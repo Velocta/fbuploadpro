@@ -11,7 +11,11 @@
  *   that is the consumer's label on AlertDialogAction; the primitive keeps
  *   the destructive variant one prop away (`variant="destructive"`).
  * Reversible removals should NOT use this — delete-with-Undo (Toast) is the
- * default for those (UI Rule 3).
+ * default for those (UI Rule 3). Geometry (spec 142 F04): same phone
+ * contract as Dialog — 16px viewport gutters on phones (`inset-x-4`,
+ * centred `max-w-lg` panel from `sm` up), dynamic-viewport-bounded
+ * height (`max-h-dvh`) and internal scrolling, so Action/Cancel stay
+ * reachable at short heights.
  */
 import * as React from "react";
 import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
@@ -73,7 +77,7 @@ function AlertDialogContent({
           root.querySelector<HTMLElement>('[data-slot="alert-dialog-cancel"]')?.focus();
         }}
         className={cn(
-          "fixed top-1/2 left-1/2 z-dialog grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-md border border-line bg-panel p-6 text-ink shadow-modal duration-base outline-none",
+          "fixed inset-x-4 top-1/2 z-dialog grid max-h-dvh -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-line bg-panel p-6 text-ink shadow-modal duration-base outline-none sm:right-auto sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2",
           className
         )}
         {...props}

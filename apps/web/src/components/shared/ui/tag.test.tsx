@@ -22,4 +22,15 @@ describe("Tag", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove Reels filter" }));
     expect(onRemove).toHaveBeenCalledTimes(1);
   });
+
+  it("spec 142 F05: remove glyph stays 16px but its hit area expands to 44px", () => {
+    render(
+      <Tag onRemove={() => undefined} removeLabel="Remove Reels filter">
+        Reels
+      </Tag>
+    );
+    const remove = screen.getByRole("button", { name: "Remove Reels filter" });
+    expect(remove.className).toContain("size-4");
+    expect(remove.className).toContain("hit-area-44");
+  });
 });

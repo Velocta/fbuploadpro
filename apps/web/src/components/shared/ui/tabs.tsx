@@ -6,6 +6,9 @@
  * matrix §30). Two list variants: `default` (segmented panel) and `line`
  * (gold underline on the active tab — the Binance active-underline accent).
  * Tabs are for 2–9 peer sections; they are never a pseudo-wizard (matrix §6).
+ * Geometry (spec 142 F07): the list is viewport-bounded (`max-w-full`)
+ * and scrolls horizontally when its tabs overflow, and triggers are
+ * 44px tall.
  */
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -30,11 +33,11 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "inline-flex w-fit items-center justify-center gap-1 text-ink-sub",
+  "inline-flex w-fit max-w-full items-center justify-center gap-1 overflow-x-auto text-ink-sub",
   {
     variants: {
       variant: {
-        default: "h-10 rounded-md bg-subtle p-1",
+        default: "h-13 rounded-md bg-subtle p-1",
         line: "border-b border-line bg-transparent",
       },
     },
@@ -62,7 +65,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-sm border-b-2 border-transparent px-3 text-body font-medium whitespace-nowrap text-ink-sub transition-colors duration-fast outline-none hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-panel data-[state=active]:text-ink data-[state=active]:shadow-card",
+        "inline-flex h-11 grow basis-0 shrink-0 items-center justify-center gap-1.5 rounded-sm border-b-2 border-transparent px-3 text-body font-medium whitespace-nowrap text-ink-sub transition-colors duration-fast outline-none hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-panel data-[state=active]:text-ink data-[state=active]:shadow-card",
         className
       )}
       {...props}
