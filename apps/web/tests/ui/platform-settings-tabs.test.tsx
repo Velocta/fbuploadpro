@@ -778,7 +778,11 @@ describe('Threads guide (§5.4 verbatim)', () => {
     expect(screen.getByText('Add Threads to your app')).toBeTruthy();
     expect(screen.getByText('Use the Threads pair, not the main pair')).toBeTruthy();
     expect(screen.getByText(/Threads has its own App ID and App Secret/)).toBeTruthy();
-    expect(screen.getByText(/not under Settings → Basic/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        /You will find the Threads pair in the Threads settings of your app — not under Settings → Basic\./
+      )
+    ).toBeTruthy();
     expect(
       screen.getByText(/Using the main pair is the most common reason connecting/)
     ).toBeTruthy();
@@ -895,9 +899,13 @@ describe('Spec 123 Part B: shared callback addresses', () => {
     );
   });
 
-  it('falls back to the production origin outside the browser', () => {
+  it('resolves against the current origin when no origin is given', () => {
+    // This suite runs in jsdom (it migrated with the behavioural
+    // rebuild in PR-135-3), so the no-argument form resolves against
+    // the window origin — the production-origin fallback applies only
+    // outside the browser, in the untouched lib helper.
     expect(getPlatformCallbackUrls('threads').signInCallback).toBe(
-      'https://fbuploadpro.com/api/connect/threads/callback'
+      `${window.location.origin}/api/connect/threads/callback`
     );
   });
 });
