@@ -20,7 +20,6 @@
 #   src/components/media/media-table-row.tsx              133
 #   src/components/pages/add-page-modal.tsx               131
 #   src/components/pages/dedicated/page-header.tsx        131
-#   src/components/pages/dedicated/queue/queue-row.tsx    134 (queue views)
 #   src/components/pages/page-card.tsx                    131
 # No ownerless strays were found, so none are assigned to 130.
 #
@@ -39,5 +38,4 @@ apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
 apps/web/src/components/pages/add-page-modal.tsx 3
 apps/web/src/components/pages/dedicated/page-header.tsx 1
-apps/web/src/components/pages/dedicated/queue/queue-row.tsx 1
 apps/web/src/components/pages/page-card.tsx 1

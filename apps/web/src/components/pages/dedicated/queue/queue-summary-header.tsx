@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import * as React from 'react';
 import { summarizeQueue } from './queue-logic';
 import type { DedicatedQueueItem } from './queue-types';
 
@@ -10,7 +9,11 @@ export interface QueueSummaryHeaderProps {
   timeZone: string;
 }
 
-/** Quiet one-line summary: "12 posts queued · runs through Nov 3 · 2 failed need attention". */
+/**
+ * Quiet one-line summary (spec 105 copy shape, preserved):
+ * "12 posts queued · runs through Nov 3 · 2 failed need attention".
+ * Rebuilt on tokens (spec 134 PR-134-1) — no inline styles.
+ */
 export function QueueSummaryHeader({ items, timeZone }: Readonly<QueueSummaryHeaderProps>) {
   const summary = summarizeQueue(items);
   if (items.length === 0) return null;
@@ -37,26 +40,8 @@ export function QueueSummaryHeader({ items, timeZone }: Readonly<QueueSummaryHea
   }
 
   return (
-    <p
-      data-testid="queue-summary"
-      style={{
-        margin: 0,
-        fontSize: '0.8125rem',
-        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        fontWeight: TYPOGRAPHY.weights.medium,
-      }}
-    >
+    <p data-testid="queue-summary" className="m-0 text-body font-medium text-ink-sub">
       {parts.join(' · ')}
     </p>
   );
-}
-
-export function queueHeaderRowStyle(): React.CSSProperties {
-  return {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: SPACING.md,
-    flexWrap: 'wrap',
-  };
 }

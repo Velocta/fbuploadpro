@@ -441,8 +441,21 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
    * Phase 3: PageTabQueue (T004)
    * ==================================================================== */
   describe('PageTabQueue Component (Spec 105)', () => {
+  // Spec 134: the rebuilt queue panel reads through React Query, so its
+  // renders need a QueryClient ancestor (the tenant layout provides one in
+  // the app) — same pattern as the composer renders below. Fresh client per
+  // render so the props-bridge seed is what each test sees.
+  const renderQueueTab = (element: React.ReactNode) =>
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        {element}
+      </QueryClientProvider>
+    );
+
     it('renders queue rows with caption, format, status, and row actions', () => {
-      const { hasText, hasAttribute } = render(
+      const { hasText, hasAttribute } = renderQueueTab(
         <PageTabQueue
           page={samplePage}
           queueItems={sampleQueueItems}
@@ -466,7 +479,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('labels queue row times with the page timezone (QA #11)', () => {
-      const { hasText } = render(
+      const { hasText } = renderQueueTab(
         <PageTabQueue
           page={samplePage}
           queueItems={sampleQueueItems}
@@ -482,7 +495,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('renders all five filter tabs with counts', () => {
-      const { hasText, hasAttribute } = render(
+      const { hasText, hasAttribute } = renderQueueTab(
         <PageTabQueue
           page={samplePage}
           queueItems={sampleQueueItems}
@@ -505,7 +518,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('renders empty state with checklist and entry buttons when queue has no items', () => {
       const onOpenAddQueue = vi.fn();
-      const { hasText, hasAttribute } = render(
+      const { hasText, hasAttribute } = renderQueueTab(
         <PageTabQueue
           page={samplePage}
           queueItems={[]}
@@ -534,7 +547,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
         retryCount: 3,
         maxRetries: 3,
       };
-      const { hasText, hasAttribute } = render(
+      const { hasText, hasAttribute } = renderQueueTab(
         <PageTabQueue
           page={samplePage}
           queueItems={[...sampleQueueItems, failedItem]}

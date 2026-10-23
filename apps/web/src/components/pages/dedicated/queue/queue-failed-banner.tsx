@@ -1,51 +1,32 @@
 'use client';
 
-import React from 'react';
-import { THEME, PALETTE, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
-import { Button } from '@/components/ui/button';
+import * as React from 'react';
+import { Banner } from '@/components/shared/ui/banner';
+import { Button } from '@/components/shared/ui/button';
 
 export interface QueueFailedBannerProps {
   count: number;
   onReview: () => void;
 }
 
-/** Full-width notice strip shown while failed posts need attention. */
+/**
+ * Failed-posts banner (spec 105 §10 / spec 134 §3.5): persistent state at
+ * the queue's scope on the shared Banner — "{n} posts failed to publish."
+ * + Review (filters to Failed); clears at zero. Counts come from the one
+ * query-cache source in the panel, so banner/chip/header always agree.
+ */
 export function QueueFailedBanner({ count, onReview }: Readonly<QueueFailedBannerProps>) {
   if (count <= 0) return null;
   return (
-    <div
-      role="alert"
+    <Banner
+      variant="critical"
       data-testid="queue-failed-banner"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: SPACING.md,
-        padding: `${SPACING.sm} 0`,
-        borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-        <span aria-hidden="true" style={COMPONENT_STYLES.statusDot('critical')} />
-        <span
-          style={{
-            fontSize: '0.875rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          {count} {count === 1 ? 'post' : 'posts'} failed to publish.
-        </span>
-      </div>
-      <Button
-        variant="link"
-        size="sm"
-        onClick={onReview}
-        style={{ color: PALETTE.accent3 }}
-      >
-        Review
-      </Button>
-    </div>
+      title={`${count} ${count === 1 ? 'post' : 'posts'} failed to publish.`}
+      action={
+        <Button variant="secondary" onClick={onReview}>
+          Review
+        </Button>
+      }
+    />
   );
 }

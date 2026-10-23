@@ -18,5 +18,4 @@
 # preferences go through the typed helper, never direct access.
 #
 # Format: <file> <count>
-apps/web/src/components/pages/dedicated/queue/content-tab.tsx 2
 apps/web/src/components/pages/dedicated/tab-insights.tsx 6

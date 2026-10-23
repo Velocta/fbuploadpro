@@ -1,23 +1,23 @@
 'use client';
 
-import React, { useState } from 'react';
-import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import { Button } from '@/components/ui/button';
+import * as React from 'react';
+import { Button } from '@/components/shared/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shared/ui/dialog';
+import { Input } from '@/components/shared/ui/input';
 import type { PageSlotSummary } from '../tab-dashboard';
 import {
-  toDateTimeLocalValue,
-  parseDateTimeLocalValue,
   formatSlotLong,
+  parseDateTimeLocalValue,
+  toDateTimeLocalValue,
 } from '../composer/queue-slot-utils';
-import { findCollision, canSwapTimes } from './queue-logic';
+import { canSwapTimes, findCollision } from './queue-logic';
 import type { DedicatedQueueItem } from './queue-types';
 
 export interface QueueRescheduleDialogProps {
@@ -31,7 +31,13 @@ export interface QueueRescheduleDialogProps {
   onError: (message: string) => void;
 }
 
-/** Inline reschedule picker with collision warning + conditional time swap. */
+/**
+ * Reschedule dialog on the shared/ui Dialog (spec 134 §3.1.1: direct time
+ * editing is reorder's non-drag twin). Past times are unselectable
+ * (spec 105 §5.1.3); a collision offers Swap only when both posts'
+ * formats fit both slots (queue-logic's canSwapTimes, preserved).
+ * Loaded via next/dynamic by the panel (closed by default).
+ */
 export function QueueRescheduleDialog({
   item,
   items,
@@ -42,12 +48,12 @@ export function QueueRescheduleDialog({
   onSaved,
   onError,
 }: Readonly<QueueRescheduleDialogProps>) {
-  const [value, setValue] = useState(() =>
+  const [value, setValue] = React.useState(() =>
     toDateTimeLocalValue(new Date(item.scheduledTime), timeZone)
   );
-  const [collision, setCollision] = useState<DedicatedQueueItem | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [inlineError, setInlineError] = useState<string | null>(null);
+  const [collision, setCollision] = React.useState<DedicatedQueueItem | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [inlineError, setInlineError] = React.useState<string | null>(null);
 
   const minValue = toDateTimeLocalValue(new Date(), timeZone);
 
@@ -104,31 +110,28 @@ export function QueueRescheduleDialog({
   const swapAllowed = collision ? canSwapTimes(item, collision, slots, timeZone) : false;
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent style={{ maxWidth: '440px' }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Reschedule post</DialogTitle>
           <DialogDescription>
-            {collision
-              ? 'That time is already taken.'
-              : 'Pick a new date and time for this post.'}
+            {collision ? 'That time is already taken.' : 'Pick a new date and time for this post.'}
           </DialogDescription>
         </DialogHeader>
 
         {!collision && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-            <label
-              htmlFor="queue-reschedule-input"
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
+          <div className="flex flex-col gap-2">
+            <label htmlFor="queue-reschedule-input" className="text-body font-medium text-ink">
               New date and time
             </label>
-            <input
+            <Input
               id="queue-reschedule-input"
+              data-testid="queue-reschedule-input"
               type="datetime-local"
               value={value}
               min={minValue}
@@ -136,25 +139,9 @@ export function QueueRescheduleDialog({
                 setValue(event.target.value);
                 setInlineError(null);
               }}
-              style={{
-                height: '38px',
-                padding: `0 ${SPACING.sm}`,
-                borderRadius: '6px',
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.875rem',
-                colorScheme: 'dark',
-              }}
             />
             {inlineError && (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
+              <p role="alert" className="m-0 text-body text-brand-rose">
                 {inlineError}
               </p>
             )}
@@ -162,40 +149,23 @@ export function QueueRescheduleDialog({
         )}
 
         {collision && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-            <p
-              style={{
-                margin: 0,
-                fontSize: '0.875rem',
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
+          <div className="flex flex-col gap-2">
+            <p className="m-0 text-body text-ink">
               Another post is scheduled for{' '}
               {formatSlotLong(new Date(collision.scheduledTime), timeZone)}.
             </p>
             {!swapAllowed && (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
-                The two posts need different posting times, so they can't swap.
+              <p className="m-0 text-body text-ink-sub">
+                The two posts need different posting times, so they can&apos;t swap.
               </p>
             )}
-            <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap' }}>
+            <div className="flex flex-wrap gap-2">
               {swapAllowed && (
-                <Button variant="secondary" size="sm" isLoading={saving} onClick={handleSwap}>
+                <Button variant="secondary" loading={saving} onClick={() => void handleSwap()}>
                   Swap times
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={saving}
-                onClick={() => setCollision(null)}
-              >
+              <Button variant="ghost" disabled={saving} onClick={() => setCollision(null)}>
                 Pick another time
               </Button>
             </div>
@@ -204,10 +174,10 @@ export function QueueRescheduleDialog({
 
         {!collision && (
           <DialogFooter>
-            <Button variant="ghost" size="sm" disabled={saving} onClick={onClose}>
+            <Button variant="ghost" disabled={saving} onClick={onClose}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" isLoading={saving} onClick={handleSave}>
+            <Button loading={saving} onClick={() => void handleSave()}>
               Save new time
             </Button>
           </DialogFooter>
@@ -216,3 +186,5 @@ export function QueueRescheduleDialog({
     </Dialog>
   );
 }
+
+export default QueueRescheduleDialog;

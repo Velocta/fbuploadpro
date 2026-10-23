@@ -99,15 +99,18 @@ export async function installApiFixtures(
   // "queue" and a covering slot exists for every format.
   await page.route(`**/api/tenant/${SUB}/pages/${FACEBOOK_PAGE.id}/slots`, (route) =>
     json(route, {
-      slots: [
-        {
-          id: '66666666-6666-4666-8666-666666666666',
-          slotTime: '09:00',
-          timezone: 'UTC',
-          isActive: true,
-          allowedFormats: null,
-        },
-      ],
+      slots: ['09:00', '10:00'].map((slotTime, i) => ({
+        id: `66666666-6666-4666-8666-66666666666${i}`,
+        userId: TENANT.userId,
+        pageId: FACEBOOK_PAGE.id,
+        slotTime,
+        timezone: 'UTC',
+        isActive: true,
+        allowedFormats: ['text', 'image', 'video', 'reel', 'story'],
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      })),
+      total: 2,
     })
   );
 
@@ -127,9 +130,38 @@ export async function installApiFixtures(
             : '2026-12-01T09:00:00.000Z',
       });
       state.queue = [item, ...state.queue];
-      return json(route, { success: true, item }, 201);
+      return json(route, item, 201);
     }
-    return json(route, { items: state.queue });
+    return json(route, {
+      items: state.queue,
+      total: state.queue.length,
+      limit: 50,
+      offset: 0,
+    });
+  });
+
+  // Per-item queue actions (spec 134 PR-134-1 fixture addition): PATCH
+  // applies the body to the fixture item (reorder/reschedule/retry read
+  // it back on refetch), DELETE removes it, publish-now acks. Registered
+  // after the list handler so it wins for item paths.
+  await page.route(`**/api/tenant/${SUB}/publishing/queue/*`, async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const itemId = url.pathname.split('/publishing/queue/')[1] ?? '';
+    if (req.method() === 'PATCH') {
+      const body = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+      const idx = state.queue.findIndex((q) => q.id === itemId);
+      if (idx >= 0) {
+        state.queue[idx] = { ...state.queue[idx], ...body };
+        return json(route, state.queue[idx]);
+      }
+      return json(route, { error: 'Queue item not found' }, 404);
+    }
+    if (req.method() === 'DELETE') {
+      state.queue = state.queue.filter((q) => q.id !== itemId);
+      return json(route, { success: true, itemId });
+    }
+    return json(route, {});
   });
 
   // Media library: list, folders, and the import pipeline
