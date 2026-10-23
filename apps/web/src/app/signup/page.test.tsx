@@ -1,0 +1,395 @@
+/** @vitest-environment jsdom */
+/**
+ * Signup + OTP — behavioural tests for the form-standard conversion
+ * (spec 136 PR-136B). User-event driven against the REAL typed API
+ * client: only the network (`fetch`) and the post-auth navigation
+ * (`completeAuthRedirect`) are doubled, so response-schema validation,
+ * server-error mapping and the cooldown handling are production paths.
+ */
+import * as React from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { configure, render, screen, waitFor } from "@testing-library/react";
+
+// The five-field form types far more keystrokes than the login suite's
+// two fields; on a loaded machine the default 5s test / 1s finder
+// budgets expire before the interactions finish.
+vi.setConfig({ testTimeout: 60_000 });
+configure({ asyncUtilTimeout: 15_000 });
+import userEvent from "@testing-library/user-event";
+import SignupPage, { validateSignupDetails } from "./page";
+import { resetSessionExpiredGuard } from "@/lib/api/session-expired";
+
+const completeAuthRedirect = vi.fn();
+vi.mock("@/lib/auth-broadcast", () => ({
+  completeAuthRedirect: (...args: unknown[]) => completeAuthRedirect(...args),
+}));
+
+const fetchMock = vi.fn();
+
+function jsonResponse(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function setUrl(path: string) {
+  window.history.pushState({}, "", path);
+}
+
+const VALID = {
+  name: "Jane Doe",
+  phone: "+1 202 555 0199",
+  email: "jane.doe@gmail.com",
+  password: "correct-password",
+};
+
+async function fillDetails(
+  user: ReturnType<typeof userEvent.setup>,
+  overrides: Partial<typeof VALID & { confirmPassword: string }> = {}
+) {
+  const values = { confirmPassword: VALID.password, ...VALID, ...overrides };
+  await user.type(screen.getByLabelText("Full Name"), values.name);
+  await user.type(screen.getByLabelText("Phone Number"), values.phone);
+  await user.type(screen.getByLabelText("Email Address"), values.email);
+  await user.type(screen.getByLabelText("Password", { exact: true }), values.password);
+  await user.type(screen.getByLabelText("Confirm Password"), values.confirmPassword);
+}
+
+async function submitDetails(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Create Account" }));
+}
+
+const SIGNUP_SUCCESS = {
+  success: true,
+  requiresOtp: true,
+  cooldownSecondsRemaining: 60,
+  email: VALID.email,
+  message: "A 6-digit verification code has been sent to your Gmail address.",
+};
+
+const VERIFY_SUCCESS = {
+  success: true,
+  user: {
+    id: "11111111-1111-4111-8111-111111111111",
+    email: VALID.email,
+    name: VALID.name,
+    subdomain: "janedoe",
+    role: "admin",
+    status: "active",
+  },
+  redirectUrl: "/tenant/janedoe",
+};
+
+beforeEach(() => {
+  completeAuthRedirect.mockClear();
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+  resetSessionExpiredGuard();
+  setUrl("/signup");
+  delete process.env.NEXT_PUBLIC_SIGNUPS_ENABLED;
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete process.env.NEXT_PUBLIC_SIGNUPS_ENABLED;
+});
+
+describe("signup details form (form standard)", () => {
+  it("renders the create-account copy, fields and credential attributes", () => {
+    render(<SignupPage />);
+    expect(screen.getByRole("heading", { name: "Create Account" })).toBeTruthy();
+    expect(screen.getByLabelText("Full Name")).toBeTruthy();
+    expect(screen.getByLabelText("Phone Number")).toBeTruthy();
+    expect(screen.getByLabelText("Email Address")).toBeTruthy();
+    expect(screen.getByLabelText("Password", { exact: true })).toBeTruthy();
+    expect(screen.getByLabelText("Confirm Password")).toBeTruthy();
+    expect(screen.getByText("Only @gmail.com accounts are supported")).toBeTruthy();
+    expect(screen.getByText("Minimum 8 characters")).toBeTruthy();
+    const password = screen.getByLabelText("Password", { exact: true }) as HTMLInputElement;
+    expect(password.getAttribute("autocomplete")).toBe("new-password");
+    expect(password.type).toBe("password");
+    // Show/hide is offered on both password fields (Rule 28).
+    expect(screen.getAllByRole("button", { name: "Show password" })).toHaveLength(2);
+  });
+
+  it("empty submit shows every field error inline and in the summary, with no request", async () => {
+    const user = userEvent.setup();
+    render(<SignupPage />);
+    await submitDetails(user);
+
+    expect(await screen.findAllByText("Full name is required.")).toHaveLength(2);
+    expect(screen.getAllByText("Phone number is required.")).toHaveLength(2);
+    expect(screen.getAllByText("A valid email address is required.")).toHaveLength(2);
+    expect(screen.getAllByText("Password is required.")).toHaveLength(2);
+    expect(screen.getAllByText("Please confirm your password.")).toHaveLength(2);
+    expect(
+      screen.getByRole("link", { name: "Full name is required." }).getAttribute("href")
+    ).toBe("#signup-name");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("validates on blur: a non-Gmail address errors inline without a summary or a request", async () => {
+    const user = userEvent.setup();
+    render(<SignupPage />);
+    const email = screen.getByLabelText("Email Address");
+    await user.click(email);
+    await user.type(email, "jane@example.com");
+    await user.click(screen.getByLabelText("Full Name"));
+
+    expect(
+      await screen.findByText("Registration is limited to @gmail.com (or @googlemail.com) accounts.")
+    ).toBeTruthy();
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector('[data-slot="form-error-summary"]')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("partially wrong submit: short password and mismatched confirmation surface with §3.3 wording, input preserved", async () => {
+    const user = userEvent.setup();
+    render(<SignupPage />);
+    await fillDetails(user, { password: "short", confirmPassword: "different-1" });
+    await submitDetails(user);
+
+    expect(await screen.findAllByText("Password must be at least 8 characters long.")).toHaveLength(2);
+    expect(
+      screen.getAllByText("Passwords do not match. Please verify both password fields.")
+    ).toHaveLength(2);
+    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe(VALID.email);
+    expect((screen.getByLabelText("Password", { exact: true }) as HTMLInputElement).value).toBe("short");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("server 400 field errors map back onto the fields inline and in the summary", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      jsonResponse(400, {
+        error: "Validation failed",
+        details: { email: ["This email address cannot be used."] },
+      })
+    );
+    render(<SignupPage />);
+    await fillDetails(user);
+    await submitDetails(user);
+
+    expect(await screen.findAllByText("This email address cannot be used.")).toHaveLength(2);
+    expect(screen.getByLabelText("Email Address").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("already-registered conflict offers Sign in instead and Reset password in place", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      jsonResponse(409, { error: "This email is already registered." })
+    );
+    render(<SignupPage />);
+    await fillDetails(user);
+    await submitDetails(user);
+
+    expect(await screen.findAllByText("This email is already registered.")).toHaveLength(2);
+    const signIn = screen.getByRole("link", { name: "Sign in instead" });
+    expect(signIn.getAttribute("href")).toBe(
+      `/login?email=${encodeURIComponent(VALID.email)}`
+    );
+    const reset = screen.getByRole("link", { name: "Reset password" });
+    expect(reset.getAttribute("href")).toBe(
+      `/forgot-password?email=${encodeURIComponent(VALID.email)}`
+    );
+  });
+
+  it("rate-limited signup surfaces the wait message and disables the submit with its countdown", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      jsonResponse(429, {
+        error: "Too many registration attempts. Please wait 45 seconds before trying again.",
+        retryAfterSeconds: 45,
+      })
+    );
+    render(<SignupPage />);
+    await fillDetails(user);
+    await submitDetails(user);
+
+    expect(
+      await screen.findByText(
+        "Too many registration attempts. Please wait 45 seconds before trying again."
+      )
+    ).toBeTruthy();
+    const button = screen.getByRole("button", { name: /Please wait \(45s\)/ });
+    expect(button.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("network failure surfaces the connection message in the summary, never silently", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    render(<SignupPage />);
+    await fillDetails(user);
+    await submitDetails(user);
+
+    expect(
+      await screen.findByText(
+        "Couldn't create your account. Please check your connection and try again."
+      )
+    ).toBeTruthy();
+  });
+
+  it("successful details submit moves to the OTP step naming the email, with the resend cooling down", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(jsonResponse(200, SIGNUP_SUCCESS));
+    render(<SignupPage />);
+    await fillDetails(user);
+    await submitDetails(user);
+
+    expect(await screen.findByRole("heading", { name: "Verify Your Email" })).toBeTruthy();
+    expect(screen.getByText(VALID.email)).toBeTruthy();
+    const otp = screen.getByLabelText("6-Digit Verification Code") as HTMLInputElement;
+    expect(otp.getAttribute("autocomplete")).toBe("one-time-code");
+    const resend = screen.getByRole("button", { name: "Resend code in 60s" });
+    expect(resend.hasAttribute("disabled")).toBe(true);
+  });
+});
+
+describe("signup OTP step (§5.4 pattern)", () => {
+  async function gotoOtpStep(user: ReturnType<typeof userEvent.setup>) {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, SIGNUP_SUCCESS));
+    render(<SignupPage />);
+    await fillDetails(user);
+    await submitDetails(user);
+    return screen.findByLabelText("6-Digit Verification Code");
+  }
+
+  it("pastes the code whole, verifies, and hands off through completeAuthRedirect", async () => {
+    const user = userEvent.setup();
+    const otpField = (await gotoOtpStep(user)) as HTMLInputElement;
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, VERIFY_SUCCESS));
+
+    await user.click(otpField);
+    await user.paste("123456");
+    expect(otpField.value).toBe("123456");
+
+    await user.click(screen.getByRole("button", { name: "Verify & Activate Account" }));
+    await waitFor(() =>
+      expect(completeAuthRedirect).toHaveBeenCalledWith("/tenant/janedoe", VERIFY_SUCCESS.user)
+    );
+    const verifyCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/auth/signup/verify-otp")
+    );
+    expect(verifyCall).toBeTruthy();
+    const [, init] = verifyCall as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      email: VALID.email,
+      otp: "123456",
+      returnUrl: undefined,
+    });
+  });
+
+  it("strips non-digits as the code is typed", async () => {
+    const user = userEvent.setup();
+    const otpField = (await gotoOtpStep(user)) as HTMLInputElement;
+    await user.type(otpField, "a1b2c3");
+    expect(otpField.value).toBe("123");
+  });
+
+  it("incomplete code errors with §3.3 wording and makes no verify request", async () => {
+    const user = userEvent.setup();
+    const otpField = await gotoOtpStep(user);
+    await user.type(otpField, "123");
+    await user.click(screen.getByRole("button", { name: "Verify & Activate Account" }));
+
+    expect(
+      await screen.findAllByText("Please enter the complete 6-digit verification code.")
+    ).toHaveLength(2);
+    const verifyCalls = fetchMock.mock.calls.filter((call) =>
+      String(call[0]).includes("verify-otp")
+    );
+    expect(verifyCalls).toHaveLength(0);
+  });
+
+  it("expired-code error reveals Send fresh code in place", async () => {
+    const user = userEvent.setup();
+    const otpField = await gotoOtpStep(user);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, { error: "Verification code has expired. Please request a new one." })
+    );
+    await user.type(otpField, "123456");
+    await user.click(screen.getByRole("button", { name: "Verify & Activate Account" }));
+
+    // Inline under the field and as the summary entry — identical wording.
+    expect(
+      await screen.findAllByText("Verification code has expired. Please request a new one.")
+    ).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Send fresh code" })).toBeTruthy();
+  });
+
+  it("direct OTP entry via ?step=otp resends on demand and confirms with the Code Sent callout", async () => {
+    const user = userEvent.setup();
+    setUrl(`/signup?step=otp&email=${encodeURIComponent(VALID.email)}`);
+    fetchMock.mockResolvedValue(jsonResponse(200, { success: true, message: "sent" }));
+    render(<SignupPage />);
+
+    const resend = await screen.findByRole("button", { name: "Did not receive code? Resend" });
+    expect(resend.hasAttribute("disabled")).toBe(false);
+    await user.click(resend);
+
+    expect(
+      await screen.findByText(
+        "A fresh 6-digit verification code has been dispatched to your email."
+      )
+    ).toBeTruthy();
+    expect(screen.getByText("Code Sent")).toBeTruthy();
+    const cooled = screen.getByRole("button", { name: "Resend code in 60s" });
+    expect(cooled.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("pending-verification entry shows the fresh-code notice on the details step", async () => {
+    setUrl(`/signup?email=${encodeURIComponent(VALID.email)}&notice=pending_verification`);
+    render(<SignupPage />);
+    expect(
+      await screen.findByText(
+        "We sent a fresh 6-digit verification code. Please confirm your email to complete registration."
+      )
+    ).toBeTruthy();
+    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe(VALID.email);
+  });
+});
+
+describe("signup paused state (§4.2.4)", () => {
+  it("replaces the details step with the paused card when signups are disabled", () => {
+    process.env.NEXT_PUBLIC_SIGNUPS_ENABLED = "false";
+    render(<SignupPage />);
+    expect(screen.getByRole("heading", { name: "Registration Paused" })).toBeTruthy();
+    expect(screen.getByText("New registrations are currently closed")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in to workspace" }).getAttribute("href")).toBe(
+      "/login"
+    );
+    expect(screen.queryByLabelText("Full Name")).toBeNull();
+  });
+
+  it("keeps the OTP step completable while signups are paused", async () => {
+    process.env.NEXT_PUBLIC_SIGNUPS_ENABLED = "false";
+    setUrl(`/signup?step=otp&email=${encodeURIComponent(VALID.email)}`);
+    render(<SignupPage />);
+    expect(await screen.findByLabelText("6-Digit Verification Code")).toBeTruthy();
+    expect(screen.queryByText("New registrations are currently closed")).toBeNull();
+  });
+});
+
+describe("validateSignupDetails (schema-backed parity helper)", () => {
+  it("accepts a valid payload and reports §3.3 wording for an invalid one", () => {
+    expect(validateSignupDetails({ ...VALID, confirmPassword: VALID.password })).toEqual({});
+    const errors = validateSignupDetails({
+      name: "",
+      phone: "",
+      email: "jane@example.com",
+      password: "short",
+      confirmPassword: "different-1",
+    });
+    expect(errors.name).toBe("Full name is required.");
+    expect(errors.phone).toBe("Phone number is required.");
+    expect(errors.email).toBe(
+      "Registration is limited to @gmail.com (or @googlemail.com) accounts."
+    );
+    expect(errors.password).toBe("Password must be at least 8 characters long.");
+    expect(errors.confirmPassword).toBe(
+      "Passwords do not match. Please verify both password fields."
+    );
+  });
+});

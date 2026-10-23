@@ -1,12 +1,49 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Input, Button, Alert } from '@/components/ui';
-import { FormErrorCallout } from '@/components/auth/form-error-callout';
-import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
+/**
+ * Signup OTP step (spec 136 §5.4 — the product's one OTP pattern):
+ * a single 6-digit field, non-digits stripped on entry, the code pastes
+ * whole, `autoComplete="one-time-code"` for OS / password-manager
+ * autofill; resend carries the server cooldown as a live countdown and
+ * is disabled with the countdown as its visible reason; an expired-code
+ * error reveals `Send fresh code` in place. Verify + resend go through
+ * the typed API client; the form is on the §3.8 standard (RHF + zod +
+ * FormErrorSummary).
+ */
+
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormErrorSummary,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  type FormErrorSummaryEntry,
+} from '@/components/shared/ui/form';
+import { Input } from '@/components/shared/ui/input';
+import { Button } from '@/components/shared/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/shared/ui/alert';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
+import { api, isApiError } from '@/lib/api';
+import {
+  ResendOtpSuccessResponseSchema,
+  VerifyOtpSuccessResponseSchema,
+  type ResendOtpErrorBody,
+  type VerifyOtpErrorBody,
+} from '@/lib/api/schemas/auth';
+import { reportError } from '@/lib/report-error';
+import {
+  signupOtpFormSchema,
+  type SignupOtpFormValues,
+} from '@/app/signup/signup-form-schema';
 
 export interface SignupOtpStepProps {
   readonly email: string;
@@ -25,19 +62,32 @@ export function getResendButtonText(resendCooldown: number, isResending: boolean
   return 'Did not receive code? Resend';
 }
 
+const OTP_FIELD_ID = 'signup-otp-code';
+
 export function SignupOtpStep({
   email,
   returnUrl,
   initialCooldown = 60,
   onBack,
 }: Readonly<SignupOtpStepProps>) {
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(initialCooldown);
+
+  const form = useForm<SignupOtpFormValues>({
+    resolver: zodResolver(signupOtpFormSchema),
+    mode: 'onTouched',
+    shouldFocusError: false,
+    defaultValues: { otp: '' },
+  });
+  const { formState } = form;
+  const isSubmitting = formState.isSubmitting;
+  const otpError = formState.errors.otp?.message
+    ? String(formState.errors.otp.message)
+    : null;
+  const isExpiredError = Boolean(otpError?.toLowerCase().includes('expired'));
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -47,227 +97,205 @@ export function SignupOtpStep({
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
-  const handleOtpSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const onSubmit = async (values: SignupOtpFormValues) => {
+    setSubmitAttempted(true);
     setGeneralError(null);
     setSuccessNotice(null);
-
-    const cleanOtp = otp.replace(/\D/g, '').trim();
-    if (cleanOtp.length !== 6) {
-      setOtpError('Please enter the complete 6-digit verification code.');
-      return;
-    }
-
-    setOtpError(null);
-    setIsSubmitting(true);
-
+    const cleanOtp = values.otp.replace(/\D/g, '').trim();
     try {
-      const res = await fetch('/api/auth/signup/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const data = await api.post(
+        '/api/auth/signup/verify-otp',
+        {
           email: email.trim(),
           otp: cleanOtp,
           returnUrl: returnUrl ? sanitizeAuthRedirectUrl(returnUrl) : undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setOtpError(
-          sanitizeAuthErrorMessage(
-            data.error,
-            'Invalid or expired verification code. Please try again.'
-          )
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
+        },
+        { schema: VerifyOtpSuccessResponseSchema }
+      );
       if (data.redirectUrl) {
         completeAuthRedirect(data.redirectUrl, data.user);
       }
-    } catch {
-      setGeneralError(
-        "Couldn't verify the code. Please check your connection and try again."
-      );
-      setIsSubmitting(false);
+    } catch (error) {
+      if (!isApiError(error)) {
+        reportError(error, { source: 'signup-verify-otp' });
+        setGeneralError("Couldn't verify the code. Please check your connection and try again.");
+        return;
+      }
+      const body = (error.cause ?? null) as VerifyOtpErrorBody | null;
+      if (error.kind === 'network') {
+        setGeneralError("Couldn't verify the code. Please check your connection and try again.");
+        return;
+      }
+      if (error.kind === 'parse' || (error.status !== undefined && error.status >= 500)) {
+        reportError(error, {
+          source: 'signup-verify-otp',
+          kind: error.kind,
+          status: error.status,
+        });
+      }
+      form.setError('otp', {
+        type: 'server',
+        message: sanitizeAuthErrorMessage(
+          body?.error,
+          'Invalid or expired verification code. Please try again.'
+        ),
+      });
     }
   };
 
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || isResending) return;
-
     setGeneralError(null);
     setSuccessNotice(null);
-    setOtpError(null);
+    form.clearErrors('otp');
     setIsResending(true);
-
     try {
-      const res = await fetch('/api/auth/signup/resend-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setGeneralError(sanitizeAuthErrorMessage(data.error, "Couldn't resend the code right now."));
-        if (data.cooldownSecondsRemaining) {
-          setResendCooldown(data.cooldownSecondsRemaining);
-        }
-        setIsResending(false);
-        return;
-      }
-
+      await api.post(
+        '/api/auth/signup/resend-otp',
+        { email: email.trim() },
+        { schema: ResendOtpSuccessResponseSchema }
+      );
       setSuccessNotice('A fresh 6-digit verification code has been dispatched to your email.');
       setResendCooldown(60);
-      setIsResending(false);
-    } catch {
-      setGeneralError("Couldn't resend the verification code. Please check your connection.");
+    } catch (error) {
+      if (!isApiError(error)) {
+        reportError(error, { source: 'signup-resend-otp' });
+        setGeneralError("Couldn't resend the verification code. Please check your connection.");
+        return;
+      }
+      const body = (error.cause ?? null) as ResendOtpErrorBody | null;
+      const cooldownSeconds = body?.cooldownSecondsRemaining || body?.retryAfterSeconds;
+      if (cooldownSeconds) {
+        setResendCooldown(cooldownSeconds);
+      }
+      if (error.kind === 'network') {
+        setGeneralError("Couldn't resend the verification code. Please check your connection.");
+        return;
+      }
+      if (error.kind === 'parse' || (error.status !== undefined && error.status >= 500)) {
+        reportError(error, {
+          source: 'signup-resend-otp',
+          kind: error.kind,
+          status: error.status,
+        });
+      }
+      setGeneralError(sanitizeAuthErrorMessage(body?.error, "Couldn't resend the code right now."));
+    } finally {
       setIsResending(false);
     }
   };
 
+  const summaryErrors: FormErrorSummaryEntry[] = [
+    ...(otpError ? [{ fieldId: OTP_FIELD_ID, message: otpError }] : []),
+    ...(generalError ? [{ message: generalError }] : []),
+  ];
+
   return (
-    <form
-      onSubmit={handleOtpSubmit}
-      noValidate
-      style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}
-    >
-      {successNotice && (
-        <Alert
-          severity="success"
-          title="Code Sent"
-          message={successNotice}
-          onClose={() => setSuccessNotice(null)}
-        />
-      )}
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 14px',
-          backgroundColor: 'rgba(255, 255, 255, 0.03)',
-          border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-          borderRadius: '8px',
-        }}
+    <Form {...form}>
+      <form
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit(onSubmit, () => setSubmitAttempted(true))}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span style={{ fontSize: '0.75rem', color: `var(--text-dim, ${THEME.default.text.muted})` }}>
-            Verification code sent to
-          </span>
-          <span
-            style={{
-              fontSize: '0.875rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            {email}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={onBack}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: PALETTE.primary,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            cursor: 'pointer',
-            padding: '4px 8px',
-            textDecoration: 'underline',
-          }}
-        >
-          Wrong email? Edit
-        </button>
-      </div>
+        {successNotice && (
+          <Alert variant="success">
+            <div className="flex flex-col gap-1">
+              <AlertTitle>Code Sent</AlertTitle>
+              <AlertDescription>{successNotice}</AlertDescription>
+            </div>
+            <button
+              type="button"
+              aria-label="Dismiss"
+              onClick={() => setSuccessNotice(null)}
+              className="shrink-0 text-ink-sub hover:text-ink"
+            >
+              ×
+            </button>
+          </Alert>
+        )}
 
-      <div>
-        <Input
-          label="6-Digit Verification Code"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          maxLength={6}
-          placeholder="••••••"
-          autoFocus
-          value={otp}
-          error={otpError || undefined}
-          onChange={(e) => {
-            setOtp(e.target.value.replace(/\D/g, '').slice(0, 6));
-            if (otpError) setOtpError(null);
-          }}
-          disabled={isSubmitting}
-          required
-          helperText="Check your spam folder if you do not see the email in your inbox."
-          style={{
-            textAlign: 'center',
-            letterSpacing: '0.4em',
-            fontSize: '1.25rem',
-            fontWeight: TYPOGRAPHY.weights.bold,
-          }}
+        <div className="flex items-center justify-between gap-3 rounded-md border border-line bg-subtle px-3.5 py-2.5">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-metadata text-ink-dim">Verification code sent to</span>
+            <span className="truncate text-body font-medium text-ink">{email}</span>
+          </div>
+          <button
+            type="button"
+            onClick={onBack}
+            className="shrink-0 px-2 py-2 text-metadata font-medium text-link underline"
+          >
+            Wrong email? Edit
+          </button>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="otp"
+          render={({ field }) => (
+            <FormItem id={OTP_FIELD_ID}>
+              <FormLabel>6-Digit Verification Code</FormLabel>
+              <FormControl>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="••••••"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  required
+                  disabled={isSubmitting}
+                  className="text-center text-xl font-bold tracking-widest"
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e.target.value.replace(/\D/g, '').slice(0, 6));
+                  }}
+                />
+              </FormControl>
+              <FormDescription>
+                Check your spam folder if you do not see the email in your inbox.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        {otpError && otpError.toLowerCase().includes('expired') && (
-          <div style={{ marginTop: '8px', textAlign: 'center' }}>
+
+        {isExpiredError && (
+          <div className="-mt-2 text-center">
             <button
               type="button"
               onClick={handleResendOtp}
               disabled={isResending || resendCooldown > 0}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: PALETTE.primary,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: 'pointer',
-                padding: 0,
-                textDecoration: 'underline',
-              }}
+              className="px-2 py-2 text-metadata font-semibold text-link underline disabled:cursor-not-allowed disabled:opacity-50"
             >
               Send fresh code
             </button>
           </div>
         )}
-      </div>
 
-      <FormErrorCallout message={generalError} />
+        {submitAttempted && <FormErrorSummary errors={summaryErrors} />}
 
-      <Button
-        type="submit"
-        variant="primary"
-        size="lg"
-        isLoading={isSubmitting}
-        style={{ width: '100%' }}
-      >
-        Verify & Activate Account
-      </Button>
+        <Button type="submit" size="lg" loading={isSubmitting} className="w-full">
+          Verify &amp; Activate Account
+        </Button>
 
-      <div style={{ textAlign: 'center', marginTop: SPACING.xs }}>
-        <button
-          type="button"
-          onClick={handleResendOtp}
-          disabled={resendCooldown > 0 || isResending}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: resendCooldown > 0 ? `var(--text-dim, ${THEME.default.text.muted})` : PALETTE.primary,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            cursor: resendCooldown > 0 ? 'default' : 'pointer',
-            padding: '4px 8px',
-            textDecoration: resendCooldown > 0 ? 'none' : 'underline',
-          }}
-        >
-          {getResendButtonText(resendCooldown, isResending)}
-        </button>
-      </div>
-    </form>
+        <div className="mt-1 text-center">
+          <button
+            type="button"
+            onClick={handleResendOtp}
+            disabled={resendCooldown > 0 || isResending}
+            aria-describedby={resendCooldown > 0 ? 'signup-otp-resend-reason' : undefined}
+            className="min-h-11 px-2 py-1 text-metadata font-medium text-link underline disabled:cursor-default disabled:text-ink-dim disabled:no-underline"
+          >
+            {getResendButtonText(resendCooldown, isResending)}
+          </button>
+          {resendCooldown > 0 && (
+            <span id="signup-otp-resend-reason" className="sr-only">
+              {`For security purposes, please wait ${resendCooldown} seconds before trying again.`}
+            </span>
+          )}
+        </div>
+      </form>
+    </Form>
   );
 }

@@ -1,20 +1,33 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Input, Button, Alert } from '@/components/ui';
-import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
-import { PasswordInput } from '@/components/auth/password-input';
-import { FormErrorCallout } from '@/components/auth/form-error-callout';
-import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
-import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
-import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
-import { completeAuthRedirect } from '@/lib/auth-broadcast';
-import { validateClientPhoneNumber, isSignupEnabled } from '@fbuploadpro/contracts';
-import { SignupPausedCard } from '@/components/auth/signup-paused-card';
-import { SignupOtpStep } from '@/components/auth/signup-otp-step';
+/**
+ * Signup (spec 136 §5.2) — page-level orchestration only: the two-step
+ * flow (details → email OTP), the entry parameters (`?step=otp&email=…`,
+ * `?notice=pending_verification`, `?returnUrl=`), and the paused-state
+ * gate. The forms themselves live in `components/auth/`
+ * (`SignupDetailsForm`, `SignupOtpStep`) on the §3.8 form standard; the
+ * hand-rolled field-error machinery that used to live here is deleted.
+ *
+ * Preserved behaviours (§4.2): direct entry at the OTP step (login's
+ * OTP-pending redirect depends on it), the OTP step staying completable
+ * while signups are paused, and the layout titles/descriptions per state.
+ */
 
-interface FieldErrors {
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
+import { SignupDetailsForm } from '@/components/auth/signup-details-form';
+import { SignupOtpStep } from '@/components/auth/signup-otp-step';
+import { SignupPausedCard } from '@/components/auth/signup-paused-card';
+import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
+import { isSignupEnabled } from '@fbuploadpro/contracts';
+import {
+  signupFormSchema,
+  type SignupFormValues,
+} from './signup-form-schema';
+
+export interface FieldErrors {
   name?: string | undefined;
   phone?: string | undefined;
   email?: string | undefined;
@@ -23,50 +36,21 @@ interface FieldErrors {
   otp?: string | undefined;
 }
 
-interface SignupDetailsInput {
-  name: string;
-  phone: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
-
-export function validateSignupDetails(input: SignupDetailsInput): FieldErrors {
+/**
+ * Kept for parity with the previous hand-rolled validator: runs the zod
+ * form schema and returns the first message per field. The details form
+ * itself validates through the RHF resolver.
+ */
+export function validateSignupDetails(input: SignupFormValues): FieldErrors {
+  const result = signupFormSchema.safeParse(input);
+  if (result.success) return {};
   const errors: FieldErrors = {};
-
-  if (!input.name.trim()) {
-    errors.name = 'Full name is required.';
-  } else if (input.name.trim().length > 100) {
-    errors.name = 'Full name cannot exceed 100 characters.';
-  }
-
-  const phoneValidation = validateClientPhoneNumber(input.phone);
-  if (!phoneValidation.isValid) {
-    errors.phone = phoneValidation.error || 'Please enter a valid international phone number.';
-  }
-
-  const cleanEmail = input.email.trim().toLowerCase();
-  if (!cleanEmail.includes('@')) {
-    errors.email = 'A valid email address is required.';
-  } else {
-    const domain = cleanEmail.split('@')[1];
-    if (domain !== 'gmail.com' && domain !== 'googlemail.com') {
-      errors.email = 'Registration is limited to @gmail.com (or @googlemail.com) accounts.';
+  for (const issue of result.error.issues) {
+    const key = issue.path[0];
+    if (typeof key === 'string' && !(key in errors)) {
+      errors[key as keyof FieldErrors] = issue.message;
     }
   }
-
-  if (!input.password) {
-    errors.password = 'Password is required.';
-  } else if (input.password.length < 8) {
-    errors.password = 'Password must be at least 8 characters long.';
-  }
-
-  if (!input.confirmPassword) {
-    errors.confirmPassword = 'Please confirm your password.';
-  } else if (input.password !== input.confirmPassword) {
-    errors.confirmPassword = 'Passwords do not match. Please verify both password fields.';
-  }
-
   return errors;
 }
 
@@ -123,21 +107,10 @@ export function parseInitialQueryParams(search: string) {
 
 export default function SignupPage() {
   const [step, setStep] = useState<'details' | 'otp'>('details');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-
-  // Field-specific validation errors for inline red border and helper error display
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  // Form-level general error for compact callout above action button
-  const [generalError, setGeneralError] = useState<string | null>(null);
+  const [otpCooldown, setOtpCooldown] = useState(0);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
-  const [isEmailConflict, setIsEmailConflict] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -148,141 +121,16 @@ export default function SignupPage() {
     if (initial.successNotice) setSuccessNotice(initial.successNotice);
   }, []);
 
-  // Cooldown countdown timer for OTP resend
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const interval = setInterval(() => {
-      setResendCooldown((prev) => Math.max(0, prev - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [resendCooldown]);
-
-  const clearFieldError = (field: keyof FieldErrors) => {
-    if (field === 'email') {
-      setIsEmailConflict(false);
-    }
-    if (fieldErrors[field]) {
-      setFieldErrors((prev) => {
-        const next = { ...prev };
-        delete next[field];
-        return next;
-      });
-    }
-    if (generalError) {
-      setGeneralError(null);
-    }
-  };
-
-  const handleDetailsSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setGeneralError(null);
-    setSuccessNotice(null);
-    setIsEmailConflict(false);
-
-    const errors = validateSignupDetails({
-      name,
-      phone,
-      email,
-      password,
-      confirmPassword,
-    });
-
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      return;
-    }
-
-    setFieldErrors({});
-    setIsSubmitting(true);
-
-    try {
-      const res = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          password,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 400 && data.details) {
-          const mappedErrors = mapApiFieldErrors(data.details);
-          if (Object.keys(mappedErrors).length > 0) {
-            setFieldErrors(mappedErrors);
-            setIsSubmitting(false);
-            return;
-          }
-        }
-
-        if (res.status === 429) {
-          const cooldown = data.retryAfterSeconds || data.cooldownSecondsRemaining || 60;
-          setResendCooldown(cooldown);
-          setGeneralError(
-            sanitizeAuthErrorMessage(
-              data.error,
-              `For security purposes, please wait ${cooldown} seconds before trying again.`
-            )
-          );
-          setIsSubmitting(false);
-          return;
-        }
-
-        if (res.status === 409 || data.error?.toLowerCase().includes('already registered')) {
-          setIsEmailConflict(true);
-          setFieldErrors((prev) => ({
-            ...prev,
-            email: 'This email is already registered.',
-          }));
-          setIsSubmitting(false);
-          return;
-        }
-
-        setGeneralError(
-          sanitizeAuthErrorMessage(
-            data.error,
-            "Couldn't create your account. Please try again shortly."
-          )
-        );
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (data.requiresOtp) {
-        setStep('otp');
-        setResendCooldown(data.cooldownSecondsRemaining ?? 60);
-        setFieldErrors({});
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (data.redirectUrl) {
-        completeAuthRedirect(data.redirectUrl, data.user);
-      }
-    } catch {
-      setGeneralError("Couldn't create your account. Please check your connection and try again.");
-      setIsSubmitting(false);
-    }
-  };
-
   const signupsAllowed = isSignupEnabled();
   const isPaused = !signupsAllowed && step !== 'otp';
   const layoutMeta = getSignupLayoutMeta(isPaused, step, email);
 
   const signInFooter = (
-    <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+    <span className="text-metadata text-ink-sub">
       Already have an account?{' '}
       <Link
         href={returnUrl ? `/login?returnUrl=${encodeURIComponent(returnUrl)}` : '/login'}
-        style={{
-          color: PALETTE.primary,
-          textDecoration: 'none',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-        }}
+        className="font-semibold text-link no-underline hover:underline"
       >
         Sign in
       </Link>
@@ -309,24 +157,8 @@ export default function SignupPage() {
         footer={
           <button
             type="button"
-            onClick={() => {
-              setStep('details');
-              setGeneralError(null);
-              setSuccessNotice(null);
-              setFieldErrors({});
-            }}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.8125rem',
-              cursor: 'pointer',
-              textDecoration: 'underline',
-              padding: '10px 12px',
-              minHeight: '44px',
-              display: 'inline-flex',
-              alignItems: 'center',
-            }}
+            onClick={() => setStep('details')}
+            className="inline-flex min-h-11 items-center px-3 py-2.5 text-metadata text-ink-sub underline"
           >
             Need to change your details? Return to form
           </button>
@@ -335,13 +167,8 @@ export default function SignupPage() {
         <SignupOtpStep
           email={email}
           returnUrl={returnUrl}
-          initialCooldown={resendCooldown}
-          onBack={() => {
-            setStep('details');
-            setGeneralError(null);
-            setSuccessNotice(null);
-            setFieldErrors({});
-          }}
+          initialCooldown={otpCooldown}
+          onBack={() => setStep('details')}
         />
       </AuthSplitLayout>
     );
@@ -353,181 +180,16 @@ export default function SignupPage() {
       description={layoutMeta.description}
       footer={signInFooter}
     >
-      {successNotice && (
-        <div style={{ marginBottom: SPACING.lg }}>
-          <Alert
-            severity="success"
-            title="Code Sent"
-            message={successNotice}
-            onClose={() => setSuccessNotice(null)}
-          />
-        </div>
-      )}
-
-      <form onSubmit={handleDetailsSubmit} noValidate style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-        <Input
-          label="Full Name"
-          placeholder="Jane Doe"
-          autoComplete="name"
-          value={name}
-          error={fieldErrors.name}
-          onChange={(e) => {
-            setName(e.target.value);
-            clearFieldError('name');
-          }}
-          disabled={isSubmitting}
-          required
-        />
-
-          <Input
-            label="Phone Number"
-            type="tel"
-            placeholder="+1 555 123 4567"
-            autoComplete="tel"
-            value={phone}
-            error={fieldErrors.phone}
-            onChange={(e) => {
-              setPhone(e.target.value);
-              clearFieldError('phone');
-            }}
-            disabled={isSubmitting}
-            required
-            helperText="Include country code starting with + (e.g. +1... or +92...)"
-          />
-
-          <Input
-            label="Email Address"
-            type="email"
-            placeholder="you@gmail.com"
-            autoComplete="email"
-            value={email}
-            error={fieldErrors.email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              clearFieldError('email');
-            }}
-            disabled={isSubmitting}
-            required
-            helperText="Only @gmail.com accounts are supported"
-          />
-
-          {isEmailConflict && (
-            <div
-              style={{
-                marginTop: '-8px',
-                marginBottom: SPACING.xs,
-                fontSize: '0.8125rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <Link
-                href={`/login?email=${encodeURIComponent(email.trim())}`}
-                style={{
-                  color: PALETTE.primary,
-                  textDecoration: 'underline',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                }}
-              >
-                Sign in instead
-              </Link>
-              <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>•</span>
-              <Link
-                href={`/forgot-password?email=${encodeURIComponent(email.trim())}`}
-                style={{
-                  color: PALETTE.primary,
-                  textDecoration: 'underline',
-                  fontWeight: TYPOGRAPHY.weights.medium,
-                }}
-              >
-                Reset password
-              </Link>
-            </div>
-          )}
-
-          <PasswordInput
-            label="Password"
-            placeholder="••••••••••••"
-            autoComplete="new-password"
-            value={password}
-            error={fieldErrors.password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              clearFieldError('password');
-            }}
-            disabled={isSubmitting}
-            required
-            helperText="Minimum 8 characters"
-          />
-
-          <PasswordInput
-            label="Confirm Password"
-            placeholder="••••••••••••"
-            autoComplete="new-password"
-            value={confirmPassword}
-            error={fieldErrors.confirmPassword}
-            onChange={(e) => {
-              setConfirmPassword(e.target.value);
-              clearFieldError('confirmPassword');
-            }}
-            disabled={isSubmitting}
-            required
-          />
-
-          <FormErrorCallout message={generalError} style={{ marginTop: SPACING.xs }} />
-
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            isLoading={isSubmitting}
-            disabled={isSubmitting || resendCooldown > 0}
-            style={{ width: '100%', marginTop: SPACING.xs }}
-          >
-            {resendCooldown > 0 ? `Please wait (${resendCooldown}s)` : 'Create Account'}
-          </Button>
-
-          <p
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              lineHeight: 1.5,
-              textAlign: 'center',
-              marginTop: SPACING.xs,
-              marginBottom: 0,
-            }}
-          >
-            By creating an account, you agree to our{' '}
-            <a
-              href="/terms"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Terms of Service (opens in a new tab)"
-              style={{
-                color: PALETTE.primary,
-                textDecoration: 'none',
-                fontWeight: TYPOGRAPHY.weights.medium,
-              }}
-            >
-              Terms of Service
-            </a>{' '}
-            and{' '}
-            <a
-              href="/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Privacy Policy (opens in a new tab)"
-              style={{
-                color: PALETTE.primary,
-                textDecoration: 'none',
-                fontWeight: TYPOGRAPHY.weights.medium,
-              }}
-            >
-              Privacy Policy
-            </a>.
-          </p>
-        </form>
+      <SignupDetailsForm
+        initialEmail={email || undefined}
+        successNotice={successNotice}
+        onDismissSuccessNotice={() => setSuccessNotice(null)}
+        onRequiresOtp={(submittedEmail, cooldownSecondsRemaining) => {
+          setEmail(submittedEmail);
+          setOtpCooldown(cooldownSecondsRemaining);
+          setStep('otp');
+        }}
+      />
     </AuthSplitLayout>
   );
 }

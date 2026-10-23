@@ -57,7 +57,6 @@ rgb apps/web/src/components/accounts/account-card.tsx 8
 rgb apps/web/src/components/accounts/connect-account-modal.tsx 6
 rgb apps/web/src/components/accounts/disconnect-account-dialog.tsx 2
 rgb apps/web/src/components/auth/form-error-callout.tsx 2
-rgb apps/web/src/components/auth/signup-otp-step.tsx 2
 rgb apps/web/src/components/connect/byoc-gate.tsx 2
 rgb apps/web/src/components/media/batch-action-bar.tsx 2
 rgb apps/web/src/components/media/batch-set-caption-modal.tsx 5

@@ -95,7 +95,11 @@ describe('Auth Inline Error Highlighting & Edge Cases (Spec 016)', () => {
       expect(html.toLowerCase()).toContain('#f6465d');
     });
 
-    it('PasswordInput renders aria-invalid, has-error class, and inline role="alert" message when error prop is provided', () => {
+    it('PasswordInput renders aria-invalid and an inline role="alert" message when error prop is provided', () => {
+      // Spec 136 PR-136B: the rebuilt shared control (shared/ui Input)
+      // carries the error via aria-invalid + the token-coloured inline
+      // message — the legacy `has-error` class / hex assertions belonged
+      // to the legacy Input it replaced.
       const { html, hasText, hasAttribute } = render(
         <PasswordInput label="Confirm Password" error="Passwords do not match. Please verify both password fields." />
       );
@@ -103,9 +107,8 @@ describe('Auth Inline Error Highlighting & Edge Cases (Spec 016)', () => {
       expect(hasText('Confirm Password')).toBe(true);
       expect(hasText('Passwords do not match. Please verify both password fields.')).toBe(true);
       expect(hasAttribute('aria-invalid', 'true')).toBe(true);
-      expect(html).toContain('has-error');
       expect(html).toContain('role="alert"');
-      expect(html.toLowerCase()).toContain('#f6465d');
+      expect(html).toContain('text-brand-rose');
     });
   });
 

@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from '../components/setup';
 import { SignupPausedCard } from '@/components/auth/signup-paused-card';
 import SignupPage from '@/app/signup/page';
-import { PALETTE } from '@/lib/theme';
 
 describe('Signup Paused Notice UI (Spec 064)', () => {
   const originalEnv = process.env.NEXT_PUBLIC_SIGNUPS_ENABLED;
@@ -19,7 +18,7 @@ describe('Signup Paused Notice UI (Spec 064)', () => {
   });
 
   describe('SignupPausedCard Component', () => {
-    it('renders the paused notice banner with primary brand left border and explanatory message', () => {
+    it('renders the paused notice banner with the token primary accent border and explanatory message', () => {
       const { hasText, html } = render(<SignupPausedCard />);
 
       expect(hasText('New registrations are currently closed')).toBe(true);
@@ -28,7 +27,10 @@ describe('Signup Paused Notice UI (Spec 064)', () => {
           "We're temporarily pausing new signups while we scale up. Existing users can keep using their workspaces as usual."
         )
       ).toBe(true);
-      expect(html).toContain(`border-left:3px solid ${PALETTE.primary}`);
+      // Spec 136 PR-136B: the card is rebuilt on tokens — the accent is
+      // the token-backed border utility, not an inline style.
+      expect(html).toContain('border-l-primary');
+      expect(html).not.toContain('border-left:3px');
     });
 
     it('renders primary CTA button routing to /login', () => {

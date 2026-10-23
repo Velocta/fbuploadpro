@@ -25,16 +25,21 @@
  * later re-skinned this page's presentation residue (the footer
  * prompt/link) and the split layout/showcase chrome onto tokens;
  * the form logic, schema, and copy remain A6's, untouched.
+ *
+ * Spec 136 PR-136B: the password field now uses the shared auth
+ * `PasswordInput` (components/auth) instead of the A6 inline control —
+ * adopted under PR-136B's gate because this page's behavioural suite
+ * (`page.test.tsx`) passes unmodified against the shared control.
  */
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { EyeIcon, EyeOffIcon } from 'lucide-react';
 
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
 import { LoginShowcasePanel } from '@/components/auth/login-showcase-panel';
+import { PasswordInput } from '@/components/auth/password-input';
 import {
   Form,
   FormControl,
@@ -71,65 +76,6 @@ const FIELD_IDS: Record<LoginFieldName, string> = {
   email: 'login-email',
   password: 'login-password',
 };
-
-/**
- * Password control on the shared/ui Input: show/hide toggle + the Caps
- * Lock warning the login form has always carried. Forwards the RHF
- * field props (value / onChange / onBlur / ref) and FormControl's ARIA
- * wiring to the input.
- */
-const PasswordControl = React.forwardRef<HTMLInputElement, React.ComponentProps<typeof Input>>(
-  function PasswordControl({ onKeyDown, onKeyUp, onBlur, disabled, ...props }, ref) {
-    const [showPassword, setShowPassword] = useState(false);
-    const [capsLockOn, setCapsLockOn] = useState(false);
-
-    return (
-      <div className="flex w-full flex-col">
-        <div className="relative">
-          <Input
-            ref={ref}
-            type={showPassword ? 'text' : 'password'}
-            className="pr-10"
-            disabled={disabled}
-            onKeyDown={(e) => {
-              setCapsLockOn(e.getModifierState('CapsLock'));
-              onKeyDown?.(e);
-            }}
-            onKeyUp={(e) => {
-              setCapsLockOn(e.getModifierState('CapsLock'));
-              onKeyUp?.(e);
-            }}
-            onBlur={(e) => {
-              setCapsLockOn(false);
-              onBlur?.(e);
-            }}
-            {...props}
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={showPassword ? 'Hide password' : 'Show password'}
-            aria-pressed={showPassword}
-            disabled={disabled}
-            onClick={() => setShowPassword((prev) => !prev)}
-            className="absolute top-1/2 right-2 -translate-y-1/2 text-ink-dim hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {showPassword ? (
-              <EyeOffIcon className="size-4" aria-hidden />
-            ) : (
-              <EyeIcon className="size-4" aria-hidden />
-            )}
-          </button>
-        </div>
-        {capsLockOn && (
-          <div role="status" aria-live="polite" className="mt-1 text-metadata font-medium text-brand-gold">
-            Caps Lock is on
-          </div>
-        )}
-      </div>
-    );
-  }
-);
 
 export default function LoginPage({ initialResetSuccess = false }: LoginPageProps = {}) {
   const [returnUrl, setReturnUrl] = useState<string | undefined>(undefined);
@@ -334,7 +280,7 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
                   </Link>
                 </div>
                 <FormControl>
-                  <PasswordControl
+                  <PasswordInput
                     placeholder="••••••••••••"
                     autoComplete="current-password"
                     required

@@ -18,7 +18,10 @@ describe('Auth Redesign Components (Spec 010)', () => {
     });
 
     it('renders error state and helper text correctly', () => {
-      const { hasText, html } = render(
+      // Spec 136 PR-136B: the rebuilt control carries its error state via
+      // aria-invalid + an inline role="alert" message on tokens — the
+      // legacy `has-error` class is gone with the legacy Input.
+      const { hasText, hasAttribute, html } = render(
         <PasswordInput
           label="Password"
           error="Password too short"
@@ -27,7 +30,9 @@ describe('Auth Redesign Components (Spec 010)', () => {
       );
 
       expect(hasText('Password too short')).toBe(true);
-      expect(html).toContain('has-error');
+      expect(hasText('Must be 8+ characters')).toBe(true);
+      expect(hasAttribute('aria-invalid', 'true')).toBe(true);
+      expect(html).toContain('role="alert"');
     });
   });
 
