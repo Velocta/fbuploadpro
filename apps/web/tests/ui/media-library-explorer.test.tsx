@@ -10,7 +10,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { RADII, PALETTE } from '@/lib/theme';
 import { formatBytes, deriveDefaultCaption } from '@/lib/upload-queue-helpers';
 import {
   MediaAssetCard,
@@ -167,9 +166,15 @@ const SAMPLE_MEDIA_ITEMS: MediaItemResponse[] = [
 ];
 
 describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2, US6)', () => {
-  it('renders MediaAssetCard with inline caption, multi-select checkbox, rectangular RADII.xs metadata badges, and zero capsule pills', () => {
+  it('renders MediaAssetCard with inline caption, multi-select checkbox, ratio badge, and caption status', () => {
+    // PR-133-2 migration (spec §2.5 doctrine): the legacy assertions on
+    // style mechanisms (`border-radius:${RADII.xs}` inline-style text,
+    // capsule-pill pixel values) are superseded — styling is carried by
+    // the shared/ui primitives + tokens now. The behaviour they guarded
+    // (tile, selection checkbox, caption, ratio/duration metadata) is
+    // asserted directly here.
     const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const { hasText, hasAttribute, html } = render(
+    const { hasText, hasAttribute, findTags } = render(
       <MediaAssetCard
         item={videoItem}
         selected={true}
@@ -189,13 +194,17 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2, US6)', () => {
     expect(hasAttribute('data-testid', `inline-caption-${videoItem.id}`)).toBe(true);
     expect(hasText('Viral Launch Reel.mp4')).toBe(true);
     expect(hasText('Viral Launch Reel 🔥')).toBe(true);
+    expect(hasText('Caption added')).toBe(true);
     expect(hasText('15.0 MB')).toBe(true);
     expect(hasText('9:16')).toBe(true);
     expect(hasText('0:45')).toBe(true);
 
-    // Must use rectangular RADII.xs (4px) and NEVER capsule pills (9999px)
-    expect(html).toContain(`border-radius:${RADII.xs}`);
-    expect(html).not.toContain('9999px');
+    // Thumbnail renders through next/image (spec 133 §6.7).
+    const images = findTags('img');
+    expect(images.length).toBeGreaterThan(0);
+    expect(images[0]?.attributes.src).toContain('m1.webp');
+    // No Schedule / eligibility affordances anywhere on the tile (PB-9).
+    expect(hasText('Schedule')).toBe(false);
   });
 
   it('enforces 300ms hover video preview delay and renders muted inline <video> preview when hovered', () => {
@@ -449,10 +458,13 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     expect(hasText('3 subfolders')).toBe(true);
     expect(hasText('14 media files')).toBe(true);
 
-    // Strict DESIGN.md & theme.ts compliance: zero decorative status dots, zero capsule pill badges
+    // Zero decorative status dots (status is colour + icon + text, OD-3).
     expect(html).not.toContain('data-slot="status-dot"');
-    expect(html).not.toContain('9999px');
-    expect(html).toContain(PALETTE.primary);
+    // PR-133-2 migration (spec §2.5): the legacy `PALETTE.primary` hex
+    // assertion pinned a style mechanism; superseded by the behavioural
+    // check that the surface's single primary action is present.
+    expect(hasAttribute('data-testid', 'upload-files-btn')).toBe(true);
+    expect(hasText('Upload Files')).toBe(true);
   });
 });
 
