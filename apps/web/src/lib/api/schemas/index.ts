@@ -6,3 +6,4 @@ export * from './media';
 export * from './settings';
 export * from './workspaces';
 export * from './connect';
+export * from './auth';

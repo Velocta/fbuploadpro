@@ -64,9 +64,15 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
       expect(html).toContain('href="/signup"');
     });
 
-    it('applies primary brand styling to submit action button', () => {
+    // Superseded by spec 137 PR-A6: the login form is the form
+    // standard's reference conversion — its submit button is the
+    // shared/ui Button primitive (token classes), not the legacy
+    // inline-styled button this assertion was written against.
+    // Behavioural coverage lives in src/app/login/page.test.tsx.
+    it('renders the submit action on the shared/ui Button primitive', () => {
       const { html } = render(<LoginPage />);
-      expect(html).toContain(`background-color:${PALETTE.primary}`);
+      expect(html).toContain('data-slot="button"');
+      expect(html).toContain('bg-primary');
     });
 
     it('does not contain robotic developer slop or decorative operational status dots', () => {
