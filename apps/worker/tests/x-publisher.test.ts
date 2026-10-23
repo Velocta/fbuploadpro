@@ -738,3 +738,54 @@ describe('Spec 127 grep proofs', () => {
     expect(source.match(/createTweet/g)?.length).toBe(1);
   });
 });
+
+// ==========================================
+// Post-merge verification fixes: non-MP4 video rejection +
+// spent-refresh-token guard
+// ==========================================
+
+describe('XPublisher — media/format guards (verification fix)', () => {
+  it('a .mov video fails permanently as unsupported_video_format with NO upload attempted', async () => {
+    const mock = new MockXClient();
+    const outcome = await makePublisher(mock).publish(
+      makeItem({
+        kind: 'video',
+        platform_format: 'video',
+        media_url: 'https://media.example.com/videos/clip.mov',
+      }),
+      makeDestination(),
+      TOKENS
+    );
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error?.kind).toBe('permanent');
+    expect(outcome.error?.code).toBe('unsupported_video_format');
+    expect(mock.uploadsStarted).toEqual([]);
+    expect(mock.callOrder).toEqual([]);
+  });
+
+  it('a .webm video fails the same way (never mislabelled video/mp4)', async () => {
+    const mock = new MockXClient();
+    const outcome = await makePublisher(mock).publish(
+      makeItem({
+        kind: 'video',
+        platform_format: 'video',
+        media_url: 'https://media.example.com/videos/clip.webm',
+      }),
+      makeDestination(),
+      TOKENS
+    );
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error?.code).toBe('unsupported_video_format');
+    expect(mock.uploadsStarted).toEqual([]);
+  });
+
+  it('refreshTokens fails auth-class when the endpoint returns NO rotated refresh token (the spent token is never returned for persist)', async () => {
+    const mock = new MockXClient();
+    mock.nextRefresh = { accessToken: 'new-access-only', refreshToken: null, expiresIn: 7200 };
+    const publisher = makePublisher(mock);
+    const err = await publisher.refreshTokens(makeAccount(), TOKENS).catch((e: unknown) => e);
+    const classified = publisher.mapError(err);
+    expect(classified.kind).toBe('auth');
+    expect(classified.code).toBe('invalid_grant');
+  });
+});
