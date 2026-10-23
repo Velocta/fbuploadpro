@@ -1,0 +1,17 @@
+# Responsive @media baseline (spec 139 / mobile audit M-G1, guardrail check 16).
+#
+# Legacy responsive literals — burn down as surfaces 130–136 rebuild; do NOT add entries
+#
+# @media (min|max)-width px literals in apps/web/src/**/*.{css,tsx} must
+# match the token breakpoint scale: 480px, 768px, 1024px, 1280px. The
+# literals below are the pre-existing legacy occurrences, frozen by the
+# regression guardrail (.github/scripts/regression-guardrails.sh,
+# check 16): any new or additional off-scale literal fails with
+# file:line, and removing one fails until its entry below is removed
+# in the same PR. Entries are exemptions for legacy code owned by
+# surface specs 130–136 — never a licence to add new ones.
+#
+# Format: <path-relative-to-repo-root> <literal> (one entry per occurrence)
+#
+apps/web/src/components/auth/auth-split-layout.tsx 1023px
+apps/web/src/components/settings/general-settings-view.tsx 639px
