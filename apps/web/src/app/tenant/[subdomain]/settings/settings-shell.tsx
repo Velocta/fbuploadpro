@@ -30,39 +30,14 @@ import { Skeleton } from '@/components/shared/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shared/ui/tabs';
 import { Toast } from '@/components/shared/ui/toast';
 
-export type SettingsTab =
-  | 'general'
-  | 'facebook'
-  | 'instagram'
-  | 'threads'
-  | 'youtube'
-  | 'x'
-  | 'tiktok';
-
-export const SETTINGS_TABS: ReadonlyArray<{ id: SettingsTab; label: string }> = [
-  { id: 'general', label: 'General' },
-  { id: 'facebook', label: 'Facebook' },
-  { id: 'instagram', label: 'Instagram' },
-  { id: 'threads', label: 'Threads' },
-  { id: 'youtube', label: 'YouTube' },
-  { id: 'x', label: 'X' },
-  { id: 'tiktok', label: 'TikTok' },
-];
-
-const SETTINGS_TAB_IDS: readonly string[] = SETTINGS_TABS.map((tab) => tab.id);
-
-/**
- * Resolve a `?tab=` value to a tab. The legacy `byoc` value keeps
- * landing on the Facebook tab so existing links (Accounts, Pages,
- * sign-in redirects) keep working unchanged.
- */
-export function resolveSettingsTab(param: string | null | undefined): SettingsTab {
-  if (param === 'byoc') return 'facebook';
-  if (param && SETTINGS_TAB_IDS.includes(param)) {
-    return param as SettingsTab;
-  }
-  return 'general';
-}
+// The tab contract (ids, labels, `resolveSettingsTab`) lives in the
+// server-safe `./settings-tabs` module — the route's server component
+// calls the resolver, and a function exported from this 'use client'
+// module cannot be called from the server. Re-exported here so this
+// island's existing importers are unchanged.
+export { resolveSettingsTab, SETTINGS_TABS } from './settings-tabs';
+export type { SettingsTab } from './settings-tabs';
+import { resolveSettingsTab, SETTINGS_TABS, type SettingsTab } from './settings-tabs';
 
 const FacebookSettingsView = React.lazy(() =>
   import('@/components/settings/facebook/facebook-settings-view').then((m) => ({
