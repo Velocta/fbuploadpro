@@ -271,7 +271,11 @@ function NewFolderForm({
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                {/* Inside a Dialog the panel needs the overlay-top
+                    step: the default popover step sits below the
+                    dialog step and the panel would render behind
+                    the dialog. */}
+                <SelectContent className="z-overlay-top">
                   <SelectItem value={ROOT_VALUE}>Library</SelectItem>
                   {folders.map((f) => (
                     <SelectItem key={f.id} value={f.id}>

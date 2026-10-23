@@ -134,8 +134,13 @@ test.describe('media batch caption', () => {
       await page.setViewportSize({ width, height: 844 });
       await gotoMedia(page);
 
-      // Batch caption dialog.
+      // Batch caption dialog. The batch pill itself must fit the
+      // viewport at this width (no clipped actions).
       await page.getByTestId(`select-media-${ITEM_A_ID}`).click();
+      const batchBar = page.getByTestId('batch-action-bar');
+      await expect(batchBar).toBeVisible();
+      await expectWithinViewport(batchBar, page);
+      await expectWithinViewport(page.getByTestId('batch-clear-btn'), page);
       await page.getByTestId('batch-caption-btn').click();
       const captionDialog = page.getByTestId('batch-set-caption-dialog');
       await expect(captionDialog).toBeVisible();
