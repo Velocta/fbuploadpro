@@ -28,30 +28,26 @@ function toErrorInfo(error: unknown): { message: string; stack?: string | undefi
 }
 
 /**
- * Capture an exception from the worker. Pass ctx.waitUntil (when available)
- * so the capture doesn't block the response and isn't cut off.
+ * Shared capture transport for exceptions and named events. Fire-and-
+ * forget: safe no-op when the key is not configured, bounded by the
+ * capture timeout, and telemetry failures are always swallowed.
  */
-export function captureWorkerError(
+function sendCapture(
   env: PostHogEnv,
-  error: unknown,
-  context?: Record<string, unknown>,
+  event: string,
+  properties: Record<string, unknown>,
   waitUntil?: (promise: Promise<unknown>) => void
 ): void {
   const apiKey = env.POSTHOG_KEY;
   if (!apiKey) return;
 
   const host = (env.POSTHOG_HOST || DEFAULT_HOST).replace(/\/$/, '');
-  const info = toErrorInfo(error);
 
   const payload = {
     api_key: apiKey,
-    event: '$exception',
+    event,
     distinct_id: 'worker',
-    properties: {
-      $exception_message: info.message,
-      $exception_stack: info.stack,
-      ...context,
-    },
+    properties,
   };
 
   const send = fetch(`${host}/capture/`, {
@@ -70,4 +66,44 @@ export function captureWorkerError(
       // ctx may be unavailable in some test harnesses.
     }
   }
+}
+
+/**
+ * Capture an exception from the worker. Pass ctx.waitUntil (when available)
+ * so the capture doesn't block the response and isn't cut off.
+ */
+export function captureWorkerError(
+  env: PostHogEnv,
+  error: unknown,
+  context?: Record<string, unknown>,
+  waitUntil?: (promise: Promise<unknown>) => void
+): void {
+  if (!env.POSTHOG_KEY) return;
+  const info = toErrorInfo(error);
+  sendCapture(
+    env,
+    '$exception',
+    {
+      $exception_message: info.message,
+      $exception_stack: info.stack,
+      ...context,
+    },
+    waitUntil
+  );
+}
+
+/**
+ * Capture a named operational event from the worker — a condition that
+ * is not an exception but must be visible in the same place operators
+ * already watch (e.g. the token-refresh backlog signal, spec 139
+ * residue). Same transport, no-op, and timeout behaviour as
+ * captureWorkerError.
+ */
+export function captureWorkerEvent(
+  env: PostHogEnv,
+  event: string,
+  properties?: Record<string, unknown>,
+  waitUntil?: (promise: Promise<unknown>) => void
+): void {
+  sendCapture(env, event, { ...properties }, waitUntil);
 }

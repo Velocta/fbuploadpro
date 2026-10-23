@@ -8,6 +8,7 @@ import {
 } from '@fbuploadpro/contracts';
 import {
   runRefreshCycle,
+  REFRESH_BACKLOG_EVENT,
   REFRESH_DUE_WINDOW_SECONDS,
   REFRESH_LEASE_TTL_MS,
   REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE,
@@ -647,6 +648,128 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(result.scanned).toBe(3);
     expect(result.refreshed).toBe(3);
     expect(publisher.refreshTokens).toHaveBeenCalledTimes(3);
+  });
+
+  it('BACKLOG SIGNAL (spec 139 residue): within-cap cycles stay silent — no event, no warn', async () => {
+    const db = new FakeRefreshDb();
+    for (const id of [acctUuid(1), acctUuid(2)]) {
+      db.accounts.set(id, await makeAccount({ id }));
+    }
+    const publisher = fakePublisher('x');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW
+    );
+
+    expect(result.scanned).toBe(2);
+    expect(result.scanCap).toBe(REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE);
+    expect(result.scanTruncated).toBe(false);
+    expect(fetchBodies.some((body) => body.includes(REFRESH_BACKLOG_EVENT))).toBe(false);
+    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes('BACKLOG'))).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('BACKLOG SIGNAL (spec 139 residue): a scan ending exactly at the cap with nothing behind it is NOT truncation', async () => {
+    const db = new FakeRefreshDb();
+    for (const id of [acctUuid(1), acctUuid(2), acctUuid(3)]) {
+      db.accounts.set(id, await makeAccount({ id }));
+    }
+    const publisher = fakePublisher('x');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW,
+      { pageSize: 2, maxAccountsPerCycle: 3 }
+    );
+
+    expect(result.scanned).toBe(3);
+    expect(result.scanCap).toBe(3);
+    // The one-row probe past the last scanned id found nothing:
+    // ending at the cap is not by itself a backlog.
+    expect(result.scanTruncated).toBe(false);
+    expect(fetchBodies.some((body) => body.includes(REFRESH_BACKLOG_EVENT))).toBe(false);
+    expect(warnSpy.mock.calls.some((args) => String(args[0]).includes('BACKLOG'))).toBe(false);
+    warnSpy.mockRestore();
+  });
+
+  it('BACKLOG SIGNAL (spec 139 residue): backlog beyond the cap fires the PostHog event + warn log with the cycle counts', async () => {
+    const db = new FakeRefreshDb();
+    for (const id of [acctUuid(1), acctUuid(2), acctUuid(3), acctUuid(4), acctUuid(5)]) {
+      db.accounts.set(id, await makeAccount({ id }));
+    }
+    const publisher = fakePublisher('x');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW,
+      { pageSize: 2, maxAccountsPerCycle: 3 }
+    );
+
+    expect(result.scanned).toBe(3);
+    expect(result.refreshed).toBe(3);
+    expect(result.scanTruncated).toBe(true);
+    const events = fetchBodies
+      .map(
+        (body) =>
+          JSON.parse(body) as { event?: string; properties?: Record<string, unknown> }
+      )
+      .filter((payload) => payload.event === REFRESH_BACKLOG_EVENT);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.properties).toMatchObject({
+      site: 'runRefreshCycle',
+      scanned: 3,
+      scanCap: 3,
+      due: 3,
+      refreshed: 3,
+      deferredTransient: 0,
+      expired: 0,
+    });
+    expect(
+      warnSpy.mock.calls.some(
+        (args) => String(args[0]).includes('BACKLOG') && String(args[0]).includes('scanned=3')
+      )
+    ).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  it('BACKLOG SIGNAL (spec 139 residue): the signal clears on a later cycle that covers the backlog', async () => {
+    const db = new FakeRefreshDb();
+    for (const id of [acctUuid(1), acctUuid(2), acctUuid(3), acctUuid(4), acctUuid(5)]) {
+      db.accounts.set(id, await makeAccount({ id }));
+    }
+    const publisher = fakePublisher('x');
+
+    const first = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW,
+      { pageSize: 2, maxAccountsPerCycle: 3 }
+    );
+    expect(first.scanTruncated).toBe(true);
+    expect(fetchBodies.filter((body) => body.includes(REFRESH_BACKLOG_EVENT))).toHaveLength(1);
+
+    // The next scheduled cycle under the production cap covers
+    // everything the capped cycle left behind: no truncation, and
+    // the stateless signal fires nothing new — it has cleared.
+    const second = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW
+    );
+    expect(second.scanTruncated).toBe(false);
+    expect(fetchBodies.filter((body) => body.includes(REFRESH_BACKLOG_EVENT))).toHaveLength(1);
   });
 
   it('DECRYPT FAILURE (spec 139): corrupt ciphertext is classified distinctly, the publisher is never called, and PostHog sees it', async () => {
