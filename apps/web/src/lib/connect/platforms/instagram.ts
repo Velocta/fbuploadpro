@@ -18,7 +18,8 @@
  * Token path: code → 1-hour short-lived token → 60-day long-lived
  * token, both exchanged server-side here; the framework persists the
  * long-lived token encrypted. The destination is the IG account
- * itself (`single-confirm`): its external id is the destination id.
+ * itself: its external id is the destination id, presented through
+ * the framework's picker (spec 123's fixture mode for Instagram).
  *
  * Guide facts the Settings copy carries (spec 124 §1): where the app
  * is in Development mode, the account owner accepts the tester invite
@@ -106,7 +107,7 @@ export function createInstagramConnectConfig(
     clientIdSource: 'byoc',
     scopes: [...INSTAGRAM_OAUTH_SCOPES],
     usePkce: false,
-    destinationMode: 'single-confirm',
+    destinationMode: 'picker',
     async exchangeCode(
       code: string,
       ctx: ConnectExchangeContext

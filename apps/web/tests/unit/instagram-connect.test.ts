@@ -24,7 +24,7 @@ describe('Instagram connect registration (spec 124)', () => {
     clearPlatformConnectConfigsForTests();
   });
 
-  it('registers Instagram as a BYOC, single-confirm platform on the Instagram-Login route', () => {
+  it('registers Instagram as a BYOC platform on the Instagram-Login route', () => {
     registerInstagramConnectConfig();
     expect(hasPlatformConnectConfig('instagram')).toBe(true);
     const config = getPlatformConnectConfig('instagram');
@@ -33,7 +33,8 @@ describe('Instagram connect registration (spec 124)', () => {
     expect(config?.authorizeUrl).not.toContain('facebook.com');
     expect(config?.clientIdSource).toBe('byoc');
     expect(config?.usePkce).toBe(false);
-    expect(config?.destinationMode).toBe('single-confirm');
+    // Spec 123's framework fixture mode for Instagram.
+    expect(config?.destinationMode).toBe('picker');
   });
 
   it('requests the manage-comments permission (the first comment needs it)', () => {
