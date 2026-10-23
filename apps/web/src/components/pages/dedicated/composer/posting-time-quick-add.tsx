@@ -2,14 +2,12 @@
 
 import React, { useState } from 'react';
 import { type PostFormat } from '@fbuploadpro/contracts';
+import { api, buildTenantApiPath } from '@/lib/api';
+import { PageQueueSlotSchema } from '@/lib/api/schemas/queue';
 import type { PageSlotSummary } from '../tab-dashboard';
-import {
-  composerLabelStyle,
-  composerErrorStyle,
-  composerFieldStyle,
-  composerInputStyle,
-} from './composer-styles';
-import { SPACING, TYPOGRAPHY, COMPONENT_STYLES, THEME } from '@/lib/theme';
+import { Button } from '@/components/shared/ui/button';
+import { Input } from '@/components/shared/ui/input';
+import { cn } from '@/lib/utils';
 
 const FORMAT_OPTIONS: Array<{ id: PostFormat; label: string }> = [
   { id: 'text', label: 'Text' },
@@ -29,6 +27,8 @@ export interface PostingTimeQuickAddProps {
  * Inline quick-add for posting times — used by the composer queue intent and
  * reused by specs 104/105. Adds a slot in place (no navigation to Settings);
  * the new time also appears in Settings since it shares the same store.
+ * The create goes through the typed API client (spec 137 §3.1); a failure
+ * surfaces inline — never silently.
  */
 export function PostingTimeQuickAdd({ pageId, subdomain, onAdded }: Readonly<PostingTimeQuickAddProps>) {
   const [timeInput, setTimeInput] = useState('09:00');
@@ -54,23 +54,18 @@ export function PostingTimeQuickAdd({ pageId, subdomain, onAdded }: Readonly<Pos
     setIsSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}/slots`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slotTime: timeInput, allowedFormats: selectedFormats }),
+      const slot = await api.post(
+        buildTenantApiPath(subdomain, `/pages/${pageId}/slots`),
+        { slotTime: timeInput, allowedFormats: selectedFormats },
+        { schema: PageQueueSlotSchema }
+      );
+      onAdded({
+        id: slot.id,
+        slotTime: slot.slotTime,
+        timezone: slot.timezone,
+        isActive: slot.isActive,
+        allowedFormats: slot.allowedFormats,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || data.error || "Couldn't add this posting time. Please try again.");
-      }
-      const slot: PageSlotSummary = {
-        id: String(data.id),
-        slotTime: String(data.slotTime ?? timeInput),
-        timezone: String(data.timezone ?? 'UTC'),
-        isActive: data.isActive !== false,
-        allowedFormats: Array.isArray(data.allowedFormats) ? data.allowedFormats : selectedFormats,
-      };
-      onAdded(slot);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't add this posting time. Please try again.");
     } finally {
@@ -79,40 +74,33 @@ export function PostingTimeQuickAdd({ pageId, subdomain, onAdded }: Readonly<Pos
   };
 
   return (
-    <div data-testid="posting-time-quick-add" style={{ ...composerFieldStyle, gap: SPACING.sm }}>
-      <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <label htmlFor="quick-add-time-input" style={composerLabelStyle}>
+    <div data-testid="posting-time-quick-add" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="quick-add-time-input" className="text-body font-medium text-ink">
             Time
           </label>
-          <input
+          <Input
             id="quick-add-time-input"
             data-testid="quick-add-time-input"
             type="time"
             value={timeInput}
             onChange={(e) => setTimeInput(e.target.value)}
-            style={{ ...composerInputStyle(), width: '130px' }}
+            className="w-36"
           />
         </div>
-        <button
-          type="button"
+        <Button
           data-testid="quick-add-submit-btn"
-          disabled={isSaving}
+          loading={isSaving}
           onClick={() => void handleAdd()}
-          style={{
-            ...COMPONENT_STYLES.primaryButton,
-            height: '38px',
-            opacity: isSaving ? 0.7 : 1,
-            cursor: isSaving ? 'not-allowed' : 'pointer',
-          }}
         >
           {isSaving ? 'Adding…' : 'Add'}
-        </button>
+        </Button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-        <span style={composerLabelStyle}>Covers</span>
-        <div style={{ display: 'flex', gap: SPACING.xs, flexWrap: 'wrap' }}>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-body font-medium text-ink">Covers</span>
+        <div className="flex flex-wrap gap-1.5">
           {FORMAT_OPTIONS.map((option) => {
             const isSelected = selectedFormats.includes(option.id);
             return (
@@ -122,16 +110,12 @@ export function PostingTimeQuickAdd({ pageId, subdomain, onAdded }: Readonly<Pos
                 data-testid={`quick-add-format-${option.id}`}
                 aria-pressed={isSelected}
                 onClick={() => toggleFormat(option.id)}
-                style={{
-                  padding: `${SPACING.xs} ${SPACING.sm}`,
-                  borderRadius: '4px',
-                  fontSize: '0.8125rem',
-                  fontWeight: isSelected ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.medium,
-                  border: '1px solid var(--border-subtle)',
-                  backgroundColor: isSelected ? `var(--bg-active, ${THEME.default.surfaces.active})` : 'transparent',
-                  color: isSelected ? `var(--text-main)` : `var(--text-sub)`,
-                  cursor: 'pointer',
-                }}
+                className={cn(
+                  'inline-flex min-h-11 items-center rounded-sm border px-3 text-body outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold',
+                  isSelected
+                    ? 'border-line bg-subtle font-semibold text-ink'
+                    : 'border-line font-medium text-ink-sub'
+                )}
               >
                 {option.label}
               </button>
@@ -141,7 +125,7 @@ export function PostingTimeQuickAdd({ pageId, subdomain, onAdded }: Readonly<Pos
       </div>
 
       {error && (
-        <span data-testid="quick-add-error" style={composerErrorStyle}>
+        <span data-testid="quick-add-error" role="alert" className="text-metadata font-medium text-brand-rose">
           {error}
         </span>
       )}

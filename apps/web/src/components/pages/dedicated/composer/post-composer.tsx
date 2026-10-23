@@ -1,10 +1,16 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
+import { XIcon } from 'lucide-react';
 import { type PostFormat } from '@fbuploadpro/contracts';
-import { MODAL_BACKDROP_STYLE, MODAL_CONTAINER_STYLE } from '../modal-styles';
+import { api, buildTenantApiPath } from '@/lib/api';
+import { queryKeys } from '@/lib/data/query-keys';
 import type { PageSlotSummary } from '../tab-dashboard';
-import { IntentSelector, type ComposerIntent } from './intent-selector';
+import { type ComposerIntent } from './intent-selector';
 import { FormatSelector } from './format-selector';
 import {
   ComposerMediaArea,
@@ -14,26 +20,33 @@ import {
 import { ComposerCaption } from './composer-caption';
 import { ComposerLink, isValidLink } from './composer-link';
 import { ComposerPreview } from './composer-preview';
-import { PostingTimeQuickAdd } from './posting-time-quick-add';
 import { submitCreatePost, submitEditPost } from './composer-submit';
 import {
   getNextSlotForFormat,
   getNextOccurrence,
-  formatSlotLong,
   queueGoesOutLine,
-  toDateTimeLocalValue,
   parseDateTimeLocalValue,
   hasRealCaption,
 } from './queue-slot-utils';
-import { FORMAT_LABELS, pluralFormatLabel } from './format-labels';
 import {
-  composerLabelStyle,
-  composerHintStyle,
-  composerErrorStyle,
-  composerFieldStyle,
-  composerInputStyle,
-} from './composer-styles';
-import { SPACING, COMPONENT_STYLES, TYPOGRAPHY, PALETTE } from '@/lib/theme';
+  computeValidationError,
+  composerDescription,
+  composerTitle,
+  getMediaCountError,
+  resolveInitialIntent,
+  resolveInitialItems,
+  resolveInitialScheduleValue,
+  timezoneForFormat,
+} from './composer-validation';
+import {
+  composerFormSchema,
+  type ComposerFormValues,
+} from './composer-form-schema';
+import { getFacebookCooldownState } from './facebook-cooldown';
+import { IntentSection, SubmitSection } from './composer-sections';
+import { Form, FormErrorSummary, type FormErrorSummaryEntry } from '@/components/shared/ui/form';
+import { Banner } from '@/components/shared/ui/banner';
+import { Button } from '@/components/shared/ui/button';
 
 /** Subset of a queue item needed to pre-fill the composer for editing. */
 export interface ComposerInitialPost {
@@ -67,305 +80,34 @@ export interface PostComposerProps {
   onSubmitted: (message: string) => void;
 }
 
-const SINGLE_MEDIA_FORMATS: ReadonlySet<PostFormat> = new Set(['video', 'reel', 'story']);
+/**
+ * Page-read shape the composer consumes (name + D5 cooldown status).
+ * Lenient by design: the composer only reads these two fields, and the
+ * failure mode that matters — a failed read — still throws through the
+ * typed client and leaves the "your Page" fallback, exactly as before.
+ */
+const ComposerPageResponseSchema = z
+  .object({
+    page: z
+      .object({
+        pageName: z.string(),
+        status: z.string().optional(),
+        rateLimitedAt: z.string().nullable().optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
-function browserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch {
-    return 'UTC';
-  }
-}
-
-function roundUpToNextHour(from: Date): Date {
-  const d = new Date(from.getTime());
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return d;
-}
-
-function timezoneForFormat(slots: PageSlotSummary[], format: PostFormat): string {
-  return getNextSlotForFormat(slots, format)?.timezone ?? browserTimezone();
-}
-
-function resolveInitialIntent(
-  slots: PageSlotSummary[],
-  initialIntent: ComposerIntent | undefined,
-  initialPost: ComposerInitialPost | undefined
-): ComposerIntent {
-  if (initialIntent) return initialIntent;
-  if (initialPost) {
-    // Best-effort intent guess: a future scheduled time reads as a custom
-    // schedule, otherwise the queue. (105's edit flow can pass initialIntent.)
-    const scheduledTime = new Date(initialPost.scheduledTime).getTime();
-    if (!Number.isNaN(scheduledTime) && scheduledTime > Date.now()) return 'schedule';
-    return 'queue';
-  }
-  return slots.some((s) => s.isActive) ? 'queue' : 'now';
-}
-
-function resolveInitialItems(initialPost: ComposerInitialPost | undefined): ComposerMediaItem[] {
-  const media = initialPost?.media;
-  if (!media) return [];
-  return [
-    {
-      id: initialPost.mediaId ?? 'initial-media',
-      name: media.name,
-      mediaType: media.mediaType,
-      url: media.url,
-      thumbnailUrl: media.thumbnailUrl,
-      durationSeconds: media.durationSeconds,
-      width: media.width,
-      height: media.height,
-    },
-  ];
-}
-
-function resolveInitialScheduleValue(
-  initialPost: ComposerInitialPost | undefined,
-  slots: PageSlotSummary[]
-): string {
-  const format = initialPost?.postFormat ?? 'reel';
-  if (initialPost) {
-    const parsed = new Date(initialPost.scheduledTime);
-    if (!Number.isNaN(parsed.getTime())) {
-      return toDateTimeLocalValue(parsed, timezoneForFormat(slots, format));
-    }
-  }
-  const nextSlot = getNextSlotForFormat(slots, format);
-  const date = (nextSlot ? getNextOccurrence(nextSlot, new Date()) : null) ?? roundUpToNextHour(new Date());
-  return toDateTimeLocalValue(date, nextSlot?.timezone ?? browserTimezone());
-}
-
-function getMediaCountError(items: ComposerMediaItem[], format: PostFormat): string | null {
-  if (format === 'text' || items.length <= 1) return null;
-  if (!SINGLE_MEDIA_FORMATS.has(format)) return null;
-  const noun = format === 'story' ? 'file' : 'video';
-  return `Choose one ${noun} for this ${FORMAT_LABELS[format].toLowerCase()}.`;
-}
-
-interface ValidationContext {
-  format: PostFormat;
-  caption: string;
-  hasItems: boolean;
-  hasMediaTypeError: boolean;
-  mediaCountError: string | null;
-  linkValid: boolean;
-  intent: ComposerIntent;
-  isScheduleInFuture: boolean;
-  hasActiveSlots: boolean;
-  hasCoveringSlot: boolean;
-}
-
-/** Single place deciding whether submit is allowed and why not. */
-function computeValidationError(ctx: ValidationContext): string | null {
-  if (ctx.format === 'text' && !ctx.caption.trim()) return 'Write a caption for your text post.';
-  if (ctx.format !== 'text' && !ctx.hasItems) return 'Choose media for this post.';
-  if (ctx.hasMediaTypeError) return 'Remove or replace the flagged media to continue.';
-  if (ctx.mediaCountError) return ctx.mediaCountError;
-  if (!ctx.linkValid) return 'Fix the link before submitting.';
-  if (ctx.intent === 'schedule' && !ctx.isScheduleInFuture) return 'Pick a time in the future.';
-  if (ctx.intent === 'queue' && !ctx.hasActiveSlots) return 'Set posting times first.';
-  if (ctx.intent === 'queue' && !ctx.hasCoveringSlot) {
-    return `No posting time covers ${pluralFormatLabel(ctx.format)} yet.`;
-  }
-  return null;
-}
-
-function composerTitle(isEdit: boolean, format: PostFormat): string {
-  if (isEdit) return 'Edit post';
-  if (format === 'text') return 'Create text post';
-  return 'Create post';
-}
-
-function composerDescription(isEdit: boolean, format: PostFormat): string {
-  if (isEdit) return 'Update this post — it keeps its scheduled time unless you change it.';
-  if (format === 'text') return 'Write a post — it publishes as text on your Page.';
-  return 'Put together a post for your Page.';
-}
-
-function submitButtonLabel(isEdit: boolean, intent: ComposerIntent): string {
-  if (isEdit) return 'Save changes';
-  if (intent === 'now') return 'Post now';
-  if (intent === 'schedule') return 'Schedule post';
-  return 'Add to queue';
-}
-
-// ---------------------------------------------------------------------------
-// Intent section
-// ---------------------------------------------------------------------------
-
-interface IntentSectionProps {
-  intent: ComposerIntent;
-  onIntentChange: (intent: ComposerIntent) => void;
-  hasActiveSlots: boolean;
-  pageId: string;
-  subdomain: string;
-  onSlotAdded: (slot: PageSlotSummary) => void;
-  scheduleValue: string;
-  onScheduleChange: (value: string) => void;
-  scheduleTimezone: string;
-  scheduleDate: Date | null;
-  isScheduleInFuture: boolean;
-  format: PostFormat;
-  nextSlotForFormat: PageSlotSummary | null;
-  nextSlotOccurrence: Date | null;
-}
-
-function renderQueueIntentBody(props: IntentSectionProps): React.ReactNode {
-  const { format, nextSlotForFormat, nextSlotOccurrence } = props;
-  if (!nextSlotForFormat || !nextSlotOccurrence) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-        <p data-testid="composer-no-covering-slot-notice" style={{ ...composerHintStyle, margin: 0 }}>
-          No posting time covers {pluralFormatLabel(format)} yet.
-        </p>
-        <PostingTimeQuickAdd pageId={props.pageId} subdomain={props.subdomain} onAdded={props.onSlotAdded} />
-      </div>
-    );
-  }
-  return (
-    <p data-testid="composer-queue-goes-out" style={{ ...composerHintStyle, margin: 0 }}>
-      {queueGoesOutLine(format, nextSlotOccurrence, nextSlotForFormat.timezone)}
-    </p>
-  );
-}
-
-function renderScheduleIntentBody(props: IntentSectionProps): React.ReactNode {
-  const { scheduleValue, onScheduleChange, scheduleTimezone, scheduleDate, isScheduleInFuture } = props;
-  return (
-    <div style={composerFieldStyle}>
-      <label htmlFor="composer-schedule-picker" style={composerLabelStyle}>
-        Date and time
-      </label>
-      <input
-        id="composer-schedule-picker"
-        data-testid="composer-schedule-picker"
-        type="datetime-local"
-        value={scheduleValue}
-        min={toDateTimeLocalValue(new Date(), scheduleTimezone)}
-        onChange={(e) => onScheduleChange(e.target.value)}
-        style={composerInputStyle()}
-      />
-      <span style={composerHintStyle}>Times shown in {scheduleTimezone}.</span>
-      {scheduleDate && isScheduleInFuture && (
-        <span data-testid="composer-schedule-goes-out" style={composerHintStyle}>
-          Goes out {formatSlotLong(scheduleDate, scheduleTimezone)}.
-        </span>
-      )}
-    </div>
-  );
-}
-
-function IntentSection(props: Readonly<IntentSectionProps>): React.ReactElement {
-  const { intent, onIntentChange, hasActiveSlots } = props;
-  return (
-    <div style={composerFieldStyle}>
-      <span style={composerLabelStyle}>How should this go out?</span>
-      <IntentSelector value={intent} onChange={onIntentChange} queueDisabled={!hasActiveSlots} />
-      {!hasActiveSlots && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-          <p data-testid="composer-no-slots-notice" style={{ ...composerHintStyle, margin: 0 }}>
-            Set posting times first — your queued posts go out automatically at these times.
-          </p>
-          <PostingTimeQuickAdd pageId={props.pageId} subdomain={props.subdomain} onAdded={props.onSlotAdded} />
-        </div>
-      )}
-      {intent === 'now' && (
-        <p data-testid="composer-intent-now-note" style={{ ...composerHintStyle, margin: 0 }}>
-          This will publish to Facebook immediately.
-        </p>
-      )}
-      {intent === 'schedule' && renderScheduleIntentBody(props)}
-      {intent === 'queue' && hasActiveSlots && renderQueueIntentBody(props)}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Submit section
-// ---------------------------------------------------------------------------
-
-interface SubmitSectionProps {
-  error: string | null;
-  isEdit: boolean;
-  intent: ComposerIntent;
-  scheduleDate: Date | null;
-  isScheduleInFuture: boolean;
-  scheduleTimezone: string;
-  /** Queue-intent explanatory line repeated under the submit button, or null. */
-  queueNote: string | null;
-  isSubmitDisabled: boolean;
-  isSubmitting: boolean;
-  onClose: () => void;
-}
-
-function SubmitSection(props: Readonly<SubmitSectionProps>): React.ReactElement {
-  const { error, isEdit, intent, isSubmitDisabled, isSubmitting, onClose } = props;
-  const showNowNote = intent === 'now' && !isEdit;
-  const scheduleNoteDate =
-    intent === 'schedule' && !isEdit && props.isScheduleInFuture ? props.scheduleDate : null;
-  const queueNote = intent === 'queue' && !isEdit ? props.queueNote : null;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, alignItems: 'flex-end' }}>
-      {error && (
-        <p data-testid="post-composer-error" style={{ ...composerErrorStyle, margin: 0, alignSelf: 'stretch' }}>
-          {error}
-        </p>
-      )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: SPACING.sm }}>
-        <button
-          type="button"
-          data-testid="cancel-post-composer-btn"
-          onClick={onClose}
-          style={{
-            padding: `${SPACING.xs} ${SPACING.md}`,
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            backgroundColor: 'transparent',
-            color: 'var(--text-sub)',
-            border: '1px solid var(--border-subtle)',
-            cursor: 'pointer',
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          data-testid="submit-post-composer-btn"
-          disabled={isSubmitDisabled}
-          style={{
-            ...COMPONENT_STYLES.primaryButton,
-            padding: `${SPACING.xs} ${SPACING.lg}`,
-            cursor: isSubmitDisabled ? 'not-allowed' : 'pointer',
-            opacity: isSubmitDisabled ? 0.7 : 1,
-          }}
-        >
-          {isSubmitting ? 'Saving…' : submitButtonLabel(isEdit, intent)}
-        </button>
-      </div>
-      {showNowNote && (
-        <span style={composerHintStyle}>This will publish to Facebook immediately.</span>
-      )}
-      {scheduleNoteDate && (
-        <span style={composerHintStyle}>
-          Goes out {formatSlotLong(scheduleNoteDate, props.scheduleTimezone)}.
-        </span>
-      )}
-      {queueNote && (
-        <span data-testid="composer-queue-submit-note" style={composerHintStyle}>
-          {queueNote}
-        </span>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Orchestrator
-// ---------------------------------------------------------------------------
-
+/**
+ * The Facebook composer, rebuilt as a FULL PAGE (OD132-1 DECIDED (a))
+ * on shared/ui primitives + the form standard (RHF + zod, onTouched)
+ * + the typed API client (spec 132 PR-C1). The §3.3 host contract is
+ * preserved as it exists on current main — same props, same callbacks —
+ * so the hosts compile untouched; the launch-contract change to
+ * navigation is the separate joint 132↔134 coordination PR. No draft
+ * mechanism is built (OD132-2 DECIDED (c): UX Rule 14 is a deliberate
+ * not-applied deviation, by Shahzeb's ruling).
+ */
 export function PostComposer({
   pageId,
   subdomain,
@@ -376,45 +118,47 @@ export function PostComposer({
   onSubmitted,
 }: Readonly<PostComposerProps>) {
   const isEdit = Boolean(initialPost);
+  const queryClient = useQueryClient();
 
   const [slots, setSlots] = useState<PageSlotSummary[]>(slotsProp);
-  const [intent, setIntent] = useState<ComposerIntent>(() =>
-    resolveInitialIntent(slotsProp, initialIntent, initialPost)
-  );
-  const [format, setFormat] = useState<PostFormat>(initialPost?.postFormat ?? 'reel');
   const [items, setItems] = useState<ComposerMediaItem[]>(() => resolveInitialItems(initialPost));
-  const [caption, setCaption] = useState(initialPost?.caption ?? '');
   const [isCaptionTouched, setIsCaptionTouched] = useState(Boolean(initialPost?.caption));
-  const [link, setLink] = useState(initialPost?.linkUrl ?? '');
-  const [pageName, setPageName] = useState('your Page');
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  // Schedule intent: timezone comes from the default slot, else the browser.
+  const form = useForm<ComposerFormValues>({
+    resolver: zodResolver(composerFormSchema),
+    mode: 'onTouched',
+    defaultValues: {
+      intent: resolveInitialIntent(slotsProp, initialIntent, initialPost),
+      format: initialPost?.postFormat ?? 'reel',
+      caption: initialPost?.caption ?? '',
+      link: initialPost?.linkUrl ?? '',
+      scheduleValue: resolveInitialScheduleValue(initialPost, slotsProp),
+    },
+  });
+  const values = form.watch();
+  const { intent, format, caption, link, scheduleValue } = values;
+  const fieldErrors = form.formState.errors;
+  const isSubmitting = form.formState.isSubmitting;
+
+  // Page read (name for the destination context + toast copy, and the
+  // D5 cooldown status) through the typed client + React Query. A failed
+  // read is non-blocking — the copy falls back to "your Page" — but it is
+  // no longer a silent swallow: React Query holds the error state and
+  // the typed client reports it (spec 137 §3.1).
+  const pageQuery = useQuery({
+    queryKey: queryKeys.tenant(subdomain).pages.detail(pageId),
+    queryFn: ({ signal }) =>
+      api.get(buildTenantApiPath(subdomain, `/pages/${pageId}`), {
+        schema: ComposerPageResponseSchema,
+        signal,
+      }),
+  });
+  const pageName = pageQuery.data?.page.pageName.trim() || 'your Page';
+  const cooldown = getFacebookCooldownState(pageQuery.data?.page);
+
   const scheduleTimezone = useMemo(() => timezoneForFormat(slots, format), [slots, format]);
-  const [scheduleValue, setScheduleValue] = useState(() =>
-    resolveInitialScheduleValue(initialPost, slotsProp)
-  );
-
-  useEffect(() => {
-    let active = true;
-    const loadPageName = async () => {
-      try {
-        const res = await fetch(`/api/tenant/${subdomain}/pages/${pageId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const name = data?.page?.pageName ?? data?.pageName;
-        if (active && typeof name === 'string' && name.trim()) setPageName(name.trim());
-      } catch {
-        // Non-blocking: toast copy falls back to "your Page".
-      }
-    };
-    void loadPageName();
-    return () => {
-      active = false;
-    };
-  }, [subdomain, pageId]);
-
   const activeSlots = useMemo(() => slots.filter((s) => s.isActive), [slots]);
   const nextSlotForFormat = useMemo(
     () => getNextSlotForFormat(activeSlots, format),
@@ -436,7 +180,7 @@ export function PostComposer({
     // own caption yet — filename-derived pseudo-captions never pre-fill.
     if (!isCaptionTouched) {
       const withCaption = next.find((item) => hasRealCaption(item));
-      setCaption(withCaption?.captionText?.trim() ?? '');
+      form.setValue('caption', withCaption?.captionText?.trim() ?? '');
     }
   };
 
@@ -454,21 +198,36 @@ export function PostComposer({
   });
   const isSubmitDisabled = isSubmitting || validationError !== null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmitDisabled) return;
-    setIsSubmitting(true);
-    setError(null);
+  const summaryEntries: FormErrorSummaryEntry[] = [];
+  if (fieldErrors.caption?.message) {
+    summaryEntries.push({ fieldId: 'composer-caption-field', message: fieldErrors.caption.message });
+  }
+  if (fieldErrors.link?.message) {
+    summaryEntries.push({ fieldId: 'composer-link-field', message: fieldErrors.link.message });
+  }
+  if (serverError) {
+    summaryEntries.push({ message: serverError });
+  } else if (
+    submitAttempted &&
+    validationError &&
+    summaryEntries.length === 0
+  ) {
+    summaryEntries.push({ message: validationError });
+  }
+
+  const handleValidSubmit = async (submitted: ComposerFormValues) => {
+    setSubmitAttempted(true);
+    setServerError(null);
     try {
       const message =
         isEdit && initialPost
           ? await submitEditPost({
               subdomain,
               itemId: initialPost.id,
-              format,
-              caption,
-              link,
-              intent,
+              format: submitted.format,
+              caption: submitted.caption,
+              link: submitted.link,
+              intent: submitted.intent,
               scheduleDate,
               wasFailed: initialPost.status === 'failed',
               pageName,
@@ -476,23 +235,26 @@ export function PostComposer({
           : await submitCreatePost({
               pageId,
               subdomain,
-              format,
+              format: submitted.format,
               items,
-              caption,
-              link,
-              intent,
+              caption: submitted.caption,
+              link: submitted.link,
+              intent: submitted.intent,
               scheduleDate,
               scheduleTimezone,
               nextSlotForFormat,
               nextSlotOccurrence,
               pageName,
             });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.tenant(subdomain).queue.all,
+      });
       onSubmitted(message);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save this post. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+      setServerError(
+        err instanceof Error ? err.message : "Couldn't save this post. Please try again."
+      );
     }
   };
 
@@ -500,60 +262,64 @@ export function PostComposer({
   const description = composerDescription(isEdit, format);
 
   return (
-    <div data-testid="post-composer-backdrop" style={MODAL_BACKDROP_STYLE}>
-      <dialog
-        data-testid="post-composer"
-        open
-        aria-label={title}
-        style={{
-          ...MODAL_CONTAINER_STYLE,
-          position: 'static',
-          margin: 0,
-          maxWidth: '640px',
-          maxHeight: '90vh',
-          overflowY: 'auto',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.md }}>
-          <div>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '1.125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: 'var(--text-main)',
-              }}
+    <section
+      data-testid="post-composer"
+      aria-label={title}
+      className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex items-center gap-3">
+            <div
+              aria-hidden
+              className="flex size-10 shrink-0 items-center justify-center rounded-full bg-subtle text-body font-semibold text-ink"
             >
-              {title}
-            </h3>
-            <p style={{ margin: `${SPACING.xs} 0 0 0`, fontSize: '0.8125rem', color: 'var(--text-sub)' }}>
-              {description}
-            </p>
+              {pageName.charAt(0).toUpperCase() || 'P'}
+            </div>
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate text-body font-semibold text-ink">{pageName}</span>
+              <span className="text-metadata text-ink-sub">Facebook Page</span>
+            </div>
           </div>
-          <button
-            type="button"
-            data-testid="close-post-composer-btn"
-            aria-label="Close composer"
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: 'var(--text-sub)', cursor: 'pointer', padding: SPACING.xs }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <h1 className="m-0 text-lg leading-heading font-semibold text-ink">{title}</h1>
+          <p className="m-0 text-body text-ink-sub">{description}</p>
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          data-testid="close-post-composer-btn"
+          aria-label="Close composer"
+          onClick={onClose}
+        >
+          <XIcon aria-hidden />
+        </Button>
+      </div>
 
-        <form onSubmit={(e) => void handleSubmit(e)} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+      {cooldown.inCooldown && cooldown.message && (
+        <div data-testid="composer-cooldown-notice">
+          <Banner variant="warning" title={cooldown.message} />
+        </div>
+      )}
+
+      <Form {...form}>
+        <form
+          onSubmit={form.handleSubmit(handleValidSubmit, () => setSubmitAttempted(true))}
+          className="flex flex-col gap-6"
+          noValidate
+        >
+          {submitAttempted && summaryEntries.length > 0 && (
+            <FormErrorSummary errors={summaryEntries} />
+          )}
+
           <IntentSection
             intent={intent}
-            onIntentChange={setIntent}
+            onIntentChange={(next) => form.setValue('intent', next)}
             hasActiveSlots={activeSlots.length > 0}
             pageId={pageId}
             subdomain={subdomain}
             onSlotAdded={(slot) => setSlots((prev) => [...prev, slot])}
             scheduleValue={scheduleValue}
-            onScheduleChange={setScheduleValue}
+            onScheduleChange={(value) => form.setValue('scheduleValue', value)}
             scheduleTimezone={scheduleTimezone}
             scheduleDate={scheduleDate}
             isScheduleInFuture={isScheduleInFuture}
@@ -562,45 +328,39 @@ export function PostComposer({
             nextSlotOccurrence={nextSlotOccurrence}
           />
 
-          <div style={composerFieldStyle}>
-            <span style={composerLabelStyle}>Format</span>
-            <FormatSelector value={format} onChange={setFormat} disabled={isEdit} />
+          <div className="flex flex-col gap-1.5">
+            <span className="text-body font-medium text-ink">Format</span>
+            <FormatSelector
+              value={format}
+              onChange={(next) => form.setValue('format', next)}
+              disabled={isEdit}
+            />
             {isEdit && (
-              <span data-testid="composer-format-locked-hint" style={composerHintStyle}>
+              <span data-testid="composer-format-locked-hint" className="text-metadata text-ink-sub">
                 Format can&apos;t be changed when editing.
               </span>
             )}
             {format === 'reel' && (
-              <span data-testid="composer-reel-hint" style={composerHintStyle}>
+              <span data-testid="composer-reel-hint" className="text-metadata text-ink-sub">
                 Portrait works best for reels.
               </span>
             )}
           </div>
 
           {format === 'text' && items.length > 0 && (
-            <div data-testid="composer-text-media-notice" style={composerFieldStyle}>
+            <div data-testid="composer-text-media-notice" className="flex flex-col gap-1.5">
               {items.map((item) => (
-                <div
-                  key={item.id}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}
-                >
-                  <span style={composerErrorStyle}>{getMediaItemError(item, format)}</span>
-                  <span style={composerHintStyle}>{item.name}</span>
+                <div key={item.id} className="flex flex-col gap-0.5">
+                  <span className="text-metadata font-medium text-brand-rose">
+                    {getMediaItemError(item, format)}
+                  </span>
+                  <span className="text-metadata text-ink-sub">{item.name}</span>
                   {!isEdit && (
                     <button
                       type="button"
                       data-testid={`composer-text-remove-media-${item.id}`}
                       onClick={() => setItems(items.filter((i) => i.id !== item.id))}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: 0,
-                        textAlign: 'left',
-                        fontSize: '0.75rem',
-                        fontWeight: TYPOGRAPHY.weights.semibold,
-                        color: PALETTE.accent3,
-                        cursor: 'pointer',
-                      }}
+                      className="min-h-11 self-start text-left text-metadata font-semibold text-brand-rose outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
                     >
                       Remove
                     </button>
@@ -621,19 +381,37 @@ export function PostComposer({
             />
           )}
 
-          <ComposerCaption
-            value={caption}
-            onChange={(value) => {
-              setCaption(value);
-              setIsCaptionTouched(true);
-            }}
-            required={format === 'text'}
+          <Controller
+            control={form.control}
+            name="caption"
+            render={({ field, fieldState }) => (
+              <ComposerCaption
+                ref={field.ref}
+                value={field.value}
+                onChange={(value) => {
+                  field.onChange(value);
+                  setIsCaptionTouched(true);
+                }}
+                onBlur={field.onBlur}
+                required={format === 'text'}
+                error={fieldState.error?.message}
+              />
+            )}
           />
 
-          <ComposerLink
-            value={link}
-            onChange={setLink}
-            visible={format === 'text' || format === 'image' || format === 'video'}
+          <Controller
+            control={form.control}
+            name="link"
+            render={({ field, fieldState }) => (
+              <ComposerLink
+                ref={field.ref}
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+                visible={format === 'text' || format === 'image' || format === 'video'}
+                error={fieldState.error?.message}
+              />
+            )}
           />
 
           <ComposerPreview
@@ -645,7 +423,7 @@ export function PostComposer({
           />
 
           <SubmitSection
-            error={error}
+            error={serverError}
             isEdit={isEdit}
             intent={intent}
             scheduleDate={scheduleDate}
@@ -661,7 +439,7 @@ export function PostComposer({
             onClose={onClose}
           />
         </form>
-      </dialog>
-    </div>
+      </Form>
+    </section>
   );
 }

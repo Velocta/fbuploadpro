@@ -1,20 +1,33 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
+import Image from 'next/image';
+import dynamic from 'next/dynamic';
+import { useQuery } from '@tanstack/react-query';
 import {
   type PostFormat,
   type MediaItemResponse,
   type MediaFolder,
 } from '@fbuploadpro/contracts';
-import { MediaImportModal } from '@/components/media/media-import-modal';
-import {
-  composerLabelStyle,
-  composerHintStyle,
-  composerErrorStyle,
-  composerFieldStyle,
-  composerSecondaryButtonStyle,
-} from './composer-styles';
-import { SPACING, RADII, PALETTE, THEME, TYPOGRAPHY } from '@/lib/theme';
+import { api, buildTenantApiPath } from '@/lib/api';
+import { MediaListResponseSchema, type MediaItem } from '@/lib/api/schemas/media';
+import { queryKeys } from '@/lib/data/query-keys';
+import { Button } from '@/components/shared/ui/button';
+import { Skeleton } from '@/components/shared/ui/skeleton';
+import { cn } from '@/lib/utils';
+
+/**
+ * The media-library import dialog (spec 133's `MediaImportModal`) is
+ * consumed unmodified and loaded on demand (spec 137 §3.6.1): it only
+ * enters the bundle when a composer upload actually opens it.
+ */
+const MediaImportModal = dynamic(
+  () =>
+    import('@/components/media/media-import-modal').then((m) => ({
+      default: m.MediaImportModal,
+    })),
+  { ssr: false }
+);
 
 export interface ComposerMediaItem {
   id: string;
@@ -41,6 +54,20 @@ export interface ComposerMediaAreaProps {
 const MEDIA_LIST_LIMIT = 50;
 
 function mediaItemFromResponse(item: MediaItemResponse): ComposerMediaItem {
+  return {
+    id: item.id,
+    name: item.name,
+    mediaType: item.mediaType,
+    url: item.url,
+    thumbnailUrl: item.thumbnailUrl,
+    captionText: item.captionText,
+    durationSeconds: item.durationSeconds,
+    width: item.width,
+    height: item.height,
+  };
+}
+
+function mediaItemFromListItem(item: MediaItem): ComposerMediaItem {
   return {
     id: item.id,
     name: item.name,
@@ -152,40 +179,32 @@ export function ComposerMediaArea({
   readOnly = false,
 }: Readonly<ComposerMediaAreaProps>) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const [libraryItems, setLibraryItems] = useState<ComposerMediaItem[]>([]);
-  const [isLoadingLibrary, setIsLoadingLibrary] = useState(false);
-  const [libraryError, setLibraryError] = useState<string | null>(null);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [capNotice, setCapNotice] = useState<CapNoticeState | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const openLibraryPicker = async () => {
-    setIsPickerOpen(true);
-    setLibraryError(null);
-    setIsLoadingLibrary(true);
-    try {
-      const res = await fetch(`/api/tenant/${subdomain}/media?limit=${MEDIA_LIST_LIMIT}`);
-      if (!res.ok) throw new Error("Couldn't load your media. Please try again.");
-      const data = await res.json();
-      const mapped: ComposerMediaItem[] = (data.items || []).map((m: MediaItemResponse) => ({
-        id: m.id,
-        name: m.name,
-        mediaType: m.mediaType,
-        url: m.url,
-        thumbnailUrl: m.thumbnailUrl,
-        captionText: m.captionText,
-        durationSeconds: m.durationSeconds,
-        width: m.width,
-        height: m.height,
-      }));
-      setLibraryItems(mapped);
-    } catch (err) {
-      setLibraryError(err instanceof Error ? err.message : "Couldn't load your media. Please try again.");
-    } finally {
-      setIsLoadingLibrary(false);
-    }
-  };
+  // Library reads go through the typed API client + React Query
+  // (spec 137 §3.1/§3.2): the list loads only while the picker is open,
+  // and a failure surfaces as the picker's inline error — never silently.
+  const libraryQuery = useQuery({
+    queryKey: queryKeys.tenant(subdomain).media.list,
+    queryFn: ({ signal }) =>
+      api.get(buildTenantApiPath(subdomain, '/media'), {
+        schema: MediaListResponseSchema,
+        query: { limit: MEDIA_LIST_LIMIT },
+        signal,
+      }),
+    enabled: isPickerOpen,
+  });
+  const libraryItems: ComposerMediaItem[] = (libraryQuery.data?.items ?? []).map(
+    mediaItemFromListItem
+  );
+  const isLoadingLibrary = isPickerOpen && libraryQuery.isPending && libraryQuery.isEnabled;
+  const libraryError =
+    isPickerOpen && libraryQuery.isError
+      ? "Couldn't load your media. Please try again."
+      : null;
 
   const addItems = (incoming: ComposerMediaItem[]) => {
     const result = resolveSelectionAfterAdd(items, incoming, format);
@@ -243,25 +262,29 @@ export function ComposerMediaArea({
   const acceptAttr = format === 'image' ? 'image/*' : 'video/*,image/*';
 
   return (
-    <div data-testid="composer-media-area" style={composerFieldStyle}>
-      <span style={composerLabelStyle}>Media</span>
+    <div data-testid="composer-media-area" className="flex flex-col gap-1.5">
+      <span className="text-body font-medium text-ink">Media</span>
 
       {/* Selected thumbnails */}
       {items.length > 0 && (
-        <div
-          data-testid="composer-selected-media"
-          style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap' }}
-        >
+        <div data-testid="composer-selected-media" className="flex flex-wrap gap-3">
           {items.map((item) => {
             const itemError = getMediaItemError(item, format);
             const thumb = item.thumbnailUrl || item.url;
             return (
-              <div key={item.id} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, maxWidth: '140px' }}>
-                <div style={{ position: 'relative', width: '120px', aspectRatio: '1', borderRadius: RADII.xs, overflow: 'hidden', border: `1px solid var(--border-subtle)` }}>
+              <div key={item.id} className="flex max-w-36 flex-col gap-1.5">
+                <div className="relative aspect-square w-30 overflow-hidden rounded-sm border border-line">
                   {thumb ? (
-                    <img src={thumb} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <Image
+                      src={thumb}
+                      alt={item.name}
+                      width={120}
+                      height={120}
+                      unoptimized
+                      className="size-full object-cover"
+                    />
                   ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', color: `var(--text-sub)` }}>
+                    <div className="flex size-full items-center justify-center text-metadata text-ink-sub">
                       {item.mediaType}
                     </div>
                   )}
@@ -271,44 +294,25 @@ export function ComposerMediaArea({
                       data-testid={`composer-remove-media-${item.id}`}
                       aria-label={`Remove ${item.name}`}
                       onClick={() => handleRemove(item.id)}
-                      style={{
-                        position: 'absolute',
-                        top: '4px',
-                        right: '4px',
-                        width: '22px',
-                        height: '22px',
-                        borderRadius: '50%',
-                        border: 'none',
-                        backgroundColor: 'rgba(0,0,0,0.6)',
-                        color: '#fff',
-                        cursor: 'pointer',
-                        fontSize: '0.75rem',
-                        lineHeight: 1,
-                      }}
+                      className="absolute top-1 right-1 inline-flex size-8 items-center justify-center rounded-full bg-neutral-black/60 text-body text-neutral-white outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
                     >
                       ×
                     </button>
                   )}
                 </div>
                 {itemError && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <span data-testid={`composer-media-error-${item.id}`} style={composerErrorStyle}>
+                  <div className="flex flex-col gap-0.5">
+                    <span
+                      data-testid={`composer-media-error-${item.id}`}
+                      className="text-metadata font-medium text-brand-rose"
+                    >
                       {itemError}
                     </span>
                     {!readOnly && (
                       <button
                         type="button"
                         onClick={() => handleRemove(item.id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          textAlign: 'left',
-                          fontSize: '0.75rem',
-                          fontWeight: TYPOGRAPHY.weights.semibold,
-                          color: PALETTE.accent3,
-                          cursor: 'pointer',
-                        }}
+                        className="min-h-11 self-start text-left text-metadata font-semibold text-brand-rose outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
                       >
                         Remove
                       </button>
@@ -323,85 +327,80 @@ export function ComposerMediaArea({
 
       {/* Empty state + actions */}
       {items.length === 0 && !readOnly && (
-        <p data-testid="composer-media-empty" style={{ ...composerHintStyle, margin: 0 }}>
+        <p data-testid="composer-media-empty" className="m-0 text-metadata text-ink-sub">
           No media selected yet.
         </p>
       )}
       {visibleCapNotice && !readOnly && (
-        <p data-testid="composer-media-cap-notice" style={{ ...composerHintStyle, margin: 0 }}>
+        <p data-testid="composer-media-cap-notice" className="m-0 text-metadata text-ink-sub">
           {visibleCapNotice}
         </p>
       )}
       {!readOnly && (
-        <div style={{ display: 'flex', gap: SPACING.sm, flexWrap: 'wrap' }}>
-          <button
-            type="button"
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant="secondary"
             data-testid="composer-choose-library-btn"
-            onClick={() => void openLibraryPicker()}
-            style={composerSecondaryButtonStyle()}
+            onClick={() => setIsPickerOpen(true)}
           >
             Choose from library
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="secondary"
             data-testid="composer-upload-new-btn"
             onClick={handleUploadClick}
-            style={composerSecondaryButtonStyle()}
           >
             Upload new
-          </button>
+          </Button>
           <input
             ref={fileInputRef}
             type="file"
             accept={acceptAttr}
             data-testid="composer-file-input"
             onChange={handleFilesChosen}
-            style={{ display: 'none' }}
+            className="hidden"
             aria-hidden="true"
             tabIndex={-1}
           />
         </div>
       )}
       {readOnly && (
-        <p style={{ ...composerHintStyle, margin: 0 }}>
+        <p className="m-0 text-metadata text-ink-sub">
           Media can&apos;t be changed when editing.
         </p>
       )}
 
-      {/* Library picker */}
+      {/* Library picker (built by 132 on shared/ui primitives + the typed
+          media schema, per OD132-4 recommendation (a)) */}
       {isPickerOpen && (
-        <div data-testid="composer-library-picker" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={composerLabelStyle}>Your media</span>
-            <button
-              type="button"
-              onClick={() => setIsPickerOpen(false)}
-              style={{ background: 'none', border: 'none', color: `var(--text-sub)`, cursor: 'pointer', fontSize: '0.8125rem' }}
-            >
+        <div data-testid="composer-library-picker" className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-body font-medium text-ink">Your media</span>
+            <Button variant="ghost" onClick={() => setIsPickerOpen(false)}>
               Done
-            </button>
+            </Button>
           </div>
-          {isLoadingLibrary && <p style={{ ...composerHintStyle, margin: 0 }}>Loading media…</p>}
-          {libraryError && <p style={composerErrorStyle}>{libraryError}</p>}
+          {isLoadingLibrary && (
+            <div aria-busy="true" className="flex flex-col gap-2">
+              <Skeleton className="h-20 w-full" />
+              <p className="m-0 text-metadata text-ink-sub">Loading media…</p>
+            </div>
+          )}
+          {libraryError && (
+            <p role="alert" className="m-0 text-metadata font-medium text-brand-rose">
+              {libraryError}
+            </p>
+          )}
           {!isLoadingLibrary && !libraryError && libraryItems.length === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs, alignItems: 'flex-start' }}>
-              <p style={{ ...composerHintStyle, margin: 0 }}>No media yet.</p>
-              <button type="button" onClick={handleUploadClick} style={composerSecondaryButtonStyle()}>
+            <div className="flex flex-col items-start gap-1.5">
+              <p className="m-0 text-metadata text-ink-sub">No media yet.</p>
+              <Button variant="secondary" onClick={handleUploadClick}>
                 Upload files to get started
-              </button>
+              </Button>
             </div>
           )}
           {!isLoadingLibrary && libraryItems.length > 0 && (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(88px, 1fr))',
-                gap: SPACING.xs,
-                maxHeight: '180px',
-                overflowY: 'auto',
-                padding: '2px',
-              }}
-            >
+            <div className="grid max-h-45 grid-cols-4 gap-1.5 overflow-y-auto p-0.5 sm:grid-cols-6">
               {libraryItems.map((media) => {
                 const isSelected = items.some((i) => i.id === media.id);
                 const thumb = media.thumbnailUrl || media.url;
@@ -412,23 +411,22 @@ export function ComposerMediaArea({
                     data-testid={`composer-library-pick-${media.id}`}
                     aria-pressed={isSelected}
                     onClick={() => handlePickFromLibrary(media)}
-                    style={{
-                      position: 'relative',
-                      aspectRatio: '1',
-                      borderRadius: RADII.xs,
-                      overflow: 'hidden',
-                      border: isSelected
-                        ? `2px solid ${PALETTE.primary}`
-                        : '1px solid var(--border-subtle)',
-                      backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-                      padding: 0,
-                      cursor: 'pointer',
-                    }}
+                    className={cn(
+                      'relative aspect-square overflow-hidden rounded-sm bg-panel p-0 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold',
+                      isSelected ? 'border-2 border-brand-gold' : 'border border-line'
+                    )}
                   >
                     {thumb ? (
-                      <img src={thumb} alt={media.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <Image
+                        src={thumb}
+                        alt={media.name}
+                        width={176}
+                        height={176}
+                        unoptimized
+                        className="size-full object-cover"
+                      />
                     ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6875rem', color: `var(--text-sub)` }}>
+                      <div className="flex size-full items-center justify-center text-metadata text-ink-sub">
                         {media.mediaType}
                       </div>
                     )}
