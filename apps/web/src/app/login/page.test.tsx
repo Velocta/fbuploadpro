@@ -1,0 +1,279 @@
+/** @vitest-environment jsdom */
+/**
+ * Login form — behavioural tests for the §3.8 reference conversion
+ * (spec 137 PR-A6). User-event driven against the REAL typed API
+ * client: only the network (`fetch`) and the post-login navigation
+ * (`completeAuthRedirect`) are doubled, so the 401 → session-expired
+ * mapping, response-schema validation and error presentation are the
+ * production code paths.
+ */
+import * as React from "react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import LoginPage, { SESSION_EXPIRED_NOTICE } from "./page";
+import { resetSessionExpiredGuard } from "@/lib/api/session-expired";
+
+const completeAuthRedirect = vi.fn();
+vi.mock("@/lib/auth-broadcast", () => ({
+  completeAuthRedirect: (...args: unknown[]) => completeAuthRedirect(...args),
+}));
+
+const fetchMock = vi.fn();
+
+function jsonResponse(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function setUrl(path: string) {
+  window.history.pushState({}, "", path);
+}
+
+async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>, email: string, password: string) {
+  await user.type(screen.getByLabelText("Email Address"), email);
+  await user.type(screen.getByLabelText("Password", { exact: true }), password);
+  await user.click(screen.getByRole("button", { name: "Sign In" }));
+}
+
+const SUCCESS_BODY = {
+  success: true,
+  user: {
+    id: "11111111-1111-4111-8111-111111111111",
+    email: "owner@gmail.com",
+    name: "Owner",
+    subdomain: "e2e",
+    role: "admin",
+    status: "active",
+  },
+  redirectUrl: "/tenant/e2e",
+};
+
+beforeEach(() => {
+  completeAuthRedirect.mockClear();
+  fetchMock.mockReset();
+  vi.stubGlobal("fetch", fetchMock);
+  resetSessionExpiredGuard();
+  setUrl("/login");
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("login form (form standard reference conversion)", () => {
+  it("renders the approved sign-in copy and fields", () => {
+    render(<LoginPage />);
+    expect(screen.getByRole("heading", { name: "Sign In" })).toBeTruthy();
+    expect(
+      screen.getByText("Welcome back! Sign in to keep your content flowing across every platform.")
+    ).toBeTruthy();
+    expect(screen.getByLabelText("Email Address")).toBeTruthy();
+    expect(screen.getByLabelText("Password", { exact: true })).toBeTruthy();
+    expect(screen.getByText("Only @gmail.com accounts are supported")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Forgot password?" }).getAttribute("href")).toBe(
+      "/forgot-password"
+    );
+    // No session-expired notice on a plain visit.
+    expect(screen.queryByText(SESSION_EXPIRED_NOTICE)).toBeNull();
+  });
+
+  it("validates on blur: a non-Gmail address errors inline without a submit or a request", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    const email = screen.getByLabelText("Email Address");
+    await user.click(email);
+    await user.type(email, "owner@example.com");
+    await user.click(screen.getByLabelText("Password", { exact: true }));
+
+    expect(
+      await screen.findByText("Only @gmail.com (or @googlemail.com) accounts are supported.")
+    ).toBeTruthy();
+    expect(email.getAttribute("aria-invalid")).toBe("true");
+    expect(document.querySelector('[data-slot="form-error-summary"]')).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("failed submit: summary focuses, its link matches the inline error, input is preserved, no request", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@example.com", "some-password-1");
+
+    const summary = await waitFor(() => {
+      const el = document.querySelector('[data-slot="form-error-summary"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    expect(document.activeElement).toBe(summary);
+    const link = screen.getByRole("link", {
+      name: "Only @gmail.com (or @googlemail.com) accounts are supported.",
+    });
+    expect(link.getAttribute("href")).toBe("#login-email");
+    expect(
+      screen.getAllByText("Only @gmail.com (or @googlemail.com) accounts are supported.")
+    ).toHaveLength(2);
+    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe(
+      "owner@example.com"
+    );
+    expect((screen.getByLabelText("Password", { exact: true }) as HTMLInputElement).value).toBe(
+      "some-password-1"
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("empty submit shows both field errors inline and in the summary", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.click(screen.getByRole("button", { name: "Sign In" }));
+
+    // Each message appears twice by design: inline under its field and
+    // as the summary entry with identical wording (§3.8).
+    expect(await screen.findAllByText("Please enter your password.")).toHaveLength(2);
+    expect(screen.getAllByText("Please enter a valid Gmail address.")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Please enter your password." }).getAttribute("href")).toBe(
+      "#login-password"
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("wrong password: the server message lands in the summary and the input is preserved", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(jsonResponse(401, { error: "Invalid email or password" }));
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "wrong-password");
+
+    const summary = await waitFor(() => {
+      const el = document.querySelector('[data-slot="form-error-summary"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+    expect(summary.textContent).toContain("Invalid email or password");
+    expect(document.activeElement).toBe(summary);
+    expect((screen.getByLabelText("Email Address") as HTMLInputElement).value).toBe("owner@gmail.com");
+    expect((screen.getByLabelText("Password", { exact: true }) as HTMLInputElement).value).toBe(
+      "wrong-password"
+    );
+    expect(completeAuthRedirect).not.toHaveBeenCalled();
+  });
+
+  it("server 400 field errors map back onto the fields inline and in the summary", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      jsonResponse(400, {
+        error: "Validation failed",
+        details: { email: ["This email address cannot be used."] },
+      })
+    );
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "some-password-1");
+
+    expect(await screen.findAllByText("This email address cannot be used.")).toHaveLength(2);
+    expect(
+      screen.getByRole("link", { name: "This email address cannot be used." }).getAttribute("href")
+    ).toBe("#login-email");
+    expect(screen.getByLabelText("Email Address").getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("network failure surfaces the connection message in the summary, never silently", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "some-password-1");
+
+    expect(
+      await screen.findByText("Couldn't sign you in. Please check your connection and try again.")
+    ).toBeTruthy();
+  });
+
+  it("successful sign-in posts the payload and hands the redirect to completeAuthRedirect", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(jsonResponse(200, SUCCESS_BODY));
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "correct-password");
+
+    await waitFor(() =>
+      expect(completeAuthRedirect).toHaveBeenCalledWith("/tenant/e2e", SUCCESS_BODY.user)
+    );
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      email: "owner@gmail.com",
+      password: "correct-password",
+    });
+  });
+
+  it("submit button shows the loading state and is disabled while the request is pending", async () => {
+    const user = userEvent.setup();
+    let release: (value: Response) => void = () => undefined;
+    fetchMock.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        release = resolve;
+      })
+    );
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "correct-password");
+
+    const button = screen.getByRole("button", { name: "Sign In" });
+    await waitFor(() => expect(button.hasAttribute("disabled")).toBe(true));
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    release(jsonResponse(200, SUCCESS_BODY));
+    await waitFor(() => expect(completeAuthRedirect).toHaveBeenCalled());
+  });
+
+  it("password visibility toggle switches the field type", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    const password = screen.getByLabelText("Password", { exact: true }) as HTMLInputElement;
+    expect(password.type).toBe("password");
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password.type).toBe("text");
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password.type).toBe("password");
+  });
+});
+
+describe("login session-expired contract (§3.1)", () => {
+  it("renders the session-expired notice when reason=session-expired is present", () => {
+    setUrl("/login?next=%2Ftenant%2Fe2e%2Fpages&reason=session-expired");
+    render(<LoginPage />);
+    expect(screen.getByText(SESSION_EXPIRED_NOTICE)).toBeTruthy();
+  });
+
+  it("honours the safe `next` path as the post-login returnUrl", async () => {
+    const user = userEvent.setup();
+    setUrl("/login?next=%2Ftenant%2Fe2e%2Fpages&reason=session-expired");
+    fetchMock.mockResolvedValue(jsonResponse(200, SUCCESS_BODY));
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "correct-password");
+
+    await waitFor(() => expect(completeAuthRedirect).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).returnUrl).toBe("/tenant/e2e/pages");
+  });
+
+  it("never honours an external `next` (no open redirect)", async () => {
+    const user = userEvent.setup();
+    setUrl("/login?next=https%3A%2F%2Fevil.example%2Fphish");
+    fetchMock.mockResolvedValue(jsonResponse(200, SUCCESS_BODY));
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "correct-password");
+
+    await waitFor(() => expect(completeAuthRedirect).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as { returnUrl?: string };
+    expect(body.returnUrl ?? "").not.toContain("evil.example");
+  });
+
+  it("still honours the legacy returnUrl parameter", async () => {
+    const user = userEvent.setup();
+    setUrl("/login?returnUrl=%2Ftenant%2Fe2e%2Fmedia");
+    fetchMock.mockResolvedValue(jsonResponse(200, SUCCESS_BODY));
+    render(<LoginPage />);
+    await fillAndSubmit(user, "owner@gmail.com", "correct-password");
+
+    await waitFor(() => expect(completeAuthRedirect).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).returnUrl).toBe("/tenant/e2e/media");
+  });
+});

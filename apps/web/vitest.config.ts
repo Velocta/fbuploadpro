@@ -10,6 +10,10 @@ export default defineConfig({
   test: {
     globals: true,
     passWithNoTests: true,
+    // Playwright specs (tests/e2e/**, spec 137-A3) are not Vitest tests —
+    // PR-A6 carries the updated login spec on this stack, so the exclude
+    // lands here; PR-A3's project-split config supersedes it on merge.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json'],
