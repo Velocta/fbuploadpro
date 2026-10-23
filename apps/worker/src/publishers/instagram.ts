@@ -293,6 +293,12 @@ export class InstagramPublisher implements Publisher {
     // ---- Live quota read (D5) — best effort, never blocks the post ----
     const liveLimit = await this.readLiveLimit(igUserId, accessToken);
 
+    // At the platform-reported cap the post DEFERS (D5) — the live
+    // total overrides the claim-side default, and publishing into a
+    // certain rejection would fail the post instead of pausing it.
+    const limitOutcome = this.publishingLimitOutcome(liveLimit);
+    if (limitOutcome) return limitOutcome;
+
     // ---- Container flow ----
     let containerId: string;
     try {
@@ -649,18 +655,52 @@ export class InstagramPublisher implements Publisher {
     }
   }
 
+  /**
+   * D5 live-cap enforcement: when the platform-reported usage reaches
+   * the resolved cap (the live total overrides the claim-side default
+   * through the destination-override seam), the post defers for an hour
+   * instead of publishing into a certain rejection. Best effort — an
+   * unreadable quota (no usage reported) never blocks a publish.
+   */
+  private publishingLimitOutcome(liveLimit: {
+    resolved: ReturnType<typeof resolvePublishLimit>;
+    detail?: Record<string, unknown> | undefined;
+  }): PublishOutcome | null {
+    const maxCount = liveLimit.resolved?.publishedPosts?.maxCount;
+    const usage = liveLimit.detail?.usage;
+    if (maxCount === undefined || typeof usage !== 'number' || usage < maxCount) {
+      return null;
+    }
+    return {
+      status: 'retry',
+      error: {
+        kind: 'retryable',
+        code: 'publishing_limit_reached',
+        message:
+          'This Instagram account has reached its publishing limit for now. The post will be tried again later.',
+      },
+      retryDelaySeconds: 3600,
+      detail: {
+        platform: 'instagram',
+        ...(liveLimit.detail ? { publishingLimit: liveLimit.detail } : {}),
+      },
+    };
+  }
+
   private failureOutcome(
     err: unknown,
     item: DatabaseUnifiedQueueItemRow,
     detail: Record<string, unknown> | undefined,
-    liveLimit?: { resolved: ReturnType<typeof resolvePublishLimit> }
+    liveLimit?: {
+      resolved: ReturnType<typeof resolvePublishLimit>;
+      detail?: Record<string, unknown> | undefined;
+    }
   ): PublishOutcome {
     const classified = classifyInstagramError(err);
     const canRetry =
       classified.kind === 'retryable' && item.retry_count < (item.max_retries ?? 3);
     const delay =
       classified.retryDelaySeconds ?? retryDelay(item.retry_count);
-    void liveLimit;
     return {
       status: canRetry ? 'retry' : 'failed',
       error: classified,
@@ -668,7 +708,10 @@ export class InstagramPublisher implements Publisher {
       ...(classified.kind === 'auth'
         ? { targetAccountStatus: 'expired' as const }
         : {}),
-      detail: detail ?? { platform: 'instagram' },
+      detail: {
+        ...(detail ?? { platform: 'instagram' }),
+        ...(liveLimit?.detail ? { publishingLimit: liveLimit.detail } : {}),
+      },
     };
   }
 }

@@ -284,7 +284,12 @@ export class ThreadsPublisher implements Publisher {
 
     // ---- Live quota read (D5) — best effort, never blocks the post ----
     const liveLimit = await this.readLiveLimit(threadsUserId, accessToken);
-    void liveLimit;
+
+    // At the platform-reported cap the post DEFERS (D5) — the live
+    // total overrides the claim-side default, and publishing into a
+    // certain rejection would fail the post instead of pausing it.
+    const limitOutcome = this.publishingLimitOutcome(liveLimit);
+    if (limitOutcome) return limitOutcome;
 
     // ---- Main post through the state machine ----
     // mainContainerParams validates content (a media post with no media
@@ -306,6 +311,7 @@ export class ThreadsPublisher implements Publisher {
       platform: 'threads',
       containerId: main.containerId,
       mediaId,
+      ...(liveLimit.detail ? { publishingLimit: liveLimit.detail } : {}),
     };
 
     // ---- Reply chain: in-order follow-ups, warning on failure ----
@@ -368,7 +374,10 @@ export class ThreadsPublisher implements Publisher {
   private async readLiveLimit(
     threadsUserId: string,
     accessToken: string
-  ): Promise<{ resolved: ReturnType<typeof resolvePublishLimit> }> {
+  ): Promise<{
+    resolved: ReturnType<typeof resolvePublishLimit>;
+    detail?: Record<string, unknown> | undefined;
+  }> {
     try {
       const limit = await this.client.getPublishingLimit({
         threadsUserId,
@@ -383,7 +392,15 @@ export class ThreadsPublisher implements Publisher {
               },
             }
           : undefined;
-      return { resolved: resolvePublishLimit('threads', override) };
+      return {
+        resolved: resolvePublishLimit('threads', override),
+        detail: {
+          ...(limit.usage !== undefined ? { usage: limit.usage } : {}),
+          ...(limit.totalCount !== undefined
+            ? { totalCount: limit.totalCount }
+            : {}),
+        },
+      };
     } catch {
       return { resolved: resolvePublishLimit('threads') };
     }
@@ -657,6 +674,38 @@ export class ThreadsPublisher implements Publisher {
       if (attempt < this.maxPolls - 1) await this.sleep(this.pollIntervalMs);
     }
     return 'retry';
+  }
+
+  /**
+   * D5 live-cap enforcement: when the platform-reported usage reaches
+   * the resolved cap (the live total overrides the claim-side default
+   * through the destination-override seam), the post defers for an hour
+   * instead of publishing into a certain rejection. Best effort — an
+   * unreadable quota (no usage reported) never blocks a publish.
+   */
+  private publishingLimitOutcome(liveLimit: {
+    resolved: ReturnType<typeof resolvePublishLimit>;
+    detail?: Record<string, unknown> | undefined;
+  }): PublishOutcome | null {
+    const maxCount = liveLimit.resolved?.publishedPosts?.maxCount;
+    const usage = liveLimit.detail?.usage;
+    if (maxCount === undefined || typeof usage !== 'number' || usage < maxCount) {
+      return null;
+    }
+    return {
+      status: 'retry',
+      error: {
+        kind: 'retryable',
+        code: 'publishing_limit_reached',
+        message:
+          'This Threads account has reached its publishing limit for now. The post will be tried again later.',
+      },
+      retryDelaySeconds: 3600,
+      detail: {
+        platform: 'threads',
+        ...(liveLimit.detail ? { publishingLimit: liveLimit.detail } : {}),
+      },
+    };
   }
 
   private failureOutcome(
