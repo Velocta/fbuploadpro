@@ -1,6 +1,10 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import { THEME, SPACING, RADII, TYPOGRAPHY } from '@/lib/theme';
 import { getWorkspaceDisplayName } from './workspace-display-name';
+
+/** Title resolves through the tenant layout's `<Section> · <Workspace>` template (§3.3.4). */
+export const metadata: Metadata = { title: 'Home' };
 
 interface TenantIndexPageProps {
   params: Promise<{ subdomain: string }>;

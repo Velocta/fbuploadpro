@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import { headers } from 'next/headers';
 import { shouldUseCleanTenantPaths } from '@/lib/tenant-href';
@@ -13,6 +14,28 @@ import { getWorkspaceDisplayName } from './workspace-display-name';
 interface TenantLayoutProps {
   params: Promise<{ subdomain: string }>;
   children: React.ReactNode;
+}
+
+/**
+ * Metadata standard (spec 137 §3.3.4 / PR-A2): tenant route titles follow
+ * `<Section> · <Workspace name>`; segments export a plain section title
+ * and this template appends the workspace name, resolved from the same
+ * server context the layout body uses. The default is the workspace name
+ * itself for segments that export no title.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ subdomain: string }>;
+}): Promise<Metadata> {
+  const { subdomain } = await params;
+  const workspaceName = (await getWorkspaceDisplayName(subdomain)) ?? subdomain;
+  return {
+    title: {
+      template: `%s · ${workspaceName}`,
+      default: workspaceName,
+    },
+  };
 }
 
 export default async function TenantLayout({ params, children }: Readonly<TenantLayoutProps>) {

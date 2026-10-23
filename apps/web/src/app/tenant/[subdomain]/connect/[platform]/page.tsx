@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
@@ -21,6 +22,13 @@ import {
 interface ConnectPickerPageProps {
   params: Promise<{ subdomain: string; platform: string }>;
   searchParams: Promise<{ notice?: string }>;
+}
+
+/** Title resolves through the tenant layout's `<Section> · <Workspace>` template (§3.3.4). */
+export async function generateMetadata({ params }: ConnectPickerPageProps): Promise<Metadata> {
+  const { platform } = await params;
+  const label = isKnownPlatform(platform) ? PLATFORM_LABELS[platform] : 'account';
+  return { title: `Connect ${label}` };
 }
 
 type PendingDestinations = Awaited<
