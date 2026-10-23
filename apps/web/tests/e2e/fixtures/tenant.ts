@@ -57,6 +57,9 @@ export const CONNECTED_ACCOUNT = {
 export function queueItemFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: '44444444-4444-4444-8444-444444444444',
+    userId: TENANT.userId,
+    pageId: FACEBOOK_PAGE.id,
+    slotId: null,
     mediaId: null,
     postFormat: 'text',
     linkUrl: null,
@@ -67,8 +70,10 @@ export function queueItemFixture(overrides: Record<string, unknown> = {}) {
     retryCount: 0,
     maxRetries: 3,
     fbPostId: null,
+    fbCommentId: null,
     publishedAt: null,
     createdAt: '2026-10-20T00:00:00.000Z',
+    updatedAt: '2026-10-20T00:00:00.000Z',
     media: null,
     ...overrides,
   };

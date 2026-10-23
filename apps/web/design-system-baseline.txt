@@ -71,7 +71,6 @@ rgb apps/web/src/lib/component-styles.ts 1
 fontsize apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
 zindex apps/web/src/components/pages/dedicated/modal-styles.ts 1
 zindex apps/web/src/components/pages/dedicated/page-header.tsx 1
-zindex apps/web/src/components/pages/dedicated/queue/queue-toasts.tsx 1
 zindex apps/web/src/components/ui/dialog.tsx 2
 zindex apps/web/src/components/ui/input.tsx 1
 important apps/web/src/components/ui/button.tsx 7

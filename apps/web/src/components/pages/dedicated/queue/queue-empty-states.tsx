@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import * as React from 'react';
 import Link from 'next/link';
-import { THEME, PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/shared/ui/button';
+import { EmptyState } from '@/components/shared/ui/empty-state';
 import { PostingTimeQuickAdd } from '../composer/posting-time-quick-add';
 import type { PageSlotSummary } from '../tab-dashboard';
 
@@ -16,22 +16,24 @@ export interface QueueEmptyStatesProps {
   onBulkAdd: () => void;
   checklistDismissed: boolean;
   onDismissChecklist: () => void;
+  /** Which typed empty state to render (spec 134 §3.1, UI Rule 23). */
+  variant?: 'first-use' | 'no-results';
+  /** Active filter label, echoed by the no-results state. */
+  filterLabel?: string;
+  onClearFilters?: () => void;
 }
 
-const CHECKLIST_LINK_STYLE: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  padding: 0,
-  cursor: 'pointer',
-  fontSize: '0.875rem',
-  fontWeight: TYPOGRAPHY.weights.medium,
-  color: PALETTE.primary,
-  textAlign: 'left',
-};
+const checklistLinkClass =
+  'text-left text-body font-medium text-link outline-none hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold';
 
 /**
- * Content-tab empty states (brief §11.1): a dismissible 3-step checklist plus
- * the centered "Nothing here yet." state with working entry buttons.
+ * Queue empty states, typed by cause (spec 134 §3.1 / UI Rule 23):
+ * - first-use: the dismissible 3-step getting-started checklist
+ *   (spec 105 §11.1, preserved — dismissal is the panel's typed device
+ *   preference) above "Nothing here yet." with Create post / Bulk add.
+ *   With no posting slots loaded yet the checklist's first step is the
+ *   setup path: it explains slots and offers Add posting time inline.
+ * - no-results: echoes the active filter with one Clear filters action.
  */
 export function QueueEmptyStates({
   pageId,
@@ -42,85 +44,62 @@ export function QueueEmptyStates({
   onBulkAdd,
   checklistDismissed,
   onDismissChecklist,
+  variant = 'first-use',
+  filterLabel,
+  onClearFilters,
 }: Readonly<QueueEmptyStatesProps>) {
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showQuickAdd, setShowQuickAdd] = React.useState(false);
+
+  if (variant === 'no-results') {
+    return (
+      <div data-testid="queue-empty-state">
+        <EmptyState
+          type="no-results"
+          title="Nothing here."
+          description="No posts match this filter."
+          {...(filterLabel ? { activeFilters: [filterLabel] } : {})}
+          action={
+            <Button variant="secondary" onClick={onClearFilters}>
+              Clear filters
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
-    <div
-      data-testid="queue-empty-state"
-      style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}
-    >
+    <div data-testid="queue-empty-state" className="flex flex-col gap-6">
       {!checklistDismissed && (
-        <div
-          aria-label="Getting started checklist"
-          style={{
-            padding: `${SPACING.md} 0`,
-            borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: SPACING.md,
-              marginBottom: SPACING.sm,
-            }}
-          >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              Get your queue running
-            </h3>
+        <div aria-label="Getting started checklist" className="border-b border-line py-4">
+          <div className="mb-2 flex items-center justify-between gap-4">
+            <h3 className="m-0 text-body font-semibold text-ink">Get your queue running</h3>
             <Button variant="link" size="sm" onClick={onDismissChecklist}>
               Dismiss
             </Button>
           </div>
-          <ol
-            style={{
-              margin: 0,
-              padding: 0,
-              listStyle: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: SPACING.sm,
-            }}
-          >
-            <li style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
-                1.
-              </span>
+          {slots.length === 0 && (
+            <p className="m-0 mb-2 text-body text-ink-sub">
+              This page has no posting times yet — add one so queued posts know when to go out.
+            </p>
+          )}
+          <ol className="m-0 flex list-none flex-col gap-2 p-0">
+            <li className="flex items-center gap-2">
+              <span className="text-body text-ink-sub">1.</span>
               <button
                 type="button"
                 onClick={() => setShowQuickAdd((prev) => !prev)}
-                style={CHECKLIST_LINK_STYLE}
+                className={checklistLinkClass}
                 aria-expanded={showQuickAdd}
               >
                 Set posting times
               </button>
               {slots.length > 0 && (
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  }}
-                >
-                  ({slots.length} set)
-                </span>
+                <span className="text-metadata text-ink-sub">({slots.length} set)</span>
               )}
             </li>
             {showQuickAdd && (
-              <li style={{ paddingLeft: SPACING.lg }}>
+              <li className="pl-6">
                 <PostingTimeQuickAdd
                   pageId={pageId}
                   subdomain={subdomain}
@@ -131,32 +110,15 @@ export function QueueEmptyStates({
                 />
               </li>
             )}
-            <li style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
-                2.
-              </span>
-              <Link
-                href={`/tenant/${subdomain}/media`}
-                style={{ ...CHECKLIST_LINK_STYLE, textDecoration: 'none' }}
-              >
+            <li className="flex items-center gap-2">
+              <span className="text-body text-ink-sub">2.</span>
+              <Link href={`/tenant/${subdomain}/media`} className={checklistLinkClass}>
                 Add media
               </Link>
             </li>
-            <li style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-              <span
-                style={{
-                  fontSize: '0.8125rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                }}
-              >
-                3.
-              </span>
-              <button type="button" onClick={onCreatePost} style={CHECKLIST_LINK_STYLE}>
+            <li className="flex items-center gap-2">
+              <span className="text-body text-ink-sub">3.</span>
+              <button type="button" onClick={onCreatePost} className={checklistLinkClass}>
                 Create your first posts
               </button>
             </li>
@@ -164,45 +126,19 @@ export function QueueEmptyStates({
         </div>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: SPACING.sm,
-          padding: `${SPACING.xxl} 0`,
-          textAlign: 'center',
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: '1rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          Nothing here yet.
-        </h3>
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            maxWidth: '380px',
-          }}
-        >
-          Create a post or bulk-add media to fill your queue.
-        </p>
-        <div style={{ display: 'flex', gap: SPACING.sm, marginTop: SPACING.xs }}>
-          <Button variant="primary" size="sm" onClick={onCreatePost}>
-            Create post
-          </Button>
-          <Button variant="secondary" size="sm" onClick={onBulkAdd}>
-            Bulk add
-          </Button>
-        </div>
-      </div>
+      <EmptyState
+        type="first-use"
+        title="Nothing here yet."
+        description="Create a post or bulk-add media to fill your queue."
+        action={
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={onCreatePost}>Create post</Button>
+            <Button variant="secondary" onClick={onBulkAdd}>
+              Bulk add
+            </Button>
+          </div>
+        }
+      />
     </div>
   );
 }

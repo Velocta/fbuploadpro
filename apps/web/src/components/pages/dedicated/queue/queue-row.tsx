@@ -1,17 +1,12 @@
 'use client';
 
-import React from 'react';
-import {
-  THEME,
-  PALETTE,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-  STATUS_SIGNALS,
-} from '@/lib/theme';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import * as React from 'react';
+import Image from 'next/image';
+import { ChevronDownIcon, ChevronUpIcon, GripVerticalIcon, ImageIcon, PlayIcon, TypeIcon } from 'lucide-react';
+import { Button } from '@/components/shared/ui/button';
+import { Checkbox } from '@/components/shared/ui/checkbox';
+import { StatusDot, type Status } from '@/components/shared/ui/status-dot';
+import { cn } from '@/lib/utils';
 import { formatLabel } from '../bulk/bulk-utils';
 import { formatQueueRowTime, resolveFormat } from './queue-logic';
 import type { DedicatedQueueItem } from './queue-types';
@@ -39,171 +34,68 @@ export interface QueueRowProps {
   retryBlocked: boolean;
   failedReason: string | null;
   busyAction: 'retry' | 'delete' | null;
+  /** Position within the reorderable list (0-based) — drives edge states. */
+  reorderIndex?: number;
+  reorderCount?: number;
+  /** Keyboard-reorder announcement sink (position + new time, §3.1.1). */
+  onAnnounce?: (message: string) => void;
+  destinationName?: string;
 }
 
-const THUMBNAIL_SIZE = 56;
-
-function StatusDot({ signal }: Readonly<{ signal: keyof typeof STATUS_SIGNALS }>) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{ ...COMPONENT_STYLES.statusDot(signal), alignSelf: 'center' }}
-    />
-  );
-}
+const STATUS_BY_BUCKET: Record<QueueRowBucket, { status: Status; label: string }> = {
+  queued: { status: 'queued', label: 'Queued' },
+  scheduled: { status: 'queued', label: 'Scheduled' },
+  published: { status: 'operational', label: 'Published' },
+  failed: { status: 'critical', label: 'Failed' },
+};
 
 function Thumbnail({ item }: Readonly<{ item: DedicatedQueueItem }>) {
   const format = resolveFormat(item);
   const thumbnailUrl = item.media?.thumbnailUrl ?? item.media?.url ?? null;
-  const baseStyle: React.CSSProperties = {
-    width: THUMBNAIL_SIZE,
-    height: THUMBNAIL_SIZE,
-    borderRadius: RADII.sm,
-    overflow: 'hidden',
-    flexShrink: 0,
-    backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: `var(--text-sub, ${THEME.default.text.secondary})`,
-  };
+  const classes =
+    'flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-sm bg-subtle text-ink-sub';
 
   if (format === 'text') {
     return (
-      <div style={baseStyle} aria-hidden="true">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="4" y1="7" x2="20" y2="7" />
-          <line x1="4" y1="12" x2="16" y2="12" />
-          <line x1="4" y1="17" x2="12" y2="17" />
-        </svg>
+      <div className={classes} aria-hidden="true">
+        <TypeIcon className="size-6" />
       </div>
     );
   }
-
   if (thumbnailUrl) {
     return (
-      <div style={baseStyle}>
-        <img
+      <div className={classes}>
+        <Image
           src={thumbnailUrl}
           alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-          loading="lazy"
+          width={56}
+          height={56}
+          sizes="56px"
+          className="size-full object-cover"
         />
       </div>
     );
   }
-
   return (
-    <div style={baseStyle} aria-hidden="true">
+    <div className={classes} aria-hidden="true">
       {item.media?.mediaType === 'video' ? (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polygon points="5 3 19 12 5 21 5 3" />
-        </svg>
+        <PlayIcon className="size-6" />
       ) : (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-          <circle cx="8.5" cy="8.5" r="1.5" />
-          <polyline points="21 15 16 10 5 21" />
-        </svg>
+        <ImageIcon className="size-6" />
       )}
     </div>
   );
 }
 
-function DragHandle({
-  onDragStart,
-  onDragEnd,
-}: Readonly<{
-  onDragStart: (event: React.DragEvent) => void;
-  onDragEnd: () => void;
-}>) {
-  return (
-    <span
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      title="Drag to reorder"
-      aria-label="Drag to reorder"
-      style={{
-        cursor: 'grab',
-        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '4px 2px',
-        flexShrink: 0,
-      }}
-    >
-      <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor" aria-hidden="true">
-        <circle cx="4" cy="4" r="1.4" />
-        <circle cx="10" cy="4" r="1.4" />
-        <circle cx="4" cy="10" r="1.4" />
-        <circle cx="10" cy="10" r="1.4" />
-        <circle cx="4" cy="16" r="1.4" />
-        <circle cx="10" cy="16" r="1.4" />
-      </svg>
-    </span>
-  );
-}
-
-function MoveButton({
-  direction,
-  onClick,
-  disabled,
-}: Readonly<{
-  direction: -1 | 1;
-  onClick: () => void;
-  disabled: boolean;
-}>) {
-  const label = direction === -1 ? 'Move up' : 'Move down';
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        background: 'none',
-        border: 'none',
-        cursor: disabled ? 'default' : 'pointer',
-        color: disabled
-          ? `var(--text-muted, ${THEME.default.text.muted})`
-          : `var(--text-sub, ${THEME.default.text.secondary})`,
-        padding: '2px',
-        display: 'inline-flex',
-        opacity: disabled ? 0.4 : 1,
-      }}
-    >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        aria-hidden="true"
-        style={{ transform: direction === 1 ? 'rotate(180deg)' : undefined }}
-      >
-        <polyline points="18 15 12 9 6 15" />
-      </svg>
-    </button>
-  );
-}
-
-const STATUS_SIGNAL: Record<QueueRowBucket, keyof typeof STATUS_SIGNALS> = {
-  queued: 'queued',
-  scheduled: 'queued',
-  published: 'operational',
-  failed: 'critical',
-};
-
-const STATUS_LABEL: Record<QueueRowBucket, string> = {
-  queued: 'Queued',
-  scheduled: 'Scheduled',
-  published: 'Published',
-  failed: 'Failed',
-};
-
+/**
+ * One queue row (spec 134 §3.1, rebuilt clean-room on shared/ui):
+ * identifier first (thumbnail + caption), format badge, publish time with
+ * its timezone label, status as colour + icon + text, and always-visible
+ * text actions. Reorder ships with all its twins (UI Rule 21): drag
+ * handle, Move up/down (disabled-with-reason at the edges), keyboard
+ * reorder on the handle (Space lifts/drops, arrows move — the panel
+ * announces the new position and time), and Reschedule in the panel.
+ */
 export function QueueRow({
   item,
   timeZone,
@@ -225,10 +117,49 @@ export function QueueRow({
   retryBlocked,
   failedReason,
   busyAction,
+  reorderIndex,
+  reorderCount,
+  onAnnounce,
+  destinationName,
 }: Readonly<QueueRowProps>) {
   const format = resolveFormat(item);
   const caption = (item.caption ?? '').trim();
   const actionsDisabled = busyAction !== null;
+  const [lifted, setLifted] = React.useState(false);
+
+  const isFirst = reorderIndex !== undefined && reorderIndex <= 0;
+  const isLast =
+    reorderIndex !== undefined && reorderCount !== undefined && reorderIndex >= reorderCount - 1;
+  const timeText = formatQueueRowTime(item, bucket, timeZone);
+  const statusMeta = STATUS_BY_BUCKET[bucket];
+  const statusLabel = item.status === 'publishing' ? 'Publishing' : statusMeta.label;
+  const context = destinationName ?? 'this page';
+
+  const handleHandleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === ' ' || event.key === 'Enter') {
+      event.preventDefault();
+      if (lifted) {
+        setLifted(false);
+        onAnnounce?.(
+          `Dropped. Post is at position ${(reorderIndex ?? 0) + 1} of ${reorderCount ?? 0}, due ${timeText}.`
+        );
+      } else {
+        setLifted(true);
+        onAnnounce?.(
+          `Lifted. Post is at position ${(reorderIndex ?? 0) + 1} of ${reorderCount ?? 0}, due ${timeText}. Use the arrow keys to move it, then press Space to drop it.`
+        );
+      }
+      return;
+    }
+    if (!lifted) return;
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      event.preventDefault();
+      onMove(item.id, event.key === 'ArrowUp' ? -1 : 1);
+    }
+    if (event.key === 'Escape') {
+      setLifted(false);
+    }
+  };
 
   return (
     <li
@@ -241,18 +172,14 @@ export function QueueRow({
         event.preventDefault();
         onDropOnRow(item.id);
       }}
-      style={{
-        listStyle: 'none',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: SPACING.sm,
-        padding: `${SPACING.md} 0`,
-        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        boxShadow: isDragOver ? `inset 0 2px 0 0 ${PALETTE.primary}` : undefined,
-      }}
+      className={cn(
+        'flex list-none items-start gap-2 border-b border-line py-4',
+        isDragOver && 'border-t-2 border-t-primary bg-hover',
+        lifted && 'bg-active'
+      )}
     >
       {selectable && (
-        <span style={{ paddingTop: '2px', flexShrink: 0 }}>
+        <span className="shrink-0 pt-0.5">
           <Checkbox
             checked={selected}
             onCheckedChange={() => onToggleSelect(item.id)}
@@ -262,127 +189,86 @@ export function QueueRow({
       )}
 
       {reorderable && (
-        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
-          <DragHandle
+        <span className="flex shrink-0 flex-col items-center">
+          <button
+            type="button"
+            draggable
+            data-testid={`queue-drag-handle-${item.id}`}
+            aria-label={`Reorder post for ${context}, due ${timeText}. Press Space to lift, arrow keys to move, Space to drop.`}
+            aria-pressed={lifted}
+            title="Drag to reorder"
             onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = 'move';
+              if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
               onDragStart(item.id);
             }}
             onDragEnd={onDragEnd}
-          />
-          <MoveButton direction={-1} onClick={() => onMove(item.id, -1)} disabled={actionsDisabled} />
-          <MoveButton direction={1} onClick={() => onMove(item.id, 1)} disabled={actionsDisabled} />
+            onKeyDown={handleHandleKeyDown}
+            className="inline-flex size-11 cursor-grab items-center justify-center rounded-sm text-ink-sub outline-none hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
+          >
+            <GripVerticalIcon className="size-5" aria-hidden />
+          </button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Move up post for ${context}, due ${timeText}`}
+            {...(isFirst
+              ? { disabledReason: 'This post is already at the top of the queue.' }
+              : {})}
+            disabled={actionsDisabled && !isFirst}
+            onClick={() => onMove(item.id, -1)}
+          >
+            <ChevronUpIcon aria-hidden />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Move down post for ${context}, due ${timeText}`}
+            {...(isLast
+              ? { disabledReason: 'This post is already at the end of the queue.' }
+              : {})}
+            disabled={actionsDisabled && !isLast}
+            onClick={() => onMove(item.id, 1)}
+          >
+            <ChevronDownIcon aria-hidden />
+          </Button>
         </span>
       )}
 
       <Thumbnail item={item} />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.sm,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span
-            style={{
-              fontSize: '0.75rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              textTransform: 'uppercase',
-              letterSpacing: TYPOGRAPHY.tracking.caption,
-            }}
-          >
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-metadata font-semibold tracking-wide text-ink-sub uppercase">
             {formatLabel(format)}
           </span>
-          <span
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            {formatQueueRowTime(item, bucket, timeZone)}
-          </span>
+          <span className="text-body font-medium text-ink">{timeText}</span>
         </div>
 
-        {caption && (
-          <p
-            style={{
-              margin: `${SPACING.xs} 0 0`,
-              fontSize: '0.8125rem',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}
-          >
-            {caption}
-          </p>
-        )}
+        {caption && <p className="mt-1 line-clamp-2 text-body text-ink">{caption}</p>}
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            marginTop: SPACING.xs,
-          }}
-        >
-          <StatusDot signal={item.status === 'publishing' ? 'queued' : STATUS_SIGNAL[bucket]} />
-          <span
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
-            {item.status === 'publishing' ? 'Publishing' : STATUS_LABEL[bucket]}
-          </span>
-          {failedReason && (
-            <span
-              style={{
-                fontSize: '0.75rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              }}
-            >
-              — {failedReason}
-            </span>
-          )}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <StatusDot status={statusMeta.status} label={statusLabel} />
+          {failedReason && <span className="text-metadata text-ink-sub">— {failedReason}</span>}
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            marginTop: SPACING.xs,
-            flexWrap: 'wrap',
-          }}
-        >
+        <div className="mt-1 flex flex-wrap items-center gap-1">
           {bucket === 'failed' && (
-            <span
-              style={{ display: 'inline-flex', flexDirection: 'column', gap: '2px' }}
-              title={retryBlocked ? 'Reconnect your Facebook account to retry.' : undefined}
-            >
+            <span className="inline-flex flex-col gap-0.5">
               <Button
                 variant="link"
                 size="sm"
-                disabled={retryBlocked || actionsDisabled}
-                isLoading={busyAction === 'retry'}
+                {...(retryBlocked
+                  ? { disabledReason: 'Reconnect your Facebook account to retry.' }
+                  : {})}
+                disabled={actionsDisabled && !retryBlocked}
+                loading={busyAction === 'retry'}
+                aria-label={`Retry post for ${context}, due ${timeText}`}
                 onClick={() => onRetry(item)}
               >
                 Retry
               </Button>
               {retryBlocked && (
-                <span
-                  style={{
-                    fontSize: '0.6875rem',
-                    color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  }}
-                >
+                <span className="text-metadata text-ink-sub">
                   Reconnect your Facebook account to retry.
                 </span>
               )}
@@ -392,6 +278,7 @@ export function QueueRow({
             variant="link"
             size="sm"
             disabled={actionsDisabled}
+            aria-label={`Edit post for ${context}, due ${timeText}`}
             onClick={() => onEdit(item)}
           >
             Edit
@@ -401,6 +288,7 @@ export function QueueRow({
               variant="link"
               size="sm"
               disabled={actionsDisabled}
+              aria-label={`Reschedule post for ${context}, due ${timeText}`}
               onClick={() => onReschedule(item)}
             >
               Reschedule
@@ -410,7 +298,8 @@ export function QueueRow({
             variant="link"
             size="sm"
             disabled={actionsDisabled}
-            isLoading={busyAction === 'delete'}
+            loading={busyAction === 'delete'}
+            aria-label={`Delete post for ${context}, due ${timeText}`}
             onClick={() => onDelete(item)}
           >
             Delete
