@@ -1,7 +1,20 @@
 'use client';
 
 import React from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { ChevronDownIcon, LayoutGridIcon, ListIcon, SearchIcon } from 'lucide-react';
+
+import { Button } from '@/components/shared/ui/button';
+import { Input } from '@/components/shared/ui/input';
+import {
+  Menu,
+  MenuContent,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuTrigger,
+} from '@/components/shared/ui/menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/shared/ui/tabs';
+import { Tag } from '@/components/shared/ui/tag';
+import { cn } from '@/lib/utils';
 import type {
   MediaViewMode,
   MediaTypeFilterKey,
@@ -14,8 +27,21 @@ import {
   ASPECT_RATIO_SHORT_VALUES,
   CAPTION_STATUS_SHORT_VALUES,
   SORT_OPTION_SHORT_VALUES,
-  type ActiveDropdownKey,
 } from './media-library-filters';
+
+/**
+ * The 3-zone toolbar (spec 133 §6.3 / PB-10, PB-11), rebuilt on the
+ * shared/ui primitives. Zone 1 (global): the library-wide search Input
+ * only. Zone 2 (local): the scope Tag, then labelled Type / Ratio /
+ * Captions dropdowns on the Menu primitive — labels always visible,
+ * non-default values carry the active (gold-underline) treatment, and
+ * "N filters · Clear" appears whenever a local filter is set. Zone 3:
+ * the labelled Sort dropdown and the grid/table segmented switch
+ * (Tabs). Zones are separated by hairline dividers; there are no
+ * bordered boxes around zones or controls (PB-1), and the hand-rolled
+ * dropdown/popover code is deleted — Menu owns focus return, Esc, and
+ * apply-on-selection.
+ */
 
 const TYPE_DROPDOWN_OPTIONS = [
   { key: 'all', label: 'All' },
@@ -44,150 +70,65 @@ const SORT_DROPDOWN_OPTIONS = [
   { key: 'file_size:desc', label: 'Largest size' },
 ] as const;
 
-export interface ToolbarDropdownItem<T extends string> {
-  key: T;
-  label: string;
-}
-
-export interface ToolbarDropdownProps<T extends string> {
+interface ToolbarMenuProps<T extends string> {
   testId: string;
   label: string;
   displayValue: string;
-  isUnderlined?: boolean;
-  isOpen: boolean;
-  containerRef: React.RefObject<HTMLDivElement | null>;
-  options: readonly ToolbarDropdownItem<T>[];
+  isActive?: boolean;
+  options: readonly { key: T; label: string }[];
   selectedKey: T;
   optionTestIdPrefix: string;
-  onToggle: () => void;
   onSelect: (key: T) => void;
-  onClose: () => void;
 }
 
-export function ToolbarDropdown<T extends string>({
+function ToolbarMenu<T extends string>({
   testId,
   label,
   displayValue,
-  isUnderlined = false,
-  isOpen,
-  containerRef,
+  isActive = false,
   options,
   selectedKey,
   optionTestIdPrefix,
-  onToggle,
   onSelect,
-  onClose,
-}: Readonly<ToolbarDropdownProps<T>>) {
+}: Readonly<ToolbarMenuProps<T>>) {
   return (
-    <div ref={containerRef} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        data-testid={testId}
-        aria-haspopup="true"
-        aria-expanded={isOpen}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggle();
-          } else if (e.key === 'Escape') {
-            onClose();
-          }
-        }}
-        style={{
-          backgroundColor: 'transparent',
-          border: 'none',
-          padding: 0,
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          fontSize: '0.8125rem',
-          fontWeight: TYPOGRAPHY.weights.medium,
-          cursor: 'pointer',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-        }}
-      >
-        <span>{label}</span>
-        <span
-          style={{
-            color: isUnderlined ? `var(--text-main, ${THEME.default.text.primary})` : 'inherit',
-            borderBottom: isUnderlined ? `2px solid ${PALETTE.primary}` : 'none',
-            paddingBottom: '2px',
-          }}
+    <Menu>
+      <MenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid={testId}
+          data-active={isActive || undefined}
+          className="h-11 gap-1.5 px-2 text-body text-ink-sub hover:text-ink md:h-10"
         >
-          {displayValue}
-        </span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <div
-          role="menu"
-          style={{
-            position: 'absolute',
-            top: '26px',
-            left: 0,
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-            borderRadius: RADII.xs,
-            padding: '4px',
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-            zIndex: 30,
-            minWidth: '120px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2px',
-          }}
-        >
+          <span>{label}</span>
+          <span
+            className={cn(
+              'font-medium',
+              isActive
+                ? 'text-ink underline decoration-primary decoration-2 underline-offset-4'
+                : 'text-ink'
+            )}
+          >
+            {displayValue}
+          </span>
+          <ChevronDownIcon className="opacity-50" aria-hidden />
+        </Button>
+      </MenuTrigger>
+      <MenuContent align="start">
+        <MenuRadioGroup value={selectedKey} onValueChange={(value) => onSelect(value as T)}>
           {options.map((opt) => (
-            <button
+            <MenuRadioItem
               key={opt.key}
-              type="button"
-              role="menuitem"
+              value={opt.key}
               data-testid={`${optionTestIdPrefix}-option-${opt.key}`}
-              tabIndex={0}
-              onClick={() => {
-                onSelect(opt.key);
-                onClose();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelect(opt.key);
-                  onClose();
-                } else if (e.key === 'Escape') {
-                  onClose();
-                }
-              }}
-              style={{
-                padding: '6px 10px',
-                textAlign: 'left',
-                backgroundColor:
-                  selectedKey === opt.key
-                    ? 'rgba(255, 255, 255, 0.08)'
-                    : 'transparent',
-                border: 'none',
-                borderRadius: RADII.xs,
-                color:
-                  selectedKey === opt.key
-                    ? `var(--text-main, ${THEME.default.text.primary})`
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                fontWeight:
-                  selectedKey === opt.key
-                    ? TYPOGRAPHY.weights.medium
-                    : TYPOGRAPHY.weights.regular,
-                cursor: 'pointer',
-              }}
             >
               {opt.label}
-            </button>
+            </MenuRadioItem>
           ))}
-        </div>
-      )}
-    </div>
+        </MenuRadioGroup>
+      </MenuContent>
+    </Menu>
   );
 }
 
@@ -207,10 +148,6 @@ export interface MediaToolbarProps {
   onSortChange: (sort: SortOptionKey) => void;
   viewMode: MediaViewMode;
   onChangeViewMode: (mode: MediaViewMode) => void;
-  activeDropdown: ActiveDropdownKey;
-  onToggleDropdown: (dropdown: NonNullable<ActiveDropdownKey>) => void;
-  onCloseDropdown: () => void;
-  dropdownRefs: Record<NonNullable<ActiveDropdownKey>, React.RefObject<HTMLDivElement | null>>;
 }
 
 export function MediaToolbar({
@@ -229,64 +166,26 @@ export function MediaToolbar({
   onSortChange,
   viewMode,
   onChangeViewMode,
-  activeDropdown,
-  onToggleDropdown,
-  onCloseDropdown,
-  dropdownRefs,
 }: Readonly<MediaToolbarProps>) {
   return (
     <div
       data-testid="media-explorer-toolbar"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: SPACING.md,
-        paddingBottom: SPACING.md,
-        borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-        flexWrap: 'wrap',
-      }}
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-4"
     >
       {/* Zone 1 — GLOBAL (left): the search field only */}
       <div
         data-testid="media-toolbar-zone-1"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.xs,
-          flex: '1 1 240px',
-          maxWidth: '360px',
-        }}
+        className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm"
       >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-          style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}
-        >
-          <circle cx="11" cy="11" r="8" />
-          <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
+        <SearchIcon className="size-4 shrink-0 text-ink-dim" aria-hidden />
+        <Input
           type="search"
           data-testid="media-search-input"
           value={searchInput}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search files and captions…"
           aria-label="Search files and captions"
-          style={{
-            width: '100%',
-            backgroundColor: 'transparent',
-            border: 'none',
-            outline: 'none',
-            fontSize: '0.875rem',
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            padding: '4px 0',
-          }}
+          className="h-11 md:h-10"
         />
       </div>
 
@@ -294,109 +193,68 @@ export function MediaToolbar({
       <hr
         data-testid="media-toolbar-divider-1"
         aria-orientation="vertical"
-        style={{
-          width: '1px',
-          height: '16px',
-          backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
-          border: 'none',
-          margin: 0,
-          flexShrink: 0,
-        }}
+        className="m-0 hidden h-4 w-px shrink-0 border-0 bg-line sm:block"
       />
 
       {/* Zone 2 — LOCAL (middle): controls that apply ONLY to the current view */}
       <div
         data-testid="media-toolbar-zone-2"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.md,
-          flexWrap: 'wrap',
-        }}
+        className="flex flex-wrap items-center gap-x-2 gap-y-1"
       >
         {/* Scope Tag Anchor */}
-        <span
-          data-testid="media-scope-tag"
-          style={{
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-            paddingRight: '4px',
-          }}
-        >
+        <Tag variant="ghost" data-testid="media-scope-tag" className="px-1 text-body font-medium text-ink-dim">
           {scopeTagLabel}
-        </span>
+        </Tag>
 
-        {/* Labeled Dropdown 1: Type */}
-        <ToolbarDropdown
+        {/* Labelled Dropdown 1: Type */}
+        <ToolbarMenu
           testId="media-type-select"
-          label="Type: "
+          label="Type:"
           displayValue={MEDIA_TYPE_LABELS[mediaTypeFilter]}
-          isUnderlined={mediaTypeFilter !== 'all'}
-          isOpen={activeDropdown === 'type'}
-          containerRef={dropdownRefs.type}
+          isActive={mediaTypeFilter !== 'all'}
           options={TYPE_DROPDOWN_OPTIONS}
           selectedKey={mediaTypeFilter}
           optionTestIdPrefix="type"
-          onToggle={() => onToggleDropdown('type')}
           onSelect={onMediaTypeChange}
-          onClose={onCloseDropdown}
         />
 
-        {/* Labeled Dropdown 2: Ratio */}
-        <ToolbarDropdown
+        {/* Labelled Dropdown 2: Ratio */}
+        <ToolbarMenu
           testId="media-aspect-ratio-select"
-          label="Ratio: "
+          label="Ratio:"
           displayValue={ASPECT_RATIO_SHORT_VALUES[aspectRatioFilter]}
-          isUnderlined={aspectRatioFilter !== 'all'}
-          isOpen={activeDropdown === 'ratio'}
-          containerRef={dropdownRefs.ratio}
+          isActive={aspectRatioFilter !== 'all'}
           options={RATIO_DROPDOWN_OPTIONS}
           selectedKey={aspectRatioFilter}
           optionTestIdPrefix="aspect-ratio"
-          onToggle={() => onToggleDropdown('ratio')}
           onSelect={onAspectRatioChange}
-          onClose={onCloseDropdown}
         />
 
-        {/* Labeled Dropdown 3: Captions */}
-        <ToolbarDropdown
+        {/* Labelled Dropdown 3: Captions */}
+        <ToolbarMenu
           testId="media-caption-status-select"
-          label="Captions: "
+          label="Captions:"
           displayValue={CAPTION_STATUS_SHORT_VALUES[captionStatusFilter]}
-          isUnderlined={captionStatusFilter !== 'all'}
-          isOpen={activeDropdown === 'caption'}
-          containerRef={dropdownRefs.caption}
+          isActive={captionStatusFilter !== 'all'}
           options={CAPTION_DROPDOWN_OPTIONS}
           selectedKey={captionStatusFilter}
           optionTestIdPrefix="caption-status"
-          onToggle={() => onToggleDropdown('caption')}
           onSelect={onCaptionStatusChange}
-          onClose={onCloseDropdown}
         />
 
         {/* Dynamic Filter Clear Badge */}
         {activeFilterCount > 0 && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             data-testid="clear-filters-btn"
             onClick={onClearFilters}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: '2px 6px',
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
+            className="h-11 px-2 text-metadata text-ink-dim hover:text-ink md:h-10"
           >
             <span>
               {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filters'} · Clear
             </span>
-          </button>
+          </Button>
         )}
       </div>
 
@@ -404,95 +262,47 @@ export function MediaToolbar({
       <hr
         data-testid="media-toolbar-divider-2"
         aria-orientation="vertical"
-        style={{
-          width: '1px',
-          height: '16px',
-          backgroundColor: 'var(--border-subtle, rgba(255, 255, 255, 0.12))',
-          border: 'none',
-          margin: 0,
-          flexShrink: 0,
-        }}
+        className="m-0 hidden h-4 w-px shrink-0 border-0 bg-line lg:block"
       />
 
       {/* Zone 3 — SORT + VIEW (right) */}
-      <div
-        data-testid="media-toolbar-zone-3"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.md,
-        }}
-      >
-        {/* Labeled Sort Dropdown */}
-        <ToolbarDropdown
+      <div data-testid="media-toolbar-zone-3" className="flex items-center gap-2">
+        {/* Labelled Sort Dropdown */}
+        <ToolbarMenu
           testId="media-sort-select"
-          label="Sort: "
+          label="Sort:"
           displayValue={SORT_OPTION_SHORT_VALUES[sortOption]}
-          isOpen={activeDropdown === 'sort'}
-          containerRef={dropdownRefs.sort}
           options={SORT_DROPDOWN_OPTIONS}
           selectedKey={sortOption}
           optionTestIdPrefix="sort"
-          onToggle={() => onToggleDropdown('sort')}
           onSelect={onSortChange}
-          onClose={onCloseDropdown}
         />
 
-        {/* Bare Grid/Table Toggle Icons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button
-            type="button"
-            data-testid="view-mode-grid-btn"
-            aria-label="Grid view"
-            onClick={() => onChangeViewMode('grid')}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: '4px',
-              color:
-                viewMode === 'grid'
-                  ? PALETTE.primary
-                  : `var(--text-dim, ${THEME.default.text.muted})`,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="3" y="3" width="7" height="7" />
-              <rect x="14" y="3" width="7" height="7" />
-              <rect x="14" y="14" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            data-testid="view-mode-table-btn"
-            aria-label="Table view"
-            onClick={() => onChangeViewMode('table')}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: '4px',
-              color:
-                viewMode === 'table'
-                  ? PALETTE.primary
-                  : `var(--text-dim, ${THEME.default.text.muted})`,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <line x1="8" y1="6" x2="21" y2="6" />
-              <line x1="8" y1="12" x2="21" y2="12" />
-              <line x1="8" y1="18" x2="21" y2="18" />
-              <line x1="3" y1="6" x2="3.01" y2="6" />
-              <line x1="3" y1="12" x2="3.01" y2="12" />
-              <line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
-          </button>
-        </div>
+        {/* Segmented Grid/Table view switch */}
+        <Tabs
+          value={viewMode}
+          onValueChange={(value) => onChangeViewMode(value as MediaViewMode)}
+          className="gap-0"
+        >
+          <TabsList aria-label="View mode" className="h-11 md:h-10">
+            <TabsTrigger
+              value="grid"
+              data-testid="view-mode-grid-btn"
+              aria-label="Grid view"
+              className="h-9 min-w-11 md:h-8"
+            >
+              <LayoutGridIcon aria-hidden />
+            </TabsTrigger>
+            <TabsTrigger
+              value="table"
+              data-testid="view-mode-table-btn"
+              aria-label="Table view"
+              className="h-9 min-w-11 md:h-8"
+            >
+              <ListIcon aria-hidden />
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
     </div>
   );

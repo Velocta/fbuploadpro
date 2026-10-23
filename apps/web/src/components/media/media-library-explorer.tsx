@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, SPACING } from '@/lib/theme';
+import { Toast, toast } from '@/components/shared/ui/toast';
 import {
   type MediaViewMode,
   type MediaTypeFilterKey,
@@ -14,8 +14,6 @@ import {
 } from './media-types';
 import { queryKeys } from '@/lib/data';
 
-/** How long success toasts stay visible before auto-dismissing. */
-const TOAST_AUTO_DISMISS_MS = 3500;
 import {
   computeNextSelection,
   useUploadNavigationGuard,
@@ -48,6 +46,9 @@ import { buildFolderBreadcrumbs } from './media-library-breadcrumbs';
 import {
   filterAndSortMediaItems,
   getScopeTagLabel,
+  MEDIA_TYPE_LABELS,
+  ASPECT_RATIO_SHORT_VALUES,
+  CAPTION_STATUS_SHORT_VALUES,
 } from './media-library-filters';
 export {
   filterAndSortMediaItems,
@@ -66,7 +67,6 @@ export { buildFolderBreadcrumbs, formatFolderAncestryPath } from './media-librar
 export type { MediaImportModalProps } from './media-import-progress';
 export type { ActiveDropdownKey } from './media-library-filters';
 import { MediaToolbar } from './media-library-toolbar';
-import { type ActiveDropdownKey } from './media-library-filters';
 import { MediaLibraryHeader } from './media-library-header';
 import { MediaLibraryMain } from './media-library-main';
 import { MediaLibraryOverlays } from './media-library-overlays';
@@ -136,13 +136,6 @@ export function MediaLibraryExplorer({
   );
   const [sortOption, setSortOption] = useState<SortOptionKey>(initialSortOption);
 
-  // Custom Dropdowns state & container refs (prevents mouse click swallowing)
-  const [activeDropdown, setActiveDropdown] = useState<ActiveDropdownKey>(null);
-  const typeDropdownRef = useRef<HTMLDivElement | null>(null);
-  const ratioDropdownRef = useRef<HTMLDivElement | null>(null);
-  const captionDropdownRef = useRef<HTMLDivElement | null>(null);
-  const sortDropdownRef = useRef<HTMLDivElement | null>(null);
-
   // Debounce search with 250ms (0ms if cleared immediately)
   useEffect(() => {
     if (!searchInput.trim()) {
@@ -155,33 +148,12 @@ export function MediaLibraryExplorer({
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    if (!activeDropdown) return;
-    const dropdownRefs = {
-      type: typeDropdownRef,
-      ratio: ratioDropdownRef,
-      caption: captionDropdownRef,
-      sort: sortDropdownRef,
-    };
-    const handleOutsideClick = (e: MouseEvent | PointerEvent) => {
-      const target = e.target as Node | null;
-      if (!activeDropdown || !target) return;
-      const ref = dropdownRefs[activeDropdown];
-      if (ref?.current?.contains(target)) return;
-      setActiveDropdown(null);
-    };
-    document.addEventListener('pointerdown', handleOutsideClick);
-    return () => document.removeEventListener('pointerdown', handleOutsideClick);
-  }, [activeDropdown]);
-
   // Modals
   const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [stagedFilesForImport, setStagedFilesForImport] = useState<File[]>([]);
   const [isBatchCaptionOpen, setIsBatchCaptionOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<MediaItemResponse | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Move Modal State
   const [moveTarget, setMoveTarget] = useState<MoveTargetState | null>(null);
@@ -246,13 +218,13 @@ export function MediaLibraryExplorer({
    * surface through `reportError` plus the same failure toasts the
    * legacy handlers showed; nothing is swallowed silently.
    * ------------------------------------------------------------ */
-  const showToast = useCallback(
-    (msg: string) => {
-      setToastMessage(msg);
-      setTimeout(() => setToastMessage(null), TOAST_AUTO_DISMISS_MS);
-    },
-    [setToastMessage]
-  );
+  // Surface feedback goes through the shared/ui Toast system
+  // (spec 133 §6.2: the surface-local toast is deleted; one toast
+  // system product-wide). The callback shape the overlays consume is
+  // unchanged from PR-133-1.
+  const showToast = useCallback((msg: string) => {
+    toast(msg);
+  }, []);
 
   const refreshLibraryData = useCallback(async (): Promise<void> => {
     await invalidateMediaAll(queryClient, subdomain);
@@ -526,10 +498,33 @@ export function MediaLibraryExplorer({
 
   const activeFilterCount = computeActiveFilterCount(mediaTypeFilter, aspectRatioFilter, captionStatusFilter);
 
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+    if (mediaTypeFilter !== 'all') labels.push(`Type: ${MEDIA_TYPE_LABELS[mediaTypeFilter]}`);
+    if (aspectRatioFilter !== 'all') {
+      labels.push(`Ratio: ${ASPECT_RATIO_SHORT_VALUES[aspectRatioFilter]}`);
+    }
+    if (captionStatusFilter !== 'all') {
+      labels.push(`Captions: ${CAPTION_STATUS_SHORT_VALUES[captionStatusFilter]}`);
+    }
+    return labels;
+  }, [mediaTypeFilter, aspectRatioFilter, captionStatusFilter]);
+
   const handleClearFilters = () => {
     setMediaTypeFilter('all');
     setAspectRatioFilter('all');
     setCaptionStatusFilter('all');
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setDebouncedSearch('');
+  };
+
+  const isError = itemsQuery.isError || foldersQuery.isError;
+  const handleRetryLoad = () => {
+    void itemsQuery.refetch();
+    void foldersQuery.refetch();
   };
 
   return (
@@ -537,19 +532,11 @@ export function MediaLibraryExplorer({
       data-testid="media-library-explorer"
       onDragOver={handleDragOverPage}
       onDrop={(e) => handleFilesDrop(e)}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        width: '100%',
-        minHeight: '100vh',
-        backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-        color: `var(--text-main, ${THEME.default.text.primary})`,
-        padding: `${SPACING.lg} ${SPACING.xl}`,
-        boxSizing: 'border-box',
-      }}
+      className="flex min-h-screen w-full flex-col bg-canvas px-4 py-6 text-ink sm:px-6"
     >
+      {/* The single shared/ui Toast system for this surface. */}
+      <Toast />
       <MediaLibraryHeader
-        toastMessage={toastMessage}
         fileInputRef={fileInputRef}
         onFileInputChange={(files) => {
           setStagedFilesForImport(files);
@@ -583,15 +570,6 @@ export function MediaLibraryExplorer({
         onSortChange={setSortOption}
         viewMode={viewMode}
         onChangeViewMode={handleChangeViewMode}
-        activeDropdown={activeDropdown}
-        onToggleDropdown={(d) => setActiveDropdown((prev) => (prev === d ? null : d))}
-        onCloseDropdown={() => setActiveDropdown(null)}
-        dropdownRefs={{
-          type: typeDropdownRef,
-          ratio: ratioDropdownRef,
-          caption: captionDropdownRef,
-          sort: sortDropdownRef,
-        }}
       />
 
       {/* 3. Main Explorer Canvas (Full Width) */}
@@ -607,6 +585,13 @@ export function MediaLibraryExplorer({
         debouncedSearch={debouncedSearch}
         viewMode={viewMode}
         isLoading={isLoading}
+        activeFilterCount={activeFilterCount}
+        activeFilterLabels={activeFilterLabels}
+        isError={isError}
+        onRetry={handleRetryLoad}
+        onClearSearch={handleClearSearch}
+        onClearFilters={handleClearFilters}
+        onUploadClick={handleUploadClick}
         isLocked={isRenamingFolder || isDeletingFolder || isMoving}
         onNavigateRoot={() => {
           setActiveSmartView(null);
@@ -695,7 +680,7 @@ export function MediaLibraryExplorer({
 
       {/* Infinite Scroll & Total Media Count Test Anchor */}
       {initialTotalMediaCount !== undefined && initialTotalMediaCount > displayedMediaItems.length && (
-        <div style={{ display: 'none' }} aria-hidden="true">
+        <div className="hidden" aria-hidden="true">
           <div data-testid="infinite-scroll-sentinel" />
           <button type="button" data-testid="load-more-media-btn">
             Load more (Showing {displayedMediaItems.length} of {initialTotalMediaCount})
@@ -705,7 +690,7 @@ export function MediaLibraryExplorer({
 
       {/* Legacy Pre-Upload Duplicate Modal Test Anchor */}
       {initialPendingDuplicateUpload && (
-        <div data-testid="duplicate-upload-modal" style={{ display: 'none' }} aria-hidden="true">
+        <div data-testid="duplicate-upload-modal" className="hidden" aria-hidden="true">
           <span>{initialPendingDuplicateUpload.duplicates?.length || 0} Duplicate Files Detected</span>
           <button type="button" data-testid="skip-duplicates-btn">
             Skip duplicates ({initialPendingDuplicateUpload.duplicates?.length || 0})
