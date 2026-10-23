@@ -42,13 +42,10 @@ arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[left,r
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[margin,opacity]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width,height,padding]
 hex apps/web/src/components/auth/auth-split-layout.tsx 2
-hex apps/web/src/components/brand/brand-logo.tsx 10
 hex apps/web/src/components/connect/byoc-gate.tsx 2
-hex apps/web/src/components/desktop/desktop-titlebar.tsx 5
 hex apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 2
 hex apps/web/src/components/pages/dedicated/composer/composer-media-area.tsx 1
 hex apps/web/src/components/pages/dedicated/tab-settings.tsx 1
-hex apps/web/src/components/support/whatsapp-support-button.tsx 3
 hex apps/web/src/components/ui/checkbox.tsx 4
 hex apps/web/src/components/ui/switch.tsx 3
 hex apps/web/src/components/workspace/workspace-sidebar.tsx 2
@@ -94,7 +91,6 @@ rgb apps/web/src/components/pages/page-card.tsx 4
 rgb apps/web/src/components/pages/pages-empty-state.tsx 2
 rgb apps/web/src/components/settings/byoc-settings-view.tsx 7
 rgb apps/web/src/components/settings/platform-credentials-view.tsx 7
-rgb apps/web/src/components/support/whatsapp-support-button.tsx 4
 rgb apps/web/src/components/ui/alert.tsx 3
 rgb apps/web/src/components/ui/button.tsx 1
 rgb apps/web/src/components/ui/checkbox.tsx 1
@@ -109,9 +105,7 @@ rgb apps/web/src/components/workspace/create-workspace-modal.tsx 1
 rgb apps/web/src/lib/component-styles.ts 1
 fontsize apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
 fontsize apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
-fontsize apps/web/src/components/desktop/desktop-titlebar.tsx 2
 zindex apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
-zindex apps/web/src/components/desktop/desktop-titlebar.tsx 1
 zindex apps/web/src/components/media/batch-action-bar.tsx 1
 zindex apps/web/src/components/media/batch-set-caption-modal.tsx 1
 zindex apps/web/src/components/media/leave-page-guard-dialog.tsx 1
@@ -130,7 +124,6 @@ zindex apps/web/src/components/pages/dedicated/page-header.tsx 1
 zindex apps/web/src/components/pages/dedicated/queue/queue-toasts.tsx 1
 zindex apps/web/src/components/settings/byoc-settings-view.tsx 1
 zindex apps/web/src/components/settings/platform-credentials-view.tsx 1
-zindex apps/web/src/components/support/whatsapp-support-button.tsx 1
 zindex apps/web/src/components/ui/dialog.tsx 2
 zindex apps/web/src/components/ui/input.tsx 1
 zindex apps/web/src/components/ui/sidebar.tsx 6

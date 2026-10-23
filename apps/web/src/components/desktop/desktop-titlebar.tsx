@@ -7,8 +7,8 @@ import {
   sendDesktopWindowAction,
   openExternalUrl,
 } from '@fbuploadpro/contracts';
-import { PALETTE, TYPOGRAPHY } from '@/lib/theme';
 import { BrandMark } from '@/components/brand';
+import { cn } from '@/lib/utils';
 
 export interface DesktopTitleBarProps {
   /** Optional override for testing or manual preview */
@@ -17,6 +17,14 @@ export interface DesktopTitleBarProps {
   platformOverride?: 'mac' | 'windows' | 'linux';
 }
 
+/**
+ * Desktop title bar (spec 130 PR-130-1: rebuilt on design tokens —
+ * token-backed utilities only, zero inline styles). Presence,
+ * placement and behaviour are unchanged: it renders only inside the
+ * desktop shell, publishes its height as the
+ * `--desktop-titlebar-height` variable the shell offsets by, and
+ * routes external target="_blank" links out of the webview.
+ */
 export function DesktopTitleBar({ forceVisible = false, platformOverride }: Readonly<DesktopTitleBarProps>) {
   const [mounted, setMounted] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
@@ -44,14 +52,16 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
 
       const isHttp = href.startsWith('http://') || href.startsWith('https://');
       if (isHttp && isTargetBlank) {
+        let url: URL | null = null;
         try {
-          const url = new URL(href, window.location.href);
-          if (url.origin !== window.location.origin) {
-            e.preventDefault();
-            void openExternalUrl(href);
-          }
+          url = new URL(href, window.location.href);
         } catch {
-          // ignore invalid URLs
+          // Invalid URLs are not intercepted — the browser handles them.
+          url = null;
+        }
+        if (url && url.origin !== window.location.origin) {
+          e.preventDefault();
+          void openExternalUrl(href);
         }
       }
     };
@@ -84,28 +94,18 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
     void sendDesktopWindowAction('toggle_maximize');
   };
 
+  const windowControlClassName =
+    'flex h-full w-11 cursor-pointer items-center justify-center bg-transparent text-ink-sub transition-colors duration-base ease-standard';
+
   return (
     <header
       data-testid="desktop-titlebar"
       data-tauri-drag-region
       onDoubleClick={handleDoubleClick}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '36px',
-        zIndex: 10000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: `var(--bg-canvas, ${PALETTE.background})`,
-        borderBottom: `1px solid var(--border-subtle, ${PALETTE.neutral})`,
-        userSelect: 'none',
-        padding: effectiveIsMac ? '0 12px' : '0 0 0 12px',
-        boxSizing: 'border-box',
-        fontFamily: TYPOGRAPHY.fontFamily,
-      }}
+      className={cn(
+        'fixed inset-x-0 top-0 z-overlay-top flex h-9 items-center justify-between border-b border-line bg-canvas font-sans select-none',
+        effectiveIsMac ? 'px-3' : 'pl-3'
+      )}
     >
       {effectiveIsMac ? (
         // macOS Traffic Lights on the Left
@@ -113,11 +113,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
           <div
             data-testid="desktop-traffic-lights"
             data-tauri-drag-region="false"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
+            className="flex items-center gap-2"
           >
             <button
               type="button"
@@ -125,15 +121,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               data-tauri-drag-region="false"
               onClick={handleAction('close')}
               aria-label="Close window"
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: PALETTE.accent3,
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-              }}
+              className="size-3 cursor-pointer rounded-full bg-brand-rose p-0"
             />
             <button
               type="button"
@@ -141,15 +129,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               data-tauri-drag-region="false"
               onClick={handleAction('minimize')}
               aria-label="Minimize window"
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: PALETTE.primary,
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-              }}
+              className="size-3 cursor-pointer rounded-full bg-brand-gold p-0"
             />
             <button
               type="button"
@@ -157,32 +137,13 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               data-tauri-drag-region="false"
               onClick={handleAction('toggle_maximize')}
               aria-label="Maximize or restore window"
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: PALETTE.accent4,
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-              }}
+              className="size-3 cursor-pointer rounded-full bg-brand-emerald p-0"
             />
           </div>
 
           <div
             data-tauri-drag-region
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              flex: 1,
-              justifyContent: 'center',
-              marginRight: '60px',
-              fontSize: '12px',
-              fontWeight: 500,
-              color: 'var(--text-sub, #9ca3af)',
-              letterSpacing: '0.02em',
-            }}
+            className="mr-16 flex flex-1 items-center justify-center gap-2 text-metadata font-medium text-ink-sub"
           >
             <span>FBUploadPro</span>
           </div>
@@ -193,32 +154,20 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
           <div
             data-testid="desktop-brand-title"
             data-tauri-drag-region
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '12px',
-              fontWeight: 500,
-              color: 'var(--text-sub, #9ca3af)',
-              letterSpacing: '0.02em',
-            }}
+            className="flex items-center gap-2 text-metadata font-medium text-ink-sub"
           >
             <BrandMark size={16} />
             <span>FBUploadPro</span>
           </div>
 
           {/* Draggable spacer */}
-          <div data-tauri-drag-region style={{ flex: 1, height: '100%' }} />
+          <div data-tauri-drag-region className="h-full flex-1" />
 
           {/* Windows / Linux Window Control Buttons */}
           <div
             data-testid="desktop-window-controls"
             data-tauri-drag-region="false"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              height: '100%',
-            }}
+            className="flex h-full items-center"
           >
             <button
               type="button"
@@ -226,18 +175,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               data-tauri-drag-region="false"
               onClick={handleAction('minimize')}
               aria-label="Minimize window"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-sub, #9ca3af)',
-                width: '42px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease, color 0.15s ease',
-              }}
+              className={windowControlClassName}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor">
                 <rect y="4.5" width="10" height="1" />
@@ -250,18 +188,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               data-tauri-drag-region="false"
               onClick={handleAction('toggle_maximize')}
               aria-label="Maximize or restore window"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-sub, #9ca3af)',
-                width: '42px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease, color 0.15s ease',
-              }}
+              className={windowControlClassName}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
                 <rect x="1.5" y="1.5" width="7" height="7" />
@@ -274,18 +201,7 @@ export function DesktopTitleBar({ forceVisible = false, platformOverride }: Read
               data-tauri-drag-region="false"
               onClick={handleAction('close')}
               aria-label="Close window"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-sub, #9ca3af)',
-                width: '42px',
-                height: '36px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease, color 0.15s ease',
-              }}
+              className={windowControlClassName}
             >
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2">
                 <path d="M1.5 1.5l7 7M8.5 1.5l-7 7" />
