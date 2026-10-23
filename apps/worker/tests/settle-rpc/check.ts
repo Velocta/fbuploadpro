@@ -25,7 +25,16 @@
  *       receives the new cooldown;
  *   (g) p_detail lands in publish_logs.detail merged with (and losing
  *       key conflicts to) the existing error-code object; p_detail NULL
- *       preserves the pre-existing detail behaviour exactly.
+ *       preserves the pre-existing detail behaviour exactly;
+ *   (h) the `deferred` outcome (spec 139 defer outcome, migration
+ *       20261024100000): the item returns to `queued` with the deferral
+ *       reason recorded and its retry_count UNCHANGED — even when the
+ *       caller passes an inflated p_retry_count — across repeated
+ *       defers; the publish log records result 'deferred' with p_detail
+ *       merged; the [139-1] terminal-state guard and the monotonic
+ *       destination cooldown both hold for defers; the `queued`
+ *       (retry) branch still advances the count (branches stay
+ *       distinct).
  *
  * Usage:
  *   SETTLE_RPC_PG_URL=postgres://postgres@/settle139?host=<socket dir>&port=<port> \
@@ -417,6 +426,129 @@ async function sectionDetail(pool: Pool): Promise<void> {
   );
 }
 
+async function sectionDeferred(pool: Pool): Promise<void> {
+  console.log('\n(h) deferred outcome leaves retry_count unchanged');
+  await reset(pool);
+  // Seed a mid-life item: two real attempts already burned.
+  await pool.query('UPDATE public.queue_items SET retry_count = 2 WHERE id = $1::uuid', [ITEM_MAIN]);
+
+  // Defer #1 — the caller deliberately passes an inflated count (99):
+  // the deferred branch must ignore it for the stored count.
+  const before = new Date();
+  const r1 = await settle(pool, {
+    outcome: 'deferred', retryCount: 99, errorCode: 'publishing_limit_reached',
+    errorMessage: 'This account has reached its publishing limit for now.',
+    cooldownSeconds: 3600,
+    detail: { platform: 'instagram', publishingLimit: { usage: 50 } },
+  });
+  check(r1 === 'settled', 'deferred settle returns settled', String(r1));
+  const item1 = await itemRow(pool, ITEM_MAIN);
+  check(item1?.status === 'queued', 'deferred item returns to queued', String(item1?.status));
+  check(
+    item1?.retry_count === 2,
+    'deferred settle leaves retry_count unchanged (caller passed 99)',
+    String(item1?.retry_count)
+  );
+  check(item1?.claimed_at === null, 'deferred settle clears the claim', String(item1?.claimed_at));
+  check(
+    item1?.error_code === 'publishing_limit_reached',
+    'deferred settle records the deferral reason on the item',
+    String(item1?.error_code)
+  );
+  const sched1 = asDate(item1?.scheduled_time);
+  check(
+    sched1 !== null && sched1.getTime() > before.getTime(),
+    'deferred item is rescheduled into the future',
+    String(item1?.scheduled_time)
+  );
+  const logs1 = await logRows(pool, ITEM_MAIN);
+  check(logs1.length === 1, 'deferred settle writes exactly one publish_logs row', String(logs1.length));
+  check(
+    logs1[0]?.result === 'deferred',
+    "publish log records the deferral with result 'deferred'",
+    String(logs1[0]?.result)
+  );
+  const dd = logs1[0]?.detail as Record<string, unknown> | null;
+  check(
+    dd?.errorCode === 'publishing_limit_reached' && dd?.platform === 'instagram',
+    'deferral log detail merges p_detail with the error-code object',
+    JSON.stringify(dd)
+  );
+  const dest1 = await destRow(pool);
+  const cd1 = asDate(dest1?.next_allowed_publish_at);
+  check(
+    cd1 !== null && cd1.getTime() >= before.getTime() + 3590 * 1000,
+    'deferred settle still applies the destination cooldown (X 402 path)',
+    String(dest1?.next_allowed_publish_at)
+  );
+
+  // Defer #2 and #3 (item re-claimed to 'publishing' between passes):
+  // repeated deferrals — e.g. a cap that stays hit for hours — must
+  // never grind the count up.
+  for (let pass = 2; pass <= 3; pass += 1) {
+    await pool.query(
+      "UPDATE public.queue_items SET status = 'publishing', claimed_at = now() WHERE id = $1::uuid",
+      [ITEM_MAIN]
+    );
+    await settle(pool, {
+      outcome: 'deferred', retryCount: 99, errorCode: 'publishing_limit_reached',
+      errorMessage: 'still capped',
+    });
+    const itemN = await itemRow(pool, ITEM_MAIN);
+    check(
+      itemN?.retry_count === 2,
+      `retry_count still unchanged after defer #${pass}`,
+      String(itemN?.retry_count)
+    );
+  }
+  const logsAll = await logRows(pool, ITEM_MAIN);
+  check(
+    logsAll.length === 3 && logsAll.every((l) => l.result === 'deferred'),
+    'each deferral logged exactly one deferred row',
+    String(logsAll.length)
+  );
+
+  // Monotonic cooldown holds for defers: a short defer cooldown must
+  // not shrink the live one-hour cooldown from defer #1.
+  const destBefore = asDate((await destRow(pool))?.next_allowed_publish_at);
+  await pool.query(
+    "UPDATE public.queue_items SET status = 'publishing', claimed_at = now() WHERE id = $1::uuid",
+    [ITEM_MAIN]
+  );
+  await settle(pool, { outcome: 'deferred', retryCount: 2, errorCode: 'x', cooldownSeconds: 60 });
+  const destAfter = asDate((await destRow(pool))?.next_allowed_publish_at);
+  check(
+    destBefore !== null && destAfter !== null && destAfter.getTime() === destBefore.getTime(),
+    'a shorter defer cooldown never shrinks a live destination cooldown',
+    `${String(destBefore)} -> ${String(destAfter)}`
+  );
+
+  // [139-1] guard holds for defers: a terminal item no-ops.
+  await addItem(pool, ITEM_B, 'published');
+  const rTerm = await settle(pool, {
+    item: ITEM_B, outcome: 'deferred', retryCount: 0, errorCode: 'publishing_limit_reached',
+  });
+  check(rTerm === 'already_settled', 'defer of a terminal item returns already_settled', String(rTerm));
+  const logsB = await logRows(pool, ITEM_B);
+  check(logsB.length === 0, 'defer of a terminal item writes no publish_logs row', String(logsB.length));
+  const itemB = await itemRow(pool, ITEM_B);
+  check(itemB?.status === 'published', 'terminal item untouched by a defer', String(itemB?.status));
+
+  // Branch distinctness regression: the retry branch still advances
+  // the stored count from p_retry_count.
+  await addItem(pool, ITEM_C, 'publishing');
+  await pool.query('UPDATE public.queue_items SET retry_count = 1 WHERE id = $1::uuid', [ITEM_C]);
+  await settle(pool, { item: ITEM_C, outcome: 'queued', retryCount: 2, errorCode: 'transient' });
+  const itemC = await itemRow(pool, ITEM_C);
+  check(
+    itemC?.retry_count === 2 && itemC?.status === 'queued',
+    'retry branch still advances retry_count (branches stay distinct)',
+    String(itemC?.retry_count)
+  );
+  const logsC = await logRows(pool, ITEM_C);
+  check(logsC[0]?.result === 'retry', "retry branch still logs result 'retry'", String(logsC[0]?.result));
+}
+
 async function dump(pool: Pool): Promise<string> {
   const fns = await pool.query<{ args: string; acl: string; rettype: string }>(
     `SELECT pg_get_function_identity_arguments(p.oid) AS args,
@@ -447,6 +579,7 @@ async function main(): Promise<void> {
     await sectionDoubleSettle(pool);
     await sectionCooldown(pool);
     await sectionDetail(pool);
+    await sectionDeferred(pool);
 
     const text = await dump(pool);
     console.log('\n--- settle_queue_item_outcome catalog dump ---');

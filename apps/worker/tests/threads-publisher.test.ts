@@ -354,7 +354,7 @@ describe('ThreadsPublisher (spec 124)', () => {
     const mock = new MockThreadsPublishClient();
     mock.limitToReturn = { usage: 250, totalCount: 250, raw: {} };
     const outcome = await publisherWith(mock).publish(makeItem(), makeDestination(), TOKENS);
-    expect(outcome.status).toBe('retry');
+    expect(outcome.status).toBe('deferred');
     expect(outcome.error?.kind).toBe('retryable');
     expect(outcome.error?.code).toBe('publishing_limit_reached');
     expect(outcome.retryDelaySeconds).toBe(3600);

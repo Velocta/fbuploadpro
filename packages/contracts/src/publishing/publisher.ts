@@ -90,11 +90,19 @@ export interface RefreshedTokenSet {
  * vocabulary. Mirrors `SettleQueueItemOutcomeUnifiedArgs` field-for-field
  * (plus `detail`) so a consumer can settle without platform knowledge:
  *   - `published` → RPC outcome `published`
- *   - `retry`     → RPC outcome `queued` (retry), error from `error`
+ *   - `retry`     → RPC outcome `queued` (retry), error from `error`;
+ *                   the item's retry_count ADVANCES (a real attempt failed)
  *   - `failed`    → RPC outcome `failed`, error from `error`
+ *   - `deferred`  → RPC outcome `deferred`, error from `error` (the
+ *                   deferral's reason); the item returns to `queued`
+ *                   after `retryDelaySeconds` and its retry_count is
+ *                   left UNCHANGED — a deferral is not the item's fault
+ *                   (platform cap reached, platform-wide pause such as
+ *                   X's 402), so it must never consume retry budget
+ *                   (spec 139 defer outcome, Shahzeb 2026-10-24).
  */
 export const PublishOutcomeSchema = z.object({
-  status: z.enum(['published', 'retry', 'failed']),
+  status: z.enum(['published', 'retry', 'failed', 'deferred']),
   /** Platform post id (`queue_items.external_post_id`) on success. */
   externalPostId: z.string().optional(),
   /** First-comment id (`queue_items.external_comment_id`) when one was posted. */
@@ -105,9 +113,9 @@ export const PublishOutcomeSchema = z.object({
    * comment warning, exactly like today's Facebook flow.
    */
   commentWarning: z.string().optional(),
-  /** Classified failure; present whenever `status` is `retry` or `failed`. */
+  /** Classified failure; present whenever `status` is `retry`, `failed`, or `deferred` (as the deferral's reason). */
   error: ClassifiedPublishErrorSchema.optional(),
-  /** Backoff before a `retry` outcome becomes due again, in seconds. */
+  /** Backoff before a `retry` or `deferred` outcome becomes due again, in seconds. */
   retryDelaySeconds: z.number().nonnegative().optional(),
   /**
    * Platform session state for `publish_logs.detail`: IG/Threads

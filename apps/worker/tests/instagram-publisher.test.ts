@@ -353,7 +353,7 @@ describe('InstagramPublisher (spec 124)', () => {
     const mock = new MockInstagramPublishClient();
     mock.limitToReturn = { usage: 50, totalCount: 50, raw: {} };
     const outcome = await publisherWith(mock).publish(makeItem(), makeDestination(), TOKENS);
-    expect(outcome.status).toBe('retry');
+    expect(outcome.status).toBe('deferred');
     expect(outcome.error?.kind).toBe('retryable');
     expect(outcome.error?.code).toBe('publishing_limit_reached');
     expect(outcome.retryDelaySeconds).toBe(3600);

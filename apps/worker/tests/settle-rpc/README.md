@@ -22,7 +22,15 @@ in filename order, that the unified `settle_queue_item_outcome` —
 - merges `p_detail` into `publish_logs.detail` (the carrier specs
   124–126 need for platform session ids), with the error-code object
   winning key conflicts and `p_detail = NULL` preserving the previous
-  detail behaviour exactly.
+  detail behaviour exactly;
+- (spec 139 defer outcome, migration
+  `20261024100000_deferred_settle_outcome.sql`) settles the `deferred`
+  outcome: the item returns to `queued` with the deferral reason
+  recorded and its `retry_count` **unchanged** — even when the caller
+  passes an inflated `p_retry_count` — across repeated defers; the
+  publish log records result `'deferred'`; the terminal-state guard
+  and the monotonic destination cooldown hold for defers, and the
+  retry branch still advances the count.
 
 Modelled on the spec 117 rls-rpc rig (`apps/worker/tests/rls-rpc/`).
 
@@ -33,7 +41,7 @@ Modelled on the spec 117 rls-rpc rig (`apps/worker/tests/rls-rpc/`).
 | `db/bootstrap.sql` | Minimal Supabase stub for plain Postgres: `anon` / `authenticated` / `service_role` (BYPASSRLS) roles, `auth` schema, `auth.users`, `auth.uid()` — plus Supabase's default-privilege posture via `ALTER DEFAULT PRIVILEGES`, because this rig exercises GRANTs (copied from the rls-rpc rig) |
 | `db/run-migrations.ts` | Applies `bootstrap.sql`, then every file in `supabase/migrations/` in filename order; `SETTLE_RPC_MIGRATIONS_UNTIL=<file>` stops after that file (builds a pre-hardening DB) |
 | `fixtures.sql` | Deterministic unified-schema fixture (`settle139_reset`, `settle139_add_item`): one user/workspace/account/destination graph with a queue item in `publishing` |
-| `check.ts` | The assertion runner (sections a–g). Prints a `pg_proc` dump of both settle overloads (`SETTLE_RPC_DUMP_FILE=<path>` also writes it to a file) |
+| `check.ts` | The assertion runner (sections a–h). Prints a `pg_proc` dump of both settle overloads (`SETTLE_RPC_DUMP_FILE=<path>` also writes it to a file) |
 
 Rig code lives outside the worker build's runtime: no file here matches
 vitest's `*.test.*` include pattern, so the normal worker suite never
@@ -58,12 +66,13 @@ SETTLE_RPC_PG_URL='postgres://postgres@/settle139?host=<socket dir>&port=<port>'
   pnpm exec tsx tests/settle-rpc/check.ts
 ```
 
-## Results (2026-10-23, PostgreSQL 16.15, full migration chain)
+## Results (2026-10-24, PostgreSQL 16.2, full migration chain incl. the defer-outcome migration)
 
-- **39 assertions, 0 failures** — sections: (a) catalog 6, (b) ACL 3,
+- **58 assertions, 0 failures** — sections: (a) catalog 6, (b) ACL 3,
   (c) normal settle 7, (d) old-signature callers 4, (e) double-settle
-  no-op 10, (f) monotonic cooldown 5, (g) p_detail 4 (counts include the
-  section sub-assertions as run; see check.ts).
+  no-op 10, (f) monotonic cooldown 5, (g) p_detail 4, (h) deferred
+  outcome 19 (counts include the section sub-assertions as run; see
+  check.ts).
 
 ### Catalog dump — after (hardened)
 

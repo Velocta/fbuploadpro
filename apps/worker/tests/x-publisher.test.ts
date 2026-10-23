@@ -366,7 +366,7 @@ describe('XPublisher — 402 platform-wide handling', () => {
       env: { POSTHOG_KEY: 'test-key', POSTHOG_HOST: 'https://posthog.example' },
     });
     const outcome = await publisher.publish(makeItem(), makeDestination(), TOKENS);
-    expect(outcome.status).toBe('retry');
+    expect(outcome.status).toBe('deferred');
     expect(outcome.error?.code).toBe(X_CREDITS_EXHAUSTED_CODE);
     expect(outcome.error?.kind).toBe('retryable');
     expect(outcome.retryDelaySeconds).toBe(3600);
