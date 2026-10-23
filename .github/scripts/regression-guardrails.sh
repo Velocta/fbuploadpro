@@ -369,6 +369,85 @@ while IFS= read -r cssfile; do
 done < <(find apps/web/src -name '*.css' 2>/dev/null | grep -v 'styles/tokens.generated.css' || true)
 
 # ---------------------------------------------------------------------------
+# Check 12: silent-failure pattern family banned (spec 137 §3.1 / PR-A1a).
+# In data code a failed request or a caught error must surface — never
+# vanish. Banned in apps/web/src:
+#   not-ok-return     `if (!res.ok) return;` (or return null/undefined;)
+#   bare-catch-return a catch block whose whole body is a bare return
+#   empty-catch       a catch block whose whole body is empty / comments
+# Pre-existing occurrences are frozen per file+category in
+# apps/web/silent-failure-baseline.txt (same discipline as check 9):
+# any increase or new file fails; a decrease fails until the baseline
+# is updated in the same PR. Existing occurrences ride the surface
+# rebuilds that own each file (spec 137 §4.1.2) — this check stops new
+# ones from the day it lands. New code talks to the API through
+# apps/web/src/lib/api (typed client: throws ApiError, never swallows).
+# ---------------------------------------------------------------------------
+SF_BASELINE="apps/web/silent-failure-baseline.txt"
+if [ -f "$SF_BASELINE" ]; then
+  SF_SCANNER="$(mktemp)"
+  cat > "$SF_SCANNER" <<'PERL_EOF'
+use strict;
+use warnings;
+my %counts;
+for my $file (@ARGV) {
+  open my $fh, '<', $file or next;
+  local $/;
+  my $content = <$fh>;
+  close $fh;
+  next unless defined $content;
+  my $notok = 0;
+  $notok++ while $content =~ /if\s*\(\s*!\s*[A-Za-z_\$][A-Za-z0-9_\$]*\.ok\s*\)\s*\{?\s*return\s*(?:null|undefined)?\s*;\s*\}?/g;
+  $counts{"not-ok-return $file"} += $notok if $notok;
+  while ($content =~ /catch\s*(?:\([^)]*\))?\s*\{/g) {
+    my $rest = substr($content, pos($content));
+    while (1) {
+      if    ($rest =~ s/\A\s+//)          { next; }
+      elsif ($rest =~ s/\A\/\/[^\n]*//)   { next; }
+      elsif ($rest =~ s/\A\/\*.*?\*\///s) { next; }
+      last;
+    }
+    if ($rest =~ /\A\}/) {
+      $counts{"empty-catch $file"}++;
+    }
+    elsif ($rest =~ /\Areturn\s*(?:null|undefined)?\s*;\s*\}/) {
+      $counts{"bare-catch-return $file"}++;
+    }
+  }
+}
+for my $key (sort keys %counts) {
+  my ($cat, $file) = split / /, $key, 2;
+  print "$cat $file $counts{$key}\n";
+}
+PERL_EOF
+  SF_CURRENT="$(mktemp)"
+  find apps/web/src -name '*.ts' -o -name '*.tsx' | sort | xargs perl "$SF_SCANNER" > "$SF_CURRENT" 2>/dev/null || true
+  SF_BASE_SORTED="$(mktemp)"
+  grep -E '^(not-ok-return|bare-catch-return|empty-catch)[[:space:]]' "$SF_BASELINE" | sort > "$SF_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    cat_name="$(printf '%s' "$change" | awk '{print $2}')"
+    fname="$(printf '%s' "$change" | awk '{print $3}')"
+    old_n="$(printf '%s' "$change" | awk '{print $4}')"
+    new_n="$(printf '%s' "$change" | awk '{print $5}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "silent-failure ban (${cat_name}): ${fname} has ${new_n} occurrence(s), baseline is ${old_n} -- surface the error (throw / present via the ladder); data code uses the typed client in src/lib/api (spec 137 §3.1); do not raise the baseline"
+    else
+      violation "silent-failure baseline STALE (${cat_name}): ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/silent-failure-baseline.txt in this PR (spec 137 PR-A1a)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1" "$2]=$3; seen[$1" "$2]=1; next }
+    { cur[$1" "$2]=$3; seen[$1" "$2]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$SF_BASE_SORTED" "$SF_CURRENT")
+  rm -f "$SF_SCANNER" "$SF_CURRENT" "$SF_BASE_SORTED"
+else
+  violation "silent-failure baseline file missing: apps/web/silent-failure-baseline.txt (spec 137 PR-A1a)"
+fi
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 count="$(wc -l < "$VIOLATIONS_FILE" | tr -d ' ')"
