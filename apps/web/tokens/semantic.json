@@ -1,0 +1,237 @@
+{
+  "$description": "Semantic design tokens \u2014 mode-specific aliases over primitives (spec 129 \u00a75.2). Components consume semantic tokens ONLY; semantic tokens alias primitives; primitives are never referenced from component code. Dark is the default mode (OD-1: both themes kept, both generated from this single source).",
+  "semantic": {
+    "dark": {
+      "border": {
+        "focus": {
+          "$type": "color",
+          "$value": "{color.alpha.goldFocus}"
+        },
+        "hairline": {
+          "$type": "color",
+          "$value": "{color.neutral.slate}"
+        },
+        "strong": {
+          "$type": "color",
+          "$value": "{color.border.darkStrong}"
+        }
+      },
+      "shadow": {
+        "card": {
+          "$type": "shadow",
+          "$value": "{shadow.dark.card}"
+        },
+        "elevated": {
+          "$type": "shadow",
+          "$value": "{shadow.dark.elevated}"
+        },
+        "modal": {
+          "$type": "shadow",
+          "$value": "{shadow.dark.modal}"
+        }
+      },
+      "status": {
+        "critical": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.brand.rose}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.brand.rose}"
+          }
+        },
+        "idle": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.gray.500}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.gray.slateText}"
+          }
+        },
+        "operational": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.brand.emerald}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.brand.emerald}"
+          }
+        },
+        "queued": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.brand.gold}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.brand.gold}"
+          }
+        }
+      },
+      "surface": {
+        "active": {
+          "$type": "color",
+          "$value": "{color.surface.darkActive}"
+        },
+        "canvas": {
+          "$type": "color",
+          "$value": "{color.neutral.black}"
+        },
+        "hover": {
+          "$type": "color",
+          "$value": "{color.neutral.slate}"
+        },
+        "panel": {
+          "$type": "color",
+          "$value": "{color.surface.darkPanel}"
+        },
+        "subtle": {
+          "$type": "color",
+          "$value": "{color.surface.darkSubtle}"
+        }
+      },
+      "text": {
+        "link": {
+          "$type": "color",
+          "$value": "{color.brand.peru}"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "{color.gray.500}"
+        },
+        "onPrimary": {
+          "$type": "color",
+          "$value": "{color.neutral.black}"
+        },
+        "primary": {
+          "$type": "color",
+          "$value": "{color.neutral.white}"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "{color.gray.400}"
+        }
+      }
+    },
+    "light": {
+      "border": {
+        "focus": {
+          "$type": "color",
+          "$value": "{color.alpha.goldFocus}"
+        },
+        "hairline": {
+          "$type": "color",
+          "$value": "{color.surface.lightHover}"
+        },
+        "strong": {
+          "$type": "color",
+          "$value": "{color.border.lightStrong}"
+        }
+      },
+      "shadow": {
+        "card": {
+          "$type": "shadow",
+          "$value": "{shadow.light.card}"
+        },
+        "elevated": {
+          "$type": "shadow",
+          "$value": "{shadow.light.elevated}"
+        },
+        "modal": {
+          "$type": "shadow",
+          "$value": "{shadow.light.modal}"
+        }
+      },
+      "status": {
+        "critical": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.brand.rose}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.brand.rose}"
+          }
+        },
+        "idle": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.gray.500}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.gray.mutedLight}"
+          }
+        },
+        "operational": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.brand.emerald}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.brand.emerald}"
+          }
+        },
+        "queued": {
+          "color": {
+            "$type": "color",
+            "$value": "{color.brand.gold}"
+          },
+          "dot": {
+            "$type": "color",
+            "$value": "{color.brand.gold}"
+          }
+        }
+      },
+      "surface": {
+        "active": {
+          "$type": "color",
+          "$value": "{color.surface.lightActive}"
+        },
+        "canvas": {
+          "$type": "color",
+          "$value": "{color.surface.lightCanvas}"
+        },
+        "hover": {
+          "$type": "color",
+          "$value": "{color.surface.lightHover}"
+        },
+        "panel": {
+          "$type": "color",
+          "$value": "{color.neutral.white}"
+        },
+        "subtle": {
+          "$type": "color",
+          "$value": "{color.surface.lightSubtle}"
+        }
+      },
+      "text": {
+        "link": {
+          "$type": "color",
+          "$value": "{color.brand.peru}"
+        },
+        "muted": {
+          "$type": "color",
+          "$value": "{color.gray.mutedLight}"
+        },
+        "onPrimary": {
+          "$type": "color",
+          "$value": "{color.neutral.black}"
+        },
+        "primary": {
+          "$type": "color",
+          "$value": "{color.neutral.black}"
+        },
+        "secondary": {
+          "$type": "color",
+          "$value": "{color.gray.slateText}"
+        }
+      }
+    }
+  }
+}

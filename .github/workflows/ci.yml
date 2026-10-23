@@ -93,3 +93,20 @@ jobs:
       - name: Run regression guardrails
         run: bash .github/scripts/regression-guardrails.sh
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Design token parity check (spec 129)
+        run: pnpm --filter @fbuploadpro/web run tokens:check
+
