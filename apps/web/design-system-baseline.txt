@@ -43,7 +43,6 @@ arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[left,r
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[margin,opacity]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width,height,padding]
 hex apps/web/src/components/connect/byoc-gate.tsx 2
-hex apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 2
 hex apps/web/src/components/pages/dedicated/tab-settings.tsx 1
 hex apps/web/src/components/ui/checkbox.tsx 4
 hex apps/web/src/components/ui/switch.tsx 3
@@ -65,7 +64,6 @@ rgb apps/web/src/components/media/media-library-dialogs.tsx 13
 rgb apps/web/src/components/media/media-preview-modal.tsx 8
 rgb apps/web/src/components/media/new-folder-modal.tsx 6
 rgb apps/web/src/components/pages/add-page-modal.tsx 5
-rgb apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 1
 rgb apps/web/src/components/pages/dedicated/modal-styles.ts 1
 rgb apps/web/src/components/pages/dedicated/page-header.tsx 3
 rgb apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 5

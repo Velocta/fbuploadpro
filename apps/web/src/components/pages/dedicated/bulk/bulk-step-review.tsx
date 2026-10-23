@@ -1,15 +1,11 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { type PostFormat } from '@fbuploadpro/contracts';
 import { type ComposerMediaItem } from '../composer/composer-media-area';
-import {
-  composerLabelStyle,
-  composerHintStyle,
-  composerErrorStyle,
-  composerInputStyle,
-} from '../composer/composer-styles';
-import { COMPONENT_STYLES, SPACING, RADII, TYPOGRAPHY } from '@/lib/theme';
+import { Button } from '@/components/shared/ui/button';
+import { Input } from '@/components/shared/ui/input';
 import { formatLabel, pluralize, type BulkDestination } from './bulk-utils';
 
 export interface BulkReviewRow {
@@ -47,7 +43,8 @@ function rowThumbnail(asset: ComposerMediaItem): string | null {
 export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
   const { rows, format, destination, isSubmitting, results, onSubmit, onDone } = props;
 
-  // Summary state
+  // Summary state (UI Rule 26: the bulk flow ends on an engineered summary,
+  // with per-row errors and failed rows named — never all-or-nothing silence).
   if (results) {
     const added = results.filter((r) => r.ok).length;
     const failed = results.length - added;
@@ -58,27 +55,30 @@ export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
         ? `${added} added to queue, ${failed} failed`
         : `${added} scheduled, ${failed} failed`;
     return (
-      <div data-testid="bulk-summary" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-        <p style={{ ...composerHintStyle, margin: 0, fontWeight: TYPOGRAPHY.weights.semibold }}>
+      <div data-testid="bulk-summary" className="flex flex-col gap-4">
+        <p className="m-0 text-body font-semibold text-ink">
           {summary} ({results.length} {summaryNoun}).
         </p>
         {failures.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
+          <div className="flex flex-col gap-1.5">
             {failures.map((failure) => (
-              <div
-                key={failure.assetId}
-                style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}
-              >
+              <div key={failure.assetId} className="flex items-center gap-3">
                 {failure.thumbnailUrl ? (
-                  <img
+                  <Image
                     src={failure.thumbnailUrl}
                     alt={failure.assetName}
-                    style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: RADII.xs }}
+                    width={80}
+                    height={80}
+                    unoptimized
+                    className="size-10 shrink-0 rounded-sm object-cover"
                   />
                 ) : (
-                  <span style={{ ...composerHintStyle, margin: 0 }}>{failure.assetName}</span>
+                  <span className="text-metadata text-ink-sub">{failure.assetName}</span>
                 )}
-                <span data-testid={`bulk-result-error-${failure.assetId}`} style={composerErrorStyle}>
+                <span
+                  data-testid={`bulk-result-error-${failure.assetId}`}
+                  className="text-metadata font-medium text-brand-rose"
+                >
                   {failure.error || 'Could not add this post.'}
                 </span>
               </div>
@@ -86,14 +86,9 @@ export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
           </div>
         )}
         <div>
-          <button
-            type="button"
-            data-testid="bulk-summary-done-btn"
-            onClick={onDone}
-            style={{ ...COMPONENT_STYLES.primaryButton, padding: `${SPACING.xs} ${SPACING.lg}`, cursor: 'pointer' }}
-          >
+          <Button data-testid="bulk-summary-done-btn" onClick={onDone}>
             Done
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -107,58 +102,41 @@ export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
       : `Schedule ${rows.length} ${postNoun}`;
 
   return (
-    <div data-testid="bulk-step-review" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-      <span style={composerLabelStyle}>Review</span>
-      <div
-        data-testid="bulk-review-rows"
-        style={{ display: 'flex', flexDirection: 'column', maxHeight: '320px', overflowY: 'auto' }}
-      >
+    <div data-testid="bulk-step-review" className="flex flex-col gap-4">
+      <span className="text-body font-medium text-ink">Review</span>
+      <div data-testid="bulk-review-rows" className="flex max-h-80 flex-col overflow-y-auto">
         {rows.map((row, index) => {
           const thumb = rowThumbnail(row.asset);
           return (
             <div
               key={row.asset.id}
               data-testid={`bulk-review-row-${row.asset.id}`}
-              style={{
-                display: 'flex',
-                gap: SPACING.sm,
-                alignItems: 'flex-start',
-                padding: `${SPACING.sm} 0`,
-                borderBottom: index === rows.length - 1 ? 'none' : '1px solid var(--border-subtle)',
-              }}
+              className={
+                index === rows.length - 1
+                  ? 'flex items-start gap-3 py-3'
+                  : 'flex items-start gap-3 border-b border-line py-3'
+              }
             >
               {thumb ? (
-                <img
+                <Image
                   src={thumb}
                   alt={row.asset.name}
-                  style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: RADII.xs, flexShrink: 0 }}
+                  width={96}
+                  height={96}
+                  unoptimized
+                  className="size-12 shrink-0 rounded-sm object-cover"
                 />
               ) : (
-                <div
-                  style={{
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: RADII.xs,
-                    flexShrink: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '0.6875rem',
-                    color: 'var(--text-sub)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                >
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-sm border border-line text-metadata text-ink-sub">
                   {formatLabel(format)}
                 </div>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', gap: SPACING.xs, alignItems: 'baseline' }}>
-                  <span style={{ fontSize: '0.8125rem', fontWeight: TYPOGRAPHY.weights.semibold }}>
-                    {formatLabel(format)}
-                  </span>
-                  <span style={composerHintStyle}>{row.timeLabel}</span>
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex flex-wrap items-baseline gap-1.5">
+                  <span className="text-body font-semibold text-ink">{formatLabel(format)}</span>
+                  <span className="text-metadata text-ink-sub">{row.timeLabel}</span>
                 </div>
-                <input
+                <Input
                   type="text"
                   aria-label={`Caption for ${row.asset.name}`}
                   data-testid={`bulk-row-caption-${row.asset.id}`}
@@ -166,48 +144,36 @@ export function BulkStepReview(props: Readonly<BulkStepReviewProps>) {
                   maxLength={5000}
                   placeholder="Add a caption…"
                   onChange={(e) => row.onCaptionChange(e.target.value)}
-                  style={{ ...composerInputStyle(), fontSize: '0.8125rem' }}
                 />
               </div>
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 data-testid={`bulk-row-remove-${row.asset.id}`}
                 aria-label={`Remove ${row.asset.name}`}
                 onClick={row.onRemove}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--text-sub)',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  padding: '4px',
-                  flexShrink: 0,
-                }}
               >
                 ×
-              </button>
+              </Button>
             </div>
           );
         })}
       </div>
-      {rows.length === 0 && (
-        <p style={{ ...composerHintStyle, margin: 0 }}>No posts left to add.</p>
+      {rows.length === 0 && <p className="m-0 text-metadata text-ink-sub">No posts left to add.</p>}
+      {isSubmitting && (
+        <p role="status" className="m-0 text-metadata text-ink-sub">
+          Adding {rows.length} {postNoun}…
+        </p>
       )}
       <div>
-        <button
-          type="button"
+        <Button
           data-testid="bulk-submit-btn"
           onClick={onSubmit}
           disabled={isSubmitting || rows.length === 0}
-          style={{
-            ...COMPONENT_STYLES.primaryButton,
-            padding: `${SPACING.xs} ${SPACING.lg}`,
-            cursor: isSubmitting || rows.length === 0 ? 'not-allowed' : 'pointer',
-            opacity: isSubmitting || rows.length === 0 ? 0.7 : 1,
-          }}
+          loading={isSubmitting}
         >
           {isSubmitting ? `Adding ${rows.length} ${postNoun}…` : submitLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
