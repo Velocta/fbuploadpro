@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { segmentedOptionStyle } from './composer-styles';
+import { cn } from '@/lib/utils';
 
 export type ComposerIntent = 'now' | 'schedule' | 'queue';
 
@@ -24,7 +24,7 @@ export function IntentSelector({ value, onChange, queueDisabled }: Readonly<Inte
       data-testid="composer-intent-selector"
       role="tablist"
       aria-label="Publishing intent"
-      style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--border-subtle)' }}
+      className="flex max-w-full gap-1 overflow-x-auto border-b border-line"
     >
       {INTENTS.map((intent) => {
         const isActive = value === intent.id;
@@ -38,7 +38,12 @@ export function IntentSelector({ value, onChange, queueDisabled }: Readonly<Inte
             data-testid={intent.testId}
             disabled={isDisabled}
             onClick={() => onChange(intent.id)}
-            style={segmentedOptionStyle(isActive, isDisabled)}
+            className={cn(
+              'inline-flex min-h-11 shrink-0 items-center border-b-2 px-3 text-body font-medium whitespace-nowrap transition-colors duration-fast outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:cursor-not-allowed disabled:opacity-50',
+              isActive
+                ? 'border-brand-gold font-semibold text-ink'
+                : 'border-transparent text-ink-sub hover:text-ink'
+            )}
           >
             {intent.label}
           </button>

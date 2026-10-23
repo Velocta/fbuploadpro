@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { type PostFormat } from '@fbuploadpro/contracts';
-import { segmentedOptionStyle } from './composer-styles';
+import { cn } from '@/lib/utils';
 
 const FORMATS: Array<{ id: PostFormat; label: string; testId: string }> = [
   { id: 'text', label: 'Text', testId: 'composer-format-text' },
@@ -25,7 +25,7 @@ export function FormatSelector({ value, onChange, disabled = false }: Readonly<F
       data-testid="composer-format-selector"
       role="tablist"
       aria-label="Post format"
-      style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', borderBottom: '1px solid var(--border-subtle)' }}
+      className="flex max-w-full flex-wrap gap-1 border-b border-line"
     >
       {FORMATS.map((format) => (
         <button
@@ -39,7 +39,12 @@ export function FormatSelector({ value, onChange, disabled = false }: Readonly<F
           onClick={() => {
             if (!disabled) onChange(format.id);
           }}
-          style={segmentedOptionStyle(value === format.id, disabled)}
+          className={cn(
+            'inline-flex min-h-11 shrink-0 items-center border-b-2 px-3 text-body font-medium whitespace-nowrap transition-colors duration-fast outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:cursor-not-allowed disabled:opacity-50',
+            value === format.id
+              ? 'border-brand-gold font-semibold text-ink'
+              : 'border-transparent text-ink-sub hover:text-ink'
+          )}
         >
           {format.label}
         </button>

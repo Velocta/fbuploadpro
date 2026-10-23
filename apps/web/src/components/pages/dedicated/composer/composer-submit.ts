@@ -1,8 +1,20 @@
+import { z } from 'zod';
 import type { PostFormat } from '@fbuploadpro/contracts';
+import { api, buildTenantApiPath } from '@/lib/api';
 import type { PageSlotSummary } from '../tab-dashboard';
 import type { ComposerIntent } from './intent-selector';
 import type { ComposerMediaItem } from './composer-media-area';
 import { formatSlotLong, formatSlotShort } from './queue-slot-utils';
+
+/**
+ * Composer submit plumbing on the typed API client (spec 137 §3.1,
+ * spec 132 C1.4). The success bodies of the queue mutations are not
+ * consumed by the composer (the host refetches on `onSubmitted`), so the
+ * response schema is a passthrough object: the client's error taxonomy
+ * still applies in full — a failed request throws an `ApiError` carrying
+ * the server's plain-language message, never a silent return.
+ */
+const QueueMutationAckSchema = z.object({}).passthrough();
 
 export interface CreatePostInput {
   pageId: string;
@@ -47,15 +59,9 @@ export async function submitCreatePost(input: CreatePostInput): Promise<string> 
       : 'Added to queue.';
   }
 
-  const res = await fetch(`/api/tenant/${subdomain}/publishing/queue`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  await api.post(buildTenantApiPath(subdomain, '/publishing/queue'), payload, {
+    schema: QueueMutationAckSchema,
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || data.error || "Couldn't save this post. Please try again.");
-  }
   return message;
 }
 
@@ -89,25 +95,16 @@ export async function submitEditPost(input: EditPostInput): Promise<string> {
   }
   if (input.wasFailed) payload.status = 'queued';
 
-  const res = await fetch(`/api/tenant/${subdomain}/publishing/queue/${itemId}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+  await api.patch(buildTenantApiPath(subdomain, `/publishing/queue/${itemId}`), payload, {
+    schema: QueueMutationAckSchema,
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || data.error || "Couldn't save this post. Please try again.");
-  }
 
   if (intent === 'now') {
-    const publishRes = await fetch(
-      `/api/tenant/${subdomain}/publishing/queue/${itemId}/publish-now`,
-      { method: 'POST' }
+    await api.post(
+      buildTenantApiPath(subdomain, `/publishing/queue/${itemId}/publish-now`),
+      undefined,
+      { schema: QueueMutationAckSchema }
     );
-    if (!publishRes.ok) {
-      const data = await publishRes.json().catch(() => ({}));
-      throw new Error(data.message || data.error || "Couldn't publish this post. Please try again.");
-    }
     return `Posted to ${input.pageName}.`;
   }
   return 'Post updated.';

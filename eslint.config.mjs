@@ -111,8 +111,6 @@ export default [
       "apps/web/src/components/pages/add-page-modal.tsx",
       "apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx",
       "apps/web/src/components/pages/dedicated/bulk/bulk-step-review.tsx",
-      "apps/web/src/components/pages/dedicated/composer/composer-media-area.tsx",
-      "apps/web/src/components/pages/dedicated/composer/composer-preview.tsx",
       "apps/web/src/components/pages/dedicated/page-header.tsx",
       "apps/web/src/components/pages/dedicated/queue/queue-row.tsx",
       "apps/web/src/components/pages/page-card.tsx"
