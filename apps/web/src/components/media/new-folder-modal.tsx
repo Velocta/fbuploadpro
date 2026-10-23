@@ -157,7 +157,7 @@ function NewFolderForm({
   // empty state disable Create as the user types, with the reason
   // present. The zod error presents inline after blur/submit (the
   // shared validation pattern, UI Rule 4/5).
-  const trimmedName = (nameValue ?? '').trim();
+  const trimmedName = nameValue.trim();
   const parentId = parentValue === ROOT_VALUE ? null : parentValue;
   const isDuplicate =
     trimmedName.length > 0 &&
@@ -179,7 +179,7 @@ function NewFolderForm({
   const summaryErrors: FormErrorSummaryEntry[] =
     form.formState.submitCount > 0
       ? Object.entries(form.formState.errors).flatMap(([field, error]) =>
-          error?.message
+          error.message
             ? [
                 {
                   fieldId:
@@ -293,7 +293,7 @@ function NewFolderForm({
             data-testid="submit-create-folder"
             loading={isSubmitting}
             disabled={!canSubmit}
-            disabledReason={disabledReason}
+            {...(disabledReason ? { disabledReason } : {})}
           >
             {isSubmitting ? 'Creating...' : 'Create folder'}
           </Button>

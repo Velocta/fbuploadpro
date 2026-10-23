@@ -53,12 +53,7 @@ rgb apps/web/src/components/accounts/account-card.tsx 8
 rgb apps/web/src/components/accounts/connect-account-modal.tsx 6
 rgb apps/web/src/components/accounts/disconnect-account-dialog.tsx 2
 rgb apps/web/src/components/connect/byoc-gate.tsx 2
-rgb apps/web/src/components/media/batch-action-bar.tsx 2
-rgb apps/web/src/components/media/batch-set-caption-modal.tsx 5
-rgb apps/web/src/components/media/leave-page-guard-dialog.tsx 2
-rgb apps/web/src/components/media/media-library-dialogs.tsx 13
 rgb apps/web/src/components/media/media-preview-modal.tsx 8
-rgb apps/web/src/components/media/new-folder-modal.tsx 6
 rgb apps/web/src/components/pages/add-page-modal.tsx 5
 rgb apps/web/src/components/pages/dedicated/modal-styles.ts 1
 rgb apps/web/src/components/pages/dedicated/page-header.tsx 3
@@ -82,12 +77,7 @@ rgb apps/web/src/lib/component-styles.ts 1
 fontsize apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
 fontsize apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
 zindex apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
-zindex apps/web/src/components/media/batch-action-bar.tsx 1
-zindex apps/web/src/components/media/batch-set-caption-modal.tsx 1
-zindex apps/web/src/components/media/leave-page-guard-dialog.tsx 1
-zindex apps/web/src/components/media/media-library-dialogs.tsx 3
 zindex apps/web/src/components/media/media-preview-modal.tsx 1
-zindex apps/web/src/components/media/new-folder-modal.tsx 1
 zindex apps/web/src/components/pages/dedicated/modal-styles.ts 1
 zindex apps/web/src/components/pages/dedicated/page-header.tsx 1
 zindex apps/web/src/components/pages/dedicated/queue/queue-toasts.tsx 1

@@ -70,7 +70,7 @@ export function BatchSetCaptionModal({
     defaultValues: { mode: 'replace', captionText: '' },
   });
 
-  const captionText = form.watch('captionText') ?? '';
+  const captionText = form.watch('captionText');
   const isSubmitting = form.formState.isSubmitting;
   const trimmedText = captionText.trim();
   const canSubmit = trimmedText.length > 0 && !isSubmitting;
@@ -169,11 +169,9 @@ export function BatchSetCaptionModal({
                 data-testid="apply-batch-caption"
                 loading={isSubmitting}
                 disabled={!canSubmit}
-                disabledReason={
-                  !isSubmitting && trimmedText.length === 0
-                    ? 'Enter a caption first.'
-                    : undefined
-                }
+                {...(!isSubmitting && trimmedText.length === 0
+                  ? { disabledReason: 'Enter a caption first.' }
+                  : {})}
               >
                 {isSubmitting ? 'Applying...' : `Apply to ${targetLabel}`}
               </Button>

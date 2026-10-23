@@ -65,7 +65,7 @@ export function RenameFolderDialog({
   });
 
   const nameValue = form.watch('name');
-  const isEmpty = (nameValue ?? '').trim().length === 0;
+  const isEmpty = nameValue.trim().length === 0;
 
   return (
     <Dialog
@@ -112,7 +112,7 @@ export function RenameFolderDialog({
               <Button
                 type="submit"
                 loading={isRenaming}
-                disabledReason={isEmpty ? 'Enter a folder name.' : undefined}
+                {...(isEmpty ? { disabledReason: 'Enter a folder name.' } : {})}
               >
                 {isRenaming ? 'Saving...' : 'Save'}
               </Button>

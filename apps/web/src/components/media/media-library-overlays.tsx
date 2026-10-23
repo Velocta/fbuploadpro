@@ -8,8 +8,8 @@
  * folder / batch delete), the new-folder and batch-caption forms,
  * the leave-page guard, the import modal (PR-133-4's file), and
  * the preview modal (PR-133-5's file). Every library-owned overlay
- * is a shared/ui Dialog/AlertDialog — no hand-rolled fixed layers,
- * no numeric z-index.
+ * is a shared/ui Dialog/AlertDialog — no hand-rolled fixed layers
+ * and no ad-hoc layering values.
  *
  * FROZEN PREVIEW PROPS CONTRACT (for PR-133-5): the preview is
  * mounted here as
