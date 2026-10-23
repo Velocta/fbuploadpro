@@ -351,9 +351,9 @@ export function CommandPalette({
       }
     );
     return pool;
-    // close/handle* are stable-in-practice closures over router/state
-    // setters; the pool rebuilds when its data inputs change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // The pool rebuilds when its data inputs change; the run
+    // closures read router/state setters that are stable across
+    // renders, so they are deliberately not dependencies.
   }, [
     fbAccountsQuery.data,
     fbPagesQuery.data,
