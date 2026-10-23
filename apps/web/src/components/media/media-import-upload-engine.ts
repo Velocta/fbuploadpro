@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
+import { api, buildTenantApiPath, isApiError } from '@/lib/api';
+import {
+  MediaItemSchema,
+  UploadUrlResponseSchema,
+  type MediaItem as ApiMediaItem,
+} from '@/lib/api/schemas/media';
 import type { ImportQueueItem } from './media-types';
 import { deriveDefaultCaption } from './media-types';
+import { toMediaItemResponse } from './media-data';
 import {
   generateThumbnailBlob,
   classifyAspectRatio,
@@ -57,6 +64,17 @@ export class StepTimeoutError extends Error {
 export function resolveUploadErrorMessage(err: unknown): string {
   if (err instanceof StepTimeoutError) return TIMEOUT_MESSAGE;
   if (err instanceof DOMException && err.name === 'AbortError') return TIMEOUT_MESSAGE;
+  if (isApiError(err)) {
+    // Typed-client failures (spec 137 §3.1): a request that never reached
+    // the server is a connection problem; an aborted one ran out of time
+    // (user aborts are filtered before this mapper is consulted). Step
+    // functions translate HTTP/parse failures into their own plain
+    // messages before rethrowing, so anything else lands on the generic.
+    if (err.kind === 'network') return NETWORK_MESSAGE;
+    if (err.kind === 'aborted') return TIMEOUT_MESSAGE;
+    if (err.kind === 'session-expired') return err.message;
+    return GENERIC_MESSAGE;
+  }
   if (err instanceof Error) {
     if (err.message === TIMEOUT_MESSAGE || err.message === NETWORK_MESSAGE) return err.message;
     if (/failed to fetch|networkerror|load failed/i.test(err.message)) return NETWORK_MESSAGE;
@@ -66,9 +84,76 @@ export function resolveUploadErrorMessage(err: unknown): string {
   return GENERIC_MESSAGE;
 }
 
+interface StepSignal {
+  /** Signal to hand to the typed client: fires on user abort or timeout. */
+  signal: AbortSignal;
+  /** True when the step's own deadline fired (vs the user's abort). */
+  timedOut: () => boolean;
+  dispose: () => void;
+}
+
+/**
+ * Combine the user's abort signal with a per-step deadline for a typed
+ * client call. The typed client has no timeout option of its own; the
+ * deadline aborts the request with a StepTimeoutError reason, which the
+ * step functions translate back into the timeout path.
+ */
+function createStepSignal(userSignal: AbortSignal, timeoutMs: number): StepSignal {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new StepTimeoutError('request'));
+  }, timeoutMs);
+  const onUserAbort = () =>
+    controller.abort(userSignal.reason ?? new DOMException('Aborted', 'AbortError'));
+  if (userSignal.aborted) {
+    onUserAbort();
+  } else {
+    userSignal.addEventListener('abort', onUserAbort);
+  }
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    dispose: () => {
+      clearTimeout(timer);
+      userSignal.removeEventListener('abort', onUserAbort);
+    },
+  };
+}
+
+/**
+ * Translate a typed-client step failure: user aborts and step timeouts
+ * keep their dedicated errors; HTTP/parse failures become the step's
+ * plain-language message (the server's wording never reaches the row).
+ */
+function translateStepError(
+  err: unknown,
+  userSignal: AbortSignal,
+  step: StepSignal,
+  plainMessage: string
+): unknown {
+  if (userSignal.aborted) {
+    return new DOMException('Upload aborted', 'AbortError');
+  }
+  if (step.timedOut()) {
+    return new StepTimeoutError('request');
+  }
+  if (isApiError(err) && (err.kind === 'http' || err.kind === 'parse')) {
+    return new Error(plainMessage);
+  }
+  return err;
+}
+
 /**
  * fetch with an explicit timeout. The caller's own AbortSignal (pause/cancel)
  * takes precedence: when it fires, the abort is the user's, not a timeout.
+ *
+ * This survives the typed-client migration for exactly one call: the
+ * thumbnail PUT to the presigned storage URL (spec 133 §6.5 — a direct
+ * fetch by design: it is not an app-API call, carries no JSON and no
+ * schema; its failures degrade to the type-icon fallback like every
+ * other engine step's). App-API calls go through the typed client.
  */
 async function fetchWithTimeout(
   url: string,
@@ -205,46 +290,43 @@ interface ThumbnailResult {
   duration: number | null;
 }
 
-/** Step 1: request the presigned R2 URLs. */
+/** Step 1: request the presigned R2 URLs (typed client, spec 133 §6.5). */
 async function requestPresignedUpload(
   subdomain: string,
   item: ImportQueueItem,
   userSignal: AbortSignal
 ): Promise<PresignedUpload> {
-  const presignRes = await fetchWithTimeout(
-    `/api/tenant/${subdomain}/media/upload-url`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+  const step = createStepSignal(userSignal, PRESIGN_TIMEOUT_MS);
+  try {
+    const presignData = await api.post(
+      buildTenantApiPath(subdomain, '/media/upload-url'),
+      {
         fileName: item.name,
         fileSize: item.size,
         mimeType: item.mimeType,
-      }),
-    },
-    PRESIGN_TIMEOUT_MS,
-    userSignal
-  );
+      },
+      { schema: UploadUrlResponseSchema, signal: step.signal }
+    );
 
-  if (!presignRes.ok) {
-    throw new Error("Couldn't start the upload. Please try again.");
+    return {
+      mediaUploadUrl: presignData.mediaUploadUrl,
+      mediaKey: presignData.mediaKey,
+      mediaId: presignData.mediaId,
+      thumbnailUploadUrl: presignData.thumbnailUploadUrl,
+      thumbnailKey: presignData.thumbnailKey,
+      publicMediaUrl: presignData.publicMediaUrl,
+      publicThumbnailUrl: presignData.publicThumbnailUrl,
+    };
+  } catch (err) {
+    throw translateStepError(
+      err,
+      userSignal,
+      step,
+      "Couldn't start the upload. Please try again."
+    );
+  } finally {
+    step.dispose();
   }
-
-  const presignData = await presignRes.json();
-  const mediaUploadUrl = presignData.mediaUploadUrl || presignData.uploadUrl;
-  if (!mediaUploadUrl) {
-    throw new Error('Upload URL missing from presign response');
-  }
-
-  return {
-    mediaUploadUrl,
-    mediaKey: presignData.mediaKey || presignData.storageKey,
-    mediaId: presignData.mediaId,
-    thumbnailUploadUrl: presignData.thumbnailUploadUrl || null,
-    thumbnailKey: presignData.thumbnailKey || null,
-    publicMediaUrl: presignData.publicMediaUrl || presignData.url || '',
-    publicThumbnailUrl: presignData.publicThumbnailUrl || presignData.thumbnailUrl || null,
-  };
 }
 
 /** Step 3: PUT the client-generated thumbnail (best effort — falls back to the type icon). */
@@ -279,13 +361,15 @@ async function uploadThumbnail(
  * directly as the response body (see
  * `app/api/tenant/[subdomain]/media/confirm/route.ts`: it responds with
  * `MediaItemResponseSchema.parse(...)` unwrapped) — there is no
- * `{ item: ... }` envelope.
+ * `{ item: ... }` envelope. The typed client validates the body against
+ * the lib/api media schema; this maps it onto the contracts surface
+ * type the rest of the surface (and `onUploadSuccess`) speaks.
  */
 export function parseConfirmUploadResponse(confirmData: unknown): MediaItemResponse {
-  return confirmData as MediaItemResponse;
+  return toMediaItemResponse(confirmData as ApiMediaItem);
 }
 
-/** Step 4: confirm the upload so it lands in the library. */
+/** Step 4: confirm the upload so it lands in the library (typed client). */
 async function confirmMediaUpload(
   subdomain: string,
   selectedFolderId: string | null,
@@ -295,12 +379,11 @@ async function confirmMediaUpload(
   uploadedThumbnailUrl: string | null,
   userSignal: AbortSignal
 ): Promise<MediaItemResponse> {
-  const confirmRes = await fetchWithTimeout(
-    `/api/tenant/${subdomain}/media/confirm`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+  const step = createStepSignal(userSignal, CONFIRM_TIMEOUT_MS);
+  try {
+    const confirmData = await api.post(
+      buildTenantApiPath(subdomain, '/media/confirm'),
+      {
         mediaId: presigned.mediaId,
         name: item.name,
         fileSize: item.size,
@@ -316,18 +399,21 @@ async function confirmMediaUpload(
         width: thumbData.width,
         height: thumbData.height,
         captionText: deriveDefaultCaption(item.name),
-      }),
-    },
-    CONFIRM_TIMEOUT_MS,
-    userSignal
-  );
+      },
+      { schema: MediaItemSchema, signal: step.signal }
+    );
 
-  if (!confirmRes.ok) {
-    throw new Error("Upload finished but we couldn't save it to your library. Please try again.");
+    return parseConfirmUploadResponse(confirmData);
+  } catch (err) {
+    throw translateStepError(
+      err,
+      userSignal,
+      step,
+      "Upload finished but we couldn't save it to your library. Please try again."
+    );
+  } finally {
+    step.dispose();
   }
-
-  const confirmData = await confirmRes.json();
-  return parseConfirmUploadResponse(confirmData);
 }
 
 /**
@@ -443,7 +529,7 @@ const uploadFile = useCallback(
       if (uploadedItem) {
         onUploadSuccess?.(uploadedItem);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Pause/cancel: the user stopped this attempt — stay silent, no retry.
       if (userSignal.aborted) {
         return;
