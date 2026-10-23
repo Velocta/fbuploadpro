@@ -1,14 +1,28 @@
 'use client';
 
-import React from 'react';
-import {
-  THEME,
-  PALETTE,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-} from '@/lib/theme';
+/**
+ * Page card (spec 131 PR-131-2) — rebuilt on the design system:
+ * token-backed Tailwind utilities only (zero inline styles), the
+ * avatar on `next/image` (the file's raw img element is deleted),
+ * and status as colour + icon + text via the shared/ui `StatusDot`
+ * (spec §6.4.1 / OD-3 — the one named deviation from the previous
+ * bare-text status). Layout, copy, testids, and the click / Enter /
+ * Space activation behaviours are preserved (spec §6 parity).
+ *
+ * The exported `FacebookPageItem` type is a cross-PR contract
+ * (consumed by the dedicated section route, PR-131-3) — its shape
+ * is frozen in this PR. The status colour/ring helper functions keep
+ * returning the theme values the parity suites pin; the card's own
+ * rendering maps the same statuses onto token classes.
+ */
+import * as React from 'react';
+import Image from 'next/image';
+import { MoveUpRightIcon, TriangleAlertIcon } from 'lucide-react';
+
+import { PALETTE, THEME } from '@/lib/theme';
 import { getUserInitials } from '@/lib/user-initials';
+import { cn } from '@/lib/utils';
+import { StatusDot, type Status } from '@/components/shared/ui/status-dot';
 
 export type FacebookPageStatus =
   | 'active'
@@ -111,6 +125,21 @@ export function getPageStatusRingBorder(status: FacebookPageStatus): string {
   return `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`;
 }
 
+/** Token signal for a page status — the StatusDot presentation (§6.4.1). */
+export function getPageStatusSignal(status: FacebookPageStatus): Status {
+  if (isPageNeedsAttention(status)) return 'critical';
+  if (status === 'paused') return 'queued';
+  if (status === 'active') return 'operational';
+  return 'idle';
+}
+
+const RING_CLASSES: Record<Status, string> = {
+  operational: 'border-2 border-signal-operational',
+  queued: 'border-2 border-signal-queued',
+  critical: 'border-2 border-signal-critical',
+  idle: 'border border-line',
+};
+
 /**
  * Short, human-comparable form of a page's Facebook Page ID.
  * Pages can share a display name (and even followers and category), so the
@@ -158,19 +187,19 @@ export function PageCard({
   const needsAttention = isPageNeedsAttention(page.status);
   const attentionMessage = getPageAttentionMessage(page.status);
   const statusLabel = getPageStatusLabel(page.status);
-  const statusColor = getPageStatusColor(page.status);
-  const statusRingBorder = getPageStatusRingBorder(page.status);
+  const statusSignal = getPageStatusSignal(page.status);
+  const ringClass = RING_CLASSES[statusSignal];
 
   const currentFollowers = page.currentFollowers ?? 0;
   const gained = computeFollowersGained(page);
   const formattedGained = formatFollowersGained(gained);
 
-  let gainedColor = `var(--text-sub, ${THEME.default.text.secondary})`;
-  if (gained > 0) {
-    gainedColor = PALETTE.accent4;
-  } else if (gained < 0) {
-    gainedColor = PALETTE.accent3;
-  }
+  const gainedClass =
+    gained > 0
+      ? 'text-brand-emerald'
+      : gained < 0
+        ? 'text-brand-rose'
+        : 'text-ink-sub';
 
   const rawPageName = page.pageName.trim();
   const initials = rawPageName ? getUserInitials(rawPageName) : 'PG';
@@ -207,145 +236,55 @@ export function PageCard({
       aria-label={`Open ${page.pageName} page details`}
       onClick={handleActivate}
       onKeyDown={handleKeyDown}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.borderColor = needsAttention
-          ? PALETTE.accent3
-          : 'rgba(46, 189, 133, 0.4)';
-        e.currentTarget.style.boxShadow = '0 8px 24px -4px rgba(0, 0, 0, 0.35)';
-        const arrow = e.currentTarget.querySelector(
-          '.page-card-arrow'
-        ) as HTMLElement | null;
-        if (arrow) {
-          arrow.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-          arrow.style.transform = 'translate(2px, -2px)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = needsAttention
-          ? PALETTE.accent3
-          : `var(--border-subtle, ${THEME.default.borders.hairline})`;
-        e.currentTarget.style.boxShadow = `var(--shadow-card, ${THEME.default.shadows.card})`;
-        const arrow = e.currentTarget.querySelector(
-          '.page-card-arrow'
-        ) as HTMLElement | null;
-        if (arrow) {
-          arrow.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
-          arrow.style.transform = 'translate(0, 0)';
-        }
-      }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: needsAttention
-          ? `1px solid ${PALETTE.accent3}`
-          : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        padding: SPACING.lg,
-        cursor: 'pointer',
-        transition:
-          'transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
-        outline: 'none',
-        minHeight: '154px',
-      }}
+      className={cn(
+        'group flex min-h-38 cursor-pointer flex-col justify-between rounded-md border bg-panel p-6 shadow-card transition outline-none hover:-translate-y-0.5 hover:shadow-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold',
+        needsAttention
+          ? 'border-brand-rose hover:border-brand-rose'
+          : 'border-line hover:border-brand-emerald/40'
+      )}
     >
       {/* Top Section: Avatar with Dynamic Status Ring + Identity + Affordance */}
       <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: SPACING.md,
-            marginBottom: SPACING.md,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.md,
-              minWidth: 0,
-              flex: 1,
-            }}
-          >
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-4">
             {showAvatarImg ? (
-              <img
+              <Image
                 src={page.profilePictureUrl!}
                 alt={page.pageName}
+                width={42}
+                height={42}
                 data-testid="page-avatar-img"
                 onError={() =>
                   setFailedAvatarUrl(page.profilePictureUrl ?? '__error__')
                 }
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: RADII.full,
-                  objectFit: 'cover',
-                  border: statusRingBorder,
-                  flexShrink: 0,
-                }}
+                className={cn('size-10.5 shrink-0 rounded-full object-cover', ringClass)}
               />
             ) : (
               <div
                 data-testid="page-avatar-initials"
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: RADII.full,
-                  backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                  border: statusRingBorder,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  fontSize: '0.9375rem',
-                  flexShrink: 0,
-                }}
+                className={cn(
+                  'flex size-10.5 shrink-0 items-center justify-center rounded-full bg-subtle text-body font-bold text-ink',
+                  ringClass
+                )}
               >
                 {initials}
               </div>
             )}
 
-            <div style={{ minWidth: 0, flex: 1 }}>
+            <div className="min-w-0 flex-1">
               <h3
                 data-testid="page-name"
-                style={{
-                  margin: 0,
-                  fontSize: '0.9375rem',
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
+                className="m-0 truncate text-body font-semibold text-ink"
               >
                 {page.pageName}
               </h3>
               <span
                 data-testid="page-followers-line"
-                style={{
-                  display: 'block',
-                  fontSize: '0.75rem',
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  marginTop: '2px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
+                className="mt-0.5 block truncate text-metadata text-ink-sub"
               >
                 <span
                   data-testid="page-current-followers"
-                  style={{
-                    fontWeight: TYPOGRAPHY.weights.semibold,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                    fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                  }}
+                  className="font-semibold text-ink tabular-nums"
                 >
                   {currentFollowers.toLocaleString('en-US')}
                 </span>{' '}
@@ -358,15 +297,7 @@ export function PageCard({
               {formatPageIdSuffix(page.fbPageId) && (
                 <span
                   data-testid="page-id-line"
-                  style={{
-                    display: 'block',
-                    fontSize: '0.75rem',
-                    color: `var(--text-dim, ${THEME.default.text.muted})`,
-                    marginTop: '2px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
+                  className="mt-0.5 block truncate text-metadata text-ink-dim"
                 >
                   Page ID {formatPageIdSuffix(page.fbPageId)}
                 </span>
@@ -374,120 +305,50 @@ export function PageCard({
             </div>
           </div>
 
-          <div
-            aria-hidden="true"
-            className="page-card-arrow"
-            style={{
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              fontSize: '1rem',
-              lineHeight: 1,
-              transition: 'color 0.15s ease, transform 0.15s ease',
-              flexShrink: 0,
-            }}
-          >
-            ↗
-          </div>
+          <MoveUpRightIcon
+            aria-hidden
+            className="size-4 shrink-0 text-ink-dim transition group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-ink"
+          />
         </div>
 
         {/* Rose Attention Standout Banner (if needs attention) */}
         {needsAttention && attentionMessage && (
           <div
             data-testid="page-attention-banner"
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: SPACING.xs,
-              padding: '8px 10px',
-              backgroundColor: 'rgba(246, 70, 93, 0.08)',
-              border: '1px solid rgba(246, 70, 93, 0.28)',
-              borderRadius: RADII.sm,
-              fontSize: '0.75rem',
-              lineHeight: 1.4,
-              color: PALETTE.accent3,
-              fontWeight: TYPOGRAPHY.weights.medium,
-              marginBottom: SPACING.sm,
-            }}
+            className="mb-2 flex items-start gap-1 rounded-sm border border-brand-rose/25 bg-brand-rose/10 px-2.5 py-2 text-metadata leading-body font-medium text-brand-rose"
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              style={{ flexShrink: 0, marginTop: '1px' }}
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
+            <TriangleAlertIcon className="mt-px size-3.5 shrink-0" aria-hidden />
             <span>{attentionMessage}</span>
           </div>
         )}
       </div>
 
       {/* Symmetrical Two-Column Data Row (Precision Editorial) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
-          gap: SPACING.md,
-          marginTop: SPACING.md,
-          paddingTop: SPACING.xs,
-        }}
-      >
+      <div className="mt-4 flex items-end justify-between gap-4 pt-1">
         {/* Left Column: Followers Gain (rendered only when non-zero) */}
-        <div style={{ minWidth: 0 }}>
+        <div className="min-w-0">
           {gained !== 0 && (
             <div
               data-testid="page-followers-gained"
-              style={{
-                fontSize: '0.75rem',
-                color: gainedColor,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                marginTop: '2px',
-              }}
+              className={cn('mt-0.5 text-metadata tabular-nums', gainedClass)}
             >
               {formattedGained}
             </div>
           )}
         </div>
 
-        {/* Right Column: Pure Typographic Status (NO DOT) & Parent Account */}
-        <div
-          style={{
-            textAlign: 'right',
-            minWidth: 0,
-            flexShrink: 0,
-          }}
-        >
-          <div
+        {/* Right Column: Status (colour + icon + text) & Parent Account */}
+        <div className="min-w-0 shrink-0 text-right">
+          <StatusDot
             data-testid="page-status"
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: statusColor,
-              letterSpacing: '0.02em',
-            }}
-          >
-            {statusLabel}
-          </div>
+            status={statusSignal}
+            label={statusLabel}
+            className="text-body font-semibold tracking-wide"
+          />
 
           <div
             data-testid="page-parent-account"
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              marginTop: '2px',
-              maxWidth: '180px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
+            className="mt-0.5 max-w-45 truncate text-metadata text-ink-sub"
           >
             Account: {page.accountDisplayName || 'Connected Account'}
           </div>
