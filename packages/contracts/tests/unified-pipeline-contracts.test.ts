@@ -253,6 +253,31 @@ describe('DatabaseUnifiedQueueItemRowSchema', () => {
     ).toBe(false);
   });
 
+  it('accepts a NULL platform_credentials_id and platform platform_options keys (spec 139 B15)', () => {
+    // Managed / global-app platforms hold no per-workspace credentials
+    // row, so the FK legitimately arrives NULL; platform_options is a
+    // free-form record whose platform keys (e.g. a TikTok soundId)
+    // pass through untouched.
+    const parsed = DatabaseUnifiedQueueItemRowSchema.parse({
+      ...validQueueItemRow,
+      platform_credentials_id: null,
+      platform_options: { soundId: 'sound-123', customKey: 'x' },
+    });
+    expect(parsed.platform_credentials_id).toBeNull();
+    expect(parsed.platform_options).toEqual({ soundId: 'sound-123', customKey: 'x' });
+    const withCredentials = DatabaseUnifiedQueueItemRowSchema.parse({
+      ...validQueueItemRow,
+      platform_credentials_id: IDS.account,
+    });
+    expect(withCredentials.platform_credentials_id).toBe(IDS.account);
+    expect(
+      DatabaseUnifiedQueueItemRowSchema.safeParse({
+        ...validQueueItemRow,
+        platform_credentials_id: 'not-a-uuid',
+      }).success
+    ).toBe(false);
+  });
+
   it('rejects malformed rows', () => {
     expect(
       DatabaseUnifiedQueueItemRowSchema.safeParse({ ...validQueueItemRow, error_code: 190 }).success
@@ -300,6 +325,19 @@ describe('DatabaseDestinationRowSchema', () => {
     expect(DatabaseDestinationRowSchema.parse(JSON.parse(JSON.stringify(parsed)))).toEqual(
       validDestinationRow
     );
+  });
+
+  it('passes through unmodelled platform data on a real row (spec 139 B15)', () => {
+    // A real destination row may carry platform data the schema does
+    // not model (e.g. a platform_options record with a TikTok
+    // soundId); boundary validation must preserve it, not strip it.
+    const parsed = DatabaseDestinationRowSchema.parse({
+      ...validDestinationRow,
+      platform_options: { soundId: 'sound-123' },
+    } as DatabaseDestinationRow);
+    expect(
+      (parsed as unknown as Record<string, unknown>).platform_options
+    ).toEqual({ soundId: 'sound-123' });
   });
 
   it('rejects out-of-range rate usage and legacy page statuses', () => {
