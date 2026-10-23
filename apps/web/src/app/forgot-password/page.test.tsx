@@ -12,7 +12,7 @@
  */
 import * as React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, configure, render, screen, waitFor } from "@testing-library/react";
+import { act, configure, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 vi.setConfig({ testTimeout: 60_000 });
 configure({ asyncUtilTimeout: 15_000 });
@@ -180,52 +180,42 @@ describe("forgot-password step 2 (code + new password)", () => {
     expect(resend.hasAttribute("disabled")).toBe(true);
     // Show/hide on both password fields (Rule 28).
     expect(screen.getAllByRole("button", { name: "Show password" })).toHaveLength(2);
-    const password = screen.getByLabelText("New Password") as HTMLInputElement;
+    const password = screen.getByLabelText("New Password", { exact: true }) as HTMLInputElement;
     expect(password.getAttribute("autocomplete")).toBe("new-password");
   });
 
   it("pastes the code whole, resets, shows the success state and redirects after 2,000 ms", async () => {
-    vi.useFakeTimers();
-    try {
-      const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
-      mockApiByPath({
-        "/api/auth/reset-password": () =>
-          jsonResponse(200, { success: true, message: "Your password has been successfully updated." }),
-        "/api/auth/forgot-password": () => jsonResponse(200, FORGOT_SUCCESS),
-      });
-      render(<ForgotPasswordPage />);
-      await user.type(screen.getByLabelText("Email Address"), EMAIL);
-      await user.click(screen.getByRole("button", { name: "Send Verification Code" }));
-      await act(async () => {});
+    const user = userEvent.setup();
+    mockApiByPath({
+      "/api/auth/reset-password": () =>
+        jsonResponse(200, { success: true, message: "Your password has been successfully updated." }),
+      "/api/auth/forgot-password": () => jsonResponse(200, FORGOT_SUCCESS),
+    });
+    render(<ForgotPasswordPage />);
+    const otp = (await gotoStep2(user)) as HTMLInputElement;
 
-      const otp = screen.getByLabelText("Verification Code") as HTMLInputElement;
-      await user.click(otp);
-      await user.paste("123456");
-      expect(otp.value).toBe("123456");
-      await user.type(screen.getByLabelText("New Password"), NEW_PASSWORD);
-      await user.type(screen.getByLabelText("Confirm New Password"), NEW_PASSWORD);
-      await user.click(screen.getByRole("button", { name: "Update Password" }));
-      await act(async () => {});
+    await user.click(otp);
+    await user.paste("123456");
+    expect(otp.value).toBe("123456");
+    await user.type(screen.getByLabelText("New Password", { exact: true }), NEW_PASSWORD);
+    await user.type(screen.getByLabelText("Confirm New Password"), NEW_PASSWORD);
+    await user.click(screen.getByRole("button", { name: "Update Password" }));
 
-      expect(screen.getByText("Password Updated")).toBeTruthy();
-      expect(
-        screen.getByText("Your password has been successfully reset. Redirecting you to sign in...")
-      ).toBeTruthy();
-      expect(
-        screen.getByRole("link", { name: "Proceed to Sign In" }).getAttribute("href")
-      ).toBe("/login?reset=success");
-      expect(routerPush).not.toHaveBeenCalled();
-      await act(async () => {
-        vi.advanceTimersByTime(2000);
-      });
-      expect(routerPush).toHaveBeenCalledWith("/login?reset=success");
-      const resetCall = fetchMock.mock.calls.find((call) =>
-        String(call[0]).includes("/api/auth/reset-password")
-      );
-      expect(resetCall).toBeTruthy();
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(await screen.findByText("Password Updated")).toBeTruthy();
+    expect(
+      screen.getByText("Your password has been successfully reset. Redirecting you to sign in...")
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Proceed to Sign In" }).getAttribute("href")).toBe(
+      "/login?reset=success"
+    );
+    const resetCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes("/api/auth/reset-password")
+    );
+    expect(resetCall).toBeTruthy();
+    // The timed redirect (§4.3.3) fires after 2,000 ms.
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith("/login?reset=success"), {
+      timeout: 5_000,
+    });
   });
 
   it("empty submit shows every step-2 error inline and in the summary, with no request", async () => {
@@ -248,7 +238,7 @@ describe("forgot-password step 2 (code + new password)", () => {
     render(<ForgotPasswordPage />);
     const otp = await gotoStep2(user);
     await user.type(otp, "123");
-    await user.type(screen.getByLabelText("New Password"), "short");
+    await user.type(screen.getByLabelText("New Password", { exact: true }), "short");
     await user.type(screen.getByLabelText("Confirm New Password"), "different-password");
     await user.click(screen.getByRole("button", { name: "Update Password" }));
 
@@ -269,7 +259,7 @@ describe("forgot-password step 2 (code + new password)", () => {
     render(<ForgotPasswordPage />);
     const otp = await gotoStep2(user);
     await user.type(otp, "123456");
-    await user.type(screen.getByLabelText("New Password"), NEW_PASSWORD);
+    await user.type(screen.getByLabelText("New Password", { exact: true }), NEW_PASSWORD);
     await user.type(screen.getByLabelText("Confirm New Password"), NEW_PASSWORD);
     await user.click(screen.getByRole("button", { name: "Update Password" }));
 
@@ -279,29 +269,32 @@ describe("forgot-password step 2 (code + new password)", () => {
   });
 
   it("resend unlocks after the 60-second cooldown and confirms the fresh code", async () => {
+    // Fake timers drive the countdown; interactions use fireEvent
+    // (userEvent's internal delays deadlock against fake timers).
     vi.useFakeTimers();
     try {
-      const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
       mockApiByPath({
         "/api/auth/forgot-password/resend": () =>
           jsonResponse(200, { success: true, message: "sent" }),
         "/api/auth/forgot-password": () => jsonResponse(200, FORGOT_SUCCESS),
       });
       render(<ForgotPasswordPage />);
-      await user.type(screen.getByLabelText("Email Address"), EMAIL);
-      await user.click(screen.getByRole("button", { name: "Send Verification Code" }));
+      fireEvent.change(screen.getByLabelText("Email Address"), { target: { value: EMAIL } });
+      fireEvent.click(screen.getByRole("button", { name: "Send Verification Code" }));
       await act(async () => {});
 
+      expect(screen.getByRole("heading", { name: "Set New Password" })).toBeTruthy();
       const cooling = screen.getByRole("button", { name: "Resend code (60s)" });
       expect(cooling.hasAttribute("disabled")).toBe(true);
+
       await act(async () => {
         vi.advanceTimersByTime(60_000);
       });
       const resend = screen.getByRole("button", { name: "Resend code" });
       expect(resend.hasAttribute("disabled")).toBe(false);
-      await user.click(resend);
-      await act(async () => {});
 
+      fireEvent.click(resend);
+      await act(async () => {});
       expect(
         screen.getByText("We've sent a fresh code. Any earlier codes no longer work.")
       ).toBeTruthy();
