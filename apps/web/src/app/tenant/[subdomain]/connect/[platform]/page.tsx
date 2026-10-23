@@ -18,6 +18,8 @@ import {
   connectNoticeMessage,
   type ConnectNoticeCode,
 } from '@/lib/connect/errors';
+// Registers the YouTube connect config (spec 125) into the framework registry.
+import '@/lib/connect/youtube';
 
 interface ConnectPickerPageProps {
   params: Promise<{ subdomain: string; platform: string }>;

@@ -68,6 +68,8 @@ export interface Env {
   __TEST_DB__?: unknown;
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
+  /** Post for Me API key (spec 125) — provider-managed YouTube/TikTok. Worker env only, via GitHub Secrets. */
+  POST_FOR_ME_API_KEY?: string;
   TOKEN_ENCRYPTION_KEY?: string;
   SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_URL?: string;
@@ -145,7 +147,7 @@ export async function handleScheduled(
     return;
   }
 
-  const registry = options?.registry ?? createWorkerPublisherRegistry();
+  const registry = options?.registry ?? createWorkerPublisherRegistry(env);
 
   // Cron routing (spec 121 Scope 9): the refresh cron runs ONLY the
   // token-refresh cycle; every other cron (the `* * * * *` claim tick)
@@ -219,7 +221,7 @@ export async function handleQueue(
   if (!db) {
     throw new InternalError('Database client is not configured; cannot consume queue batch');
   }
-  const registry = options?.registry ?? createWorkerPublisherRegistry();
+  const registry = options?.registry ?? createWorkerPublisherRegistry(env);
   await handleQueueBatch(batch, {
     db,
     registry,

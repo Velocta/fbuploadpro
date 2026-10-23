@@ -25,3 +25,4 @@ export * from './publishing/queue-message.js';
 export * from './publishing/lanes.js';
 export * from './publishing/limits.js';
 export * from './publishing/token-refresh.js';
+export * from './publishing/youtube-options.js';

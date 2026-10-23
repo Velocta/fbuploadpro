@@ -61,12 +61,14 @@ jobs:
             TOKEN_ENCRYPTION_KEY
             POSTHOG_KEY
             POSTHOG_HOST
+            POST_FOR_ME_API_KEY
         env:
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || vars.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TOKEN_ENCRYPTION_KEY: ${{ secrets.TOKEN_ENCRYPTION_KEY }}
           POSTHOG_KEY: ${{ secrets.POSTHOG_KEY }}
           POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POST_FOR_ME_API_KEY: ${{ secrets.POST_FOR_ME_API_KEY }}
 
       - name: Smoke check worker /health (spec 116)
         if: steps.check-credentials.outputs.has_token == 'true'
