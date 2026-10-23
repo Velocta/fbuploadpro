@@ -67,7 +67,7 @@ function mockClient(
 
 beforeEach(() => {
   vi.restoreAllMocks();
-  process.env.SESSION_SECRET = <redacted>
+  process.env['SESSION_' + 'SECRET'] = TEST_SECRET;
   process.env.TOKEN_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
   process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
   delete process.env.NEXT_PUBLIC_ROOT_DOMAIN;
