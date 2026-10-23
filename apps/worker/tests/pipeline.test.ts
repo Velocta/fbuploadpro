@@ -606,6 +606,162 @@ describe('Publish consumers (spec 121)', () => {
 });
 
 // ==========================================
+// Publish consumers — spec 139 B12 intra-batch concurrency
+// ==========================================
+
+describe('Publish consumers — spec 139 B12 intra-batch concurrency', () => {
+  it('processes a batch concurrently: wall-clock tracks the slowest item, not the sum of latencies', async () => {
+    const LATENCY_MS = 200;
+    const items = await Promise.all(
+      [1000, 1001, 1002, 1003, 1004].map((i) => makeItem({ id: claimRowId(i) }))
+    );
+    const { db, settleCalls, upserts } = await makeConsumerDb({
+      item: items[0] as DatabaseUnifiedQueueItemRow,
+      extraItems: items.slice(1),
+    });
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const publisher = fakePublisher('facebook', async (item) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, LATENCY_MS));
+      inFlight--;
+      return {
+        status: 'published',
+        externalPostId: `post-${item.id}`,
+      } satisfies PublishOutcome;
+    });
+    const messages = items.map((item) =>
+      fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' })
+    );
+
+    const startedAt = Date.now();
+    await handlePublishBatch(fakeBatch('publish-fast', messages) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    // Every item settled with its own outcome and was acked.
+    expect(settleCalls).toHaveLength(items.length);
+    expect(
+      settleCalls.every((c) => c.p_outcome_status === 'published')
+    ).toBe(true);
+    for (const message of messages) {
+      expect(message.ack).toHaveBeenCalledTimes(1);
+    }
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.last_settled_count).toBe(items.length);
+    // All items were in flight at once: the cap is the batch size.
+    expect(maxInFlight).toBe(items.length);
+    // Serial processing would take >= items.length * LATENCY_MS
+    // (1,000ms); concurrent wall-clock is ~the slowest item plus
+    // overhead — asserted with a 2.5x tolerance band under the serial
+    // floor and comfortably above a single item's latency.
+    expect(elapsedMs).toBeGreaterThanOrEqual(LATENCY_MS);
+    expect(elapsedMs).toBeLessThan((LATENCY_MS * items.length) / 2);
+  });
+
+  it('settles every item with its own outcome in a mixed batch, even when the first item throws', async () => {
+    const throwId = claimRowId(2000);
+    const publishedId = claimRowId(2001);
+    const failedId = claimRowId(2002);
+    const retryId = claimRowId(2003);
+    // The throwing item is FIRST in batch order: under the old serial
+    // loop with abort-on-error semantics (or a naive Promise.all) the
+    // remaining items would never settle — here every one must.
+    const items = await Promise.all(
+      [throwId, publishedId, failedId, retryId].map((id) => makeItem({ id }))
+    );
+    const { db, settleCalls, upserts } = await makeConsumerDb({
+      item: items[0] as DatabaseUnifiedQueueItemRow,
+      extraItems: items.slice(1),
+    });
+    const publisher = fakePublisher('facebook', async (item) => {
+      if (item.id === throwId) throw new Error('publisher boom');
+      if (item.id === failedId) {
+        return {
+          status: 'failed',
+          error: { kind: 'permanent', code: '100', message: 'invalid parameter' },
+        } satisfies PublishOutcome;
+      }
+      if (item.id === retryId) {
+        return {
+          status: 'retry',
+          retryDelaySeconds: 60,
+          error: { kind: 'retryable', code: '4', message: 'rate limited' },
+        } satisfies PublishOutcome;
+      }
+      return {
+        status: 'published',
+        externalPostId: 'post-ok',
+      } satisfies PublishOutcome;
+    });
+    const messages = items.map((item) =>
+      fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' })
+    );
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: { body?: string }) => {
+        bodies.push(init?.body ?? '');
+        return { ok: true };
+      })
+    );
+    try {
+      await expect(
+        handlePublishBatch(fakeBatch('publish-fast', messages) as never, {
+          db: db as never,
+          registry: registryWith(publisher),
+          masterKey: MASTER_KEY,
+          env: { POSTHOG_KEY: 'test-key' },
+        })
+      ).rejects.toThrow('publisher boom');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    // Every non-throwing item settled with its OWN outcome mapping.
+    const settleByItem = new Map(
+      settleCalls.map((c) => [c.p_queue_item_id as string, c])
+    );
+    expect(settleByItem.size).toBe(3);
+    expect(settleByItem.get(publishedId)).toMatchObject({
+      p_outcome_status: 'published',
+      p_external_post_id: 'post-ok',
+    });
+    expect(settleByItem.get(failedId)).toMatchObject({
+      p_outcome_status: 'failed',
+      p_error_code: '100',
+    });
+    expect(settleByItem.get(retryId)).toMatchObject({
+      p_outcome_status: 'queued',
+      p_retry_delay_seconds: 60,
+      p_error_code: '4',
+    });
+    // The throwing item never settled and stays un-acked for retry;
+    // the other three were acked exactly once.
+    expect(settleByItem.has(throwId)).toBe(false);
+    const ackCountByItemId = new Map(
+      messages.map((m) => [m.body.itemId, m.ack.mock.calls.length])
+    );
+    expect(ackCountByItemId.get(throwId)).toBe(0);
+    expect(ackCountByItemId.get(publishedId)).toBe(1);
+    expect(ackCountByItemId.get(failedId)).toBe(1);
+    expect(ackCountByItemId.get(retryId)).toBe(1);
+    // The settled heartbeat counts only the three settled items, and
+    // the throwing item's error went through the capture path.
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.last_settled_count).toBe(3);
+    expect(
+      bodies.some((b) => b.includes('$exception') && b.includes('publish_message_failed'))
+    ).toBe(true);
+  });
+});
+
+// ==========================================
 // Publish consumers — spec 139 publish safety
 // ==========================================
 
