@@ -33,6 +33,14 @@ import dynamic from 'next/dynamic';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { BatchActionBar } from './batch-action-bar';
 import { BatchSetCaptionModal } from './batch-set-caption-modal';
+import { NewFolderModal } from './new-folder-modal';
+import { LeavePageGuardDialog } from './leave-page-guard-dialog';
+import { MediaPreviewModal } from './media-preview-modal';
+import { MoveTargetDialog } from './media-move-dialog';
+import { RenameFolderDialog } from './media-rename-folder-dialog';
+import { DeleteFolderDialog } from './media-delete-folder-dialog';
+import { BatchDeleteConfirmDialog } from './media-batch-delete-dialog';
+import type { MoveTargetState } from './media-library-helpers';
 
 /**
  * The import dialog is closed-by-default UI (spec 133 §6.5 / 137
@@ -47,14 +55,6 @@ const MediaImportModal = dynamic(
     })),
   { ssr: false }
 );
-import { NewFolderModal } from './new-folder-modal';
-import { LeavePageGuardDialog } from './leave-page-guard-dialog';
-import { MediaPreviewModal } from './media-preview-modal';
-import { MoveTargetDialog } from './media-move-dialog';
-import { RenameFolderDialog } from './media-rename-folder-dialog';
-import { DeleteFolderDialog } from './media-delete-folder-dialog';
-import { BatchDeleteConfirmDialog } from './media-batch-delete-dialog';
-import type { MoveTargetState } from './media-library-helpers';
 
 export interface MediaLibraryOverlaysProps {
   subdomain: string;
