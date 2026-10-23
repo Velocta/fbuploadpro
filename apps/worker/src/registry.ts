@@ -1,9 +1,11 @@
 import { createPublisherRegistry, type PublisherRegistry } from '@fbuploadpro/contracts';
 import { PostForMeClient } from './providers/post-for-me.js';
+import { PostForMeTikTokClient } from './providers/post-for-me-tiktok.js';
 import { PostForMeYouTubeClient } from './providers/post-for-me-youtube.js';
 import { FacebookPublisher } from './publishers/facebook.js';
 import { InstagramPublisher } from './publishers/instagram.js';
 import { ThreadsPublisher } from './publishers/threads.js';
+import { TikTokPublisher } from './publishers/tiktok.js';
 import { XPublisher } from './publishers/x.js';
 import { YouTubePublisher } from './publishers/youtube.js';
 
@@ -26,8 +28,9 @@ import { YouTubePublisher } from './publishers/youtube.js';
  * are passed structurally so tests can inject fakes and the registry
  * never reads `process.env` itself.
  *
- * Spec 125 registers YouTube when the Post for Me API key is present
- * in worker env. When the key is absent, YouTube is deliberately NOT
+ * Specs 125/126 register YouTube and TikTok when the Post for Me API
+ * key is present in the bag. When the key is absent, they are
+ * deliberately NOT
  * registered — the safer behaviour, since a registered publisher
  * with no key could only fail every item auth-class and cascade
  * accounts to `expired`, while unregistered items simply stay queued
@@ -71,9 +74,14 @@ export function createWorkerPublisherRegistry(
         new PostForMeYouTubeClient(new PostForMeClient({ apiKey: postForMeApiKey }))
       )
     );
+    registry.register(
+      new TikTokPublisher(
+        new PostForMeTikTokClient(new PostForMeClient({ apiKey: postForMeApiKey }))
+      )
+    );
   } else {
     console.warn(
-      '[registry] POST_FOR_ME_API_KEY is not configured; YouTube publishing is disabled and YouTube items will stay queued.'
+      '[registry] POST_FOR_ME_API_KEY is not configured; YouTube and TikTok publishing are disabled and their items will stay queued.'
     );
   }
 

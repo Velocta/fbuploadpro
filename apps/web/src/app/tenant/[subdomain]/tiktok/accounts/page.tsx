@@ -4,6 +4,7 @@ import React from 'react';
 import { useParams } from 'next/navigation';
 import { PlatformPlaceholderAccounts } from '@/components/workspace/platform-placeholder-accounts';
 import { TikTokIcon } from '@/components/workspace/platform-nav-config';
+import { Button } from '@/components/shared/ui/button';
 
 export default function TikTokAccountsPage() {
   const params = useParams();
@@ -14,7 +15,17 @@ export default function TikTokAccountsPage() {
       platformName="TikTok"
       subdomain={subdomain}
       icon={<TikTokIcon size={24} />}
-      description="You connect your account through our publishing partner — there is nothing to set up or paste here. When you connect, you sign in with TikTok and approve the connection."
+      description="You connect your account through our publishing partner — there is nothing to set up or paste here. When you connect, you sign in with TikTok, approve the connection, and confirm your account."
+      connectArea={
+        <Button asChild>
+          <a
+            href={`/api/connect/tiktok?subdomain=${encodeURIComponent(subdomain)}`}
+            data-testid="tiktok-connect-link"
+          >
+            Connect TikTok
+          </a>
+        </Button>
+      }
     />
   );
 }

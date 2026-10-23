@@ -64,6 +64,33 @@ export const THREADS_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
 // bucket, but replies are not v1 claim traffic — deliberately not
 // modelled here. Add a window only when reply publishing ships.
 
+// --- TikTok (spec 126 — via Post for Me, D1) ---
+
+/**
+ * SHARED POOL CAP — this is NOT a per-account or per-workspace limit,
+ * and no window belongs in the config below for it.
+ *
+ * TikTok publishing runs through Post for Me's ONE managed TikTok app
+ * (D1), so TikTok's audited distinct-creator allowance — how many
+ * distinct creators may publish publicly through that app, per what
+ * window — is a single pool shared by EVERY FBUploadPro workspace.
+ * The provider documents that its TikTok app has passed TikTok's
+ * content audit, but states the audited creator cap NOWHERE in its
+ * docs, terms, or API spec (spec 119 research:
+ * tiktok-provider-verification.md §1.1). The written cap answer is
+ * spec 126's Gate A, still pending with the provider — when it lands,
+ * record the number HERE, labelled as the shared pool cap it is, and
+ * surface any product consequence to Shahzeb; never encode it as a
+ * per-destination window, which would multiply the real cap by the
+ * number of workspaces.
+ *
+ * Per-account: the provider publishes NO per-account TikTok posting
+ * cap (its documented limits are transport-level: 5 req/s and
+ * 40 req/min per project, raisable on request). The `tiktok: {}`
+ * entry therefore stays empty, exactly like YouTube's — no invented
+ * number. Plan-level post volume is the commercial guardrail.
+ */
+
 // --- X ---
 
 /**
@@ -90,8 +117,10 @@ export const X_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
  *     throttling happens via `destinations.next_allowed_publish_at` /
  *     the `rate_limited` cooldown, not this config.
  *   - `{}` (YouTube/TikTok): provider-imposed effective limits, supplied
- *     by specs 125/126 once verified. The empty shape is the extension
- *     point — filling in a window later needs no schema change.
+ *     by specs 125/126 once verified. For TikTok the verified position
+ *     is "no per-account cap" — see the shared pool-cap record in the
+ *     TikTok section above. The empty shape is the extension point —
+ *     filling in a window later needs no schema change.
  */
 export const PLATFORM_PUBLISH_LIMITS: Record<Platform, PlatformPublishLimitConfig | null> = {
   facebook: null,

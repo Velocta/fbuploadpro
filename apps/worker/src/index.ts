@@ -68,7 +68,7 @@ export interface Env {
   __TEST_DB__?: unknown;
   POSTHOG_KEY?: string;
   POSTHOG_HOST?: string;
-  /** Post for Me API key (spec 125) — provider-managed YouTube/TikTok. Worker env only, via GitHub Secrets. */
+  /** Post for Me API key (specs 125/126) — provider-managed YouTube/TikTok. Worker env only, via GitHub Secrets. */
   POST_FOR_ME_API_KEY?: string;
   /** X global-app client ID (spec 127, D7) — GitHub Secrets → worker env only, never the database. */
   X_CLIENT_ID?: string;

@@ -25,6 +25,8 @@ import {
 } from '@/lib/connect/errors';
 // Registers the YouTube connect config (spec 125) into the framework registry.
 import '@/lib/connect/platforms/youtube';
+// Registers the TikTok connect config (spec 126) into the framework registry.
+import '@/lib/connect/tiktok';
 
 interface ConnectPickerPageProps {
   params: Promise<{ subdomain: string; platform: string }>;
