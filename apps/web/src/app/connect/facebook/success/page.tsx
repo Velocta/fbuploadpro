@@ -1,44 +1,18 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { THEME, PALETTE, RADII } from '@/lib/theme';
+
+import { ConnectStatusLayout } from '@/components/accounts/connect-status-layout';
 
 export const metadata: Metadata = { title: 'Facebook connected' };
-import { ConnectStatusLayout } from '@/components/accounts/connect-status-layout';
 
 export default function FacebookConnectSuccessPage() {
   return (
     <ConnectStatusLayout
       testId="magic-connect-success"
-      iconBg="rgba(46, 189, 133, 0.15)"
-      iconBorder="rgba(46, 189, 133, 0.35)"
-      iconColor={PALETTE.accent4}
+      variant="success"
       title="Facebook Account Connected Successfully"
       description="You're all set! You can close this tab and return to your FbUploadPro dashboard."
-      icon={
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      }
     >
-      <div
-        style={{
-          padding: '10px 14px',
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          borderRadius: RADII.sm,
-          fontSize: '0.8125rem',
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-        }}
-      >
+      <div className="rounded-sm bg-subtle px-3.5 py-2.5 text-metadata text-ink-dim">
         Linked to FBUploadPro via Facebook.
       </div>
     </ConnectStatusLayout>

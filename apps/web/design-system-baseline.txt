@@ -50,8 +50,6 @@ hex apps/web/src/components/ui/checkbox.tsx 4
 hex apps/web/src/components/ui/switch.tsx 3
 hex apps/web/src/components/workspace/workspace-sidebar.tsx 2
 hex apps/web/src/components/workspace/workspace-studio-footer.tsx 2
-rgb apps/web/src/app/connect/facebook/error/page.tsx 2
-rgb apps/web/src/app/connect/facebook/success/page.tsx 2
 rgb apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 10
 rgb apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 5
 rgb apps/web/src/app/tenant/[subdomain]/pages/page.tsx 5

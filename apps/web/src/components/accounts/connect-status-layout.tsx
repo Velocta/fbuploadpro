@@ -1,12 +1,42 @@
-import React from 'react';
-import { THEME, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+/**
+ * Connect status layout — the terminal-state frame for the Facebook
+ * magic-link connect outcomes (spec 136 PR-136D, spec §5.6).
+ *
+ * Rebuilt on the shared/ui Card primitive + design tokens. Status is
+ * presented as colour + icon + text (OD-3 / UX Rule 27): the `variant`
+ * prop selects a token-backed status treatment — an icon in a tinted
+ * medallion whose shape (check vs. cross) and accessible label carry
+ * the meaning even in greyscale — replacing the former raw-alpha tint
+ * props, which were literal colour values passed in by each page.
+ *
+ * The layout's only consumers are the two connect outcome pages
+ * (`app/connect/facebook/success` and `app/connect/facebook/error`);
+ * ownership sits with spec 136 per plan.md.
+ */
+import * as React from 'react';
+import { CheckIcon, XIcon } from 'lucide-react';
+
+import { Card } from '@/components/shared/ui/card';
+import { cn } from '@/lib/utils';
+
+const STATUS_VARIANTS = {
+  success: {
+    label: 'Success',
+    Icon: CheckIcon,
+    medallionClass: 'border-brand-emerald bg-brand-emerald/15 text-brand-emerald',
+  },
+  error: {
+    label: 'Error',
+    Icon: XIcon,
+    medallionClass: 'border-brand-rose bg-brand-rose/15 text-brand-rose',
+  },
+} as const;
+
+type ConnectStatusVariant = keyof typeof STATUS_VARIANTS;
 
 interface ConnectStatusLayoutProps {
   testId: string;
-  iconBg: string;
-  iconBorder: string;
-  iconColor: string;
-  icon: React.ReactNode;
+  variant: ConnectStatusVariant;
   title: string;
   description: string;
   children?: React.ReactNode;
@@ -14,79 +44,38 @@ interface ConnectStatusLayoutProps {
 
 export function ConnectStatusLayout({
   testId,
-  iconBg,
-  iconBorder,
-  iconColor,
-  icon,
+  variant,
   title,
   description,
   children,
 }: Readonly<ConnectStatusLayoutProps>) {
+  const { label, Icon, medallionClass } = STATUS_VARIANTS[variant];
   return (
-    <main
-      style={{
-        display: 'flex',
-        minHeight: '100svh',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-        padding: SPACING.md,
-      }}
-    >
-      <div
+    <main className="flex min-h-svh items-center justify-center bg-canvas p-3">
+      <Card
         data-testid={testId}
-        style={{
-          maxWidth: '440px',
-          width: '100%',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-          padding: SPACING.xl,
-          textAlign: 'center',
-        }}
+        data-variant={variant}
+        className="w-full max-w-110 items-center gap-0 px-6 py-6 text-center"
       >
         <div
-          style={{
-            width: '48px',
-            height: '48px',
-            margin: '0 auto 16px',
-            borderRadius: RADII.full,
-            backgroundColor: iconBg,
-            border: `1px solid ${iconBorder}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: iconColor,
-          }}
+          className={cn(
+            'mb-4 flex size-12 items-center justify-center rounded-full border',
+            medallionClass
+          )}
         >
-          {icon}
+          <Icon className="size-6" strokeWidth={2.5} aria-hidden />
+          <span className="sr-only">{label}</span>
         </div>
 
-        <h1
-          style={{
-            margin: '0 0 8px',
-            fontSize: '1.25rem',
-            fontWeight: TYPOGRAPHY.weights.bold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          {title}
-        </h1>
+        <h1 className="mb-2 text-xl leading-heading font-bold text-ink">{title}</h1>
 
-        <p
-          style={{
-            margin: '0 0 24px',
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          {description}
-        </p>
+        <p className="mb-6 text-body leading-body text-ink-sub">{description}</p>
 
         {children}
-      </div>
+      </Card>
     </main>
   );
 }
+
+export { STATUS_VARIANTS };
+export type { ConnectStatusLayoutProps, ConnectStatusVariant };
