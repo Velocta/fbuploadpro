@@ -260,12 +260,12 @@ function ResetPasswordForm({
     }
   };
 
-  const resendButtonLabel =
-    cooldownSeconds > 0
-      ? `Resend code (${cooldownSeconds}s)`
-      : isResending
-        ? 'Sending...'
-        : 'Resend code';
+  let resendButtonLabel = 'Resend code';
+  if (cooldownSeconds > 0) {
+    resendButtonLabel = `Resend code (${cooldownSeconds}s)`;
+  } else if (isResending) {
+    resendButtonLabel = 'Sending...';
+  }
 
   const onSubmit = async (values: ResetPasswordFormValues) => {
     setSubmitAttempted(true);
@@ -414,9 +414,9 @@ function ResetPasswordForm({
         />
 
         {resendSuccessMessage && (
-          <p role="status" className="text-metadata font-medium text-brand-emerald">
+          <output className="text-metadata font-medium text-brand-emerald">
             {resendSuccessMessage}
-          </p>
+          </output>
         )}
 
         {submitAttempted && <FormErrorSummary errors={summaryErrors} />}
@@ -473,6 +473,46 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
     return () => clearTimeout(timer);
   }, [redirectArmed, router]);
 
+  let content: React.ReactNode;
+  if (isSuccess) {
+    content = (
+      <div className="flex flex-col gap-6">
+        <Alert variant="success">
+          <div className="flex flex-col gap-1">
+            <AlertTitle>Password Updated</AlertTitle>
+            <AlertDescription>
+              Your password has been successfully reset. Redirecting you to sign in...
+            </AlertDescription>
+          </div>
+        </Alert>
+        <Button asChild size="lg" className="w-full">
+          <Link href="/login?reset=success">Proceed to Sign In</Link>
+        </Button>
+      </div>
+    );
+  } else if (step === 1) {
+    content = (
+      <ForgotEmailForm
+        initialEmail={email}
+        onCodeSent={(cleanEmail) => {
+          setEmail(cleanEmail);
+          setStep(2);
+        }}
+      />
+    );
+  } else {
+    content = (
+      <ResetPasswordForm
+        email={email}
+        onBack={() => setStep(1)}
+        onSuccess={() => {
+          setIsSuccess(true);
+          setRedirectArmed(true);
+        }}
+      />
+    );
+  }
+
   return (
     <AuthSplitLayout
       title={step === 1 ? 'Reset Password' : 'Set New Password'}
@@ -490,38 +530,7 @@ export default function ForgotPasswordPage({ initialSuccess = false }: ForgotPas
         </span>
       }
     >
-      {isSuccess ? (
-        <div className="flex flex-col gap-6">
-          <Alert variant="success">
-            <div className="flex flex-col gap-1">
-              <AlertTitle>Password Updated</AlertTitle>
-              <AlertDescription>
-                Your password has been successfully reset. Redirecting you to sign in...
-              </AlertDescription>
-            </div>
-          </Alert>
-          <Button asChild size="lg" className="w-full">
-            <Link href="/login?reset=success">Proceed to Sign In</Link>
-          </Button>
-        </div>
-      ) : step === 1 ? (
-        <ForgotEmailForm
-          initialEmail={email}
-          onCodeSent={(cleanEmail) => {
-            setEmail(cleanEmail);
-            setStep(2);
-          }}
-        />
-      ) : (
-        <ResetPasswordForm
-          email={email}
-          onBack={() => setStep(1)}
-          onSuccess={() => {
-            setIsSuccess(true);
-            setRedirectArmed(true);
-          }}
-        />
-      )}
+      {content}
     </AuthSplitLayout>
   );
 }
