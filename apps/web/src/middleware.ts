@@ -153,6 +153,45 @@ function applyNoStoreHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// CSRF defence-in-depth for /api routes (spec 139). SameSite=Lax on the
+// session cookie already blocks most cross-site cookie sending, but it
+// does not cover every same-site subdomain takeover / non-cookie path.
+// For mutating requests, when a browser supplies an Origin header, the
+// origin must be the request host itself or the configured root domain
+// (or a subdomain of it). Requests with no Origin header are NOT
+// blocked: Origin is a browser header, so non-browser clients — the
+// platform deauthorize / data-deletion webhooks
+// (/api/connect/[platform]/deauthorize and .../data-deletion), which
+// are unauthenticated server-to-server calls — typically send none.
+// /api/csp-report is the exception that proves the rule: it IS called
+// by browsers, but a CSP report is generated for the page that served
+// the policy, so its Origin (when sent) is that page's own origin —
+// the apex or a tenant subdomain — which passes this check; and
+// implementations that omit Origin pass via the missing-Origin rule.
+function isAllowedApiOrigin(origin: string, host: string, rootDomain: string): boolean {
+  let originHostname: string;
+  let originHost: string;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    originHostname = parsed.hostname.toLowerCase();
+    originHost = parsed.host.toLowerCase();
+    if (!originHostname) return false;
+  } catch {
+    return false;
+  }
+  const requestHost = host.toLowerCase().trim();
+  const requestHostname = requestHost.split(':')[0] || '';
+  const cleanRoot = rootDomain.toLowerCase().split(':')[0] || '';
+  if (originHost === requestHost) return true;
+  if (originHostname === requestHostname) return true;
+  if (cleanRoot && originHostname === cleanRoot) return true;
+  if (cleanRoot && originHostname.endsWith(`.${cleanRoot}`)) return true;
+  return false;
+}
+
 function buildLoginRedirectWithCleanReturn(
   request: NextRequest,
   targetHost?: string
@@ -217,16 +256,29 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     pathname === '/favicon.ico' ||
     pathname.endsWith('.ico')
   ) {
+    const isApiRoute = pathname.startsWith('/api');
+    if (isApiRoute && MUTATING_METHODS.has(request.method.toUpperCase())) {
+      const origin = request.headers.get('origin');
+      if (origin && !isAllowedApiOrigin(origin, host, rootDomain)) {
+        return applyCspHeaders(
+          applyNoStoreHeaders(
+            NextResponse.json({ error: 'Forbidden: origin mismatch' }, { status: 403 })
+          ),
+          nonce
+        );
+      }
+    }
     const requestHeaders = stripUserHeaders(request);
     setCspRequestHeaders(requestHeaders, nonce);
-    return applyCspHeaders(
-      NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      }),
-      nonce
-    );
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    if (isApiRoute) {
+      applyNoStoreHeaders(response);
+    }
+    return applyCspHeaders(response, nonce);
   }
 
   // Extract subdomain and determine routing target
