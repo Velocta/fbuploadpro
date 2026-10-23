@@ -24,7 +24,6 @@ bare-catch-return apps/web/src/components/media/media-import-utils.ts 1
 bare-catch-return apps/web/src/components/media/media-library-filters.ts 1
 bare-catch-return apps/web/src/components/media/media-library-helpers.ts 2
 bare-catch-return apps/web/src/lib/auth.ts 1
-bare-catch-return apps/web/src/lib/auth/clients.ts 1
 bare-catch-return apps/web/src/lib/auth/users.ts 1
 bare-catch-return apps/web/src/lib/connect/platform-callback.ts 2
 bare-catch-return apps/web/src/lib/connect/session.ts 1
