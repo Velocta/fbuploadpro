@@ -181,6 +181,11 @@ describe('Lane routing (spec 121 Scope.2)', () => {
     expect(routePublishLane('facebook', 'story', 'post')).toBe(PUBLISH_LANE_HEAVY);
   });
 
+  it('routes every X media kind heavy (spec 127: chunked upload streams bytes for all media)', () => {
+    expect(routePublishLane('x', 'image', 'tweet')).toBe(PUBLISH_LANE_HEAVY);
+    expect(routePublishLane('x', 'carousel', 'tweet')).toBe(PUBLISH_LANE_HEAVY);
+  });
+
   it('keeps light formats on the fast lane when kind agrees', () => {
     expect(routePublishLane('x', 'text', 'tweet')).toBe(PUBLISH_LANE_FAST);
     expect(routePublishLane('instagram', 'carousel', 'carousel')).toBe(PUBLISH_LANE_FAST);
@@ -230,7 +235,8 @@ describe('Lane routing (spec 121 Scope.2)', () => {
     expect(getLaneKindSet('facebook', PUBLISH_LANE_FAST)).toEqual(['text', 'image', 'carousel']);
     expect(getLaneKindSet('facebook', PUBLISH_LANE_HEAVY)).toEqual(['video', 'story']);
     expect(getLaneKindSet('youtube', PUBLISH_LANE_HEAVY)).toEqual(['image', 'video', 'story', 'carousel']);
-    expect(getLaneKindSet('x', PUBLISH_LANE_FAST)).toEqual(['text', 'image', 'carousel']);
+    expect(getLaneKindSet('x', PUBLISH_LANE_FAST)).toEqual(['text']);
+    expect(getLaneKindSet('x', PUBLISH_LANE_HEAVY)).toEqual(['image', 'video', 'story', 'carousel']);
   });
 });
 
