@@ -11,6 +11,18 @@
  *   Banner (persistent) or AlertDialog (decision). Reversible removals use
  *   a toast WITH Undo (pass an action on the toast call).
  * - Action/cancel buttons are 44px tall (spec 142 F05).
+ * - Bottom toasts clear the home indicator (spec 142 F03): the default
+ *   `offset` / `mobileOffset` bottom values are
+ *   `max(<Sonner's own base>, env(safe-area-inset-bottom))`, preserving
+ *   Sonner's shipped bases (24px desktop / 16px mobile) while growing
+ *   on notched devices. Only the bottom side is overridden — Sonner
+ *   falls back to its defaults for the other sides. Callers can still
+ *   override either prop (defaults are set before the {...props}
+ *   spread below). The insets are live only because the root layout
+ *   exports `viewportFit: 'cover'` (layout.tsx + globals.css pt-safe
+ *   family).
+ * - Contract-only for now: this Toaster is mounted NOWHERE yet — spec
+ *   130 mounts the single shell-level Toaster (audit H-130 / R26).
  * - Styling is token classes via Sonner's classNames slots — no inline
  *   style variables, no second toast implementation anywhere.
  */
@@ -24,6 +36,8 @@ function Toast({ ...props }: ToasterProps) {
       data-slot="toast"
       className="toaster group"
       position={props.position ?? "bottom-right"}
+      offset={props.offset ?? { bottom: "max(24px, env(safe-area-inset-bottom))" }}
+      mobileOffset={props.mobileOffset ?? { bottom: "max(16px, env(safe-area-inset-bottom))" }}
       visibleToasts={props.visibleToasts ?? 3}
       duration={props.duration ?? 5000}
       closeButton={props.closeButton ?? true}

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import React, { type ReactNode } from 'react';
 import './globals.css';
 import { DesktopTitleBar } from '@/components/desktop';
@@ -18,6 +18,23 @@ export const metadata: Metadata = {
     shortcut: '/favicon.ico?v=2',
     apple: '/icon.svg?v=2',
   },
+};
+
+/**
+ * Viewport (spec 142, F03): `viewportFit: 'cover'` opts the page into the
+ * full screen area on notched devices, which is what makes the
+ * `env(safe-area-inset-*)` values behind the globals.css safe-area
+ * utilities (pt-safe / pb-safe / pl-safe / pr-safe / pb-safe-offset)
+ * non-zero. Without it those insets stay 0 and bottom-anchored UI can sit
+ * under the home indicator. Deliberately NO maximumScale /
+ * userScalable: false — pinch zoom stays available (accessibility).
+ * This must stay a separate `viewport` export: Next ignores a
+ * `viewportFit` key placed inside `metadata`.
+ */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 const themeInitScript = `
