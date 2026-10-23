@@ -258,8 +258,8 @@ async function fetchQueueCountsFallback(
     return counts;
   } catch {
     // return defaults
-    return null;
   }
+  return null;
 }
 
 async function fetchPageQueueCounts(
