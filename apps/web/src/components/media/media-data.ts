@@ -1,7 +1,12 @@
-'use client';
-
 /**
  * Media Library data module (spec 133 §6.1 / PR-133-1).
+ *
+ * Deliberately no 'use client' directive: the pure parts (response
+ * mapping, query definitions, the duplicate-check call) are shared
+ * with the route's server component for server-first prefetch,
+ * while the hooks below are consumed by the client explorer island
+ * (which pulls this module into the client graph).
+
  *
  * The surface's single data path: every list/folder read and every
  * mutation goes through the typed API client (`lib/api`) + React

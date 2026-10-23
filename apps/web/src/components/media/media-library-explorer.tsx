@@ -10,7 +10,12 @@ import {
   type CaptionStatusFilterKey,
   type SortOptionKey,
   type MediaSmartViewKey,
+  type BatchCaptionMode,
 } from './media-types';
+import { queryKeys } from '@/lib/data';
+
+/** How long success toasts stay visible before auto-dismissing. */
+const TOAST_AUTO_DISMISS_MS = 3500;
 import {
   computeNextSelection,
   useUploadNavigationGuard,
@@ -234,65 +239,234 @@ export function MediaLibraryExplorer({
 
   useUploadNavigationGuard(activeUploadsCount, handleInterceptNavigation);
 
-  const {
-    refreshLibraryData,
-    showToast,
-    handleCreateFolder,
-    handleRenameFolder,
-    handleDeleteFolder,
-    handleReparent,
-    handleBatchCaptionApply,
-    handleBatchDelete,
-    handleBatchMoveSubmit,
-    handleUpdateItemCaption,
-    handleDeleteItem,
-    handleFilesDrop,
-  } = useMediaLibraryActions({
-    subdomain,
-    isRenamingFolder,
-    isDeletingFolder,
-    isMoving,
-    isBatchDeleting,
-    isBatchCaptioning,
-    deletingAssetId,
-    currentFolderId,
-    selectedIds,
-    mediaItems,
-    setFolders,
-    setMediaItems,
-    setIsLoading,
-    setCurrentFolderId,
-    setToastMessage,
-    setRenameFolderTarget,
-    setIsRenamingFolder,
-    setDeleteFolderTarget,
-    setIsDeletingFolder,
-    setIsMoving,
-    setMoveTarget,
-    setIsBatchDeleting,
-    setSelectedIds,
-    setIsBatchCaptioning,
-    setDeletingAssetId,
-    setStagedFilesForImport,
-    setIsImportModalOpen,
-  });
+  /* --------------------------------------------------------------
+   * Data handlers (spec 133 §6.1). These preserve the deleted
+   * actions hook's behaviour — same guards, toasts, and state
+   * transitions — on the media-data mutations. Mutation failures
+   * surface through `reportError` plus the same failure toasts the
+   * legacy handlers showed; nothing is swallowed silently.
+   * ------------------------------------------------------------ */
+  const showToast = useCallback(
+    (msg: string) => {
+      setToastMessage(msg);
+      setTimeout(() => setToastMessage(null), TOAST_AUTO_DISMISS_MS);
+    },
+    [setToastMessage]
+  );
 
-  useEffect(() => {
-    if (!initialMediaItems) {
-      void refreshLibraryData();
+  const refreshLibraryData = useCallback(async (): Promise<void> => {
+    await invalidateMediaAll(queryClient, subdomain);
+  }, [queryClient, subdomain]);
+
+  const createFolderMutation = useCreateFolder(subdomain);
+  const renameFolderMutation = useRenameFolder(subdomain);
+  const deleteFolderMutation = useDeleteFolder(subdomain);
+  const reparentMutation = useReparentMedia(subdomain);
+  const batchCaptionMutation = useBatchCaptionMedia(subdomain);
+  const batchDeleteMutation = useBatchDeleteMedia(subdomain);
+  const batchMoveMutation = useBatchMoveMedia(subdomain);
+  const updateItemCaptionMutation = useUpdateItemCaption(subdomain);
+  const deleteItemMutation = useDeleteMediaItem(subdomain);
+
+  const handleCreateFolder = useCallback(
+    async (name: string, parentId: string | null) => {
+      try {
+        const folder = await createFolderMutation.mutateAsync({ name, parentId });
+        showToast(`Folder '${name}' created`);
+        if (folder.id) {
+          setCurrentFolderId(folder.id);
+        }
+      } catch (error) {
+        reportError(error, { source: 'media-create-folder' });
+      }
+    },
+    [createFolderMutation, showToast]
+  );
+
+  const handleRenameFolder = useCallback(
+    async (folderId: string, newName: string) => {
+      if (isRenamingFolder || !newName.trim()) return;
+      setIsRenamingFolder(true);
+      try {
+        await renameFolderMutation.mutateAsync({ folderId, name: newName });
+        showToast(`Folder renamed to '${newName}'`);
+        setRenameFolderTarget(null);
+      } catch (error) {
+        reportError(error, { source: 'media-rename-folder' });
+      } finally {
+        setIsRenamingFolder(false);
+      }
+    },
+    [isRenamingFolder, renameFolderMutation, showToast]
+  );
+
+  const handleDeleteFolder = useCallback(
+    async (folderId: string) => {
+      if (isDeletingFolder) return;
+      setIsDeletingFolder(true);
+      try {
+        await deleteFolderMutation.mutateAsync(folderId);
+        showToast('Folder deleted');
+        setDeleteFolderTarget(null);
+        if (currentFolderId === folderId) {
+          setCurrentFolderId(null);
+        }
+      } catch (error) {
+        reportError(error, { source: 'media-delete-folder' });
+      } finally {
+        setIsDeletingFolder(false);
+      }
+    },
+    [isDeletingFolder, currentFolderId, deleteFolderMutation, showToast]
+  );
+
+  const handleReparent = useCallback(
+    async (
+      targetFolderId: string | null,
+      payload: { mediaId?: string; folderId?: string }
+    ) => {
+      if (isMoving) return;
+      if (!payload.mediaId && !(payload.folderId && payload.folderId !== targetFolderId)) {
+        return;
+      }
+      setIsMoving(true);
+      try {
+        await reparentMutation.mutateAsync({ targetFolderId, ...payload });
+        showToast(payload.mediaId ? 'Item moved' : 'Folder moved');
+      } catch (error) {
+        reportError(error, { source: 'media-reparent' });
+        showToast(
+          payload.mediaId
+            ? 'Could not move item. Please try again.'
+            : 'Could not move folder. Please try again.'
+        );
+      } finally {
+        setIsMoving(false);
+      }
+    },
+    [isMoving, reparentMutation, showToast]
+  );
+
+  const handleBatchCaptionApply = useCallback(
+    async (text: string, mode: BatchCaptionMode) => {
+      if (selectedIds.length === 0 || isBatchCaptioning) return;
+      setIsBatchCaptioning(true);
+      try {
+        await batchCaptionMutation.mutateAsync({
+          mediaIds: selectedIds,
+          items: mediaItems,
+          text,
+          mode,
+        });
+        showToast(`Caption updated on ${selectedIds.length} files`);
+        setSelectedIds([]);
+      } catch (error) {
+        reportError(error, { source: 'media-batch-caption' });
+        showToast('Some captions could not be updated. Please try again.');
+      } finally {
+        setIsBatchCaptioning(false);
+      }
+    },
+    [selectedIds, isBatchCaptioning, mediaItems, batchCaptionMutation, showToast]
+  );
+
+  const handleBatchDelete = useCallback(async () => {
+    if (selectedIds.length === 0 || isBatchDeleting) return;
+    setIsBatchDeleting(true);
+    try {
+      await batchDeleteMutation.mutateAsync(selectedIds);
+      showToast(`Deleted ${selectedIds.length} files`);
+      setSelectedIds([]);
+    } catch (error) {
+      reportError(error, { source: 'media-batch-delete' });
+      showToast('Could not delete files. Please try again.');
+    } finally {
+      setIsBatchDeleting(false);
     }
-  }, [refreshLibraryData, initialMediaItems]);
+  }, [selectedIds, isBatchDeleting, batchDeleteMutation, showToast]);
+
+  const handleBatchMoveSubmit = useCallback(
+    async (destinationId: string | null) => {
+      if (selectedIds.length === 0 || isMoving) return;
+      setIsMoving(true);
+      try {
+        await batchMoveMutation.mutateAsync({
+          mediaIds: selectedIds,
+          folderId: destinationId,
+        });
+        showToast(`Moved ${selectedIds.length} files`);
+        setSelectedIds([]);
+        setMoveTarget(null);
+      } catch (error) {
+        reportError(error, { source: 'media-batch-move' });
+        showToast('Could not move files. Please try again.');
+      } finally {
+        setIsMoving(false);
+      }
+    },
+    [selectedIds, isMoving, batchMoveMutation, showToast]
+  );
+
+  const handleUpdateItemCaption = useCallback(
+    (mediaId: string, captionText: string) => {
+      updateItemCaptionMutation.mutate(
+        { mediaId, captionText },
+        {
+          onError: (error) => reportError(error, { source: 'media-update-caption' }),
+        }
+      );
+    },
+    [updateItemCaptionMutation]
+  );
+
+  const handleDeleteItem = useCallback(
+    async (mediaId: string) => {
+      if (deletingAssetId === mediaId) return;
+      setDeletingAssetId(mediaId);
+      try {
+        await deleteItemMutation.mutateAsync(mediaId);
+        showToast('Asset deleted');
+      } catch (error) {
+        reportError(error, { source: 'media-delete-item' });
+        showToast('Could not delete asset. Please try again.');
+      } finally {
+        setDeletingAssetId(null);
+      }
+    },
+    [deletingAssetId, deleteItemMutation, showToast]
+  );
+
+  const handleFilesDrop = useCallback(
+    (e: React.DragEvent, targetFolderId?: string | null) => {
+      e.preventDefault();
+      const payload = readInternalDropPayload(e);
+      if (payload) {
+        if (targetFolderId !== undefined) {
+          void handleReparent(targetFolderId, payload);
+        }
+        return;
+      }
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const files = Array.from(e.dataTransfer.files);
+        setStagedFilesForImport(files);
+        setIsImportModalOpen(true);
+      }
+    },
+    [handleReparent]
+  );
 
   // Grid refresh (M11): show the confirmed item immediately instead of
   // waiting on a refetch round-trip, then refresh to pick up server fields.
   const handleUploadSuccess = useCallback(
     (item: MediaItemResponse) => {
-      setMediaItems((prev) =>
-        prev.some((m) => m.id === item.id) ? prev : [item, ...prev]
+      queryClient.setQueryData<MediaItemResponse[]>(
+        queryKeys.tenant(subdomain).media.list,
+        (prev) =>
+          prev?.some((m) => m.id === item.id) ? prev : [item, ...(prev ?? [])]
       );
       void refreshLibraryData();
     },
-    [refreshLibraryData]
+    [queryClient, subdomain, refreshLibraryData]
   );
 
   // Breadcrumbs
