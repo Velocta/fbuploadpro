@@ -10,6 +10,15 @@
  * 14px product body via `sm:text-body`). Panel height is bounded by the
  * Radix available-height variable and the panel carries collision padding
  * (spec 142 F09); items are 44px rows.
+ *
+ * Layering (spec 133 PR-133-3 fix, named there): the panel uses the
+ * overlay-top step, NOT the popover step — a Select is a legitimate
+ * Dialog inhabitant (folder pickers in the media dialogs were the
+ * first case), and at the popover step (9000) the panel renders
+ * behind a dialog's overlay (9500) and stops receiving pointer
+ * events (proven by a browser hit-test in PR-133-3). Menus and
+ * popovers keep the popover step; they are not Dialog inhabitants
+ * in any current surface.
  */
 import * as React from "react";
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
@@ -68,7 +77,7 @@ function SelectContent({
       <SelectPrimitive.Content
         data-slot="select-content"
         className={cn(
-          "relative z-popover max-h-(--radix-select-content-available-height) max-w-(--radix-select-content-available-width) min-w-32 overflow-x-hidden overflow-y-auto rounded-md border border-line bg-panel text-ink shadow-elevated data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
+          "relative z-overlay-top max-h-(--radix-select-content-available-height) max-w-(--radix-select-content-available-width) min-w-32 overflow-x-hidden overflow-y-auto rounded-md border border-line bg-panel text-ink shadow-elevated data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
           className
         )}
         position={position}

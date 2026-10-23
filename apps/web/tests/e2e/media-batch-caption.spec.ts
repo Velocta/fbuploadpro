@@ -118,7 +118,7 @@ test.describe('media batch caption', () => {
     await apply.click();
 
     // Success is stated with the count, and both assets flip status.
-    await expect(page.getByText('Caption updated on 2 files')).toBeVisible({
+    await expect(page.getByText('Caption updated on 2 files').first()).toBeVisible({
       timeout: 15_000,
     });
     await expect(page.getByTestId(`media-caption-status-${ITEM_A_ID}`)).toHaveText(

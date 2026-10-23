@@ -90,10 +90,7 @@ export function MoveTargetDialog({
             >
               <SelectValue />
             </SelectTrigger>
-            {/* Inside a Dialog the panel needs the overlay-top step:
-                the default popover step sits below the dialog step
-                and the panel would render behind the dialog. */}
-            <SelectContent className="z-overlay-top">
+            <SelectContent>
               <SelectItem value={ROOT_VALUE}>Library</SelectItem>
               {destinations.map((f) => (
                 <SelectItem key={f.id} value={f.id}>
