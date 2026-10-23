@@ -66,7 +66,7 @@ function sessionFor(subdomain: string): SessionResult {
     email: 'owner@example.com',
     subdomain,
     role: 'owner',
-  } as SessionResult;
+  } as unknown as SessionResult;
 }
 
 function fakeSupabase(data: unknown, fail?: Error) {
