@@ -19,7 +19,6 @@ bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/byoc/route.ts
 bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/platform-credentials/[platform]/route.ts 1
 bare-catch-return apps/web/src/app/api/workspaces/route.ts 1
 bare-catch-return apps/web/src/app/api/workspaces/switch/route.ts 1
-bare-catch-return apps/web/src/components/media/media-import-utils.ts 1
 bare-catch-return apps/web/src/lib/auth.ts 1
 bare-catch-return apps/web/src/lib/auth/users.ts 1
 bare-catch-return apps/web/src/lib/connect/platform-callback.ts 2
@@ -30,7 +29,6 @@ empty-catch apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
 empty-catch apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 2
 empty-catch apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
 empty-catch apps/web/src/components/accounts/connect-account-modal.tsx 1
-empty-catch apps/web/src/components/media/media-import-modal.tsx 1
 empty-catch apps/web/src/components/media/media-library-explorer.tsx 1
 empty-catch apps/web/src/components/pages/add-page-modal.tsx 1
 empty-catch apps/web/src/components/pages/dedicated/page-header.tsx 1
@@ -43,5 +41,4 @@ empty-catch apps/web/src/lib/auth/login.ts 1
 empty-catch apps/web/src/lib/server-analytics.ts 1
 empty-catch apps/web/src/lib/timezones.ts 1
 not-ok-return apps/web/src/components/accounts/connect-account-modal.tsx 1
-not-ok-return apps/web/src/components/media/media-import-modal.tsx 1
 not-ok-return apps/web/src/components/pages/dedicated/queue/content-tab.tsx 1

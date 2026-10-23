@@ -1,10 +1,24 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { BatchActionBar } from './batch-action-bar';
 import { BatchSetCaptionModal } from './batch-set-caption-modal';
-import { MediaImportModal } from './media-import-modal';
+
+/**
+ * The import dialog is closed-by-default UI (spec 133 §6.5 / 137
+ * §3.6.1): it loads behind next/dynamic so a closed import ships
+ * nothing in the media route's initial bundle. (PR-133-4's named
+ * one-line mount change in this file.)
+ */
+const MediaImportModal = dynamic(
+  () =>
+    import('./media-import-modal').then((m) => ({
+      default: m.MediaImportModal,
+    })),
+  { ssr: false }
+);
 import { NewFolderModal } from './new-folder-modal';
 import { LeavePageGuardDialog } from './leave-page-guard-dialog';
 import { MediaPreviewModal } from './media-preview-modal';

@@ -1,12 +1,35 @@
 'use client';
 
-import React from 'react';
-import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+/**
+ * Import progress chrome (spec 133 PR-133-4, spec §6.5 / PB-18,
+ * OD-133-4(a)).
+ *
+ * Header: the title, the destination subtext, the overall percent
+ * (header shows overall progress only) and the aggregate bar — its
+ * fill width is a dynamic value, the ratchet's sanctioned
+ * inline-style case (spec §7.10). Completion lands on the summary
+ * ("Import complete — 8 of 10 uploaded" / "Import canceled —
+ * nothing was uploaded", Peak-End, UI Rule 26) inside the dialog —
+ * never a bare toast.
+ *
+ * The minimised state ("Keep working") is OD-133-4(a): a small
+ * in-surface fixed progress chip built from primitives —
+ * persistent, expandable, keyboard-reachable, never a toast.
+ */
 
+import React from 'react';
+
+import { Button } from '@/components/shared/ui/button';
+
+/**
+ * The modal's props live with the modal (media-import-modal.tsx);
+ * re-exported here because the explorer's public type surface has
+ * always sourced them from this module.
+ */
+export type { MediaImportModalProps } from './media-import-modal';
 
 // -----------------------------------------------------------------------------
-// Subcomponent: Progress Header (Title, Subtext, Large % & Aggregate Progress Bar)
+// Progress header (title, subtext, overall % + aggregate bar)
 // -----------------------------------------------------------------------------
 export interface ImportProgressHeaderProps {
   step: 'progress' | 'complete';
@@ -25,95 +48,50 @@ export function ImportProgressHeader({
   isAllCancelled,
   overallProgressPercent,
 }: Readonly<ImportProgressHeaderProps>) {
-  const getTitle = () => {
-    if (step === 'complete') {
-      return isAllCancelled ? 'Import canceled' : 'Import complete';
-    }
-    return 'Importing media';
-  };
+  const title =
+    step === 'complete'
+      ? isAllCancelled
+        ? 'Import canceled'
+        : 'Import complete'
+      : 'Importing media';
 
-  const getSubtext = () => {
-    if (step === 'complete') {
-      if (isAllCancelled) {
-        return 'Import canceled — nothing was uploaded';
-      }
-      return `${completedCount} of ${totalCount} added to ${destinationFolderName}`;
-    }
-    return `Adding to ${destinationFolderName}`;
-  };
+  const subtext =
+    step === 'complete'
+      ? isAllCancelled
+        ? 'Import canceled — nothing was uploaded'
+        : `Import complete — ${completedCount} of ${totalCount} uploaded`
+      : `Adding to ${destinationFolderName}`;
 
-  const barPercent = step === 'complete' && !isAllCancelled ? 100 : overallProgressPercent;
+  const barPercent =
+    step === 'complete' && !isAllCancelled ? 100 : overallProgressPercent;
 
   return (
-    <div
-      style={{
-        padding: `${SPACING.md} ${SPACING.lg}`,
-        borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: SPACING.xs,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <h2
-            id="import-media-title"
-            data-testid="import-modal-title"
-            style={{
-              margin: 0,
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            {getTitle()}
-          </h2>
-          <p
-            data-testid="import-progress-subtext"
-            style={{
-              margin: '4px 0 0 0',
-              fontSize: '0.8125rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
-            {getSubtext()}
-          </p>
-        </div>
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-3">
+        <p
+          data-testid="import-progress-subtext"
+          className="m-0 text-body text-ink-sub"
+        >
+          {subtext}
+        </p>
 
-        {/* Large Overall Percentage */}
+        {/* Overall percentage (header shows overall progress only) */}
         <div
           data-testid="overall-progress-percentage"
-          style={{
-            fontSize: '1.5rem',
-            fontWeight: TYPOGRAPHY.weights.bold,
-            color: PALETTE.primary,
-            fontVariantNumeric: TYPOGRAPHY.tabularNums,
-            lineHeight: 1,
-          }}
+          className="text-xl leading-none font-bold text-brand-gold tabular-nums"
+          aria-label={`${title}: ${barPercent}%`}
         >
           {barPercent}%
         </div>
       </div>
 
-      {/* Full-Width Aggregate Progress Track */}
-      <div
-        style={{
-          width: '100%',
-          height: '6px',
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          borderRadius: '3px',
-          overflow: 'hidden',
-          marginTop: SPACING.xs,
-        }}
-      >
+      {/* Aggregate progress track */}
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-subtle">
+        {/* Dynamic overall progress width — allowlisted (§7.10). */}
         <div
           data-testid="aggregate-progress-bar"
-          style={{
-            width: `${barPercent}%`,
-            height: '100%',
-            backgroundColor: PALETTE.primary,
-            transition: 'width 0.2s ease',
-          }}
+          className="h-full bg-primary transition-[width] duration-base"
+          style={{ width: `${barPercent}%` }}
         />
       </div>
     </div>
@@ -121,11 +99,7 @@ export function ImportProgressHeader({
 }
 
 // -----------------------------------------------------------------------------
-// Subcomponent: Progress Row (uploading, paused, queued, failed, done, cancelled)
-// -----------------------------------------------------------------------------
-
-// -----------------------------------------------------------------------------
-// Subcomponent: Progress Footer (Leave warning, Cancel remaining, Keep working, Done)
+// Progress footer (leave warning, Cancel remaining, Keep working, Done)
 // -----------------------------------------------------------------------------
 export interface ImportProgressFooterProps {
   step: 'progress' | 'complete';
@@ -146,101 +120,49 @@ export function ImportProgressFooter({
 }: Readonly<ImportProgressFooterProps>) {
   if (step === 'complete') {
     return (
-      <div
-        style={{
-          padding: `${SPACING.md} ${SPACING.lg}`,
-          borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-        }}
-      >
-        <button
-          type="button"
-          data-testid="import-done-btn"
-          onClick={onDone}
-          style={{
-            padding: `${SPACING.xs} ${SPACING.lg}`,
-            backgroundColor: PALETTE.primary,
-            color: PALETTE.background,
-            border: 'none',
-            borderRadius: RADII.xs,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            cursor: 'pointer',
-          }}
-        >
+      <div className="flex items-center justify-end">
+        <Button type="button" data-testid="import-done-btn" onClick={onDone}>
           Done
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div
-      style={{
-        padding: `${SPACING.md} ${SPACING.lg}`,
-        borderTop: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: SPACING.md,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm, flexWrap: 'wrap' }}>
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         {canCancelRemaining && (
-          <button
+          <Button
             type="button"
+            variant="link"
             data-testid="cancel-remaining-btn"
             onClick={onCancelRemaining}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              color: PALETTE.accent3,
-              fontSize: '0.75rem',
-              cursor: 'pointer',
-              padding: 0,
-              textDecoration: 'underline',
-            }}
+            className="h-11 px-0 text-metadata text-brand-rose"
           >
             Cancel remaining
-          </button>
+          </Button>
         )}
         {isUploading && (
-          <span
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-            }}
-          >
+          <span className="text-metadata text-ink-dim">
             Leaving now will cancel the remaining uploads.
           </span>
         )}
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="secondary"
         data-testid="keep-working-btn"
         onClick={onKeepWorking}
-        style={{
-          padding: `${SPACING.xs} ${SPACING.md}`,
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          border: '1px solid var(--border-subtle, rgba(255,255,255,0.1))',
-          borderRadius: RADII.xs,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          fontSize: '0.8125rem',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
       >
         Keep working
-      </button>
+      </Button>
     </div>
   );
 }
 
 // -----------------------------------------------------------------------------
-// Subcomponent: Minimized Floating Pill Dock
+// Minimised progress chip (OD-133-4(a))
 // -----------------------------------------------------------------------------
 interface MinimizedUploadPillProps {
   completedCount: number;
@@ -249,10 +171,6 @@ interface MinimizedUploadPillProps {
   onRestore: () => void;
 }
 
-
-// -----------------------------------------------------------------------------
-// Subcomponent: Minimized Upload Pill
-// -----------------------------------------------------------------------------
 export function MinimizedUploadPill({
   completedCount,
   totalCount,
@@ -263,103 +181,36 @@ export function MinimizedUploadPill({
     <aside
       aria-label="Upload progress dock"
       data-testid="minimized-upload-dock"
-      style={{
-        position: 'fixed',
-        bottom: SPACING.md,
-        right: SPACING.md,
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid var(--border-strong, ${THEME.default.borders.strong})`,
-        borderRadius: RADII.md,
-        padding: `${SPACING.xs} ${SPACING.md}`,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-        zIndex: 9000,
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.sm,
-      }}
+      className="fixed right-4 bottom-4 z-dialog flex items-center gap-3 rounded-md border border-line bg-panel p-2 pl-4 shadow-modal"
     >
-      <button
+      <div className="flex min-w-32 flex-col gap-1">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-metadata font-medium text-ink">
+            Uploading {completedCount} of {totalCount}
+          </span>
+          <span className="text-metadata font-semibold text-brand-gold tabular-nums">
+            {overallPercent}%
+          </span>
+        </div>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-subtle">
+          {/* Dynamic overall progress width — allowlisted (§7.10). */}
+          <div
+            className="h-full bg-primary transition-[width] duration-base"
+            style={{ width: `${overallPercent}%` }}
+          />
+        </div>
+      </div>
+      <Button
         type="button"
+        variant="ghost"
+        size="sm"
         data-testid="restore-modal-btn"
         onClick={onRestore}
         aria-label={`Restore upload dialog: Uploading ${completedCount} of ${totalCount}`}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.sm,
-          backgroundColor: 'transparent',
-          border: 'none',
-          padding: 0,
-          cursor: 'pointer',
-          color: 'inherit',
-          textAlign: 'left',
-        }}
+        className="min-h-11 sm:min-h-8"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: '130px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              Uploading {completedCount} of {totalCount}
-            </span>
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                color: PALETTE.primary,
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              }}
-            >
-              {overallPercent}%
-            </span>
-          </div>
-          <div
-            style={{
-              width: '100%',
-              height: '3px',
-              backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-              borderRadius: '2px',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${overallPercent}%`,
-                height: '100%',
-                backgroundColor: PALETTE.primary,
-                transition: 'width 0.2s ease',
-              }}
-            />
-          </div>
-        </div>
-        <span
-          style={{
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            fontSize: '0.6875rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-          }}
-        >
-          View
-        </span>
-      </button>
+        View
+      </Button>
     </aside>
   );
-}
-
-// -----------------------------------------------------------------------------
-// Main Component: MediaImportModal
-// -----------------------------------------------------------------------------
-export interface MediaImportModalProps {
-  subdomain: string;
-  isOpen: boolean;
-  initialFiles: File[];
-  currentFolderId: string | null;
-  folders: MediaFolder[];
-  onClose: () => void;
-  onUploadSuccess: (item: MediaItemResponse) => void;
-  onActiveUploadsChange?: (count: number, furthestAlong: { name: string; progressPercent: number } | null) => void;
 }

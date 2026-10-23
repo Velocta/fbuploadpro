@@ -145,6 +145,10 @@ export async function installApiFixtures(
       thumbnailKey: 'e2e/e2e-sunset-thumb.webp',
       publicMediaUrl: item.url,
       publicThumbnailUrl: 'https://storage.e2e.invalid/e2e/e2e-sunset-thumb.webp',
+      // The real route returns this (900s presign lifetime); PR-133-4's
+      // engine validates the response through the typed client's
+      // UploadUrlResponseSchema, which requires it.
+      expiresInSeconds: 900,
     });
   });
   await page.route(`**/api/tenant/${SUB}/media/confirm`, (route) => {
