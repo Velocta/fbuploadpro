@@ -121,11 +121,12 @@ test.describe('media browse', () => {
     // keyboard, Esc closes it and returns focus to the trigger; the
     // segmented switch activates from the keyboard.
     const typeTrigger = page.getByTestId('media-type-select');
+    const typeMenu = page.locator('[data-slot="menu-content"]');
     await typeTrigger.focus();
     await page.keyboard.press('ArrowDown');
-    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(typeMenu).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(typeMenu).toHaveCount(0);
     await expect(typeTrigger).toBeFocused();
     await page.getByTestId('view-mode-table-btn').focus();
     await page.keyboard.press('Enter');
