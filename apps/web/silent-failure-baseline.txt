@@ -20,8 +20,6 @@ bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/platform-cred
 bare-catch-return apps/web/src/app/api/workspaces/route.ts 1
 bare-catch-return apps/web/src/app/api/workspaces/switch/route.ts 1
 bare-catch-return apps/web/src/components/media/media-import-utils.ts 1
-bare-catch-return apps/web/src/components/media/media-library-filters.ts 1
-bare-catch-return apps/web/src/components/media/media-library-helpers.ts 2
 bare-catch-return apps/web/src/lib/auth.ts 1
 bare-catch-return apps/web/src/lib/auth/users.ts 1
 bare-catch-return apps/web/src/lib/connect/platform-callback.ts 2
@@ -39,8 +37,7 @@ empty-catch apps/web/src/components/accounts/connect-account-modal.tsx 1
 empty-catch apps/web/src/components/desktop/desktop-titlebar.tsx 1
 empty-catch apps/web/src/components/downloader/media-downloader.tsx 2
 empty-catch apps/web/src/components/media/media-import-modal.tsx 1
-empty-catch apps/web/src/components/media/media-library-explorer.tsx 2
-empty-catch apps/web/src/components/media/use-media-library-actions.ts 1
+empty-catch apps/web/src/components/media/media-library-explorer.tsx 1
 empty-catch apps/web/src/components/pages/add-page-modal.tsx 1
 empty-catch apps/web/src/components/pages/dedicated/composer/post-composer.tsx 1
 empty-catch apps/web/src/components/pages/dedicated/page-header.tsx 1
@@ -61,6 +58,5 @@ empty-catch apps/web/src/lib/server-analytics.ts 1
 empty-catch apps/web/src/lib/timezones.ts 1
 not-ok-return apps/web/src/components/accounts/connect-account-modal.tsx 1
 not-ok-return apps/web/src/components/media/media-import-modal.tsx 1
-not-ok-return apps/web/src/components/media/media-library-filters.ts 1
 not-ok-return apps/web/src/components/pages/dedicated/composer/post-composer.tsx 1
 not-ok-return apps/web/src/components/pages/dedicated/queue/content-tab.tsx 1
