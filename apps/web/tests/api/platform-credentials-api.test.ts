@@ -6,6 +6,7 @@ import {
   PUT as savePlatformCredentials,
   DELETE as deletePlatformCredentials,
 } from '@/app/api/tenant/[subdomain]/settings/platform-credentials/[platform]/route';
+import { POST as revealPlatformSecret } from '@/app/api/tenant/[subdomain]/settings/platform-credentials/[platform]/reveal/route';
 import * as authModule from '@/lib/auth/clients';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -157,7 +158,7 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
   });
 
   describe('GET', () => {
-    it('matches the frozen response contract when credentials are saved', async () => {
+    it('matches the frozen response contract when credentials are saved — masked, never the secret (spec 139 N3)', async () => {
       const encrypted = await encryptToken('instagram-secret-999', TEST_ENCRYPTION_KEY);
       vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
         makeSupabase({
@@ -187,7 +188,7 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
           'subdomain',
           'platform',
           'appId',
-          'appSecret',
+          'secretHint',
           'hasSecret',
           'status',
           'lastTestedAt',
@@ -198,7 +199,11 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
       expect(json.subdomain).toBe(subdomain);
       expect(json.platform).toBe('instagram');
       expect(json.appId).toBe('123456789012345');
-      expect(json.appSecret).toBe('instagram-secret-999');
+      // The masked hint (bullets + last four) is all the GET carries.
+      expect(json.secretHint).toBe('••••-999');
+      expect(json).not.toHaveProperty('appSecret');
+      // Deep-scan: the full secret appears NOWHERE in the payload.
+      expect(JSON.stringify(json)).not.toContain('instagram-secret-999');
       expect(json.hasSecret).toBe(true);
       expect(json.status).toBe('valid');
       expect(json.lastTestedAt).toBe('2026-10-14T10:00:00Z');
@@ -218,7 +223,8 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
       const json = await res.json();
       expect(json.platform).toBe('threads');
       expect(json.appId).toBe('');
-      expect(json.appSecret).toBe('');
+      expect(json.secretHint).toBeNull();
+      expect(json).not.toHaveProperty('appSecret');
       expect(json.hasSecret).toBe(false);
       expect(json.status).toBe('unverified');
       expect(json.lastTestedAt).toBeNull();
@@ -227,7 +233,7 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
   });
 
   describe('edge branches', () => {
-    it('GET returns hasSecret with an empty secret when decryption fails', async () => {
+    it('GET returns hasSecret with a null hint when decryption fails', async () => {
       vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
         makeSupabase({
           workspaceId,
@@ -251,7 +257,8 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.appId).toBe('111222333');
-      expect(json.appSecret).toBe('');
+      expect(json.secretHint).toBeNull();
+      expect(json).not.toHaveProperty('appSecret');
       expect(json.hasSecret).toBe(true);
     });
 
@@ -437,6 +444,87 @@ describe('Platform Credentials Settings API Routes (instagram/threads)', () => {
       expect(platformEqMock).toHaveBeenCalledWith('platform', 'instagram');
       expect(tablesUsed).not.toContain('social_accounts');
       expect(tablesUsed).not.toContain('destinations');
+    });
+  });
+
+  describe('POST reveal (spec 139 N3)', () => {
+    const SAVED_SECRET = 'threads-secret-777';
+
+    function revealReq(platform: string, cookie?: string) {
+      return new NextRequest(
+        `http://localhost:3000/api/tenant/${subdomain}/settings/platform-credentials/${platform}/reveal`,
+        { method: 'POST', headers: cookie ? { cookie } : {} }
+      );
+    }
+
+    it('returns 401 when request lacks authentication session', async () => {
+      const res = await revealPlatformSecret(revealReq('threads'), ctx('threads'));
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 403 when session subdomain does not match request tenant', async () => {
+      const res = await revealPlatformSecret(
+        revealReq('threads', otherTenantSessionCookie),
+        ctx('threads')
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 400 for a non-BYOC platform', async () => {
+      const res = await revealPlatformSecret(
+        revealReq('facebook', validSessionCookie),
+        ctx('facebook')
+      );
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 404 when no secret is saved for the workspace', async () => {
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        makeSupabase({ workspaceId, credsRow: null }) as any
+      );
+      const res = await revealPlatformSecret(
+        revealReq('threads', validSessionCookie),
+        ctx('threads')
+      );
+      expect(res.status).toBe(404);
+      const json = await res.json();
+      expect(JSON.stringify(json)).not.toContain(SAVED_SECRET);
+    });
+
+    it('returns the saved secret once, no-store, and logs the reveal WITHOUT the value', async () => {
+      const encrypted = await encryptToken(SAVED_SECRET, TEST_ENCRYPTION_KEY);
+      vi.spyOn(authModule, 'getSupabaseAdminClient').mockReturnValue(
+        makeSupabase({
+          workspaceId,
+          credsRow: {
+            workspace_id: workspaceId,
+            platform: 'threads',
+            client_id: '987654321',
+            encrypted_client_secret: encrypted,
+            status: 'valid',
+            last_tested_at: '2026-10-14T10:00:00Z',
+            created_at: '2026-10-14T09:00:00Z',
+            updated_at: '2026-10-14T09:00:00Z',
+          },
+        }) as any
+      );
+      const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+
+      const res = await revealPlatformSecret(
+        revealReq('threads', validSessionCookie),
+        ctx('threads')
+      );
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      const json = await res.json();
+      expect(json).toEqual({ appSecret: SAVED_SECRET });
+
+      // The reveal is audited — and the audit line must not carry
+      // the secret value anywhere in any argument.
+      expect(infoSpy).toHaveBeenCalled();
+      for (const call of infoSpy.mock.calls) {
+        expect(JSON.stringify(call)).not.toContain(SAVED_SECRET);
+      }
     });
   });
 });

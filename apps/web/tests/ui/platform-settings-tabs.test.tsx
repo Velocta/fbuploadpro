@@ -13,6 +13,10 @@
  * and validation messages are spec §5.3/§5.4 verbatim (the §5.2
  * patterns with the platform's labels substituted).
  *
+ * Spec 139 N3: the seeded payload carries a secret HINT, never the
+ * secret — Show drives the reveal endpoint (stubbed below) and only
+ * then does the value reach the screen.
+ *
  * The YouTube/X/TikTok explanation-tab portions were migrated to
  * behavioural tests in spec 135 PR-135-4, completing this file's
  * migration: every tab is now rendered into jsdom and asserted on
@@ -78,7 +82,7 @@ interface PlatformPayload {
   subdomain: string;
   platform: string;
   appId: string;
-  appSecret: string;
+  secretHint: string | null;
   hasSecret: boolean;
   status: 'unverified' | 'valid' | 'invalid';
   lastTestedAt: string | null;
@@ -122,7 +126,7 @@ function notConnectedPayload(platform: string): PlatformPayload {
     subdomain: SUBDOMAIN,
     platform,
     appId: '',
-    appSecret: '',
+    secretHint: null,
     hasSecret: false,
     status: 'unverified',
     lastTestedAt: null,
@@ -136,7 +140,7 @@ function connectedPayload(c: PlatformCase): PlatformPayload {
     subdomain: SUBDOMAIN,
     platform: c.platform,
     appId: c.savedAppId,
-    appSecret: c.savedSecret,
+    secretHint: `••••${c.savedSecret.slice(-4)}`,
     hasSecret: true,
     status: 'valid',
     lastTestedAt: '2026-10-16T10:00:00.000Z',
@@ -159,6 +163,7 @@ const currentPayloads = new Map<string, PlatformPayload>();
 let putCalls: Array<{ platform: string; url: string; body: Record<string, unknown> }>;
 let deleteCalls: string[];
 let getResponders: Map<string, () => Promise<Response>>;
+let revealResponders: Map<string, () => Promise<Response>>;
 let putResponder: (platform: string, body: Record<string, unknown>) => Promise<Response>;
 let deleteResponder: (platform: string) => Promise<Response>;
 
@@ -172,13 +177,14 @@ function installFetchStub() {
   putCalls = [];
   deleteCalls = [];
   getResponders = new Map();
+  revealResponders = new Map();
   putResponder = async (platform, body) => {
     const c = PLATFORM_CASES.find((entry) => entry.platform === platform) as PlatformCase;
-    const previous = currentPayloads.get(platform) as PlatformPayload;
+    const savedSecret = String(body.appSecret ?? c.savedSecret);
     currentPayloads.set(platform, {
       ...connectedPayload(c),
       appId: String(body.appId ?? ''),
-      appSecret: String(body.appSecret ?? previous.appSecret ?? c.savedSecret),
+      secretHint: `••••${savedSecret.slice(-4)}`,
     });
     return jsonResponse({
       success: true,
@@ -202,6 +208,15 @@ function installFetchStub() {
         if (method === 'GET') {
           const responder = getResponders.get(platform);
           return responder ? responder() : jsonResponse(currentPayloads.get(platform));
+        }
+        if (method === 'POST') {
+          // The reveal action (spec 139 N3) — the URL extends the
+          // credentials path, so it matches the same regex.
+          const responder = revealResponders.get(platform);
+          const c = PLATFORM_CASES.find(
+            (entry) => entry.platform === platform
+          ) as PlatformCase;
+          return responder ? responder() : jsonResponse({ appSecret: c.savedSecret });
         }
         if (method === 'PUT') {
           const body = init?.body
@@ -573,16 +588,36 @@ for (const c of PLATFORM_CASES) {
       );
     }, INTERACTION_TIMEOUT);
 
-    it('Show reveals the saved secret and Hide masks it again', async () => {
+    it('Show fetches the saved secret through the reveal action and Hide masks it again', async () => {
       const user = userEvent.setup();
       renderView(c, connectedPayload(c));
 
+      // The value is not in the payload — it only arrives via reveal.
+      expect(screen.getByTestId(`${p}-saved-app-secret`).textContent).toBe('•'.repeat(24));
+
       await user.click(screen.getByTestId(`${p}-state2-secret-toggle`));
-      expect(screen.getByTestId(`${p}-saved-app-secret`).textContent).toBe(c.savedSecret);
+      await waitFor(() =>
+        expect(screen.getByTestId(`${p}-saved-app-secret`).textContent).toBe(c.savedSecret)
+      );
       expect(screen.getByTestId(`${p}-state2-secret-toggle`).textContent).toBe('Hide');
 
       await user.click(screen.getByTestId(`${p}-state2-secret-toggle`));
       expect(screen.getByTestId(`${p}-saved-app-secret`).textContent).toBe('•'.repeat(24));
+    }, INTERACTION_TIMEOUT);
+
+    it('a failed reveal reports at the field and keeps the secret masked', async () => {
+      revealResponders.set(c.platform, async () => jsonResponse({ error: 'Failed' }, 500));
+      const user = userEvent.setup();
+      renderView(c, connectedPayload(c));
+
+      await user.click(screen.getByTestId(`${p}-state2-secret-toggle`));
+
+      expect(await screen.findByTestId(`${p}-secret-reveal-error`)).toBeTruthy();
+      expect(screen.getByTestId(`${p}-secret-reveal-error`).textContent).toBe(
+        "Couldn't show your App Secret. Please try again."
+      );
+      expect(screen.getByTestId(`${p}-saved-app-secret`).textContent).toBe('•'.repeat(24));
+      expect(screen.getByTestId(`${p}-state2-secret-toggle`).textContent).toBe('Show');
     }, INTERACTION_TIMEOUT);
   });
 

@@ -37,6 +37,19 @@ export function platformLabel(platform: ByocPlatform): string {
   return PLATFORM_LABELS[platform];
 }
 
+/**
+ * The masked hint a settings payload may carry for a stored secret
+ * (spec 139 N3): bullets plus the last four characters — the same
+ * convention as a card number. The full secret NEVER travels in a
+ * settings GET response; it is disclosed only by the dedicated
+ * reveal action. A secret of four characters or fewer yields the
+ * bullets alone, so the hint can never BE the secret.
+ */
+export function toSecretHint(decryptedSecret: string): string {
+  if (decryptedSecret.length <= 4) return '••••';
+  return `••••${decryptedSecret.slice(-4)}`;
+}
+
 export class UnsupportedPlatformError extends Error {
   readonly platform: string;
 

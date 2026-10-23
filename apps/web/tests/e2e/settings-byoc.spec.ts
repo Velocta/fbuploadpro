@@ -37,7 +37,7 @@ const CONNECTED_AT = '2026-10-16T12:00:00.000Z';
 
 interface ByocFixture {
   fbAppId: string;
-  fbAppSecret: string;
+  fbAppSecretHint: string | null;
   hasSecret: boolean;
   status: 'unverified' | 'valid' | 'invalid';
   connectedAt: string | null;
@@ -45,7 +45,7 @@ interface ByocFixture {
 
 const NOT_CONNECTED: ByocFixture = {
   fbAppId: '',
-  fbAppSecret: '',
+  fbAppSecretHint: null,
   hasSecret: false,
   status: 'unverified',
   connectedAt: null,
@@ -56,7 +56,7 @@ function byocPayload(state: ByocFixture) {
     workspaceId: TENANT.userId,
     subdomain: TENANT.subdomain,
     fbAppId: state.fbAppId,
-    fbAppSecret: state.fbAppSecret,
+    fbAppSecretHint: state.fbAppSecretHint,
     hasSecret: state.hasSecret,
     status: state.status,
     lastTestedAt: state.connectedAt,
@@ -114,8 +114,10 @@ async function installSettingsFixtures(
       const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
       byoc = {
         fbAppId: typeof body.fbAppId === 'string' ? body.fbAppId : '',
-        fbAppSecret:
-          typeof body.fbAppSecret === 'string' ? body.fbAppSecret : byoc.fbAppSecret,
+        fbAppSecretHint:
+          typeof body.fbAppSecret === 'string'
+            ? `••••${body.fbAppSecret.slice(-4)}`
+            : byoc.fbAppSecretHint,
         hasSecret: true,
         status: 'valid',
         connectedAt: CONNECTED_AT,

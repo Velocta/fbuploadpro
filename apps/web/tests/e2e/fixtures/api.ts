@@ -72,7 +72,7 @@ export async function installApiFixtures(
       workspaceId: '11111111-1111-4111-8111-111111111111',
       subdomain: SUB,
       fbAppId: '123456789012345',
-      fbAppSecret: 'e2e-fixture-secret',
+      fbAppSecretHint: '••••cret',
       hasSecret: true,
       status: 'valid',
       lastTestedAt: null,

@@ -13,6 +13,10 @@
  * asserted here are the finalized 2026-10-16 contract, not
  * decoration. The forbidden strings ("Permissions your app needs",
  * "last tested") are asserted absent in both states.
+ *
+ * Spec 139 N3: the seeded payload carries a secret HINT, never the
+ * secret — Show drives the reveal endpoint (stubbed below) and only
+ * then does the value reach the screen.
  */
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,7 +53,7 @@ interface ByocPayload {
   workspaceId: string;
   subdomain: string;
   fbAppId: string;
-  fbAppSecret: string;
+  fbAppSecretHint: string | null;
   hasSecret: boolean;
   status: 'unverified' | 'valid' | 'invalid';
   lastTestedAt: string | null;
@@ -60,7 +64,7 @@ const NOT_CONNECTED: ByocPayload = {
   workspaceId: WORKSPACE_ID,
   subdomain: SUBDOMAIN,
   fbAppId: '',
-  fbAppSecret: '',
+  fbAppSecretHint: null,
   hasSecret: false,
   status: 'unverified',
   lastTestedAt: null,
@@ -71,7 +75,7 @@ const CONNECTED: ByocPayload = {
   workspaceId: WORKSPACE_ID,
   subdomain: SUBDOMAIN,
   fbAppId: SAVED_APP_ID,
-  fbAppSecret: SAVED_SECRET,
+  fbAppSecretHint: '••••alue',
   hasSecret: true,
   status: 'valid',
   lastTestedAt: '2026-10-16T10:00:00.000Z',
@@ -87,13 +91,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /* Stateful fetch stub: GET serves `currentPayload`; the default PUT /
- * DELETE responders flip it, exactly like the real route pair. */
+ * DELETE responders flip it, exactly like the real route pair. The
+ * reveal POST serves the saved secret (spec 139 N3). */
 let currentPayload: ByocPayload;
 let putCalls: Array<{ url: string; body: Record<string, unknown> }>;
 let deleteCalls: number;
 let getResponder: () => Promise<Response>;
 let putResponder: (body: Record<string, unknown>) => Promise<Response>;
 let deleteResponder: () => Promise<Response>;
+let revealResponder: () => Promise<Response>;
 
 const clipboardWriteText = vi.fn().mockResolvedValue(undefined);
 
@@ -103,10 +109,11 @@ function installFetchStub() {
   deleteCalls = 0;
   getResponder = async () => jsonResponse(currentPayload);
   putResponder = async (body) => {
+    const savedSecret = String(body.fbAppSecret ?? SAVED_SECRET);
     currentPayload = {
       ...CONNECTED,
       fbAppId: String(body.fbAppId ?? ''),
-      fbAppSecret: String(body.fbAppSecret ?? SAVED_SECRET),
+      fbAppSecretHint: `••••${savedSecret.slice(-4)}`,
     };
     return jsonResponse({
       success: true,
@@ -115,6 +122,7 @@ function installFetchStub() {
       connectedAt: CONNECTED.connectedAt,
     });
   };
+  revealResponder = async () => jsonResponse({ fbAppSecret: SAVED_SECRET });
   deleteResponder = async () => {
     currentPayload = NOT_CONNECTED;
     return jsonResponse({ success: true, disconnected: true });
@@ -126,6 +134,7 @@ function installFetchStub() {
       const method = init?.method ?? 'GET';
       if (url.includes('/settings/byoc')) {
         if (method === 'GET') return getResponder();
+        if (method === 'POST') return revealResponder();
         if (method === 'PUT') {
           const body = init?.body
             ? (JSON.parse(String(init.body)) as Record<string, unknown>)
@@ -523,16 +532,36 @@ describe('FacebookSettingsView — connected state', () => {
     );
   }, INTERACTION_TIMEOUT);
 
-  it('Show reveals the saved secret and Hide masks it again', async () => {
+  it('Show fetches the saved secret through the reveal action and Hide masks it again', async () => {
     const user = userEvent.setup();
     renderView(CONNECTED);
 
+    // The value is not in the payload — it only arrives via reveal.
+    expect(screen.getByTestId('fb-saved-app-secret').textContent).toBe('•'.repeat(24));
+
     await user.click(screen.getByTestId('fb-state2-secret-toggle'));
-    expect(screen.getByTestId('fb-saved-app-secret').textContent).toBe(SAVED_SECRET);
+    await waitFor(() =>
+      expect(screen.getByTestId('fb-saved-app-secret').textContent).toBe(SAVED_SECRET)
+    );
     expect(screen.getByTestId('fb-state2-secret-toggle').textContent).toBe('Hide');
 
     await user.click(screen.getByTestId('fb-state2-secret-toggle'));
     expect(screen.getByTestId('fb-saved-app-secret').textContent).toBe('•'.repeat(24));
+  }, INTERACTION_TIMEOUT);
+
+  it('a failed reveal reports at the field and keeps the secret masked', async () => {
+    revealResponder = async () => jsonResponse({ error: 'Failed' }, 500);
+    const user = userEvent.setup();
+    renderView(CONNECTED);
+
+    await user.click(screen.getByTestId('fb-state2-secret-toggle'));
+
+    expect(await screen.findByTestId('fb-secret-reveal-error')).toBeTruthy();
+    expect(screen.getByTestId('fb-secret-reveal-error').textContent).toBe(
+      "Couldn't show your App Secret. Please try again."
+    );
+    expect(screen.getByTestId('fb-saved-app-secret').textContent).toBe('•'.repeat(24));
+    expect(screen.getByTestId('fb-state2-secret-toggle').textContent).toBe('Show');
   }, INTERACTION_TIMEOUT);
 });
 
