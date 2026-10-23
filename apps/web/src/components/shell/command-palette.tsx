@@ -383,11 +383,20 @@ export function CommandPalette({
       .filter((entry) => entry.rows.length > 0);
   }, [items]);
 
-  const handleOpenChange = (next: boolean) => {
-    if (next) {
+  // Every open starts from a clean query with recents re-read from
+  // the device preference (the host opens via prop, Radix events
+  // only cover closes — so this lives in an open-transition effect,
+  // not in onOpenChange).
+  const wasOpenRef = React.useRef(false);
+  React.useEffect(() => {
+    if (open && !wasOpenRef.current) {
       setRecents(getPreference(recentsPreference));
       setQuery('');
     }
+    wasOpenRef.current = open;
+  }, [open]);
+
+  const handleOpenChange = (next: boolean) => {
     onOpenChange(next);
   };
 

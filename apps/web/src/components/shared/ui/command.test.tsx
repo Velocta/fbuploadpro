@@ -91,12 +91,13 @@ describe("Command", () => {
     function Harness() {
       const [open, setOpen] = React.useState(false);
       return (
-        <>
-          <Button onClick={() => setOpen(true)}>Open palette</Button>
-          <CommandDialog open={open} onOpenChange={setOpen}>
-            <TestCommand onSelect={() => setOpen(false)} />
-          </CommandDialog>
-        </>
+        <CommandDialog
+          open={open}
+          onOpenChange={setOpen}
+          trigger={<Button>Open palette</Button>}
+        >
+          <TestCommand onSelect={() => setOpen(false)} />
+        </CommandDialog>
       );
     }
     render(<Harness />);

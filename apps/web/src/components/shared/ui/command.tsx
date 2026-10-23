@@ -36,6 +36,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "./dialog";
 
 function Command({
@@ -59,22 +60,31 @@ function CommandDialog({
   description = "Search for a destination or action",
   children,
   className,
+  trigger,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string;
   description?: string;
   className?: string;
+  /**
+   * Optional in-dialog trigger. When the palette is opened
+   * programmatically instead (a global chord, an external button),
+   * there is no in-dialog trigger and the opener owns focus return
+   * to the invoker (the palette host does exactly that).
+   */
+  trigger?: React.ReactNode;
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent
         showCloseButton={false}
         className={cn("overflow-hidden p-0 sm:max-w-xl", className)}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
         {children}
       </DialogContent>
     </Dialog>
