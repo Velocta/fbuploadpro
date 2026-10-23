@@ -13,8 +13,10 @@
  * and validation messages are spec §5.3/§5.4 verbatim (the §5.2
  * patterns with the platform's labels substituted).
  *
- * The YouTube/X/TikTok explanation-tab portions still use the static
- * harness — those views are rebuilt and migrated in PR-135-4. The
+ * The YouTube/X/TikTok explanation-tab portions were migrated to
+ * behavioural tests in spec 135 PR-135-4, completing this file's
+ * migration: every tab is now rendered into jsdom and asserted on
+ * its rendered output (no static harness remains in this file). The
  * page-level tab cases live in tests/ui/settings-shell.test.tsx
  * (PR-135-1). The plain-language (no-jargon) lint covers every tab.
  */
@@ -24,12 +26,20 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { render as renderStatic } from '../components/setup';
 import { InstagramSettingsView } from '@/components/settings/instagram-settings-view';
 import { ThreadsSettingsView } from '@/components/settings/threads-settings-view';
-import { YouTubeSettingsView } from '@/components/settings/youtube-settings-view';
-import { XSettingsView } from '@/components/settings/x-settings-view';
-import { TikTokSettingsView } from '@/components/settings/tiktok-settings-view';
+import {
+  YouTubeSettingsView,
+  YOUTUBE_CONNECT_INFO_CONFIG,
+} from '@/components/settings/youtube-settings-view';
+import {
+  XSettingsView,
+  X_CONNECT_INFO_CONFIG,
+} from '@/components/settings/x-settings-view';
+import {
+  TikTokSettingsView,
+  TIKTOK_CONNECT_INFO_CONFIG,
+} from '@/components/settings/tiktok-settings-view';
 import { createPlatformConnectFormSchema } from '@/components/settings/platform/platform-connect-form';
 import { formatPlatformConnectedDate } from '@/components/settings/platform/platform-credentials-helpers';
 import {
@@ -843,48 +853,82 @@ describe('Threads guide (§5.4 verbatim)', () => {
   });
 });
 
-describe('Spec 123 Part B: YouTube, X and TikTok explanation tabs', () => {
+describe('Spec 123 Part B: YouTube, X and TikTok explanation tabs (§5.5, PR-135-4)', () => {
   const cases = [
     {
       name: 'YouTube',
       view: YouTubeSettingsView,
       card: 'youtube-connect-info-card',
       link: 'youtube-accounts-link',
-      text: 'You connect your YouTube channel through our publishing partner, so there is nothing to set up or paste here.',
+      paragraphs: [
+        'You connect your YouTube channel through our publishing partner, so there is nothing to set up or paste here.',
+        'When you are ready, go to Accounts and choose Connect. You will choose your channel and approve the connection there, and then you can schedule and publish videos from here as normal.',
+      ],
     },
     {
       name: 'X',
       view: XSettingsView,
       card: 'x-connect-info-card',
       link: 'x-accounts-link',
-      text: 'You simply sign in with X and approve the connection. There are no keys to create or paste here.',
+      paragraphs: [
+        'You simply sign in with X and approve the connection. There are no keys to create or paste here.',
+        'When you are ready, go to Accounts and choose Connect. X will ask you to confirm that you want to connect your account, and when you are done you will be back in your Accounts list.',
+      ],
     },
     {
       name: 'TikTok',
       view: TikTokSettingsView,
       card: 'tiktok-connect-info-card',
       link: 'tiktok-accounts-link',
-      text: 'You connect your TikTok account through our publishing partner, so there is nothing to set up or paste here.',
+      paragraphs: [
+        'You connect your TikTok account through our publishing partner, so there is nothing to set up or paste here.',
+        'When you are ready, go to Accounts and choose Connect. You will sign in with TikTok and approve the connection there, and then you can schedule and publish videos from here as normal.',
+      ],
     },
   ] as const;
 
   for (const c of cases) {
-    it(`${c.name} tab has no form inputs and links to Accounts`, () => {
+    it(`${c.name} tab renders both paragraphs verbatim, has no form controls, and links to Accounts`, () => {
       const View = c.view;
-      const { html, hasText, hasAttribute, getAttribute } = renderStatic(
-        <View subdomain="acme" />
-      );
+      const { container } = render(<View subdomain="acme" />);
 
-      expect(html.match(/<input/g) || []).toHaveLength(0);
-      expect(html.match(/<textarea/g) || []).toHaveLength(0);
-      expect(html.match(/<select/g) || []).toHaveLength(0);
-      expect(hasAttribute('data-testid', c.card)).toBe(true);
-      expect(hasText(c.text)).toBe(true);
-      expect(hasText('Go to Accounts')).toBe(true);
-      expect(hasAttribute('data-testid', c.link)).toBe(true);
-      expect(getAttribute('href')).toBe('/tenant/acme/accounts');
+      expect(
+        screen.getByRole('heading', { name: `Connect ${c.name}` })
+      ).toBeTruthy();
+      expect(screen.getByTestId(c.card)).toBeTruthy();
+      for (const paragraph of c.paragraphs) {
+        expect(screen.getByText(paragraph)).toBeTruthy();
+      }
+
+      // Explanation-only (spec 123 D1/D3/D4): no form, no input, no
+      // paste field of any kind is rendered on these tabs.
+      expect(
+        container.querySelectorAll('form, input, textarea, select')
+      ).toHaveLength(0);
+
+      const link = screen.getByTestId(c.link);
+      expect(link.tagName).toBe('A');
+      expect(link.textContent).toBe('Go to Accounts');
+      expect(link.getAttribute('href')).toBe('/tenant/acme/accounts');
     });
   }
+
+  it('X tab copy is byte-identical to the shipped strings (OD-135-3a)', () => {
+    expect(X_CONNECT_INFO_CONFIG.platform).toBe('x');
+    expect(X_CONNECT_INFO_CONFIG.displayName).toBe('X');
+    expect([...X_CONNECT_INFO_CONFIG.paragraphs]).toEqual([
+      'You simply sign in with X and approve the connection. There are no keys to create or paste here.',
+      'When you are ready, go to Accounts and choose Connect. X will ask you to confirm that you want to connect your account, and when you are done you will be back in your Accounts list.',
+    ]);
+    expect([...YOUTUBE_CONNECT_INFO_CONFIG.paragraphs]).toEqual([
+      'You connect your YouTube channel through our publishing partner, so there is nothing to set up or paste here.',
+      'When you are ready, go to Accounts and choose Connect. You will choose your channel and approve the connection there, and then you can schedule and publish videos from here as normal.',
+    ]);
+    expect([...TIKTOK_CONNECT_INFO_CONFIG.paragraphs]).toEqual([
+      'You connect your TikTok account through our publishing partner, so there is nothing to set up or paste here.',
+      'When you are ready, go to Accounts and choose Connect. You will sign in with TikTok and approve the connection there, and then you can schedule and publish videos from here as normal.',
+    ]);
+  });
 });
 
 describe('Spec 123 Part B: shared callback addresses', () => {
@@ -944,9 +988,15 @@ describe('plain-language lint over user-facing copy (§5.3/§5.4/§5.5)', () => 
       void notConnected;
     }
 
-    htmls.push(renderStatic(<YouTubeSettingsView subdomain="acme" />).html);
-    htmls.push(renderStatic(<XSettingsView subdomain="acme" />).html);
-    htmls.push(renderStatic(<TikTokSettingsView subdomain="acme" />).html);
+    render(<YouTubeSettingsView subdomain="acme" />);
+    htmls.push(document.body.innerHTML);
+    cleanup();
+    render(<XSettingsView subdomain="acme" />);
+    htmls.push(document.body.innerHTML);
+    cleanup();
+    render(<TikTokSettingsView subdomain="acme" />);
+    htmls.push(document.body.innerHTML);
+    cleanup();
 
     for (const html of htmls) {
       const text = stripToVisibleText(html);
