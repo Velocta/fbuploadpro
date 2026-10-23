@@ -366,11 +366,11 @@ export function SignupDetailsForm({
           size="lg"
           loading={isSubmitting}
           disabled={cooldown > 0}
-          disabledReason={
-            cooldown > 0
-              ? `For security purposes, please wait ${cooldown} seconds before trying again.`
-              : undefined
-          }
+          {...(cooldown > 0
+            ? {
+                disabledReason: `For security purposes, please wait ${cooldown} seconds before trying again.`,
+              }
+            : {})}
           className="mt-1 w-full"
         >
           {cooldown > 0 ? `Please wait (${cooldown}s)` : 'Create Account'}
