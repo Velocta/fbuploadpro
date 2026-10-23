@@ -11,8 +11,21 @@ import type {
   SortOptionKey,
 } from './media-types';
 import type { ActiveDropdownKey } from './media-library-filters';
+import { getPreference, preferences } from '@/lib/storage/preferences';
 
+/**
+ * The pre-137 storage key for the view-mode preference, kept as a
+ * named constant because the parity suite pins its value. Runtime
+ * reads/writes go through the typed preferences helper
+ * (`preferences.mediaViewMode`, spec 137 §3.9) — whose reader accepts
+ * the legacy plain-string form — never through this literal.
+ */
 export const MEDIA_VIEW_MODE_STORAGE_KEY = 'fbuploadpro:media-view-mode';
+
+/** Shape of the staged duplicate-upload test fixture prop. */
+export interface PendingDuplicateUpload {
+  duplicates?: unknown[];
+}
 
 export interface MoveTargetState {
   type: 'single_media' | 'batch_media' | 'folder';
@@ -33,7 +46,7 @@ export interface MediaLibraryExplorerProps {
   initialCaptionStatusFilter?: CaptionStatusFilterKey;
   initialSortOption?: SortOptionKey;
   initialTotalMediaCount?: number;
-  initialPendingDuplicateUpload?: any;
+  initialPendingDuplicateUpload?: PendingDuplicateUpload;
   initialDeleteFolderTarget?: MediaFolder | null;
 }
 
@@ -110,11 +123,9 @@ export function useUploadNavigationGuard(
 
 export function getInitialViewMode(initialMode?: MediaViewMode): MediaViewMode {
   if (initialMode) return initialMode;
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const stored = window.localStorage.getItem(MEDIA_VIEW_MODE_STORAGE_KEY);
-    if (stored === 'grid' || stored === 'table') return stored;
-  }
-  return 'grid';
+  // Typed preferences helper (spec 137 §3.9): validated read, the
+  // definition's default ('grid') on missing/corrupt/unavailable.
+  return getPreference(preferences.mediaViewMode);
 }
 
 export function computeActiveFilterCount(
@@ -129,26 +140,40 @@ export function computeActiveFilterCount(
   );
 }
 
+/**
+ * Parse one internal drag payload. A malformed payload is not an
+ * error the user can act on: it degrades to "no internal payload"
+ * (null) and the drop falls through to the external-files path —
+ * that fallback IS the handling, so the parse failure is consumed
+ * here deliberately rather than surfaced.
+ */
+function parseInternalDropPayload<TKey extends 'mediaId' | 'folderId'>(
+  raw: string,
+  key: TKey
+): { [K in TKey]?: string } | null {
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch {
+    parsed = null;
+  }
+  if (parsed === null || typeof parsed !== 'object') return null;
+  const value = (parsed as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.length > 0
+    ? ({ [key]: value } as { [K in TKey]?: string })
+    : null;
+}
+
 export function readInternalDropPayload(
   e: React.DragEvent
 ): { mediaId?: string; folderId?: string } | null {
   const mediaRaw = e.dataTransfer.getData('application/x-fbuploadpro-media');
   if (mediaRaw) {
-    try {
-      const parsed = JSON.parse(mediaRaw) as { mediaId?: string };
-      return parsed.mediaId ? { mediaId: parsed.mediaId } : null;
-    } catch {
-      return null;
-    }
+    return parseInternalDropPayload(mediaRaw, 'mediaId');
   }
   const folderRaw = e.dataTransfer.getData('application/x-fbuploadpro-folder');
   if (folderRaw) {
-    try {
-      const parsed = JSON.parse(folderRaw) as { folderId?: string };
-      return parsed.folderId ? { folderId: parsed.folderId } : null;
-    } catch {
-      return null;
-    }
+    return parseInternalDropPayload(folderRaw, 'folderId');
   }
   return null;
 }

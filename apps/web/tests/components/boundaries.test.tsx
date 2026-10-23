@@ -109,6 +109,8 @@ describe("not-found boundaries", () => {
     render(<RootNotFound />);
     const state = screen.getByRole("status");
     expect(state.getAttribute("data-slot")).toBe("empty-state");
+    // The dedicated `not-found` cause (spec 130 §5.7 / spec 137 §11(a)).
+    expect(state.getAttribute("data-type")).toBe("not-found");
     expect(screen.getByText("This page is not here")).toBeTruthy();
     const links = screen.getAllByRole("link");
     expect(links).toHaveLength(1);

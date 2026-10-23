@@ -8,6 +8,10 @@ import {
   type PageInsightsReactions,
   type DemographicItem,
 } from '@fbuploadpro/contracts';
+import {
+  GRAPH_API_TIMEOUT_MS,
+  fetchWithTimeout,
+} from '@/lib/http/fetch-with-timeout';
 
 export interface PageOverviewResult {
   overview: PageInsightsOverview;
@@ -25,11 +29,16 @@ export async function getPageOverview(
   )}?fields=name,fan_count,followers_count,picture.type(large)`;
 
   try {
-    const res = await fetchImpl(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const res = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+      GRAPH_API_TIMEOUT_MS,
+      fetchImpl
+    );
     const data = await res.json();
 
     if (!res.ok || data.error) {
@@ -174,11 +183,16 @@ export async function getPageTimeSeriesInsights(
   let totalVideoViewTimeMinutes = 0;
 
   try {
-    const res = await fetchImpl(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const res = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+      GRAPH_API_TIMEOUT_MS,
+      fetchImpl
+    );
     const payload = await res.json();
 
     if (res.ok && Array.isArray(payload.data)) {
@@ -305,11 +319,16 @@ export async function getPageReactionsAndDemographics(
   )}/insights?metric=${metrics}&period=days_28`;
 
   try {
-    const res = await fetchImpl(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
+    const res = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       },
-    });
+      GRAPH_API_TIMEOUT_MS,
+      fetchImpl
+    );
     const payload = await res.json();
 
     if (res.ok && Array.isArray(payload.data)) {

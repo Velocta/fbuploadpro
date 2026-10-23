@@ -18,6 +18,10 @@ import {
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
+import {
+  GRAPH_API_TIMEOUT_MS,
+  fetchWithTimeout,
+} from '@/lib/http/fetch-with-timeout';
 
 async function resolveOAuthErrorTarget(
   requestUrl: string,
@@ -479,9 +483,11 @@ export async function handleFacebookCallback(
     codeExchangeUrl.searchParams.set('redirect_uri', effectiveRedirectUri);
     codeExchangeUrl.searchParams.set('code', code);
 
-    const shortTokenRes = await fetch(codeExchangeUrl.toString(), {
-      method: 'POST',
-    });
+    const shortTokenRes = await fetchWithTimeout(
+      codeExchangeUrl.toString(),
+      { method: 'POST' },
+      GRAPH_API_TIMEOUT_MS
+    );
     if (!shortTokenRes.ok) {
       return buildOAuthStepErrorRedirect(
         request.url,
@@ -506,9 +512,11 @@ export async function handleFacebookCallback(
       shortTokenData.access_token
     );
 
-    const longTokenRes = await fetch(longTokenUrl.toString(), {
-      method: 'GET',
-    });
+    const longTokenRes = await fetchWithTimeout(
+      longTokenUrl.toString(),
+      { method: 'GET' },
+      GRAPH_API_TIMEOUT_MS
+    );
     if (!longTokenRes.ok) {
       return buildOAuthStepErrorRedirect(
         request.url,
@@ -524,11 +532,15 @@ export async function handleFacebookCallback(
     // 4. Fetch user profile from /me
     const meUrl = new URL('https://graph.facebook.com/v26.0/me');
     meUrl.searchParams.set('fields', 'id,name,gender,link,picture{url}');
-    const meRes = await fetch(meUrl.toString(), {
-      headers: {
-        Authorization: `Bearer ${longTokenData.access_token}`,
+    const meRes = await fetchWithTimeout(
+      meUrl.toString(),
+      {
+        headers: {
+          Authorization: `Bearer ${longTokenData.access_token}`,
+        },
       },
-    });
+      GRAPH_API_TIMEOUT_MS
+    );
     if (!meRes.ok) {
       return buildOAuthStepErrorRedirect(
         request.url,
