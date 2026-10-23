@@ -47,25 +47,25 @@ describe('Rate Limiter & Abuse Shield (Spec 014)', () => {
   describe('recordFailedAttempt and lockout', () => {
     it('tracks attempts and triggers lockout after threshold', async () => {
       const key = 'user:testuser@gmail.com';
-      expect(isLockedOut(key).locked).toBe(false);
+      expect((await isLockedOut(key)).locked).toBe(false);
 
       for (let i = 1; i <= 4; i++) {
-        const attempt = recordFailedAttempt(key, 5, 60000);
+        const attempt = await recordFailedAttempt(key, 5, 60000);
         expect(attempt.locked).toBe(false);
         expect(attempt.remainingAttempts).toBe(5 - i);
       }
 
       // 5th attempt locks out
-      const fifth = recordFailedAttempt(key, 5, 60000);
+      const fifth = await recordFailedAttempt(key, 5, 60000);
       expect(fifth.locked).toBe(true);
       expect(fifth.remainingAttempts).toBe(0);
       expect(fifth.retryAfterSeconds).toBeGreaterThan(0);
 
-      expect(isLockedOut(key).locked).toBe(true);
+      expect((await isLockedOut(key)).locked).toBe(true);
 
       // Clearing lockout restores access
-      clearLockout(key);
-      expect(isLockedOut(key).locked).toBe(false);
+      await clearLockout(key);
+      expect((await isLockedOut(key)).locked).toBe(false);
     });
   });
 

@@ -208,7 +208,7 @@ describe('Auth API Endpoints (Spec 009 & 014 Hardened)', () => {
     it('returns 403 with requiresOtp when unverified user logs in', async () => {
       // Stage unverified pending signup in fallback store
       const { createPendingSignup } = await import('../../src/lib/otp-service');
-      createPendingSignup({
+      await createPendingSignup({
         name: 'Pending User',
         phone: '+14155552671',
         email: 'pending.user@gmail.com',

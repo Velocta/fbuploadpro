@@ -39,7 +39,7 @@ export async function sendPasswordResetOtpViaSupabase(email: string): Promise<{
   }
 
   const { createPasswordResetOtp } = await import('@/lib/otp-service');
-  const { otp } = createPasswordResetOtp(canonicalEmail);
+  const { otp } = await createPasswordResetOtp(canonicalEmail);
   console.info(`[SupabaseAuth Fallback] Simulated Password Reset OTP dispatch triggered for ${canonicalEmail}`);
   return { success: true, otp };
 }
@@ -67,7 +67,7 @@ export async function resendPasswordResetOtpViaSupabase(email: string): Promise<
   }
 
   const { resendPasswordResetOtp } = await import('@/lib/otp-service');
-  return resendPasswordResetOtp(canonicalEmail);
+  return await resendPasswordResetOtp(canonicalEmail);
 }
 
 export async function resetUserPasswordWithOtp(params: {
@@ -161,7 +161,7 @@ export async function resetUserPasswordWithOtp(params: {
   } else {
     // 1. Verify OTP with constant-time comparison and lockout checks in fallback
     const { verifyPasswordResetOtp } = await import('@/lib/otp-service');
-    const verification = verifyPasswordResetOtp(canonicalEmail, params.otp);
+    const verification = await verifyPasswordResetOtp(canonicalEmail, params.otp);
     if (!verification.success) {
       throw new Error(verification.error || 'Invalid or expired verification code.');
     }

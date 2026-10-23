@@ -12,6 +12,7 @@ import {
   verifyPasswordResetOtp,
   resendPasswordResetOtp,
   getPendingSignup,
+  INVALID_OTP_ERROR,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
@@ -39,7 +40,7 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     expect(constantTimeEquals('123456', '12345')).toBe(false);
   });
 
-  it('creates and verifies pending signup successfully with Gmail canonicalization', () => {
+  it('creates and verifies pending signup successfully with Gmail canonicalization', async () => {
     const signupData = {
       name: 'Sarah Connor',
       phone: '+14155552671',
@@ -47,24 +48,24 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       password: 'SecurePassword123!',
     };
 
-    const { otp, expiresAt } = createPendingSignup(signupData);
+    const { otp, expiresAt } = await createPendingSignup(signupData);
     expect(otp).toHaveLength(6);
     expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
 
     // Verify using unaliased canonical email
-    const result = verifySignupOtp('sarahconnor@gmail.com', otp);
+    const result = await verifySignupOtp('sarahconnor@gmail.com', otp);
     expect(result.success).toBe(true);
     expect(result.signupData).toBeDefined();
     expect(result.signupData?.name).toBe('Sarah Connor');
     expect(result.signupData?.email).toBe('sarahconnor@gmail.com');
 
     // Immediate second attempt with same OTP must fail (single-use consumption)
-    const secondAttempt = verifySignupOtp('sarahconnor@gmail.com', otp);
+    const secondAttempt = await verifySignupOtp('sarahconnor@gmail.com', otp);
     expect(secondAttempt.success).toBe(false);
     expect(secondAttempt.error).toContain('No pending registration found');
   });
 
-  it('rejects incorrect OTP and counts attempts', () => {
+  it('rejects incorrect OTP with the unified error (no attempt-count oracle)', async () => {
     const signupData = {
       name: 'John Connor',
       phone: '+14155552671',
@@ -72,15 +73,18 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       password: 'SecurePassword123!',
     };
 
-    createPendingSignup(signupData);
+    await createPendingSignup(signupData);
 
-    const badResult = verifySignupOtp('johnconnor@gmail.com', '000000');
+    const badResult = await verifySignupOtp('johnconnor@gmail.com', '000000');
     expect(badResult.success).toBe(false);
-    expect(badResult.error).toContain('Invalid verification code');
-    expect(badResult.error).toContain('4 attempts remaining');
+    // Byte-identical to every other failed code check (spec 139 B2): the
+    // response must not leak how many attempts remain.
+    expect(badResult.error).toBe(INVALID_OTP_ERROR);
+    expect(badResult.error).not.toContain('remaining');
+    expect(badResult.error).not.toContain('locked');
   });
 
-  it('locks out verification after 5 failed attempts', () => {
+  it('locks out verification after 5 failed attempts, with responses identical to a wrong code', async () => {
     const signupData = {
       name: 'John Connor',
       phone: '+14155552671',
@@ -88,25 +92,30 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       password: 'SecurePassword123!',
     };
 
-    createPendingSignup(signupData);
+    await createPendingSignup(signupData);
 
+    let firstError: string | undefined;
     for (let i = 0; i < 4; i++) {
-      const res = verifySignupOtp('johnlockout@gmail.com', '000000');
+      const res = await verifySignupOtp('johnlockout@gmail.com', '000000');
       expect(res.success).toBe(false);
+      firstError ??= res.error;
     }
 
-    // 5th attempt triggers lockout
-    const finalRes = verifySignupOtp('johnlockout@gmail.com', '000000');
+    // 5th attempt triggers lockout — same bytes as any wrong code
+    const finalRes = await verifySignupOtp('johnlockout@gmail.com', '000000');
     expect(finalRes.success).toBe(false);
-    expect(finalRes.error).toContain('temporarily locked');
+    expect(finalRes.error).toBe(INVALID_OTP_ERROR);
+    expect(finalRes.error).toBe(firstError);
 
-    // Subsequent attempt should still be locked out
-    const lockedRes = verifySignupOtp('johnlockout@gmail.com', '123456');
+    // Subsequent attempt while locked — still the identical bytes, even
+    // though this submits a (different) well-formed code
+    const lockedRes = await verifySignupOtp('johnlockout@gmail.com', '123456');
     expect(lockedRes.success).toBe(false);
-    expect(lockedRes.error).toContain('temporarily locked');
+    expect(lockedRes.error).toBe(INVALID_OTP_ERROR);
+    expect(lockedRes.error).toBe(finalRes.error);
   });
 
-  it('enforces 60-second cooldown on resend', () => {
+  it('enforces 60-second cooldown on resend', async () => {
     const signupData = {
       name: 'Kyle Reese',
       phone: '+14155552671',
@@ -114,16 +123,16 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       password: 'SecurePassword123!',
     };
 
-    createPendingSignup(signupData);
+    await createPendingSignup(signupData);
 
     // Immediate resend should fail due to cooldown
-    const earlyResend = resendSignupOtp('kylereese@gmail.com');
+    const earlyResend = await resendSignupOtp('kylereese@gmail.com');
     expect(earlyResend.success).toBe(false);
     expect(earlyResend.cooldownSecondsRemaining).toBeGreaterThan(0);
     expect(earlyResend.error).toContain('Please wait');
   });
 
-  it('resets rate-limiter failure attempts upon legitimate OTP resend (ISSUE-36)', () => {
+  it('resets rate-limiter failure attempts upon legitimate OTP resend (ISSUE-36)', async () => {
     const signupData = {
       name: 'Resend Sync User',
       phone: '+14155552671',
@@ -131,13 +140,13 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       password: 'SecurePassword123!',
     };
 
-    createPendingSignup(signupData);
+    await createPendingSignup(signupData);
 
     // Fail 4 times (1 attempt remaining before lockout)
     for (let i = 0; i < 4; i++) {
-      const res = verifySignupOtp('resendsync@gmail.com', '000000');
+      const res = await verifySignupOtp('resendsync@gmail.com', '000000');
       expect(res.success).toBe(false);
-      expect(res.error).toContain(`${4 - i} attempt${4 - i === 1 ? '' : 's'} remaining`);
+      expect(res.error).toBe(INVALID_OTP_ERROR);
     }
 
     // Fast-forward cooldown to allow resend
@@ -148,20 +157,24 @@ describe('OTP Service (Spec 014 Hardened)', () => {
     }
 
     // Legitimate user requests fresh OTP
-    const resendResult = resendSignupOtp('resendsync@gmail.com');
+    const resendResult = await resendSignupOtp('resendsync@gmail.com');
     expect(resendResult.success).toBe(true);
     expect(resendResult.otp).toBeDefined();
 
-    // Now, a single typo on the newly issued OTP must NOT trigger immediate lockout;
-    // user must have a full clean slate of attempts (4 remaining after this 1st typo on new code)
-    const typoResult = verifySignupOtp('resendsync@gmail.com', '999999');
+    // Now, a single typo on the newly issued OTP must NOT trigger immediate
+    // lockout: the resend cleared the failure counter, so the user has a
+    // full clean slate of attempts on the new code.
+    const typoResult = await verifySignupOtp('resendsync@gmail.com', '999999');
     expect(typoResult.success).toBe(false);
-    expect(typoResult.error).toContain('4 attempts remaining');
-    expect(typoResult.error).not.toContain('temporarily locked');
+    expect(typoResult.error).toBe(INVALID_OTP_ERROR);
+
+    // Proof the typo did not lock: the fresh code still verifies.
+    const okResult = await verifySignupOtp('resendsync@gmail.com', resendResult.otp as string);
+    expect(okResult.success).toBe(true);
   });
 
-  it('returns friendly error when verifying nonexistent or expired registration', () => {
-    const result = verifySignupOtp('nonexistent@gmail.com', '123456');
+  it('returns friendly error when verifying nonexistent or expired registration', async () => {
+    const result = await verifySignupOtp('nonexistent@gmail.com', '123456');
     expect(result.success).toBe(false);
     expect(result.error).toContain('No pending registration found');
   });
@@ -174,7 +187,7 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       password: 'StrongPassword123!',
     };
 
-    createPendingSignup(signupData);
+    await createPendingSignup(signupData);
 
     const pending = findPendingSignup('elenafisher@gmail.com');
     expect(pending).not.toBeNull();
@@ -222,14 +235,14 @@ describe('OTP Service (Spec 014 Hardened)', () => {
         verifyBad: (email: string) => verifyPasswordResetOtp(email, '000000'),
         attemptRecreate: (email: string) => createPasswordResetOtp(email),
       },
-    ])('blocks new OTP generation when $type email is locked out', ({ email, init, verifyBad, attemptRecreate }) => {
-      init(email);
+    ])('blocks new OTP generation when $type email is locked out', async ({ email, init, verifyBad, attemptRecreate }) => {
+      await init(email);
 
       for (let i = 0; i < 5; i++) {
-        verifyBad(email);
+        await verifyBad(email);
       }
 
-      expect(() => attemptRecreate(email)).toThrow(/locked/i);
+      await expect(attemptRecreate(email)).rejects.toThrow(/locked/i);
     });
 
   });
@@ -244,9 +257,9 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       spy.mockRestore();
     });
 
-    it('strictly rejects non-6-digit or malformed OTP inputs for signup verification without silent coercion', () => {
+    it('strictly rejects non-6-digit or malformed OTP inputs for signup verification without silent coercion', async () => {
       const email = 'strict.otp@gmail.com';
-      createPendingSignup({
+      await createPendingSignup({
         name: 'Strict User',
         phone: '+14155552671',
         email,
@@ -265,15 +278,15 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       ];
 
       for (const input of malformedInputs) {
-        const res = verifySignupOtp(email, input);
+        const res = await verifySignupOtp(email, input);
         expect(res.success).toBe(false);
         expect(res.error).toMatch(/must be exactly 6 digits/i);
       }
     });
 
-    it('strictly rejects non-6-digit or malformed OTP inputs for password reset verification without silent coercion', () => {
+    it('strictly rejects non-6-digit or malformed OTP inputs for password reset verification without silent coercion', async () => {
       const email = 'strict.reset@gmail.com';
-      createPasswordResetOtp(email);
+      await createPasswordResetOtp(email);
 
       const malformedInputs = [
         '12 34 56',
@@ -286,14 +299,10 @@ describe('OTP Service (Spec 014 Hardened)', () => {
       ];
 
       for (const input of malformedInputs) {
-        const res = verifyPasswordResetOtp(email, input);
+        const res = await verifyPasswordResetOtp(email, input);
         expect(res.success).toBe(false);
         expect(res.error).toMatch(/must be exactly 6 digits/i);
       }
     });
   });
 });
-
-
-
-

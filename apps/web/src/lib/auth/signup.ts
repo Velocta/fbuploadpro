@@ -226,7 +226,7 @@ export async function signUpTenantUser(params: {
   } else {
     // Local / test fallback
     const { createPendingSignup } = await import('@/lib/otp-service');
-    const { otp } = createPendingSignup({
+    const { otp } = await createPendingSignup({
       name: params.name,
       phone: formattedPhone,
       email: canonicalEmail,
@@ -315,7 +315,7 @@ export async function verifySignupOtpViaSupabase(params: {
   } else {
     // Local / test fallback
     const { verifySignupOtp } = await import('@/lib/otp-service');
-    const verification = verifySignupOtp(canonicalEmail, params.otp);
+    const verification = await verifySignupOtp(canonicalEmail, params.otp);
     if (!verification.success) {
       throw new Error(verification.error || 'Invalid or expired verification code.');
     }
@@ -402,5 +402,5 @@ export async function resendSignupOtpViaSupabase(email: string): Promise<{
   }
 
   const { resendSignupOtp } = await import('@/lib/otp-service');
-  return resendSignupOtp(canonicalEmail);
+  return await resendSignupOtp(canonicalEmail);
 }

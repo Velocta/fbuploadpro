@@ -21,7 +21,7 @@ describe('Login Unverified Registration Recovery (Spec 021 US1)', () => {
       email: 'arthur.morgan@gmail.com',
       password: 'Outlaws123!',
     };
-    const { otp: initialOtp } = createPendingSignup(signupData);
+    const { otp: initialOtp } = await createPendingSignup(signupData);
 
     const req = new NextRequest('http://localhost:3000/api/auth/login', {
       method: 'POST',
@@ -53,7 +53,7 @@ describe('Login Unverified Registration Recovery (Spec 021 US1)', () => {
 
   it('returns standard 401 Invalid email or password when password does not match pending registration', async () => {
     // Stage an unverified pending signup
-    createPendingSignup({
+    await createPendingSignup({
       name: 'John Marston',
       phone: '+14155552671',
       email: 'john.marston@gmail.com',

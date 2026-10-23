@@ -35,6 +35,14 @@ const RESEND_COOLDOWN_MS = 60 * 1000; // 60 seconds
 const MAX_VERIFICATION_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes lockout
 
+/**
+ * The ONE error every failed code check returns (spec 139 B2): a wrong
+ * code, the failure that engages the lockout, and any attempt made while
+ * locked are byte-identical, so the verify response is never an oracle
+ * for the lockout state or the remaining-attempt count.
+ */
+export const INVALID_OTP_ERROR = 'Invalid verification code.';
+
 // In-memory store for pending signups
 const pendingSignups = new Map<string, PendingSignupEntry>();
 // In-memory store for pending password resets
@@ -148,8 +156,8 @@ function resolveCanonicalEmail(email: string): string {
   }
 }
 
-function assertNotLockedOut(key: string): void {
-  const status = isLockedOut(key);
+async function assertNotLockedOut(key: string): Promise<void> {
+  const status = await isLockedOut(key);
   if (status.locked) {
     const minutes = Math.ceil(status.retryAfterSeconds / 60);
     throw new Error(
@@ -158,16 +166,16 @@ function assertNotLockedOut(key: string): void {
   }
 }
 
-export function createPendingSignup(data: {
+export async function createPendingSignup(data: {
   name: string;
   phone: string;
   email: string;
   password?: string | undefined;
   hashedPassword?: string | undefined;
-}): {
+}): Promise<{
   otp: string;
   expiresAt: Date;
-} {
+}> {
   validateOtpServiceConfig();
   if (process.env.NODE_ENV === 'production') {
     console.warn(
@@ -176,7 +184,7 @@ export function createPendingSignup(data: {
   }
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(data.email);
-  assertNotLockedOut(canonicalEmail);
+  await assertNotLockedOut(canonicalEmail);
 
   const now = Date.now();
   const otp = generateSecureOtp();
@@ -229,34 +237,34 @@ export async function verifyPendingSignupPassword(email: string, candidatePasswo
   if (!entry?.data?.hashedPassword) return false;
   return await verifyHashedPassword(candidatePassword, entry.data.hashedPassword);
 }
-function updatePendingSignupOtpEntry(entry: PendingSignupEntry): string {
+async function updatePendingSignupOtpEntry(entry: PendingSignupEntry): Promise<string> {
   const now = Date.now();
   const newOtp = generateSecureOtp();
   entry.otp = newOtp;
   entry.lastSentAt = now;
   entry.expiresAt = now + OTP_TTL_MS;
   entry.attempts = 0;
-  clearLockout(entry.data.email);
+  await clearLockout(entry.data.email);
   return newOtp;
 }
-export function verifySignupOtp(
+export async function verifySignupOtp(
   email: string,
   providedOtp: string
-): {
+): Promise<{
   success: boolean;
   signupData?: StagedSignupData | undefined;
   error?: string | undefined;
-} {
+}> {
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
 
-  // Check if identifier is currently locked out
-  const lockoutStatus = isLockedOut(canonicalEmail);
+  // Check if identifier is currently locked out. The response is the same
+  // INVALID_OTP_ERROR a wrong code gets (no lockout-state oracle).
+  const lockoutStatus = await isLockedOut(canonicalEmail);
   if (lockoutStatus.locked) {
-    const minutes = Math.ceil(lockoutStatus.retryAfterSeconds / 60);
     return {
       success: false,
-      error: `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      error: INVALID_OTP_ERROR,
     };
   }
 
@@ -289,27 +297,23 @@ export function verifySignupOtp(
   // Use timingSafeEqual to compare OTPs
   if (!constantTimeEquals(cleanProvided, entry.otp)) {
     entry.attempts += 1;
-    const lockout = recordFailedAttempt(canonicalEmail, MAX_VERIFICATION_ATTEMPTS, LOCKOUT_DURATION_MS);
+    const lockout = await recordFailedAttempt(canonicalEmail, MAX_VERIFICATION_ATTEMPTS, LOCKOUT_DURATION_MS);
 
     if (lockout.locked) {
       pendingSignups.delete(canonicalEmail);
-      return {
-        success: false,
-        error: 'Too many incorrect attempts. Verification is temporarily locked for 15 minutes.',
-      };
     }
 
-    const remaining = lockout.remainingAttempts;
+    // Byte-identical to the locked-state response above (no oracle).
     return {
       success: false,
-      error: `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+      error: INVALID_OTP_ERROR,
     };
   }
 
   // OTP verified successfully
   const signupData = entry.data;
   pendingSignups.delete(canonicalEmail);
-  clearLockout(canonicalEmail);
+  await clearLockout(canonicalEmail);
 
   return {
     success: true,
@@ -317,16 +321,16 @@ export function verifySignupOtp(
   };
 }
 
-export function resendSignupOtp(email: string): {
+export async function resendSignupOtp(email: string): Promise<{
   success: boolean;
   otp?: string | undefined;
   cooldownSecondsRemaining?: number | undefined;
   error?: string | undefined;
-} {
+}> {
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
 
-  const lockoutStatus = isLockedOut(canonicalEmail);
+  const lockoutStatus = await isLockedOut(canonicalEmail);
   if (lockoutStatus.locked) {
     return {
       success: false,
@@ -356,7 +360,7 @@ export function resendSignupOtp(email: string): {
     };
   }
 
-  const newOtp = updatePendingSignupOtpEntry(entry);
+  const newOtp = await updatePendingSignupOtpEntry(entry);
 
   return {
     success: true,
@@ -364,10 +368,10 @@ export function resendSignupOtp(email: string): {
   };
 }
 
-export function createPasswordResetOtp(email: string): {
+export async function createPasswordResetOtp(email: string): Promise<{
   otp: string;
   expiresAt: Date;
-} {
+}> {
   validateOtpServiceConfig();
   if (process.env.NODE_ENV === 'production') {
     console.warn(
@@ -376,7 +380,7 @@ export function createPasswordResetOtp(email: string): {
   }
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
-  assertNotLockedOut(`reset:${canonicalEmail}`);
+  await assertNotLockedOut(`reset:${canonicalEmail}`);
 
   const now = Date.now();
   const otp = generateSecureOtp();
@@ -398,24 +402,24 @@ export function createPasswordResetOtp(email: string): {
     expiresAt: new Date(entry.expiresAt),
   };
 }
-export function verifyPasswordResetOtp(
+export async function verifyPasswordResetOtp(
   email: string,
   providedOtp: string
-): {
+): Promise<{
   success: boolean;
   error?: string | undefined;
-} {
+}> {
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
 
-  // Check if reset lockout is active
+  // Check if reset lockout is active. The response is the same
+  // INVALID_OTP_ERROR a wrong code gets (no lockout-state oracle).
   const lockoutKey = `reset:${canonicalEmail}`;
-  const lockoutStatus = isLockedOut(lockoutKey);
+  const lockoutStatus = await isLockedOut(lockoutKey);
   if (lockoutStatus.locked) {
-    const minutes = Math.ceil(lockoutStatus.retryAfterSeconds / 60);
     return {
       success: false,
-      error: `Too many incorrect attempts. Verification is temporarily locked for ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      error: INVALID_OTP_ERROR,
     };
   }
 
@@ -448,43 +452,39 @@ export function verifyPasswordResetOtp(
   // Timing-safe comparison to prevent timing side channels
   if (!constantTimeEquals(cleanProvided, entry.otp)) {
     entry.attempts += 1;
-    const lockout = recordFailedAttempt(lockoutKey, MAX_VERIFICATION_ATTEMPTS, LOCKOUT_DURATION_MS);
+    const lockout = await recordFailedAttempt(lockoutKey, MAX_VERIFICATION_ATTEMPTS, LOCKOUT_DURATION_MS);
 
     if (lockout.locked) {
       pendingPasswordResets.delete(canonicalEmail);
-      return {
-        success: false,
-        error: 'Too many incorrect attempts. Verification is temporarily locked for 15 minutes.',
-      };
     }
 
-    const remaining = lockout.remainingAttempts;
+    // Byte-identical to the locked-state response above (no oracle).
     return {
       success: false,
-      error: `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`,
+      error: INVALID_OTP_ERROR,
     };
   }
 
   // OTP verified successfully: delete single-use entry and clear lockout
   pendingPasswordResets.delete(canonicalEmail);
-  clearLockout(lockoutKey);
+  await clearLockout(lockoutKey);
 
   return {
     success: true,
   };
 }
 
-export function resendPasswordResetOtp(email: string): {
+export async function resendPasswordResetOtp(email: string): Promise<{
   success: boolean;
   otp?: string | undefined;
   cooldownSecondsRemaining?: number | undefined;
   error?: string | undefined;
-} {
+}> {
   cleanupExpiredEntries();
   const canonicalEmail = resolveCanonicalEmail(email);
 
   const lockoutKey = `reset:${canonicalEmail}`;
-  const lockoutStatus = isLockedOut(lockoutKey);
+  const lockoutStatus = await isLockedOut(lockoutKey);
   if (lockoutStatus.locked) {
     return {
       success: false,
@@ -497,7 +497,7 @@ export function resendPasswordResetOtp(email: string): {
 
   if (!entry) {
     // If no existing entry, generate a fresh one
-    const { otp } = createPasswordResetOtp(canonicalEmail);
+    const { otp } = await createPasswordResetOtp(canonicalEmail);
     return {
       success: true,
       otp,
@@ -521,7 +521,7 @@ export function resendPasswordResetOtp(email: string): {
   entry.lastSentAt = now;
   entry.expiresAt = now + OTP_TTL_MS;
   entry.attempts = 0; // Reset failed attempts on fresh code dispatch
-  clearLockout(lockoutKey); // Synchronize rate-limiter lockout state on fresh code dispatch
+  await clearLockout(lockoutKey); // Synchronize rate-limiter lockout state on fresh code dispatch
 
   return {
     success: true,

@@ -6,6 +6,7 @@ import {
   verifyPasswordResetOtp,
   verifySignupOtp,
   resendPasswordResetOtp,
+  INVALID_OTP_ERROR,
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import {
@@ -36,8 +37,8 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
   });
 
   describe('OTP Generation & Delivery (US1)', () => {
-    it('generates a cryptographically secure 6-digit numeric OTP with 10-minute TTL', () => {
-      const { otp, expiresAt } = createPasswordResetOtp('John.Doe+security@gmail.com');
+    it('generates a cryptographically secure 6-digit numeric OTP with 10-minute TTL', async () => {
+      const { otp, expiresAt } = await createPasswordResetOtp('John.Doe+security@gmail.com');
 
       expect(otp).toHaveLength(6);
       expect(/^\d{6}$/.test(otp)).toBe(true);
@@ -50,12 +51,12 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
 
     });
 
-    it('enforces 60-second resend cooldown', () => {
+    it('enforces 60-second resend cooldown', async () => {
       const email = 'speedy@gmail.com';
-      createPasswordResetOtp(email);
+      await createPasswordResetOtp(email);
 
       // Attempt immediate resend
-      const earlyResend = resendPasswordResetOtp(email);
+      const earlyResend = await resendPasswordResetOtp(email);
       expect(earlyResend.success).toBe(false);
       expect(earlyResend.cooldownSecondsRemaining).toBeGreaterThan(0);
       expect(earlyResend.error).toContain('Please wait');
@@ -64,39 +65,41 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
   });
 
   describe('OTP Verification, Lockout & Password Mutation (US2)', () => {
-    it('verifies correct OTP and consumes it (single-use)', () => {
+    it('verifies correct OTP and consumes it (single-use)', async () => {
       const email = 'alex.reset@gmail.com';
-      const { otp } = createPasswordResetOtp(email);
+      const { otp } = await createPasswordResetOtp(email);
 
-      const result = verifyPasswordResetOtp('alexreset@gmail.com', otp);
+      const result = await verifyPasswordResetOtp('alexreset@gmail.com', otp);
       expect(result.success).toBe(true);
 
       // Immediate reuse must fail
-      const reuse = verifyPasswordResetOtp('alexreset@gmail.com', otp);
+      const reuse = await verifyPasswordResetOtp('alexreset@gmail.com', otp);
       expect(reuse.success).toBe(false);
       expect(reuse.error).toContain('No active password reset request found');
     });
 
-    it('decrements remaining attempts on incorrect code and locks out after 5 failures', () => {
+    it('locks out after 5 failures, with responses identical to a wrong code', async () => {
       const email = 'lockout.target@gmail.com';
-      createPasswordResetOtp(email);
+      await createPasswordResetOtp(email);
 
       for (let i = 0; i < 4; i++) {
-        const attempt = verifyPasswordResetOtp(email, '000000');
+        const attempt = await verifyPasswordResetOtp(email, '000000');
         expect(attempt.success).toBe(false);
-        expect(attempt.error).toContain('Invalid verification code');
-        expect(attempt.error).toContain(`${4 - i} attempt${4 - i === 1 ? '' : 's'} remaining`);
+        // Byte-identical unified error (spec 139 B2): no attempt-count
+        // or lockout-state oracle.
+        expect(attempt.error).toBe(INVALID_OTP_ERROR);
       }
 
-      // 5th attempt locks out
-      const finalAttempt = verifyPasswordResetOtp(email, '000000');
+      // 5th attempt locks out — same bytes as any wrong code
+      const finalAttempt = await verifyPasswordResetOtp(email, '000000');
       expect(finalAttempt.success).toBe(false);
-      expect(finalAttempt.error).toContain('temporarily locked');
+      expect(finalAttempt.error).toBe(INVALID_OTP_ERROR);
 
-      // Subsequent attempt blocked even with valid code
-      const lockedAttempt = verifyPasswordResetOtp(email, '123456');
+      // Subsequent attempt blocked even with valid code — identical bytes
+      const lockedAttempt = await verifyPasswordResetOtp(email, '123456');
       expect(lockedAttempt.success).toBe(false);
-      expect(lockedAttempt.error).toContain('temporarily locked');
+      expect(lockedAttempt.error).toBe(INVALID_OTP_ERROR);
+      expect(lockedAttempt.error).toBe(finalAttempt.error);
     });
 
     it('updates password and invalidates prior sessions', async () => {
@@ -107,7 +110,7 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
         email: 'target.user@gmail.com',
         password: 'OriginalPassword123!',
       });
-      const verifyRes = verifySignupOtp('target.user@gmail.com', signupRes.simulatedOtp!);
+      const verifyRes = await verifySignupOtp('target.user@gmail.com', signupRes.simulatedOtp!);
       expect(verifyRes.success).toBe(true);
       const loginRes = await loginTenantUser({
         email: 'target.user@gmail.com',
@@ -121,7 +124,7 @@ describe('Password Reset OTP Flow (Spec 018)', () => {
       expect(initialActive).toBe(true);
 
       // 2. Request password reset OTP
-      const { otp } = createPasswordResetOtp('target.user@gmail.com');
+      const { otp } = await createPasswordResetOtp('target.user@gmail.com');
 
       // 3. Reset password with OTP
       const resetResult = await resetUserPasswordWithOtp({
