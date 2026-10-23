@@ -8,6 +8,11 @@ import {
   QUEUE_REORDER_NOOP_MESSAGE,
   QUEUE_REORDER_SUCCESS_MESSAGE,
 } from './content-tab';
+import {
+  contentChecklistDismissedPreference,
+  getPreference,
+  removePreference,
+} from '@/lib/storage/preferences';
 import { toast } from '@/components/shared/ui/toast';
 import type { FacebookPageItem } from '../../page-card';
 import type { DedicatedQueueItem } from './queue-types';
@@ -194,7 +199,7 @@ const failedItem = () =>
 describe('PageTabQueue — rebuilt panel (spec 134 PR-134-1)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.localStorage.clear();
+    removePreference(contentChecklistDismissedPreference(PAGE_ID));
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -343,9 +348,7 @@ describe('PageTabQueue — rebuilt panel (spec 134 PR-134-1)', () => {
     expect(screen.getByText('Get your queue running')).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByText('Get your queue running')).toBeNull();
-    expect(
-      window.localStorage.getItem(`fbup:pref:content-checklist-dismissed:${PAGE_ID}`)
-    ).toBe('true');
+    expect(getPreference(contentChecklistDismissedPreference(PAGE_ID))).toBe(true);
   });
 
   it('filter with no matches echoes the filter and Clear filters restores the list', async () => {

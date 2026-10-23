@@ -208,14 +208,15 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
         signal,
       }),
     enabled: Boolean(subdomain),
-    initialData: queueItems.length
-      ? {
-          items: queueItems as unknown as QueueItem[],
-          total: queueItems.length,
-          limit: queueItems.length,
-          offset: 0,
-        }
-      : undefined,
+    // Always seed — including the empty array — so the panel renders the
+    // route's known state on first paint (the legacy panel rendered props
+    // immediately); the background refetch still reconciles with the API.
+    initialData: {
+      items: queueItems as unknown as QueueItem[],
+      total: queueItems.length,
+      limit: queueItems.length,
+      offset: 0,
+    },
   });
 
   const slotsQuery = useQuery({
@@ -541,17 +542,17 @@ export function PageTabQueue(props: Readonly<PageTabQueueProps>) {
     const ids = [...selection];
     if (ids.length === 0) return;
     setBulkDeleting(true);
-    let deleted = 0;
+    let failed = 0;
     for (const id of ids) {
       try {
         await api.delete(buildTenantApiPath(subdomain, `/publishing/queue/${id}`), {
           schema: AckSchema,
         });
-        deleted += 1;
       } catch {
-        // Counted as a failure below — the summary states the outcome.
+        failed += 1;
       }
     }
+    const deleted = ids.length - failed;
     setBulkDeleting(false);
     setShowBulkDeleteConfirm(false);
     setSelecting(false);
