@@ -61,10 +61,15 @@ export default defineConfig({
         '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       // Dummy values for the rest of spec 139's required env set — the
       // production boot validator demands the full set; none of these
-      // point at a real backend (see the header comment).
-      NEXT_PUBLIC_SUPABASE_URL: 'http://localhost:54321',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'e2e-test-anon-key',
-      SUPABASE_SERVICE_ROLE_KEY: 'e2e-test-service-role-key',
+      // point at a real backend (see the header comment). The Supabase
+      // values use the codebase's `placeholder` convention: the client
+      // factories (lib/auth/clients.ts) treat it as "not configured" and
+      // refuse instantly — a live-looking dummy URL instead makes
+      // supabase-js retry a dead backend for ~7s per query, which stalls
+      // SSR past the specs' timeouts.
+      NEXT_PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'placeholder-anon-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'placeholder-service-role-key',
       UPSTASH_REDIS_REST_URL: 'http://localhost:8079',
       UPSTASH_REDIS_REST_TOKEN: 'e2e-test-upstash-token',
       R2_ACCOUNT_ID: 'e2e-test-r2-account',
