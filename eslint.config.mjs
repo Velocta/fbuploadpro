@@ -101,7 +101,6 @@ export default [
     // next/image. Reasons per file are recorded in
     // apps/web/img-baseline.txt.
     files: [
-      "apps/web/src/components/accounts/account-card.tsx",
       "apps/web/src/components/connect/destination-picker.tsx",
       "apps/web/src/components/media/media-import-progress-row.tsx",
       "apps/web/src/components/media/media-import-staging.tsx",

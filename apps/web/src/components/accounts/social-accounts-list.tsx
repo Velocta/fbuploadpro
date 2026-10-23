@@ -9,16 +9,19 @@
  * internals; the routing lands there now). Renders nothing until there is
  * at least one social account, so the existing Facebook Accounts page is
  * unchanged for Facebook-only workspaces.
+ *
+ * Spec 131 PR-131-1: presentation rebuilt on the design system —
+ * token-backed utilities only (zero inline styles) and status as
+ * colour + icon + text via the shared/ui `StatusDot` (spec §6.4.1 /
+ * OD-3). The exported helpers (`socialStatusSignal`,
+ * `socialStatusLabel`, `loadSocialAccounts`) keep their names and
+ * behaviour — the destinations route and the connect suites consume
+ * them.
  */
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  THEME,
-  SPACING,
-  RADII,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-} from '@/lib/theme';
+
+import { StatusDot } from '@/components/shared/ui/status-dot';
 import { PLATFORM_LABELS, type Platform } from '@/lib/connect/registry';
 
 export interface SocialDestinationItem {
@@ -80,26 +83,11 @@ function SocialDestinationLink({
     <Link
       href={`/tenant/${subdomain}/destinations/${destination.id}`}
       data-testid={`social-destination-${destination.id}`}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.sm,
-        padding: `${SPACING.xs} 0`,
-        textDecoration: 'none',
-        color: `var(--text-main, ${THEME.default.text.primary})`,
-        fontSize: '0.875rem',
-      }}
+      className="flex min-h-11 items-center gap-2 py-1 text-body text-ink outline-none hover:underline focus-visible:outline-2 focus-visible:outline-brand-gold"
     >
-      <span style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
-        {destination.name}
-      </span>
+      <span className="font-medium">{destination.name}</span>
       {destination.handle && (
-        <span
-          style={{
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            fontSize: '0.8125rem',
-          }}
-        >
+        <span className="text-body text-ink-sub">
           {destination.handle.startsWith('@')
             ? destination.handle
             : `@${destination.handle}`}
@@ -121,56 +109,23 @@ function SocialAccountBlock({
   return (
     <div
       data-testid={`social-account-${account.id}`}
-      style={{
-        borderTop: isFirst
-          ? 'none'
-          : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        padding: `${SPACING.md} ${SPACING.lg}`,
-      }}
+      className={isFirst ? 'px-6 py-4' : 'border-t border-line px-6 py-4'}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.sm,
-          marginBottom: SPACING.sm,
-        }}
-      >
-        <span
-          style={COMPONENT_STYLES.statusDot(socialStatusSignal(account.status))}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <StatusDot
+          status={socialStatusSignal(account.status)}
+          label={socialStatusLabel(account.status)}
         />
-        <span
-          style={{
-            fontSize: '0.9375rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-          }}
-        >
-          {account.displayName}
-        </span>
-        <span
-          style={{
-            fontSize: '0.8125rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          {PLATFORM_LABELS[account.platform] ?? account.platform} ·{' '}
-          {socialStatusLabel(account.status)}
+        <span className="text-body font-semibold text-ink">{account.displayName}</span>
+        <span className="text-body text-ink-sub">
+          {PLATFORM_LABELS[account.platform] ?? account.platform}
         </span>
       </div>
 
       {account.destinations.length === 0 ? (
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.8125rem',
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-          }}
-        >
-          No destinations added yet.
-        </p>
+        <p className="m-0 text-body text-ink-dim">No destinations added yet.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div className="flex flex-col">
           {account.destinations.map((destination) => (
             <SocialDestinationLink
               key={destination.id}
@@ -189,38 +144,14 @@ export function SocialAccountsListView({
   accounts,
 }: Readonly<SocialAccountsListViewProps>) {
   return (
-    <section
-      data-testid="social-accounts-list"
-      style={{ marginBottom: SPACING.xl }}
-    >
-      <h2
-        style={{
-          margin: `0 0 ${SPACING.xs} 0`,
-          fontSize: '1.125rem',
-          fontWeight: TYPOGRAPHY.weights.bold,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-        }}
-      >
-        Connected accounts
-      </h2>
-      <p
-        style={{
-          margin: `0 0 ${SPACING.md} 0`,
-          fontSize: '0.875rem',
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        }}
-      >
+    <section data-testid="social-accounts-list" className="mb-6">
+      <h2 className="mb-1 text-lg font-bold text-ink">Connected accounts</h2>
+      <p className="mb-4 text-body text-ink-sub">
         Every account you have connected, across all platforms. Choose a
         destination to open it.
       </p>
 
-      <div
-        style={{
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-        }}
-      >
+      <div className="rounded-md border border-line bg-panel">
         {accounts.map((account, accountIndex) => (
           <SocialAccountBlock
             key={account.id}

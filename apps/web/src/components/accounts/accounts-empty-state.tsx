@@ -1,8 +1,18 @@
 'use client';
 
-import React from 'react';
+/**
+ * Accounts empty state (spec 131 PR-131-1) — rebuilt as a typed
+ * shared/ui `EmptyState` (type `first-use`: one primary action, per
+ * UI Rule 23 / UX Rule 6) inside the same panel geometry. Copy,
+ * testids, and the BYOC disabled-with-reason behaviour (UX Rule 19)
+ * are preserved verbatim.
+ */
+import * as React from 'react';
 import Link from 'next/link';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+import { PlusIcon } from 'lucide-react';
+
+import { Button } from '@/components/shared/ui/button';
+import { EmptyState } from '@/components/shared/ui/empty-state';
 
 interface AccountsEmptyStateProps {
   onConnect: () => void;
@@ -22,142 +32,61 @@ export function AccountsEmptyState({
 }: Readonly<AccountsEmptyStateProps>) {
   const isDisabled = isConnectDisabled || credentialsMissing;
   return (
-    <div
-      data-testid="accounts-empty-state"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        textAlign: 'center',
-        padding: '64px 24px',
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        maxWidth: '560px',
-        margin: '40px auto',
-      }}
-    >
-      {/* Facebook Brand Monogram Icon */}
-      <div
-        style={{
-          width: '56px',
-          height: '56px',
-          borderRadius: RADII.full,
-          backgroundColor: PALETTE.primary,
-          color: PALETTE.background,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: TYPOGRAPHY.weights.bold,
-          fontSize: '1.25rem',
-          marginBottom: SPACING.md,
-          userSelect: 'none',
-        }}
-      >
-        FB
-      </div>
-
-      <h2
-        style={{
-          margin: `0 0 ${SPACING.xs} 0`,
-          fontSize: '1.25rem',
-          fontWeight: TYPOGRAPHY.weights.bold,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-        }}
-      >
-        Connect your first Facebook account
-      </h2>
-
-      <p
-        style={{
-          margin: `0 0 ${SPACING.xl} 0`,
-          fontSize: '0.875rem',
-          lineHeight: 1.5,
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          maxWidth: '420px',
-        }}
-      >
-        Link your Facebook Account to import pages
-      </p>
-
-      <button
-        type="button"
-        data-testid="empty-connect-button"
-        onClick={onConnect}
-        disabled={isDisabled}
-        aria-describedby={
-          credentialsMissing ? 'empty-connect-disabled-reason' : undefined
+    <div className="mx-auto my-10 w-full max-w-xl rounded-md border border-line bg-panel shadow-card">
+      <EmptyState
+        type="first-use"
+        data-testid="accounts-empty-state"
+        icon={
+          <div
+            aria-hidden
+            className="mb-2 flex size-14 items-center justify-center rounded-full bg-primary text-xl font-bold text-on-primary select-none"
+          >
+            FB
+          </div>
         }
-        style={{
-          ...COMPONENT_STYLES.primaryButton,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: SPACING.xs,
-          padding: `0 ${SPACING.lg}`,
-          opacity: isDisabled ? 0.5 : 1,
-          cursor: isDisabled ? 'not-allowed' : 'pointer',
-        }}
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-        <span>Connect Facebook Account</span>
-      </button>
+        title="Connect your first Facebook account"
+        description="Link your Facebook Account to import pages"
+        action={
+          <Button
+            type="button"
+            size="lg"
+            data-testid="empty-connect-button"
+            onClick={onConnect}
+            disabled={isDisabled}
+            aria-describedby={
+              credentialsMissing ? 'empty-connect-disabled-reason' : undefined
+            }
+          >
+            <PlusIcon aria-hidden />
+            <span>Connect Facebook Account</span>
+          </Button>
+        }
+      />
+      <div className="flex flex-col items-center px-6 pb-12 text-center">
+        {credentialsMissing && (
+          <p
+            id="empty-connect-disabled-reason"
+            data-testid="empty-connect-disabled-reason"
+            className="-mt-8 max-w-105 text-body leading-body text-ink-sub"
+          >
+            Add your Facebook App ID and App Secret first — connecting is
+            paused until they are saved.{' '}
+            {settingsHref && (
+              <Link
+                href={settingsHref}
+                data-testid="empty-connect-settings-link"
+                className="font-semibold text-link underline"
+              >
+                Add them in Settings
+              </Link>
+            )}
+          </p>
+        )}
 
-      {credentialsMissing && (
-        <p
-          id="empty-connect-disabled-reason"
-          data-testid="empty-connect-disabled-reason"
-          style={{
-            margin: `${SPACING.md} 0 0 0`,
-            fontSize: '0.8125rem',
-            lineHeight: 1.5,
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            maxWidth: '420px',
-          }}
-        >
-          Add your Facebook App ID and App Secret first — connecting is
-          paused until they are saved.{' '}
-          {settingsHref && (
-            <Link
-              href={settingsHref}
-              data-testid="empty-connect-settings-link"
-              style={{
-                color: PALETTE.primary,
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                textDecoration: 'underline',
-              }}
-            >
-              Add them in Settings
-            </Link>
-          )}
+        <p className="mt-4 max-w-105 text-metadata leading-body text-ink-dim">
+          We only request permissions to publish reels and manage your pages
         </p>
-      )}
-
-      <p
-        style={{
-          margin: `${SPACING.md} 0 0 0`,
-          fontSize: '0.75rem',
-          lineHeight: 1.4,
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-          maxWidth: '420px',
-        }}
-      >
-        We only request permissions to publish reels and manage your pages
-      </p>
+      </div>
     </div>
   );
 }

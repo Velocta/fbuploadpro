@@ -68,12 +68,21 @@ export async function installApiFixtures(
 
   // Settings: BYOC Facebook app configured (gates the connect modal).
   await page.route(`**/api/tenant/${SUB}/settings/byoc`, (route) =>
-    json(route, { fbAppId: '123456789012345', hasSecret: true })
+    json(route, {
+      workspaceId: '11111111-1111-4111-8111-111111111111',
+      subdomain: SUB,
+      fbAppId: '123456789012345',
+      fbAppSecret: 'e2e-fixture-secret',
+      hasSecret: true,
+      status: 'valid',
+      lastTestedAt: null,
+      connectedAt: null,
+    })
   );
 
   // Accounts list (connect flow reads its post-connect state from here).
   await page.route(`**/api/tenant/${SUB}/accounts`, (route) =>
-    json(route, { accounts: state.accounts })
+    json(route, { accounts: state.accounts, total: state.accounts.length })
   );
   await page.route(`**/api/tenant/${SUB}/accounts/magic-link`, (route) =>
     json(route, { magicUrl: 'https://connect.e2e.invalid/magic' })
