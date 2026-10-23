@@ -46,7 +46,11 @@ async function readPendingPick(
       pendingCookie,
       getSessionSecret()
     );
-  } catch {
+  } catch (err) {
+    console.error(
+      '[connect/tiktok] Pending destinations cookie could not be verified:',
+      err
+    );
     return null;
   }
   if (pending.platform !== 'tiktok') return null;
@@ -63,7 +67,11 @@ async function readPendingPick(
         )
       );
     }
-  } catch {
+  } catch (err) {
+    console.error(
+      '[connect/tiktok] Complete request body could not be parsed:',
+      err
+    );
     return { pending, pickedExternalIds: [], providerAccountId: null };
   }
 
