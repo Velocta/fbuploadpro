@@ -66,6 +66,10 @@ EOF
   # Check 13 (spec 137 PR-A1b) wants the localStorage baseline file; fixtures
   # plant no localStorage usages, so a comments-only baseline passes.
   printf '# Fixture baseline: no localStorage occurrences in this tree.\n' > "$root/apps/web/localstorage-baseline.txt"
+  # Checks 14/15 (spec 137 PR-A4) want the any/img baseline files; fixtures
+  # plant no type-position any and no raw <img>, so comments-only passes.
+  printf '# Fixture baseline: no type-position any occurrences in this tree.\n' > "$root/apps/web/any-baseline.txt"
+  printf '# Fixture baseline: no raw img elements in this tree.\n' > "$root/apps/web/img-baseline.txt"
 }
 
 run_guardrails() {
