@@ -1,0 +1,51 @@
+# `any` ratchet baseline (spec 137 §3.7 / PR-A4, guardrail check 14).
+#
+# Counting method (the baseline of record — the audit's 178 across 32
+# files was measured on the pre-A1 tree with an unspecified method;
+# PR-A4 re-measured at its start with the method below: 205 occurrences
+# across 43 files at the PR-A1b tip, 58 after this PR):
+#   grep -roE '(:[[:space:]]*any\b|as[[:space:]]+any\b|<any[[:space:]]*[>,]|,[[:space:]]*any[[:space:]]*[>,]|\bany\[\])' \
+#     apps/web/src --include='*.ts' --include='*.tsx' | wc -l
+# i.e. `any` in type position only (: any, as any, <any>, generic
+# arguments, any[]) — the English word "any" in prose does not count.
+#
+# Discipline (same as checks 9/12/13): the occurrences below are frozen
+# per file. Any increase or any new file fails CI; a decrease fails
+# until this file is updated in the same PR. PR-A4 cleared the whole
+# API-route/lib-owned share (src/app/api/** 135 -> 0, lib/route-auth.ts
+# 7 -> 0, lib/server/** via the client-factory type): every residual
+# below belongs to a named owner that deletes it in its own rebuild
+# (spec 137 §4.1.6). End state (spec §3.7): zero `any` in src/lib/api,
+# src/lib/data and all response-mapping paths — already true; the
+# lib/api entry below is a documentation comment, not a type.
+#
+# Residual owners:
+#   src/app/connect/facebook/route.ts            136 (entry/connect route)
+#   src/app/tenant/[subdomain]/pages/[pageId]/page.tsx  131 (page section)
+#   src/components/downloader/media-downloader-engine.ts  downloader future upgrade spec (kept per D137-4)
+#   src/components/media/* (4 files)             133 (Media Library)
+#   src/components/pages/dedicated/schedule-timezone-modal.tsx  134
+#   src/components/pages/dedicated/tab-insights.tsx  131
+#   src/components/ui/sidebar.tsx, tooltip.tsx   legacy ui folder — dies with the folder (129/130)
+#   src/components/workspace/workspace-lifecycle-guard.tsx  130 (shell)
+#   src/lib/api/errors.ts                        not a type: the word in a doc comment (A1a-owned file)
+#   src/lib/auth/workspaces.ts                   lib/auth (PR-A1b-owned; outside A4's file ownership)
+#   src/lib/connect/persist.ts                   connect framework (spec 123; consumed as-is per spec §5)
+#
+# Format: <file> <count>
+apps/web/src/app/connect/facebook/route.ts 1
+apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 8
+apps/web/src/components/downloader/media-downloader-engine.ts 5
+apps/web/src/components/media/media-import-modal.tsx 1
+apps/web/src/components/media/media-import-upload-engine.ts 1
+apps/web/src/components/media/media-import-utils.ts 2
+apps/web/src/components/media/media-library-filters.ts 7
+apps/web/src/components/media/media-library-helpers.ts 1
+apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 1
+apps/web/src/components/pages/dedicated/tab-insights.tsx 1
+apps/web/src/components/ui/sidebar.tsx 7
+apps/web/src/components/ui/tooltip.tsx 3
+apps/web/src/components/workspace/workspace-lifecycle-guard.tsx 4
+apps/web/src/lib/api/errors.ts 1
+apps/web/src/lib/auth/workspaces.ts 5
+apps/web/src/lib/connect/persist.ts 10

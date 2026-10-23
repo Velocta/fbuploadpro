@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  type DatabasePageQueueSlotRow,
   canAccessTenant,
   CreateQueueSlotRequestSchema,
   getSessionSecret,
@@ -19,7 +20,7 @@ export async function handleListQueueSlots(
   request: NextRequest,
   subdomain: string,
   pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -45,7 +46,11 @@ export async function handleListQueueSlots(
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
-  let slotRows: any[] = [];
+/** Slot row as consumed here (spec 137 §3.7): the contracts slot row
+ * plus the allowed_formats column the contracts type does not model. */
+type SlotRow = DatabasePageQueueSlotRow & { allowed_formats?: string[] | null };
+
+  let slotRows: SlotRow[] = [];
   let pageTimezone = 'UTC';
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
@@ -61,15 +66,15 @@ export async function handleListQueueSlots(
     pageTimezone = String(pageRows[0].timezone || 'UTC');
 
     // 2. Fetch slots for this page and user
-    slotRows = (await dbClient.query(
+    slotRows = await dbClient.query<SlotRow>(
       `SELECT id, user_id, fb_page_id, slot_time, is_active, allowed_formats, created_at, updated_at
        FROM page_queue_slots
        WHERE fb_page_id = $1 AND user_id = $2
        ORDER BY slot_time ASC`,
       [pageId, session.userId]
-    )) as Record<string, unknown>[];
+    );
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -124,7 +129,7 @@ export async function handleCreateQueueSlot(
   request: NextRequest,
   subdomain: string,
   pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -209,8 +214,13 @@ export async function handleCreateQueueSlot(
       });
 
       return NextResponse.json(responsePayload, { status: 201 });
-    } catch (err: any) {
-      if (err?.code === '23505') {
+    } catch (err: unknown) {
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'code' in err &&
+        err.code === '23505'
+      ) {
         return NextResponse.json(
           {
             error: 'SLOT_ALREADY_EXISTS',
@@ -225,7 +235,7 @@ export async function handleCreateQueueSlot(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -336,7 +346,7 @@ async function realignPendingQueueItemsPostgres(
 }
 
 async function realignPendingQueueItemsSupabase(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   pageId: string,
   userId: string,
   newTimezone: string
@@ -419,10 +429,10 @@ async function updateScheduleTimezonePostgres(
     return { notFound: true };
   }
 
-  const slotRows = (await dbClient.query(
+  const slotRows = await dbClient.query<{ count: number }>(
     'SELECT count(*)::int as count FROM page_queue_slots WHERE fb_page_id = $1 AND user_id = $2',
     [pageId, userId]
-  )) as Record<string, unknown>[];
+  );
 
   const realignedQueueCount = await realignPendingQueueItemsPostgres(
     dbClient,
@@ -438,7 +448,7 @@ async function updateScheduleTimezonePostgres(
 }
 
 async function updateScheduleTimezoneSupabase(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   pageId: string,
   userId: string,
   workspaceId: string,
@@ -487,7 +497,7 @@ export async function handleUpdateQueueScheduleTimezone(
   request: NextRequest,
   subdomain: string,
   pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -555,7 +565,7 @@ export async function handleUpdateQueueScheduleTimezone(
     return NextResponse.json(responsePayload);
   }
 
-  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
   if (!supabase) {
     return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
   }

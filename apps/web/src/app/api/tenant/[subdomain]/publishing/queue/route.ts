@@ -9,6 +9,7 @@ import {
   validatePostFormatEligibility,
   verifySessionToken,
   type DatabaseClient,
+  type DatabaseMediaItemRow,
   type PostFormat,
 } from '@fbuploadpro/contracts';
 import { calculateNextVacantSlot } from '../../../../../../lib/slot-scheduler';
@@ -16,10 +17,79 @@ import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+/**
+ * Row shapes consumed by the queue handlers (spec 137 §3.7).
+ * QueueMediaRecord: the media columns the enqueue handlers read
+ * (file_size is read by the eligibility check even though the selects
+ * do not project it — modelled optional, as it is at runtime).
+ * SlotCalcRow / QueuedTimeRow: the inputs of calculateNextVacantSlot.
+ * QueueListRow: the legacy list query's joined projection;
+ * QueueListSupabaseRow: the same item with the embedded media relation.
+ */
+type QueueMediaRecord = Pick<
+  DatabaseMediaItemRow,
+  | 'id'
+  | 'name'
+  | 'media_type'
+  | 'url'
+  | 'thumbnail_url'
+  | 'aspect_ratio'
+  | 'duration_seconds'
+> & { width: number | null; height: number | null; file_size?: number | null };
+
+interface SlotCalcRow {
+  id: string;
+  slot_time: string;
+  is_active: boolean;
+  allowed_formats?: string[] | null;
+}
+
+interface QueuedTimeRow {
+  scheduled_time: string | Date;
+}
+
+interface QueueListRow {
+  id: string;
+  user_id: string;
+  fb_page_id: string;
+  slot_id: string | null;
+  media_id: string | null;
+  post_format: string | null;
+  media_type: string | null;
+  link_url: string | null;
+  scheduled_time: string | Date;
+  caption: string | null;
+  first_comment: string | null;
+  status: string;
+  retry_count: number | string | null;
+  max_retries: number | string | null;
+  fb_post_id: string | null;
+  fb_comment_id: string | null;
+  published_at: string | Date | null;
+  created_at: string;
+  updated_at: string;
+  media_name: string | null;
+  media_thumbnail_url: string | null;
+  media_url: string | null;
+  media_aspect_ratio: string | null;
+  media_duration_seconds: number | string | null;
+}
+
+interface QueueListSupabaseRow extends Omit<QueueListRow, 'media_name' | 'media_thumbnail_url' | 'media_url' | 'media_aspect_ratio' | 'media_duration_seconds' | 'media_type'> {
+  media: {
+    name: string;
+    media_type: string;
+    thumbnail_url: string | null;
+    url: string;
+    aspect_ratio: string | null;
+    duration_seconds: number | null;
+  } | null;
+}
+
 export async function handleEnqueueMedia(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -90,7 +160,7 @@ export async function handleEnqueueMedia(
     const pageTimezone = String(pageRows[0].timezone || 'UTC');
 
     let finalPostFormat: PostFormat;
-    let mediaRecord: any = null;
+    let mediaRecord: QueueMediaRecord | null = null;
 
     if (requestedFormat === 'text' || (!mediaId && !requestedFormat)) {
       finalPostFormat = 'text';
@@ -101,12 +171,12 @@ export async function handleEnqueueMedia(
         );
       }
     } else if (mediaId) {
-      const mediaRows = (await dbClient.query(
+      const mediaRows = await dbClient.query<QueueMediaRecord>(
         `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds, width, height
          FROM media_items
          WHERE id = $1 AND user_id = $2`,
         [mediaId, session.userId]
-      )) as Record<string, unknown>[];
+      );
 
       if (!mediaRows || mediaRows.length === 0) {
         return NextResponse.json({ error: 'Media not found' }, { status: 404 });
@@ -176,10 +246,10 @@ export async function handleEnqueueMedia(
       if (requestedScheduledTime) {
         finalScheduledTime = new Date(requestedScheduledTime).toISOString();
       } else {
-        const existingQueued = (await dbClient.query(
+        const existingQueued = await dbClient.query<QueuedTimeRow>(
           `SELECT scheduled_time FROM legacy_queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
           [pageId, session.userId]
-        )) as Record<string, unknown>[];
+        );
 
         const computed = calculateNextVacantSlot({
           slots: [
@@ -195,7 +265,7 @@ export async function handleEnqueueMedia(
             },
           ],
           existingScheduledTimes: (existingQueued || []).map(
-            (q: any) => new Date(q.scheduled_time)
+            (q: QueuedTimeRow) => new Date(q.scheduled_time)
           ),
           now: new Date(),
           postFormat: finalPostFormat,
@@ -215,13 +285,13 @@ export async function handleEnqueueMedia(
     } else if (requestedScheduledTime) {
       finalScheduledTime = new Date(requestedScheduledTime).toISOString();
     } else {
-      const activeSlots = (await dbClient.query(
+      const activeSlots = await dbClient.query<SlotCalcRow>(
         `SELECT id, slot_time, is_active, allowed_formats
          FROM page_queue_slots
          WHERE fb_page_id = $1 AND user_id = $2 AND is_active = true
          ORDER BY slot_time ASC`,
         [pageId, session.userId]
-      )) as Record<string, unknown>[];
+      );
 
       if (!activeSlots || activeSlots.length === 0) {
         return NextResponse.json(
@@ -234,13 +304,13 @@ export async function handleEnqueueMedia(
         );
       }
 
-      const existingQueued = (await dbClient.query(
+      const existingQueued = await dbClient.query<QueuedTimeRow>(
         `SELECT scheduled_time FROM legacy_queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
         [pageId, session.userId]
-      )) as Record<string, unknown>[];
+      );
 
       const computed = calculateNextVacantSlot({
-        slots: activeSlots.map((s: any) => ({
+        slots: activeSlots.map((s: SlotCalcRow) => ({
           id: s.id,
           slotTime:
             typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
@@ -249,7 +319,7 @@ export async function handleEnqueueMedia(
           allowedFormats: s.allowed_formats ?? null,
         })),
         existingScheduledTimes: (existingQueued || []).map(
-          (q: any) => new Date(q.scheduled_time)
+          (q: QueuedTimeRow) => new Date(q.scheduled_time)
         ),
         now: new Date(),
         postFormat: finalPostFormat,
@@ -380,7 +450,7 @@ export async function handleEnqueueMedia(
   const pageTimezone = String(pageRow.timezone || 'UTC');
 
   let finalPostFormat: PostFormat;
-  let mediaRecord: any = null;
+  let mediaRecord: QueueMediaRecord | null = null;
 
   if (requestedFormat === 'text' || (!mediaId && !requestedFormat)) {
     finalPostFormat = 'text';
@@ -482,7 +552,7 @@ export async function handleEnqueueMedia(
           },
         ],
         existingScheduledTimes: (existingQueued || []).map(
-          (q: any) => new Date(q.scheduled_time)
+          (q: QueuedTimeRow) => new Date(q.scheduled_time)
         ),
         now: new Date(),
         postFormat: finalPostFormat,
@@ -529,7 +599,7 @@ export async function handleEnqueueMedia(
       .eq('status', 'queued');
 
     const computed = calculateNextVacantSlot({
-      slots: activeSlots.map((s: any) => ({
+      slots: activeSlots.map((s: SlotCalcRow) => ({
         id: s.id,
         slotTime:
           typeof s.slot_time === 'string' ? s.slot_time : String(s.slot_time),
@@ -538,7 +608,7 @@ export async function handleEnqueueMedia(
         allowedFormats: s.allowed_formats ?? null,
       })),
       existingScheduledTimes: (existingQueued || []).map(
-        (q: any) => new Date(q.scheduled_time)
+        (q: QueuedTimeRow) => new Date(q.scheduled_time)
       ),
       now: new Date(),
       postFormat: finalPostFormat,
@@ -627,7 +697,7 @@ export async function handleEnqueueMedia(
 export async function handleListQueueItems(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -681,7 +751,7 @@ export async function handleListQueueItems(
       'qi.user_id = $1',
       'EXISTS (SELECT 1 FROM facebook_pages fp WHERE fp.id = qi.fb_page_id AND fp.workspace_id = $2 AND fp.user_id = $1)'
     ];
-    const params: any[] = [session.userId, workspaceId];
+    const params: unknown[] = [session.userId, workspaceId];
 
     if (pageId) {
       params.push(pageId);
@@ -735,9 +805,9 @@ export async function handleListQueueItems(
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const rows = (await dbClient.query(listSql, listParams)) as Record<string, unknown>[];
+    const rows = await dbClient.query<QueueListRow>(listSql, listParams);
 
-    const items = (rows || []).map((row: any) => ({
+    const items = (rows || []).map((row) => ({
       id: row.id,
       userId: row.user_id,
       pageId: row.fb_page_id,
@@ -861,7 +931,12 @@ export async function handleListQueueItems(
     return NextResponse.json({ error: 'Failed to list queue items' }, { status: 500 });
   }
 
-  const items = (rows || []).map((row: any) => {
+  // supabase-js models the embedded media relation as an array; the
+  // runtime value is the single joined object (or null), which is what
+  // QueueListSupabaseRow describes — hence the bridge through unknown
+  // for this one inference gap (spec 137 §3.7).
+  const typedRows = (rows || []) as unknown as QueueListSupabaseRow[];
+  const items = typedRows.map((row) => {
     const m = row.media;
     return {
       id: row.id,

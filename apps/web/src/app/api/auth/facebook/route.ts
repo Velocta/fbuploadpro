@@ -13,7 +13,7 @@ import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver'
 
 export async function handleInitiateFacebookOAuth(
   request: NextRequest,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';

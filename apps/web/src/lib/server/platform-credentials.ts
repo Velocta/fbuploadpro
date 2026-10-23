@@ -78,7 +78,7 @@ export type PlatformCredentialsMutationResult =
   | { ok: true }
   | { ok: false; error: string; status: number };
 
-type CredentialsClient = DatabaseClient | SupabaseClient<any> | null | undefined;
+type CredentialsClient = DatabaseClient | SupabaseClient | null | undefined;
 
 /** Outcome of a low-level write: success, a database error, or no database available. */
 type WriteOutcome = 'ok' | 'error' | 'unavailable';
@@ -132,7 +132,7 @@ function legacyDb(client: CredentialsClient): DatabaseClient | null {
   return isLegacyClient(client ?? undefined) ? (client as DatabaseClient) : null;
 }
 
-function supabaseDb(client: CredentialsClient): SupabaseClient<any> | null {
+function supabaseDb(client: CredentialsClient): SupabaseClient | null {
   if (legacyDb(client)) return null;
   return getRouteSupabase(client ?? undefined);
 }

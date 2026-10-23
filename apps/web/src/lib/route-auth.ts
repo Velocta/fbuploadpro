@@ -10,23 +10,26 @@ import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function isLegacyClient(
-  client?: DatabaseClient | SupabaseClient<any>
+  client?: DatabaseClient | SupabaseClient
 ): client is DatabaseClient {
+  if (!client) return false;
+  // Structural probe (spec 137 §3.7): view the client as a record of
+  // unknown members and narrow each with typeof — no `any` casts.
+  const candidate = client as { query?: unknown; withTransaction?: unknown };
   return (
-    !!client &&
-    (('query' in client && typeof (client as any).query === 'function') ||
-      ('withTransaction' in client &&
-        typeof (client as any).withTransaction === 'function'))
+    ('query' in client && typeof candidate.query === 'function') ||
+    ('withTransaction' in client &&
+      typeof candidate.withTransaction === 'function')
   );
 }
 
 export function getRouteSupabase(
-  client?: DatabaseClient | SupabaseClient<any>
-): SupabaseClient<any> | null {
+  client?: DatabaseClient | SupabaseClient
+): SupabaseClient | null {
   if (client && 'from' in client) {
-    return client as SupabaseClient<any>;
+    return client as SupabaseClient;
   }
-  return getSupabaseAdminClient() as SupabaseClient<any> | null;
+  return getSupabaseAdminClient() as SupabaseClient | null;
 }
 
 export async function authenticateTenantRoute(

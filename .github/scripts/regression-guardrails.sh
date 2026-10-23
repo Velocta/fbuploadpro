@@ -494,6 +494,91 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Check 14: `any` ratchet (spec 137 §3.7 / PR-A4).
+# Type-position `any` in apps/web/src may only go DOWN. Counting method
+# (the baseline of record, recorded in apps/web/any-baseline.txt):
+# occurrences of the type-position pattern below via grep -oE — prose
+# uses of the word "any" do not count. Frozen per file (same discipline
+# as checks 9/12/13): any increase or new file fails; a decrease fails
+# until the baseline is updated in the same PR. PR-A4 cleared the whole
+# API-route/lib-owned share (205 -> 58); each residual names its owning
+# surface in the baseline header (spec 137 §4.1.6).
+# ---------------------------------------------------------------------------
+ANY_BASELINE="apps/web/any-baseline.txt"
+ANY_PAT='(:[[:space:]]*any\b|as[[:space:]]+any\b|<any[[:space:]]*[>,]|,[[:space:]]*any[[:space:]]*[>,]|\bany\[\])'
+if [ -f "$ANY_BASELINE" ]; then
+  ANY_CURRENT="$(mktemp)"
+  while IFS= read -r any_file; do
+    any_count="$(grep -oE "$ANY_PAT" "$any_file" 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$any_count" -gt 0 ] && printf '%s %s\n' "$any_file" "$any_count" >> "$ANY_CURRENT"
+  done < <(find apps/web/src -name '*.ts' -o -name '*.tsx' | sort)
+  ANY_BASE_SORTED="$(mktemp)"
+  grep -E '^apps/web/src/' "$ANY_BASELINE" | sort > "$ANY_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    old_n="$(printf '%s' "$change" | awk '{print $3}')"
+    new_n="$(printf '%s' "$change" | awk '{print $4}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "any ratchet INCREASED: ${fname} has ${new_n} type-position any occurrence(s), baseline is ${old_n} -- type the boundary properly (zod-inferred types, contracts row types, unknown + narrowing); do not raise the baseline (spec 137 §3.7)"
+    else
+      violation "any baseline STALE: ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/any-baseline.txt in this PR (spec 137 PR-A4)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1]=$2; seen[$1]=1; next }
+    { cur[$1]=$2; seen[$1]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$ANY_BASE_SORTED" "$ANY_CURRENT")
+  rm -f "$ANY_CURRENT" "$ANY_BASE_SORTED"
+else
+  violation "any baseline file missing: apps/web/any-baseline.txt (spec 137 PR-A4)"
+fi
+
+# ---------------------------------------------------------------------------
+# Check 15: raw <img> freeze (spec 137 §3.5 / PR-A4).
+# ESLint @next/next/no-img-element is an error across apps/web/src with
+# a per-file freeze for the 16 surface-owned files that still carry the
+# 23 pre-existing raw <img> elements; this check is the count-level
+# backstop (it also covers files ESLint's freeze list names): counts
+# frozen per file in apps/web/img-baseline.txt — any increase or new
+# file fails; a decrease fails until the baseline (and the ESLint
+# freeze list, when a file reaches zero) is updated in the same PR.
+# Conversions to next/image ride the surface rebuilds (§4.1.4).
+# ---------------------------------------------------------------------------
+IMG_BASELINE="apps/web/img-baseline.txt"
+if [ -f "$IMG_BASELINE" ]; then
+  IMG_CURRENT="$(mktemp)"
+  while IFS= read -r img_file; do
+    img_count="$(grep -o '<img' "$img_file" 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$img_count" -gt 0 ] && printf '%s %s\n' "$img_file" "$img_count" >> "$IMG_CURRENT"
+  done < <(find apps/web/src -name '*.ts' -o -name '*.tsx' | sort)
+  IMG_BASE_SORTED="$(mktemp)"
+  grep -E '^apps/web/src/' "$IMG_BASELINE" | sort > "$IMG_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    old_n="$(printf '%s' "$change" | awk '{print $3}')"
+    new_n="$(printf '%s' "$change" | awk '{print $4}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "raw <img> INCREASED: ${fname} has ${new_n} occurrence(s), baseline is ${old_n} -- use next/image (spec 137 §3.5); do not raise the baseline"
+    else
+      violation "img baseline STALE: ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/img-baseline.txt (and the ESLint freeze list when a file reaches zero) in this PR (spec 137 PR-A4)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1]=$2; seen[$1]=1; next }
+    { cur[$1]=$2; seen[$1]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$IMG_BASE_SORTED" "$IMG_CURRENT")
+  rm -f "$IMG_CURRENT" "$IMG_BASE_SORTED"
+else
+  violation "img baseline file missing: apps/web/img-baseline.txt (spec 137 PR-A4)"
+fi
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 count="$(wc -l < "$VIOLATIONS_FILE" | tr -d ' ')"

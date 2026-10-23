@@ -29,7 +29,7 @@ export type ResolveBYOCResult = ResolvedBYOCCredentials | UnresolvedBYOCCredenti
  * Never falls back to global platform process.env credentials.
  */
 export async function resolveWorkspaceFacebookCredentials(
-  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+  client: DatabaseClient | SupabaseClient | null | undefined,
   subdomain: string,
   userId: string,
   role?: string

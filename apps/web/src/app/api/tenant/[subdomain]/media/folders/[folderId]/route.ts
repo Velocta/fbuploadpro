@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  type DatabaseMediaFolderRow,
+  type DatabaseMediaItemRow,
   canAccessTenant,
   DeleteFolderResponseSchema,
   FolderResponseSchema,
@@ -17,7 +19,7 @@ export async function handleUpdateFolder(
   request: NextRequest,
   subdomain: string,
   folderId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -132,7 +134,7 @@ export async function handleUpdateFolder(
       }
 
       const updates: string[] = ['updated_at = now()'];
-      const values: any[] = [];
+      const values: unknown[] = [];
       let paramIdx = 1;
 
       if (parsed.data.name !== undefined) {
@@ -192,8 +194,13 @@ export async function handleUpdateFolder(
       });
 
       return NextResponse.json(responsePayload);
-    } catch (err: any) {
-      if (err?.code === '23505') {
+    } catch (err: unknown) {
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'code' in err &&
+        err.code === '23505'
+      ) {
         return NextResponse.json(
           {
             error: 'FOLDER_NAME_ALREADY_EXISTS',
@@ -274,7 +281,7 @@ export async function handleUpdateFolder(
       }
     }
 
-    const updates: Record<string, any> = {
+    const updates: Partial<DatabaseMediaFolderRow> = {
       updated_at: new Date().toISOString(),
     };
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
@@ -339,7 +346,7 @@ export async function handleUpdateFolder(
 }
 
 async function deleteKeySubChunks(
-  storage: { deleteObject: (key: string) => Promise<any> },
+  storage: { deleteObject: (key: string) => Promise<unknown> },
   chunk: string[]
 ): Promise<void> {
   const subBatchSize = 25;
@@ -361,7 +368,7 @@ async function deleteKeySubChunks(
 }
 
 async function deleteChunk(
-  storage: { deleteObject: (key: string) => Promise<any>; deleteObjects?: (keys: string[]) => Promise<any> },
+  storage: { deleteObject: (key: string) => Promise<unknown>; deleteObjects?: (keys: string[]) => Promise<unknown> },
   chunk: string[]
 ): Promise<void> {
   if (typeof storage.deleteObjects === 'function') {
@@ -376,7 +383,7 @@ async function deleteChunk(
 }
 
 async function batchDeleteStorageKeys(
-  storage: { deleteObject: (key: string) => Promise<any>; deleteObjects?: (keys: string[]) => Promise<any> },
+  storage: { deleteObject: (key: string) => Promise<unknown>; deleteObjects?: (keys: string[]) => Promise<unknown> },
   keys: string[],
   batchSize = 1000
 ): Promise<void> {
@@ -391,7 +398,7 @@ export async function handleDeleteFolder(
   request: NextRequest,
   subdomain: string,
   folderId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>,
+  dbClient?: DatabaseClient | SupabaseClient,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
@@ -455,7 +462,7 @@ export async function handleDeleteFolder(
 
     // 4. Purge R2 objects for all contained media items in bounded batches of 50
     const keysToDelete = mediaRows
-      .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+      .flatMap((item) => [item.storage_key, item.thumbnail_key])
       .filter((k): k is string => Boolean(k));
 
     await batchDeleteStorageKeys(storage, keysToDelete, 50);
@@ -526,9 +533,11 @@ export async function handleDeleteFolder(
     .eq('user_id', session.userId)
     .in('folder_id', folderIds);
 
-  const mediaRows = mediaItems || [];
+  const mediaRows = (mediaItems || []) as Array<
+    Pick<DatabaseMediaItemRow, 'storage_key' | 'thumbnail_key'>
+  >;
   const keysToDelete = mediaRows
-    .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+    .flatMap((item) => [item.storage_key, item.thumbnail_key])
     .filter((k): k is string => Boolean(k));
 
   await batchDeleteStorageKeys(storage, keysToDelete, 50);

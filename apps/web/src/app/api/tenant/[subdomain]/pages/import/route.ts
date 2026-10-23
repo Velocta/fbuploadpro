@@ -19,7 +19,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export async function handleImportPages(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const encryptionKey = getTokenEncryptionKey();
@@ -67,13 +67,19 @@ export async function handleImportPages(
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
 
-  let account: any = null;
+  // Account row shape as consumed below (spec 137 §3.7): the token
+  // fields, in snake_case (SQL/Supabase) and camelCase (legacy) spellings.
+  interface AccountLookupRow {
+    encrypted_access_token?: string | null;
+    encryptedAccessToken?: string | null;
+  }
+  let account: AccountLookupRow | null = null;
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    const accounts = (await dbClient.query(
+    const accounts = await dbClient.query<AccountLookupRow>(
       'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
-    )) as Record<string, unknown>[];
+    );
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
       return NextResponse.json(
@@ -107,6 +113,12 @@ export async function handleImportPages(
 
   const encryptedToken =
     account.encrypted_access_token || account.encryptedAccessToken;
+  if (!encryptedToken) {
+    return NextResponse.json(
+      { error: 'Failed to decrypt account credentials' },
+      { status: 500 }
+    );
+  }
 
   let rawToken: string;
   try {
@@ -119,7 +131,7 @@ export async function handleImportPages(
   }
 
   // 5. Query Facebook Graph API v26.0 /me/accounts with pagination
-  let rawItems: any[] = [];
+  let rawItems: Awaited<ReturnType<typeof fetchAllFacebookPages>> = [];
   try {
     rawItems = await fetchAllFacebookPages(
       rawToken,
@@ -146,7 +158,7 @@ export async function handleImportPages(
   if (isSupabaseMode && matchedPages.length > 0) {
     const supabase = (
       dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()
-    ) as SupabaseClient<any> | null;
+    ) as SupabaseClient | null;
     if (supabase) {
       const pageFbIds = matchedPages.map((item) => String(item.id));
       const { data: existingRows } = await supabase
@@ -226,7 +238,7 @@ export async function handleImportPages(
       }
       return null;
     } else {
-      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
       if (!supabase) return null;
 
       const existingPage = existingPagesMap.get(String(pageItem.id));

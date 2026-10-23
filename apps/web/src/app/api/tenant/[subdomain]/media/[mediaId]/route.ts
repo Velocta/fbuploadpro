@@ -8,6 +8,7 @@ import {
   UpdateMediaItemRequestSchema,
   verifySessionToken,
   type DatabaseClient,
+  type DatabaseMediaItemRow,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../lib/storage';
@@ -45,7 +46,16 @@ async function authenticateUser(request: NextRequest, subdomain: string) {
   return { session };
 }
 
-function formatMediaRow(row: any) {
+
+/** Media row as the handlers consume it (spec 137 §3.7): the contracts
+ * row minus workspace_id (not projected by these selects), plus the
+ * width/height columns the contracts type does not model yet. */
+type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
+  width: number | null;
+  height: number | null;
+};
+
+function formatMediaRow(row: MediaItemRow) {
   return MediaItemResponseSchema.parse({
     id: row.id,
     userId: row.user_id,
@@ -75,7 +85,7 @@ export async function handleGetMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
   if (auth.error || !auth.session) return auth.error!;
@@ -102,7 +112,7 @@ export async function handleGetMedia(
       return NextResponse.json({ error: 'Media item not found' }, { status: 404 });
     }
 
-    return NextResponse.json(formatMediaRow(rows[0]));
+    return NextResponse.json(formatMediaRow(rows[0] as MediaItemRow));
   }
 
   const supabase = getRouteSupabase(dbClient);
@@ -130,7 +140,7 @@ export async function handleUpdateMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>,
+  dbClient?: DatabaseClient | SupabaseClient,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
@@ -222,7 +232,7 @@ export async function handleUpdateMedia(
     }
 
     const updates: string[] = ['updated_at = now()'];
-    const values: any[] = [];
+    const values: unknown[] = [];
     let paramIdx = 1;
 
     if (parsed.data.name !== undefined) {
@@ -284,7 +294,7 @@ export async function handleUpdateMedia(
       }
     }
 
-    return NextResponse.json(formatMediaRow(updatedRows[0]));
+    return NextResponse.json(formatMediaRow(updatedRows[0] as MediaItemRow));
   }
 
   const supabase = getRouteSupabase(dbClient);
@@ -319,7 +329,7 @@ export async function handleUpdateMedia(
     }
   }
 
-  const updatePayload: Record<string, any> = {
+  const updatePayload: Partial<MediaItemRow> = {
     updated_at: new Date().toISOString(),
   };
 
@@ -366,7 +376,7 @@ export async function handleDeleteMedia(
   request: NextRequest,
   subdomain: string,
   mediaId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>,
+  dbClient?: DatabaseClient | SupabaseClient,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const auth = await authenticateUser(request, subdomain);
