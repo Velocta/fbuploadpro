@@ -43,20 +43,26 @@ export const TIKTOK_PRIVACY_LEVELS = [
 
 export type TikTokPrivacy = (typeof TIKTOK_PRIVACY_LEVELS)[number];
 
-export const tikTokOptionsSchema = z.object({
-  /** Who can see the post. Defaults to 'public' (the provider default). */
-  privacy: z.enum(TIKTOK_PRIVACY_LEVELS).default('public'),
-  /** Whether other TikTok users may comment on the post. */
-  allowComment: z.boolean().optional(),
-  /** Whether other TikTok users may duet with the post. */
-  allowDuet: z.boolean().optional(),
-  /** Whether other TikTok users may stitch the post. */
-  allowStitch: z.boolean().optional(),
-  /** Whether the post is AI-generated content (TikTok disclosure). */
-  isAiGenerated: z.boolean().optional(),
-  /** Photo posts only: let TikTok add music automatically. */
-  autoAddMusic: z.boolean().optional(),
-});
+export const tikTokOptionsSchema = z
+  .object({
+    /** Who can see the post. Defaults to 'public' (the provider default). */
+    privacy: z.enum(TIKTOK_PRIVACY_LEVELS).default('public'),
+    /** Whether other TikTok users may comment on the post. */
+    allowComment: z.boolean().optional(),
+    /** Whether other TikTok users may duet with the post. */
+    allowDuet: z.boolean().optional(),
+    /** Whether other TikTok users may stitch the post. */
+    allowStitch: z.boolean().optional(),
+    /** Whether the post is AI-generated content (TikTok disclosure). */
+    isAiGenerated: z.boolean().optional(),
+    /** Photo posts only: let TikTok add music automatically. */
+    autoAddMusic: z.boolean().optional(),
+  })
+  // Strict like every sibling platform schema: an unknown key (e.g. a
+  // stored `isDraft` — deliberately not modelled, see above) must FAIL
+  // validation, never be silently stripped into a different post than
+  // the one that was requested.
+  .strict();
 
 export type TikTokOptions = z.infer<typeof tikTokOptionsSchema>;
 

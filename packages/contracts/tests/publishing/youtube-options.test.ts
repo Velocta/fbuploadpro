@@ -56,6 +56,16 @@ describe('parseYouTubePlatformOptions', () => {
     ).toThrow();
   });
 
+  it('rejects unknown option keys (schema is strict — nothing is silently stripped)', () => {
+    expect(() =>
+      parseYouTubePlatformOptions({
+        privacy: 'public',
+        madeForKids: false,
+        isDraft: true,
+      })
+    ).toThrow();
+  });
+
   it('rejects a missing privacy value', () => {
     expect(() =>
       parseYouTubePlatformOptions({ madeForKids: false })

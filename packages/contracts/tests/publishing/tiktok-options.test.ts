@@ -81,15 +81,20 @@ describe('parseTikTokOptions', () => {
     }
   });
 
-  it('never accepts a draft flag — draft delivery is out of scope for v1', () => {
-    // The schema has no isDraft field; zod strips unknown keys, so a
-    // stored draft request degrades to a normal public post request
-    // rather than silently becoming an in-app draft.
+  it('rejects a draft flag — draft delivery is out of scope for v1', () => {
+    // The schema has no isDraft field and is .strict(): a stored draft
+    // request FAILS validation outright. It must never be silently
+    // stripped and degraded into a normal public post.
     const result = parseTikTokOptions({ privacy: 'public', isDraft: true });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.options).not.toHaveProperty('isDraft');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('isDraft');
     }
+  });
+
+  it('rejects any other unknown option key', () => {
+    const result = parseTikTokOptions({ privacy: 'public', somethingElse: 1 });
+    expect(result.ok).toBe(false);
   });
 });
 
