@@ -8,6 +8,7 @@
  * prefilled message.
  */
 
+import React from 'react';
 import Link from 'next/link';
 
 import { Button } from '@/components/shared/ui/button';
@@ -18,7 +19,7 @@ export interface SignupPausedCardProps {
   className?: string;
 }
 
-export function SignupPausedCard({ className }: Readonly<SignupPausedCardProps>) {
+export const SignupPausedCard: React.FC<SignupPausedCardProps> = ({ className }) => {
   const whatsAppUrl = buildWhatsAppSupportUrl({
     message: 'Hi! I am inquiring about account registration and early access for FBUploadPro.',
   });
@@ -56,4 +57,4 @@ export function SignupPausedCard({ className }: Readonly<SignupPausedCardProps>)
       </div>
     </div>
   );
-}
+};
