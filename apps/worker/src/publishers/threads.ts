@@ -140,6 +140,14 @@ export function isThreadsContainerNotFound(err: unknown): boolean {
 export function classifyThreadsError(err: unknown): ClassifiedPublishError {
   const { code, subcode, message, httpStatus } = extractError(err);
 
+  // Our own pre-flight validation (missing media, bad carousel, …) is a
+  // definitive content problem — permanent, never retried. ValidationError
+  // carries a string code that extractError cannot read as a number, so
+  // it must be recognised before the numeric branches, or it falls into
+  // the code-undefined retryable branch by mistake.
+  if (err instanceof ValidationError) {
+    return { kind: 'permanent', code: 'validation', message };
+  }
   if (code === 190 || code === 102 || code === 10 || (code !== undefined && code >= 200 && code <= 299)) {
     return {
       kind: 'auth',
@@ -279,12 +287,19 @@ export class ThreadsPublisher implements Publisher {
     void liveLimit;
 
     // ---- Main post through the state machine ----
-    const main = await this.publishOne(
-      this.mainContainerParams(item, options, threadsUserId, accessToken),
-      threadsUserId,
-      accessToken,
-      item
-    );
+    // mainContainerParams validates content (a media post with no media
+    // URL, a carousel with too few items) and throws ValidationError —
+    // the params must be built inside a guard: evaluated as an argument
+    // the throw escaped publish() entirely, the queue message was never
+    // settled, and the item burned retries into the DLQ instead of
+    // failing permanently as a content problem.
+    let mainParams: ThreadsContainerCreateParams;
+    try {
+      mainParams = this.mainContainerParams(item, options, threadsUserId, accessToken);
+    } catch (err) {
+      return this.failureOutcome(err, item, undefined);
+    }
+    const main = await this.publishOne(mainParams, threadsUserId, accessToken, item);
     if (main.outcome) return main.outcome;
     const mediaId = main.mediaId as string;
     const detail: Record<string, unknown> = {

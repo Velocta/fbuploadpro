@@ -124,6 +124,14 @@ function isRateLimitCode(code: number | undefined): boolean {
 export function classifyInstagramError(err: unknown): ClassifiedPublishError {
   const { code, subcode, message, httpStatus } = extractError(err);
 
+  // Our own pre-flight validation (missing media, bad carousel, …) is a
+  // definitive content problem — permanent, never retried. ValidationError
+  // carries a string code that extractError cannot read as a number, so
+  // it must be recognised before the numeric branches, or it falls into
+  // the code-undefined retryable branch by mistake.
+  if (err instanceof ValidationError) {
+    return { kind: 'permanent', code: 'validation', message };
+  }
   if (code === 190 || code === 102 || code === 10 || (code !== undefined && code >= 200 && code <= 299)) {
     return {
       kind: 'auth',
