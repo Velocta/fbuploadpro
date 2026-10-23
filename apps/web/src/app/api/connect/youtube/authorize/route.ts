@@ -5,7 +5,7 @@ import type { ConnectNoticeCode } from '@/lib/connect/errors';
 import {
   createPostForMeConnectClient,
   type PostForMeConnectClient,
-} from '@/lib/connect/youtube';
+} from '@/lib/connect/platforms/youtube';
 
 /**
  * GET /api/connect/youtube/authorize — the initiation shim for the

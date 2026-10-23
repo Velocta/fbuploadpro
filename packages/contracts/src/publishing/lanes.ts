@@ -19,7 +19,7 @@ import type {
 //                       call-set that is request/response-light.
 //   - `publish-heavy` — anything streaming bytes: reels, video uploads,
 //                       stories, YouTube resumable/provider uploads,
-//                       X chunked video.
+//                       X chunked media uploads.
 
 export const PUBLISH_LANE_FAST = 'publish-fast';
 export const PUBLISH_LANE_HEAVY = 'publish-heavy';
@@ -54,8 +54,11 @@ const HEAVY = PUBLISH_LANE_HEAVY;
  *   - `text`, `image`, and `carousel` are fast wherever the platform's
  *     publish call-set ingests by reference (public URL / simple upload)
  *     and never streams bytes through the worker — Facebook photo posts,
- *     IG/Threads containers, X simple image upload, TikTok photo posts
- *     via the provider.
+ *     IG/Threads containers, TikTok photo posts via the provider.
+ *   - X is a deviation in the same direction: every media-bearing kind
+ *     is heavy, because the X publisher streams chunked uploads for ALL
+ *     media (spec 127 Scope.3 — there is no simple-upload path), and
+ *     spec 127's lane rule is text-only → fast, any media → heavy.
  *   - YouTube is the one deviation: every media-bearing kind is heavy,
  *     because the only YouTube publish path is a resumable/provider
  *     upload. YouTube has no text posts; the `text` entry exists only so
@@ -99,12 +102,14 @@ export const LANE_ROUTING_TABLE: Record<Platform, Record<QueueItemKind, PublishL
     carousel: HEAVY,
   },
   x: {
-    // Images use the simple upload; video uses chunked upload.
+    // Spec 127 Scope.3: the chunked upload streams bytes for every
+    // medium (images included — no simple-upload path); any post with
+    // media is heavy, text-only is fast.
     text: FAST,
-    image: FAST,
+    image: HEAVY,
     video: HEAVY,
     story: HEAVY,
-    carousel: FAST,
+    carousel: HEAVY,
   },
   tiktok: {
     // Video publishes through the provider's upload flow (heavy); photo

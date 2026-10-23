@@ -200,17 +200,27 @@ export async function handleGetInsights(
       throw graphError;
     }
 
-    const timeSeriesResult = await getPageTimeSeriesInsights(
-      page.fb_page_id,
-      decryptedToken,
-      query.range,
-      fetchImpl
-    );
-    const reactionsDemoResult = await getPageReactionsAndDemographics(
-      page.fb_page_id,
-      decryptedToken,
-      fetchImpl
-    );
+    // Dependency analysis (spec 139): getPageOverview above must stay
+    // sequential — its healthStatus gates this whole branch (a degraded
+    // status returns early without calling the other two, and a rawError
+    // throws before they run). The two calls below are independent of
+    // each other: each takes only fb_page_id / token / (range) / fetchImpl,
+    // neither consumes the other's result, and they are only merged into
+    // the payload after both settle. So they run concurrently.
+    //
+    // Failure semantics: Promise.all preserves today's net behaviour.
+    // The client library never rejects for Graph failures (it returns
+    // zero-filled/degraded results), but if a call ever did reject,
+    // sequential code would also have failed the whole request via the
+    // outer catch (discarding any sibling result). Promise.all does the
+    // same: the first rejection propagates to the outer catch and the
+    // sibling result is discarded. Promise.allSettled + degraded
+    // fallbacks was deliberately NOT used — it would turn a hard failure
+    // that returns 429/502 today into a 200 with partial data.
+    const [timeSeriesResult, reactionsDemoResult] = await Promise.all([
+      getPageTimeSeriesInsights(page.fb_page_id, decryptedToken, query.range, fetchImpl),
+      getPageReactionsAndDemographics(page.fb_page_id, decryptedToken, fetchImpl),
+    ]);
 
     // Preserve stored page_name if Graph API didn't return one
     const finalOverview = {

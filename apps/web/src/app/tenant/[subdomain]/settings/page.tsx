@@ -1,174 +1,127 @@
-'use client';
-
-import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import { THEME, PALETTE, SPACING, TYPOGRAPHY } from '@/lib/theme';
-import { GeneralSettingsView } from '@/components/settings/general-settings-view';
-import { BYOCSettingsView } from '@/components/settings/byoc-settings-view';
-import { InstagramSettingsView } from '@/components/settings/instagram-settings-view';
-import { ThreadsSettingsView } from '@/components/settings/threads-settings-view';
-import { YouTubeSettingsView } from '@/components/settings/youtube-settings-view';
-import { XSettingsView } from '@/components/settings/x-settings-view';
-import { TikTokSettingsView } from '@/components/settings/tiktok-settings-view';
-
-type SettingsTab = 'general' | 'facebook' | 'instagram' | 'threads' | 'youtube' | 'x' | 'tiktok';
-
-const SETTINGS_TAB_IDS: SettingsTab[] = [
-  'general',
-  'facebook',
-  'instagram',
-  'threads',
-  'youtube',
-  'x',
-  'tiktok',
-];
-
 /**
- * Resolve a ?tab= value to a tab. The legacy 'byoc' value keeps landing on
- * the Facebook tab so existing links (Accounts, Pages, sign-in redirects)
- * keep working unchanged.
+ * Settings route — server component (spec 135 PR-135-1, spec §6.2).
+ *
+ * Server-first pattern (spec 137 §3.2.4): the active tab is resolved
+ * from `searchParams` here on the server (the 7 ids + the legacy
+ * `byoc` → `facebook` alias + default `general`, spec §5.6), the
+ * active tab's initial data plus the workspace list are fetched in
+ * parallel, and the result is dehydrated into the React Query cache
+ * the client island (`SettingsShell`) reads from — zero fetch-on-mount
+ * for initial data, zero raw fetch in the subtree.
+ *
+ * The per-tab server-data contract is wired generically for all 7
+ * tabs, keyed by the existing `queryKeys` factory, so the tab PRs
+ * that follow (135-2/3/4) replace view components without touching
+ * this route again:
+ *   general          → workspace list only
+ *   facebook / `byoc` → workspace list + `queryKeys.settings.byoc`
+ *   instagram/threads → workspace list + `queryKeys.settings.platformCredentials(platform)`
+ *   youtube/x/tiktok → workspace list only (explanation tabs hold no data)
+ *
+ * Data source: preference (2) of spec 137 §3.2.4 — the cookie-forwarding
+ * server variant of the typed API client (`serverApiFetch`) against the
+ * route's own API handlers, validated by the already-shipped zod
+ * schemas. Preference (1) does not apply: `lib/server/` exposes no
+ * function returning the settings responses (its resolvers return
+ * decrypted credentials / workspace ids for server-internal use, not
+ * the settings payload shape), and assembling that shape here would
+ * duplicate the API routes' response construction.
+ *
+ * Failure handling: `prefetchQuery` never throws — a failed prefetch
+ * simply leaves the key out of the dehydrated state and the client
+ * island's query fetches on mount instead. Nothing fails silently at
+ * the surface: the client query's error state is the ladder rung.
+ *
+ * `useSearchParams` discipline (spec §6.2 re-verification): the shell
+ * island still reads search params (the credential panels read
+ * `?notice=` themselves), so it is mounted inside a Suspense boundary
+ * below — under Next 16 the bailout is contained to the island and
+ * the route streams the aligned `loading.tsx` geometry meanwhile.
+ * Outcome recorded in PR-135-1.
  */
-function resolveSettingsTab(param: string | null): SettingsTab {
-  if (param === 'byoc') return 'facebook';
-  if (param && (SETTINGS_TAB_IDS as string[]).includes(param)) {
-    return param as SettingsTab;
-  }
-  return 'general';
+
+import * as React from 'react';
+
+import { ListWorkspacesResponseSchema } from '@/lib/api/schemas/workspaces';
+import {
+  ByocSettingsResponseSchema,
+  PlatformCredentialsResponseSchema,
+} from '@/lib/api/schemas/settings';
+import { buildTenantApiPath } from '@/lib/api/client';
+import { DataHydration, queryKeys } from '@/lib/data';
+import {
+  createServerQueryClient,
+  prefetchServerQueries,
+  serverApiFetch,
+  type ServerPrefetchEntry,
+} from '@/lib/data/server';
+
+import SettingsLoading from './loading';
+import { resolveSettingsTab, SettingsShell, type SettingsTab } from './settings-shell';
+
+interface WorkspaceSettingsPageProps {
+  params: Promise<{ subdomain: string }>;
+  searchParams: Promise<{ tab?: string | string[] | undefined }>;
 }
 
-export default function WorkspaceSettingsPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
+function firstParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
 
-  const subdomain = (params?.subdomain as string) || '';
-  const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
-    resolveSettingsTab(searchParams.get('tab'))
-  );
-
-  useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam) {
-      setActiveTab(resolveSettingsTab(tabParam));
-    }
-  }, [searchParams]);
-
-  const handleTabChange = (tab: SettingsTab) => {
-    setActiveTab(tab);
-    router.replace(`/tenant/${subdomain}/settings?tab=${tab}`);
-  };
-
-  const tabs: Array<{ id: SettingsTab; label: string }> = [
-    { id: 'general', label: 'General' },
-    { id: 'facebook', label: 'Facebook' },
-    { id: 'instagram', label: 'Instagram' },
-    { id: 'threads', label: 'Threads' },
-    { id: 'youtube', label: 'YouTube' },
-    { id: 'x', label: 'X' },
-    { id: 'tiktok', label: 'TikTok' },
+/** The server-prefetch entries for one tab (see the contract above). */
+function settingsPrefetchEntries(subdomain: string, tab: SettingsTab): ServerPrefetchEntry[] {
+  const tenant = queryKeys.tenant(subdomain);
+  const entries: ServerPrefetchEntry[] = [
+    {
+      queryKey: tenant.workspaces.list,
+      queryFn: () =>
+        serverApiFetch('/api/workspaces', { schema: ListWorkspacesResponseSchema }),
+    },
   ];
 
+  if (tab === 'facebook') {
+    entries.push({
+      queryKey: tenant.settings.byoc,
+      queryFn: () =>
+        serverApiFetch(buildTenantApiPath(subdomain, '/settings/byoc'), {
+          schema: ByocSettingsResponseSchema,
+        }),
+    });
+  }
+
+  if (tab === 'instagram' || tab === 'threads') {
+    entries.push({
+      queryKey: tenant.settings.platformCredentials(tab),
+      queryFn: () =>
+        serverApiFetch(
+          buildTenantApiPath(subdomain, `/settings/platform-credentials/${tab}`),
+          { schema: PlatformCredentialsResponseSchema }
+        ),
+    });
+  }
+
+  return entries;
+}
+
+export default async function WorkspaceSettingsPage({
+  params,
+  searchParams,
+}: Readonly<WorkspaceSettingsPageProps>) {
+  const { subdomain } = await params;
+  const { tab: tabParam } = await searchParams;
+  const activeTab = resolveSettingsTab(firstParam(tabParam));
+
+  const queryClient = createServerQueryClient(subdomain);
+  const dehydratedState = await prefetchServerQueries(
+    queryClient,
+    settingsPrefetchEntries(subdomain, activeTab)
+  );
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: SPACING.xl,
-        padding: `${SPACING.xl} ${SPACING.xxl}`,
-        boxSizing: 'border-box',
-        minHeight: '100vh',
-        backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-      }}
-    >
-      {/* Settings Header */}
-      <div>
-        <h1
-          style={{
-            margin: 0,
-            fontSize: '1.5rem',
-            fontWeight: TYPOGRAPHY.weights.bold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            letterSpacing: TYPOGRAPHY.tracking.h1,
-          }}
-        >
-          Settings
-        </h1>
-      </div>
-
-      {/* Tabs Navigation Bar */}
-      <div
-        role="tablist"
-        aria-label="Settings sections"
-        style={{
-          display: 'flex',
-          gap: SPACING.lg,
-          borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          flexWrap: 'wrap',
-        }}
-      >
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              role="tab"
-              type="button"
-              aria-selected={isActive}
-              data-testid={`settings-tab-${tab.id}`}
-              onClick={() => handleTabChange(tab.id)}
-              style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: isActive ? `2px solid ${PALETTE.primary}` : '2px solid transparent',
-                padding: `${SPACING.sm} 0`,
-                fontSize: '0.875rem',
-                fontWeight: isActive ? TYPOGRAPHY.weights.semibold : TYPOGRAPHY.weights.medium,
-                color: isActive ? `var(--text-main, ${THEME.default.text.primary})` : `var(--text-dim, ${THEME.default.text.muted})`,
-                cursor: 'pointer',
-                transition: 'color 0.15s ease, border-color 0.15s ease',
-                marginBottom: '-1px',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  e.currentTarget.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
-                }
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Tab Panels */}
-      <div>
-        {activeTab === 'general' && (
-          <GeneralSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'facebook' && (
-          <BYOCSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'instagram' && (
-          <InstagramSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'threads' && (
-          <ThreadsSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'youtube' && (
-          <YouTubeSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'x' && (
-          <XSettingsView subdomain={subdomain} />
-        )}
-        {activeTab === 'tiktok' && (
-          <TikTokSettingsView subdomain={subdomain} />
-        )}
-      </div>
-    </div>
+    <DataHydration state={dehydratedState}>
+      <React.Suspense fallback={<SettingsLoading />}>
+        <SettingsShell subdomain={subdomain} initialTab={activeTab} />
+      </React.Suspense>
+    </DataHydration>
   );
 }

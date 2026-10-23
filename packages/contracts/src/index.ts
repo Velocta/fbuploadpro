@@ -26,3 +26,4 @@ export * from './publishing/lanes.js';
 export * from './publishing/limits.js';
 export * from './publishing/token-refresh.js';
 export * from './publishing/youtube-options.js';
+export * from './publishing/x-options.js';

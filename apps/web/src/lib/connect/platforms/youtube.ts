@@ -54,7 +54,7 @@ import {
   type DiscoveredDestination,
   type ExchangedAccount,
   type PlatformConnectConfig,
-} from './registry';
+} from '../registry';
 
 const POST_FOR_ME_BASE_URL = 'https://api.postforme.dev/v1';
 

@@ -10,7 +10,7 @@ import {
   resolveConnectDbClient,
 } from '@/lib/connect/session';
 import type { ConnectDbClient } from '@/lib/connect/persist';
-import type { YouTubeDiscoveredDestination } from '@/lib/connect/youtube';
+import type { YouTubeDiscoveredDestination } from '@/lib/connect/platforms/youtube';
 import { getRouteSupabase, isLegacyClient } from '@/lib/route-auth';
 
 /**

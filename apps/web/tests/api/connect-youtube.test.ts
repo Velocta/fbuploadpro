@@ -21,7 +21,7 @@ import {
   type PostForMeConnectClient,
   type PostForMeSocialAccount,
   type YouTubeDiscoveredDestination,
-} from '@/lib/connect/youtube';
+} from '@/lib/connect/platforms/youtube';
 import { handleYouTubeAuthorize } from '@/app/api/connect/youtube/authorize/route';
 import { handleYouTubeReturn } from '@/app/api/connect/youtube/return/route';
 import { handleYouTubeComplete } from '@/app/api/connect/youtube/complete/route';
