@@ -2,7 +2,8 @@
  * @file connect-pages.test.tsx
  * @description Spec 123 Part C: the picker landing page (server component,
  * fed by the signed pending cookie) and the dedicated-section destination
- * landing page (client component shell — spec 128 builds its internals).
+ * landing page (server-first route + frame shell — spec 131 PR-131-4
+ * mounts the four spec 128 slots in the frame).
  */
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -27,11 +28,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: () => undefined }),
 }));
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { httpError } from '@/lib/api/errors';
 import ConnectPickerPage from '@/app/tenant/[subdomain]/connect/[platform]/page';
-import DestinationSectionPage, {
-  DestinationSummary,
-  loadDestinationDetail,
-} from '@/app/tenant/[subdomain]/destinations/[destinationId]/page';
+import { DestinationSummary } from '@/app/tenant/[subdomain]/destinations/[destinationId]/page';
+import {
+  DestinationFrame,
+  DestinationSlots,
+  destinationLoadErrorMessage,
+} from '@/app/tenant/[subdomain]/destinations/[destinationId]/destination-frame';
 import {
   SocialAccountsList,
   SocialAccountsListView,
@@ -102,7 +107,12 @@ describe('Connect picker page', () => {
 
 describe('Destination dedicated-section landing page', () => {
   it('renders the back link and loading state before data arrives', () => {
-    const { html, hasText } = render(<DestinationSectionPage />);
+    const queryClient = new QueryClient();
+    const { html, hasText } = render(
+      <QueryClientProvider client={queryClient}>
+        <DestinationFrame subdomain="acme" destinationId="dest-row-1" />
+      </QueryClientProvider>
+    );
     expect(html).toContain('data-testid="destination-section-page"');
     expect(hasText('Back to Accounts')).toBe(true);
     expect(html).toContain('/tenant/acme/accounts');
@@ -139,58 +149,53 @@ describe('Destination dedicated-section landing page', () => {
   });
 });
 
-describe('loadDestinationDetail', () => {
-  function fakeResponse(ok: boolean, body: unknown, status = 200): Response {
-    return { ok, status, json: async () => body } as Response;
-  }
-
-  it('returns the destination on success', async () => {
-    const fetcher = async () =>
-      fakeResponse(true, { destination: { id: 'd1', name: 'My Brand' } });
-    const result = await loadDestinationDetail(
-      'acme',
-      'd1',
-      fetcher as typeof fetch
+describe('destination load errors (server-first conversion, spec 131 §8.1)', () => {
+  // The client-side loadDestinationDetail helper is deleted in PR-131-4;
+  // its two error strings survive verbatim in the frame's error path.
+  it('reports not found for a 404', () => {
+    expect(destinationLoadErrorMessage(httpError(404, 'missing'))).toBe(
+      "We couldn't find this destination."
     );
-    expect(result.destination?.name).toBe('My Brand');
   });
 
-  it('reports not found for a 404 and for an empty payload', async () => {
-    const notFound = async () => fakeResponse(false, {}, 404);
-    const missing = await loadDestinationDetail(
-      'acme',
-      'nope',
-      notFound as typeof fetch
+  it('reports a plain retry message for other failures', () => {
+    expect(destinationLoadErrorMessage(httpError(500, 'boom'))).toContain(
+      'try again'
     );
-    expect(missing.error).toContain("couldn't find");
-
-    const empty = async () => fakeResponse(true, {});
-    const emptyResult = await loadDestinationDetail(
-      'acme',
-      'd1',
-      empty as typeof fetch
+    expect(destinationLoadErrorMessage(new Error('offline'))).toBe(
+      "Couldn't load this destination. Please try again."
     );
-    expect(emptyResult.error).toContain("couldn't find");
   });
+});
 
-  it('reports a plain retry message for other failures', async () => {
-    const failing = async () => fakeResponse(false, {}, 500);
-    const failed = await loadDestinationDetail(
-      'acme',
-      'd1',
-      failing as typeof fetch
+describe('Destination frame slots (spec 128 §9.4 wiring)', () => {
+  it('mounts all four slots with the destination identity, and no tabs', () => {
+    const { html } = render(
+      <DestinationSlots
+        destination={{
+          id: 'dest-row-1',
+          externalDestinationId: 'dest-1001',
+          name: 'My Brand',
+          handle: 'mybrand',
+          avatarUrl: null,
+          timezone: 'UTC',
+          status: 'active',
+          platform: 'instagram',
+          account: {
+            id: 'acct-1',
+            displayName: 'Fixture Creator',
+            platform: 'instagram',
+            status: 'active',
+          },
+        }}
+      />
     );
-    expect(failed.error).toContain('try again');
-
-    const throwing = async () => {
-      throw new Error('offline');
-    };
-    const thrown = await loadDestinationDetail(
-      'acme',
-      'd1',
-      throwing as unknown as typeof fetch
-    );
-    expect(thrown.error).toContain('try again');
+    expect(html).toContain('data-testid="destination-slot-queue"');
+    expect(html).toContain('data-testid="destination-slot-composer"');
+    expect(html).toContain('data-testid="destination-slot-posting-times"');
+    expect(html).toContain('data-testid="destination-slot-history"');
+    expect(html).toContain('data-destination-id="dest-row-1"');
+    expect(html).not.toContain('role="tab"');
   });
 });
 

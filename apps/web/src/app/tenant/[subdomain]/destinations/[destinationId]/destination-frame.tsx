@@ -169,8 +169,7 @@ export function DestinationSummary({
 
       <div className="mt-4 flex flex-col gap-1 rounded-md border border-line bg-panel px-6 py-4 text-body text-ink">
         <p className="m-0">
-          Platform:{' '}
-          {PLATFORM_LABELS[destination.platform] ?? destination.platform}
+          Platform: {PLATFORM_LABELS[destination.platform]}
         </p>
         <p className="m-0">
           Connected through: {destination.account.displayName}
@@ -308,7 +307,7 @@ export function DestinationFrame({
     >
       <Link
         href={`/tenant/${subdomain}/accounts`}
-        className="text-metadata font-semibold text-primary underline outline-none focus-visible:outline-2 focus-visible:outline-brand-gold"
+        className="inline-flex min-h-11 items-center text-metadata font-semibold text-primary underline outline-none focus-visible:outline-2 focus-visible:outline-brand-gold"
       >
         Back to Accounts
       </Link>
