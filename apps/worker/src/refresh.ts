@@ -4,10 +4,12 @@ import {
   getTokenRefreshConfig,
   InternalError,
   isTokenRefreshDue,
+  PLATFORM_TOKEN_REFRESH_CONFIG,
   type DatabaseSocialAccountRow,
   type Platform,
   type Publisher,
   type PublisherRegistry,
+  type PublisherTokenSet,
   type RefreshedTokenSet,
 } from '@fbuploadpro/contracts';
 import { captureWorkerError, type PostHogEnv } from './analytics.js';
@@ -29,9 +31,15 @@ import { captureWorkerError, type PostHogEnv } from './analytics.js';
 //
 //   UPDATE social_accounts
 //   SET refresh_lease_owner = <run-scoped uuid>,
-//       refresh_lease_expires_at = <cycle now> + REFRESH_LEASE_TTL_MS
+//       refresh_lease_expires_at = <acquisition time> + REFRESH_LEASE_TTL_MS
 //   WHERE id = <account id>
-//     AND (refresh_lease_owner IS NULL OR refresh_lease_expires_at < <cycle now>)
+//     AND (refresh_lease_owner IS NULL OR refresh_lease_expires_at < <acquisition time>)
+//
+// The acquisition time is read from the wall clock AT THE MOMENT of
+// the acquire (`new Date()` inside `tryAcquireLease`), never from the
+// cycle-start snapshot: in a long cycle a lease minted from the stale
+// snapshot would be part-expired on arrival, letting a concurrent run
+// steal it mid-refresh and double-spend a rotating refresh token.
 //
 // Exactly one concurrent run can affect the row, so exactly one run can
 // spend a given refresh token. A run that affects 0 rows skips the
@@ -62,8 +70,16 @@ import { captureWorkerError, type PostHogEnv } from './analytics.js';
 //     is raised, and the job never retry-loops — later scans only read
 //     `status='active'` rows, so an expired account is never revisited.
 //   - Any other refresh failure (retryable or otherwise non-auth): the
-//     lease is released, the stored tokens are left untouched, and the
-//     account is counted deferred — the next scheduled run retries.
+//     lease is released, the stored tokens are left untouched, the
+//     failure is captured to PostHog (`refresh_transient_failed`), and
+//     the account is counted deferred — the next scheduled run retries.
+//   - A token DECRYPT failure is classified separately from platform
+//     refresh failures (`refresh_decrypt_failed` + the error class):
+//     the publisher is never called, because the failure is in our own
+//     stored ciphertext / key, not at the platform — a corrupt
+//     ciphertext must be distinguishable from a platform outage. Its
+//     retry semantics are otherwise the transient ones above (lease
+//     released, tokens untouched, counted deferred).
 //   - A persist failure after a successful platform refresh is logged
 //     loudly + captured to PostHog and counted deferred; the lease is
 //     deliberately NOT released (its expiry is the backstop) — see the
@@ -73,6 +89,21 @@ import { captureWorkerError, type PostHogEnv } from './analytics.js';
 //     error after a loud log + PostHog capture. The job never treats a
 //     schema/DB failure as a platform auth failure, so it can never
 //     silently mark accounts `expired` because of its own plumbing.
+//
+// Scan: BOUNDED and due-windowed (spec 139). The query carries a
+// due-window predicate — `token_expires_at <= cycle now + horizon`,
+// where the horizon is the widest per-platform refresh threshold in
+// the contracts config (currently the 7-day long-lived / lapse
+// threshold) — so rows that cannot possibly be due are never read.
+// (Rows with no recorded expiry are excluded by the same predicate:
+// `isTokenRefreshDue` never fires without an expiry.) Pages are
+// fetched keyset-style, ordered by `id` with a `id > last-seen`
+// cursor, REFRESH_SCAN_PAGE_SIZE rows at a time, and a cycle stops
+// after REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE scanned rows; anything
+// beyond the bound is picked up by a later cycle. Per-account due-ness
+// is still decided in code by `isTokenRefreshDue` (the query window is
+// the superset across platforms; the per-platform thresholds and the
+// minimum-age rule are finer than any single SQL predicate).
 //
 // Scan scope: `social_accounts` only. `destinations` carries
 // `encrypted_destination_token` but the unified schema gives it NO
@@ -121,6 +152,37 @@ export const CLAIM_TICK_CRON = '* * * * *';
 /** How long a per-connection refresh lease is held before another run may take it over. */
 export const REFRESH_LEASE_TTL_MS = 5 * 60 * 1000;
 
+/**
+ * Due-window horizon for the scan query, in seconds: the widest
+ * `refreshWhenExpiringWithinSeconds` across the contracts per-platform
+ * config (currently 7 days — Instagram/Threads/Facebook). Derived from
+ * the config, not restated, so widening a platform threshold widens
+ * the scan window with it.
+ */
+export const REFRESH_DUE_WINDOW_SECONDS = Math.max(
+  ...Object.values(PLATFORM_TOKEN_REFRESH_CONFIG).map(
+    (config) => config.refreshWhenExpiringWithinSeconds ?? 0
+  )
+);
+
+/** Rows fetched per scan page (keyset pagination on `id`). */
+export const REFRESH_SCAN_PAGE_SIZE = 100;
+
+/** Per-cycle work bound: a cycle scans at most this many due-window rows. */
+export const REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE = 500;
+
+/** Optional scan-bound overrides (tests use these to exercise pagination cheaply). */
+export interface RefreshCycleOptions {
+  pageSize?: number;
+  maxAccountsPerCycle?: number;
+}
+
+function saneBound(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : fallback;
+}
+
 export interface RefreshEnv extends PostHogEnv {
   TOKEN_ENCRYPTION_KEY?: string;
 }
@@ -133,6 +195,10 @@ export interface RefreshDbResult {
 
 export interface RefreshSelectQuery extends PromiseLike<RefreshDbResult> {
   eq(column: string, value: unknown): RefreshSelectQuery;
+  lte(column: string, value: unknown): RefreshSelectQuery;
+  gt(column: string, value: unknown): RefreshSelectQuery;
+  order(column: string, options: { ascending: boolean }): RefreshSelectQuery;
+  limit(count: number): RefreshSelectQuery;
 }
 
 export interface RefreshUpdateQuery extends PromiseLike<RefreshDbResult> {
@@ -157,7 +223,7 @@ export interface RefreshDbClient {
 
 /** Structured per-cycle counters (logged on every run). */
 export interface RefreshCycleResult {
-  /** Active accounts returned by the scan. */
+  /** Due-window accounts returned by the bounded, paginated scan. */
   scanned: number;
   /** Scanned accounts that were eligible and due (incl. lapsed Facebook). */
   due: number;
@@ -210,15 +276,21 @@ function isDue(row: RefreshAccountRow, now: Date): boolean {
   );
 }
 
-/** Acquires the per-connection lease; true when this run won the row. */
+/**
+ * Acquires the per-connection lease; true when this run won the row.
+ *
+ * Expiry AND the takeover comparison are computed from the actual
+ * acquisition moment (`new Date()` here), NOT from the cycle-start
+ * snapshot — see the header note on part-expired leases.
+ */
 async function tryAcquireLease(
   db: RefreshDbClient,
   accountId: string,
-  runId: string,
-  now: Date
+  runId: string
 ): Promise<boolean> {
-  const leaseExpiresAt = new Date(now.getTime() + REFRESH_LEASE_TTL_MS).toISOString();
-  const nowIso = now.toISOString();
+  const acquiredAt = new Date();
+  const leaseExpiresAt = new Date(acquiredAt.getTime() + REFRESH_LEASE_TTL_MS).toISOString();
+  const nowIso = acquiredAt.toISOString();
   const rows = await runUpdate(db, (table) =>
     table
       .update({ refresh_lease_owner: runId, refresh_lease_expires_at: leaseExpiresAt })
@@ -276,8 +348,11 @@ interface RefreshAccountContext {
   env: RefreshEnv;
   masterKey: string;
   runId: string;
-  now: Date;
   result: RefreshCycleResult;
+}
+
+function errorClass(err: unknown): string {
+  return err instanceof Error ? err.name : typeof err;
 }
 
 async function refreshOneAccount(
@@ -289,7 +364,7 @@ async function refreshOneAccount(
 
   let acquired: boolean;
   try {
-    acquired = await tryAcquireLease(db, row.id, runId, ctx.now);
+    acquired = await tryAcquireLease(db, row.id, runId);
   } catch (err) {
     // A lease-acquire failure is the job's own plumbing (e.g. lease
     // columns not yet migrated) — fail the whole cycle loudly rather
@@ -303,15 +378,38 @@ async function refreshOneAccount(
     return;
   }
 
-  let refreshedTokens: RefreshedTokenSet;
+  // Decrypt is its OWN step, classified separately from platform
+  // refresh failures: a failure here means our stored ciphertext (or
+  // key) is bad — the publisher is never called and its `mapError`
+  // never sees the error. Retry semantics stay the transient ones:
+  // lease released, stored tokens untouched, counted deferred.
+  let tokens: PublisherTokenSet;
   try {
-    const tokens = {
+    tokens = {
       accessToken: await decryptToken(row.encrypted_access_token, masterKey),
       refreshToken: row.encrypted_refresh_token
         ? await decryptToken(row.encrypted_refresh_token, masterKey)
         : null,
       tokenExpiresAt: row.token_expires_at ?? null,
     };
+  } catch (err) {
+    captureWorkerError(env, err, { site: 'runRefreshCycle', kind: 'refresh_decrypt_failed', accountId: row.id, platform: row.platform, errorClass: errorClass(err) });
+    console.error(
+      `[refresh] account ${row.id} (${row.platform}) token decrypt failed (${errorClass(err)}); refresh deferred, publisher not called:`,
+      err
+    );
+    try {
+      await releaseLease(db, row.id, runId);
+    } catch (releaseErr) {
+      captureWorkerError(env, releaseErr, { site: 'runRefreshCycle', kind: 'lease_release_failed', accountId: row.id, platform: row.platform });
+      console.error(`[refresh] failed to release lease for account ${row.id} (${row.platform}) after decrypt failure:`, releaseErr);
+    }
+    result.deferredTransient++;
+    return;
+  }
+
+  let refreshedTokens: RefreshedTokenSet;
+  try {
     refreshedTokens = await publisher.refreshTokens(row, tokens);
   } catch (err) {
     const classified = publisher.mapError(err);
@@ -333,7 +431,10 @@ async function refreshOneAccount(
       return;
     }
     // Transient / non-auth failure: release the lease, leave the stored
-    // tokens untouched, and let the next scheduled run retry.
+    // tokens untouched, capture to PostHog (this branch was previously
+    // console-only, so transient platform failures were invisible in
+    // error tracking), and let the next scheduled run retry.
+    captureWorkerError(env, err, { site: 'runRefreshCycle', kind: 'refresh_transient_failed', accountId: row.id, platform: row.platform, code: classified.code, classifiedKind: classified.kind, errorClass: errorClass(err) });
     try {
       await releaseLease(db, row.id, runId);
     } catch (releaseErr) {
@@ -396,7 +497,8 @@ export async function runRefreshCycle(
   db: RefreshDbClient,
   registry: PublisherRegistry,
   env: RefreshEnv,
-  now: Date = new Date()
+  now: Date = new Date(),
+  options: RefreshCycleOptions = {}
 ): Promise<RefreshCycleResult> {
   const masterKey = env.TOKEN_ENCRYPTION_KEY;
   if (!masterKey) {
@@ -413,42 +515,67 @@ export async function runRefreshCycle(
   };
   const runId = crypto.randomUUID();
 
-  const { data, error } = await db.from('social_accounts').select('*').eq('status', 'active');
-  if (error) {
-    captureWorkerError(env, error, { site: 'runRefreshCycle', kind: 'scan_failed' });
-    console.error('[refresh] failed to scan social_accounts; aborting cycle:', error);
-    throw dbError(error);
-  }
-  const rows = (Array.isArray(data) ? data : []) as RefreshAccountRow[];
-  result.scanned = rows.length;
+  const pageSize = saneBound(options.pageSize, REFRESH_SCAN_PAGE_SIZE);
+  const maxAccountsPerCycle = saneBound(
+    options.maxAccountsPerCycle,
+    REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE
+  );
+  // Due-window predicate: only rows expiring within the widest
+  // platform refresh horizon can be due this cycle (see header).
+  const dueBeforeIso = new Date(now.getTime() + REFRESH_DUE_WINDOW_SECONDS * 1000).toISOString();
 
-  for (const row of rows) {
-    const config = getTokenRefreshConfig(row.platform);
+  let cursor: string | null = null;
+  while (result.scanned < maxAccountsPerCycle) {
+    const pageLimit = Math.min(pageSize, maxAccountsPerCycle - result.scanned);
+    let query = db
+      .from('social_accounts')
+      .select('*')
+      .eq('status', 'active')
+      .lte('token_expires_at', dueBeforeIso);
+    if (cursor !== null) {
+      query = query.gt('id', cursor);
+    }
+    const { data, error } = await query.order('id', { ascending: true }).limit(pageLimit);
+    if (error) {
+      captureWorkerError(env, error, { site: 'runRefreshCycle', kind: 'scan_failed' });
+      console.error('[refresh] failed to scan social_accounts; aborting cycle:', error);
+      throw dbError(error);
+    }
+    const rows = (Array.isArray(data) ? data : []) as RefreshAccountRow[];
+    if (rows.length === 0) break;
+    result.scanned += rows.length;
+    cursor = (rows[rows.length - 1] as RefreshAccountRow).id;
 
-    if (config.strategy === 'lapse-detection') {
-      // Facebook: no refresh call ever. The flip fires only once the
-      // token has actually lapsed (see header).
-      if (!isDue(row, now)) continue;
-      if (!row.token_expires_at || new Date(row.token_expires_at).getTime() > now.getTime()) {
+    for (const row of rows) {
+      const config = getTokenRefreshConfig(row.platform);
+
+      if (config.strategy === 'lapse-detection') {
+        // Facebook: no refresh call ever. The flip fires only once the
+        // token has actually lapsed (see header).
+        if (!isDue(row, now)) continue;
+        if (!row.token_expires_at || new Date(row.token_expires_at).getTime() > now.getTime()) {
+          continue;
+        }
+        result.due++;
+        if (await markFacebookLapsed(db, row.id)) {
+          result.expired++;
+          console.warn(`[refresh] facebook account ${row.id} marked expired: user token lapsed`);
+        }
         continue;
       }
+
+      // Refreshable platforms need a stored refresh token to spend.
+      if (!row.encrypted_refresh_token) continue;
+      if (!isDue(row, now)) continue;
       result.due++;
-      if (await markFacebookLapsed(db, row.id)) {
-        result.expired++;
-        console.warn(`[refresh] facebook account ${row.id} marked expired: user token lapsed`);
-      }
-      continue;
+
+      const publisher = registry.get(row.platform);
+      if (!publisher) continue; // No module registered yet — by design (specs 122/124–127).
+
+      await refreshOneAccount({ db, registry, env, masterKey, runId, result }, row, publisher);
     }
 
-    // Refreshable platforms need a stored refresh token to spend.
-    if (!row.encrypted_refresh_token) continue;
-    if (!isDue(row, now)) continue;
-    result.due++;
-
-    const publisher = registry.get(row.platform);
-    if (!publisher) continue; // No module registered yet — by design (specs 122/124–127).
-
-    await refreshOneAccount({ db, registry, env, masterKey, runId, now, result }, row, publisher);
+    if (rows.length < pageLimit) break;
   }
 
   console.info(

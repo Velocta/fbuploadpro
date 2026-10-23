@@ -8,7 +8,10 @@ import {
 } from '@fbuploadpro/contracts';
 import {
   runRefreshCycle,
+  REFRESH_DUE_WINDOW_SECONDS,
   REFRESH_LEASE_TTL_MS,
+  REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE,
+  REFRESH_SCAN_PAGE_SIZE,
   type RefreshDbClient,
 } from '../src/refresh.js';
 import { handleScheduled, type Env } from '../src/index.js';
@@ -58,32 +61,73 @@ function thenable(execute: () => DbResult) {
   };
 }
 
+interface RecordedSelect {
+  ops: Array<{ op: 'eq' | 'lte' | 'gt'; column: string; value: unknown }>;
+  orderColumn: string | null;
+  limit: number | null;
+}
+
 class FakeRefreshDb {
   readonly accounts = new Map<string, FakeAccount>();
   readonly updates: RecordedUpdate[] = [];
+  readonly selects: RecordedSelect[] = [];
   failScan = false;
 
   from(_table: string) {
     const db = this;
     return {
       select: (_columns: string) => {
-        const filters: Array<[string, unknown]> = [];
+        const ops: RecordedSelect['ops'] = [];
+        let orderColumn: string | null = null;
+        let limitCount: number | null = null;
         const builder = {
           eq(column: string, value: unknown) {
-            filters.push([column, value]);
+            ops.push({ op: 'eq', column, value });
+            return builder;
+          },
+          lte(column: string, value: unknown) {
+            ops.push({ op: 'lte', column, value });
+            return builder;
+          },
+          gt(column: string, value: unknown) {
+            ops.push({ op: 'gt', column, value });
+            return builder;
+          },
+          order(column: string, _options: { ascending: boolean }) {
+            orderColumn = column;
+            return builder;
+          },
+          limit(count: number) {
+            limitCount = count;
             return builder;
           },
           then: thenable(() => {
+            db.selects.push({ ops: [...ops], orderColumn, limit: limitCount });
             if (db.failScan) {
               return {
                 data: null,
                 error: new Error('column social_accounts.refresh_lease_owner does not exist'),
               };
             }
-            const rows = [...db.accounts.values()]
-              .filter((row) => filters.every(([col, val]) => row[col] === val))
-              .map((row) => ({ ...row }));
-            return { data: rows, error: null };
+            // Mirror SQL semantics: comparisons against NULL never pass.
+            let rows = [...db.accounts.values()].filter((row) =>
+              ops.every(({ op, column, value }) => {
+                const cell: unknown = row[column];
+                if (op === 'eq') return cell === value;
+                if (cell === null || cell === undefined) return false;
+                return op === 'lte'
+                  ? (cell as string) <= (value as string)
+                  : (cell as string) > (value as string);
+              })
+            );
+            if (orderColumn !== null) {
+              const col = orderColumn;
+              rows = rows.sort((a, b) =>
+                String(a[col]) < String(b[col]) ? -1 : String(a[col]) > String(b[col]) ? 1 : 0
+              );
+            }
+            if (limitCount !== null) rows = rows.slice(0, limitCount);
+            return { data: rows.map((row) => ({ ...row })), error: null };
           }).then,
         };
         return builder;
@@ -206,6 +250,11 @@ describe('Token refresh job (spec 121 D6)', () => {
 
   beforeEach(() => {
     fetchBodies.length = 0;
+    // Fake ONLY the Date clock (timers stay real): lease expiry is
+    // computed from `new Date()` at acquisition time, so tests pin
+    // the wall clock to NOW and advance it explicitly when needed.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_url: string, init?: { body?: string }) => {
@@ -215,6 +264,7 @@ describe('Token refresh job (spec 121 D6)', () => {
     );
   });
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -338,6 +388,16 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(stored.refresh_lease_owner).toBeNull();
     // No update ever carried token material.
     expect(db.updates.some((u) => 'encrypted_access_token' in u.values)).toBe(false);
+    // Spec 139: transient failures are PostHog-visible (previously
+    // console-only), tagged with the account id + error class.
+    expect(
+      fetchBodies.some(
+        (body) =>
+          body.includes('$exception') &&
+          body.includes('refresh_transient_failed') &&
+          body.includes('acct-1')
+      )
+    ).toBe(true);
   });
 
   it('skips an account whose lease is held by a live other owner', async () => {
@@ -478,6 +538,146 @@ describe('Token refresh job (spec 121 D6)', () => {
     expect(db.accounts.get('acct-1')?.status).toBe('active');
     expect(fetchBodies.some((body) => body.includes('$exception'))).toBe(true);
   });
+
+  it('LEASE TIMING (spec 139): lease expiry is computed from the acquisition moment, not the stale cycle-start snapshot', async () => {
+    const db = new FakeRefreshDb();
+    db.accounts.set('acct-1', await makeAccount({ id: 'acct-1' }));
+    db.accounts.set('acct-2', await makeAccount({ id: 'acct-2' }));
+    const publisher = fakePublisher('x', async () => {
+      // Simulate a long cycle: by the time the SECOND account's lease
+      // is acquired, the wall clock has moved 3 minutes past the
+      // cycle-start snapshot (NOW).
+      vi.setSystemTime(new Date(NOW.getTime() + 3 * 60 * 1000));
+      return { accessToken: 'new-access', refreshToken: 'new-refresh', tokenExpiresAt: NEW_EXPIRY };
+    });
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW
+    );
+
+    expect(result.refreshed).toBe(2);
+    const acquires = db.updates.filter((u) => 'refresh_lease_owner' in u.values && u.values.refresh_lease_owner !== null);
+    expect(acquires).toHaveLength(2);
+    // First acquire happens at the pinned clock (NOW).
+    expect((acquires[0] as RecordedUpdate).values.refresh_lease_expires_at).toBe(
+      new Date(NOW.getTime() + REFRESH_LEASE_TTL_MS).toISOString()
+    );
+    // Second acquire: expiry is acquisition-time + TTL — a full TTL
+    // from NOW+3min, NOT the part-expired NOW+TTL the stale snapshot
+    // would have minted.
+    const second = acquires.find((u) => u.matchedIds.includes('acct-2')) as RecordedUpdate;
+    expect(second.values.refresh_lease_expires_at).toBe(
+      new Date(NOW.getTime() + 3 * 60 * 1000 + REFRESH_LEASE_TTL_MS).toISOString()
+    );
+  });
+
+  it('BOUNDED DUE-SCAN (spec 139): keyset pagination processes only due-window accounts, across pages', async () => {
+    const db = new FakeRefreshDb();
+    // Five due X accounts interleaved (by id) with three accounts
+    // whose tokens expire far beyond the refresh horizon — those
+    // must never be scanned.
+    const dueIds = ['acct-01', 'acct-03', 'acct-05', 'acct-07', 'acct-09'];
+    for (const id of dueIds) {
+      db.accounts.set(id, await makeAccount({ id }));
+    }
+    for (const id of ['acct-02', 'acct-04', 'acct-06']) {
+      db.accounts.set(
+        id,
+        await makeAccount({ id, token_expires_at: '2027-10-22T12:10:00.000Z' })
+      );
+    }
+    const publisher = fakePublisher('x');
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW,
+      { pageSize: 2 }
+    );
+
+    expect(result.scanned).toBe(5);
+    expect(result.due).toBe(5);
+    expect(result.refreshed).toBe(5);
+    expect(publisher.refreshTokens).toHaveBeenCalledTimes(5);
+    // Three pages: 2 + 2 + 1, each carrying the due-window predicate,
+    // id-ordering, the page limit, and (from page 2) the keyset cursor.
+    expect(db.selects.length).toBeGreaterThanOrEqual(3);
+    const horizonIso = new Date(NOW.getTime() + REFRESH_DUE_WINDOW_SECONDS * 1000).toISOString();
+    for (const select of db.selects.slice(0, 3)) {
+      expect(select.ops).toContainEqual({ op: 'eq', column: 'status', value: 'active' });
+      expect(select.ops).toContainEqual({ op: 'lte', column: 'token_expires_at', value: horizonIso });
+      expect(select.orderColumn).toBe('id');
+      expect(select.limit).toBe(2);
+    }
+    expect(db.selects[0]?.ops.some((op) => op.op === 'gt')).toBe(false);
+    expect(db.selects[1]?.ops).toContainEqual({ op: 'gt', column: 'id', value: 'acct-03' });
+    expect(db.selects[2]?.ops).toContainEqual({ op: 'gt', column: 'id', value: 'acct-07' });
+    // The production defaults are sane and bounded.
+    expect(REFRESH_SCAN_PAGE_SIZE).toBeGreaterThan(0);
+    expect(REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE).toBeGreaterThanOrEqual(REFRESH_SCAN_PAGE_SIZE);
+    expect(REFRESH_DUE_WINDOW_SECONDS).toBe(7 * 24 * 3600);
+  });
+
+  it('BOUNDED DUE-SCAN (spec 139): the per-cycle work bound stops the scan; the remainder waits for a later cycle', async () => {
+    const db = new FakeRefreshDb();
+    for (const id of ['acct-1', 'acct-2', 'acct-3', 'acct-4', 'acct-5']) {
+      db.accounts.set(id, await makeAccount({ id }));
+    }
+    const publisher = fakePublisher('x');
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW,
+      { pageSize: 2, maxAccountsPerCycle: 3 }
+    );
+
+    expect(result.scanned).toBe(3);
+    expect(result.refreshed).toBe(3);
+    expect(publisher.refreshTokens).toHaveBeenCalledTimes(3);
+  });
+
+  it('DECRYPT FAILURE (spec 139): corrupt ciphertext is classified distinctly, the publisher is never called, and PostHog sees it', async () => {
+    const db = new FakeRefreshDb();
+    const account = await makeAccount({ encrypted_access_token: 'not-valid-ciphertext' });
+    db.accounts.set(account.id, account);
+    const publisher = fakePublisher('x');
+
+    const result = await runRefreshCycle(
+      db as unknown as RefreshDbClient,
+      registryWith(publisher),
+      ENV,
+      NOW
+    );
+
+    // Transient retry semantics preserved: deferred, still active,
+    // lease released, tokens untouched.
+    expect(result.deferredTransient).toBe(1);
+    expect(result.expired).toBe(0);
+    expect(result.refreshed).toBe(0);
+    expect(publisher.refreshTokens).not.toHaveBeenCalled();
+    const stored = db.accounts.get('acct-1') as FakeAccount;
+    expect(stored.status).toBe('active');
+    expect(stored.refresh_lease_owner).toBeNull();
+    expect(stored.encrypted_access_token).toBe('not-valid-ciphertext');
+    // Distinct classification: decrypt kind + error class, and NOT
+    // the transient platform kind or an auth expiry.
+    expect(
+      fetchBodies.some(
+        (body) =>
+          body.includes('refresh_decrypt_failed') &&
+          body.includes('acct-1') &&
+          body.includes('ValidationError')
+      )
+    ).toBe(true);
+    expect(fetchBodies.some((body) => body.includes('refresh_transient_failed'))).toBe(false);
+    expect(fetchBodies.some((body) => body.includes('refresh_auth_failed'))).toBe(false);
+  });
 });
 
 // ==========================================
@@ -500,6 +700,10 @@ describe('Scheduled cron routing (spec 121 D6)', () => {
           scannedTables.push(table);
           const builder = {
             eq: (_col: string, _val: unknown) => builder,
+            lte: (_col: string, _val: unknown) => builder,
+            gt: (_col: string, _val: unknown) => builder,
+            order: (_col: string, _opts: { ascending: boolean }) => builder,
+            limit: (_count: number) => builder,
             then: thenable(() => ({ data: [], error: null })).then,
           };
           return builder;
