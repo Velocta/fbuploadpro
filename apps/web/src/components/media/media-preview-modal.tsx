@@ -1,98 +1,54 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+/**
+ * Preview modal shell (spec 133 §6.6 / PR-133-5, PB-8 / PB-14).
+ *
+ * The slim composition that replaces the 969-line legacy monolith.
+ * The monolith is decomposed into focused units in this folder —
+ * `media-preview-viewer.tsx` (media pane + scrubber + spec-113
+ * fallback chain + frame capture trigger), `media-preview-metadata.tsx`
+ * (label/value rows + name/caption editors), `media-preview-footer.tsx`
+ * (Delete / Cancel / Save changes), and `video-frame-capture.ts` (the
+ * pure capture utility) — and this shell owns only the dialog itself:
+ * shared/ui Dialog composition (focus trap/return, Esc, backdrop —
+ * the legacy hand-rolled <dialog> layer and the subtree's last legacy
+ * `components/ui/dialog` import die here), the name/caption drafts,
+ * Previous/Next wiring, and the action lockouts.
+ *
+ * EXTERNAL CONTRACT — FROZEN in PR-133-3 (plan.md sequencing):
+ * `MediaPreviewModalProps` below is exactly the contract the overlays
+ * composition mounts (`<MediaPreviewModal item open onOpenChange
+ * onSave onDelete />`); this PR changed internals only. The delete
+ * confirmation is the shared/ui AlertDialog destructive pattern
+ * (verb-named, focus on Keep, no Esc/outside dismissal — UI Rule 3).
+ * A failed save stays open with the failure stated inline in the
+ * footer (spec §7.2) instead of the legacy silent close.
+ */
+
+import React, { useEffect, useState } from 'react';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+
 import {
-  deriveDefaultCaption,
-  formatBytes,
-  formatUploadDate,
-  formatDuration,
-} from './media-types';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/shared/ui/alert-dialog';
+import { Dialog, DialogContent } from '@/components/shared/ui/dialog';
+import { reportError } from '@/lib/report-error';
+import { deriveDefaultCaption } from './media-types';
+import { MediaPreviewFooter } from './media-preview-footer';
+import { MediaPreviewMetadata } from './media-preview-metadata';
+import { MediaPreviewViewer } from './media-preview-viewer';
+import type { CapturedVideoFrame } from './video-frame-capture';
 
-export interface CapturedVideoFrame {
-  blob: Blob | null;
-  dataUrl: string;
-}
-
-const FALLBACK_WEBP_DATA_URL =
-  'data:image/webp;base64,UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA';
-
-/** Safety timeout for canvas.toBlob() — resolves null if the browser hangs. */
-const CANVAS_TO_BLOB_TIMEOUT_MS = 60;
-
-/** How long the "frame saved" success message stays visible. */
-const FRAME_SUCCESS_DURATION_MS = 3000;
-
-export async function captureVideoFrameAsWebp(
-  videoElement: HTMLVideoElement | null
-): Promise<CapturedVideoFrame> {
-  if (typeof document === 'undefined') {
-    return { blob: null, dataUrl: FALLBACK_WEBP_DATA_URL };
-  }
-
-  try {
-    const rawWidth = videoElement?.videoWidth || 640;
-    const rawHeight = videoElement?.videoHeight || 360;
-    const maxDim = 640;
-    const scale = Math.min(1, maxDim / Math.max(rawWidth, rawHeight, 1));
-    const width = Math.max(1, Math.round(rawWidth * scale));
-    const height = Math.max(1, Math.round(rawHeight * scale));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-
-    let dataUrl = FALLBACK_WEBP_DATA_URL;
-    try {
-      const ctx = canvas.getContext('2d');
-      if (ctx && videoElement) {
-        ctx.drawImage(videoElement, 0, 0, width, height);
-      }
-      if (typeof canvas.toDataURL === 'function') {
-        const encoded = canvas.toDataURL('image/webp', 0.85);
-        if (encoded && encoded.startsWith('data:image/')) {
-          dataUrl = encoded;
-        }
-      }
-    } catch (_drawErr) {
-      dataUrl = FALLBACK_WEBP_DATA_URL;
-    }
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      if (typeof canvas.toBlob !== 'function') {
-        resolve(null);
-        return;
-      }
-      const timer = setTimeout(() => resolve(null), CANVAS_TO_BLOB_TIMEOUT_MS);
-      try {
-        canvas.toBlob(
-          (b) => {
-            clearTimeout(timer);
-            resolve(b);
-          },
-          'image/webp',
-          0.85
-        );
-      } catch (_blobErr) {
-        clearTimeout(timer);
-        resolve(null);
-      }
-    });
-
-    return { blob, dataUrl };
-  } catch (_err) {
-    return { blob: null, dataUrl: FALLBACK_WEBP_DATA_URL };
-  }
-}
+export type { CapturedVideoFrame } from './video-frame-capture';
+export { captureVideoFrameAsWebp } from './video-frame-capture';
+export { resolvePreviewImageSrc } from './media-preview-viewer';
 
 export interface MediaPreviewModalProps {
   item: MediaItemResponse | null;
@@ -117,573 +73,6 @@ export interface MediaPreviewModalProps {
   onDelete?: ((mediaId: string) => Promise<void> | void) | undefined;
 }
 
-/**
- * Still-image source for the preview pane. The full-size `item.url` is
- * primary; when it fails to load, fall back to `item.thumbnailUrl` — the
- * same source the grid/table thumbnails render (they use
- * `thumbnailUrl || url` and render fine for assets whose preview pane
- * previously stayed black). Returns null when neither source is usable,
- * so the caller can show the placeholder instead of a black pane.
- */
-export function resolvePreviewImageSrc(
-  item: Pick<MediaItemResponse, 'url' | 'thumbnailUrl'>,
-  failedSrcs: ReadonlySet<string>
-): string | null {
-  if (!failedSrcs.has(item.url)) return item.url;
-  if (
-    item.thumbnailUrl &&
-    item.thumbnailUrl !== item.url &&
-    !failedSrcs.has(item.thumbnailUrl)
-  ) {
-    return item.thumbnailUrl;
-  }
-  return null;
-}
-
-interface PreviewMediaViewerProps {
-  item: MediaItemResponse;
-  isVideo: boolean;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  currentTime: number;
-  duration: number;
-  isPlaying: boolean;
-  isCapturingFrame: boolean;
-  frameSuccessMessage: string | null;
-  onTimeUpdate: () => void;
-  onEnded: () => void;
-  onTogglePlay: () => void;
-  onScrubberChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onCaptureFrame: () => void;
-}
-
-function PreviewMediaViewer({
-  item,
-  isVideo,
-  videoRef,
-  currentTime,
-  duration,
-  isPlaying,
-  isCapturingFrame,
-  frameSuccessMessage,
-  onTimeUpdate,
-  onEnded,
-  onTogglePlay,
-  onScrubberChange,
-  onCaptureFrame,
-}: Readonly<PreviewMediaViewerProps>) {
-  // The pane background is pitch black, so a media element that fails (or,
-  // for video, has not painted a frame yet) is indistinguishable from a
-  // black image. Track the failed source and fall back to the thumbnail —
-  // the exact source the grid renders — then to a placeholder, mirroring
-  // MediaAssetCard/MediaTableRow. Keyed by URL so a different asset is
-  // never affected by a previous asset's failure.
-  const [failedSrcs, setFailedSrcs] = useState<ReadonlySet<string>>(new Set());
-  const markSrcFailed = (src: string) => {
-    setFailedSrcs((prev) => {
-      if (prev.has(src)) return prev;
-      const next = new Set(prev);
-      next.add(src);
-      return next;
-    });
-  };
-
-  const imageSrc = isVideo ? null : resolvePreviewImageSrc(item, failedSrcs);
-  const videoFailed = isVideo && failedSrcs.has(item.url);
-  const showVideoFallbackStill =
-    videoFailed &&
-    item.thumbnailUrl !== null &&
-    !failedSrcs.has(item.thumbnailUrl);
-
-  const mediaStyle: React.CSSProperties = {
-    maxWidth: '100%',
-    maxHeight: '440px',
-    objectFit: 'contain',
-    borderRadius: RADII.xs,
-  };
-
-  let mediaContent: React.ReactNode;
-  if (isVideo && !videoFailed) {
-    mediaContent = (
-      <video
-        ref={videoRef}
-        data-testid="modal-video-player"
-        src={item.url}
-        // Poster is the captured-frame thumbnail: without it the video
-        // element paints black until playback, even though the thumbnail
-        // renders fine in the grid.
-        poster={item.thumbnailUrl ?? undefined}
-        preload="metadata"
-        controls={false}
-        playsInline
-        onTimeUpdate={onTimeUpdate}
-        onEnded={onEnded}
-        onError={() => markSrcFailed(item.url)}
-        style={mediaStyle}
-      >
-        <track kind="captions" />
-      </video>
-    );
-  } else if (isVideo && showVideoFallbackStill) {
-    mediaContent = (
-      <img
-        data-testid="modal-video-fallback-still"
-        src={item.thumbnailUrl ?? undefined}
-        alt={item.name}
-        onError={() => {
-          if (item.thumbnailUrl) markSrcFailed(item.thumbnailUrl);
-        }}
-        style={mediaStyle}
-      />
-    );
-  } else if (!isVideo && imageSrc) {
-    mediaContent = (
-      <img
-        data-testid="modal-image-preview"
-        src={imageSrc}
-        alt={item.name}
-        onError={() => markSrcFailed(imageSrc)}
-        style={mediaStyle}
-      />
-    );
-  } else {
-    mediaContent = (
-      <div
-        data-testid="modal-preview-placeholder"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '100%',
-          minHeight: '200px',
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-        }}
-      >
-        {isVideo ? (
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" />
-            <polygon points="10 8 16 12 10 16 10 8" />
-          </svg>
-        ) : (
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-            <circle cx="9" cy="9" r="2" />
-            <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-          </svg>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        padding: SPACING.xl,
-        backgroundColor: PALETTE.background,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: SPACING.md,
-        borderRight: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxHeight: '440px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          borderRadius: RADII.xs,
-        }}
-      >
-        {mediaContent}
-      </div>
-
-      {isVideo && (
-        <div
-          style={{
-            width: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-            <button
-              type="button"
-              onClick={onTogglePlay}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: PALETTE.text,
-                cursor: 'pointer',
-                padding: 0,
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              {isPlaying ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <rect x="6" y="4" width="4" height="16" />
-                  <rect x="14" y="4" width="4" height="16" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              )}
-            </button>
-
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              step={0.01}
-              value={currentTime}
-              onChange={onScrubberChange}
-              style={{
-                flex: 1,
-                accentColor: PALETTE.primary,
-                cursor: 'pointer',
-              }}
-            />
-
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                minWidth: '55px',
-                textAlign: 'right',
-              }}
-            >
-              {formatDuration(currentTime) || '0:00'} / {formatDuration(duration || item.durationSeconds) || '0:00'}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-            <button
-              type="button"
-              data-testid="set-video-frame-thumbnail-btn"
-              onClick={onCaptureFrame}
-              disabled={isCapturingFrame}
-              style={{
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: PALETTE.primary,
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: isCapturingFrame ? 'wait' : 'pointer',
-                padding: '2px 0',
-              }}
-            >
-              {isCapturingFrame ? 'Capturing frame...' : 'Capture frame'}
-              <span style={{ display: 'none' }} aria-hidden="true">
-                Set Current Frame as Thumbnail
-              </span>
-            </button>
-            {frameSuccessMessage && (
-              <span style={{ fontSize: '0.75rem', color: PALETTE.accent2 }}>
-                {frameSuccessMessage}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface PreviewMetadataEditorProps {
-  item: MediaItemResponse;
-  isVideo: boolean;
-  nameDraft: string;
-  captionDraft: string;
-  isSaving: boolean;
-  isDeleting: boolean;
-  onNameChange: (val: string) => void;
-  onCaptionChange: (val: string) => void;
-}
-
-function PreviewMetadataEditor({
-  item,
-  isVideo,
-  nameDraft,
-  captionDraft,
-  isSaving,
-  isDeleting,
-  onNameChange,
-  onCaptionChange,
-}: Readonly<PreviewMetadataEditorProps>) {
-  const isBusy = isSaving || isDeleting;
-  return (
-    <div
-      style={{
-        padding: SPACING.xl,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: SPACING.md,
-      }}
-    >
-      <h2
-        id="preview-modal-title"
-        style={{
-          margin: 0,
-          fontSize: '1rem',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-        }}
-      >
-        Asset Details
-      </h2>
-
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          paddingBottom: SPACING.sm,
-          borderBottom: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Type</span>
-          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontWeight: TYPOGRAPHY.weights.medium }}>
-            {item.mediaType === 'video' ? 'Video' : 'Image'}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Size</span>
-          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
-            {formatBytes(item.fileSize)}
-          </span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Aspect ratio</span>
-          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})` }}>
-            {item.aspectRatio && item.aspectRatio !== 'unknown' ? item.aspectRatio : '—'}
-          </span>
-        </div>
-        {isVideo && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-            <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Duration</span>
-            <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
-              {formatDuration(item.durationSeconds) || '—'}
-            </span>
-          </div>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem' }}>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>Upload date</span>
-          <span style={{ color: `var(--text-main, ${THEME.default.text.primary})`, fontVariantNumeric: TYPOGRAPHY.tabularNums }}>
-            {formatUploadDate(item.createdAt)}
-          </span>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label
-            htmlFor="preview-filename-input"
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-            }}
-          >
-            File name
-          </label>
-          <input
-            id="preview-filename-input"
-            type="text"
-            data-testid="modal-filename-input"
-            disabled={isBusy}
-            value={nameDraft}
-            onChange={(e) => onNameChange(e.target.value)}
-            style={{
-              width: '100%',
-              padding: `${SPACING.xs} ${SPACING.sm}`,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-              borderRadius: RADII.xs,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              fontSize: '0.8125rem',
-              outline: 'none',
-              boxSizing: 'border-box',
-              opacity: isBusy ? 0.6 : 1,
-            }}
-          />
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <label
-            htmlFor="preview-caption-textarea"
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-            }}
-          >
-            Caption
-          </label>
-          <textarea
-            id="preview-caption-textarea"
-            data-testid="modal-caption-input"
-            rows={4}
-            disabled={isBusy}
-            value={captionDraft}
-            onChange={(e) => onCaptionChange(e.target.value)}
-            placeholder="Add a caption..."
-            style={{
-              width: '100%',
-              padding: SPACING.sm,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-              borderRadius: RADII.xs,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              fontSize: '0.8125rem',
-              lineHeight: 1.45,
-              outline: 'none',
-              resize: 'vertical',
-              boxSizing: 'border-box',
-              opacity: isBusy ? 0.6 : 1,
-            }}
-          />
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              fontSize: '0.6875rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              fontVariantNumeric: TYPOGRAPHY.tabularNums,
-            }}
-          >
-            {captionDraft.length} / 2,200
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface PreviewModalFooterProps {
-  hasDelete: boolean;
-  isSaving: boolean;
-  isDeleting: boolean;
-  onDelete?: () => void;
-  onCancel: () => void;
-  onSave: () => void;
-}
-
-function PreviewModalFooter({
-  hasDelete,
-  isSaving,
-  isDeleting,
-  onDelete,
-  onCancel,
-  onSave,
-}: Readonly<PreviewModalFooterProps>) {
-  const isBusy = isSaving || isDeleting;
-  return (
-    <div
-      style={{
-        padding: `${SPACING.md} ${SPACING.xl}`,
-        borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-      }}
-    >
-      {hasDelete ? (
-        <button
-          type="button"
-          data-testid="modal-delete-media-btn"
-          disabled={isBusy}
-          onClick={onDelete}
-          style={{
-            backgroundColor: 'transparent',
-            border: 'none',
-            color: PALETTE.accent3,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-            opacity: isBusy ? 0.6 : 1,
-            padding: `${SPACING.xs} 0`,
-          }}
-        >
-          {isDeleting ? 'Deleting...' : 'Delete asset'}
-        </button>
-      ) : (
-        <div />
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-        <button
-          type="button"
-          disabled={isBusy}
-          onClick={onCancel}
-          style={{
-            padding: `${SPACING.xs} ${SPACING.md}`,
-            backgroundColor: 'transparent',
-            border: 'none',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            fontSize: '0.8125rem',
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-            opacity: isBusy ? 0.6 : 1,
-          }}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          data-testid="modal-save-caption-btn"
-          disabled={isBusy}
-          onClick={onSave}
-          style={{
-            padding: `${SPACING.xs} ${SPACING.lg}`,
-            backgroundColor: PALETTE.primary,
-            color: PALETTE.background,
-            border: 'none',
-            borderRadius: RADII.xs,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-            opacity: isBusy ? 0.6 : 1,
-          }}
-        >
-          {isSaving ? 'Saving...' : 'Save changes'}
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export function MediaPreviewModal({
   item,
   open,
@@ -703,267 +92,137 @@ export function MediaPreviewModal({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isCapturingFrame, setIsCapturingFrame] = useState(false);
-  const [frameSuccessMessage, setFrameSuccessMessage] = useState<string | null>(null);
-
-  // Video scrubber state
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     if (item && open) {
       setNameDraft(item.name || '');
       setCaptionDraft(item.captionText ?? deriveDefaultCaption(item.name));
-      setFrameSuccessMessage(null);
-      setCurrentTime(0);
-      setIsPlaying(false);
+      setSaveError(null);
     }
   }, [item, open]);
 
-  if (!open || !item) return null;
+  if (!item) return null;
 
-  const isVideo = item.mediaType === 'video';
+  const isBusy = isSaving || isDeleting;
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-      setDuration(videoRef.current.duration || 0);
-    }
-  };
-
-  const handleScrubberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTime = Number.parseFloat(e.target.value);
-    setCurrentTime(newTime);
-    if (videoRef.current) {
-      videoRef.current.currentTime = newTime;
-    }
-  };
-
-  const handleTogglePlay = () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      videoRef.current.pause();
-      setIsPlaying(false);
-    } else {
-      videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
-    }
-  };
-
-  const handleCaptureFrame = async () => {
-    if (!videoRef.current || !onUpdateThumbnail || isCapturingFrame || isSaving || isDeleting) return;
-    setIsCapturingFrame(true);
-    setFrameSuccessMessage(null);
-    try {
-      const captured = await captureVideoFrameAsWebp(videoRef.current);
-      await onUpdateThumbnail(item.id, captured);
-      setFrameSuccessMessage('Frame captured as thumbnail');
-      setTimeout(() => setFrameSuccessMessage(null), FRAME_SUCCESS_DURATION_MS);
-    } finally {
-      setIsCapturingFrame(false);
-    }
+  const handleOpenChange = (next: boolean) => {
+    // An in-flight save/delete owns the dialog until it settles —
+    // no dismissal path (Esc, backdrop, close button, Cancel is
+    // disabled separately) may strand the operation (spec 071).
+    if (!next && isBusy) return;
+    onOpenChange(next);
   };
 
   const handleSaveChanges = async () => {
-    if (!onSave || isSaving || isDeleting) return;
+    if (!onSave || isBusy) return;
     setIsSaving(true);
+    setSaveError(null);
     try {
       await onSave(item.id, {
         name: nameDraft.trim() || item.name,
         captionText: captionDraft.trim(),
       });
       onOpenChange(false);
+    } catch (error) {
+      reportError(error, { source: 'media-preview-save' });
+      setSaveError('Could not save changes. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    if (!onDelete || isDeleting || isSaving) return;
-    setShowDeleteConfirm(true);
-  };
-
   const handleConfirmDelete = async () => {
-    if (!onDelete || isDeleting || isSaving) return;
+    if (!onDelete || isBusy) return;
     setIsDeleting(true);
     try {
       await onDelete(item.id);
       setShowDeleteConfirm(false);
       onOpenChange(false);
+    } catch (error) {
+      reportError(error, { source: 'media-preview-delete' });
     } finally {
       setIsDeleting(false);
     }
   };
 
   return (
-    <dialog
-      open
-      aria-labelledby="preview-modal-title"
-      data-testid="media-preview-modal"
-      onPointerDown={(e) => {
-        if (!isSaving && !isDeleting && e.target === e.currentTarget) {
-          onOpenChange(false);
-        }
-      }}
-      onKeyDown={(e) => {
-        if (!isSaving && !isDeleting && !showDeleteConfirm && e.key === 'Escape') {
-          onOpenChange(false);
-        }
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        maxWidth: 'none',
-        maxHeight: 'none',
-        margin: 0,
-        border: 'none',
-        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9200,
-        padding: SPACING.lg,
-        boxSizing: 'border-box',
-      }}
-    >
-      {(hasPrevious !== undefined || hasNext !== undefined || onPrevious || onNext) && (
-        <div style={{ display: 'none' }} aria-hidden="true">
-          <button
-            type="button"
-            data-testid="preview-prev-btn"
-            disabled={hasPrevious === false}
-            onClick={onPrevious}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            data-testid="preview-next-btn"
-            disabled={hasNext === false}
-            onClick={onNext}
-          >
-            Next
-          </button>
-        </div>
-      )}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '920px',
-          maxHeight: '90vh',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: '1px solid var(--border-strong, rgba(255, 255, 255, 0.15))',
-          borderRadius: RADII.md,
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.75)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)',
-            flex: 1,
-            overflowY: 'auto',
-          }}
+    <>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent
+          data-testid="media-preview-modal"
+          aria-describedby={undefined}
+          className="flex flex-col gap-0 p-0 sm:max-w-4xl"
         >
-          <PreviewMediaViewer
-            item={item}
-            isVideo={isVideo}
-            videoRef={videoRef}
-            currentTime={currentTime}
-            duration={duration}
-            isPlaying={isPlaying}
-            isCapturingFrame={isCapturingFrame}
-            frameSuccessMessage={frameSuccessMessage}
-            onTimeUpdate={handleTimeUpdate}
-            onEnded={() => setIsPlaying(false)}
-            onTogglePlay={handleTogglePlay}
-            onScrubberChange={handleScrubberChange}
-            onCaptureFrame={handleCaptureFrame}
-          />
+          <div className="grid min-h-0 flex-1 md:grid-cols-5">
+            <MediaPreviewViewer
+              item={item}
+              isBusy={isBusy}
+              className="md:col-span-3"
+              hasPrevious={hasPrevious}
+              hasNext={hasNext}
+              onPrevious={onPrevious}
+              onNext={onNext}
+              onUpdateThumbnail={onUpdateThumbnail}
+            />
+            <MediaPreviewMetadata
+              item={item}
+              className="md:col-span-2"
+              nameDraft={nameDraft}
+              captionDraft={captionDraft}
+              isSaving={isSaving}
+              isDeleting={isDeleting}
+              onNameChange={setNameDraft}
+              onCaptionChange={setCaptionDraft}
+            />
+          </div>
 
-          <PreviewMetadataEditor
-            item={item}
-            isVideo={isVideo}
-            nameDraft={nameDraft}
-            captionDraft={captionDraft}
+          <MediaPreviewFooter
+            hasDelete={Boolean(onDelete)}
             isSaving={isSaving}
             isDeleting={isDeleting}
-            onNameChange={setNameDraft}
-            onCaptionChange={setCaptionDraft}
+            saveError={saveError}
+            onDelete={onDelete ? () => setShowDeleteConfirm(true) : undefined}
+            onCancel={() => handleOpenChange(false)}
+            onSave={handleSaveChanges}
           />
-        </div>
+        </DialogContent>
+      </Dialog>
 
-        <PreviewModalFooter
-          hasDelete={Boolean(onDelete)}
-          isSaving={isSaving}
-          isDeleting={isDeleting}
-          onDelete={handleDelete}
-          onCancel={() => onOpenChange(false)}
-          onSave={handleSaveChanges}
-        />
-      </div>
-
-      {/* Single-asset delete confirmation */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent style={{ maxWidth: '440px' }} data-testid="preview-delete-confirm-dialog">
-          <DialogHeader>
-            <DialogTitle>Delete &ldquo;{item.name}&rdquo;?</DialogTitle>
-            <DialogDescription>This can&apos;t be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button
-              type="button"
-              data-testid="preview-delete-keep-btn"
-              disabled={isDeleting}
-              onClick={() => setShowDeleteConfirm(false)}
-              style={{
-                height: '36px',
-                padding: `0 ${SPACING.md}`,
-                backgroundColor: 'transparent',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                cursor: isDeleting ? 'not-allowed' : 'pointer',
-                opacity: isDeleting ? 0.6 : 1,
-              }}
-            >
+      {/* Single-asset delete confirmation (AlertDialog pattern). */}
+      <AlertDialog
+        open={showDeleteConfirm}
+        onOpenChange={(next) => {
+          if (!next) setShowDeleteConfirm(false);
+        }}
+      >
+        <AlertDialogContent
+          data-testid="preview-delete-confirm-dialog"
+          className="sm:max-w-md"
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{item.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>This can&apos;t be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="preview-delete-keep-btn" disabled={isDeleting}>
               Keep
-            </button>
-            <button
-              type="button"
+            </AlertDialogCancel>
+            <AlertDialogAction
               data-testid="preview-delete-confirm-btn"
               disabled={isDeleting}
-              onClick={handleConfirmDelete}
-              style={{
-                height: '36px',
-                padding: `0 ${SPACING.md}`,
-                backgroundColor: PALETTE.accent3,
-                color: PALETTE.text,
-                border: 'none',
-                borderRadius: RADII.sm,
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: isDeleting ? 'not-allowed' : 'pointer',
-                opacity: isDeleting ? 0.7 : 1,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: SPACING.xs,
+              onClick={(event) => {
+                // Stay open until the delete settles: success closes
+                // from the handler; a failure keeps the confirm up.
+                event.preventDefault();
+                void handleConfirmDelete();
               }}
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
