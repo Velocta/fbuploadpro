@@ -69,6 +69,14 @@ export const THREADS_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
 /**
  * 100 posts per 15 min per user — the lower bound of the conflicting
  * official figures (100 vs 200 per 15 min), per spec 121 Scope.8.
+ *
+ * Shared-app fact (spec 127 Scope.6, comment only — not an enforced
+ * window here): X's global app is additionally subject to an app-level
+ * ceiling of 10,000 posts per 24 h across ALL workspaces, republished
+ * in X's tables. It is recorded, not modelled: the per-user window
+ * above is the enforced D5 limit, and the runtime `x-rate-limit-*`
+ * headers tighten an individual destination further when X reports
+ * less headroom (spec 127 publisher).
  */
 export const X_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
   maxCount: 100,

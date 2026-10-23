@@ -79,11 +79,10 @@ export interface BoundaryNotFoundProps {
 export function BoundaryNotFound({ homeHref, homeLabel }: BoundaryNotFoundProps) {
   return (
     <div className="flex items-center justify-center px-6 py-12">
-      {/* The shared EmptyState is typed by cause; `no-results` is its
-          closest cause for a missing route (the primitive has no
-          dedicated not-found type — recorded in PR-A2). */}
+      {/* Typed by cause: a missing route is the dedicated `not-found`
+          cause (spec 130 §5.7, discharging spec 137 §11(a)). */}
       <EmptyState
-        type="no-results"
+        type="not-found"
         icon={<CompassIcon aria-hidden className="size-8 text-ink-dim" />}
         title="This page is not here"
         description="The page you are looking for may have moved or no longer exists."

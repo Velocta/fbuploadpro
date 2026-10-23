@@ -143,15 +143,36 @@ export interface FacebookGraphPageItem {
   [key: string]: unknown;
 }
 
+// NOTE: this timeout is implemented locally, not via the web app's shared
+// `fetchWithTimeout` helper (apps/web/src/lib/http/fetch-with-timeout.ts),
+// because @fbuploadpro/contracts is a dependency of the web app — importing
+// the web helper here would invert that dependency. The budget is kept in
+// step with GRAPH_API_TIMEOUT_MS in the web helper (30s, spec 139 A4).
+const FACEBOOK_GRAPH_TIMEOUT_MS = 30_000;
+
+function facebookGraphTimeoutSignal(callerSignal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(FACEBOOK_GRAPH_TIMEOUT_MS);
+  if (!callerSignal) {
+    return timeoutSignal;
+  }
+  return typeof AbortSignal.any === 'function'
+    ? AbortSignal.any([callerSignal, timeoutSignal])
+    : timeoutSignal;
+}
+
 /**
  * Shared helper for fetching all Facebook Pages via /me/accounts with limit=100
  * and following cursor pagination (paging.next) up to maxPages (default: 5 = 500 pages max).
+ * Each Graph request is bounded by a 30s timeout, composed with the caller's
+ * signal when one is supplied via the optional trailing `options` argument.
+ * The trailing options argument is additive — existing callers are unaffected.
  */
 export async function fetchAllFacebookPages(
   accessToken: string,
   fields: string,
   maxPages = 5,
-  fetchFn: typeof fetch = globalThis.fetch
+  fetchFn: typeof fetch = globalThis.fetch,
+  options?: { signal?: AbortSignal }
 ): Promise<FacebookGraphPageItem[]> {
   const allPages: FacebookGraphPageItem[] = [];
   const initialUrl = new URL('https://graph.facebook.com/v26.0/me/accounts');
@@ -167,6 +188,7 @@ export async function fetchAllFacebookPages(
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      signal: facebookGraphTimeoutSignal(options?.signal),
     });
 
     if (!res.ok) {

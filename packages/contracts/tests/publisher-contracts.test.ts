@@ -153,7 +153,7 @@ describe('Lane routing (spec 121 Scope.2)', () => {
     instagram: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
     threads: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
     youtube: { text: 'publish-fast', image: 'publish-heavy', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-heavy' },
-    x: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
+    x: { text: 'publish-fast', image: 'publish-heavy', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-heavy' },
     tiktok: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
   };
 
@@ -179,6 +179,11 @@ describe('Lane routing (spec 121 Scope.2)', () => {
   it('does not let a light platform_format pull a heavy kind into the fast lane', () => {
     expect(routePublishLane('x', 'video', 'tweet')).toBe(PUBLISH_LANE_HEAVY);
     expect(routePublishLane('facebook', 'story', 'post')).toBe(PUBLISH_LANE_HEAVY);
+  });
+
+  it('routes every X media kind heavy (spec 127: chunked upload streams bytes for all media)', () => {
+    expect(routePublishLane('x', 'image', 'tweet')).toBe(PUBLISH_LANE_HEAVY);
+    expect(routePublishLane('x', 'carousel', 'tweet')).toBe(PUBLISH_LANE_HEAVY);
   });
 
   it('keeps light formats on the fast lane when kind agrees', () => {
@@ -230,7 +235,8 @@ describe('Lane routing (spec 121 Scope.2)', () => {
     expect(getLaneKindSet('facebook', PUBLISH_LANE_FAST)).toEqual(['text', 'image', 'carousel']);
     expect(getLaneKindSet('facebook', PUBLISH_LANE_HEAVY)).toEqual(['video', 'story']);
     expect(getLaneKindSet('youtube', PUBLISH_LANE_HEAVY)).toEqual(['image', 'video', 'story', 'carousel']);
-    expect(getLaneKindSet('x', PUBLISH_LANE_FAST)).toEqual(['text', 'image', 'carousel']);
+    expect(getLaneKindSet('x', PUBLISH_LANE_FAST)).toEqual(['text']);
+    expect(getLaneKindSet('x', PUBLISH_LANE_HEAVY)).toEqual(['image', 'video', 'story', 'carousel']);
   });
 });
 

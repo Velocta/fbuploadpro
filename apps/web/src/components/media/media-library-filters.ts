@@ -8,6 +8,10 @@ import type {
   SortOptionKey,
   MediaSmartViewKey,
 } from './media-types';
+import {
+  checkMediaDuplicates,
+  type DuplicateCheckEntry,
+} from './media-data';
 
 export interface FolderSubtreeImpact {
   descendantFolderIds: string[];
@@ -210,8 +214,20 @@ export function getEmptyStateInfo(
   };
 }
 
+/** One staged import entry, as the duplicate check consumes it. */
+export interface DuplicateCheckEntryLike {
+  file: { name: string; size: number };
+  relativePath?: string | undefined;
+  relativeSubfolderPath?: string[] | undefined;
+}
+
+export interface ServerDuplicateCheckResult<TEntry> {
+  duplicates: TEntry[];
+  uniqueEntries: TEntry[];
+}
+
 export function resolveTargetFolderIdForEntry(
-  entry: any,
+  entry: DuplicateCheckEntryLike,
   existingFolders: MediaFolder[],
   baseFolderId: string | null
 ): string | null | undefined {
@@ -245,74 +261,66 @@ export function resolveTargetFolderIdForEntry(
   return currentParentId;
 }
 
-export async function checkServerDuplicateEntries(
+/**
+ * Server duplicate check for staged import entries (spec 133 §6.1:
+ * the single typed-client call path lives in `media-data.ts`; this
+ * wrapper keeps the entry-resolution + split the import flow needs).
+ *
+ * Failure behaviour changed in PR-133-1 (spec §7.2): a failed check
+ * now THROWS the typed client's `ApiError` instead of silently
+ * returning null — the caller decides how to present it. (The legacy
+ * null return was a frozen silent-failure baseline entry.)
+ */
+export async function checkServerDuplicateEntries<TEntry extends DuplicateCheckEntryLike>(
   subdomain: string,
   folderId: string | null | undefined,
-  entries: any[],
+  entries: TEntry[],
   existingFolders: MediaFolder[] = []
-): Promise<{ duplicates: any[]; uniqueEntries: any[] } | null> {
-  try {
-    const checkableEntries: Array<{
-      clientKey: string;
-      name: string;
-      fileSize: number;
-      folderId: string | null;
-    }> = [];
+): Promise<ServerDuplicateCheckResult<TEntry>> {
+  const checkableEntries: DuplicateCheckEntry[] = [];
 
-    entries.forEach((e, idx) => {
-      const targetFolderId = resolveTargetFolderIdForEntry(
-        e,
-        existingFolders,
-        folderId ?? null
-      );
-      if (targetFolderId !== undefined) {
-        checkableEntries.push({
-          clientKey: String(idx),
-          name: e.file.name,
-          fileSize: e.file.size,
-          folderId: targetFolderId,
-        });
-      }
-    });
-
-    if (checkableEntries.length === 0) {
-      return { duplicates: [], uniqueEntries: entries };
+  entries.forEach((e, idx) => {
+    const targetFolderId = resolveTargetFolderIdForEntry(
+      e,
+      existingFolders,
+      folderId ?? null
+    );
+    if (targetFolderId !== undefined) {
+      checkableEntries.push({
+        clientKey: String(idx),
+        name: e.file.name,
+        fileSize: e.file.size,
+        folderId: targetFolderId,
+      });
     }
+  });
 
-    const payload = {
-      folderId: folderId ?? null,
-      entries: checkableEntries,
-    };
-    const checkRes = await fetch(`/api/tenant/${subdomain}/media/check-duplicates`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (!checkRes.ok) return null;
-
-    const checkData = (await checkRes.json()) as {
-      duplicates: Array<{ clientKey: string; existingItem: any }>;
-    };
-    if (!checkData.duplicates || checkData.duplicates.length === 0) {
-      return { duplicates: [], uniqueEntries: entries };
-    }
-
-    const dupKeySet = new Set(checkData.duplicates.map((d) => d.clientKey));
-    const duplicates: any[] = [];
-    const uniqueEntries: any[] = [];
-
-    entries.forEach((e, idx) => {
-      if (dupKeySet.has(String(idx))) {
-        duplicates.push(e);
-      } else {
-        uniqueEntries.push(e);
-      }
-    });
-
-    return { duplicates, uniqueEntries };
-  } catch {
-    return null;
+  if (checkableEntries.length === 0) {
+    return { duplicates: [], uniqueEntries: entries };
   }
+
+  const checkData = await checkMediaDuplicates(
+    subdomain,
+    folderId ?? null,
+    checkableEntries
+  );
+  if (checkData.duplicates.length === 0) {
+    return { duplicates: [], uniqueEntries: entries };
+  }
+
+  const dupKeySet = new Set(checkData.duplicates.map((d) => d.clientKey));
+  const duplicates: TEntry[] = [];
+  const uniqueEntries: TEntry[] = [];
+
+  entries.forEach((e, idx) => {
+    if (dupKeySet.has(String(idx))) {
+      duplicates.push(e);
+    } else {
+      uniqueEntries.push(e);
+    }
+  });
+
+  return { duplicates, uniqueEntries };
 }
 
 export const MEDIA_TYPE_LABELS: Record<MediaTypeFilterKey, string> = {

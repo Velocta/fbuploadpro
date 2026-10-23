@@ -36,7 +36,22 @@ import {
   resolveTargetFolderIdForEntry,
   checkServerDuplicateEntries,
 } from '@/components/media/media-library-explorer';
+import type { DuplicateCheckEntryLike } from '@/components/media/media-library-filters';
 import { render } from '../components/setup';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { createQueryClient } from '@/lib/data/query-client';
+
+/**
+ * PR-133-1 data-path setup: the explorer now reads its data from the
+ * React Query cache (media-data.ts), so explorer renders are wrapped
+ * in a QueryClientProvider. The `initial*` props seed the queries'
+ * initial data, so no request fires and the rendered output is
+ * unchanged from the pre-133 suite.
+ */
+function renderExplorer(ui: React.ReactElement) {
+  const client = createQueryClient('acme');
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const mockPush = vi.fn();
 
@@ -346,8 +361,8 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
   });
 
   it('renders global search results across nested folders with clickable folder path badges on media cards', () => {
-    const { hasText, hasAttribute } = render(
-      <MediaLibraryExplorer
+    const { hasText, hasAttribute } = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -375,8 +390,8 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
   });
 
   it('renders Infinite Scroll sentinel and Load More button when totalMediaCount exceeds loaded items', () => {
-    const { hasText, hasAttribute } = render(
-      <MediaLibraryExplorer
+    const { hasText, hasAttribute } = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS.slice(0, 2)}
@@ -393,8 +408,8 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
 
   it('renders MediaLibraryExplorer with breadcrumb navigation, nested subfolders, destructive delete folder modal impact, and strict theme compliance', () => {
     const campaignA = SAMPLE_FOLDERS[0]!;
-    const { hasText, hasAttribute, html } = render(
-      <MediaLibraryExplorer
+    const { hasText, hasAttribute, html } = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -445,8 +460,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
   it('US1: renders Grid View by default and switches to Compact Table View with MediaTableRow when initialViewMode="table"', () => {
     expect(MEDIA_VIEW_MODE_STORAGE_KEY).toBe('fbuploadpro:media-view-mode');
 
-    const gridRender = render(
-      <MediaLibraryExplorer
+    const gridRender = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -459,8 +474,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(gridRender.hasAttribute('data-testid', 'media-assets-grid')).toBe(true);
     expect(gridRender.hasAttribute('data-testid', 'media-table-view')).toBe(false);
 
-    const tableRender = render(
-      <MediaLibraryExplorer
+    const tableRender = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -577,8 +592,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     });
     expect(hasCaptionRoot.map((i) => i.name)).toEqual(['Viral Launch Reel.mp4']);
 
-    const explorerRender = render(
-      <MediaLibraryExplorer
+    const explorerRender = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -631,15 +646,16 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
   });
 
   it('Spec 046 US3: resolveTargetFolderIdForEntry resolves nested subfolder IDs and checkServerDuplicateEntries passes folderId per entry', async () => {
-    const entryInNested: any = {
+    // PR-133-1: entries typed via the filters module's entry shape (was `any`).
+    const entryInNested: DuplicateCheckEntryLike = {
       file: new File(['video content'], 'clip1.mp4', { type: 'video/mp4' }),
       relativePath: 'Campaign A/Reels/clip1.mp4',
     };
-    const entryInRoot: any = {
+    const entryInRoot: DuplicateCheckEntryLike = {
       file: new File(['image content'], 'banner.png', { type: 'image/png' }),
       relativePath: 'banner.png',
     };
-    const entryInUncreatedSubfolder: any = {
+    const entryInUncreatedSubfolder: DuplicateCheckEntryLike = {
       file: new File(['image content'], 'new.png', { type: 'image/png' }),
       relativePath: 'BrandNewFolder/Sub/new.png',
     };
@@ -654,13 +670,18 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     const resolvedUncreated = resolveTargetFolderIdForEntry(entryInUncreatedSubfolder, SAMPLE_FOLDERS, null);
     expect(resolvedUncreated).toBeUndefined();
 
-    // Verify checkServerDuplicateEntries makes request with individual folderId per entry
+    // Verify checkServerDuplicateEntries makes request with individual folderId per entry.
+    // PR-133-1 data-path setup: the call now goes through the typed API
+    // client (media-data.ts), which reads the response via text() and
+    // validates it against the check-duplicates schema — the fetch mock
+    // serves that shape. Request assertions are unchanged.
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ duplicates: [] }),
+      status: 200,
+      text: async () => JSON.stringify({ duplicates: [] }),
     });
     const originalFetch = global.fetch;
-    global.fetch = fetchSpy as any;
+    global.fetch = fetchSpy as unknown as typeof fetch;
 
     try {
       const result = await checkServerDuplicateEntries(
@@ -670,9 +691,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
         SAMPLE_FOLDERS
       );
 
-      expect(result).not.toBeNull();
-      expect(result?.duplicates).toEqual([]);
-      expect(result?.uniqueEntries.length).toBe(3);
+      expect(result.duplicates).toEqual([]);
+      expect(result.uniqueEntries.length).toBe(3);
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const callBody = JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string);
@@ -727,8 +747,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     });
     expect(filtered.map((i) => i.name)).toEqual(['Facebook_Feed_4_5.mp4']);
 
-    const explorer = render(
-      <MediaLibraryExplorer
+    const explorer = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={[portraitItem, ...SAMPLE_MEDIA_ITEMS]}
@@ -776,8 +796,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
   });
 
   it('Spec 070 US1: renders hairline vertical dividers separating 3 toolbar zones', () => {
-    const explorer = render(
-      <MediaLibraryExplorer
+    const explorer = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -793,8 +813,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
   });
 
   it('Spec 070 US1: renders three-zone toolbar with persistent labels, scope anchor, and active filter underline', () => {
-    const explorer = render(
-      <MediaLibraryExplorer
+    const explorer = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -840,8 +860,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
 
   it('Spec 071 US1: renders full-width layout without VIEWS sidebar rail and keeps breadcrumb navigation', () => {
     // Root explorer view
-    const rootExplorer = render(
-      <MediaLibraryExplorer
+    const rootExplorer = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -860,8 +880,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(rootExplorer.hasAttribute('data-testid', 'breadcrumb-root')).toBe(true);
 
     // Folder view (Campaign A)
-    const folderExplorer = render(
-      <MediaLibraryExplorer
+    const folderExplorer = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}
@@ -922,8 +942,8 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
 
   it('Spec 070 US3: library-wide global search resets scope to In: Library and displays folder path attribution with "in " prefix', () => {
     // Search from within nested folder "Reels"
-    const searchExplorer = render(
-      <MediaLibraryExplorer
+    const searchExplorer = renderExplorer(
+        <MediaLibraryExplorer
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
         initialMediaItems={SAMPLE_MEDIA_ITEMS}

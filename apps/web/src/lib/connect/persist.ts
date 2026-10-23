@@ -378,6 +378,59 @@ export async function markSocialAccountRevoked(
   return { updated: Array.isArray(data) ? data.length : 0 };
 }
 
+/**
+ * Bounded-pagination bounds for the social list loader (spec 139, B14).
+ *
+ * PostgREST silently truncates every response at its `max_rows` cap
+ * (1,000 by default): an unbounded `select` LOOKS successful while
+ * dropping every row past the cap. The loader therefore pages with
+ * `.range()` in slices of SOCIAL_LIST_PAGE_SIZE until a short page
+ * arrives, and refuses to page forever — past SOCIAL_LIST_MAX_PAGES
+ * pages it throws rather than returning a silently truncated list.
+ */
+export const SOCIAL_LIST_PAGE_SIZE = 1_000;
+
+/** Safety cap on pages per table; exceeding it is a loud error, never a truncation. */
+export const SOCIAL_LIST_MAX_PAGES = 100;
+
+interface PagedRowsResult {
+  data: unknown;
+  error: { message: string } | null;
+}
+
+/**
+ * Fetches every row a paged query can return, SOCIAL_LIST_PAGE_SIZE rows
+ * at a time, in the query's established order. A page error propagates
+ * (the caller never sees a partial list presented as complete), and a
+ * result set larger than the page cap throws instead of truncating.
+ */
+async function fetchAllRowsPaged(
+  buildPageQuery: (from: number, to: number) => PromiseLike<PagedRowsResult>,
+  failurePrefix: string
+): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
+  for (let page = 0; page < SOCIAL_LIST_MAX_PAGES; page++) {
+    const from = page * SOCIAL_LIST_PAGE_SIZE;
+    const { data, error } = await buildPageQuery(
+      from,
+      from + SOCIAL_LIST_PAGE_SIZE - 1
+    );
+    if (error) {
+      throw new Error(`${failurePrefix}: ${error.message}`);
+    }
+    const pageRows = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...pageRows);
+    if (pageRows.length < SOCIAL_LIST_PAGE_SIZE) {
+      return rows;
+    }
+  }
+  throw new Error(
+    `${failurePrefix}: exceeded the ${SOCIAL_LIST_MAX_PAGES}-page safety cap ` +
+      `(${SOCIAL_LIST_MAX_PAGES * SOCIAL_LIST_PAGE_SIZE} rows); ` +
+      'refusing to return a truncated list'
+  );
+}
+
 function mapDestinationRow(row: Record<string, any>): SocialDestinationView {
   return {
     id: row.id,
@@ -391,7 +444,17 @@ function mapDestinationRow(row: Record<string, any>): SocialDestinationView {
   };
 }
 
-/** All social accounts in the workspace, each with its destinations. */
+/**
+ * All social accounts in the workspace, each with its destinations.
+ *
+ * The Supabase path pages both tables with bounded `.range()` slices
+ * (spec 139, B14): PostgREST's `max_rows` cap silently truncated the
+ * previous unbounded selects at 1,000 rows. Ordering gains a stable
+ * secondary `id` key — `created_at` alone is not unique, and page
+ * boundaries over a non-unique order can skip or repeat rows. The
+ * legacy path queries Postgres directly (no PostgREST cap applies)
+ * and keeps the same primary + secondary ordering.
+ */
 export async function fetchSocialAccountsWithDestinations(
   client: ConnectDbClient | null | undefined,
   workspaceId: string
@@ -402,38 +465,38 @@ export async function fetchSocialAccountsWithDestinations(
   if (isLegacyClient(client ?? undefined)) {
     const legacy = client as DatabaseClient;
     accountRows = (await legacy.query(
-      `SELECT * FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC, id DESC`,
       [workspaceId]
     )) as Array<Record<string, any>>;
     destinationRows = (await legacy.query(
-      `SELECT * FROM destinations WHERE workspace_id = $1 ORDER BY created_at ASC`,
+      `SELECT * FROM destinations WHERE workspace_id = $1 ORDER BY created_at ASC, id ASC`,
       [workspaceId]
     )) as Array<Record<string, any>>;
   } else {
     const supabase = getRouteSupabase(client ?? undefined);
     if (!supabase) return [];
-    const { data: accounts, error: accountsError } = await supabase
-      .from('social_accounts')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false });
-    if (accountsError) {
-      throw new Error(
-        `Failed to load connected accounts: ${accountsError.message}`
-      );
-    }
-    const { data: destinations, error: destinationsError } = await supabase
-      .from('destinations')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: true });
-    if (destinationsError) {
-      throw new Error(
-        `Failed to load destinations: ${destinationsError.message}`
-      );
-    }
-    accountRows = (accounts ?? []) as Array<Record<string, any>>;
-    destinationRows = (destinations ?? []) as Array<Record<string, any>>;
+    accountRows = await fetchAllRowsPaged(
+      (from, to) =>
+        supabase
+          .from('social_accounts')
+          .select('*')
+          .eq('workspace_id', workspaceId)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, to),
+      'Failed to load connected accounts'
+    );
+    destinationRows = await fetchAllRowsPaged(
+      (from, to) =>
+        supabase
+          .from('destinations')
+          .select('*')
+          .eq('workspace_id', workspaceId)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(from, to),
+      'Failed to load destinations'
+    );
   }
 
   const destinationsByAccount = new Map<string, SocialDestinationView[]>();

@@ -26,6 +26,7 @@ This document details every required secret, environment variable, and credentia
 | `NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER` | WhatsApp Phone (E.164, e.g. `+15551234567`) | ✅ | ❌ | ✅ | ✅ |
 | `NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE` | Default support greeting string | ✅ | ❌ | ✅ | ✅ |
 | `NEXT_PUBLIC_SIGNUPS_ENABLED` | Registration toggle (`"true"` / `"false"`) | ✅ | ❌ | ✅ | ✅ |
+| `POST_FOR_ME_API_KEY` | Post for Me provider API key (spec 125; YouTube publishing + connect, server-side only — never in the database, never sent to the browser) | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
