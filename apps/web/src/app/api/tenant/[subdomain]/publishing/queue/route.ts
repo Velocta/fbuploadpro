@@ -26,7 +26,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * QueueListRow: the legacy list query's joined projection;
  * QueueListSupabaseRow: the same item with the embedded media relation.
  */
-type QueueMediaRecord = Pick<
+export type QueueMediaRecord = Pick<
   DatabaseMediaItemRow,
   | 'id'
   | 'name'
@@ -86,10 +86,26 @@ interface QueueListSupabaseRow extends Omit<QueueListRow, 'media_name' | 'media_
   } | null;
 }
 
+/**
+ * Reads the bulk enqueue handler (spec 139 A15) batches ONCE for a whole
+ * request and shares with every per-item call: the workspace resolution,
+ * the target page row, and every referenced media row (fetched with a
+ * single `.in()` query). Per-item semantics are unchanged — a page or
+ * media row missing from the prefetch is exactly the per-item query
+ * returning no row. Only the Supabase path consumes the prefetch; the
+ * legacy SQL path always reads live.
+ */
+export interface EnqueueMediaPrefetch {
+  workspaceId: string;
+  page: { id: string; timezone?: string | null } | null;
+  mediaById: ReadonlyMap<string, QueueMediaRecord>;
+}
+
 export async function handleEnqueueMedia(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient
+  dbClient?: DatabaseClient | SupabaseClient,
+  prefetch?: EnqueueMediaPrefetch
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -142,7 +158,10 @@ export async function handleEnqueueMedia(
     linkUrl,
   } = parsed.data;
 
-  const workspaceId = await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
+  const workspaceId =
+    prefetch && !isLegacyClient(dbClient)
+      ? prefetch.workspaceId
+      : await resolveTenantWorkspaceId(dbClient, subdomain, session.userId, session.role);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Workspace not found' }, { status: 404 });
   }
@@ -436,13 +455,15 @@ export async function handleEnqueueMedia(
   }
 
   // 4. Verify page exists and belongs to user and workspace
-  const { data: pageRow } = await supabase
-    .from('facebook_pages')
-    .select('id, timezone')
-    .eq('id', pageId)
-    .eq('user_id', session.userId)
-    .eq('workspace_id', workspaceId)
-    .maybeSingle();
+  const { data: pageRow } = prefetch
+    ? { data: prefetch.page }
+    : await supabase
+        .from('facebook_pages')
+        .select('id, timezone')
+        .eq('id', pageId)
+        .eq('user_id', session.userId)
+        .eq('workspace_id', workspaceId)
+        .maybeSingle();
 
   if (!pageRow) {
     return NextResponse.json({ error: 'Page not found' }, { status: 404 });
@@ -461,12 +482,14 @@ export async function handleEnqueueMedia(
       );
     }
   } else if (mediaId) {
-    const { data: mediaData } = await supabase
-      .from('media_items')
-      .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds, width, height')
-      .eq('id', mediaId)
-      .eq('user_id', session.userId)
-      .maybeSingle();
+    const { data: mediaData } = prefetch
+      ? { data: prefetch.mediaById.get(mediaId) ?? null }
+      : await supabase
+          .from('media_items')
+          .select('id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds, width, height')
+          .eq('id', mediaId)
+          .eq('user_id', session.userId)
+          .maybeSingle();
 
     if (!mediaData) {
       return NextResponse.json({ error: 'Media not found' }, { status: 404 });
@@ -981,6 +1004,14 @@ export async function handleListQueueItems(
   let skippedCount = 0;
   let cancelledCount = 0;
 
+  // Counts are RPC-first (spec 139 A14). When the grouped RPC is
+  // unavailable, errors, or returns no row, the fallback is BOUNDED:
+  // one head/count query per status (a constant number of queries that
+  // transfers zero rows) instead of selecting every queue row for the
+  // page/workspace and counting in JS, which grew with queue history
+  // and silently truncated at the PostgREST row cap. Count-query
+  // errors are swallowed exactly as before — the counts stay at zero.
+  let rpcCountsApplied = false;
   if (pageId && typeof (supabase as SupabaseClient).rpc === 'function') {
     try {
       const { data: countData } = await (supabase as SupabaseClient).rpc('get_page_queue_status_counts', {
@@ -994,28 +1025,39 @@ export async function handleListQueueItems(
         failedCount = Number(counts.failed_count ?? 0);
         skippedCount = Number(counts.skipped_count ?? 0);
         cancelledCount = Number(counts.cancelled_count ?? 0);
+        rpcCountsApplied = true;
       }
     } catch (_e) {
-      // Fallback
+      // Fall through to the bounded fallback below.
     }
-  } else {
+  }
+
+  if (!rpcCountsApplied) {
     try {
-      const { data: statusRows } = await supabase
-        .from('legacy_queue_items')
-        .select('status')
-        .eq('user_id', session.userId)
-        .in('fb_page_id', workspacePageIds);
-      if (statusRows) {
-        for (const row of statusRows) {
-          if (row.status === 'queued') queuedCount++;
-          else if (row.status === 'published') publishedCount++;
-          else if (row.status === 'failed') failedCount++;
-          else if (row.status === 'skipped') skippedCount++;
-          else if (row.status === 'cancelled') cancelledCount++;
-        }
+      const QUEUE_LIST_COUNT_STATUSES = ['queued', 'published', 'failed', 'skipped', 'cancelled'] as const;
+      const perStatus = await Promise.all(
+        QUEUE_LIST_COUNT_STATUSES.map(async (status) => {
+          let countQuery = supabase
+            .from('legacy_queue_items')
+            .select('id', { head: true, count: 'exact' })
+            .eq('user_id', session.userId);
+          countQuery = pageId
+            ? countQuery.eq('fb_page_id', pageId)
+            : countQuery.in('fb_page_id', workspacePageIds);
+          const { count, error } = await countQuery.eq('status', status);
+          if (error) throw error;
+          return [status, count ?? 0] as const;
+        })
+      );
+      for (const [status, count] of perStatus) {
+        if (status === 'queued') queuedCount = count;
+        else if (status === 'published') publishedCount = count;
+        else if (status === 'failed') failedCount = count;
+        else if (status === 'skipped') skippedCount = count;
+        else if (status === 'cancelled') cancelledCount = count;
       }
     } catch (_e) {
-      // Fallback
+      // Fallback: counts stay at zero, as before.
     }
   }
 
