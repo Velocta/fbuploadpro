@@ -163,6 +163,79 @@ describe('Claimer (spec 121)', () => {
     expect(result.claimed).toBe(500 * MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK * 2);
   });
 
+  it('isolates a failing (lane, platform) pair: other platforms still claim (spec 139)', async () => {
+    const registry = createPublisherRegistry();
+    registry.register(fakePublisher('facebook', async () => ({ status: 'published' })));
+    registry.register(fakePublisher('instagram', async () => ({ status: 'published' })));
+    const rpc = vi.fn(async (_fn: string, args?: Record<string, unknown>) => {
+      if (args?.p_platform === 'facebook') {
+        return { data: null, error: new Error('facebook claim boom') };
+      }
+      // instagram: one row per lane
+      return { data: [{ id: `ig-${String(args?.p_platform)}-1` }], error: null };
+    });
+    const fastQ = makeQueueProducer();
+    const heavyQ = makeQueueProducer();
+    const waitUntil = vi.fn((_p: Promise<unknown>) => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true }))
+    );
+    try {
+      const result = await runClaimTick({
+        db: { rpc },
+        registry,
+        queues: { fast: fastQ, heavy: heavyQ },
+        now: NON_RECOVERY_TICK,
+        env: { POSTHOG_KEY: 'test-key' },
+        waitUntil,
+      });
+      // Facebook failed in both lanes, instagram still claimed in both.
+      expect(result.claimed).toBe(2);
+      expect(result.enqueuedFast).toBe(1);
+      expect(result.enqueuedHeavy).toBe(1);
+      // The claim-path failure was captured with waitUntil threaded.
+      expect(waitUntil).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('records per-chunk progress when sendBatch fails mid-batch and still runs the other lane (spec 139)', async () => {
+    const registry = createPublisherRegistry();
+    registry.register(fakePublisher('facebook', async () => ({ status: 'published' })));
+    const rpc = vi.fn(async (_fn: string, args?: Record<string, unknown>) => {
+      const kindSet = (args?.p_lane_kind_set as string[]) ?? [];
+      if (kindSet.includes('video')) return { data: [], error: null }; // heavy empty
+      return {
+        data: Array.from({ length: 150 }, (_, i) => ({ id: `item-${i}` })),
+        error: null,
+      };
+    });
+    let sendCalls = 0;
+    const fastQ = {
+      batches: [] as PublishQueueMessage[][],
+      sendBatch: vi.fn(async (messages: Iterable<{ body: PublishQueueMessage }>) => {
+        sendCalls += 1;
+        if (sendCalls === 2) throw new Error('queue send boom');
+        fastQ.batches.push([...messages].map((m) => m.body));
+      }),
+    };
+    const heavyQ = makeQueueProducer();
+    const result = await runClaimTick({
+      db: { rpc },
+      registry,
+      queues: { fast: fastQ, heavy: heavyQ },
+      now: NON_RECOVERY_TICK,
+    });
+    // First 100-chunk went out, second chunk failed: progress is exact,
+    // the tick did not throw, and the heavy lane was still attempted.
+    expect(result.claimed).toBe(150);
+    expect(result.enqueuedFast).toBe(100);
+    expect(result.enqueuedHeavy).toBe(0);
+    expect(rpc.mock.calls.some((c) => ((c[1] as { p_lane_kind_set: string[] }).p_lane_kind_set ?? []).includes('video'))).toBe(true);
+  });
+
   it('claims only platforms registered in the publisher registry', async () => {
     const registry = createPublisherRegistry(); // empty: nothing is claimable yet
     const rpc = vi.fn(async (_fn: string, _args?: Record<string, unknown>) => ({ data: [], error: null }));
@@ -888,6 +961,27 @@ describe('Heartbeat lane counters (spec 121)', () => {
       last_enqueued_fast: 9,
       last_enqueued_heavy: 3,
     });
+  });
+
+  it('full tick writes omit last_settled_count when unset, preserving consumer counts (spec 139)', async () => {
+    const { db, upserts } = captureDb();
+    await recordHeartbeat(db as never, {
+      success: true,
+      claimed: 5,
+      enqueuedFast: 5,
+    });
+    expect(upserts[0]?.last_claimed_count).toBe(5);
+    expect('last_settled_count' in (upserts[0] ?? {})).toBe(false);
+  });
+
+  it('full tick writes still carry last_settled_count when explicitly supplied (spec 139)', async () => {
+    const { db, upserts } = captureDb();
+    await recordHeartbeat(db as never, {
+      success: true,
+      claimed: 5,
+      settled: 7,
+    });
+    expect(upserts[0]?.last_settled_count).toBe(7);
   });
 
   it('counts-only writes touch only the counters they carry', async () => {

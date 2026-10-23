@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import worker, { handleScheduled, type Env } from '../src/index.js';
 
 const VALID_WORKER_TOKEN_KEY =
@@ -38,7 +38,7 @@ describe('Cloudflare Worker Health Probing', () => {
     const data = (await response.json()) as Record<string, unknown>;
     expect(data.status).toBe('ok');
     expect(data.worker).toBe('fbuploadpro-worker');
-    expect(data.checks).toEqual({ database: true, config: true });
+    expect(data.checks).toEqual({ database: true, config: true, heartbeat: true });
     expect(Object.keys(data).sort()).toEqual(['checks', 'status', 'timestamp', 'worker']);
     expect(new Date(String(data.timestamp)).getTime()).not.toBeNaN();
   });
@@ -52,7 +52,7 @@ describe('Cloudflare Worker Health Probing', () => {
     expect(response.status).toBe(503);
     const data = (await response.json()) as { status: string; checks: Record<string, boolean> };
     expect(data.status).toBe('unhealthy');
-    expect(data.checks).toEqual({ database: true, config: false });
+    expect(data.checks).toEqual({ database: true, config: false, heartbeat: true });
   });
 
   it('GET /health returns 503 and leaks no detail when the database probe fails', async () => {
@@ -83,7 +83,7 @@ describe('Cloudflare Worker Health Probing', () => {
     const response = await worker.fetch(request, env, dummyCtx);
     expect(response.status).toBe(503);
     const data = (await response.json()) as { checks: Record<string, boolean> };
-    expect(data.checks).toEqual({ database: false, config: false });
+    expect(data.checks).toEqual({ database: false, config: false, heartbeat: false });
   });
 
   it('unhandled routes return 404 Not Found fallback', async () => {
@@ -99,6 +99,59 @@ describe('Cloudflare Worker Health Probing', () => {
     expect(data).toEqual({
       error: 'Not Found',
     });
+  });
+
+  // Spec 139: /health must not report healthy when the claimer is dead.
+  function heartbeatDb(lastSuccessAt: string | null, hasRow = true) {
+    return {
+      from: vi.fn((table: string) => {
+        if (table === 'worker_heartbeats') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                  data: hasRow ? { last_success_at: lastSuccessAt } : null,
+                  error: null,
+                })),
+              })),
+            })),
+          };
+        }
+        return {
+          select: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }),
+    };
+  }
+
+  it('GET /health returns 503 when the heartbeat is stale (>180s since last success)', async () => {
+    const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const env = healthyWorkerEnv({ __TEST_DB__: heartbeatDb(stale) });
+    const request = new Request('https://worker.internal/health', { method: 'GET' });
+    const response = await worker.fetch(request, env, dummyCtx);
+    expect(response.status).toBe(503);
+    const data = (await response.json()) as { status: string; checks: Record<string, boolean> };
+    expect(data.status).toBe('unhealthy');
+    expect(data.checks).toEqual({ database: true, config: true, heartbeat: false });
+  });
+
+  it('GET /health returns 200 when the heartbeat is fresh', async () => {
+    const fresh = new Date(Date.now() - 10 * 1000).toISOString();
+    const env = healthyWorkerEnv({ __TEST_DB__: heartbeatDb(fresh) });
+    const request = new Request('https://worker.internal/health', { method: 'GET' });
+    const response = await worker.fetch(request, env, dummyCtx);
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { checks: Record<string, boolean> };
+    expect(data.checks.heartbeat).toBe(true);
+  });
+
+  it('GET /health degrades gracefully on cold start (no heartbeat row yet)', async () => {
+    const env = healthyWorkerEnv({ __TEST_DB__: heartbeatDb(null, false) });
+    const request = new Request('https://worker.internal/health', { method: 'GET' });
+    const response = await worker.fetch(request, env, dummyCtx);
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { checks: Record<string, boolean> };
+    expect(data.checks.heartbeat).toBe(true);
   });
 
   it('non-GET methods on /health return 404 Not Found', async () => {
@@ -170,9 +223,61 @@ describe('Worker Heartbeat (Spec 116)', () => {
     expect(upserts[0]?.last_skip_reason).toBeNull();
     expect(typeof upserts[0]?.last_success_at).toBe('string');
     expect(upserts[0]?.last_claimed_count).toBe(0);
-    expect(upserts[0]?.last_settled_count).toBe(0);
+    // Spec 139: a full tick write omits last_settled_count when unset —
+    // forcing 0 wiped the publish consumers' settled count every tick.
+    expect(upserts[0]?.last_settled_count).toBeUndefined();
     // Spec 121: per-lane enqueued counters ride the tick heartbeat.
     expect(upserts[0]?.last_enqueued_fast).toBe(0);
     expect(upserts[0]?.last_enqueued_heavy).toBe(0);
+  });
+});
+
+describe('Spec 139: scheduled-wrapper error capture uses waitUntil', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('captures a claim-tick failure via PostHog with ctx.waitUntil and still heartbeats claim_error', async () => {
+    const controller = {
+      cron: '* * * * *',
+      scheduledTime: Date.now(),
+      noRetry: () => {},
+    } as unknown as ScheduledController;
+    const fetchMock = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    const waitUntil = vi.fn((_p: Promise<unknown>) => {});
+    const ctx = { waitUntil, passThroughOnException: () => {} } as unknown as ExecutionContext;
+
+    const upserts: Record<string, unknown>[] = [];
+    const db = {
+      from: vi.fn(() => ({
+        upsert: vi.fn(async (row: Record<string, unknown>) => {
+          upserts.push(row);
+          return { error: null };
+        }),
+      })),
+      rpc: vi.fn(async () => ({ data: [], error: null })),
+    };
+    const registry = {
+      platforms: () => {
+        throw new Error('registry boom');
+      },
+    };
+    const env: Env = {
+      ENVIRONMENT: 'test',
+      TOKEN_ENCRYPTION_KEY: VALID_WORKER_TOKEN_KEY,
+      POSTHOG_KEY: 'test-key',
+    };
+
+    await expect(
+      handleScheduled(controller, env, ctx, {
+        db: db as never,
+        registry: registry as never,
+      })
+    ).rejects.toThrow('registry boom');
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(waitUntil).toHaveBeenCalled();
+    expect(upserts.some((r) => r.last_skip_reason === 'claim_error')).toBe(true);
   });
 });

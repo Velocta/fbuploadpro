@@ -126,10 +126,13 @@ export async function recordHeartbeat(
   if (record.success) {
     row.last_success_at = now;
   }
-  // Full tick writes always carry the aggregate counters (0 when the
-  // caller did not supply them), preserving the spec 116 behaviour.
+  // Full tick writes always carry the claimed counter (0 when the
+  // caller did not supply it), preserving the spec 116 behaviour.
+  // `last_settled_count` is deliberately NOT forced: it is owned by the
+  // publish consumers (counts-only writes), so a full tick write that
+  // does not supply it must omit the field entirely — forcing 0 here
+  // wiped the consumer-settled count on every tick (spec 139).
   if (row.last_claimed_count === undefined) row.last_claimed_count = 0;
-  if (row.last_settled_count === undefined) row.last_settled_count = 0;
 
   try {
     if (typeof db.from === 'function') {
@@ -143,26 +146,51 @@ export async function recordHeartbeat(
       return true;
     }
     if (typeof db.query === 'function') {
-      await db.query(
-        `INSERT INTO worker_heartbeats
-           (worker_name, last_run_at, last_success_at, last_claimed_count, last_settled_count, last_skip_reason, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $2)
-         ON CONFLICT (worker_name) DO UPDATE SET
-           last_run_at = EXCLUDED.last_run_at,
-           last_success_at = COALESCE(EXCLUDED.last_success_at, worker_heartbeats.last_success_at),
-           last_claimed_count = EXCLUDED.last_claimed_count,
-           last_settled_count = EXCLUDED.last_settled_count,
-           last_skip_reason = EXCLUDED.last_skip_reason,
-           updated_at = EXCLUDED.updated_at`,
-        [
-          WORKER_HEARTBEAT_NAME,
-          now,
-          record.success ? now : null,
-          record.claimed ?? 0,
-          record.settled ?? 0,
-          record.success ? null : (record.skipReason ?? null),
-        ]
-      );
+      // `last_settled_count` is omitted when the caller did not supply
+      // it (see above): the INSERT leaves it at its default for a new
+      // row and the ON CONFLICT update does not touch it, so consumer
+      // counts survive claimer ticks. When supplied, it is written.
+      if (record.settled !== undefined) {
+        await db.query(
+          `INSERT INTO worker_heartbeats
+             (worker_name, last_run_at, last_success_at, last_claimed_count, last_settled_count, last_skip_reason, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $2)
+           ON CONFLICT (worker_name) DO UPDATE SET
+             last_run_at = EXCLUDED.last_run_at,
+             last_success_at = COALESCE(EXCLUDED.last_success_at, worker_heartbeats.last_success_at),
+             last_claimed_count = EXCLUDED.last_claimed_count,
+             last_settled_count = EXCLUDED.last_settled_count,
+             last_skip_reason = EXCLUDED.last_skip_reason,
+             updated_at = EXCLUDED.updated_at`,
+          [
+            WORKER_HEARTBEAT_NAME,
+            now,
+            record.success ? now : null,
+            record.claimed ?? 0,
+            record.settled,
+            record.success ? null : (record.skipReason ?? null),
+          ]
+        );
+      } else {
+        await db.query(
+          `INSERT INTO worker_heartbeats
+             (worker_name, last_run_at, last_success_at, last_claimed_count, last_skip_reason, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $2)
+           ON CONFLICT (worker_name) DO UPDATE SET
+             last_run_at = EXCLUDED.last_run_at,
+             last_success_at = COALESCE(EXCLUDED.last_success_at, worker_heartbeats.last_success_at),
+             last_claimed_count = EXCLUDED.last_claimed_count,
+             last_skip_reason = EXCLUDED.last_skip_reason,
+             updated_at = EXCLUDED.updated_at`,
+          [
+            WORKER_HEARTBEAT_NAME,
+            now,
+            record.success ? now : null,
+            record.claimed ?? 0,
+            record.success ? null : (record.skipReason ?? null),
+          ]
+        );
+      }
       return true;
     }
   } catch (err) {
