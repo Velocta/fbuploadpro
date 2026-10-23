@@ -116,7 +116,10 @@ class FakeDb {
     if (sql.includes('INSERT INTO destinations')) return this.insertDestination(params);
     if (sql.includes('UPDATE social_accounts')) return this.revokeAccounts(params);
     if (sql.includes('JOIN social_accounts')) return this.destinationDetail(params);
-    if (sql.includes('FROM social_accounts') && sql.includes('external_account_id')) {
+    if (
+      sql.includes('FROM social_accounts') &&
+      sql.includes('WHERE platform = $1 AND external_account_id = $2')
+    ) {
       return [...this.accounts.values()].filter(
         (r) => r.platform === params[0] && r.external_account_id === params[1]
       );
@@ -1067,6 +1070,8 @@ class FakeSupabaseBuilder {
   rowsToWrite: Array<Record<string, unknown>> = [];
   updateValues: Record<string, unknown> = {};
   filters: Array<[string, unknown]> = [];
+  orderSpec: { column: string; ascending: boolean } | null = null;
+  rangeSpec: [number, number] | null = null;
 
   constructor(
     private readonly tables: Map<string, Array<Record<string, unknown>>>,
@@ -1095,7 +1100,13 @@ class FakeSupabaseBuilder {
     return this;
   }
 
-  order(): this {
+  order(column: string, options?: { ascending?: boolean }): this {
+    this.orderSpec = { column, ascending: options?.ascending ?? true };
+    return this;
+  }
+
+  range(from: number, to: number): this {
+    this.rangeSpec = [from, to];
     return this;
   }
 
@@ -1111,10 +1122,19 @@ class FakeSupabaseBuilder {
   private executeList(): { data: Array<Record<string, unknown>>; error: null } {
     if (this.mode === 'upsert') return { data: this.executeUpsert(), error: null };
     if (this.mode === 'update') return { data: this.executeUpdate(), error: null };
-    return {
-      data: this.tableRows().filter((row) => this.matches(row)),
-      error: null,
-    };
+    let rows = this.tableRows().filter((row) => this.matches(row));
+    if (this.orderSpec) {
+      const { column, ascending } = this.orderSpec;
+      rows = [...rows].sort((a, b) => {
+        const av = String(a[column] ?? '');
+        const bv = String(b[column] ?? '');
+        return ascending ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+    }
+    if (this.rangeSpec) {
+      rows = rows.slice(this.rangeSpec[0], this.rangeSpec[1] + 1);
+    }
+    return { data: rows, error: null };
   }
 
   private executeUpsert(): Array<Record<string, unknown>> {

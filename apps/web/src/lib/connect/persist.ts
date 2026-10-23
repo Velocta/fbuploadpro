@@ -378,6 +378,56 @@ export async function markSocialAccountRevoked(
   return { updated: Array.isArray(data) ? data.length : 0 };
 }
 
+/**
+ * Columns the accounts-list view actually reads (spec 139). Selecting only
+ * these keeps encrypted tokens, scopes and metadata out of a list response
+ * that never uses them.
+ */
+const SOCIAL_ACCOUNT_LIST_COLUMNS =
+  'id, platform, external_account_id, display_name, avatar_url, status, token_expires_at';
+
+/** Columns the accounts-list view actually reads from `destinations`. */
+const DESTINATION_LIST_COLUMNS =
+  'id, account_id, external_destination_id, name, handle, avatar_url, timezone, status';
+
+/**
+ * Page size for the accounts-list reads. PostgREST silently truncates an
+ * unbounded select at its max_rows cap (1,000 by default), so the reads
+ * below page with .range() until a short page returns — the result is
+ * complete at any workspace scale.
+ */
+const SOCIAL_LIST_PAGE_SIZE = 1000;
+
+/**
+ * Reads every row of `table` for the workspace, one page at a time.
+ * Ordering by `id` gives each page a stable, non-overlapping window.
+ */
+async function selectAllWorkspaceRows(
+  supabase: SupabaseClient,
+  table: 'social_accounts' | 'destinations',
+  columns: string,
+  workspaceId: string,
+  errorLabel: string
+): Promise<Array<Record<string, any>>> {
+  const rows: Array<Record<string, any>> = [];
+  for (let from = 0; ; from += SOCIAL_LIST_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from(table)
+      .select(columns)
+      .eq('workspace_id', workspaceId)
+      .order('id', { ascending: true })
+      .range(from, from + SOCIAL_LIST_PAGE_SIZE - 1);
+    if (error) {
+      throw new Error(`Failed to load ${errorLabel}: ${error.message}`);
+    }
+    const page = (data ?? []) as typeof rows;
+    rows.push(...page);
+    if (page.length < SOCIAL_LIST_PAGE_SIZE) {
+      return rows;
+    }
+  }
+}
+
 function mapDestinationRow(row: Record<string, any>): SocialDestinationView {
   return {
     id: row.id,
@@ -402,38 +452,30 @@ export async function fetchSocialAccountsWithDestinations(
   if (isLegacyClient(client ?? undefined)) {
     const legacy = client as DatabaseClient;
     accountRows = (await legacy.query(
-      `SELECT * FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC`,
+      `SELECT id, platform, external_account_id, display_name, avatar_url, status, token_expires_at FROM social_accounts WHERE workspace_id = $1 ORDER BY created_at DESC`,
       [workspaceId]
     )) as Array<Record<string, any>>;
     destinationRows = (await legacy.query(
-      `SELECT * FROM destinations WHERE workspace_id = $1 ORDER BY created_at ASC`,
+      `SELECT id, account_id, external_destination_id, name, handle, avatar_url, timezone, status FROM destinations WHERE workspace_id = $1 ORDER BY created_at ASC`,
       [workspaceId]
     )) as Array<Record<string, any>>;
   } else {
     const supabase = getRouteSupabase(client ?? undefined);
     if (!supabase) return [];
-    const { data: accounts, error: accountsError } = await supabase
-      .from('social_accounts')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false });
-    if (accountsError) {
-      throw new Error(
-        `Failed to load connected accounts: ${accountsError.message}`
-      );
-    }
-    const { data: destinations, error: destinationsError } = await supabase
-      .from('destinations')
-      .select('*')
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: true });
-    if (destinationsError) {
-      throw new Error(
-        `Failed to load destinations: ${destinationsError.message}`
-      );
-    }
-    accountRows = (accounts ?? []) as Array<Record<string, any>>;
-    destinationRows = (destinations ?? []) as Array<Record<string, any>>;
+    accountRows = await selectAllWorkspaceRows(
+      supabase,
+      'social_accounts',
+      SOCIAL_ACCOUNT_LIST_COLUMNS,
+      workspaceId,
+      'connected accounts'
+    );
+    destinationRows = await selectAllWorkspaceRows(
+      supabase,
+      'destinations',
+      DESTINATION_LIST_COLUMNS,
+      workspaceId,
+      'destinations'
+    );
   }
 
   const destinationsByAccount = new Map<string, SocialDestinationView[]>();
