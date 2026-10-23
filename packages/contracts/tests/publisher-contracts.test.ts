@@ -153,7 +153,7 @@ describe('Lane routing (spec 121 Scope.2)', () => {
     instagram: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
     threads: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
     youtube: { text: 'publish-fast', image: 'publish-heavy', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-heavy' },
-    x: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
+    x: { text: 'publish-fast', image: 'publish-heavy', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-heavy' },
     tiktok: { text: 'publish-fast', image: 'publish-fast', video: 'publish-heavy', story: 'publish-heavy', carousel: 'publish-fast' },
   };
 
