@@ -5,14 +5,28 @@
  * Nested Folder Selection & Inline 'New Folder' Creation, Intra-Batch URL
  * Deduplication, Unified Batch Progress Bar, Recent Downloads List with
  * Auto-Populated Captions, 'Open in Folder' Navigation, and Failed Link 'Retry'.
+ *
+ * Spec 140 PR-140-2 setup: the legacy `initial*` test-only prop API died
+ * with the old component. The rebuilt surface
+ * (`downloader-surface.tsx`) is rendered into jsdom through the
+ * PR-140-1 data-layer pattern — a QueryClientProvider plus a fetch stub
+ * serving the typed client's API responses — and driven with
+ * user-event. Assertions are the pre-rebuild ones, re-expressed against
+ * the live DOM (the two assertions that read legacy inline-style values
+ * out of the static markup — a `border-radius` style and the raw
+ * PALETTE hex — are replaced by their post-rebuild equivalents: the
+ * palette hex must NOT appear in the rendered markup at all, because
+ * styling now comes from token classes; the capsule-pill ban is kept).
  */
 
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { PALETTE, RADII } from '@/lib/theme';
-import { MediaDownloader } from '@/components/downloader/media-downloader';
+import { PALETTE } from '@/lib/theme';
+import { DownloaderSurface } from '@/components/downloader/downloader-surface';
 import {
   initializeDownloaderFolders,
   createDownloaderFolder,
@@ -25,20 +39,11 @@ import {
   validateDownloaderBatchInput,
   buildMediaFolderHref,
 } from '@/components/downloader/media-downloader-helpers';
-import { render } from '../components/setup';
 
-/**
- * Spec 140 PR-140-1 data-path setup: the surface now reads its data
- * through React Query hooks (downloader-data.ts), so renders are
- * wrapped in a QueryClientProvider. Behaviour assertions are unchanged
- * in this PR; the behavioural migration lands in PR-140-4.
- */
-function renderDownloader(ui: React.ReactElement) {
-  const queryClient = new QueryClient();
-  return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
-  );
-}
+// userEvent interaction tests run long under coverage instrumentation;
+// the per-test budget below replaces the 5s default for this file's
+// interaction cases only (assertions and waits are unchanged).
+const INTERACTION_TIMEOUT = 20_000;
 
 const mockPush = vi.fn();
 
@@ -124,6 +129,80 @@ const SAMPLE_DOWNLOADED_ITEMS: MediaItemResponse[] = [
   },
 ];
 
+/* ------------------------------------------------------------------ */
+/* Surface render harness (data-layer mocks via a fetch stub)          */
+/* ------------------------------------------------------------------ */
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
+}
+
+interface SurfaceStubOptions {
+  /** Stored jobs served by GET …/downloader (recent-list hydration). */
+  jobs?: unknown[];
+  /** POST …/downloader responder; defaults to "unstubbed". */
+  onIngestPost?: (body: { url: string; folderId: string | null }) => Promise<Response>;
+}
+
+let downloaderPostCalls: Array<{ url: string; folderId: string | null }> = [];
+
+function installSurfaceFetchStub(options: SurfaceStubOptions = {}) {
+  downloaderPostCalls = [];
+  const jobs = options.jobs ?? [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+
+      if (url.includes('/media/folders') && method === 'GET') {
+        return jsonResponse({ folders: SAMPLE_FOLDERS, unorganizedCount: 0 });
+      }
+      if (url.includes('/downloader') && method === 'POST') {
+        const body = JSON.parse(String(init?.body)) as {
+          url: string;
+          folderId: string | null;
+        };
+        downloaderPostCalls.push(body);
+        if (options.onIngestPost) return options.onIngestPost(body);
+        throw new Error('Unstubbed downloader POST');
+      }
+      if (url.includes('/downloader') && method === 'GET') {
+        return jsonResponse({ success: true, jobs });
+      }
+      const mediaMatch = /\/media\/([0-9a-f-]+)$/.exec(url);
+      if (mediaMatch && method === 'GET') {
+        const item = SAMPLE_DOWNLOADED_ITEMS.find((i) => i.id === mediaMatch[1]);
+        if (item) return jsonResponse(item);
+      }
+      throw new Error(`Unstubbed fetch: ${method} ${url}`);
+    })
+  );
+}
+
+function renderDownloader() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <DownloaderSurface subdomain="acme" />
+    </QueryClientProvider>
+  );
+}
+
+beforeEach(() => {
+  mockPush.mockClear();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
 describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder Selection & Inline New Folder (US2)', () => {
   it('auto-selects an existing root-level Downloads folder on load without issuing a POST request', async () => {
     const mockFetch = vi.fn(async () => {
@@ -191,41 +270,52 @@ describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder 
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
-  it('renders destination folder selector with All Media (Root), Downloads default selected, nested ancestry paths, and inline New Folder dialog', () => {
-    const { hasText, hasAttribute, findTags } = renderDownloader(
-      <MediaDownloader
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialNewFolderDialogOpen={true}
-        initialNewFolderName="Q4 Viral Clips"
-      />
-    );
+  it(
+    'renders destination folder selector with All Media (Root), Downloads default selected, nested ancestry paths, and inline New Folder dialog',
+    async () => {
+      installSurfaceFetchStub();
+      const user = userEvent.setup();
+      renderDownloader();
 
-    expect(hasAttribute('data-testid', 'downloader-folder-select')).toBe(true);
-    expect(hasAttribute('data-testid', 'downloader-new-folder-button')).toBe(true);
-    expect(hasText('All Media (Root)')).toBe(true);
-    expect(hasText('Downloads')).toBe(true);
-    expect(hasText('Campaign A')).toBe(true);
-    expect(hasText('Campaign A / TikTok Reels')).toBe(true);
+      const folderSelect = screen.getByTestId('downloader-folder-select');
+      expect(folderSelect).toBeTruthy();
+      expect(screen.getByTestId('downloader-new-folder-button')).toBeTruthy();
 
-    // Verify Downloads option is selected by default when initialFolders contains Downloads
-    const options = findTags('option');
-    const selectedDownloadsOption = options.find(
-      (opt) =>
-        opt.attributes['value'] === '11111111-1111-4111-8111-111111111111' &&
-        opt.attributes['selected'] !== undefined
-    );
-    expect(selectedDownloadsOption).toBeDefined();
+      // Downloads is the default selected folder (its label is what the
+      // select trigger shows once the folder list has loaded).
+      await waitFor(() => {
+        expect(folderSelect.textContent).toContain('Downloads');
+      });
 
-    // Verify inline New Folder modal controls
-    expect(hasAttribute('data-testid', 'downloader-new-folder-dialog')).toBe(true);
-    expect(hasAttribute('data-testid', 'downloader-new-folder-input')).toBe(true);
-    expect(hasAttribute('data-testid', 'downloader-new-folder-parent-select')).toBe(
-      true
-    );
-    expect(hasAttribute('data-testid', 'downloader-new-folder-submit')).toBe(true);
-    expect(hasAttribute('value', 'Q4 Viral Clips')).toBe(true);
-  });
+      // Every folder is listed by its ancestry path.
+      await user.click(folderSelect);
+      expect(
+        await screen.findByRole('option', { name: 'All Media (Root)' })
+      ).toBeTruthy();
+      expect(screen.getByRole('option', { name: 'Downloads' })).toBeTruthy();
+      expect(screen.getByRole('option', { name: 'Campaign A' })).toBeTruthy();
+      expect(
+        screen.getByRole('option', { name: 'Campaign A / TikTok Reels' })
+      ).toBeTruthy();
+      await user.keyboard('{Escape}');
+
+      // Verify inline New Folder modal controls
+      await user.click(screen.getByTestId('downloader-new-folder-button'));
+      expect(
+        await screen.findByTestId('downloader-new-folder-dialog')
+      ).toBeTruthy();
+      const nameInput = screen.getByTestId('downloader-new-folder-input');
+      expect(nameInput).toBeTruthy();
+      expect(
+        screen.getByTestId('downloader-new-folder-parent-select')
+      ).toBeTruthy();
+      expect(screen.getByTestId('downloader-new-folder-submit')).toBeTruthy();
+
+      await user.type(nameInput, 'Q4 Viral Clips');
+      expect((nameInput as HTMLInputElement).value).toBe('Q4 Viral Clips');
+    },
+    INTERACTION_TIMEOUT
+  );
 
   it('creates a new folder inline via createDownloaderFolder and immediately returns its ID as selectedFolderId', async () => {
     const newFolderResponse: MediaFolder = {
@@ -266,32 +356,44 @@ describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder 
 });
 
 describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Unified Progress Bar (US3, US5)', () => {
-  it('validates empty or invalid URL inputs and renders inline role="alert" error state', () => {
-    const emptyCheck = validateDownloaderBatchInput('   \n  ');
-    expect(emptyCheck.valid).toBe(false);
-    expect(emptyCheck.errorMessage).toContain('Please paste at least one link');
+  it(
+    'validates empty or invalid URL inputs and renders inline role="alert" error state',
+    async () => {
+      const emptyCheck = validateDownloaderBatchInput('   \n  ');
+      expect(emptyCheck.valid).toBe(false);
+      expect(emptyCheck.errorMessage).toContain('Please paste at least one link');
 
-    const invalidCheck = validateDownloaderBatchInput(
-      'not-a-valid-url\nhttp://127.0.0.1/private.mp4'
-    );
-    expect(invalidCheck.valid).toBe(false);
-    expect(invalidCheck.errorMessage).toContain('valid public link');
+      const invalidCheck = validateDownloaderBatchInput(
+        'not-a-valid-url\nhttp://127.0.0.1/private.mp4'
+      );
+      expect(invalidCheck.valid).toBe(false);
+      expect(invalidCheck.errorMessage).toContain('valid public link');
 
-    const { hasText, hasAttribute, findByRole } = renderDownloader(
-      <MediaDownloader
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialUrlInput="invalid-link"
-        initialUrlError={invalidCheck.errorMessage}
-      />
-    );
+      installSurfaceFetchStub();
+      const user = userEvent.setup();
+      renderDownloader();
 
-    expect(findByRole('alert')).toBe(true);
-    expect(hasAttribute('data-testid', 'downloader-url-error')).toBe(true);
-    expect(
-      hasText('Please enter at least one valid public link.')
-    ).toBe(true);
-  });
+      const urlInput = screen.getByTestId('downloader-url-input');
+      await user.type(urlInput, 'invalid-link');
+      await user.click(screen.getByTestId('downloader-submit-button'));
+
+      // Inline error (role="alert"), byte-identical copy, nothing submitted.
+      const urlError = await screen.findByTestId('downloader-url-error');
+      expect(urlError.getAttribute('role')).toBe('alert');
+      expect(urlError.textContent).toBe(
+        'Please enter at least one valid public link.'
+      );
+      expect(screen.getAllByRole('alert').length).toBeGreaterThan(0);
+      expect(downloaderPostCalls).toHaveLength(0);
+
+      // §3 item 2: typing clears the error.
+      await user.type(urlInput, 'x');
+      await waitFor(() => {
+        expect(screen.queryByTestId('downloader-url-error')).toBeNull();
+      });
+    },
+    INTERACTION_TIMEOUT
+  );
 
   it('deduplicates identical URLs within a pasted batch, handles multi-item carousel responses, and emits unified progress updates', async () => {
     const rawBatchInput = [
@@ -408,117 +510,186 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
     expect(batchResult.savedEntries[0]?.platform).toBe('tiktok');
   });
 
-  it('renders a single unified Windows Copy-style batch progress bar and deduplication notice during active downloads', () => {
-    const activeProgress: DownloaderBatchProgressState = {
-      status: 'downloading',
-      totalLinks: 4,
-      completedLinks: 2,
-      currentUrl: 'https://www.tiktok.com/@creator/video/333',
-      duplicateCount: 1,
-      invalidCount: 0,
-    };
+  it(
+    'renders a single unified Windows Copy-style batch progress bar and deduplication notice during active downloads',
+    async () => {
+      // Two links complete immediately; the remaining two stay in
+      // flight (their POST never resolves), freezing the batch at
+      // 2 of 4 — the state the legacy suite seeded via initial props.
+      const neverResolves = new Promise<Response>(() => {});
+      installSurfaceFetchStub({
+        onIngestPost: async (body) => {
+          if (
+            body.url.includes('/video/111') ||
+            body.url.includes('/video/222')
+          ) {
+            return jsonResponse(
+              {
+                sourceUrl: body.url,
+                platform: 'tiktok',
+                items: [SAMPLE_DOWNLOADED_ITEMS[0]],
+              },
+              201
+            );
+          }
+          return neverResolves;
+        },
+      });
+      const user = userEvent.setup();
+      renderDownloader();
 
-    const { hasText, hasAttribute, findTags } = renderDownloader(
-      <MediaDownloader
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialBatchProgress={activeProgress}
-      />
-    );
+      const urlInput = screen.getByTestId('downloader-url-input');
+      await user.type(
+        urlInput,
+        [
+          'https://www.tiktok.com/@creator/video/111',
+          'https://www.tiktok.com/@creator/video/111', // Duplicate in batch!
+          'https://www.tiktok.com/@creator/video/222',
+          'https://www.tiktok.com/@creator/video/333',
+          'https://www.tiktok.com/@creator/video/444',
+        ].join('\n')
+      );
+      await user.click(screen.getByTestId('downloader-submit-button'));
 
-    expect(hasAttribute('data-testid', 'downloader-batch-progress')).toBe(true);
-    expect(hasAttribute('data-testid', 'downloader-dedup-notice')).toBe(true);
-    expect(hasText('Skipped 1 duplicate link in batch')).toBe(true);
-    expect(hasText('Saving 2 of 4 links to Media Library...')).toBe(true);
-    expect(hasText('50%')).toBe(true);
-    expect(hasText('Saving to Media Library...')).toBe(true);
+      expect(
+        await screen.findByTestId('downloader-batch-progress')
+      ).toBeTruthy();
+      const dedupNotice = await screen.findByTestId('downloader-dedup-notice');
+      expect(dedupNotice.textContent).toBe(
+        'Skipped 1 duplicate link in batch'
+      );
+      expect(
+        await screen.findByText('Saving 2 of 4 links to Media Library...')
+      ).toBeTruthy();
+      expect(screen.getByText('50%')).toBeTruthy();
+      expect(screen.getByText('Saving to Media Library...')).toBeTruthy();
 
-    // Must render a single semantic progress element
-    const progressBars = findTags('progress');
-    expect(progressBars).toHaveLength(1);
-    expect(progressBars[0]?.attributes['value']).toBe('50');
-    expect(progressBars[0]?.attributes['max']).toBe('100');
-  });
+      // Must render a single semantic progress element
+      const progressBars = document.querySelectorAll('progress');
+      expect(progressBars).toHaveLength(1);
+      expect(progressBars[0]!.getAttribute('value')).toBe('50');
+      expect(progressBars[0]!.getAttribute('max')).toBe('100');
+    },
+    INTERACTION_TIMEOUT
+  );
 });
 
 describe('Spec 031: MediaDownloader — Recent Downloads List, Open in Folder & Retry Failed Links (US5)', () => {
-  it('renders saved items with auto-populated captions, formatted sizes, target folder path, and Open in Folder navigation', () => {
-    const failedEntry: DownloaderFailedEntry = {
-      id: 'failed-1',
-      url: 'https://www.tiktok.com/@private/video/999',
-      folderId: '11111111-1111-4111-8111-111111111111',
-      errorMessage: 'This post is private or unavailable for cloud download.',
-    };
-
-    const { hasText, hasAttribute, html } = renderDownloader(
-      <MediaDownloader
-        subdomain="acme"
-        initialFolders={SAMPLE_FOLDERS}
-        initialSavedEntries={[
+  it(
+    'renders saved items with auto-populated captions, formatted sizes, target folder path, and Open in Folder navigation',
+    async () => {
+      // The Recent list hydrates from the stored jobs (OD-140-2): two
+      // completed jobs (their media items served by GET /media/<id>)
+      // and one failed job.
+      installSurfaceFetchStub({
+        jobs: [
           {
-            item: SAMPLE_DOWNLOADED_ITEMS[0]!,
-            sourceUrl: 'https://www.tiktok.com/@creator/video/111',
-            platform: 'tiktok',
+            id: 'job-saved-1',
+            status: 'completed',
+            source_url: 'https://www.tiktok.com/@creator/video/111',
+            source_platform: 'tiktok',
+            media_id: SAMPLE_DOWNLOADED_ITEMS[0]!.id,
+            folder_id: SAMPLE_DOWNLOADED_ITEMS[0]!.folderId,
+            progress_percent: 100,
+            error_message: null,
           },
           {
-            item: SAMPLE_DOWNLOADED_ITEMS[1]!,
-            sourceUrl: 'https://www.instagram.com/p/CAROUSEL999/',
-            platform: 'instagram',
+            id: 'job-saved-2',
+            status: 'completed',
+            source_url: 'https://www.instagram.com/p/CAROUSEL999/',
+            source_platform: 'instagram',
+            media_id: SAMPLE_DOWNLOADED_ITEMS[1]!.id,
+            folder_id: SAMPLE_DOWNLOADED_ITEMS[1]!.folderId,
+            progress_percent: 100,
+            error_message: null,
           },
-        ]}
-        initialFailedEntries={[failedEntry]}
-      />
-    );
+          {
+            id: 'job-failed-1',
+            status: 'failed',
+            source_url: 'https://www.tiktok.com/@private/video/999',
+            source_platform: 'tiktok',
+            media_id: null,
+            folder_id: '11111111-1111-4111-8111-111111111111',
+            progress_percent: 0,
+            error_message:
+              'This post is private or unavailable for cloud download.',
+          },
+        ],
+      });
+      const user = userEvent.setup();
+      const { container } = renderDownloader();
 
-    expect(hasAttribute('data-testid', 'downloader-recent-list')).toBe(true);
-    expect(
-      hasAttribute(
-        'data-testid',
-        `downloader-saved-item-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
-      )
-    ).toBe(true);
-    expect(
-      hasAttribute(
-        'data-testid',
-        `downloader-item-caption-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
-      )
-    ).toBe(true);
-    expect(
-      hasAttribute(
-        'data-testid',
-        `downloader-open-folder-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
-      )
-    ).toBe(true);
+      expect(screen.getByTestId('downloader-recent-list')).toBeTruthy();
+      expect(
+        await screen.findByTestId(
+          `downloader-saved-item-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
+        )
+      ).toBeTruthy();
+      expect(
+        screen.getByTestId(
+          `downloader-item-caption-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
+        )
+      ).toBeTruthy();
+      expect(
+        screen.getByTestId(
+          `downloader-open-folder-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
+        )
+      ).toBeTruthy();
 
-    // Verify auto-populated post captions and folder ancestry paths
-    expect(
-      hasText('POV: You automated your entire content calendar 🚀 #growth')
-    ).toBe(true);
-    expect(hasText('5 Frameworks for High-Retention Reels')).toBe(true);
-    expect(hasText('12.0 MB')).toBe(true);
-    expect(hasText('1.5 MB')).toBe(true);
-    expect(hasText('Campaign A / TikTok Reels')).toBe(true);
-    expect(hasText('Open in Folder')).toBe(true);
+      // Verify auto-populated post captions and folder ancestry paths
+      expect(
+        screen.getByText(
+          'POV: You automated your entire content calendar 🚀 #growth'
+        )
+      ).toBeTruthy();
+      expect(
+        screen.getByText('5 Frameworks for High-Retention Reels')
+      ).toBeTruthy();
+      expect(screen.getByText('12.0 MB')).toBeTruthy();
+      expect(screen.getByText('1.5 MB')).toBeTruthy();
+      expect(
+        screen.getByTestId(
+          `downloader-item-folder-${SAMPLE_DOWNLOADED_ITEMS[1]!.id}`
+        ).textContent
+      ).toBe('Campaign A / TikTok Reels');
+      expect(screen.getAllByText('Open in Folder')).toHaveLength(2);
+      expect(screen.getByText('2 saved · 1 failed')).toBeTruthy();
 
-    // Verify failed item & Retry button rendering
-    expect(hasAttribute('data-testid', 'downloader-failed-item')).toBe(true);
-    expect(hasAttribute('data-testid', 'downloader-retry-btn')).toBe(true);
-    expect(
-      hasText('This post is private or unavailable for cloud download.')
-    ).toBe(true);
+      // Verify failed item & Retry button rendering
+      expect(screen.getByTestId('downloader-failed-item')).toBeTruthy();
+      expect(screen.getByTestId('downloader-retry-btn')).toBeTruthy();
+      expect(
+        screen.getByText(
+          'This post is private or unavailable for cloud download.'
+        )
+      ).toBeTruthy();
 
-    // Verify buildMediaFolderHref routes accurately to ?folder=<id> or /media for root
-    expect(
-      buildMediaFolderHref('acme', '33333333-3333-4333-8333-333333333333')
-    ).toBe('/tenant/acme/media?folder=33333333-3333-4333-8333-333333333333');
-    expect(buildMediaFolderHref('acme', null)).toBe('/tenant/acme/media');
+      // Open in Folder navigates into the Media Library at that folder
+      await user.click(
+        screen.getByTestId(
+          `downloader-open-folder-${SAMPLE_DOWNLOADED_ITEMS[1]!.id}`
+        )
+      );
+      expect(mockPush).toHaveBeenCalledWith(
+        '/tenant/acme/media?folder=33333333-3333-4333-8333-333333333333'
+      );
 
-    // Strict DESIGN.md & theme.ts compliance: zero capsule pills (9999px) and zero decorative status dots
-    expect(html).not.toContain('9999px');
-    expect(html).not.toContain('data-slot="status-dot"');
-    expect(html).toContain(`border-radius:${RADII.xs}`);
-    expect(html).toContain(PALETTE.primary);
-  });
+      // Verify buildMediaFolderHref routes accurately to ?folder=<id> or /media for root
+      expect(
+        buildMediaFolderHref('acme', '33333333-3333-4333-8333-333333333333')
+      ).toBe('/tenant/acme/media?folder=33333333-3333-4333-8333-333333333333');
+      expect(buildMediaFolderHref('acme', null)).toBe('/tenant/acme/media');
+
+      // Strict theme compliance: zero capsule pills (9999px), zero
+      // decorative status dots, and no raw palette hex in the markup —
+      // styling comes from token classes after the PR-140-2 rebuild.
+      const html = container.innerHTML;
+      expect(html).not.toContain('9999px');
+      expect(html).not.toContain('data-slot="status-dot"');
+      expect(html).not.toContain(PALETTE.primary);
+    },
+    INTERACTION_TIMEOUT
+  );
 
   it('retries a failed link via retryFailedDownloadEntry and recovers the saved media item', async () => {
     const failedEntry: DownloaderFailedEntry = {
