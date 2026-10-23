@@ -3,6 +3,11 @@ import { NextRequest } from 'next/server';
 import { encryptToken, signSessionToken } from '@fbuploadpro/contracts';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
+vi.mock('@/lib/server-analytics', () => ({
+  logServerError: vi.fn(),
+  captureServerException: vi.fn(),
+}));
+
 vi.mock('@/lib/insights/facebook-insights-client', () => ({
   getPageOverview: vi.fn(),
   getPageTimeSeriesInsights: vi.fn(),
@@ -15,6 +20,9 @@ import {
   getPageTimeSeriesInsights,
   getPageReactionsAndDemographics,
 } from '@/lib/insights/facebook-insights-client';
+import { logServerError } from '@/lib/server-analytics';
+
+const mockLogServerError = vi.mocked(logServerError);
 
 const mockOverview = vi.mocked(getPageOverview);
 const mockTimeSeries = vi.mocked(getPageTimeSeriesInsights);
@@ -216,7 +224,7 @@ describe('Facebook Page Insights — parallel Graph calls (spec 139)', () => {
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.error).toBe('UPSTREAM_GRAPH_ERROR');
-    expect(body.message).toBe('timeseries boom');
+    expect(body.message).toBe('Facebook Graph API failed to return page insights.');
   });
 
   it('fails the whole request (502) when the reactions call rejects, matching sequential behaviour', async () => {
@@ -229,10 +237,10 @@ describe('Facebook Page Insights — parallel Graph calls (spec 139)', () => {
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.error).toBe('UPSTREAM_GRAPH_ERROR');
-    expect(body.message).toBe('reactions boom');
+    expect(body.message).toBe('Facebook Graph API failed to return page insights.');
   });
 
-  it('primary failure: overview rawError returns the byte-identical error response (502)', async () => {
+  it('primary failure: overview rawError returns the generic error response (502)', async () => {
     mockOverview.mockResolvedValue({
       overview: OVERVIEW_OK.overview,
       healthStatus: 'active',
@@ -243,7 +251,9 @@ describe('Facebook Page Insights — parallel Graph calls (spec 139)', () => {
 
     expect(res.status).toBe(502);
     const body = await res.json();
-    expect(body).toEqual({ error: 'UPSTREAM_GRAPH_ERROR', message: 'Graph exploded' });
+    expect(body).toEqual({ error: 'UPSTREAM_GRAPH_ERROR', message: 'Facebook Graph API failed to return page insights.' });
+    // Provider detail is logged server-side instead (spec 139 B3).
+    expect(mockLogServerError).toHaveBeenCalled();
     expect(mockTimeSeries).not.toHaveBeenCalled();
     expect(mockReactions).not.toHaveBeenCalled();
   });
@@ -259,7 +269,7 @@ describe('Facebook Page Insights — parallel Graph calls (spec 139)', () => {
 
     expect(res.status).toBe(429);
     const body = await res.json();
-    expect(body).toEqual({ error: 'FB_RATE_LIMITED', message: 'Rate limit hit' });
+    expect(body).toEqual({ error: 'FB_RATE_LIMITED', message: 'Facebook Graph API failed to return page insights.' });
   });
 
   it('auxiliary partial data preserved: a degraded (resolved, zero-filled) time-series keeps reactions data in a 200', async () => {
