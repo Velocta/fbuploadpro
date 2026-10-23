@@ -14,6 +14,11 @@
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+
+// userEvent interaction tests run long under coverage instrumentation;
+// the per-test budget below replaces the 5s default for this file's
+// interaction cases only (assertions and waits are unchanged).
+const INTERACTION_TIMEOUT = 20_000;
 import userEvent from '@testing-library/user-event';
 
 import {
@@ -143,7 +148,7 @@ describe('GeneralSettingsView — rename flow', () => {
 
     expect(screen.getByTestId('workspace-name-display').textContent).toBe('Acme Studio');
     expect(patchCalls).toHaveLength(0);
-  });
+  }, INTERACTION_TIMEOUT);
 
   it('invalid submit: summary + inline carry the same exact message, input is preserved, focus moves to the summary', async () => {
     const user = userEvent.setup();
@@ -165,7 +170,7 @@ describe('GeneralSettingsView — rename flow', () => {
     expect(input.value).toBe('ab');
     await waitFor(() => expect(document.activeElement).toBe(summary));
     expect(patchCalls).toHaveLength(0);
-  });
+  }, INTERACTION_TIMEOUT);
 
   it('trailing-space name fails with the spaces sentence, not the length sentence', async () => {
     const user = userEvent.setup();
@@ -182,7 +187,7 @@ describe('GeneralSettingsView — rename flow', () => {
       'Workspace name must not contain leading or trailing spaces.'
     );
     expect(input.value).toBe('Acme ');
-  });
+  }, INTERACTION_TIMEOUT);
 
   it('successful save: PATCHes through the typed client, shows the new name in place, fires workspace-updated', async () => {
     const user = userEvent.setup();
@@ -209,7 +214,7 @@ describe('GeneralSettingsView — rename flow', () => {
     } finally {
       window.removeEventListener('workspace-updated', listener);
     }
-  });
+  }, INTERACTION_TIMEOUT);
 
   it('failed save: the server message surfaces in the summary, edit mode and text survive', async () => {
     const user = userEvent.setup();
@@ -227,7 +232,7 @@ describe('GeneralSettingsView — rename flow', () => {
     expect((screen.getByTestId('workspace-name-input') as HTMLInputElement).value).toBe(
       'Taken Name'
     );
-  });
+  }, INTERACTION_TIMEOUT);
 
   it('failed save without a server message falls back to the fixed §5.1 sentence', async () => {
     const user = userEvent.setup();
@@ -249,5 +254,5 @@ describe('GeneralSettingsView — rename flow', () => {
     expect((screen.getByTestId('workspace-name-input') as HTMLInputElement).value).toBe(
       'Any Name'
     );
-  });
+  }, INTERACTION_TIMEOUT);
 });
