@@ -28,6 +28,8 @@ import {
   resolveConnectDbClient,
   sessionCanAccessTenant,
 } from '@/lib/connect/session';
+// Registers the YouTube connect config (spec 125) into the framework registry.
+import '@/lib/connect/platforms/youtube';
 
 const CONNECT_FAILED = 'connect_failed';
 

@@ -25,6 +25,8 @@ import {
 } from '@/lib/connect/persist';
 import { resolveConnectDbClient } from '@/lib/connect/session';
 import { mapProviderDenial, type ConnectNoticeCode } from '@/lib/connect/errors';
+// Registers the YouTube connect config (spec 125) into the framework registry.
+import '@/lib/connect/platforms/youtube';
 
 /**
  * Reads the PKCE verifier for this flow from its signed cookie, matched to

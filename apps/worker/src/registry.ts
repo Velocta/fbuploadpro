@@ -1,6 +1,9 @@
 import { createPublisherRegistry, type PublisherRegistry } from '@fbuploadpro/contracts';
+import { PostForMeClient } from './providers/post-for-me.js';
+import { PostForMeYouTubeClient } from './providers/post-for-me-youtube.js';
 import { FacebookPublisher } from './publishers/facebook.js';
 import { XPublisher } from './publishers/x.js';
+import { YouTubePublisher } from './publishers/youtube.js';
 
 /**
  * Builds the worker's publisher registry (spec 121 Scope 1).
@@ -19,6 +22,13 @@ import { XPublisher } from './publishers/x.js';
  * database; spec 125/126's Post-for-Me key rides the same bag). Values
  * are passed structurally so tests can inject fakes and the registry
  * never reads `process.env` itself.
+ *
+ * Spec 125 registers YouTube when the Post for Me API key is present
+ * in worker env. When the key is absent, YouTube is deliberately NOT
+ * registered — the safer behaviour, since a registered publisher
+ * with no key could only fail every item auth-class and cascade
+ * accounts to `expired`, while unregistered items simply stay queued
+ * until the key is configured.
  */
 export interface WorkerPublisherEnv {
   /** Post-for-Me provider API key (specs 125/126) — env only, never a table. */
@@ -48,5 +58,19 @@ export function createWorkerPublisherRegistry(
       },
     })
   );
+
+  const postForMeApiKey = env?.POST_FOR_ME_API_KEY;
+  if (postForMeApiKey) {
+    registry.register(
+      new YouTubePublisher(
+        new PostForMeYouTubeClient(new PostForMeClient({ apiKey: postForMeApiKey }))
+      )
+    );
+  } else {
+    console.warn(
+      '[registry] POST_FOR_ME_API_KEY is not configured; YouTube publishing is disabled and YouTube items will stay queued.'
+    );
+  }
+
   return registry;
 }
