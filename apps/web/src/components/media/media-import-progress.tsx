@@ -129,7 +129,7 @@ export function ImportProgressFooter({
   }
 
   return (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {canCancelRemaining && (
           <Button

@@ -237,7 +237,9 @@ export function ImportStagingFooter({
   const isStartDisabled = validCount === 0 || isStarting;
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-3">
+      {/* Wraps at phone widths (spec 142): "+ Add more" keeps its own
+          line rather than squeezing the actions off the panel. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Button
           type="button"
           variant="link"
@@ -248,7 +250,7 @@ export function ImportStagingFooter({
           + Add more
         </Button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="ghost"
