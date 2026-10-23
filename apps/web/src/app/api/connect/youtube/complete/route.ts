@@ -70,9 +70,12 @@ async function readPendingPick(
   const picked = pending.destinations.filter((destination) =>
     requestedIds.has(destination.externalDestinationId)
   );
-  const providerAccountId =
-    (picked[0] as YouTubeDiscoveredDestination | undefined)
-      ?.providerAccountId ?? null;
+  const firstPicked = picked[0] as
+    | YouTubeDiscoveredDestination
+    | undefined;
+  const providerAccountId = firstPicked
+    ? firstPicked.providerAccountId
+    : null;
   return {
     pending,
     pickedExternalIds: picked.map((d) => d.externalDestinationId),
@@ -88,7 +91,7 @@ async function mergeMetadataJson(
 ): Promise<void> {
   const patch = { providerAccountId };
 
-  if (isLegacyClient(client ?? undefined)) {
+  if (isLegacyClient(client)) {
     const legacy = client as DatabaseClient;
     const conditions = Object.keys(match)
       .map((column, index) => `${column} = $${index + 2}`)
@@ -100,7 +103,7 @@ async function mergeMetadataJson(
     return;
   }
 
-  const supabase = getRouteSupabase(client ?? undefined);
+  const supabase = getRouteSupabase(client);
   if (!supabase) return;
   let query = supabase.from(table).select('id, metadata');
   for (const [column, value] of Object.entries(match)) {

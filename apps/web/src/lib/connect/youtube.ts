@@ -177,7 +177,7 @@ export function createPostForMeConnectClient(
         );
         const accounts = Array.isArray(list)
           ? (list as PostForMeSocialAccount[])
-          : ((list as { data?: PostForMeSocialAccount[] })?.data ?? []);
+          : ((list as { data?: PostForMeSocialAccount[] }).data ?? []);
         return accounts.find((account) => account.id === id) ?? null;
       }
     },
