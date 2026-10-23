@@ -1,7 +1,8 @@
 import type { Platform } from '../domain/database.js';
 
 // ==========================================
-// Per-account posting limits (spec 121 Scope.8, D5 DECIDED)
+// Per-destination posting limits (spec 121 Scope.8, D5 DECIDED;
+// clarified 2026-10-24: caps are per-destination)
 // ==========================================
 //
 // Platform caps enforced in-product at claim time: the claim path counts
@@ -10,8 +11,9 @@ import type { Platform } from '../domain/database.js';
 // the one named config in contracts — so the claim RPC, the worker, and
 // the composer/queue surfaces (spec 128) read the same numbers.
 //
-// A destination-level live value (e.g. Instagram's per-account quota
-// read from the platform) overrides the default for that destination
+// A destination-level live value (e.g. Instagram's live per-account
+// quota read from the platform — applied per destination) overrides
+// the default for that destination
 // via `resolvePublishLimit` — no schema or code change needed when a
 // platform reports a different cap for a specific account.
 //
@@ -38,15 +40,15 @@ export interface PlatformPublishLimitConfig {
 const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_DAY = 24 * SECONDS_PER_HOUR;
 
-// --- Instagram (spec 124 refines with the live per-account quota read) ---
+// --- Instagram (spec 124 refines with the live quota read) ---
 
-/** 100 published posts per rolling 24 h per account. */
+/** 100 published posts per rolling 24 h per destination (the platform's per-account figure; one account per destination). */
 export const INSTAGRAM_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
   maxCount: 100,
   windowSeconds: SECONDS_PER_DAY,
 };
 
-/** ~25 publish calls per hour per account. */
+/** ~25 publish calls per hour per destination. */
 export const INSTAGRAM_PUBLISH_CALLS_LIMIT: PublishLimitWindow = {
   maxCount: 25,
   windowSeconds: SECONDS_PER_HOUR,
@@ -54,7 +56,7 @@ export const INSTAGRAM_PUBLISH_CALLS_LIMIT: PublishLimitWindow = {
 
 // --- Threads ---
 
-/** 250 posts per rolling 24 h per profile. */
+/** 250 posts per rolling 24 h per destination (per profile). */
 export const THREADS_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
   maxCount: 250,
   windowSeconds: SECONDS_PER_DAY,
@@ -67,7 +69,8 @@ export const THREADS_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
 // --- TikTok (spec 126 — via Post for Me, D1) ---
 
 /**
- * SHARED POOL CAP — this is NOT a per-account or per-workspace limit,
+ * SHARED POOL CAP — this is NOT a per-destination, per-account, or
+ * per-workspace limit,
  * and no window belongs in the config below for it.
  *
  * TikTok publishing runs through Post for Me's ONE managed TikTok app
@@ -84,8 +87,8 @@ export const THREADS_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
  * per-destination window, which would multiply the real cap by the
  * number of workspaces.
  *
- * Per-account: the provider publishes NO per-account TikTok posting
- * cap (its documented limits are transport-level: 5 req/s and
+ * Per destination: the provider publishes NO per-destination TikTok
+ * posting cap (its documented limits are transport-level: 5 req/s and
  * 40 req/min per project, raisable on request). The `tiktok: {}`
  * entry therefore stays empty, exactly like YouTube's — no invented
  * number. Plan-level post volume is the commercial guardrail.
@@ -94,14 +97,14 @@ export const THREADS_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
 // --- X ---
 
 /**
- * 100 posts per 15 min per user — the lower bound of the conflicting
- * official figures (100 vs 200 per 15 min), per spec 121 Scope.8.
+ * 100 posts per 15 min per destination (X's per-user figure) — the
+ * lower bound of the conflicting
  *
  * Shared-app fact (spec 127 Scope.6, comment only — not an enforced
  * window here): X's global app is additionally subject to an app-level
  * ceiling of 10,000 posts per 24 h across ALL workspaces, republished
- * in X's tables. It is recorded, not modelled: the per-user window
- * above is the enforced D5 limit, and the runtime `x-rate-limit-*`
+ * in X's tables. It is recorded, not modelled: the per-destination
+ * window above is the enforced D5 limit, and the runtime `x-rate-limit-*`
  * headers tighten an individual destination further when X reports
  * less headroom (spec 127 publisher).
  */
@@ -118,7 +121,7 @@ export const X_PUBLISHED_POSTS_LIMIT: PublishLimitWindow = {
  *     the `rate_limited` cooldown, not this config.
  *   - `{}` (YouTube/TikTok): provider-imposed effective limits, supplied
  *     by specs 125/126 once verified. For TikTok the verified position
- *     is "no per-account cap" — see the shared pool-cap record in the
+ *     is "no per-destination cap" — see the shared pool-cap record in the
  *     TikTok section above. The empty shape is the extension point —
  *     filling in a window later needs no schema change.
  */
@@ -140,7 +143,7 @@ export const PLATFORM_PUBLISH_LIMITS: Record<Platform, PlatformPublishLimitConfi
 
 /**
  * A destination-level override of the platform defaults — e.g. the live
- * quota a platform reports for one specific account. Each window present
+ * quota a platform reports for one specific destination (account). Each window present
  * in the override replaces the default window wholesale; windows absent
  * from the override keep their defaults.
  */

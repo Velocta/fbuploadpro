@@ -56,11 +56,11 @@ import type {
 //   - `is_draft` is always sent as an explicit false: drafts are
 //     out of scope for v1 (see contracts tiktok-options).
 //
-// Per-account limit (D5): Post for Me publishes NO per-account
+// Per-destination limit (D5): Post for Me publishes NO per-destination
 // TikTok posting cap, and the audited distinct-creator cap on its
 // managed app is a SHARED pool across all workspaces — recorded at
 // the contracts claim config (limits.ts, TikTok section), never as
-// a per-account window. The contracts `tiktok: {}` limit entry
+// a per-destination window. The contracts `tiktok: {}` limit entry
 // therefore stays empty (no invented number).
 
 export const TIKTOK_PLATFORM: Platform = 'tiktok';

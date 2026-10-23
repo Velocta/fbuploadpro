@@ -39,8 +39,9 @@ import {
 // the item published WITHOUT a second publish call — never a
 // double-post (the D10 settlement discipline).
 //
-// Quota (D5): the live per-account quota is read from
-// `content_publishing_limit` on every publish and fed through the
+// Quota (D5): the live per-destination quota is read from
+// `content_publishing_limit` (Meta meters it per account; one account
+// per destination) on every publish and fed through the
 // contracts destination-override seam (`resolvePublishLimit`). No
 // quota number is hardcoded in this module — Meta's own docs disagree
 // with each other about the cap, so only the live read is trusted.
@@ -404,7 +405,7 @@ export class InstagramPublisher implements Publisher {
   }
 
   /**
-   * Reads the live per-account quota and resolves it through the
+   * Reads the live per-destination quota and resolves it through the
    * contracts destination-override seam. Best effort: a failed read
    * never blocks a publish (the claim-side defaults still apply), and
    * an unreported total leaves the defaults untouched.
