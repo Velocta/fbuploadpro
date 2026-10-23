@@ -52,7 +52,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err: unknown) => {
+try {
+  await main();
+} catch (err) {
   console.error('[migrations] FAILED:', err);
   process.exit(1);
-});
+}
