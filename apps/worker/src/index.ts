@@ -14,6 +14,11 @@ import {
 } from './heartbeat.js';
 import { createWorkerPublisherRegistry } from './registry.js';
 import {
+  runRetentionCleanup,
+  RETENTION_CRON,
+  type RetentionDbClient,
+} from './retention.js';
+import {
   runRefreshCycle,
   TOKEN_REFRESH_CRON,
   type RefreshDbClient,
@@ -58,6 +63,8 @@ export {
   REFRESH_LEASE_TTL_MS,
   REFRESH_BACKLOG_EVENT,
 } from './refresh.js';
+export { runRetentionCleanup, RETENTION_CRON } from './retention.js';
+export type { RetentionRunResult, RetentionDbClient } from './retention.js';
 export type { RefreshCycleResult, RefreshDbClient } from './refresh.js';
 
 export interface Env {
@@ -76,6 +83,10 @@ export interface Env {
   /** X global-app client secret (spec 127, D7) — GitHub Secrets → worker env only, never the database. */
   X_CLIENT_SECRET?: string;
   TOKEN_ENCRYPTION_KEY?: string;
+  /** Retention cleanup kill-switch (spec 139 residue): 'true'/'1' skips the daily run. Unset = enabled. */
+  RETENTION_DISABLED?: string;
+  /** Retention cleanup dry-run (spec 139 residue): 'true'/'1' counts what would be deleted, deletes nothing. */
+  RETENTION_DRY_RUN?: string;
   SUPABASE_URL?: string;
   NEXT_PUBLIC_SUPABASE_URL?: string;
   SUPABASE_SERVICE_ROLE_KEY?: string;
@@ -176,6 +187,31 @@ export async function handleScheduled(
         env,
         err,
         { site: 'handleScheduled', kind: 'refresh_cycle_failed' },
+        waitUntil
+      );
+      throw err;
+    }
+    return;
+  }
+
+  // Retention cron (spec 139 residue): the daily 30-day history cleanup
+  // runs ONLY the retention job (retention.ts). Like the refresh cycle
+  // it writes no heartbeat row of its own — the heartbeat is
+  // claimer-owned — and reports through its structured counter log line
+  // + PostHog captures.
+  if (controller.cron === RETENTION_CRON) {
+    try {
+      await runRetentionCleanup(
+        db as unknown as RetentionDbClient,
+        env,
+        options?.now ?? new Date(controller.scheduledTime)
+      );
+    } catch (err) {
+      console.error('[Scheduled] retention cleanup failed:', err);
+      captureWorkerError(
+        env,
+        err,
+        { site: 'handleScheduled', kind: 'retention_cleanup_failed' },
         waitUntil
       );
       throw err;
