@@ -105,7 +105,6 @@ jobs:
           POST_FOR_ME_API_KEY: ${{ secrets.POST_FOR_ME_API_KEY }}
           X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
           X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
-          POST_FOR_ME_API_KEY: ${{ secrets.POST_FOR_ME_API_KEY }}
 
       - name: Smoke check worker /health (spec 116)
         if: steps.check-credentials.outputs.has_token == 'true'
