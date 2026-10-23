@@ -55,9 +55,9 @@ export function TimezoneReviewStep({
       {/* Transition preview */}
       <div
         data-testid="timezone-transition-card"
-        className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-md border border-line bg-subtle p-4"
+        className="flex items-center gap-2 rounded-md border border-line bg-subtle p-4"
       >
-        <div className="flex flex-col">
+        <div className="flex flex-1 flex-col">
           <span className="text-metadata font-semibold tracking-wide text-ink-dim uppercase">
             Current timezone
           </span>
@@ -72,7 +72,7 @@ export function TimezoneReviewStep({
         >
           <ArrowRightIcon className="size-3.5" />
         </span>
-        <div className="flex flex-col">
+        <div className="flex flex-1 flex-col">
           <span className="text-metadata font-semibold tracking-wide text-brand-gold uppercase">
             New timezone
           </span>
