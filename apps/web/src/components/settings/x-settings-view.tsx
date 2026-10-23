@@ -1,5 +1,13 @@
 'use client';
 
+/**
+ * X tab — connect-info config (spec 135 PR-135-4, spec §5.5).
+ *
+ * Copy preserved VERBATIM per OD-135-3 (a): the strings below are
+ * byte-identical to the shipped text (grep proof in the PR body);
+ * only the view's construction changed (tokens/primitives).
+ */
+
 import React from 'react';
 import { PlatformConnectInfoView } from '@/components/settings/platform-connect-info-view';
 

@@ -28,7 +28,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { GeneralSettingsView } from '@/components/settings/general-settings-view';
 import { Skeleton } from '@/components/shared/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shared/ui/tabs';
-import { Toast } from '@/components/shared/ui/toast';
 
 // The tab contract (ids, labels, `resolveSettingsTab`) lives in the
 // server-safe `./settings-tabs` module — the route's server component
@@ -162,8 +161,12 @@ export function SettingsShell({ subdomain, initialTab }: Readonly<SettingsShellP
         </TabsContent>
       </Tabs>
 
-      {/* The single shared/ui Toast system for the settings subtree. */}
-      <Toast />
+      {/* No Toast mount here (PR-135-4 close-out correction): the
+          tenant layout mounts the single shell-level Toaster
+          (spec 130), and this island's second mount made every
+          settings toast render twice. Settings views fire toasts
+          through the shared store, which the layout's Toaster
+          renders — the single shared/ui Toast system (§6.4). */}
     </div>
   );
 }

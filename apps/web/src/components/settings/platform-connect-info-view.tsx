@@ -1,7 +1,29 @@
 'use client';
 
+/**
+ * Platform connect-info view — YouTube / X / TikTok tabs
+ * (spec 135 PR-135-4, spec §5.5 / §8 close-out).
+ *
+ * Explanation-only tab for a platform with nothing to set up here:
+ * it explains, in plain language, how connecting works and sends
+ * the user to Accounts, where the Connect action lives (spec 123
+ * D1/D3/D4). It never renders a form, an input, or a paste field —
+ * none exists on these tabs and none is added.
+ *
+ * Rebuilt clean-room on the spec 129 design system (tokens +
+ * shared/ui primitives): the legacy inline styles and the
+ * `lib/theme` / `COMPONENT_STYLES` imports are deleted — this was
+ * the last `lib/theme` consumer in the settings subtree. The card,
+ * heading, and prose geometry follow the rebuilt credential tabs'
+ * pattern (hairline-bordered panel, token type scale); the copy is
+ * §5.5 verbatim, carried by the per-platform config views
+ * (`x-settings-view.tsx` etc.) — the X tab's strings are preserved
+ * byte-identical per OD-135-3 (a).
+ */
+
 import React from 'react';
-import { THEME, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+
+import { Button } from '@/components/shared/ui/button';
 
 export interface PlatformConnectInfoConfig {
   /** Platform slug, e.g. "youtube". */
@@ -19,85 +41,40 @@ export interface PlatformConnectInfoViewProps {
   config: PlatformConnectInfoConfig;
 }
 
-/**
- * Settings tab for a platform with nothing to set up here: it explains, in
- * plain language, how connecting works and sends the user to Accounts,
- * where the Connect action lives. It never renders a form or an input.
- */
 export function PlatformConnectInfoView({
   subdomain,
   config,
 }: Readonly<PlatformConnectInfoViewProps>) {
   const { displayName, testIdPrefix, paragraphs } = config;
   const accountsHref = `/tenant/${subdomain}/accounts`;
+  const headingId = `${testIdPrefix}-connect-info-heading`;
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: SPACING.xl,
-        maxWidth: '780px',
-        width: '100%',
-      }}
-    >
-      <div
+    <div className="flex w-full max-w-3xl flex-col gap-6">
+      <section
         data-testid={`${testIdPrefix}-connect-info-card`}
-        style={{
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-          padding: SPACING.xl,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: SPACING.lg,
-        }}
+        aria-labelledby={headingId}
+        className="flex flex-col gap-6 rounded-md border border-line bg-panel p-6 shadow-card"
       >
         <div>
-          <h3
-            style={{
-              margin: 0,
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              letterSpacing: TYPOGRAPHY.tracking.h3,
-            }}
-          >
+          <h2 id={headingId} className="text-lg font-semibold text-ink">
             {`Connect ${displayName}`}
-          </h3>
+          </h2>
           {paragraphs.map((paragraph) => (
-            <p
-              key={paragraph}
-              style={{
-                margin: `${SPACING.sm} 0 0 0`,
-                fontSize: '0.875rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                lineHeight: 1.5,
-              }}
-            >
+            <p key={paragraph} className="mt-2 text-body text-ink-sub">
               {paragraph}
             </p>
           ))}
         </div>
 
         <div>
-          <a
-            href={accountsHref}
-            data-testid={`${testIdPrefix}-accounts-link`}
-            style={{
-              ...COMPONENT_STYLES.secondaryButton(),
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textDecoration: 'none',
-              boxSizing: 'border-box',
-            }}
-          >
-            Go to Accounts
-          </a>
+          <Button asChild variant="secondary">
+            <a href={accountsHref} data-testid={`${testIdPrefix}-accounts-link`}>
+              Go to Accounts
+            </a>
+          </Button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
