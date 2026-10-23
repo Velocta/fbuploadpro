@@ -37,7 +37,6 @@ empty-catch apps/web/src/components/pages/dedicated/page-header.tsx 1
 empty-catch apps/web/src/components/pages/dedicated/queue/content-tab.tsx 5
 empty-catch apps/web/src/components/pages/dedicated/tab-insights.tsx 2
 empty-catch apps/web/src/components/pages/dedicated/tab-settings.tsx 2
-empty-catch apps/web/src/components/settings/byoc-settings-view.tsx 2
 empty-catch apps/web/src/components/settings/general-settings-view.tsx 1
 empty-catch apps/web/src/components/ui/sidebar.tsx 1
 empty-catch apps/web/src/components/workspace/create-workspace-modal.tsx 1

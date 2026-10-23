@@ -82,7 +82,6 @@ rgb apps/web/src/components/pages/dedicated/tab-posting-times.tsx 2
 rgb apps/web/src/components/pages/dedicated/tab-settings.tsx 6
 rgb apps/web/src/components/pages/page-card.tsx 4
 rgb apps/web/src/components/pages/pages-empty-state.tsx 2
-rgb apps/web/src/components/settings/byoc-settings-view.tsx 7
 rgb apps/web/src/components/settings/platform-credentials-view.tsx 7
 rgb apps/web/src/components/ui/alert.tsx 3
 rgb apps/web/src/components/ui/button.tsx 1
@@ -115,7 +114,6 @@ zindex apps/web/src/components/media/new-folder-modal.tsx 1
 zindex apps/web/src/components/pages/dedicated/modal-styles.ts 1
 zindex apps/web/src/components/pages/dedicated/page-header.tsx 1
 zindex apps/web/src/components/pages/dedicated/queue/queue-toasts.tsx 1
-zindex apps/web/src/components/settings/byoc-settings-view.tsx 1
 zindex apps/web/src/components/settings/platform-credentials-view.tsx 1
 zindex apps/web/src/components/ui/dialog.tsx 2
 zindex apps/web/src/components/ui/input.tsx 1

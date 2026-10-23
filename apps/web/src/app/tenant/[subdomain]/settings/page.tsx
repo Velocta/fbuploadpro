@@ -57,7 +57,8 @@ import {
 } from '@/lib/data/server';
 
 import SettingsLoading from './loading';
-import { resolveSettingsTab, SettingsShell, type SettingsTab } from './settings-shell';
+import { SettingsShell } from './settings-shell';
+import { resolveSettingsTab, type SettingsTab } from './settings-tabs';
 
 interface WorkspaceSettingsPageProps {
   params: Promise<{ subdomain: string }>;
