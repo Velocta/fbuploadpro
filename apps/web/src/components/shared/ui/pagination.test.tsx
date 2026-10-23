@@ -41,6 +41,22 @@ describe("Pagination", () => {
     expect(screen.getByRole("link", { name: "Go to next page" })).toHaveAttribute("href", "?page=3");
   });
 
+  it("spec 142 F15/F01: content wraps and centres; links inherit 44px Button geometry", () => {
+    render(
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationLink href="?page=2">2</PaginationLink>
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    );
+    const content = document.querySelector('[data-slot="pagination-content"]') as HTMLElement;
+    expect(content.className).toContain("flex-wrap");
+    expect(content.className).toContain("justify-center");
+    expect(screen.getByRole("link", { name: "2" }).className).toContain("size-11");
+  });
+
   it("page links are real anchors a keyboard user can Tab to and activate", async () => {
     const user = userEvent.setup();
     const onNavigate = vi.fn((e: React.MouseEvent) => e.preventDefault());

@@ -38,6 +38,15 @@ describe("Popover", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("spec 142 F10: panel is capped at the Radix available width", async () => {
+    const user = userEvent.setup();
+    render(<TestPopover />);
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    const content = screen.getByText("Post details").closest('[data-slot="popover-content"]') as HTMLElement;
+    expect(content.className).toContain("max-w-(--radix-popover-content-available-width)");
+    expect(content.className).toContain("w-72");
+  });
+
   it("interactive content inside the popover is reachable and typeable", async () => {
     const user = userEvent.setup();
     render(<TestPopover />);

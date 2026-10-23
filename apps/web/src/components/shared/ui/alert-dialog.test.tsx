@@ -50,6 +50,18 @@ describe("AlertDialog (destructive pattern)", () => {
     expect(screen.queryByRole("alertdialog")).toBeInTheDocument();
   });
 
+  it("spec 142 F04: phone gutters, dvh-bounded height and internal scrolling", async () => {
+    const user = userEvent.setup();
+    render(<TestAlertDialog onAction={() => undefined} />);
+    await user.click(screen.getByRole("button", { name: "Delete…" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.className).toContain("inset-x-4");
+    expect(dialog.className).toContain("max-h-dvh");
+    expect(dialog.className).toContain("overflow-y-auto");
+    expect(dialog.className).toContain("sm:max-w-lg");
+    expect(dialog.className).not.toMatch(/-\[/);
+  });
+
   it("Cancel closes without action and returns focus to the trigger", async () => {
     const user = userEvent.setup();
     const onAction = vi.fn();

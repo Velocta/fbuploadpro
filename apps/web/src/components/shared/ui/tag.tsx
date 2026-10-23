@@ -6,6 +6,9 @@
  * carries icon + text). When the label must be removable, pass `onRemove`
  * and the Tag becomes the interactive chip form — a real button with an
  * accessible "Remove <label>" name, never a clickable-looking span.
+ * The remove button's glyph stays 16px; its hit area is expanded to
+ * 44px by the global `hit-area-44` utility (spec 142 F05), which paints
+ * nothing and does not change the chip's layout box.
  */
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
@@ -51,7 +54,7 @@ function Tag({ className, variant = "default", asChild = false, onRemove, remove
           type="button"
           onClick={onRemove}
           aria-label={removeLabel ?? "Remove tag"}
-          className="inline-flex size-4 shrink-0 items-center justify-center rounded-full outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-brand-gold"
+          className="inline-flex hit-area-44 size-4 shrink-0 items-center justify-center rounded-full outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-brand-gold"
         >
           <XIcon aria-hidden />
         </button>
