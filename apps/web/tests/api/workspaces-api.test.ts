@@ -9,7 +9,7 @@ import { signSessionToken, verifySessionToken } from '@fbuploadpro/contracts';
 import { GET as listWorkspaces, POST as createWorkspace, PATCH as updateWorkspace } from '../../src/app/api/workspaces/route';
 import { POST as switchWorkspace } from '../../src/app/api/workspaces/switch/route';
 import { authenticateTenantRoute } from '../../src/lib/route-auth';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/clients';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

@@ -6,7 +6,7 @@ import {
   type DatabaseClient,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function isLegacyClient(
@@ -59,7 +59,7 @@ export async function authenticateTenantRoute(
     };
   }
 
-  const { validateSessionActive } = await import('@/lib/supabase-auth');
+  const { validateSessionActive } = await import('@/lib/auth/session');
   const isActive = await validateSessionActive(session);
   if (!isActive) {
     return {

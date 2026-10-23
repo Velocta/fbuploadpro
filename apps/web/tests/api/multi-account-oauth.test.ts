@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { decryptToken, encryptToken, signOAuthState, signSessionToken } from '@fbuploadpro/contracts';
 import { handleFacebookCallback, refreshConnectedPageTokens } from '../../src/app/api/auth/facebook/callback/route';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/clients';
 import type { Database } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 

@@ -2,12 +2,20 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { verifySessionToken } from '@fbuploadpro/contracts';
 import { verifySignupOtp } from '../../src/lib/otp-service';
 import {
-  signUpTenantUser,
   loginTenantUser,
+} from '../../src/lib/auth/login';
+import {
   resetUserPasswordWithOtp,
+} from '../../src/lib/auth/password-reset';
+import {
   validateSessionActive,
+} from '../../src/lib/auth/session';
+import {
+  signUpTenantUser,
+} from '../../src/lib/auth/signup';
+import {
   _resetAuthStores,
-} from '../../src/lib/supabase-auth';
+} from '../../src/lib/auth/stores';
 
 const SESSION_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 

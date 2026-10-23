@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/index';
 
 describe('ISSUE-06: Pre-Hashed Password Handling Lifecycle', () => {
   beforeEach(() => {

@@ -6,10 +6,14 @@ import {
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import {
-  signUpTenantUser,
   loginTenantUser,
+} from '../../src/lib/auth/login';
+import {
+  signUpTenantUser,
+} from '../../src/lib/auth/signup';
+import {
   _resetAuthStores,
-} from '../../src/lib/supabase-auth';
+} from '../../src/lib/auth/stores';
 
 describe('Credential Zero-Retention in OTP Staging (AUTH-02 / Spec 017 US3)', () => {
   beforeEach(() => {

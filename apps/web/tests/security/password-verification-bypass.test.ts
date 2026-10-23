@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/index';
 
 describe('ISSUE-04: Password Verification Bypass in Local/Fallback loginTenantUser', () => {
   beforeEach(() => {

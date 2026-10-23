@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Dispatch recovery OTP via Supabase Auth (or test fallback)
-    const { sendPasswordResetOtpViaSupabase } = await import('@/lib/supabase-auth');
+    const { sendPasswordResetOtpViaSupabase } = await import('@/lib/auth/password-reset');
     await sendPasswordResetOtpViaSupabase(canonicalEmail);
 
     return NextResponse.json({

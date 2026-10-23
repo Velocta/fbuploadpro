@@ -8,7 +8,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/index';
 import { GET as getByocSettings } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
 
 const VALID_UUID = '00000000-0000-4000-a000-000000000001';
