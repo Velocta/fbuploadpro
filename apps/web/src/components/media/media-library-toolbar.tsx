@@ -175,7 +175,7 @@ export function MediaToolbar({
       {/* Zone 1 — GLOBAL (left): the search field only */}
       <div
         data-testid="media-toolbar-zone-1"
-        className="flex min-w-0 flex-1 items-center gap-2 sm:max-w-sm"
+        className="flex w-full min-w-0 items-center gap-2 sm:w-80 sm:flex-none"
       >
         <SearchIcon className="size-4 shrink-0 text-ink-dim" aria-hidden />
         <Input

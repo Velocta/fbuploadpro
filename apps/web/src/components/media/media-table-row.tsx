@@ -146,7 +146,7 @@ export function MediaTableRow({
       </TableCell>
 
       {/* 3. File (Name + Folder Ancestry Link) */}
-      <TableCell className="max-w-55 whitespace-normal">
+      <TableCell className="w-55 whitespace-normal">
         <div className="flex flex-col gap-0.5">
           <span
             title={item.name}
@@ -169,7 +169,7 @@ export function MediaTableRow({
       </TableCell>
 
       {/* 4. Caption (Click-to-Edit) */}
-      <TableCell className="max-w-60 whitespace-normal">
+      <TableCell className="w-60 whitespace-normal">
         {isEditingCaption ? (
           <Input
             type="text"

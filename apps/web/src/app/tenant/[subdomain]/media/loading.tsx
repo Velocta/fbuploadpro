@@ -13,7 +13,7 @@ export default function MediaLoading() {
         <Skeleton className="h-10 w-32" />
       </div>
       <div className="flex items-center gap-4 border-b border-line pb-4">
-        <Skeleton className="h-10 w-full max-w-sm" />
+        <Skeleton className="h-10 w-80" />
         <Skeleton className="h-10 w-24" />
         <Skeleton className="h-10 w-24" />
         <Skeleton className="ml-auto h-10 w-28" />
