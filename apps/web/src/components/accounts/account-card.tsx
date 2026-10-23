@@ -1,9 +1,24 @@
 'use client';
 
-import React from 'react';
+/**
+ * Account card (spec 131 PR-131-1) — rebuilt on the design system:
+ * token-backed Tailwind utilities only (zero inline styles), avatars
+ * on `next/image` (the file's 2 raw `<img>` are deleted), and status
+ * as colour + icon + text via the shared/ui `StatusDot` (spec §6.4.1 /
+ * OD-3) fed by the single account-health model in `account-health.ts`
+ * (logic carried over untouched). Layout, copy, testids, and the
+ * hover/disconnect/reconnect behaviours are preserved from the
+ * previous implementation (spec §6 parity).
+ */
+import * as React from 'react';
+import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, STATUS_SIGNALS, COMPONENT_STYLES } from '@/lib/theme';
+import { ExternalLinkIcon, TriangleAlertIcon } from 'lucide-react';
+
+import { StatusDot } from '@/components/shared/ui/status-dot';
+import { Button } from '@/components/shared/ui/button';
 import { getUserInitials } from '@/lib/user-initials';
+import { cn } from '@/lib/utils';
 import {
   getAccountHealth,
   getAccountHealthLabel,
@@ -51,6 +66,13 @@ function initialsFor(name: string | null | undefined, fallback: string): string 
   return getUserInitials(name);
 }
 
+const RING_CLASSES = {
+  operational: 'border-signal-operational',
+  queued: 'border-signal-queued',
+  critical: 'border-signal-critical',
+  idle: 'border-signal-idle',
+} as const;
+
 function LinkedPageRow({ page }: Readonly<{ page: FacebookAccountLinkedPageItem }>) {
   const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
   const showImg = Boolean(page.profilePictureUrl) && failedUrl !== page.profilePictureUrl;
@@ -59,58 +81,23 @@ function LinkedPageRow({ page }: Readonly<{ page: FacebookAccountLinkedPageItem 
   return (
     <div
       data-testid={`account-linked-page-${page.id}`}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.sm,
-        padding: '4px 0',
-        fontSize: '0.8125rem',
-        color: `var(--text-main, ${THEME.default.text.primary})`,
-      }}
+      className="flex items-center gap-2 py-1 text-body text-ink"
     >
       {showImg ? (
-        <img
+        <Image
           src={page.profilePictureUrl!}
           alt={page.pageName}
+          width={24}
+          height={24}
           onError={() => setFailedUrl(page.profilePictureUrl ?? '__error__')}
-          style={{
-            width: '22px',
-            height: '22px',
-            borderRadius: RADII.full,
-            objectFit: 'cover',
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            flexShrink: 0,
-          }}
+          className="size-6 shrink-0 rounded-full border border-line object-cover"
         />
       ) : (
-        <div
-          style={{
-            width: '22px',
-            height: '22px',
-            borderRadius: RADII.full,
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.625rem',
-            fontWeight: TYPOGRAPHY.weights.bold,
-            flexShrink: 0,
-          }}
-        >
+        <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line bg-panel text-xs font-bold text-ink-sub">
           {pageInitials}
         </div>
       )}
-      <span
-        style={{
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {page.pageName}
-      </span>
+      <span className="truncate">{page.pageName}</span>
     </div>
   );
 }
@@ -121,16 +108,7 @@ export function AccountLinkedPagesList({
   return (
     <div
       data-testid="account-linked-pages-list"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '2px',
-        padding: `${SPACING.xs} ${SPACING.sm}`,
-        marginBottom: SPACING.md,
-        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.sm,
-      }}
+      className="mb-4 flex flex-col gap-0.5 rounded-sm border border-line bg-subtle px-2 py-1"
     >
       {pages.map((page) => (
         <LinkedPageRow key={page.id} page={page} />
@@ -144,53 +122,36 @@ function AccountAvatar({
   displayName,
   showAvatarImg,
   initials,
-  ringColor,
+  ringClass,
   onAvatarError,
 }: Readonly<{
   profilePictureUrl?: string | null | undefined;
   displayName: string;
   showAvatarImg: boolean;
   initials: string;
-  ringColor: string;
+  ringClass: string;
   onAvatarError: () => void;
 }>) {
   if (showAvatarImg && profilePictureUrl) {
     return (
-      <img
+      <Image
         src={profilePictureUrl}
         alt={displayName}
+        width={44}
+        height={44}
         data-testid="account-avatar-img"
         onError={onAvatarError}
-        style={{
-          width: '42px',
-          height: '42px',
-          borderRadius: RADII.full,
-          objectFit: 'cover',
-          border: `1.5px solid ${ringColor}`,
-          boxShadow: `0 0 0 2px ${ringColor}22`,
-          flexShrink: 0,
-        }}
+        className={cn('size-11 shrink-0 rounded-full border-2 object-cover', ringClass)}
       />
     );
   }
   return (
     <div
       data-testid="account-avatar-initials"
-      style={{
-        width: '42px',
-        height: '42px',
-        borderRadius: RADII.full,
-        backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-        border: `1.5px solid ${ringColor}`,
-        boxShadow: `0 0 0 2px ${ringColor}22`,
-        color: `var(--text-main, ${THEME.default.text.primary})`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: TYPOGRAPHY.weights.bold,
-        fontSize: '0.875rem',
-        flexShrink: 0,
-      }}
+      className={cn(
+        'flex size-11 shrink-0 items-center justify-center rounded-full border-2 bg-subtle text-body font-bold text-ink',
+        ringClass
+      )}
     >
       {initials}
     </div>
@@ -212,62 +173,16 @@ function AccountLinkedPagesAffordance({
         type="button"
         data-testid="account-pages-toggle"
         onClick={onNavigateToPages}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '4px 8px',
-          margin: 0,
-          backgroundColor: 'transparent',
-          border: '1px solid transparent',
-          borderRadius: RADII.xs,
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          fontSize: '0.8125rem',
-          fontFamily: 'inherit',
-          cursor: 'pointer',
-          transition: 'background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = `var(--bg-subtle, ${THEME.default.surfaces.subtle})`;
-          e.currentTarget.style.color = `var(--text-main, ${THEME.default.text.primary})`;
-          e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.color = `var(--text-sub, ${THEME.default.text.secondary})`;
-          e.currentTarget.style.borderColor = 'transparent';
-        }}
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-xs px-2 py-1 text-body text-ink-sub outline-none transition-colors hover:bg-subtle hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-gold"
       >
         <span data-testid="account-pages-count">{pagesCountLabel}</span>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-          style={{ opacity: 0.7 }}
-        >
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-          <polyline points="15 3 21 3 21 9" />
-          <line x1="10" y1="14" x2="21" y2="3" />
-        </svg>
+        <ExternalLinkIcon className="size-3 opacity-70" aria-hidden />
       </button>
     );
   }
 
   return (
-    <span
-      data-testid="account-pages-count"
-      style={{
-        fontSize: '0.8125rem',
-        color: `var(--text-dim, ${THEME.default.text.muted})`,
-        padding: '4px 8px',
-      }}
-    >
+    <span data-testid="account-pages-count" className="px-2 py-1 text-body text-ink-dim">
       {pagesCountLabel}
     </span>
   );
@@ -294,7 +209,7 @@ export function AccountCard({
       ? 'queued'
       : getAccountHealthSignal(health);
   const statusLabel = getAccountHealthLabel(health);
-  const ringColor = STATUS_SIGNALS[statusSignal].color;
+  const ringClass = RING_CLASSES[statusSignal];
 
   const [failedAvatarUrl, setFailedAvatarUrl] = React.useState<string | null>(
     forceAvatarError ? (account.profilePictureUrl ?? '__forced__') : null
@@ -309,7 +224,7 @@ export function AccountCard({
         day: 'numeric',
         year: 'numeric',
       });
-    } catch (_e) {
+    } catch {
       return 'recently';
     }
   }, [account.createdAt]);
@@ -340,76 +255,25 @@ export function AccountCard({
   return (
     <div
       data-testid={`account-card-${account.id}`}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.borderColor = isExpired
-          ? PALETTE.accent3
-          : 'rgba(46, 189, 133, 0.45)';
-        e.currentTarget.style.boxShadow = isExpired
-          ? '0 8px 24px -4px rgba(246, 70, 93, 0.25), 0 0 0 1px rgba(246, 70, 93, 0.2)'
-          : '0 8px 24px -4px rgba(0, 0, 0, 0.35)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.borderColor = isExpired
-          ? PALETTE.accent3
-          : `var(--border-subtle, ${THEME.default.borders.hairline})`;
-        e.currentTarget.style.boxShadow = `var(--shadow-card, ${THEME.default.shadows.card})`;
-      }}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: isExpired
-          ? `1px solid ${PALETTE.accent3}`
-          : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        padding: SPACING.lg,
-        minHeight: '154px',
-        transition: 'transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
-      }}
+      className={cn(
+        'flex min-h-40 flex-col justify-between rounded-md border bg-panel p-6 shadow-card transition hover:-translate-y-0.5 hover:shadow-elevated',
+        isExpired ? 'border-brand-rose' : 'border-line'
+      )}
     >
       {/* Profile Header */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.md,
-          marginBottom: SPACING.md,
-        }}
-      >
+      <div className="mb-4 flex items-center gap-4">
         <AccountAvatar
           profilePictureUrl={account.profilePictureUrl}
           displayName={account.displayName}
           showAvatarImg={showAvatarImg}
           initials={initials}
-          ringColor={ringColor}
+          ringClass={ringClass}
           onAvatarError={() => setFailedAvatarUrl(account.profilePictureUrl ?? '__error__')}
         />
 
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              overflow: 'hidden',
-            }}
-          >
-            <h3
-              data-testid="account-name"
-              style={{
-                margin: 0,
-                fontSize: '0.9375rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1 overflow-hidden">
+            <h3 data-testid="account-name" className="truncate text-body font-semibold text-ink">
               {account.displayName}
             </h3>
 
@@ -421,62 +285,22 @@ export function AccountCard({
                 title="View Facebook Profile"
                 aria-label={`View ${account.displayName}'s Facebook Profile`}
                 data-testid="account-profile-link"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  textDecoration: 'none',
-                  flexShrink: 0,
-                }}
+                className="inline-flex shrink-0 items-center text-ink-dim outline-none hover:text-ink focus-visible:outline-2 focus-visible:outline-brand-gold"
               >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                  <polyline points="15 3 21 3 21 9" />
-                  <line x1="10" y1="14" x2="21" y2="3" />
-                </svg>
+                <ExternalLinkIcon className="size-3.5" aria-hidden />
               </a>
             )}
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              marginTop: '2px',
-            }}
-          >
-            <span
-              data-testid="account-health-dot"
-              style={COMPONENT_STYLES.statusDot(statusSignal)}
-            />
-            <span
-              data-testid="account-health-label"
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: STATUS_SIGNALS[statusSignal].color,
-              }}
-            >
-              {statusLabel}
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span data-testid="account-health-label" className="inline-flex">
+              <StatusDot
+                data-testid="account-health-dot"
+                status={statusSignal}
+                label={statusLabel}
+              />
             </span>
-            <span
-              data-testid="account-connected-date"
-              style={{
-                fontSize: '0.75rem',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-              }}
-            >
+            <span data-testid="account-connected-date" className="text-metadata text-ink-dim">
               · Connected {formattedDate}
             </span>
           </div>
@@ -484,14 +308,7 @@ export function AccountCard({
       </div>
 
       {/* Blended Linked Pages Strip */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: SPACING.md,
-        }}
-      >
+      <div className="mb-4 flex items-center justify-between">
         <AccountLinkedPagesAffordance
           connectedPagesCount={account.connectedPagesCount}
           pagesCountLabel={pagesCountLabel}
@@ -508,98 +325,37 @@ export function AccountCard({
       {isExpired && (
         <div
           data-testid="account-expired-alert"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.xs,
-            padding: '6px 10px',
-            backgroundColor: 'rgba(246, 70, 93, 0.08)',
-            border: '1px solid rgba(246, 70, 93, 0.2)',
-            borderRadius: RADII.sm,
-            fontSize: '0.75rem',
-            color: PALETTE.accent3,
-            fontWeight: TYPOGRAPHY.weights.medium,
-            marginBottom: SPACING.md,
-          }}
+          className="mb-4 flex items-center gap-1.5 rounded-sm border border-brand-rose/25 bg-brand-rose/10 px-2.5 py-1.5 text-metadata font-medium text-brand-rose"
         >
-          <span
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: RADII.full,
-              backgroundColor: PALETTE.accent3,
-              display: 'inline-block',
-            }}
-          />
+          <TriangleAlertIcon className="size-3.5 shrink-0" aria-hidden />
           <span>Session expired — reconnect to resume publishing</span>
         </div>
       )}
 
       {/* Card Actions */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: SPACING.sm,
-          marginTop: 'auto',
-        }}
-      >
+      <div className="mt-auto flex items-center justify-between gap-2">
         {isExpired || isExpiringSoon ? (
-          <button
+          <Button
             type="button"
             data-testid="account-reconnect-button"
+            variant={isExpired ? 'default' : 'outline'}
             onClick={() => onReconnect?.(account)}
-            style={{
-              height: '30px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: isExpired ? PALETTE.primary : 'transparent',
-              color: isExpired ? PALETTE.background : `var(--text-main, ${THEME.default.text.primary})`,
-              border: isExpired ? 'none' : `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              fontSize: '0.8125rem',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-            }}
           >
             <span>{isExpired ? 'Reconnect account' : 'Refresh connection'}</span>
-          </button>
+          </Button>
         ) : (
-          <div style={{ flex: 1 }} />
+          <div className="flex-1" />
         )}
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
           data-testid="account-disconnect-button"
           onClick={() => onDisconnect?.(account)}
-          style={{
-            height: '30px',
-            padding: `0 ${SPACING.sm}`,
-            backgroundColor: 'transparent',
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-            border: '1px solid transparent',
-            borderRadius: RADII.sm,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            cursor: 'pointer',
-            transition: 'all 0.15s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = PALETTE.accent3;
-            e.currentTarget.style.borderColor = 'rgba(246, 70, 93, 0.25)';
-            e.currentTarget.style.backgroundColor = 'rgba(246, 70, 93, 0.08)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = `var(--text-dim, ${THEME.default.text.muted})`;
-            e.currentTarget.style.borderColor = 'transparent';
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
+          className="text-ink-dim hover:bg-brand-rose/10 hover:text-brand-rose"
         >
           Disconnect
-        </button>
+        </Button>
       </div>
     </div>
   );

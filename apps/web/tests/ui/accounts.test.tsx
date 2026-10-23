@@ -23,16 +23,18 @@ import {
   MagicLinkView,
   evaluateAccountConnectionPoll,
 } from '@/components/accounts/connect-account-modal';
+import { AccountsFilterBar } from '@/components/accounts/accounts-filter-bar';
 import {
-  AccountsFilterBar,
-  ByocConfigPromptModal,
   ByocRequiredBanner,
+} from '@/components/accounts/accounts-banners';
+import { ByocConfigPromptModal } from '@/components/accounts/byoc-config-prompt-modal';
+import {
   computeAccountsSubtitle,
   isConnectGatedByMissingCredentials,
   filterAccountsList,
   resolveOAuthRedirectNotice,
   sortAccountsExpiredFirst,
-} from '@/app/tenant/[subdomain]/accounts/page';
+} from '@/components/accounts/accounts-helpers';
 import {
   ConnectErrorView,
   getConnectErrorCopy,

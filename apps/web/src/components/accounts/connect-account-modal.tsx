@@ -1,16 +1,35 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+/**
+ * Connect account modal (spec 131 PR-131-1, spec §8.2) — rebuilt on
+ * the shared/ui `Dialog` primitive (the legacy `components/ui/dialog`
+ * import is deleted) with token-backed utilities only. Its two raw
+ * fetches (magic-link generation + connection polling) now go through
+ * the typed API client with zod schemas (spec §8.1); the poll outcome
+ * helpers (`evaluateAccountConnectionPoll`, `buildDirectConnectUrl`)
+ * and all copy/testids are preserved verbatim for parity.
+ */
+import * as React from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { CheckIcon, LinkIcon, MonitorIcon } from 'lucide-react';
+
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
-  DialogBody,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+} from '@/components/shared/ui/dialog';
+import { Button } from '@/components/shared/ui/button';
+import { Input } from '@/components/shared/ui/input';
+import { api, buildTenantApiPath } from '@/lib/api';
+import {
+  ListFacebookAccountsResponseSchema,
+  MagicLinkResponseSchema,
+} from '@/lib/api/schemas/accounts';
+import { reportError } from '@/lib/report-error';
+import { cn } from '@/lib/utils';
 
 export interface AccountStateRecord {
   status?: string | undefined;
@@ -183,76 +202,14 @@ function ConnectOptionButton({
       data-testid={testId}
       disabled={disabled}
       onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.md,
-        padding: `${SPACING.md} ${SPACING.lg}`,
-        backgroundColor: 'transparent',
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        textAlign: 'left',
-        transition: 'border-color 0.15s ease, background-color 0.15s ease',
-        width: '100%',
-        boxSizing: 'border-box',
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.backgroundColor = `var(--bg-subtle, ${THEME.default.surfaces.subtle})`;
-          e.currentTarget.style.borderColor = PALETTE.primary;
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.backgroundColor = 'transparent';
-          e.currentTarget.style.borderColor = `var(--border-subtle, ${THEME.default.borders.hairline})`;
-        }
-      }}
+      className="flex w-full items-center gap-4 rounded-md border border-line px-6 py-4 text-left transition-colors outline-none hover:border-brand-gold hover:bg-subtle focus-visible:outline-2 focus-visible:outline-brand-gold disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-          color: PALETTE.primary,
-        }}
-      >
-        {icon}
-      </div>
+      <div className="flex shrink-0 items-center justify-center text-brand-gold">{icon}</div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            fontSize: '0.9375rem',
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            marginBottom: '2px',
-          }}
-        >
-          {title}
-        </div>
-        <div
-          style={{
-            fontSize: '0.8125rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            lineHeight: 1.4,
-          }}
-        >
-          {description}
-        </div>
-        {actionHint && (
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              marginTop: '4px',
-            }}
-          >
-            {actionHint}
-          </div>
-        )}
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 text-body font-semibold text-ink">{title}</div>
+        <div className="text-body leading-body text-ink-sub">{description}</div>
+        {actionHint && <div className="mt-1 text-metadata text-ink-dim">{actionHint}</div>}
       </div>
 
       <svg
@@ -265,10 +222,7 @@ function ConnectOptionButton({
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden="true"
-        style={{
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-          flexShrink: 0,
-        }}
+        className="shrink-0 text-ink-dim"
       >
         <polyline points="9 18 15 12 9 6" />
       </svg>
@@ -296,104 +250,57 @@ export function MagicLinkView({
   const isExpired = remainingSeconds <= 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-      <p style={{ margin: 0, fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, lineHeight: 1.5 }}>
+    <div className="flex flex-col gap-4">
+      <p className="m-0 text-body leading-body text-ink-sub">
         Open this link in the browser or mobile window where your Facebook account is currently logged in. Once you approve access there, this window will update automatically.
       </p>
 
       {isExpired ? (
-        <button
+        <Button
           type="button"
           data-testid="magic-regenerate-button"
           disabled={isGeneratingMagic}
           onClick={onRegenerateLink}
-          style={{
-            ...COMPONENT_STYLES.primaryButton,
-            width: '100%',
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            cursor: isGeneratingMagic ? 'not-allowed' : 'pointer',
-          }}
+          className="w-full"
         >
           {isGeneratingMagic ? 'Generating Magic Link...' : 'Link expired — Generate a new link'}
-        </button>
+        </Button>
       ) : (
-        <div style={{ display: 'flex', gap: SPACING.xs, alignItems: 'center' }}>
-          <input
+        <div className="flex items-center gap-1">
+          <Input
             type="text"
             readOnly
             data-testid="magic-url-input"
             value={magicUrl ?? ''}
             onClick={onCopyLink}
-            style={{
-              flex: 1,
-              height: '38px',
-              padding: `0 ${SPACING.sm}`,
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              fontSize: '0.8125rem',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              outline: 'none',
-              fontFamily: TYPOGRAPHY.mono,
-              cursor: 'pointer',
-            }}
+            className="flex-1 cursor-pointer bg-canvas font-mono"
           />
 
-          <button
+          <Button
             type="button"
             data-testid="magic-copy-button"
             onClick={onCopyLink}
-            style={{
-              height: '38px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: copySuccess ? PALETTE.accent4 : PALETTE.primary,
-              color: PALETTE.background,
-              border: 'none',
-              borderRadius: RADII.sm,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-              whiteSpace: 'nowrap',
-              transition: 'background-color 0.15s ease',
-            }}
+            className={cn(copySuccess && 'bg-brand-emerald hover:bg-brand-emerald')}
           >
             {copySuccess ? 'Copied!' : 'Copy Link'}
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Countdown & Status */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '10px 14px',
-          backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-          borderRadius: RADII.sm,
-          fontSize: '0.75rem',
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div className="flex items-center justify-between rounded-sm bg-subtle px-3.5 py-2.5 text-metadata text-ink-dim">
+        <div className="flex items-center gap-1.5">
           <span
             data-testid="magic-pulse-indicator"
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: RADII.full,
-              backgroundColor: isExpired ? PALETTE.accent3 : PALETTE.primary,
-              display: 'inline-block',
-            }}
+            className={cn(
+              'inline-block size-1.5 rounded-full',
+              isExpired ? 'bg-brand-rose' : 'bg-primary'
+            )}
           />
           <span>{isExpired ? 'Magic link expired' : 'Waiting for Facebook approval...'}</span>
         </div>
 
-        <span data-testid="magic-countdown" style={{ fontWeight: TYPOGRAPHY.weights.medium }}>
+        <span data-testid="magic-countdown" className="font-medium">
           {isExpired ? 'Link expired' : `Link expires in ${formatTimer(remainingSeconds)}`}
         </span>
       </div>
@@ -419,43 +326,22 @@ export function ConnectionResultView({
   return (
     <div
       data-testid="magic-success-animation"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 0',
-        textAlign: 'center',
-      }}
+      className="flex flex-col items-center justify-center py-6 text-center"
     >
       <div
-        style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: RADII.full,
-          backgroundColor: isMismatch
-            ? 'rgba(246, 70, 93, 0.15)'
-            : 'rgba(46, 189, 133, 0.15)',
-          border: `1px solid ${
-            isMismatch ? 'rgba(246, 70, 93, 0.35)' : 'rgba(46, 189, 133, 0.35)'
-          }`,
-          color: isMismatch ? PALETTE.accent3 : PALETTE.accent4,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: SPACING.sm,
-        }}
+        className={cn(
+          'mb-2 flex size-12 items-center justify-center rounded-full border',
+          isMismatch
+            ? 'border-brand-rose/35 bg-brand-rose/15 text-brand-rose'
+            : 'border-brand-emerald/35 bg-brand-emerald/15 text-brand-emerald'
+        )}
       >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
+        <CheckIcon className="size-6" strokeWidth={2.5} aria-hidden />
       </div>
-      <div style={{ fontWeight: TYPOGRAPHY.weights.semibold, fontSize: '1rem', color: `var(--text-main, ${THEME.default.text.primary})` }}>
-        {heading}
-      </div>
+      <div className="text-lg font-semibold text-ink">{heading}</div>
       <div
         data-testid={isMismatch ? 'magic-mismatch-notice' : 'magic-success-message'}
-        style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})`, marginTop: '4px' }}
+        className="mt-1 text-body text-ink-sub"
       >
         {subtext}
       </div>
@@ -542,26 +428,22 @@ export function ConnectAccountModal({
     setIsGeneratingMagic(true);
     setMagicError(null);
     try {
-      const requestInit: RequestInit = reconnectingAccount
+      const body = reconnectingAccount
         ? {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              expectedFbAccountId: reconnectingAccount.fbAccountId,
-              expectedDisplayName: reconnectingAccount.displayName,
-            }),
+            expectedFbAccountId: reconnectingAccount.fbAccountId,
+            expectedDisplayName: reconnectingAccount.displayName,
           }
-        : { method: 'POST' };
-      const res = await fetch(`/api/tenant/${subdomain}/accounts/magic-link`, requestInit);
-      if (!res.ok) {
-        throw new Error("Couldn't generate the connection link. Please try again.");
-      }
-      const data = await res.json();
+        : undefined;
+      const data = await api.post(
+        buildTenantApiPath(subdomain, '/accounts/magic-link'),
+        body,
+        { schema: MagicLinkResponseSchema }
+      );
       setMagicUrl(data.magicUrl);
       setRemainingSeconds(data.expiresInSeconds ?? 900);
       setView('magic');
-    } catch (_err) {
-      // Ignored because generation error is handled via user-facing error state
+    } catch (error) {
+      reportError(error, { source: 'connect-account-magic-link' });
       setMagicError("Couldn't generate the magic link. Please try again.");
     } finally {
       setIsGeneratingMagic(false);
@@ -575,8 +457,8 @@ export function ConnectAccountModal({
       await navigator.clipboard.writeText(magicUrl);
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), COPY_FEEDBACK_DURATION_MS);
-    } catch (_err) {
-      // Ignored because clipboard write failure falls back to manual link selection
+    } catch {
+      // Clipboard write failure falls back to manual link selection.
       setCopySuccess(false);
     }
   };
@@ -602,9 +484,9 @@ export function ConnectAccountModal({
   // Check for newly connected or reconnected account
   const pollAccounts = useCallback(async () => {
     try {
-      const res = await fetch(`/api/tenant/${subdomain}/accounts`);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await api.get(buildTenantApiPath(subdomain, '/accounts'), {
+        schema: ListFacebookAccountsResponseSchema,
+      });
       const accounts: AccountSnapshot[] = data.accounts || [];
 
       const outcome = evaluateAccountConnectionPoll(
@@ -633,8 +515,9 @@ export function ConnectAccountModal({
           onOpenChange(false);
         }, SUCCESS_AUTO_CLOSE_DELAY_MS);
       }
-    } catch (_e) {
-      // Ignored because polling failures are silently retried on the next cycle
+    } catch (error) {
+      // Polling failures are reported and retried on the next cycle.
+      reportError(error, { source: 'connect-account-poll' });
     }
   }, [subdomain, onAccountConnected, onConnectionNotice, onOpenChange, reconnectingAccount]);
 
@@ -655,7 +538,7 @@ export function ConnectAccountModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ maxWidth: '500px' }} data-testid="connect-account-modal">
+      <DialogContent className="sm:max-w-125" data-testid="connect-account-modal">
         <DialogHeader>
           <DialogTitle>{modalTitle}</DialogTitle>
           <DialogDescription>
@@ -665,25 +548,15 @@ export function ConnectAccountModal({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody>
+        <div>
           {magicError && (
-            <div
-              style={{
-                padding: '8px 12px',
-                marginBottom: SPACING.md,
-                backgroundColor: 'rgba(246, 70, 93, 0.10)',
-                border: '1px solid rgba(246, 70, 93, 0.25)',
-                borderRadius: RADII.sm,
-                fontSize: '0.8125rem',
-                color: PALETTE.accent3,
-              }}
-            >
+            <div className="mb-4 rounded-sm border border-brand-rose/25 bg-brand-rose/10 px-3 py-2 text-body text-brand-rose">
               {magicError}
             </div>
           )}
 
           {view === 'choose' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
+            <div className="flex flex-col gap-4">
               <ConnectOptionButton
                 testId="connect-option-direct"
                 disabled={isDirectConnecting}
@@ -691,13 +564,7 @@ export function ConnectAccountModal({
                 title={isDirectConnecting ? 'Redirecting to Facebook...' : 'This Browser'}
                 description="Choose this if you are already logged into Facebook in this browser window."
                 actionHint="Direct Facebook authorization in this window"
-                icon={
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                    <line x1="8" y1="21" x2="16" y2="21" />
-                    <line x1="12" y1="17" x2="12" y2="21" />
-                  </svg>
-                }
+                icon={<MonitorIcon className="size-5.5" aria-hidden />}
               />
 
               <ConnectOptionButton
@@ -709,12 +576,7 @@ export function ConnectAccountModal({
                 title={isGeneratingMagic ? 'Generating Secure Link...' : 'Different Browser or Phone'}
                 description="Choose this if your Facebook account is open in another browser, private window, or on your mobile device."
                 actionHint="Generates a secure link you can open on any device (valid for 15 minutes)"
-                icon={
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                }
+                icon={<LinkIcon className="size-5.5" aria-hidden />}
               />
             </div>
           )}
@@ -737,46 +599,28 @@ export function ConnectAccountModal({
           {view === 'success' && (
             <ConnectionResultView completionNotice={completionNotice} />
           )}
-        </DialogBody>
+        </div>
 
         <DialogFooter>
           {view === 'magic' && (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => setView('choose')}
-              style={{
-                height: '36px',
-                padding: `0 ${SPACING.md}`,
-                backgroundColor: 'transparent',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                fontSize: '0.875rem',
-                cursor: 'pointer',
-                marginRight: 'auto',
-              }}
+              className="mr-auto"
             >
               Back
-            </button>
+            </Button>
           )}
 
-          <button
+          <Button
             type="button"
+            variant="outline"
             data-testid="connect-close-btn"
             onClick={() => onOpenChange(false)}
-            style={{
-              height: '36px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: 'transparent',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              fontSize: '0.875rem',
-              cursor: 'pointer',
-            }}
           >
             {view === 'success' ? 'Done' : 'Cancel'}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

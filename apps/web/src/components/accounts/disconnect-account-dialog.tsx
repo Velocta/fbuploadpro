@@ -1,16 +1,28 @@
 'use client';
 
-import React from 'react';
+/**
+ * Disconnect account dialog (spec 131 PR-131-1, spec §8.2) — rebuilt
+ * on the shared/ui alert-dialog pattern (UI Rule 3 / UX Rule 13):
+ * Radix AlertDialog mechanics (no outside-click/Esc dismissal), focus
+ * starts on Cancel, and the confirm button names the verb
+ * ("Disconnect Account"). Copy, the linked-pages warning, and
+ * testids are preserved verbatim. The confirm is a plain destructive
+ * `Button` (not AlertDialogAction) so the dialog stays open while the
+ * disconnect is in flight and when it fails — the parent closes it on
+ * success, exactly as before.
+ */
+import * as React from 'react';
+
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogBody,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/shared/ui/alert-dialog';
+import { Button } from '@/components/shared/ui/button';
 import type { FacebookAccountItem } from './account-card';
 
 interface DisconnectAccountDialogProps {
@@ -39,123 +51,75 @@ export function DisconnectAccountDialog({
   const linkedPages = account.connectedPages ?? [];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent style={{ maxWidth: '460px' }}>
-        <DialogHeader>
-          <DialogTitle>Disconnect {account.displayName}?</DialogTitle>
-          <DialogDescription>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="sm:max-w-115">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Disconnect {account.displayName}?</AlertDialogTitle>
+          <AlertDialogDescription>
             This account will no longer be available
-          </DialogDescription>
-        </DialogHeader>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
-        <DialogBody>
-          {pagesCount === 0 ? (
-            <div
-              data-testid="disconnect-zero-pages-notice"
-              style={{
-                padding: SPACING.md,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                fontSize: '0.8125rem',
-                lineHeight: 1.5,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              }}
-            >
-              <p style={{ margin: 0 }}>
-                No Facebook Pages are linked to this account yet. It&apos;s safe to remove — you can reconnect it any time.
-              </p>
-            </div>
-          ) : (
-            <div
-              data-testid="disconnect-linked-pages-warning"
-              style={{
-                padding: SPACING.md,
-                backgroundColor: 'rgba(246, 70, 93, 0.08)',
-                border: '1px solid rgba(246, 70, 93, 0.25)',
-                borderRadius: RADII.sm,
-                fontSize: '0.8125rem',
-                lineHeight: 1.5,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              <p style={{ margin: '0 0 8px 0', fontWeight: TYPOGRAPHY.weights.semibold, color: PALETTE.accent3 }}>
-                Before you disconnect
-              </p>
-              <p style={{ margin: 0 }}>
-                <strong>{pagesCount} linked {pagesLabel}</strong> will be removed, and any scheduled content on them will be removed as well.
-              </p>
-              {linkedPages.length > 0 && (
-                <ul
-                  data-testid="disconnect-linked-pages-list"
-                  style={{
-                    margin: `${SPACING.sm} 0 0 0`,
-                    paddingLeft: SPACING.lg,
-                    color: `var(--text-main, ${THEME.default.text.primary})`,
-                  }}
-                >
-                  {linkedPages.map((page) => (
-                    <li
-                      key={page.id}
-                      data-testid={`disconnect-linked-page-${page.id}`}
-                      style={{ marginBottom: '2px' }}
-                    >
-                      {page.pageName}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </DialogBody>
+        {pagesCount === 0 ? (
+          <div
+            data-testid="disconnect-zero-pages-notice"
+            className="rounded-sm border border-line bg-subtle p-4 text-body leading-body text-ink-sub"
+          >
+            <p className="m-0">
+              No Facebook Pages are linked to this account yet. It&apos;s safe to remove — you can reconnect it any time.
+            </p>
+          </div>
+        ) : (
+          <div
+            data-testid="disconnect-linked-pages-warning"
+            className="rounded-sm border border-brand-rose/25 bg-brand-rose/10 p-4 text-body leading-body text-ink"
+          >
+            <p className="m-0 mb-2 font-semibold text-brand-rose">
+              Before you disconnect
+            </p>
+            <p className="m-0">
+              <strong>{pagesCount} linked {pagesLabel}</strong> will be removed, and any scheduled content on them will be removed as well.
+            </p>
+            {linkedPages.length > 0 && (
+              <ul
+                data-testid="disconnect-linked-pages-list"
+                className="mt-2 mb-0 pl-6 text-ink"
+              >
+                {linkedPages.map((page) => (
+                  <li
+                    key={page.id}
+                    data-testid={`disconnect-linked-page-${page.id}`}
+                    className="mb-0.5"
+                  >
+                    {page.pageName}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
-        <DialogFooter>
-          <button
-            type="button"
+        <AlertDialogFooter>
+          <AlertDialogCancel
             data-testid="disconnect-cancel-btn"
             disabled={isDisconnecting}
-            onClick={() => onOpenChange(false)}
-            style={{
-              height: '36px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: 'transparent',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-              borderRadius: RADII.sm,
-              fontSize: '0.875rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: isDisconnecting ? 'not-allowed' : 'pointer',
-              opacity: isDisconnecting ? 0.6 : 1,
-            }}
           >
             Cancel
-          </button>
+          </AlertDialogCancel>
 
-          <button
+          <Button
             type="button"
+            variant="destructive"
             data-testid="disconnect-confirm-btn"
             disabled={isDisconnecting}
-            onClick={handleConfirm}
-            style={{
-              height: '36px',
-              padding: `0 ${SPACING.md}`,
-              backgroundColor: PALETTE.accent3,
-              color: PALETTE.text,
-              border: 'none',
-              borderRadius: RADII.sm,
-              fontSize: '0.875rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              cursor: isDisconnecting ? 'not-allowed' : 'pointer',
-              opacity: isDisconnecting ? 0.7 : 1,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
+            onClick={() => {
+              void handleConfirm();
             }}
           >
             {isDisconnecting ? 'Disconnecting...' : 'Disconnect Account'}
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
