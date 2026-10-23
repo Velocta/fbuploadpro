@@ -17,7 +17,7 @@ import { getStorageService } from '@/lib/storage';
 import {
   MediaDownloaderError,
   resolveAndUploadMediaFromUrl,
-} from '@/lib/media-downloader';
+} from '@/lib/media-downloader/index';
 
 type NullableNumeric = string | number | null;
 type NumericString = string | number;
@@ -99,8 +99,9 @@ async function cleanupUploadedItems(
         if (item.thumbnailKey) {
           await storage.deleteObject(item.thumbnailKey);
         }
-      } catch {
+      } catch (_e) {
         // ignore cleanup error
+        void _e;
       }
     })
   );

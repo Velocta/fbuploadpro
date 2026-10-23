@@ -1067,6 +1067,8 @@ class FakeSupabaseBuilder {
   rowsToWrite: Array<Record<string, unknown>> = [];
   updateValues: Record<string, unknown> = {};
   filters: Array<[string, unknown]> = [];
+  private rangeFrom: number | null = null;
+  private rangeTo: number | null = null;
 
   constructor(
     private readonly tables: Map<string, Array<Record<string, unknown>>>,
@@ -1099,6 +1101,12 @@ class FakeSupabaseBuilder {
     return this;
   }
 
+  range(from: number, to: number): this {
+    this.rangeFrom = from;
+    this.rangeTo = to;
+    return this;
+  }
+
   private tableRows(): Array<Record<string, unknown>> {
     if (!this.tables.has(this.table)) this.tables.set(this.table, []);
     return this.tables.get(this.table) ?? [];
@@ -1111,8 +1119,12 @@ class FakeSupabaseBuilder {
   private executeList(): { data: Array<Record<string, unknown>>; error: null } {
     if (this.mode === 'upsert') return { data: this.executeUpsert(), error: null };
     if (this.mode === 'update') return { data: this.executeUpdate(), error: null };
+    const matched = this.tableRows().filter((row) => this.matches(row));
     return {
-      data: this.tableRows().filter((row) => this.matches(row)),
+      data:
+        this.rangeFrom !== null && this.rangeTo !== null
+          ? matched.slice(this.rangeFrom, this.rangeTo + 1)
+          : matched,
       error: null,
     };
   }

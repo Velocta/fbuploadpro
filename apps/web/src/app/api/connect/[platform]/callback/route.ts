@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
+// Side effect: registers the X connect config (spec 127).
+import '@/lib/connect/platforms/x';
+// Side effect: registers the Instagram + Threads connect configs (spec 124).
+import '@/lib/connect/platforms/instagram';
+import '@/lib/connect/platforms/threads';
 import {
   getPlatformConnectConfig,
   isKnownPlatform,
@@ -23,6 +28,8 @@ import {
 } from '@/lib/connect/persist';
 import { resolveConnectDbClient } from '@/lib/connect/session';
 import { mapProviderDenial, type ConnectNoticeCode } from '@/lib/connect/errors';
+// Registers the YouTube connect config (spec 125) into the framework registry.
+import '@/lib/connect/platforms/youtube';
 
 /**
  * Reads the PKCE verifier for this flow from its signed cookie, matched to

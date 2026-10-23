@@ -50,7 +50,9 @@ describe('Settings Views Suite (Facebook Settings & General)', () => {
 
       expect(hasText('About this workspace')).toBe(true);
       expect(hasText('Name your workspace.')).toBe(true);
-      expect(hasText('WORKSPACE NAME')).toBe(true);
+      // Sentence-case source per the 2026-10-19 code-style decision; the
+      // uppercase look is CSS-applied in the rebuilt view (spec 135).
+      expect(hasText('Workspace name')).toBe(true);
       expect(hasText('Acme Media Holdings')).toBe(true);
       expect(hasText('Edit')).toBe(true);
       expect(hasText('Rename it any time — the new name shows up everywhere.')).toBe(true);

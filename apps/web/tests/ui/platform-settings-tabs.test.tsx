@@ -4,12 +4,17 @@
  * credentials views for Instagram/Threads, explanation-only tabs for
  * YouTube/X/TikTok, shared callback addresses, and the plain-language
  * (no-jargon) lint over the new user-facing copy.
+ *
+ * The page-level tab cases (7 tabs, default, ?tab= routing incl. the
+ * byoc alias) moved to tests/ui/settings-shell.test.tsx in spec 135
+ * PR-135-1: the settings page is now an async server component whose
+ * tab behaviour lives in the SettingsShell island, which the
+ * behavioural suite drives directly.
  */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '../components/setup';
-import WorkspaceSettingsPage from '@/app/tenant/[subdomain]/settings/page';
 import { InstagramSettingsView } from '@/components/settings/instagram-settings-view';
 import { ThreadsSettingsView } from '@/components/settings/threads-settings-view';
 import { YouTubeSettingsView } from '@/components/settings/youtube-settings-view';
@@ -61,11 +66,6 @@ const CONNECTED_THREADS = {
   connectedAt: '2026-10-16T12:00:00Z',
 };
 
-function activeTabTestId(htmlTags: Array<{ attributes: Record<string, string> }>): string | null {
-  const active = htmlTags.find((tag) => tag.attributes['aria-selected'] === 'true');
-  return active?.attributes['data-testid'] ?? null;
-}
-
 function stripToVisibleText(html: string): string {
   const withoutTags = html
     .split('<')
@@ -83,67 +83,6 @@ function stripToVisibleText(html: string): string {
     .replaceAll('&quot;', '"')
     .toLowerCase();
 }
-
-describe('Spec 123 Part B: Settings page tabs', () => {
-  beforeEach(() => {
-    searchParamsState.current = new URLSearchParams();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) })
-    );
-  });
-
-  it('renders all seven tabs with their labels', () => {
-    const { hasText, hasAttribute } = render(<WorkspaceSettingsPage />);
-
-    const expected: Array<[string, string]> = [
-      ['general', 'General'],
-      ['facebook', 'Facebook'],
-      ['instagram', 'Instagram'],
-      ['threads', 'Threads'],
-      ['youtube', 'YouTube'],
-      ['x', 'X'],
-      ['tiktok', 'TikTok'],
-    ];
-    for (const [id, label] of expected) {
-      expect(hasAttribute('data-testid', `settings-tab-${id}`)).toBe(true);
-      expect(hasText(label)).toBe(true);
-    }
-  });
-
-  it('defaults to the General tab when no ?tab= is present', () => {
-    const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
-    expect(activeTabTestId(findTags('button'))).toBe('settings-tab-general');
-    expect(hasAttribute('data-testid', 'workspace-about-card')).toBe(true);
-  });
-
-  const routingCases: Array<{ param: string; tab: string; panelTestId: string }> = [
-    { param: 'general', tab: 'general', panelTestId: 'workspace-about-card' },
-    { param: 'facebook', tab: 'facebook', panelTestId: 'byoc-loading' },
-    // Legacy value: every existing link with ?tab=byoc must keep working.
-    { param: 'byoc', tab: 'facebook', panelTestId: 'byoc-loading' },
-    { param: 'instagram', tab: 'instagram', panelTestId: 'instagram-loading' },
-    { param: 'threads', tab: 'threads', panelTestId: 'threads-loading' },
-    { param: 'youtube', tab: 'youtube', panelTestId: 'youtube-connect-info-card' },
-    { param: 'x', tab: 'x', panelTestId: 'x-connect-info-card' },
-    { param: 'tiktok', tab: 'tiktok', panelTestId: 'tiktok-connect-info-card' },
-  ];
-
-  for (const { param, tab, panelTestId } of routingCases) {
-    it(`routes ?tab=${param} to the ${tab} tab`, () => {
-      searchParamsState.current = new URLSearchParams(`tab=${param}`);
-      const { hasAttribute, findTags } = render(<WorkspaceSettingsPage />);
-      expect(activeTabTestId(findTags('button'))).toBe(`settings-tab-${tab}`);
-      expect(hasAttribute('data-testid', panelTestId)).toBe(true);
-    });
-  }
-
-  it('falls back to General for an unknown ?tab= value', () => {
-    searchParamsState.current = new URLSearchParams('tab=nonsense');
-    const { findTags } = render(<WorkspaceSettingsPage />);
-    expect(activeTabTestId(findTags('button'))).toBe('settings-tab-general');
-  });
-});
 
 describe('Spec 123 Part B: Instagram credentials view', () => {
   beforeEach(() => {

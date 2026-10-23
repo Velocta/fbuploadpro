@@ -22,7 +22,7 @@
 # Residual owners:
 #   src/app/connect/facebook/route.ts            136 (entry/connect route)
 #   src/app/tenant/[subdomain]/pages/[pageId]/page.tsx  131 (page section)
-#   src/components/media/* (4 files)             133 (Media Library)
+#   src/components/media/* (3 files)             133 (Media Library; filters/helpers cleared in PR-133-1)
 #   src/components/pages/dedicated/schedule-timezone-modal.tsx  134
 #   src/components/pages/dedicated/tab-insights.tsx  131
 #   src/components/ui/sidebar.tsx, tooltip.tsx   legacy ui folder — dies with the folder (129/130)
@@ -37,8 +37,6 @@ apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 8
 apps/web/src/components/media/media-import-modal.tsx 1
 apps/web/src/components/media/media-import-upload-engine.ts 1
 apps/web/src/components/media/media-import-utils.ts 2
-apps/web/src/components/media/media-library-filters.ts 7
-apps/web/src/components/media/media-library-helpers.ts 1
 apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 1
 apps/web/src/components/pages/dedicated/tab-insights.tsx 1
 apps/web/src/components/ui/sidebar.tsx 7
@@ -46,4 +44,4 @@ apps/web/src/components/ui/tooltip.tsx 3
 apps/web/src/components/workspace/workspace-lifecycle-guard.tsx 4
 apps/web/src/lib/api/errors.ts 1
 apps/web/src/lib/auth/workspaces.ts 5
-apps/web/src/lib/connect/persist.ts 10
+apps/web/src/lib/connect/persist.ts 8
