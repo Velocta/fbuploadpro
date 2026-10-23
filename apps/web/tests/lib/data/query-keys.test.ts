@@ -67,6 +67,18 @@ describe('queryKeys factory (spec 137 §3.2.3)', () => {
       'page-1',
       '7d',
     ]);
+    expect(tenant.downloader.all).toEqual(['tenant', 'acme', 'downloader']);
+    expect(tenant.downloader.jobs).toEqual(['tenant', 'acme', 'downloader', 'jobs']);
+    expect(tenant.downloader.job('job-1')).toEqual([
+      'tenant',
+      'acme',
+      'downloader',
+      'jobs',
+      'job-1',
+    ]);
+    expect(
+      tenant.downloader.job('job-1').slice(0, tenant.downloader.jobs.length)
+    ).toEqual([...tenant.downloader.jobs]);
   });
 
   it('is deterministic — the same inputs produce equal keys for invalidation', () => {

@@ -35,7 +35,6 @@ empty-catch apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 2
 empty-catch apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
 empty-catch apps/web/src/components/accounts/connect-account-modal.tsx 1
 empty-catch apps/web/src/components/desktop/desktop-titlebar.tsx 1
-empty-catch apps/web/src/components/downloader/media-downloader.tsx 2
 empty-catch apps/web/src/components/media/media-import-modal.tsx 1
 empty-catch apps/web/src/components/media/media-library-explorer.tsx 1
 empty-catch apps/web/src/components/pages/add-page-modal.tsx 1
