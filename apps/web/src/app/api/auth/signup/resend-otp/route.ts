@@ -7,6 +7,7 @@ import { findUserByEmail } from '@/lib/auth/users';
 import { getPendingSignup } from '@/lib/otp-service';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
+import { bodyTooLargeResponse, readJsonBody } from '@/lib/request-body';
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +28,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const bodyResult = await readJsonBody(request);
+    if (!bodyResult.ok) {
+      if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
+      return NextResponse.json(
+        { error: 'Invalid JSON request body' },
+        { status: 400 }
+      );
+    }
+    const body = bodyResult.value as Record<string, unknown> | null;
     const { email } = body || {};
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {

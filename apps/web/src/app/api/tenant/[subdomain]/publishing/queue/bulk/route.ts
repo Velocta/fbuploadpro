@@ -13,6 +13,7 @@ import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { getRouteSupabase, isLegacyClient } from '@/lib/route-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody, LARGE_JSON_BODY_LIMIT_BYTES } from '@/lib/request-body';
 
 const SINGLE_QUEUE_PATH = '/publishing/queue';
 
@@ -185,15 +186,15 @@ export async function handleBulkEnqueue(
   }
 
   // 3. Request body validation (150-cap enforced by the schema)
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch (_e) {
+  const bodyResult = await readJsonBody(request, LARGE_JSON_BODY_LIMIT_BYTES);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json(
       { error: 'INVALID_REQUEST', message: 'Invalid JSON payload' },
       { status: 400 }
     );
   }
+  const rawBody: unknown = bodyResult.value;
 
   const parsed = BulkEnqueueRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -227,5 +228,7 @@ export async function POST(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_queue_bulk', 10);
+  if (limited) return limited;
   return handleBulkEnqueue(request, subdomain);
 }

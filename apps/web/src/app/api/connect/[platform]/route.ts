@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import { enforceIpRateLimit } from '@/lib/request-body';
 // Side effect: registers the X connect config (spec 127).
 import '@/lib/connect/platforms/x';
 // Side effect: registers the Instagram + Threads connect configs (spec 124).
@@ -249,5 +250,7 @@ export async function GET(
   context: { params: Promise<{ platform: string }> }
 ): Promise<NextResponse> {
   const { platform } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'connect_initiate', 20);
+  if (limited) return limited;
   return handleConnectInitiate(request, platform);
 }

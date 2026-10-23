@@ -9,6 +9,7 @@ import {
   type IStorageService,
 } from '@fbuploadpro/contracts';
 import { getStorageService } from '../../../../../../lib/storage';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 
 export async function handleCreateUploadUrl(
   request: NextRequest,
@@ -37,12 +38,12 @@ export async function handleCreateUploadUrl(
   }
 
   // 3. Request payload validation
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch (_e) {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json({ error: 'INVALID_REQUEST', message: 'Invalid JSON' }, { status: 400 });
   }
+  const rawBody: unknown = bodyResult.value;
 
   const parsed = UploadUrlRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -107,5 +108,7 @@ export async function POST(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_upload_url', 30);
+  if (limited) return limited;
   return handleCreateUploadUrl(request, subdomain);
 }

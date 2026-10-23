@@ -9,6 +9,7 @@ import {
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { setSessionCookie } from '@/lib/auth/session';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -21,17 +22,19 @@ async function extractSession(request: NextRequest): Promise<SessionPayload | nu
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const limited = await enforceIpRateLimit(request, 'workspaces_switch', 30);
+  if (limited) return limited;
   const session = await extractSession(request);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
   }
+  const body: unknown = bodyResult.value;
 
   const parseResult = SwitchWorkspaceRequestSchema.safeParse(body);
   if (!parseResult.success) {

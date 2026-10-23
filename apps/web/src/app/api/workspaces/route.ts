@@ -11,6 +11,7 @@ import {
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { setSessionCookie } from '@/lib/auth/session';
 import { ensureWorkspaceForUser } from '@/lib/auth/workspaces';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
@@ -151,17 +152,19 @@ async function resolveUniqueSubdomain(
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const limited = await enforceIpRateLimit(request, 'workspaces_create', 20);
+  if (limited) return limited;
   const session = await extractSession(request);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
   }
+  const body: unknown = bodyResult.value;
 
   const parseResult = CreateWorkspaceRequestSchema.safeParse(body);
   if (!parseResult.success) {
@@ -259,17 +262,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 export async function PATCH(request: NextRequest): Promise<NextResponse> {
+  const limited = await enforceIpRateLimit(request, 'workspaces_update', 20);
+  if (limited) return limited;
   const session = await extractSession(request);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
   }
+  const body: unknown = bodyResult.value;
 
   const parseResult = UpdateWorkspaceRequestSchema.safeParse(body);
   if (!parseResult.success) {

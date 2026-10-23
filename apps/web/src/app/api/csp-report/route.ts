@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { parseCspReports } from '@/lib/csp';
+import { enforceIpRateLimit } from '@/lib/request-body';
 
 const MAX_BODY_BYTES = 64 * 1024;
 
@@ -30,6 +31,9 @@ async function readBodyWithCap(request: NextRequest): Promise<string | null> {
 // credentials. Submitted data is only logged server-side (normalized) and
 // is never reflected in the response.
 export async function POST(request: NextRequest) {
+  const limited = await enforceIpRateLimit(request, 'csp_report', 120);
+  if (limited) return limited;
+
   const declaredLength = Number(request.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
     return new NextResponse(null, { status: 413 });

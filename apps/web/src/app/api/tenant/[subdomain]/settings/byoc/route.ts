@@ -9,6 +9,7 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import {
   deleteCredentials,
@@ -84,6 +85,8 @@ export async function PUT(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_byoc_save', 20);
+  if (limited) return limited;
   const session = await extractSession(request);
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -94,12 +97,12 @@ export async function PUT(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
   }
+  const body: unknown = bodyResult.value;
 
   const parseResult = SaveBYOCCredentialsRequestSchema.safeParse(body);
   if (!parseResult.success) {

@@ -9,28 +9,51 @@ import {
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
+import { z } from 'zod';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
+
+/**
+ * Body schema for the magic-link request (spec 139 Wave B, audit C2:
+ * this body was previously read with no validation at all). Both fields
+ * are optional hints about the account the user expects to connect;
+ * a field of the wrong type or blank is dropped (`.catch(undefined)`),
+ * exactly matching the previous ignore-it behaviour.
+ */
+const MagicLinkRequestBodySchema = z.object({
+  expectedFbAccountId: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .optional()
+    .catch(undefined),
+  expectedDisplayName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .optional()
+    .catch(undefined),
+});
 
 async function extractExpectedAccountFromBody(request: NextRequest): Promise<{
   expectedFbAccountId?: string | undefined;
   expectedDisplayName?: string | undefined;
+  bodyTooLarge?: boolean;
 }> {
-  try {
-    const body = (await request.json()) as Record<string, unknown> | null;
-    if (!body || typeof body !== 'object') {
-      return {};
-    }
-    const expectedFbAccountId =
-      typeof body.expectedFbAccountId === 'string' && body.expectedFbAccountId.trim()
-        ? body.expectedFbAccountId.trim()
-        : undefined;
-    const expectedDisplayName =
-      typeof body.expectedDisplayName === 'string' && body.expectedDisplayName.trim()
-        ? body.expectedDisplayName.trim()
-        : undefined;
-    return { expectedFbAccountId, expectedDisplayName };
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return { bodyTooLarge: true };
     return {};
   }
+  const parsed = MagicLinkRequestBodySchema.safeParse(bodyResult.value);
+  if (!parsed.success) {
+    return {};
+  }
+  return {
+    expectedFbAccountId: parsed.data.expectedFbAccountId,
+    expectedDisplayName: parsed.data.expectedDisplayName,
+  };
 }
 
 export async function handleGenerateMagicLink(
@@ -75,8 +98,9 @@ export async function handleGenerateMagicLink(
   }
 
   // 4. Generate 15-minute cryptographically signed magic token
-  const { expectedFbAccountId, expectedDisplayName } =
+  const { expectedFbAccountId, expectedDisplayName, bodyTooLarge } =
     await extractExpectedAccountFromBody(request);
+  if (bodyTooLarge) return bodyTooLargeResponse();
 
   const now = Math.floor(Date.now() / 1000);
   const nonce = crypto.randomUUID().replaceAll('-', '');
@@ -111,5 +135,7 @@ export async function POST(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_magic_link', 10);
+  if (limited) return limited;
   return handleGenerateMagicLink(request, subdomain);
 }

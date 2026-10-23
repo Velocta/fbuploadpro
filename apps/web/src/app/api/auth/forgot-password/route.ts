@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
+import { bodyTooLargeResponse, readJsonBody } from '@/lib/request-body';
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +24,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const bodyResult = await readJsonBody(request);
+    if (!bodyResult.ok) {
+      if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
+      return NextResponse.json(
+        { error: 'Invalid JSON request body' },
+        { status: 400 }
+      );
+    }
+    const body = bodyResult.value as { email?: unknown } | null;
     const email = body?.email;
 
     if (!email || typeof email !== 'string' || !email.includes('@')) {

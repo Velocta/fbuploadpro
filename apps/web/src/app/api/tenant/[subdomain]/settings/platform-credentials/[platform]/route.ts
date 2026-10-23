@@ -8,6 +8,7 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import {
   SavePlatformCredentialsRequestSchema,
@@ -117,17 +118,19 @@ export async function PUT(
   context: { params: Promise<{ subdomain: string; platform: string }> }
 ): Promise<NextResponse> {
   const { subdomain, platform } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_platform_credentials_save', 20);
+  if (limited) return limited;
   const auth = await authorizePlatformRequest(request, subdomain, platform);
   if ('errorResponse' in auth) return auth.errorResponse;
   const { session } = auth;
   const byocPlatform = auth.platform;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
   }
+  const body: unknown = bodyResult.value;
 
   const parseResult = SavePlatformCredentialsRequestSchema.safeParse(body);
   if (!parseResult.success) {
