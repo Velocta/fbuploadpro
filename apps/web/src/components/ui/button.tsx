@@ -159,6 +159,41 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   };
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        .fbu-btn:focus-visible {
+          box-shadow: 0 0 0 3px var(--ring-focus) !important;
+        }
+        .fbu-btn-primary:not(:disabled):hover {
+          filter: brightness(1.08);
+        }
+        .fbu-btn-primary:not(:disabled):active {
+          filter: brightness(0.94);
+        }
+        .fbu-btn-secondary:not(:disabled):hover {
+          background-color: var(--bg-hover) !important;
+          border-color: var(--border-strong) !important;
+        }
+        .fbu-btn-secondary:not(:disabled):active {
+          background-color: var(--bg-active) !important;
+        }
+        .fbu-btn-ghost:not(:disabled):hover {
+          background-color: var(--bg-hover) !important;
+        }
+        .fbu-btn-ghost:not(:disabled):active {
+          background-color: var(--bg-active) !important;
+        }
+        .fbu-btn-danger:not(:disabled):hover {
+          filter: brightness(1.10);
+        }
+        .fbu-btn-danger:not(:disabled):active {
+          filter: brightness(0.90);
+        }
+        .fbu-btn-link:not(:disabled):hover {
+          text-decoration: underline !important;
+        }
+      `}</style>
     <button
       ref={ref}
       type={type}
@@ -186,6 +221,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         </span>
       )}
     </button>
+    </>
   );
 });
 

@@ -31,11 +31,13 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitest/coverage-v8": "^4.0.0",
     "style-dictionary": "^5.7.0",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.7.0",
     "vitest": "^4.0.0"
   }

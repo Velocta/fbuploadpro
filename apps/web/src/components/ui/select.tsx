@@ -74,6 +74,21 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   }
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        .fbu-select-field:focus {
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 3px var(--ring-focus) !important;
+        }
+        .fbu-select-field.has-error:focus {
+          border-color: var(--accent-3) !important;
+          box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
+        }
+        .fbu-select-field:hover:not(:disabled):not(:focus) {
+          border-color: var(--border-strong);
+        }
+      `}</style>
     <div
       className={containerClassName}
         style={{
@@ -185,6 +200,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
           </span>
         )}
       </div>
+    </>
     );
   });
 

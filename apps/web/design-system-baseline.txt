@@ -1,0 +1,139 @@
+# Design-system enforcement baseline (spec 129 §5.4 / PR-F2, T14).
+#
+# WHY THIS FILE EXISTS: the literal bans (hex / rgb() / hsl() colour literals,
+# raw px font-sizes, ad-hoc numeric z-index, !important outside the globals
+# overrides layer) are the end state, but the pre-rebuild tree already
+# contains legacy occurrences in surfaces that PR-F2 does not own. This file
+# FREEZES them per file and per category: the regression guardrails
+# (.github/scripts/regression-guardrails.sh, checks 9-12) FAIL when
+#   - any listed count INCREASES,
+#   - a file not listed here gains an occurrence,
+#   - a listed count DECREASES without this file being updated in the same PR
+#     (counts only ever go down, as specs 130-136 convert each surface).
+# New code must use design tokens / token-backed Tailwind utilities instead.
+#
+# Exempt by design (not scanned): apps/web/tokens/** (the token source),
+# apps/web/src/styles/tokens.generated.css and apps/web/src/lib/theme.ts
+# (generated outputs — tokens:check guards them).
+#
+# Categories: hex | rgb | fontsize | zindex | important
+# Format: <category> <path-relative-to-repo-root> <count>
+#
+# The `important` lines double as the !important ALLOWLIST: every entry is a
+# legacy block evicted verbatim from globals.css into its owning component
+# (spec 129 T12 — button/checkbox/input/select/sidebar/skeleton/switch/
+# textarea) or the pre-existing <style> block in auth-split-layout.tsx
+# (owned by spec 136). In globals.css itself, !important is permitted ONLY
+# inside @layer overrides (position-checked by the guardrail; count 0 today).
+#
+# Tailwind arbitrary-value allowlist (spec 129 §5.4): bracket-form utility
+# values (text-[13px], bg-[#fad734], z-[9999], ...) and important-modifier
+# classes are BANNED in apps/web/src. An exception needs a line here:
+#   arbitrary-allow <path> <exact-class-token>   # plus a reason in the PR
+# There are currently NO exceptions.
+hex apps/web/src/components/auth/auth-split-layout.tsx 2
+hex apps/web/src/components/brand/brand-logo.tsx 10
+hex apps/web/src/components/connect/byoc-gate.tsx 2
+hex apps/web/src/components/desktop/desktop-titlebar.tsx 5
+hex apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 2
+hex apps/web/src/components/pages/dedicated/composer/composer-media-area.tsx 1
+hex apps/web/src/components/pages/dedicated/tab-settings.tsx 1
+hex apps/web/src/components/support/whatsapp-support-button.tsx 3
+hex apps/web/src/components/ui/checkbox.tsx 4
+hex apps/web/src/components/ui/switch.tsx 3
+hex apps/web/src/components/workspace/workspace-sidebar.tsx 2
+hex apps/web/src/components/workspace/workspace-studio-footer.tsx 2
+rgb apps/web/src/app/connect/facebook/error/page.tsx 2
+rgb apps/web/src/app/connect/facebook/success/page.tsx 2
+rgb apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 10
+rgb apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 5
+rgb apps/web/src/app/tenant/[subdomain]/pages/page.tsx 5
+rgb apps/web/src/components/accounts/account-card.tsx 8
+rgb apps/web/src/components/accounts/connect-account-modal.tsx 6
+rgb apps/web/src/components/accounts/disconnect-account-dialog.tsx 2
+rgb apps/web/src/components/auth/auth-split-layout.tsx 3
+rgb apps/web/src/components/auth/form-error-callout.tsx 2
+rgb apps/web/src/components/auth/signup-otp-step.tsx 2
+rgb apps/web/src/components/connect/byoc-gate.tsx 2
+rgb apps/web/src/components/media/batch-action-bar.tsx 2
+rgb apps/web/src/components/media/batch-set-caption-modal.tsx 5
+rgb apps/web/src/components/media/leave-page-guard-dialog.tsx 2
+rgb apps/web/src/components/media/media-asset-card.tsx 9
+rgb apps/web/src/components/media/media-import-modal.tsx 5
+rgb apps/web/src/components/media/media-import-progress-row.tsx 3
+rgb apps/web/src/components/media/media-import-progress.tsx 5
+rgb apps/web/src/components/media/media-import-staging.tsx 7
+rgb apps/web/src/components/media/media-library-dialogs.tsx 13
+rgb apps/web/src/components/media/media-library-grid.tsx 1
+rgb apps/web/src/components/media/media-library-header.tsx 2
+rgb apps/web/src/components/media/media-library-subfolders.tsx 2
+rgb apps/web/src/components/media/media-library-toolbar.tsx 6
+rgb apps/web/src/components/media/media-preview-modal.tsx 8
+rgb apps/web/src/components/media/new-folder-modal.tsx 6
+rgb apps/web/src/components/pages/add-page-modal.tsx 5
+rgb apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 1
+rgb apps/web/src/components/pages/dedicated/composer/composer-media-area.tsx 1
+rgb apps/web/src/components/pages/dedicated/modal-styles.ts 1
+rgb apps/web/src/components/pages/dedicated/page-header.tsx 3
+rgb apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 5
+rgb apps/web/src/components/pages/dedicated/tab-dashboard.tsx 1
+rgb apps/web/src/components/pages/dedicated/tab-insights.tsx 2
+rgb apps/web/src/components/pages/dedicated/tab-posting-times.tsx 2
+rgb apps/web/src/components/pages/dedicated/tab-settings.tsx 6
+rgb apps/web/src/components/pages/page-card.tsx 4
+rgb apps/web/src/components/pages/pages-empty-state.tsx 2
+rgb apps/web/src/components/settings/byoc-settings-view.tsx 7
+rgb apps/web/src/components/settings/general-settings-view.tsx 1
+rgb apps/web/src/components/settings/platform-credentials-view.tsx 7
+rgb apps/web/src/components/support/whatsapp-support-button.tsx 4
+rgb apps/web/src/components/ui/alert.tsx 3
+rgb apps/web/src/components/ui/button.tsx 1
+rgb apps/web/src/components/ui/checkbox.tsx 1
+rgb apps/web/src/components/ui/dialog.tsx 1
+rgb apps/web/src/components/ui/input.tsx 1
+rgb apps/web/src/components/ui/select.tsx 1
+rgb apps/web/src/components/ui/sidebar.tsx 1
+rgb apps/web/src/components/ui/switch.tsx 2
+rgb apps/web/src/components/ui/tag.tsx 10
+rgb apps/web/src/components/ui/textarea.tsx 1
+rgb apps/web/src/components/workspace/create-workspace-modal.tsx 1
+rgb apps/web/src/lib/component-styles.ts 1
+fontsize apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
+fontsize apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
+fontsize apps/web/src/components/desktop/desktop-titlebar.tsx 2
+zindex apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
+zindex apps/web/src/components/desktop/desktop-titlebar.tsx 1
+zindex apps/web/src/components/media/batch-action-bar.tsx 1
+zindex apps/web/src/components/media/batch-set-caption-modal.tsx 1
+zindex apps/web/src/components/media/leave-page-guard-dialog.tsx 1
+zindex apps/web/src/components/media/media-asset-card.tsx 3
+zindex apps/web/src/components/media/media-import-modal.tsx 1
+zindex apps/web/src/components/media/media-import-progress.tsx 1
+zindex apps/web/src/components/media/media-import-staging.tsx 1
+zindex apps/web/src/components/media/media-library-dialogs.tsx 3
+zindex apps/web/src/components/media/media-library-grid.tsx 1
+zindex apps/web/src/components/media/media-library-header.tsx 1
+zindex apps/web/src/components/media/media-library-toolbar.tsx 1
+zindex apps/web/src/components/media/media-preview-modal.tsx 1
+zindex apps/web/src/components/media/new-folder-modal.tsx 1
+zindex apps/web/src/components/pages/dedicated/modal-styles.ts 1
+zindex apps/web/src/components/pages/dedicated/page-header.tsx 1
+zindex apps/web/src/components/pages/dedicated/queue/queue-toasts.tsx 1
+zindex apps/web/src/components/settings/byoc-settings-view.tsx 1
+zindex apps/web/src/components/settings/platform-credentials-view.tsx 1
+zindex apps/web/src/components/support/whatsapp-support-button.tsx 1
+zindex apps/web/src/components/ui/dialog.tsx 2
+zindex apps/web/src/components/ui/input.tsx 1
+zindex apps/web/src/components/ui/sidebar.tsx 6
+zindex apps/web/src/components/ui/tooltip.tsx 1
+zindex apps/web/src/components/workspace/create-workspace-modal.tsx 1
+zindex apps/web/src/components/workspace/workspace-studio-footer.tsx 1
+important apps/web/src/components/auth/auth-split-layout.tsx 6
+important apps/web/src/components/ui/button.tsx 7
+important apps/web/src/components/ui/checkbox.tsx 1
+important apps/web/src/components/ui/input.tsx 6
+important apps/web/src/components/ui/select.tsx 4
+important apps/web/src/components/ui/sidebar.tsx 4
+important apps/web/src/components/ui/skeleton.tsx 2
+important apps/web/src/components/ui/switch.tsx 1
+important apps/web/src/components/ui/textarea.tsx 4
