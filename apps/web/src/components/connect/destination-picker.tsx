@@ -1,7 +1,9 @@
 'use client';
 
 /**
- * Destination picker (Spec 123, Part C).
+ * Destination picker (Spec 123, Part C) — rebuilt on the design
+ * system (spec 131 PR-131-4): shared/ui Checkbox + Button, token-backed
+ * utilities only, avatar via next/image.
  *
  * Reuses the spec 109 Pages-discovery behaviour from add-page-modal:
  * destinations that share a name are never merged — each row is
@@ -13,20 +15,16 @@
  *    single confirm button (platforms whose flow yields exactly one).
  */
 import React, { useMemo, useState } from 'react';
-import {
-  THEME,
-  PALETTE,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-} from '@/lib/theme';
+import Image from 'next/image';
+
 import { formatPageIdSuffix } from '@/components/pages/page-card';
 import {
   PLATFORM_LABELS,
   type DiscoveredDestination,
   type Platform,
 } from '@/lib/connect/registry';
+import { Button } from '@/components/shared/ui/button';
+import { Checkbox } from '@/components/shared/ui/checkbox';
 
 export type DestinationPickResult =
   | { ok: true; accountsUrl: string }
@@ -85,61 +83,29 @@ function DestinationRow({
   onToggle,
 }: Readonly<DestinationRowProps>) {
   const subtitle = destinationSubtitle(destination, isDuplicateName);
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: SPACING.md,
-    padding: '10px 12px',
-    backgroundColor:
-      isChecked && !isSingleConfirm
-        ? `var(--bg-subtle, ${THEME.default.surfaces.subtle})`
-        : 'transparent',
-    borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-  };
+  const rowClassName = `flex min-h-11 items-center gap-3 border-b border-line px-3 py-2 ${
+    isChecked && !isSingleConfirm ? 'bg-subtle' : ''
+  }`;
   const content = (
     <>
       {!isSingleConfirm && (
-        <input
-          type="checkbox"
+        <Checkbox
           data-testid={`destination-checkbox-${destination.externalDestinationId}`}
           checked={isChecked}
-          onChange={() => onToggle(destination.externalDestinationId)}
-          style={{
-            width: '16px',
-            height: '16px',
-            accentColor: PALETTE.primary,
-            cursor: 'pointer',
-            flexShrink: 0,
-          }}
+          onCheckedChange={() => onToggle(destination.externalDestinationId)}
+          aria-label={destination.name}
         />
       )}
       <DestinationAvatar
         name={destination.name}
         avatarUrl={destination.avatarUrl ?? null}
       />
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div
-          style={{
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            fontSize: '0.875rem',
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-body font-semibold text-ink">
           {destination.name}
         </div>
         {subtitle && (
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              marginTop: '2px',
-            }}
-          >
-            {subtitle}
-          </div>
+          <div className="mt-0.5 text-metadata text-ink-sub">{subtitle}</div>
         )}
       </div>
     </>
@@ -148,7 +114,7 @@ function DestinationRow({
     return (
       <div
         data-testid={`destination-row-${destination.externalDestinationId}`}
-        style={rowStyle}
+        className={rowClassName}
       >
         {content}
       </div>
@@ -157,7 +123,7 @@ function DestinationRow({
   return (
     <label
       data-testid={`destination-row-${destination.externalDestinationId}`}
-      style={{ ...rowStyle, cursor: 'pointer' }}
+      className={`${rowClassName} cursor-pointer`}
     >
       {content}
     </label>
@@ -193,34 +159,22 @@ function DestinationAvatar({
 }: Readonly<{ name: string; avatarUrl?: string | null }>) {
   if (avatarUrl) {
     return (
-      <img
+      <Image
         src={avatarUrl}
         alt=""
         width={36}
         height={36}
-        style={{ borderRadius: RADII.full, objectFit: 'cover', flexShrink: 0 }}
+        className="size-9 shrink-0 rounded-full object-cover"
       />
     );
   }
   return (
-    <div
+    <span
       aria-hidden="true"
-      style={{
-        width: '36px',
-        height: '36px',
-        borderRadius: RADII.full,
-        backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '0.875rem',
-        fontWeight: TYPOGRAPHY.weights.semibold,
-        flexShrink: 0,
-      }}
+      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-active text-body font-semibold text-ink-sub"
     >
       {name.trim().charAt(0).toUpperCase() || '?'}
-    </div>
+    </span>
   );
 }
 
@@ -294,14 +248,8 @@ export function DestinationPicker({
   const rows = isSingleConfirm ? confirmTarget : destinations;
 
   return (
-    <div data-testid="destination-picker" style={{ width: '100%' }}>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          borderTop: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        }}
-      >
+    <div data-testid="destination-picker" className="w-full">
+      <div className="flex flex-col border-t border-line">
         {rows.map((destination) => (
           <DestinationRow
             key={destination.externalDestinationId}
@@ -319,40 +267,19 @@ export function DestinationPicker({
       {errorMessage && (
         <p
           data-testid="destination-picker-error"
-          style={{
-            margin: `${SPACING.md} 0 0 0`,
-            fontSize: '0.875rem',
-            color: PALETTE.accent3,
-          }}
+          className="mt-4 mb-0 text-body text-brand-rose"
         >
           {errorMessage}
         </p>
       )}
 
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginTop: SPACING.lg,
-        }}
-      >
-        <button
+      <div className="mt-6 flex justify-end">
+        <Button
           type="button"
           data-testid="destination-picker-confirm-btn"
-          disabled={selectedIds.length === 0 || isSaving}
+          disabled={selectedIds.length === 0}
+          loading={isSaving}
           onClick={() => void handleConfirm()}
-          style={{
-            ...COMPONENT_STYLES.primaryButton,
-            height: '38px',
-            padding: `0 ${SPACING.lg}`,
-            fontSize: '0.875rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            cursor:
-              selectedIds.length === 0 || isSaving
-                ? 'not-allowed'
-                : 'pointer',
-            opacity: selectedIds.length === 0 || isSaving ? 0.6 : 1,
-          }}
         >
           {confirmButtonLabel(
             isSaving,
@@ -360,7 +287,7 @@ export function DestinationPicker({
             platformName,
             selectedIds.length
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );

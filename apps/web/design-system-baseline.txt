@@ -42,13 +42,11 @@ arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[left,right,width]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[margin,opacity]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width,height,padding]
-hex apps/web/src/components/connect/byoc-gate.tsx 2
 hex apps/web/src/components/pages/dedicated/tab-settings.tsx 1
 hex apps/web/src/components/ui/checkbox.tsx 4
 hex apps/web/src/components/ui/switch.tsx 3
 rgb apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 5
 rgb apps/web/src/app/tenant/[subdomain]/pages/page.tsx 5
-rgb apps/web/src/components/connect/byoc-gate.tsx 2
 rgb apps/web/src/components/pages/add-page-modal.tsx 5
 rgb apps/web/src/components/pages/dedicated/modal-styles.ts 1
 rgb apps/web/src/components/pages/dedicated/page-header.tsx 3

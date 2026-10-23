@@ -3,7 +3,6 @@ import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
 import { getSessionSecret } from '@fbuploadpro/contracts';
-import { THEME, SPACING, RADII, TYPOGRAPHY, PALETTE } from '@/lib/theme';
 import { DestinationPicker } from '@/components/connect/destination-picker';
 // Side effect: registers the X connect config (spec 127) so its picker mode resolves.
 import '@/lib/connect/platforms/x';
@@ -130,55 +129,24 @@ export default async function ConnectPickerPage({
   return (
     <div
       data-testid="connect-picker-page"
-      style={{
-        width: '100%',
-        maxWidth: '720px',
-        margin: '0 auto',
-        padding: SPACING.xl,
-        boxSizing: 'border-box',
-      }}
+      className="mx-auto box-border w-full max-w-180 px-6 py-6"
     >
-      <h1
-        style={{
-          margin: `0 0 ${SPACING.xs} 0`,
-          fontSize: '1.5rem',
-          fontWeight: TYPOGRAPHY.weights.bold,
-          letterSpacing: TYPOGRAPHY.tracking.h1,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-        }}
-      >
+      <h1 className="mt-0 mb-1 text-xxl font-bold tracking-h1 text-ink">
         {pickerHeading(noticeCode, mode, platformName)}
       </h1>
-      <p
-        style={{
-          margin: `0 0 ${SPACING.lg} 0`,
-          fontSize: '0.875rem',
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          lineHeight: 1.5,
-        }}
-      >
+      <p className="mt-0 mb-6 text-body leading-relaxed text-ink-sub">
         {pickerSubheading(noticeCode, mode, platformName)}
       </p>
 
       {noticeCode || !pending || !platform ? (
         <div
           data-testid="connect-picker-notice"
-          style={{
-            padding: `${SPACING.md} ${SPACING.lg}`,
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            borderRadius: RADII.md,
-          }}
+          className="rounded-md border border-line bg-panel px-6 py-4"
         >
           <Link
             href={accountsHref}
             data-testid="connect-picker-accounts-link"
-            style={{
-              color: PALETTE.primary,
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              fontSize: '0.875rem',
-              textDecoration: 'underline',
-            }}
+            className="inline-flex min-h-11 items-center text-body font-semibold text-primary underline outline-none focus-visible:outline-2 focus-visible:outline-brand-gold"
           >
             Go to Accounts
           </Link>
