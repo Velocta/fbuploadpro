@@ -5,6 +5,9 @@ import { cookies } from 'next/headers';
 import { getSessionSecret } from '@fbuploadpro/contracts';
 import { THEME, SPACING, RADII, TYPOGRAPHY, PALETTE } from '@/lib/theme';
 import { DestinationPicker } from '@/components/connect/destination-picker';
+// Side effect: registers the Instagram + Threads connect configs (spec 124) so their picker modes resolve.
+import '@/lib/connect/platforms/instagram';
+import '@/lib/connect/platforms/threads';
 import {
   getPlatformConnectConfig,
   isKnownPlatform,
