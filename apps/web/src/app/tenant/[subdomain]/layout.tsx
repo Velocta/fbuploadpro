@@ -11,6 +11,7 @@ import {
 import { Toaster } from '@/components/shared/ui/toast';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb';
+import { CommandPaletteHost } from '@/components/shell/command-palette-host';
 import { WorkspaceLifecycleGuard } from '@/components/workspace/workspace-lifecycle-guard';
 import { getServerSessionContext } from '@/lib/auth';
 import { DataProvider } from '@/lib/data/provider';
@@ -118,6 +119,15 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
               <SidebarTrigger className="size-11" />
               <div aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-line" />
               <WorkspaceBreadcrumb subdomain={subdomain} useCleanPaths={useCleanPaths} />
+              {/*
+                ⌘K palette trigger (spec 130 §5.6, OD130-6: YES — the
+                visible search-style header button ships alongside the
+                keyboard shortcut). The host is the palette's only
+                frame-bundle part; the palette itself loads via
+                next/dynamic on first open (PR-130-4's one mount edit
+                to this layout).
+              */}
+              <CommandPaletteHost subdomain={subdomain} useCleanPaths={useCleanPaths} />
             </header>
             {/*
               Banner slot (spec 130 §5.1): the shell-level region directly

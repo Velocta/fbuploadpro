@@ -1,6 +1,7 @@
 /**
  * shared/ui — the shadcn-based primitives library (spec 129 PR-F3).
- * 21 primitives: Alert, Banner, Button, Card, Checkbox, Dialog (+
+ * 22 primitives: Alert, Banner, Button, Card, Checkbox, Command
+ * (spec 130 §5.6, on cmdk per OD130-2), Dialog (+
  * AlertDialog), EmptyState, Input, Menu (Popover/Menu), Pagination,
  * Popover, Select, Sidebar, Skeleton, StatusDot, Switch, Table (+ batch
  * bar), Tabs, Tag, Textarea, Toast, Tooltip — plus the form standard
@@ -14,6 +15,7 @@ export * from "./banner";
 export * from "./button";
 export * from "./card";
 export * from "./checkbox";
+export * from "./command";
 export * from "./dialog";
 export * from "./empty-state";
 export * from "./form";
