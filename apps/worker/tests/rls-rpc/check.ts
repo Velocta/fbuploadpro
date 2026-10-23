@@ -10,6 +10,14 @@
  *       (b) authenticated self-update of users.role / users.status
  *           fails; a profile-column update (name) succeeds;
  *           service_role can still update role/status.
+ *       (b2) INSERT-path role planting (fold-in, 2026-10-23):
+ *           an authenticated self-INSERT planting role='admin' /
+ *           status='suspended' is neutralised to the column defaults
+ *           ('user' / 'active'); anon cannot insert at all;
+ *           a service_role INSERT keeps its explicit role/status
+ *           (the app-side admin-client row-creation path). In
+ *           vulnerable mode the planted values are stored verbatim,
+ *           documenting the hole.
  *       (c) BYOC: authenticated INSERT into a foreign workspace fails,
  *           into an own workspace succeeds, and a planted row whose
  *           workspace belongs to another user is invisible to SELECT.
@@ -44,6 +52,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 const USER_A = '11111111-1111-1111-1111-111111111111';
 const USER_B = '22222222-2222-2222-2222-222222222222';
+const USER_C = '33333333-3333-3333-3333-333333333333';
+const USER_D = '44444444-4444-4444-4444-444444444444';
+const USER_E = '55555555-5555-5555-5555-555555555555';
 const WS_A = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 const WS_A2 = 'acacacac-acac-acac-acac-acacacacacac';
 const WS_B = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
@@ -211,6 +222,54 @@ async function sectionUsers(pool: Pool): Promise<void> {
   );
 }
 
+async function sectionUsersInsert(pool: Pool): Promise<void> {
+  console.log('\n(b2) users INSERT-path role planting');
+  const plantSql = `INSERT INTO public.users (id, email, name, role, status)
+                    VALUES ($1::uuid, $2, $3, 'admin', 'suspended')`;
+  // An authenticated caller with a self-obtained Auth JWT (sub = their
+  // own auth id) inserts their public.users row BEFORE any app flow
+  // creates it, planting a privileged role/status. users_self_access's
+  // WITH CHECK only pins id = auth.uid(), so RLS lets it through; only
+  // the guard trigger can neutralise the planted values.
+  await asRole(
+    pool,
+    'authenticated',
+    USER_C,
+    async (client) => {
+      const res = await client.query(plantSql, [USER_C, 'rls117.c@gmail.com', 'Rig User C']);
+      check(res.rowCount === 1, 'authenticated self-INSERT of own users row succeeds (RLS permits own-id insert)');
+    },
+    { commit: true }
+  );
+  const planted = await pool.query<{ role: string; status: string }>('SELECT role, status FROM public.users WHERE id = $1', [USER_C]);
+  if (hardened) {
+    check(planted.rows[0]?.role === 'user', "planted role='admin' neutralised to default 'user'", `stored role=${planted.rows[0]?.role}`);
+    check(planted.rows[0]?.status === 'active', "planted status='suspended' neutralised to default 'active'", `stored status=${planted.rows[0]?.status}`);
+  } else {
+    check(planted.rows[0]?.role === 'admin', "planted role='admin' stored verbatim (pre-hardening hole)", `stored role=${planted.rows[0]?.role}`);
+    check(planted.rows[0]?.status === 'suspended', "planted status='suspended' stored verbatim (pre-hardening hole)", `stored status=${planted.rows[0]?.status}`);
+  }
+  // anon has no INSERT policy on users at all (users_self_access is
+  // TO authenticated) — denied in both modes.
+  const anonIns = await attempt(pool, 'anon', null, plantSql, [USER_E, 'rls117.e@gmail.com', 'Rig User E']);
+  check(!anonIns.ok && anonIns.code === '42501', 'anon INSERT into users denied (no anon policy)', anonIns.ok ? 'insert succeeded' : `${anonIns.code}`);
+  // The app-side creation path: service_role (admin client) upserts
+  // user rows and may set role/status explicitly — fully preserved.
+  await asRole(
+    pool,
+    'service_role',
+    null,
+    async (client) => {
+      const res = await client.query(plantSql, [USER_D, 'rls117.d@gmail.com', 'Rig User D']);
+      check(res.rowCount === 1, 'service_role INSERT of a users row succeeds');
+    },
+    { commit: true }
+  );
+  const svcRow = await pool.query<{ role: string; status: string }>('SELECT role, status FROM public.users WHERE id = $1', [USER_D]);
+  check(svcRow.rows[0]?.role === 'admin', "service_role INSERT keeps explicit role='admin'", `stored role=${svcRow.rows[0]?.role}`);
+  check(svcRow.rows[0]?.status === 'suspended', "service_role INSERT keeps explicit status='suspended'", `stored status=${svcRow.rows[0]?.status}`);
+}
+
 async function sectionByoc(pool: Pool): Promise<void> {
   console.log('\n(c) workspace_byoc_credentials compound policy');
   const insertSql = `INSERT INTO public.workspace_byoc_credentials (workspace_id, user_id, fb_app_id, encrypted_fb_app_secret)
@@ -373,6 +432,7 @@ async function main(): Promise<void> {
     console.log(`\n== spec 117 rls-rpc rig — mode: ${mode} ==`);
     await sectionLegacyRpcs(pool, legacyItem);
     await sectionUsers(pool);
+    await sectionUsersInsert(pool);
     await sectionByoc(pool);
     await sectionClaimCap(pool);
     await sectionUnified(pool);

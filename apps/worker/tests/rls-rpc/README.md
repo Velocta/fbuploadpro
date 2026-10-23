@@ -5,8 +5,9 @@ hardening migration (`supabase/migrations/20261023120000_rls_rpc_hardening.sql`)
 proves, against a **real PostgreSQL** with bootstrap + all repo
 migrations applied in filename order, that the five legacy RPC
 overloads are service-role-only, `users.role`/`status` cannot be
-self-updated, the BYOC policy requires workspace ownership, the legacy
-claim honours its 100-row cap, and the unified overloads are unchanged.
+self-updated nor planted via a self-INSERT, the BYOC policy requires
+workspace ownership, the legacy claim honours its 100-row cap, and
+the unified overloads are unchanged.
 Modelled on the spec 138 claim-rpc rig (`apps/worker/tests/claim-rpc/`).
 
 ## Layout
@@ -16,7 +17,7 @@ Modelled on the spec 138 claim-rpc rig (`apps/worker/tests/claim-rpc/`).
 | `db/bootstrap.sql` | Minimal Supabase stub for plain Postgres: `anon` / `authenticated` / `service_role` (BYPASSRLS) roles, `auth` schema, `auth.users`, `auth.uid()` from `request.jwt.claim.sub` — plus Supabase's default-privilege posture (table-level SELECT/INSERT/UPDATE/DELETE to anon + authenticated, ALL to service_role) via `ALTER DEFAULT PRIVILEGES`, because this rig exercises GRANTs/RLS |
 | `db/run-migrations.ts` | Applies `bootstrap.sql`, then every file in `supabase/migrations/` in filename order; `RLS_RPC_MIGRATIONS_UNTIL=<file>` stops after that file (builds the pre-hardening DB) |
 | `fixtures.sql` | Deterministic two-tenant fixture (`rls117_reset`, `rls117_seed_legacy_items`): users A/B, their workspaces, FB account/page with dummy encrypted tokens, BYOC rows (incl. a planted row — user_id = A, workspace = B's), download jobs, a unified account/destination/queue-item graph |
-| `check.ts` | The assertion runner. `RLS_RPC_MODE=hardened` (default) asserts the post-migration state (37 assertions, groups a–f in the spec); `RLS_RPC_MODE=vulnerable` asserts the holes are still open on the pre-hardening DB, proving the rig detects them. Both modes print a `pg_proc.proacl` + `pg_policies` dump (`RLS_RPC_DUMP_FILE=<path>` also writes it to a file) |
+| `check.ts` | The assertion runner. `RLS_RPC_MODE=hardened` (default) asserts the post-migration state (44 assertions, groups a–f in the spec plus b2 for the INSERT-path fold-in); `RLS_RPC_MODE=vulnerable` asserts the holes are still open on the pre-hardening DB, proving the rig detects them. Both modes print a `pg_proc.proacl` + `pg_policies` dump (`RLS_RPC_DUMP_FILE=<path>` also writes it to a file) |
 
 Rig code lives outside the worker build's runtime: no file here
 matches vitest's `*.test.*` include pattern, so the normal worker suite
@@ -35,11 +36,17 @@ column-level grant). With only the column REVOKE applied, an
 authenticated-context `UPDATE public.users SET role = 'admin'` on the
 user's own row still succeeded (`UPDATE 1`). The migration therefore
 keeps the column REVOKEs as defense-in-depth **and** enforces with
-plan.md's fallback: the `trg_users_guard_role_status` BEFORE UPDATE
-trigger (`guard_users_role_status()`), which raises SQLSTATE 42501
-when `authenticated`/`anon` changes `role` or `status`. Profile
-updates and service-role flows pass; the email-canonicalization and
-updated_at triggers are untouched.
+plan.md's fallback: the `trg_users_guard_role_status` BEFORE INSERT OR
+UPDATE trigger (`guard_users_role_status()`), which raises SQLSTATE
+42501 when `authenticated`/`anon` changes `role` or `status` on
+UPDATE, and on INSERT forces `role`/`status` to the column defaults
+(`'user'`/`'active'`) for `authenticated`/`anon` — closing the
+symmetric planting path (a self-obtained Auth JWT + `users_self_access`'s
+id-only WITH CHECK otherwise let a caller insert their own row
+pre-planted with `role = 'admin'`; folded in 2026-10-23 on Shahzeb's
+approval, per the spec addendum). Profile updates and service-role
+flows pass; the email-canonicalization and updated_at triggers are
+untouched.
 
 ## Setup (one-time)
 
@@ -81,30 +88,36 @@ updated_at triggers are untouched.
 
 ```sh
 cd apps/worker
-# Pre-hardening DB: every hole must show OPEN (37 assertions):
+# Pre-hardening DB: every hole must show OPEN (44 assertions):
 RLS_RPC_MODE=vulnerable RLS_RPC_PG_URL='...rls117pre...' \
   pnpm exec tsx tests/rls-rpc/check.ts
-# Post-hardening DB: every hole must show CLOSED (37 assertions):
+# Post-hardening DB: every hole must show CLOSED (44 assertions):
 RLS_RPC_PG_URL='...rls117...' pnpm exec tsx tests/rls-rpc/check.ts
 ```
 
 ## Results (2026-10-23, PostgreSQL 16.2, full migration chain)
 
-- Vulnerable mode on the pre-hardening DB: **37 assertions, 0 failures**
+- Vulnerable mode on the pre-hardening DB: **44 assertions, 0 failures**
   — all five legacy RPCs executable by authenticated + anon, role/status
-  self-update succeeds, foreign-workspace BYOC insert succeeds, planted
-  BYOC row visible, claim(100000, 100000) returns all 150 seeded rows.
-- Hardened mode on the post-hardening DB: **37 assertions, 0 failures**
+  self-update succeeds, an authenticated self-INSERT stores planted
+  `role='admin'`/`status='suspended'` verbatim (the fold-in hole),
+  foreign-workspace BYOC insert succeeds, planted BYOC row visible,
+  claim(100000, 100000) returns all 150 seeded rows.
+- Hardened mode on the post-hardening DB: **44 assertions, 0 failures**
   — (a) 15/15 legacy-RPC probes (denied to authenticated + anon with
   SQLSTATE 42501, allowed to service_role), (b) 5/5 users assertions
   (role + status denied, name update + service-role update succeed),
-  (c) 4/4 BYOC assertions (foreign insert denied 42501, own insert ok,
-  planted row invisible, own rows visible), (d) claim cap returns
-  exactly 100 of 150, (e) 6/6 unified-overload regression probes
-  unchanged, (f) 6/6 download-jobs policy assertions (all four policies
-  `roles={authenticated}`, RLS visibility intact).
+  (b2) 7/7 INSERT-path assertions (planted role/status neutralised to
+  `'user'`/`'active'`, anon insert denied, service_role insert keeps
+  explicit role/status), (c) 4/4 BYOC assertions (foreign insert
+  denied 42501, own insert ok, planted row invisible, own rows
+  visible), (d) claim cap returns exactly 100 of 150, (e) 6/6
+  unified-overload regression probes unchanged, (f) 6/6 download-jobs
+  policy assertions (all four policies `roles={authenticated}`, RLS
+  visibility intact).
 - The migration is idempotent: re-applying
-  `20261023120000_rls_rpc_hardening.sql` to the hardened DB exits 0.
+  `20261023120000_rls_rpc_hardening.sql` to the hardened DB exits 0
+  (re-verified for the fold-in amendment).
 
 ### ACL dump — before (pre-hardening)
 

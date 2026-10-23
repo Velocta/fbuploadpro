@@ -22,8 +22,19 @@
 --      column-level REVOKE does NOT deny the update while the role
 --      holds Supabase's table-level UPDATE grant (PostgreSQL privileges
 --      are additive; the rig's authenticated UPDATE of role succeeded
---      after the column REVOKE) — a BEFORE UPDATE guard trigger is the
---      enforcement mechanism, per plan.md's documented fallback.
+--      after the column REVOKE) — a BEFORE INSERT OR UPDATE guard
+--      trigger is the enforcement mechanism, per plan.md's documented
+--      fallback. On UPDATE it rejects role/status changes by
+--      authenticated/anon (42501). On INSERT it neutralises the
+--      symmetric planting path (fold-in approved by Shahzeb
+--      2026-10-23, surfaced by the PR #663 verification gate): there
+--      is no signup trigger creating public.users rows — they are
+--      created app-side by service-role upserts — so an
+--      authenticated caller holding a self-obtained Auth JWT could
+--      otherwise INSERT their own row pre-planted with
+--      role = 'admin'; the guard forces the column defaults
+--      ('user' / 'active', per 20261008120001_initial_schema.sql)
+--      for authenticated/anon inserts instead.
 --      Profile updates (name, phone, ...) and service-role flows are
 --      unaffected; the existing trg_canonicalize_user_email and
 --      trg_users_updated_at triggers are untouched.
@@ -190,7 +201,8 @@ END;
 $$;
 
 -- -----------------------------------------------------------------------------
--- 3. users: prevent authenticated self-update of role / status
+-- 3. users: prevent authenticated self-assignment of role / status,
+--    on UPDATE (reject) and on INSERT (neutralise to the defaults)
 -- -----------------------------------------------------------------------------
 
 -- Defense in depth (removes any column-level grants); NOT sufficient on
@@ -204,10 +216,19 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF (NEW.role IS DISTINCT FROM OLD.role OR NEW.status IS DISTINCT FROM OLD.status)
-     AND current_user IN ('authenticated', 'anon') THEN
-    RAISE EXCEPTION 'role and status can only be changed by the service role'
-      USING ERRCODE = '42501';
+  IF current_user IN ('authenticated', 'anon') THEN
+    IF TG_OP = 'INSERT' THEN
+      -- Self-created rows always start with the column defaults
+      -- (20261008120001_initial_schema.sql); a planted role/status is
+      -- silently neutralised, never honoured. Service-role upserts
+      -- (the app-side row-creation path) are not affected.
+      NEW.role := 'user';
+      NEW.status := 'active';
+    ELSIF TG_OP = 'UPDATE'
+          AND (NEW.role IS DISTINCT FROM OLD.role OR NEW.status IS DISTINCT FROM OLD.status) THEN
+      RAISE EXCEPTION 'role and status can only be changed by the service role'
+        USING ERRCODE = '42501';
+    END IF;
   END IF;
   RETURN NEW;
 END;
@@ -215,7 +236,7 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_users_guard_role_status ON public.users;
 CREATE TRIGGER trg_users_guard_role_status
-  BEFORE UPDATE ON public.users
+  BEFORE INSERT OR UPDATE ON public.users
   FOR EACH ROW
   EXECUTE FUNCTION public.guard_users_role_status();
 
