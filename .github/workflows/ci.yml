@@ -212,8 +212,33 @@ jobs:
       - name: Build contracts (web build dependency)
         run: pnpm --filter @fbuploadpro/contracts build
 
-      - name: Install Chromium for Playwright
+      # Cache the downloaded Chromium build (spec 139 DX fix): the
+      # uncached `playwright install --with-deps` step swung this job
+      # from ~60 s to ~637 s (585 s of browser download for a 27 s test
+      # step). The key hashes pnpm-lock.yaml, which pins the Playwright
+      # version — a Playwright bump changes the browser build and
+      # invalidates the cache. A restore-keys prefix hit restores the
+      # previous build but reports cache-hit != 'true', so the full
+      # install below still runs and refreshes it; an exact hit skips
+      # the download and only re-installs the OS dependencies, which
+      # are not part of the cached directory (Playwright-recommended
+      # GitHub Actions pattern).
+      - name: Cache Playwright browsers
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Chromium for Playwright (cache miss)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @fbuploadpro/web exec playwright install --with-deps chromium
+
+      - name: Install Chromium system dependencies (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @fbuploadpro/web exec playwright install-deps chromium
 
       - name: Run Playwright e2e (production build, 1 retry in CI)
         run: pnpm --filter @fbuploadpro/web run test:e2e
@@ -228,4 +253,133 @@ jobs:
             apps/web/tests/e2e/.results/
           retention-days: 14
           if-no-files-found: ignore
+
+  sql-changes:
+    name: Detect SQL-rig changes (Postgres gate)
+    runs-on: ubuntu-latest
+    outputs:
+      sql: ${{ steps.diff.outputs.sql }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check whether SQL-rig inputs changed
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+          else
+            RANGE="${{ github.event.before }}...${{ github.event.after }}"
+          fi
+          if git diff --name-only "$RANGE" -- supabase/migrations apps/worker packages/contracts .github/workflows/ci.yml | grep -q .; then
+            echo "sql=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sql=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  sql-rigs:
+    # Real-Postgres SQL regression rigs (spec 139 DX fix): these suites
+    # previously ran NOWHERE in CI — they were only ever executed by
+    # hand against a local pgserver instance (see the rig READMEs), so
+    # a migration or RPC change could silently break the RLS posture or
+    # the claim RPC's behaviour parity. Each rig gets its own database
+    # on the postgres:16 service (the version both rigs were verified
+    # against), built by the rig's own db/run-migrations.ts (bootstrap
+    # + every supabase/migrations file in filename order), and is then
+    # run through the rig's existing env-var config surface, unchanged:
+    #   - spec 117 RLS rig (apps/worker/tests/rls-rpc): 44 assertions,
+    #     RLS_RPC_PG_URL, hardened mode (the default).
+    #   - spec 138 claim-RPC parity rig (apps/worker/tests/claim-rpc):
+    #     12 cases / 77 checks, CLAIM_RPC_PG_URL, against the post-fix
+    #     (all-migrations) database.
+    #   - spec 138 claim-RPC scale rig: instagram-shaped seed (5,000
+    #     destinations, 21,867 publish_logs); asserts one claim call
+    #     completes in < 5 s with the expected claim/defer counts. The
+    #     grouped implementation this guards measured orders of
+    #     magnitude under the bound locally, so the bound is kept in
+    #     CI; if hosted-runner variance ever makes it flaky, drop this
+    #     one step to report-only rather than loosening the bound in
+    #     the rig itself.
+    name: SQL Rigs (real Postgres — RLS + claim parity/scale)
+    needs: sql-changes
+    if: needs.sql-changes.outputs.sql == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Create rig databases
+        working-directory: apps/worker
+        run: |
+          node --input-type=module -e "
+          import pg from 'pg';
+          const pool = new pg.Pool({ connectionString: 'postgres://postgres:postgres@localhost:5432/postgres' });
+          for (const db of ['rls117', 'claim138_parity', 'claim138_scale']) {
+            await pool.query('CREATE DATABASE ' + db);
+            console.log('created database ' + db);
+          }
+          await pool.end();
+          "
+
+      - name: Spec 117 RLS rig — apply bootstrap + migrations
+        env:
+          RLS_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/rls117
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/rls-rpc/db/run-migrations.ts
+
+      - name: Spec 117 RLS rig — 44 assertions (hardened mode)
+        env:
+          RLS_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/rls117
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/rls-rpc/check.ts
+
+      - name: Spec 138 claim-RPC rig — apply bootstrap + migrations (parity DB)
+        env:
+          CLAIM_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/claim138_parity
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/claim-rpc/db/run-migrations.ts
+
+      - name: Spec 138 claim-RPC parity rig — 12 cases
+        env:
+          CLAIM_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/claim138_parity
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/claim-rpc/parity.ts
+
+      - name: Spec 138 claim-RPC rig — apply bootstrap + migrations (scale DB)
+        env:
+          CLAIM_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/claim138_scale
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/claim-rpc/db/run-migrations.ts
+
+      - name: Spec 138 claim-RPC scale rig — one claim < 5 s at certification shape
+        env:
+          CLAIM_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/claim138_scale
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/claim-rpc/scale.ts
 
