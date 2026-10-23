@@ -55,7 +55,7 @@ describe('X connect registration (spec 127)', () => {
 
 describe('X connect exchange (spec 127)', () => {
   function mockFetch() {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
     const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
       if (url === 'https://api.x.com/2/oauth2/token') {
