@@ -129,6 +129,10 @@ describe('Worker Heartbeat (Spec 116)', () => {
         }),
       })),
       query: vi.fn().mockResolvedValue([]),
+      // Spec 122 superseded the empty-registry assumption in the test
+      // below: the default registry now registers Facebook, so a claim
+      // tick calls the claim RPC (returning no due items here).
+      rpc: vi.fn(async () => ({ data: [], error: null })),
     };
     return { db, upserts };
   }
@@ -153,7 +157,14 @@ describe('Worker Heartbeat (Spec 116)', () => {
       TOKEN_ENCRYPTION_KEY: VALID_WORKER_TOKEN_KEY,
     };
 
-    await handleScheduled(controller, env, ctx, { db: db as never });
+    // Spec 122: the default registry registers Facebook, so the tick
+    // needs lane queue producers (previously the empty registry meant
+    // no lane was ever entered and no queues were required).
+    const queues = {
+      fast: { sendBatch: vi.fn(async () => undefined) },
+      heavy: { sendBatch: vi.fn(async () => undefined) },
+    };
+    await handleScheduled(controller, env, ctx, { db: db as never, queues });
 
     expect(upserts).toHaveLength(1);
     expect(upserts[0]?.last_skip_reason).toBeNull();
