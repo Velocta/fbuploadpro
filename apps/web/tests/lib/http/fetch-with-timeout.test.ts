@@ -9,7 +9,7 @@ import {
 } from '@/lib/http/fetch-with-timeout';
 
 function capturingFetch(response = new Response('ok', { status: 200 })) {
-  const calls: Array<{ input: unknown; init?: RequestInit }> = [];
+  const calls: Array<{ input: unknown; init: RequestInit | undefined }> = [];
   const fetchFn = vi.fn(async (input: unknown, init?: RequestInit) => {
     calls.push({ input, init });
     return response;

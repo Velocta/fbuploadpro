@@ -18,6 +18,10 @@
  */
 import { X_OAUTH_SCOPES } from '@fbuploadpro/contracts';
 import {
+  DEFAULT_FETCH_TIMEOUT_MS,
+  fetchWithTimeout,
+} from '@/lib/http/fetch-with-timeout';
+import {
   hasPlatformConnectConfig,
   registerPlatformConnectConfig,
   type ConnectExchangeContext,
@@ -49,9 +53,11 @@ interface XUserMe {
 }
 
 async function fetchXMe(fetchFn: typeof fetch, accessToken: string): Promise<XUserMe> {
-  const res = await fetchFn(
+  const res = await fetchWithTimeout(
     `${X_API_BASE_URL}/users/me?user.fields=profile_image_url`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    DEFAULT_FETCH_TIMEOUT_MS,
+    fetchFn
   );
   const json = (await res.json().catch(() => null)) as {
     data?: XUserMe;
@@ -94,14 +100,19 @@ export function createXConnectConfig(
         redirect_uri: ctx.redirectUri,
         code_verifier: ctx.codeVerifier,
       });
-      const tokenRes = await fetchFn(X_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          Authorization: basicAuthHeader(ctx.clientId, ctx.clientSecret),
-          'Content-Type': 'application/x-www-form-urlencoded',
+      const tokenRes = await fetchWithTimeout(
+        X_TOKEN_URL,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: basicAuthHeader(ctx.clientId, ctx.clientSecret),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: form.toString(),
         },
-        body: form.toString(),
-      });
+        DEFAULT_FETCH_TIMEOUT_MS,
+        fetchFn
+      );
       const tokenJson = (await tokenRes.json().catch(() => null)) as {
         access_token?: string;
         refresh_token?: string;
