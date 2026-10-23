@@ -99,3 +99,55 @@ export interface ResendOtpErrorBody {
   retryAfterSeconds?: number;
   cooldownSecondsRemaining?: number;
 }
+
+/* ------------------------------------------------------------------ */
+/* Password recovery (spec 136 PR-136C — additive; the login and      */
+/* signup schemas above are untouched). Success bodies exactly as     */
+/* their route handlers construct them:                               */
+/*   POST /api/auth/forgot-password        → { success, requiresOtp,  */
+/*     email, message }                                               */
+/*   POST /api/auth/forgot-password/resend → { success, message }     */
+/*   POST /api/auth/reset-password         → { success, message }     */
+/* Error bodies are control flow (400 field/message mapping, 429      */
+/* cooldown) and are read from the thrown `ApiError`'s `cause`.       */
+/* ------------------------------------------------------------------ */
+
+export const ForgotPasswordSuccessResponseSchema = z.object({
+  success: z.literal(true),
+  requiresOtp: z.boolean().optional(),
+  email: z.string().optional(),
+  message: z.string().optional(),
+});
+export type ForgotPasswordSuccessResponse = z.infer<
+  typeof ForgotPasswordSuccessResponseSchema
+>;
+
+/** The forgot-password + resend routes' error body shape. */
+export interface ForgotPasswordErrorBody {
+  error?: string;
+  retryAfterSeconds?: number;
+  cooldownSecondsRemaining?: number;
+}
+
+export const ResendRecoveryCodeSuccessResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+});
+export type ResendRecoveryCodeSuccessResponse = z.infer<
+  typeof ResendRecoveryCodeSuccessResponseSchema
+>;
+
+export const ResetPasswordSuccessResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+});
+export type ResetPasswordSuccessResponse = z.infer<
+  typeof ResetPasswordSuccessResponseSchema
+>;
+
+/** The reset-password route's error body shape, read from an `ApiError` cause. */
+export interface ResetPasswordErrorBody {
+  error?: string;
+  retryAfterSeconds?: number;
+  cooldownSecondsRemaining?: number;
+}

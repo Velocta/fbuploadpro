@@ -1,11 +1,22 @@
 'use client';
 
+/**
+ * Legacy recovery URL (spec 136 §5.3, OD-136-5): an explanatory
+ * redirect stub — emailed legacy reset links may still land here, so
+ * the route is kept, rebuilt on primitives. It explains that recovery
+ * moved to the 6-digit code BEFORE its timed redirect (UX Rule 8),
+ * auto-redirects to `/forgot-password` after 1,500 ms, and offers a
+ * manual action for anyone who doesn't want to wait. Copy verbatim
+ * (§3.3).
+ */
+
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Button, Alert } from '@/components/ui';
+
+import { Button } from '@/components/shared/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/shared/ui/alert';
 import { AuthSplitLayout } from '@/components/auth/auth-split-layout';
-import { PALETTE, SPACING, THEME, TYPOGRAPHY } from '@/lib/theme';
 
 /** Delay before redirecting to the OTP recovery page. */
 const REDIRECT_DELAY_MS = 1500;
@@ -26,41 +37,27 @@ export default function ResetPasswordPage() {
       title="Password Recovery"
       description="Password recovery is now managed securely with a 6-digit verification code."
       footer={
-        <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+        <span className="text-metadata text-ink-sub">
           Back to{' '}
-          <Link
-            href="/login"
-            style={{
-              color: PALETTE.primary,
-              textDecoration: 'none',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-            }}
-          >
+          <Link href="/login" className="font-semibold text-link no-underline hover:underline">
             Sign in
           </Link>
         </span>
       }
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-        <Alert
-          severity="info"
-          title="Redirecting to Password Recovery"
-          message="Password recovery is now handled directly using a 6-digit code. Redirecting you to the recovery page..."
-        />
-        <Link
-          href="/forgot-password"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            textDecoration: 'none',
-            width: '100%',
-          }}
-        >
-          <Button variant="primary" size="lg" style={{ width: '100%' }}>
-            Go to Password Recovery
-          </Button>
-        </Link>
+      <div className="flex flex-col gap-6">
+        <Alert>
+          <div className="flex flex-col gap-1">
+            <AlertTitle>Redirecting to Password Recovery</AlertTitle>
+            <AlertDescription>
+              Password recovery is now handled directly using a 6-digit code. Redirecting you to
+              the recovery page...
+            </AlertDescription>
+          </div>
+        </Alert>
+        <Button asChild size="lg" className="w-full">
+          <Link href="/forgot-password">Go to Password Recovery</Link>
+        </Button>
       </div>
     </AuthSplitLayout>
   );
