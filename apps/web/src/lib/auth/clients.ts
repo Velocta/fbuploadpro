@@ -12,6 +12,34 @@ let mockSupabaseClientForTesting: SupabaseClient | null = null;
 let mockSupabaseServiceClientForTesting: SupabaseClient | null = null;
 
 /**
+ * Default per-request timeout for the admin (service-role) client
+ * (spec 139). Applied via a global fetch wrapper: any single Supabase
+ * request that hangs is aborted after this long instead of tying up a
+ * serverless invocation indefinitely. Callers that pass their own
+ * AbortSignal (e.g. a longer/shorter per-call timeout) keep theirs —
+ * the wrapper only supplies the default when no signal is present.
+ */
+export const SUPABASE_ADMIN_FETCH_TIMEOUT_MS = 15_000;
+
+let cachedAdminClient: SupabaseClient | null = null;
+let cachedAdminClientConfig: string | null = null;
+
+/**
+ * Global fetch for the admin client: delegates to the ambient fetch and
+ * defaults the abort signal to SUPABASE_ADMIN_FETCH_TIMEOUT_MS.
+ * Exported so the timeout default can be unit-tested directly.
+ */
+export function fetchWithAdminTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(SUPABASE_ADMIN_FETCH_TIMEOUT_MS),
+  });
+}
+
+/**
  * Single gate for every test double in this module. Mocks may only take
  * effect outside production — even if a setter is somehow called in
  * production, the mock is never honored by the getters.
@@ -37,10 +65,18 @@ export function _setMockSupabaseServiceClient(client: SupabaseClient | null): vo
   mockSupabaseServiceClientForTesting = client;
 }
 
-/** Clears both mock clients. Called by `_resetAuthStores` (stores.ts). */
+/**
+ * Clears both mock clients and the cached admin client. Called by
+ * `_resetAuthStores` (stores.ts) — this is the seam tests use between
+ * cases, so clearing the cache here keeps env-swapping tests correct:
+ * after a reset, the next getSupabaseAdminClient() re-resolves the
+ * (possibly changed) environment instead of reusing a stale client.
+ */
 export function _resetMockSupabaseClients(): void {
   mockSupabaseClientForTesting = null;
   mockSupabaseServiceClientForTesting = null;
+  cachedAdminClient = null;
+  cachedAdminClientConfig = null;
 }
 
 /**
@@ -56,24 +92,60 @@ export function getSupabaseAdminClient(): SupabaseClient | null {
     return mockSupabaseClientForTesting;
   }
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const isProduction = process.env.NODE_ENV === 'production';
 
-  if (url && key && !url.includes('placeholder') && !key.includes('placeholder')) {
-    try {
-      return createClient(url, key, {
-        auth: {
-          persistSession: false,
-          autoRefreshToken: false,
-        },
-      });
-    } catch {
+  // Production (spec 139): the service-role key is strictly required.
+  // The admin client must NEVER silently degrade to the anon key — an
+  // anon-key client looks configured but runs under RLS with no elevated
+  // privilege, turning admin workflows into confusing partial failures.
+  // Fail fast and loudly instead. The anon-key fallback below is kept
+  // for non-production only, where local/test setups may legitimately
+  // run without a service-role key.
+  let key: string | undefined;
+  if (isProduction) {
+    key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || url.includes('placeholder') || !key || key.includes('placeholder')) {
+      throw new Error(
+        'NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are strictly required in production.'
+      );
+    }
+  } else {
+    key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key || url.includes('placeholder') || key.includes('placeholder')) {
       return null;
     }
   }
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are strictly required in production.');
+
+  // Singleton cache keyed by the resolved config (spec 139): building a
+  // fresh client per call churns connections/agents on hot server paths.
+  // A config change (tests swapping env) misses the cache and rebuilds;
+  // `_resetMockSupabaseClients` clears it via `_resetAuthStores`.
+  const configKey = `${url}\n${key}`;
+  if (cachedAdminClient && cachedAdminClientConfig === configKey) {
+    return cachedAdminClient;
   }
-  return null;
+
+  try {
+    const client = createClient(url, key, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      global: {
+        fetch: fetchWithAdminTimeout,
+      },
+    });
+    cachedAdminClient = client;
+    cachedAdminClientConfig = configKey;
+    return client;
+  } catch (error) {
+    // In production a client that cannot even be constructed is a hard
+    // misconfiguration — surface it rather than masking it as "no client".
+    if (isProduction) {
+      throw error;
+    }
+    return null;
+  }
 }
 
 export function getCookieDomain(requestHost?: string | null): string | undefined {
