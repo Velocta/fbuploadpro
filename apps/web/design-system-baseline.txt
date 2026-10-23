@@ -56,10 +56,6 @@ rgb apps/web/src/components/connect/byoc-gate.tsx 2
 rgb apps/web/src/components/media/batch-action-bar.tsx 2
 rgb apps/web/src/components/media/batch-set-caption-modal.tsx 5
 rgb apps/web/src/components/media/leave-page-guard-dialog.tsx 2
-rgb apps/web/src/components/media/media-import-modal.tsx 5
-rgb apps/web/src/components/media/media-import-progress-row.tsx 3
-rgb apps/web/src/components/media/media-import-progress.tsx 5
-rgb apps/web/src/components/media/media-import-staging.tsx 7
 rgb apps/web/src/components/media/media-library-dialogs.tsx 13
 rgb apps/web/src/components/media/media-preview-modal.tsx 8
 rgb apps/web/src/components/media/new-folder-modal.tsx 6
@@ -89,9 +85,6 @@ zindex apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
 zindex apps/web/src/components/media/batch-action-bar.tsx 1
 zindex apps/web/src/components/media/batch-set-caption-modal.tsx 1
 zindex apps/web/src/components/media/leave-page-guard-dialog.tsx 1
-zindex apps/web/src/components/media/media-import-modal.tsx 1
-zindex apps/web/src/components/media/media-import-progress.tsx 1
-zindex apps/web/src/components/media/media-import-staging.tsx 1
 zindex apps/web/src/components/media/media-library-dialogs.tsx 3
 zindex apps/web/src/components/media/media-preview-modal.tsx 1
 zindex apps/web/src/components/media/new-folder-modal.tsx 1

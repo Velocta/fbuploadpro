@@ -6,6 +6,9 @@ export const MAX_FILE_SIZE_BYTES = 500 * 1024 * 1024; // 500 MB
 import { AllowedMediaMimeTypes } from '@fbuploadpro/contracts';
 import type { ImportQueueItem } from './media-types';
 
+/** The contracts tuple widened once, so membership checks stay typed. */
+const ALLOWED_MIME_TYPES: readonly string[] = AllowedMediaMimeTypes;
+
 const EXTENSION_TO_MIME: Record<string, string> = {
   mp4: 'video/mp4',
   mov: 'video/quicktime',
@@ -17,7 +20,7 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 };
 
 export function resolveMimeType(file: File): string {
-  if (file.type && AllowedMediaMimeTypes.includes(file.type as any)) {
+  if (file.type && ALLOWED_MIME_TYPES.includes(file.type)) {
     return file.type;
   }
   const ext = file.name.split('.').pop()?.toLowerCase() || '';
@@ -189,20 +192,6 @@ export function computeFurthestAlong(
   }, null);
 }
 
-export function handleModalKeyDown(
-  key: string,
-  step: 'staging' | 'progress' | 'complete',
-  onClose: () => void,
-  onDone: () => void
-) {
-  if (key !== 'Escape') return;
-  if (step === 'staging') {
-    onClose();
-  } else if (step === 'complete') {
-    onDone();
-  }
-}
-
 export function validateFileForImport(file: File, mime: string): string | null {
   if (file.size === 0) {
     return 'empty file';
@@ -210,7 +199,7 @@ export function validateFileForImport(file: File, mime: string): string | null {
   if (file.size > MAX_FILE_SIZE_BYTES) {
     return 'too large — 500 MB max';
   }
-  if (!mime || !AllowedMediaMimeTypes.includes(mime as any)) {
+  if (!mime || !ALLOWED_MIME_TYPES.includes(mime)) {
     return "can't upload — not a supported format";
   }
   return null;
@@ -219,11 +208,17 @@ export function validateFileForImport(file: File, mime: string): string | null {
 export function createImagePreviewUrl(file: File, mime: string): string | null {
   if (!mime.startsWith('image/')) return null;
   if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return null;
+  // A preview is best-effort presentation: when the platform cannot mint
+  // an object URL the row degrades to its type icon (the staging row's
+  // fallback), so the failure is absorbed by assignment, never a throw
+  // into the staging path.
+  let previewUrl: string | null = null;
   try {
-    return URL.createObjectURL(file);
+    previewUrl = URL.createObjectURL(file);
   } catch {
-    return null;
+    previewUrl = null;
   }
+  return previewUrl;
 }
 
 export function generateQueueItemId(): string {

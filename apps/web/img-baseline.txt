@@ -15,8 +15,8 @@
 #   src/components/accounts/account-card.tsx              131 (Accounts)
 #   src/components/connect/destination-picker.tsx         131 (destinations)
 #   src/components/media/media-asset-card.tsx             133 (Media Library)
-#   src/components/media/media-import-progress-row.tsx    133 — transient blob: upload preview class (§3.5)
-#   src/components/media/media-import-staging.tsx         133 — transient blob: upload preview class (§3.5)
+#   src/components/media/media-import-progress-row.tsx    133 — OD-133-1(b) ALLOWLISTED (see below)
+#   src/components/media/media-import-staging.tsx         133 — OD-133-1(b) ALLOWLISTED (see below)
 #   src/components/media/media-preview-modal.tsx          133
 #   src/components/media/media-table-row.tsx              133
 #   src/components/pages/add-page-modal.tsx               131
@@ -24,6 +24,15 @@
 #   src/components/pages/dedicated/queue/queue-row.tsx    134 (queue views)
 #   src/components/pages/page-card.tsx                    131
 # No ownerless strays were found, so none are assigned to 130.
+#
+# OD-133-1(b) — DECIDED allowlist (spec 133 §11, PR-133-4): the two
+# media-import <img> rows above STAY as raw <img> elements. They render
+# transient `blob:` object URLs — previews of local files that have
+# not been uploaded yet (staging rows + progress rows). The Next.js
+# image optimiser cannot process `blob:` URLs, so next/image is not an
+# option for this class; the allowlist entry is the honest mechanism
+# (§3.5's per-case route) and the conversion rule stays absolute for
+# real (remote) media, which the rest of spec 133 converts.
 #
 # Format: <file> <count>
 apps/web/src/components/accounts/account-card.tsx 2
