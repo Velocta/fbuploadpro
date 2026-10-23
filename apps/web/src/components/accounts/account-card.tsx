@@ -292,7 +292,7 @@ export function AccountCard({
             )}
           </div>
 
-          <div className="mt-0.5 flex items-center gap-1.5">
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
             <span data-testid="account-health-label" className="inline-flex">
               <StatusDot
                 data-testid="account-health-dot"
@@ -333,7 +333,7 @@ export function AccountCard({
       )}
 
       {/* Card Actions */}
-      <div className="mt-auto flex items-center justify-between gap-2">
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-2">
         {isExpired || isExpiringSoon ? (
           <Button
             type="button"
