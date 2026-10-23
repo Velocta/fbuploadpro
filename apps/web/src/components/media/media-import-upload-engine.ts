@@ -526,9 +526,10 @@ const uploadFile = useCallback(
         )
       );
 
-      if (uploadedItem) {
-        onUploadSuccess?.(uploadedItem);
-      }
+      // The typed confirm either returns the item or throws — success
+      // is only ever announced with a real, server-confirmed item
+      // (spec 114 / UX Rule 17).
+      onUploadSuccess?.(uploadedItem);
     } catch (err: unknown) {
       // Pause/cancel: the user stopped this attempt — stay silent, no retry.
       if (userSignal.aborted) {

@@ -136,8 +136,9 @@ export function ImportStagingRow({
           {showPreview ? (
             /* OD-133-1(b): transient blob: preview of a not-yet-uploaded
                file — allowlisted raw <img>; next/image cannot optimise
-               blob: URLs. Reason recorded in apps/web/img-baseline.txt. */
-            // eslint-disable-next-line @next/next/no-img-element
+               blob: URLs. Reason recorded in apps/web/img-baseline.txt.
+               (The no-img-element rule is frozen off for this file in
+               eslint.config.mjs, per the baseline.) */
             <img
               src={item.previewUrl ?? undefined}
               alt={item.name}

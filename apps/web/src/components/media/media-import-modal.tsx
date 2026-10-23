@@ -86,7 +86,7 @@ export function MediaImportModal({
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(currentFolderId);
   const [queue, setQueue] = useState<ImportQueueItem[]>(() =>
-    isOpen && initialFiles && initialFiles.length > 0
+    isOpen && initialFiles.length > 0
       ? buildImportQueueItems(initialFiles, currentFolderId)
       : []
   );
@@ -105,18 +105,17 @@ export function MediaImportModal({
 
   // Append newly picked files to the staging queue — a second import
   // while one is staged joins the same list, never a second dialog.
+  // (Deduped by name+size inside buildImportQueueItems, so re-runs
+  // when the destination changes are no-ops, as in the legacy modal.)
   useEffect(() => {
-    if (!isOpen || initialFiles.length === 0) return;
+    if (!isOpen || initialFiles.length === 0 || step !== 'staging') return;
 
     setQueue((prevQueue) => {
       const newItems = buildImportQueueItems(initialFiles, selectedFolderId, prevQueue);
       if (newItems.length === 0) return prevQueue;
       return [...prevQueue, ...newItems];
     });
-    // The staging step is only re-entered from a fresh open; appending
-    // during progress is handled by the queue itself.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, initialFiles]);
+  }, [isOpen, initialFiles, selectedFolderId, step]);
 
   // Server-side duplicate detection (single typed call path, §6.1).
   const queueLength = queue.length;
@@ -155,9 +154,8 @@ export function MediaImportModal({
     return () => {
       cancelled = true;
     };
-    // `queue` identity changes on every progress tick; the check keys
-    // off the staged set's size + destination, as the legacy check did.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // `queue` identity changes on every render; the check keys off
+    // the staged set's size + destination, as the legacy check did.
   }, [step, subdomain, selectedFolderId, queueLength]);
 
   // Derived counts

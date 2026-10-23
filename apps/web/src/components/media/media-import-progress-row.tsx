@@ -65,8 +65,8 @@ export function ImportProgressRow({
         <div className="flex size-11.5 shrink-0 items-center justify-center overflow-hidden rounded-xs bg-subtle">
           {item.mediaType === 'image' && item.previewUrl ? (
             /* OD-133-1(b): transient blob: preview — allowlisted raw
-               <img>; see media-import-staging.tsx and img-baseline.txt. */
-            // eslint-disable-next-line @next/next/no-img-element
+               <img>; see media-import-staging.tsx and img-baseline.txt.
+               (Rule frozen off for this file in eslint.config.mjs.) */
             <img
               src={item.previewUrl}
               alt={item.name}
