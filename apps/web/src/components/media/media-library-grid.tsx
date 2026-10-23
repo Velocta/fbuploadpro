@@ -137,7 +137,7 @@ export function MediaCanvas({
             ))}
           </div>
         ) : (
-          <div data-testid="media-table-view" className="mt-1 w-full">
+          <div data-testid="media-table-view" className="mt-1 w-full min-w-0">
             <Table data-testid="media-table">
               <TableHeader>
                 <TableRow>
@@ -286,6 +286,7 @@ export function MediaCanvas({
             <Button
               type="button"
               data-testid="media-empty-upload-btn"
+              aria-label="Upload your first files"
               onClick={onUploadClick}
               className="h-11 md:h-10"
             >
@@ -310,6 +311,7 @@ export function MediaCanvas({
           <Button
             type="button"
             data-testid="media-empty-upload-btn"
+            aria-label="Upload files to this folder"
             onClick={onUploadClick}
             className="h-11 md:h-10"
           >

@@ -532,7 +532,7 @@ export function MediaLibraryExplorer({
       data-testid="media-library-explorer"
       onDragOver={handleDragOverPage}
       onDrop={(e) => handleFilesDrop(e)}
-      className="flex min-h-screen w-full flex-col bg-canvas px-4 py-6 text-ink sm:px-6"
+      className="flex min-h-screen w-full min-w-0 flex-col bg-canvas px-4 py-6 text-ink sm:px-6"
     >
       {/* The single shared/ui Toast system for this surface. */}
       <Toast />

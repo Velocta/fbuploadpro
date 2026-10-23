@@ -95,7 +95,7 @@ export function MediaLibraryMain({
       : null;
 
   return (
-    <main data-testid="media-explorer-body" className="flex w-full flex-col">
+    <main data-testid="media-explorer-body" className="flex w-full min-w-0 flex-col">
       {/* Slim Context Row: Breadcrumb in Plain Text on Left, "Select all" on Right */}
       <div
         data-testid="context-row"
