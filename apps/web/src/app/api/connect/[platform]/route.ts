@@ -33,6 +33,8 @@ import {
 } from '@/lib/connect/session';
 // Registers the YouTube connect config (spec 125) into the framework registry.
 import '@/lib/connect/platforms/youtube';
+// Registers the TikTok connect config (spec 126) into the framework registry.
+import '@/lib/connect/tiktok';
 
 const CONNECT_FAILED = 'connect_failed';
 
