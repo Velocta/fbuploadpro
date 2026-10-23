@@ -37,4 +37,3 @@ empty-catch apps/web/src/lib/auth-redirect.ts 1
 empty-catch apps/web/src/lib/auth/login.ts 1
 empty-catch apps/web/src/lib/server-analytics.ts 1
 empty-catch apps/web/src/lib/timezones.ts 1
-not-ok-return apps/web/src/components/accounts/connect-account-modal.tsx 1
