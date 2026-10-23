@@ -113,6 +113,99 @@ function readServerError(parsed: unknown, status: number): ServerErrorShape {
   return { message, code };
 }
 
+async function performRequest(
+  fetchFn: typeof fetch,
+  url: string,
+  init: RequestInit,
+  signal?: AbortSignal
+): Promise<Response> {
+  try {
+    return await fetchFn(url, init);
+  } catch (error) {
+    if (isAbortRejection(error, signal)) throw abortedError(error);
+    throw networkError(error);
+  }
+}
+
+async function readResponseText(
+  response: Response,
+  signal?: AbortSignal
+): Promise<string> {
+  try {
+    return await response.text();
+  } catch (error) {
+    if (isAbortRejection(error, signal)) throw abortedError(error);
+    throw networkError(error);
+  }
+}
+
+/** The single JSON parse every response goes through. */
+function parseJsonBody(rawText: string): { parsed: unknown; parsedOk: boolean } {
+  if (rawText.length === 0) return { parsed: undefined, parsedOk: true };
+  try {
+    return { parsed: JSON.parse(rawText) as unknown, parsedOk: true };
+  } catch {
+    return { parsed: undefined, parsedOk: false };
+  }
+}
+
+function throwForErrorResponse(
+  response: Response,
+  parsed: unknown,
+  parsedOk: boolean
+): never {
+  const server = readServerError(parsedOk ? parsed : undefined, response.status);
+  const errorOptions = {
+    cause: parsed,
+    ...(server.code !== undefined ? { code: server.code } : {}),
+  };
+  if (response.status === 401) {
+    void handleSessionExpired();
+    throw sessionExpiredError(errorOptions);
+  }
+  throw httpError(response.status, server.message, errorOptions);
+}
+
+function parseSuccessResponse(
+  response: Response,
+  rawText: string,
+  parsed: unknown,
+  parsedOk: boolean,
+  schema: z.ZodTypeAny | undefined,
+  path: string,
+  method: string
+): unknown {
+  if (rawText.length === 0) {
+    if (!schema) return undefined;
+    const error = parseError('The server returned an empty response.', {
+      status: response.status,
+    });
+    reportError(error, { source: 'api-client', path, method });
+    throw error;
+  }
+  if (!parsedOk) {
+    const error = parseError('The server returned a response that was not valid JSON.', {
+      status: response.status,
+      cause: rawText,
+    });
+    reportError(error, { source: 'api-client', path, method });
+    throw error;
+  }
+  if (schema) {
+    const result = schema.safeParse(parsed);
+    if (!result.success) {
+      const error: ApiError = parseError(
+        'The server returned data in an unexpected shape.',
+        { status: response.status, cause: result.error, issues: result.error.issues }
+      );
+      reportError(error, { source: 'api-client', path, method });
+      throw error;
+    }
+    return result.data;
+  }
+  return parsed;
+}
+
 export async function apiFetch<S extends z.ZodTypeAny>(
   path: string,
   options: ApiFetchOptions<S> & { schema: S }
@@ -134,77 +227,19 @@ export async function apiFetch(
   if (bodyInit !== undefined) init.body = bodyInit;
   if (options.signal) init.signal = options.signal;
 
-  let response: Response;
-  try {
-    response = await fetchFn(url, init);
-  } catch (error) {
-    if (isAbortRejection(error, options.signal)) throw abortedError(error);
-    throw networkError(error);
-  }
-
-  let rawText: string;
-  try {
-    rawText = await response.text();
-  } catch (error) {
-    if (isAbortRejection(error, options.signal)) throw abortedError(error);
-    throw networkError(error);
-  }
-
-  let parsed: unknown;
-  let parsedOk = true;
-  if (rawText.length > 0) {
-    try {
-      parsed = JSON.parse(rawText) as unknown;
-    } catch {
-      parsedOk = false;
-    }
-  }
-
-  if (!response.ok) {
-    const server = readServerError(parsedOk ? parsed : undefined, response.status);
-    const errorOptions = {
-      cause: parsed,
-      ...(server.code !== undefined ? { code: server.code } : {}),
-    };
-    if (response.status === 401) {
-      void handleSessionExpired();
-      throw sessionExpiredError(errorOptions);
-    }
-    throw httpError(response.status, server.message, errorOptions);
-  }
-
-  if (rawText.length === 0) {
-    if (!options.schema) return undefined;
-    const error = parseError('The server returned an empty response.', {
-      status: response.status,
-    });
-    reportError(error, { source: 'api-client', path, method });
-    throw error;
-  }
-
-  if (!parsedOk) {
-    const error = parseError('The server returned a response that was not valid JSON.', {
-      status: response.status,
-      cause: rawText,
-    });
-    reportError(error, { source: 'api-client', path, method });
-    throw error;
-  }
-
-  if (options.schema) {
-    const result = options.schema.safeParse(parsed);
-    if (!result.success) {
-      const error: ApiError = parseError(
-        'The server returned data in an unexpected shape.',
-        { status: response.status, cause: result.error, issues: result.error.issues }
-      );
-      reportError(error, { source: 'api-client', path, method });
-      throw error;
-    }
-    return result.data;
-  }
-
-  return parsed;
+  const response = await performRequest(fetchFn, url, init, options.signal);
+  const rawText = await readResponseText(response, options.signal);
+  const { parsed, parsedOk } = parseJsonBody(rawText);
+  if (!response.ok) throwForErrorResponse(response, parsed, parsedOk);
+  return parseSuccessResponse(
+    response,
+    rawText,
+    parsed,
+    parsedOk,
+    options.schema,
+    path,
+    method
+  );
 }
 
 type SchemaOption<S extends z.ZodTypeAny> = ApiFetchOptions<S> & { schema: S };
