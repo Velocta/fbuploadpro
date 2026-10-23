@@ -11,8 +11,8 @@
  * The surface's single data path: every list/folder read and every
  * mutation goes through the typed API client (`lib/api`) + React
  * Query (`lib/data`), replacing the deleted
- * `use-media-library-actions.ts` hook and its twelve raw `fetch(`
- * call sites. No component in the surface talks to the media API
+ * `use-media-library-actions.ts` hook and its twelve raw fetch call
+ * sites. No component in the surface talks to the media API
  * directly any more (the import engine's app-API calls are PR-133-4).
  *
  * Invalidations are named per mutation (spec 137 §3.2 / spec 133 §6.1):
