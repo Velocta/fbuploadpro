@@ -66,7 +66,6 @@ describe("Input / Textarea", () => {
   });
 });
 
-});
 
 describe("Field + FormErrorSummary (form error pattern)", () => {
   it("Field wires label above, hint and inline error into the control ARIA", () => {
