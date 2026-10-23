@@ -32,6 +32,40 @@ export function getRouteSupabase(
   return getSupabaseAdminClient() as SupabaseClient | null;
 }
 
+/**
+ * Shared session guard for API routes (spec 139): verifies the
+ * fbup_session token AND re-validates the session against the live user
+ * record via validateSessionActive (user still exists, status is
+ * 'active', and the token was not issued at or before the latest
+ * password change). Returns null for a missing, invalid, or no-longer-
+ * active session. Deliberately uncached — every call re-reads the user
+ * record, so suspension, deletion, and password rotation revoke
+ * outstanding 30-day tokens on the very next request.
+ */
+export async function extractActiveSession(
+  request: NextRequest
+): Promise<SessionPayload | null> {
+  const sessionCookie = request.cookies.get('fbup_session')?.value;
+  if (!sessionCookie) {
+    return null;
+  }
+
+  let session: SessionPayload | null = null;
+  try {
+    session = await verifySessionToken(sessionCookie, getSessionSecret());
+  } catch {
+    // Invalid/expired token — treated identically to a missing cookie.
+    session = null;
+  }
+  if (!session) {
+    return null;
+  }
+
+  const { validateSessionActive } = await import('@/lib/auth/session');
+  const isActive = await validateSessionActive(session);
+  return isActive ? session : null;
+}
+
 export async function authenticateTenantRoute(
   request: NextRequest,
   subdomain: string
@@ -39,32 +73,8 @@ export async function authenticateTenantRoute(
   | { session: SessionPayload; errorResponse?: never }
   | { session?: never; errorResponse: NextResponse }
 > {
-  const sessionSecret = getSessionSecret();
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return {
-      errorResponse: NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      ),
-    };
-  }
-
-  let session: SessionPayload;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch {
-    return {
-      errorResponse: NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      ),
-    };
-  }
-
-  const { validateSessionActive } = await import('@/lib/auth/session');
-  const isActive = await validateSessionActive(session);
-  if (!isActive) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return {
       errorResponse: NextResponse.json(
         { error: 'Unauthorized' },

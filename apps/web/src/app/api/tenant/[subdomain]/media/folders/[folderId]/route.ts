@@ -5,13 +5,11 @@ import {
   canAccessTenant,
   DeleteFolderResponseSchema,
   FolderResponseSchema,
-  getSessionSecret,
   type IStorageService,
   UpdateFolderRequestSchema,
-  verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { extractActiveSession, isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../../lib/storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -21,17 +19,9 @@ export async function handleUpdateFolder(
   folderId: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -401,17 +391,9 @@ export async function handleDeleteFolder(
   dbClient?: DatabaseClient | SupabaseClient,
   storageService?: IStorageService
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

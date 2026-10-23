@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { extractActiveSession } from '@/lib/route-auth';
 import {
   BulkEnqueueRequestSchema,
   BulkEnqueueResponseSchema,
   canAccessTenant,
-  getSessionSecret,
-  verifySessionToken,
   type BulkQueueItem,
   type BulkEnqueueItemResult,
 } from '@fbuploadpro/contracts';
@@ -72,18 +71,10 @@ export async function POST(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
-  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

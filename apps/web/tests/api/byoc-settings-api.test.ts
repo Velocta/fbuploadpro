@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import { GET as getBYOC, PUT as saveBYOC, DELETE as deleteBYOC } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
 import * as authModule from '@/lib/auth/clients';
+import { _seedTestUser } from '@/lib/auth/stores';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -52,6 +53,17 @@ describe('Facebook BYOC Settings API Routes', () => {
       TEST_SECRET
     );
     validSessionCookie = `fbup_session=${token}`;
+    // Spec 139: routes re-validate the session against the live user
+    // record — seed the token's user as active so the guard passes.
+    await _seedTestUser({
+      id: userId,
+      email: 'alexfounder@gmail.com',
+      name: 'Alex Founder',
+      phone: null,
+      subdomain: 'acme',
+      role: 'user',
+      status: 'active',
+    });
 
     const otherToken = await signSessionToken(
       {
