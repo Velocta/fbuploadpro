@@ -58,6 +58,8 @@ export function DownloaderProgress({
   if (batchProgress.currentUrl && isDownloading) {
     descriptionParts.push(batchProgress.currentUrl);
   }
+  const description =
+    descriptionParts.length > 0 ? descriptionParts.join(' ') : undefined;
 
   return (
     <section
@@ -76,9 +78,7 @@ export function DownloaderProgress({
         title={`Saving ${batchProgress.completedLinks} of ${batchProgress.totalLinks} ${
           batchProgress.totalLinks === 1 ? 'link' : 'links'
         } to Media Library...`}
-        description={
-          descriptionParts.length > 0 ? descriptionParts.join(' ') : undefined
-        }
+        {...(description ? { description } : {})}
         action={
           <div className="flex items-center gap-4">
             <span
