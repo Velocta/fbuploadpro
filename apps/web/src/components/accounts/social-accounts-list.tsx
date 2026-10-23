@@ -23,7 +23,6 @@ import Link from 'next/link';
 
 import { StatusDot } from '@/components/shared/ui/status-dot';
 import { PLATFORM_LABELS, type Platform } from '@/lib/connect/registry';
-import { cn } from '@/lib/utils';
 
 export interface SocialDestinationItem {
   id: string;
@@ -110,7 +109,7 @@ function SocialAccountBlock({
   return (
     <div
       data-testid={`social-account-${account.id}`}
-      className={cn('px-6 py-4', !isFirst && 'border-t border-line')}
+      className={isFirst ? 'px-6 py-4' : 'border-t border-line px-6 py-4'}
     >
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <StatusDot
