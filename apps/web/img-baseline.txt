@@ -12,7 +12,6 @@
 #
 # Conversion owners (each surface ends at zero outside the blob:
 # preview exception, decided per case in the surface PR per §3.5):
-#   src/components/accounts/account-card.tsx              131 (Accounts)
 #   src/components/connect/destination-picker.tsx         131 (destinations)
 #   src/components/media/media-asset-card.tsx             133 (Media Library)
 #   src/components/media/media-import-progress-row.tsx    133 — OD-133-1(b) ALLOWLISTED (see below)
@@ -35,7 +34,6 @@
 # real (remote) media, which the rest of spec 133 converts.
 #
 # Format: <file> <count>
-apps/web/src/components/accounts/account-card.tsx 2
 apps/web/src/components/connect/destination-picker.tsx 1
 apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
