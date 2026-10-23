@@ -241,7 +241,7 @@ export function MediaTableRow({
               data-testid={`row-action-preview-${item.id}`}
               onClick={() => onPreview(item)}
               aria-label="Preview asset"
-              className="h-10 px-3 md:h-8"
+              className="h-11 px-3 md:h-8"
             >
               Preview
             </Button>
@@ -255,7 +255,7 @@ export function MediaTableRow({
               data-testid={`row-action-move-${item.id}`}
               onClick={() => onMoveRequest(item)}
               aria-label="Move asset"
-              className="h-10 px-3 md:h-8"
+              className="h-11 px-3 md:h-8"
             >
               Move
             </Button>
@@ -269,7 +269,7 @@ export function MediaTableRow({
               data-testid={`row-action-delete-${item.id}`}
               onClick={() => onDeleteRequest(item)}
               aria-label="Delete asset"
-              className="h-10 px-3 text-brand-rose hover:text-brand-rose md:h-8"
+              className="h-11 px-3 text-brand-rose hover:text-brand-rose md:h-8"
             >
               Delete
             </Button>

@@ -70,12 +70,14 @@ export function MediaLibraryHeader({
             <span>New Folder</span>
           </Button>
 
-          {/* Single Primary Button: Upload Files (UI Rule 1) */}
+          {/* Single Primary Button: Upload Files (UI Rule 1).
+              44px at every width — the surface's primary touch target
+              (spec 142 gate). */}
           <Button
             type="button"
             data-testid="upload-files-btn"
             onClick={onUploadClick}
-            className="h-11 md:h-10"
+            className="h-11"
           >
             <UploadIcon aria-hidden />
             <span>Upload Files</span>
