@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+// Side effect: registers the X connect config (spec 127).
+import '@/lib/connect/platforms/x';
 import {
   getPlatformConnectConfig,
   isByocPlatform,
