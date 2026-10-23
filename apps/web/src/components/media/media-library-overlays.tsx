@@ -11,10 +11,10 @@
  * is a shared/ui Dialog/AlertDialog — no hand-rolled fixed layers
  * and no ad-hoc layering values.
  *
- * FROZEN PREVIEW PROPS CONTRACT (for PR-133-5): the preview is
- * mounted here as
+ * FROZEN PREVIEW PROPS CONTRACT (frozen in PR-133-3, honoured by
+ * PR-133-5): the preview is mounted here as
  *   <MediaPreviewModal item open onOpenChange onSave onDelete />
- * with `MediaPreviewModalProps` as exported today from
+ * with `MediaPreviewModalProps` as exported from
  * `media-preview-modal.tsx`:
  *   item: MediaItemResponse | null
  *   open: boolean
@@ -24,18 +24,23 @@
  *   onSave?: (mediaId: string, updates: { name?: string; captionText?: string }) => Promise<void> | void
  *   onUpdateThumbnail?: (mediaId: string, captured: CapturedVideoFrame) => Promise<void> | void
  *   onDelete?: (mediaId: string) => Promise<void> | void
- * PR-133-5 decomposes the preview's internals only — this contract
- * does not change.
+ * PR-133-5 decomposed the preview's internals only — this contract
+ * did not change. Its two seam changes in this file (named in the
+ * plan): the preview now loads behind next/dynamic (closed-by-default
+ * rule, §6.6), and its onSave below goes through the typed API
+ * client — the preview's raw fetch was the last app-API raw fetch
+ * in the surface (spec §7.1).
  */
 
 import React from 'react';
 import dynamic from 'next/dynamic';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
+import { api, buildTenantApiPath } from '@/lib/api';
+import { MediaItemSchema } from '@/lib/api/schemas/media';
 import { BatchActionBar } from './batch-action-bar';
 import { BatchSetCaptionModal } from './batch-set-caption-modal';
 import { NewFolderModal } from './new-folder-modal';
 import { LeavePageGuardDialog } from './leave-page-guard-dialog';
-import { MediaPreviewModal } from './media-preview-modal';
 import { MoveTargetDialog } from './media-move-dialog';
 import { RenameFolderDialog } from './media-rename-folder-dialog';
 import { DeleteFolderDialog } from './media-delete-folder-dialog';
@@ -52,6 +57,20 @@ const MediaImportModal = dynamic(
   () =>
     import('./media-import-modal').then((m) => ({
       default: m.MediaImportModal,
+    })),
+  { ssr: false }
+);
+
+/**
+ * The preview modal is closed-by-default UI too (spec 133 §6.6 /
+ * 137 §3.6.1): it loads behind next/dynamic so a closed preview
+ * ships nothing in the media route's initial bundle. (PR-133-5's
+ * named mount change in this file.)
+ */
+const MediaPreviewModal = dynamic(
+  () =>
+    import('./media-preview-modal').then((m) => ({
+      default: m.MediaPreviewModal,
     })),
   { ssr: false }
 );
@@ -254,10 +273,12 @@ export function MediaLibraryOverlays({
           if (!open) setPreviewItem(null);
         }}
         onSave={async (id, updates) => {
-          await fetch(`/api/tenant/${subdomain}/media/${id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updates),
+          // Typed client (PR-133-5): this PATCH was the surface's
+          // last app-API raw fetch. A failure now throws through
+          // the typed client and the preview shell presents it
+          // inline, instead of the legacy silent "saved" toast.
+          await api.patch(buildTenantApiPath(subdomain, `/media/${id}`), updates, {
+            schema: MediaItemSchema,
           });
           showToast('Changes saved');
           await refreshLibraryData();

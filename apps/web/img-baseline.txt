@@ -39,7 +39,6 @@ apps/web/src/components/accounts/account-card.tsx 2
 apps/web/src/components/connect/destination-picker.tsx 1
 apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
-apps/web/src/components/media/media-preview-modal.tsx 2
 apps/web/src/components/pages/add-page-modal.tsx 3
 apps/web/src/components/pages/dedicated/page-header.tsx 1
 apps/web/src/components/pages/dedicated/queue/queue-row.tsx 1

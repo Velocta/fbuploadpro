@@ -105,7 +105,6 @@ export default [
       "apps/web/src/components/connect/destination-picker.tsx",
       "apps/web/src/components/media/media-import-progress-row.tsx",
       "apps/web/src/components/media/media-import-staging.tsx",
-      "apps/web/src/components/media/media-preview-modal.tsx",
       "apps/web/src/components/pages/add-page-modal.tsx",
       "apps/web/src/components/pages/dedicated/page-header.tsx",
       "apps/web/src/components/pages/dedicated/queue/queue-row.tsx",
