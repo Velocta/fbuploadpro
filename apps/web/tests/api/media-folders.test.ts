@@ -237,15 +237,17 @@ describe('Nested Media Folders CRUD, Reparenting & Cascading Deletion', () => {
       expect(res.status).toBe(200);
       const data = await res.json();
       expect(data.folders).toHaveLength(3);
-      const byId = new Map(data.folders.map((f: any) => [f.id, f]));
-      expect(byId.get(folderId).itemCount).toBe(2);
-      expect(byId.get(folderId).subfolderCount).toBe(1);
-      expect(byId.get(folderId).parentId).toBeNull();
-      expect(byId.get(childFolderId).itemCount).toBe(3);
-      expect(byId.get(childFolderId).subfolderCount).toBe(0);
-      expect(byId.get(childFolderId).parentId).toBe(folderId);
-      expect(byId.get(emptyFolderId).itemCount).toBe(0);
-      expect(byId.get(emptyFolderId).subfolderCount).toBe(0);
+      const byId = new Map<string, any>(
+        data.folders.map((f: any) => [f.id, f] as [string, any])
+      );
+      expect(byId.get(folderId)?.itemCount).toBe(2);
+      expect(byId.get(folderId)?.subfolderCount).toBe(1);
+      expect(byId.get(folderId)?.parentId).toBeNull();
+      expect(byId.get(childFolderId)?.itemCount).toBe(3);
+      expect(byId.get(childFolderId)?.subfolderCount).toBe(0);
+      expect(byId.get(childFolderId)?.parentId).toBe(folderId);
+      expect(byId.get(emptyFolderId)?.itemCount).toBe(0);
+      expect(byId.get(emptyFolderId)?.subfolderCount).toBe(0);
       expect(data.unorganizedCount).toBe(4);
     });
   });
