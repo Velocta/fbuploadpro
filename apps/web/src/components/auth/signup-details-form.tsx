@@ -1,0 +1,405 @@
+'use client';
+
+/**
+ * Signup details form (spec 136 §5.2) — the registration details step,
+ * extracted from the signup page and converted to the form standard
+ * (spec 137 §3.8): react-hook-form + zod on the shared/ui Form
+ * primitives, `onTouched` validation, `FormErrorSummary` on submit
+ * failure, input never cleared, submit through the typed API client.
+ *
+ * Preserved behaviours (§4.2): the Gmail rule and phone validation with
+ * §3.3's wording, server 400 field errors mapped inline, the 429
+ * cooldown surfacing the §3.3 wait message with the submit disabled
+ * while it counts down, the already-registered conflict panel offering
+ * `Sign in instead` / `Reset password` in place, and the pending-
+ * verification success notice (`Code Sent`).
+ */
+
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormErrorSummary,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  type FormErrorSummaryEntry,
+} from '@/components/shared/ui/form';
+import { Input } from '@/components/shared/ui/input';
+import { Button } from '@/components/shared/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/shared/ui/alert';
+import { PasswordInput } from '@/components/auth/password-input';
+import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
+import { completeAuthRedirect } from '@/lib/auth-broadcast';
+import { api, isApiError } from '@/lib/api';
+import {
+  SignupSuccessResponseSchema,
+  type SignupErrorBody,
+} from '@/lib/api/schemas/auth';
+import { reportError } from '@/lib/report-error';
+import { signupFormSchema, type SignupFormValues } from '@/app/signup/signup-form-schema';
+
+export interface SignupDetailsFormProps {
+  /** Email arriving via the page's entry parameters (`?email=`). */
+  initialEmail?: string | undefined;
+  /** Pending-verification notice arriving via `?notice=pending_verification`. */
+  successNotice?: string | null | undefined;
+  onDismissSuccessNotice?: (() => void) | undefined;
+  /** The details step succeeded and the server asked for the OTP step. */
+  onRequiresOtp: (email: string, cooldownSecondsRemaining: number) => void;
+}
+
+type SignupFieldName = 'name' | 'phone' | 'email' | 'password' | 'confirmPassword';
+
+const FIELD_IDS: Record<SignupFieldName, string> = {
+  name: 'signup-name',
+  phone: 'signup-phone',
+  email: 'signup-email',
+  password: 'signup-password',
+  confirmPassword: 'signup-confirm-password',
+};
+
+const FIELD_ORDER: SignupFieldName[] = ['name', 'phone', 'email', 'password', 'confirmPassword'];
+
+export function SignupDetailsForm({
+  initialEmail,
+  successNotice,
+  onDismissSuccessNotice,
+  onRequiresOtp,
+}: Readonly<SignupDetailsFormProps>) {
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [isEmailConflict, setIsEmailConflict] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+
+  const form = useForm<SignupFormValues>({
+    resolver: zodResolver(signupFormSchema),
+    mode: 'onTouched',
+    shouldFocusError: false,
+    defaultValues: {
+      name: '',
+      phone: '',
+      email: initialEmail ?? '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
+  const { formState } = form;
+  const isSubmitting = formState.isSubmitting;
+  const emailValue = form.watch('email');
+
+  // Entry-parameter prefill (`?email=`, read by the page after mount):
+  // applied once it arrives, without overwriting anything typed since.
+  const appliedInitialEmail = React.useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!initialEmail || appliedInitialEmail.current === initialEmail) return;
+    appliedInitialEmail.current = initialEmail;
+    if (!form.getValues('email')) {
+      form.setValue('email', initialEmail);
+    }
+  }, [initialEmail, form]);
+
+  // Cooldown countdown after a rate-limited signup attempt (§3.3).
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const interval = setInterval(() => {
+      setCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [cooldown]);
+
+  const handleServerFieldErrors = (body: SignupErrorBody): boolean => {
+    if (!body.details) return false;
+    let mapped = false;
+    for (const name of FIELD_ORDER) {
+      const messages = body.details[name];
+      if (Array.isArray(messages) && messages.length > 0 && typeof messages[0] === 'string') {
+        form.setError(name, { type: 'server', message: messages[0] });
+        mapped = true;
+      }
+    }
+    return mapped;
+  };
+
+  const onSubmit = async (values: SignupFormValues) => {
+    setSubmitAttempted(true);
+    setServerError(null);
+    setIsEmailConflict(false);
+    try {
+      const data = await api.post(
+        '/api/auth/signup',
+        {
+          name: values.name.trim(),
+          phone: values.phone.trim(),
+          email: values.email.trim(),
+          password: values.password,
+        },
+        { schema: SignupSuccessResponseSchema }
+      );
+
+      if (data.requiresOtp) {
+        onRequiresOtp(values.email.trim(), data.cooldownSecondsRemaining ?? 60);
+        return;
+      }
+      if (data.redirectUrl) {
+        completeAuthRedirect(data.redirectUrl, data.user);
+      }
+    } catch (error) {
+      if (!isApiError(error)) {
+        reportError(error, { source: 'signup-submit' });
+        setServerError("Couldn't create your account. Please check your connection and try again.");
+        return;
+      }
+      const body = (error.cause ?? null) as SignupErrorBody | null;
+
+      if (error.status === 400 && body && handleServerFieldErrors(body)) {
+        return;
+      }
+      if (error.status === 429) {
+        const waitSeconds = body?.retryAfterSeconds || body?.cooldownSecondsRemaining || 60;
+        setCooldown(waitSeconds);
+        setServerError(
+          sanitizeAuthErrorMessage(
+            body?.error,
+            `For security purposes, please wait ${waitSeconds} seconds before trying again.`
+          )
+        );
+        return;
+      }
+      if (
+        error.status === 409 ||
+        body?.error?.toLowerCase().includes('already registered')
+      ) {
+        setIsEmailConflict(true);
+        form.setError('email', {
+          type: 'server',
+          message: 'This email is already registered.',
+        });
+        return;
+      }
+      if (error.kind === 'network') {
+        setServerError("Couldn't create your account. Please check your connection and try again.");
+        return;
+      }
+      if (error.kind === 'parse' || (error.status !== undefined && error.status >= 500)) {
+        reportError(error, { source: 'signup-submit', kind: error.kind, status: error.status });
+      }
+      setServerError(
+        sanitizeAuthErrorMessage(body?.error, "Couldn't create your account. Please try again shortly.")
+      );
+    }
+  };
+
+  const summaryErrors: FormErrorSummaryEntry[] = [
+    ...FIELD_ORDER.flatMap((name) => {
+      const message = formState.errors[name]?.message;
+      return message ? [{ fieldId: FIELD_IDS[name], message: String(message) }] : [];
+    }),
+    ...(serverError ? [{ message: serverError }] : []),
+  ];
+
+  return (
+    <Form {...form}>
+      <form
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={form.handleSubmit(onSubmit, () => setSubmitAttempted(true))}
+      >
+        {successNotice && (
+          <Alert variant="success">
+            <div className="flex flex-col gap-1">
+              <AlertTitle>Code Sent</AlertTitle>
+              <AlertDescription>{successNotice}</AlertDescription>
+            </div>
+            {onDismissSuccessNotice && (
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={onDismissSuccessNotice}
+                className="shrink-0 text-ink-sub hover:text-ink"
+              >
+                ×
+              </button>
+            )}
+          </Alert>
+        )}
+
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }) => (
+            <FormItem id={FIELD_IDS.name}>
+              <FormLabel>Full Name</FormLabel>
+              <FormControl>
+                <Input
+                  placeholder="Jane Doe"
+                  autoComplete="name"
+                  required
+                  disabled={isSubmitting}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="phone"
+          render={({ field }) => (
+            <FormItem id={FIELD_IDS.phone}>
+              <FormLabel>Phone Number</FormLabel>
+              <FormControl>
+                <Input
+                  type="tel"
+                  placeholder="+1 555 123 4567"
+                  autoComplete="tel"
+                  required
+                  disabled={isSubmitting}
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>
+                Include country code starting with + (e.g. +1... or +92...)
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem id={FIELD_IDS.email}>
+              <FormLabel>Email Address</FormLabel>
+              <FormControl>
+                <Input
+                  type="email"
+                  placeholder="you@gmail.com"
+                  autoComplete="email"
+                  required
+                  disabled={isSubmitting}
+                  {...field}
+                  onChange={(e) => {
+                    field.onChange(e);
+                    if (isEmailConflict) setIsEmailConflict(false);
+                  }}
+                />
+              </FormControl>
+              <FormDescription>Only @gmail.com accounts are supported</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {isEmailConflict && (
+          <div className="-mt-2 flex items-center gap-2 text-metadata">
+            <Link
+              href={`/login?email=${encodeURIComponent(emailValue.trim())}`}
+              className="font-medium text-link underline"
+            >
+              Sign in instead
+            </Link>
+            <span className="text-ink-dim">•</span>
+            <Link
+              href={`/forgot-password?email=${encodeURIComponent(emailValue.trim())}`}
+              className="font-medium text-link underline"
+            >
+              Reset password
+            </Link>
+          </div>
+        )}
+
+        <FormField
+          control={form.control}
+          name="password"
+          render={({ field }) => (
+            <FormItem id={FIELD_IDS.password}>
+              <FormLabel>Password</FormLabel>
+              <FormControl>
+                <PasswordInput
+                  placeholder="••••••••••••"
+                  autoComplete="new-password"
+                  required
+                  disabled={isSubmitting}
+                  {...field}
+                />
+              </FormControl>
+              <FormDescription>Minimum 8 characters</FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="confirmPassword"
+          render={({ field }) => (
+            <FormItem id={FIELD_IDS.confirmPassword}>
+              <FormLabel>Confirm Password</FormLabel>
+              <FormControl>
+                <PasswordInput
+                  placeholder="••••••••••••"
+                  autoComplete="new-password"
+                  required
+                  disabled={isSubmitting}
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {submitAttempted && <FormErrorSummary errors={summaryErrors} />}
+
+        <Button
+          type="submit"
+          size="lg"
+          loading={isSubmitting}
+          disabled={cooldown > 0}
+          disabledReason={
+            cooldown > 0
+              ? `For security purposes, please wait ${cooldown} seconds before trying again.`
+              : undefined
+          }
+          className="mt-1 w-full"
+        >
+          {cooldown > 0 ? `Please wait (${cooldown}s)` : 'Create Account'}
+        </Button>
+
+        <p className="mt-1 text-center text-metadata leading-body text-ink-dim">
+          By creating an account, you agree to our{' '}
+          <a
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Terms of Service (opens in a new tab)"
+            className="font-medium text-link no-underline hover:underline"
+          >
+            Terms of Service
+          </a>{' '}
+          and{' '}
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Privacy Policy (opens in a new tab)"
+            className="font-medium text-link no-underline hover:underline"
+          >
+            Privacy Policy
+          </a>
+          .
+        </p>
+      </form>
+    </Form>
+  );
+}

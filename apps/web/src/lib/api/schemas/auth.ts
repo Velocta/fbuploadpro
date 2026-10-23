@@ -40,3 +40,62 @@ export interface LoginErrorBody {
   redirectUrl?: string;
   details?: Record<string, string[]>;
 }
+
+/* ------------------------------------------------------------------ */
+/* Signup + OTP (spec 136 PR-136B — additive; the login schemas above  */
+/* are untouched). Success bodies exactly as their route handlers      */
+/* construct them:                                                     */
+/*   POST /api/auth/signup        → { success, requiresOtp,            */
+/*     cooldownSecondsRemaining, email, message }                      */
+/*   POST /api/auth/signup/verify-otp → 201 { success, user,          */
+/*     redirectUrl }                                                   */
+/*   POST /api/auth/signup/resend-otp → { success, message }           */
+/* Error bodies are control flow (400 `details`, 409 conflict, 429     */
+/* cooldown) and are read from the thrown `ApiError`'s `cause`.        */
+/* ------------------------------------------------------------------ */
+
+export const SignupSuccessResponseSchema = z.object({
+  success: z.literal(true),
+  requiresOtp: z.boolean().optional(),
+  cooldownSecondsRemaining: z.number().optional(),
+  email: z.string().optional(),
+  message: z.string().optional(),
+  redirectUrl: z.string().optional(),
+  user: LoginUserSchema.optional(),
+});
+export type SignupSuccessResponse = z.infer<typeof SignupSuccessResponseSchema>;
+
+/** The signup route's error body shape, read from an `ApiError` cause. */
+export interface SignupErrorBody {
+  error?: string;
+  details?: Record<string, string[]>;
+  retryAfterSeconds?: number;
+  cooldownSecondsRemaining?: number;
+}
+
+export const VerifyOtpSuccessResponseSchema = z.object({
+  success: z.literal(true),
+  user: LoginUserSchema,
+  redirectUrl: z.string(),
+});
+export type VerifyOtpSuccessResponse = z.infer<typeof VerifyOtpSuccessResponseSchema>;
+
+/** The verify-otp route's error body shape, read from an `ApiError` cause. */
+export interface VerifyOtpErrorBody {
+  error?: string;
+  retryAfterSeconds?: number;
+  cooldownSecondsRemaining?: number;
+}
+
+export const ResendOtpSuccessResponseSchema = z.object({
+  success: z.literal(true),
+  message: z.string().optional(),
+});
+export type ResendOtpSuccessResponse = z.infer<typeof ResendOtpSuccessResponseSchema>;
+
+/** The resend-otp route's error body shape, read from an `ApiError` cause. */
+export interface ResendOtpErrorBody {
+  error?: string;
+  retryAfterSeconds?: number;
+  cooldownSecondsRemaining?: number;
+}
