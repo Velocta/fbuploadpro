@@ -332,4 +332,31 @@ describe('ThreadsPublisher (spec 124)', () => {
     expect(mock.refreshCalls).toBe(1);
     expect(refreshed.accessToken).toBe('threads-access-token-refreshed');
   });
+
+  it('missing media URL: publish() RESOLVES with a permanent validation failure (never throws, no container)', async () => {
+    const mock = new MockThreadsPublishClient();
+    const outcome = await publisherWith(mock).publish(
+      makeItem({ kind: 'image', platform_format: 'image', media_url: null }),
+      makeDestination(),
+      TOKENS
+    );
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error?.kind).toBe('permanent');
+    expect(outcome.error?.code).toBe('validation');
+    expect(mock.containersCreated).toHaveLength(0);
+  });
+
+  it('live quota at the cap defers (publishing_limit_reached) and creates no container', async () => {
+    const mock = new MockThreadsPublishClient();
+    mock.limitToReturn = { usage: 250, totalCount: 250, raw: {} };
+    const outcome = await publisherWith(mock).publish(makeItem(), makeDestination(), TOKENS);
+    expect(outcome.status).toBe('retry');
+    expect(outcome.error?.kind).toBe('retryable');
+    expect(outcome.error?.code).toBe('publishing_limit_reached');
+    expect(outcome.retryDelaySeconds).toBe(3600);
+    expect(outcome.detail).toMatchObject({
+      publishingLimit: { usage: 250, totalCount: 250 },
+    });
+    expect(mock.containersCreated).toHaveLength(0);
+  });
 });

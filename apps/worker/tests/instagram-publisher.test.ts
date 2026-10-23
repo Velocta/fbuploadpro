@@ -336,14 +336,30 @@ describe('InstagramPublisher (spec 124)', () => {
     expect(mock.containersCreated).toHaveLength(0);
   });
 
-  it('missing media URL fails without a container', async () => {
+  it('missing media URL fails PERMANENTLY as a validation error, without a container', async () => {
     const mock = new MockInstagramPublishClient();
     const outcome = await publisherWith(mock).publish(
       makeItem({ media_url: null }),
       makeDestination(),
       TOKENS
     );
+    expect(outcome.status).toBe('failed');
+    expect(outcome.error?.kind).toBe('permanent');
+    expect(outcome.error?.code).toBe('validation');
+    expect(mock.containersCreated).toHaveLength(0);
+  });
+
+  it('live quota at the cap defers (publishing_limit_reached) and creates no container', async () => {
+    const mock = new MockInstagramPublishClient();
+    mock.limitToReturn = { usage: 50, totalCount: 50, raw: {} };
+    const outcome = await publisherWith(mock).publish(makeItem(), makeDestination(), TOKENS);
     expect(outcome.status).toBe('retry');
+    expect(outcome.error?.kind).toBe('retryable');
+    expect(outcome.error?.code).toBe('publishing_limit_reached');
+    expect(outcome.retryDelaySeconds).toBe(3600);
+    expect(outcome.detail).toMatchObject({
+      publishingLimit: { usage: 50, totalCount: 50 },
+    });
     expect(mock.containersCreated).toHaveLength(0);
   });
 });
