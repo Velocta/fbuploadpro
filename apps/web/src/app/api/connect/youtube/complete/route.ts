@@ -46,7 +46,14 @@ async function readPendingPick(
       pendingCookie,
       getSessionSecret()
     );
-  } catch {
+  } catch (err) {
+    // Not fatal here: the framework's complete handler re-verifies
+    // the cookie and produces the connect error response. We only
+    // lose the provider-ref patch for this attempt, so log it.
+    console.error(
+      '[connect/youtube] Pending cookie could not be verified for the provider-ref patch:',
+      err
+    );
     return null;
   }
   if (pending.platform !== 'youtube') return null;
@@ -63,7 +70,13 @@ async function readPendingPick(
         )
       );
     }
-  } catch {
+  } catch (err) {
+    // Body unreadable: no picks can be identified, so no provider
+    // ref is patched. The framework handler surfaces the body error.
+    console.error(
+      '[connect/youtube] Complete body could not be read for the provider-ref patch:',
+      err
+    );
     return { pending, pickedExternalIds: [], providerAccountId: null };
   }
 
