@@ -291,6 +291,10 @@ jobs:
     # run through the rig's existing env-var config surface, unchanged:
     #   - spec 117 RLS rig (apps/worker/tests/rls-rpc): 44 assertions,
     #     RLS_RPC_PG_URL, hardened mode (the default).
+    #   - spec 139 db-hygiene rig (apps/worker/tests/db-hygiene):
+    #     58 assertions, DB_HYGIENE_PG_URL, hardened mode — recovery
+    #     index + trigger EXECUTE revokes (20261023193000) and the
+    #     posting_slots unique constraint (20261024100000, N5).
     #   - spec 138 claim-RPC parity rig (apps/worker/tests/claim-rpc):
     #     12 cases / 77 checks, CLAIM_RPC_PG_URL, against the post-fix
     #     (all-migrations) database.
@@ -349,7 +353,7 @@ jobs:
           node --input-type=module -e "
           import pg from 'pg';
           const pool = new pg.Pool({ connectionString: 'postgres://postgres:postgres@localhost:5432/postgres' });
-          for (const db of ['rls117', 'claim138_parity', 'claim138_scale', 'settle139']) {
+          for (const db of ['rls117', 'claim138_parity', 'claim138_scale', 'settle139', 'dbhygiene139']) {
             await pool.query('CREATE DATABASE ' + db);
             console.log('created database ' + db);
           }
@@ -375,6 +379,16 @@ jobs:
         env:
           SETTLE_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/settle139
         run: pnpm --filter @fbuploadpro/worker exec tsx tests/settle-rpc/check.ts
+
+      - name: Spec 139 db-hygiene rig — apply bootstrap + migrations
+        env:
+          DB_HYGIENE_PG_URL: postgres://postgres:postgres@localhost:5432/dbhygiene139
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/db-hygiene/db/run-migrations.ts
+
+      - name: Spec 139 db-hygiene rig — 58 assertions (hardened mode)
+        env:
+          DB_HYGIENE_PG_URL: postgres://postgres:postgres@localhost:5432/dbhygiene139
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/db-hygiene/check.ts
 
       - name: Spec 138 claim-RPC rig — apply bootstrap + migrations (parity DB)
         env:
