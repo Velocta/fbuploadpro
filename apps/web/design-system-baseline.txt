@@ -30,7 +30,17 @@
 # values (text-[13px], bg-[#fad734], z-[9999], ...) and important-modifier
 # classes are BANNED in apps/web/src. An exception needs a line here:
 #   arbitrary-allow <path> <exact-class-token>   # plus a reason in the PR
-# There are currently NO exceptions.
+# Exceptions (ONE, named): the four `transition-[...]` property-list classes
+# in components/shared/ui/sidebar.tsx come verbatim from the upstream shadcn
+# sidebar (PR-F3 rebuilds that same sidebar, per Shahzeb's directive): they
+# name CSS properties only and carry NO design value (durations/easing are
+# the duration-base / ease-standard tokens). Accepted as a named baseline
+# exception at the #658 merge (Shahzeb-approved, gate-recommended);
+# zero behaviour change.
+arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width]
+arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[left,right,width]
+arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[margin,opacity]
+arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width,height,padding]
 hex apps/web/src/components/auth/auth-split-layout.tsx 2
 hex apps/web/src/components/brand/brand-logo.tsx 10
 hex apps/web/src/components/connect/byoc-gate.tsx 2
