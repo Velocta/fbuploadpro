@@ -407,8 +407,8 @@ interface PagedRowsResult {
 async function fetchAllRowsPaged(
   buildPageQuery: (from: number, to: number) => PromiseLike<PagedRowsResult>,
   failurePrefix: string
-): Promise<Array<Record<string, any>>> {
-  const rows: Array<Record<string, any>> = [];
+): Promise<Array<Record<string, unknown>>> {
+  const rows: Array<Record<string, unknown>> = [];
   for (let page = 0; page < SOCIAL_LIST_MAX_PAGES; page++) {
     const from = page * SOCIAL_LIST_PAGE_SIZE;
     const { data, error } = await buildPageQuery(
@@ -418,7 +418,7 @@ async function fetchAllRowsPaged(
     if (error) {
       throw new Error(`${failurePrefix}: ${error.message}`);
     }
-    const pageRows = (data ?? []) as Array<Record<string, any>>;
+    const pageRows = (data ?? []) as Array<Record<string, unknown>>;
     rows.push(...pageRows);
     if (pageRows.length < SOCIAL_LIST_PAGE_SIZE) {
       return rows;
