@@ -1,4 +1,9 @@
-import { InternalError } from '@fbuploadpro/contracts';
+import {
+  InternalError,
+  X_GIF_MAX_BYTES,
+  X_IMAGE_MAX_BYTES,
+  X_VIDEO_MAX_BYTES,
+} from '@fbuploadpro/contracts';
 
 // ==========================================
 // X API client (spec 127)
@@ -143,6 +148,30 @@ export interface IXClient {
   }): Promise<XTokenResponse>;
 }
 
+/**
+ * Per-category byte caps (spec 127 Scope.3 conservative v1 limits, from
+ * contracts). Enforced in `uploadMediaChunked` once the total byte count
+ * is known and BEFORE the initialize call — an oversize file fails
+ * permanently without any upload traffic.
+ */
+const MEDIA_CATEGORY_MAX_BYTES: Record<string, number> = {
+  tweet_image: X_IMAGE_MAX_BYTES,
+  tweet_gif: X_GIF_MAX_BYTES,
+  tweet_video: X_VIDEO_MAX_BYTES,
+};
+
+function assertMediaWithinLimit(mediaCategory: string, totalBytes: number): void {
+  const maxBytes = MEDIA_CATEGORY_MAX_BYTES[mediaCategory];
+  if (maxBytes !== undefined && totalBytes > maxBytes) {
+    throw new XApiError(413, {
+      error: 'media_too_large',
+      detail:
+        `This file is ${totalBytes} bytes, over the ${maxBytes}-byte limit ` +
+        'for this kind of post on X.',
+    });
+  }
+}
+
 export interface XClientOptions {
   baseUrl?: string;
   fetchFn?: typeof fetch;
@@ -266,6 +295,7 @@ export class XClient implements IXClient {
     const totalBytes = contentLengthHeader ? Number(contentLengthHeader) : Number.NaN;
 
     if (Number.isFinite(totalBytes) && totalBytes >= 0) {
+      assertMediaWithinLimit(input.mediaCategory, totalBytes);
       const mediaId = await this.initializeUpload(accessToken, {
         mediaType: input.mediaType,
         mediaCategory: input.mediaCategory,
@@ -285,6 +315,7 @@ export class XClient implements IXClient {
       segments.push(segment);
       counted += segment.byteLength;
     }
+    assertMediaWithinLimit(input.mediaCategory, counted);
     const mediaId = await this.initializeUpload(accessToken, {
       mediaType: input.mediaType,
       mediaCategory: input.mediaCategory,

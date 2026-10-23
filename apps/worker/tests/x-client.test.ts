@@ -264,3 +264,103 @@ describe('XClient tweets + timeline + token endpoint', () => {
     expect(parseXRateLimitHeaders(null)).toBeUndefined();
   });
 });
+
+// ==========================================
+// Media size caps — rejected BEFORE the initialize call
+// (post-merge verification fix: validateXMedia had no enforcement
+// call site; the caps now live where the byte count is known)
+// ==========================================
+
+describe('XClient media size caps', () => {
+  function makeCappedFetch(sourceResponse: Response, apiCalls: string[]) {
+    return vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url.startsWith('https://media.example.com/')) return sourceResponse;
+      apiCalls.push(url);
+      if (url.endsWith('/media/upload/initialize')) return jsonResponse({ data: { id: 'm-cap' } });
+      if (url.includes('/append')) return new Response(null, { status: 204 });
+      if (url.endsWith('/finalize')) return jsonResponse({ data: { id: 'm-cap' } });
+      throw new Error(`Unexpected URL ${url}`);
+    });
+  }
+
+  function makeClient(fetchFn: ReturnType<typeof makeCappedFetch>) {
+    return new XClient({
+      fetchFn: fetchFn as unknown as typeof fetch,
+      sleepFn: async () => {},
+    });
+  }
+
+  it('rejects an oversize image (Content-Length path) with 413 media_too_large and NO initialize call', async () => {
+    const apiCalls: string[] = [];
+    const source = new Response(new Uint8Array([1]), {
+      status: 200,
+      headers: { 'content-length': String(5 * 1024 * 1024 + 1) },
+    });
+    const err = await makeClient(makeCappedFetch(source, apiCalls))
+      .uploadMediaChunked('t', {
+        sourceUrl: 'https://media.example.com/big.jpg',
+        mediaType: 'image/jpeg',
+        mediaCategory: 'tweet_image',
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(XApiError);
+    expect((err as XApiError).status).toBe(413);
+    expect((err as XApiError).errorCode).toBe('media_too_large');
+    expect(apiCalls).toEqual([]);
+  });
+
+  it('rejects an oversize video (Content-Length path) before any upload traffic', async () => {
+    const apiCalls: string[] = [];
+    const source = new Response(new Uint8Array([1]), {
+      status: 200,
+      headers: { 'content-length': String(512 * 1024 * 1024 + 1) },
+    });
+    const err = await makeClient(makeCappedFetch(source, apiCalls))
+      .uploadMediaChunked('t', {
+        sourceUrl: 'https://media.example.com/big.mp4',
+        mediaType: 'video/mp4',
+        mediaCategory: 'tweet_video',
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(XApiError);
+    expect((err as XApiError).errorCode).toBe('media_too_large');
+    expect(apiCalls).toEqual([]);
+  });
+
+  it('rejects an oversize GIF on the counted (no Content-Length) path, still before initialize', async () => {
+    const apiCalls: string[] = [];
+    // 17 MiB streamed in 1 MiB chunks, no Content-Length header.
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let i = 0; i < 17; i++) controller.enqueue(new Uint8Array(1024 * 1024));
+        controller.close();
+      },
+    });
+    const source = new Response(stream, { status: 200 });
+    const err = await makeClient(makeCappedFetch(source, apiCalls))
+      .uploadMediaChunked('t', {
+        sourceUrl: 'https://media.example.com/big.gif',
+        mediaType: 'image/gif',
+        mediaCategory: 'tweet_gif',
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(XApiError);
+    expect((err as XApiError).errorCode).toBe('media_too_large');
+    expect(apiCalls).toEqual([]);
+  });
+
+  it('allows a file exactly AT the cap (boundary) — initialize proceeds', async () => {
+    const apiCalls: string[] = [];
+    const source = new Response(new Uint8Array([1, 2, 3]), {
+      status: 200,
+      headers: { 'content-length': String(5 * 1024 * 1024) },
+    });
+    const result = await makeClient(makeCappedFetch(source, apiCalls)).uploadMediaChunked('t', {
+      sourceUrl: 'https://media.example.com/exact.jpg',
+      mediaType: 'image/jpeg',
+      mediaCategory: 'tweet_image',
+    });
+    expect(result.mediaId).toBe('m-cap');
+    expect(apiCalls.some((u) => u.endsWith('/media/upload/initialize'))).toBe(true);
+  });
+});
