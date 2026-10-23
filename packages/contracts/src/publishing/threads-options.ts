@@ -108,20 +108,24 @@ export function validateThreadsText(text: string): string | null {
 // Media descriptors
 // ==========================================
 
-export const ThreadsCarouselItemSchema = z.object({
-  mediaUrl: z.string().url(),
-  mediaType: z.enum(['image', 'video']),
-  altText: z.string().max(1000).optional(),
-});
+export const ThreadsCarouselItemSchema = z
+  .object({
+    mediaUrl: z.string().url(),
+    mediaType: z.enum(['image', 'video']),
+    altText: z.string().max(1000).optional(),
+  })
+  .strict();
 export type ThreadsCarouselItem = z.infer<typeof ThreadsCarouselItemSchema>;
 
 /** One follow-up post in a reply chain, published in order. */
-export const ThreadsReplyChainItemSchema = z.object({
-  text: z.string().optional(),
-  mediaUrl: z.string().url().optional(),
-  mediaType: z.enum(['image', 'video']).optional(),
-  altText: z.string().max(1000).optional(),
-});
+export const ThreadsReplyChainItemSchema = z
+  .object({
+    text: z.string().optional(),
+    mediaUrl: z.string().url().optional(),
+    mediaType: z.enum(['image', 'video']).optional(),
+    altText: z.string().max(1000).optional(),
+  })
+  .strict();
 export type ThreadsReplyChainItem = z.infer<typeof ThreadsReplyChainItemSchema>;
 
 // ==========================================
