@@ -3,7 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Spec 137-A3 (T33): Playwright e2e for the four critical flows.
  *
- * - Chromium project only (decision D137-2).
+ * - Chromium project only (decision D137-2); spec 142 (PR-M142-3) adds
+ *   Chromium mobile-viewport projects for the full spec 142 §2 matrix
+ *   (320/360/390/430/768/1024) that run only the mobile layout spec — the
+ *   desktop critical flows are not re-run per width.
  * - `webServer` runs the production build (`next build` + `next start`)
  *   with a disposable e2e environment: a test SESSION_SECRET (the session
  *   fixture mints real signed session cookies against it), the localhost
@@ -40,7 +43,66 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: '**/mobile-layout.spec.ts',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-320',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 320, height: 720 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-360',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 360, height: 740 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-390',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-430',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 430, height: 932 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-768',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 768, height: 1024 },
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'mobile-1024',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1024, height: 768 },
+        hasTouch: true,
+      },
     },
   ],
   webServer: {
