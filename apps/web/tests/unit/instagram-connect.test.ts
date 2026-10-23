@@ -72,7 +72,7 @@ describe('Instagram connect exchange (spec 124)', () => {
   };
 
   function mockFetch(accountType: string) {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
     const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
       if (url === 'https://api.instagram.com/oauth/access_token') {

@@ -74,7 +74,7 @@ describe('Threads connect exchange (spec 124)', () => {
   };
 
   function mockFetch() {
-    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
     const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
       if (url === 'https://graph.threads.net/oauth/access_token') {
