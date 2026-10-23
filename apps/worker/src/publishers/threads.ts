@@ -302,9 +302,9 @@ export class ThreadsPublisher implements Publisher {
     try {
       mainParams = this.mainContainerParams(item, options, threadsUserId, accessToken);
     } catch (err) {
-      return this.failureOutcome(err, item, undefined);
+      return this.failureOutcome(err, item, undefined, liveLimit);
     }
-    const main = await this.publishOne(mainParams, threadsUserId, accessToken, item);
+    const main = await this.publishOne(mainParams, threadsUserId, accessToken, item, liveLimit);
     if (main.outcome) return main.outcome;
     const mediaId = main.mediaId as string;
     const detail: Record<string, unknown> = {
@@ -340,7 +340,8 @@ export class ThreadsPublisher implements Publisher {
           },
           threadsUserId,
           accessToken,
-          item
+          item,
+          liveLimit
         );
         if (stepResult.outcome || !stepResult.mediaId) {
           warning =
@@ -510,7 +511,11 @@ export class ThreadsPublisher implements Publisher {
     params: ThreadsContainerCreateParams,
     threadsUserId: string,
     accessToken: string,
-    item: DatabaseUnifiedQueueItemRow
+    item: DatabaseUnifiedQueueItemRow,
+    liveLimit?: {
+      resolved: ReturnType<typeof resolvePublishLimit>;
+      detail?: Record<string, unknown> | undefined;
+    }
   ): Promise<{
     mediaId?: string | undefined;
     containerId?: string | undefined;
@@ -541,7 +546,7 @@ export class ThreadsPublisher implements Publisher {
         }
         effectiveParams = { ...params, children: childIds };
       } catch (err) {
-        return { outcome: this.failureOutcome(err, item, undefined) };
+        return { outcome: this.failureOutcome(err, item, undefined, liveLimit) };
       }
     }
 
@@ -550,7 +555,7 @@ export class ThreadsPublisher implements Publisher {
       const created = await this.client.createContainer(effectiveParams);
       containerId = created.containerId;
     } catch (err) {
-      return { outcome: this.failureOutcome(err, item, undefined) };
+      return { outcome: this.failureOutcome(err, item, undefined, liveLimit) };
     }
     const detail: Record<string, unknown> = { platform: 'threads', containerId };
 
@@ -617,12 +622,12 @@ export class ThreadsPublisher implements Publisher {
               return { mediaId: containerId, containerId };
             }
             return {
-              outcome: this.failureOutcome(secondErr, item, detail),
+              outcome: this.failureOutcome(secondErr, item, detail, liveLimit),
             };
           }
         }
       }
-      return { outcome: this.failureOutcome(err, item, detail) };
+      return { outcome: this.failureOutcome(err, item, detail, liveLimit) };
     }
   }
 
@@ -711,7 +716,11 @@ export class ThreadsPublisher implements Publisher {
   private failureOutcome(
     err: unknown,
     item: DatabaseUnifiedQueueItemRow,
-    detail: Record<string, unknown> | undefined
+    detail: Record<string, unknown> | undefined,
+    liveLimit?: {
+      resolved: ReturnType<typeof resolvePublishLimit>;
+      detail?: Record<string, unknown> | undefined;
+    }
   ): PublishOutcome {
     const classified = classifyThreadsError(err);
     const canRetry =
@@ -724,7 +733,10 @@ export class ThreadsPublisher implements Publisher {
       ...(classified.kind === 'auth'
         ? { targetAccountStatus: 'expired' as const }
         : {}),
-      detail: detail ?? { platform: 'threads' },
+      detail: {
+        ...(detail ?? { platform: 'threads' }),
+        ...(liveLimit?.detail ? { publishingLimit: liveLimit.detail } : {}),
+      },
     };
   }
 }

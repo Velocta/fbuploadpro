@@ -343,6 +343,10 @@ describe('ThreadsPublisher (spec 124)', () => {
     expect(outcome.status).toBe('failed');
     expect(outcome.error?.kind).toBe('permanent');
     expect(outcome.error?.code).toBe('validation');
+    // Failure outcomes record the resolved live quota too (mirrors IG).
+    expect(outcome.detail).toMatchObject({
+      publishingLimit: { usage: 10, totalCount: 250 },
+    });
     expect(mock.containersCreated).toHaveLength(0);
   });
 
