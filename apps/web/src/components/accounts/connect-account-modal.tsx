@@ -440,7 +440,7 @@ export function ConnectAccountModal({
         { schema: MagicLinkResponseSchema }
       );
       setMagicUrl(data.magicUrl);
-      setRemainingSeconds(data.expiresInSeconds ?? 900);
+      setRemainingSeconds(data.expiresInSeconds);
       setView('magic');
     } catch (error) {
       reportError(error, { source: 'connect-account-magic-link' });
