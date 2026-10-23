@@ -2,15 +2,19 @@
 
 import React from 'react';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
+
+import { Button } from '@/components/shared/ui/button';
+import { cn } from '@/lib/utils';
 import type { MediaSmartViewKey, MediaViewMode } from './media-types';
 import { MediaCanvas } from './media-library-grid';
 import { SubfolderRowsSection } from './media-library-subfolders';
 
 /**
- * Main explorer canvas section, extracted from media-library-explorer.tsx.
- * Includes the breadcrumb context row, subfolder rows, and the media canvas.
- * No behavior changes — moved verbatim.
+ * Main explorer canvas (spec 133 §6.2): the plain-text breadcrumb
+ * context row (root is "Library", ancestors clickable, drag-onto-crumb
+ * reparenting with the Move-dialog twin), the "Select all" control in
+ * the same row, the subfolder rows, and the media canvas. Rebuilt on
+ * token utilities — no box, no panel (PB-1).
  */
 
 export interface BreadcrumbItem {
@@ -31,6 +35,13 @@ export interface MediaLibraryMainProps {
   viewMode: MediaViewMode;
   isLoading: boolean;
   isLocked: boolean;
+  activeFilterCount?: number;
+  activeFilterLabels?: string[];
+  isError?: boolean;
+  onRetry?: () => void;
+  onClearSearch?: () => void;
+  onClearFilters?: () => void;
+  onUploadClick?: () => void;
   onNavigateRoot: () => void;
   onNavigateFolder: (folderId: string | null) => void;
   onSelectAll: () => void;
@@ -58,6 +69,13 @@ export function MediaLibraryMain({
   viewMode,
   isLoading,
   isLocked,
+  activeFilterCount = 0,
+  activeFilterLabels = [],
+  isError = false,
+  onRetry,
+  onClearSearch,
+  onClearFilters,
+  onUploadClick,
   onNavigateRoot,
   onNavigateFolder,
   onSelectAll,
@@ -71,38 +89,23 @@ export function MediaLibraryMain({
   onMoveMediaRequest,
   onFilesDrop,
 }: Readonly<MediaLibraryMainProps>) {
+  const currentFolderName =
+    currentFolderId != null
+      ? (folders.find((f) => f.id === currentFolderId)?.name ?? null)
+      : null;
+
   return (
-    <main
-      data-testid="media-explorer-body"
-      style={{
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
+    <main data-testid="media-explorer-body" className="flex w-full min-w-0 flex-col">
       {/* Slim Context Row: Breadcrumb in Plain Text on Left, "Select all" on Right */}
       <div
         data-testid="context-row"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: `${SPACING.md} 0`,
-          gap: SPACING.md,
-          flexWrap: 'wrap',
-        }}
+        className="flex flex-wrap items-center justify-between gap-4 py-4"
       >
         {/* Breadcrumb Trail in Plain Text (Clickable & Drag-Drop Reparenting) */}
         <nav
           aria-label="Folder path"
           data-testid="folder-breadcrumbs"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
+          className="flex flex-wrap items-center gap-1.5 text-body text-ink-sub"
         >
           <button
             type="button"
@@ -110,49 +113,27 @@ export function MediaLibraryMain({
             onClick={onNavigateRoot}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => onFilesDrop(e, null)}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color:
-                activeSmartView === null && currentFolderId === null
-                  ? `var(--text-main, ${THEME.default.text.primary})`
-                  : `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontWeight:
-                activeSmartView === null && currentFolderId === null
-                  ? TYPOGRAPHY.weights.semibold
-                  : TYPOGRAPHY.weights.regular,
-              cursor: 'pointer',
-            }}
+            className={cn(
+              'cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:outline-2 focus-visible:outline-brand-gold',
+              activeSmartView === null && currentFolderId === null
+                ? 'font-semibold text-ink'
+                : 'text-ink-sub'
+            )}
           >
             Library
           </button>
 
           {activeSmartView === 'everything' && (
             <>
-              <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
-              <span
-                style={{
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                }}
-              >
-                Everything
-              </span>
+              <span className="text-ink-dim">/</span>
+              <span className="font-semibold text-ink">Everything</span>
             </>
           )}
 
           {activeSmartView === 'needs_caption' && (
             <>
-              <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
-              <span
-                style={{
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  fontWeight: TYPOGRAPHY.weights.semibold,
-                }}
-              >
-                Needs caption
-              </span>
+              <span className="text-ink-dim">/</span>
+              <span className="font-semibold text-ink">Needs caption</span>
             </>
           )}
 
@@ -161,25 +142,17 @@ export function MediaLibraryMain({
               const isLast = idx === breadcrumbs.length - 1;
               return (
                 <React.Fragment key={crumb.id}>
-                  <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>/</span>
+                  <span className="text-ink-dim">/</span>
                   <button
                     type="button"
                     data-testid={`breadcrumb-folder-${crumb.id}`}
                     onClick={() => onNavigateFolder(crumb.id)}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => onFilesDrop(e, crumb.id)}
-                    style={{
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      padding: 0,
-                      color: isLast
-                        ? `var(--text-main, ${THEME.default.text.primary})`
-                        : `var(--text-sub, ${THEME.default.text.secondary})`,
-                      fontWeight: isLast
-                        ? TYPOGRAPHY.weights.semibold
-                        : TYPOGRAPHY.weights.regular,
-                      cursor: 'pointer',
-                    }}
+                    className={cn(
+                      'cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:outline-2 focus-visible:outline-brand-gold',
+                      isLast ? 'font-semibold text-ink' : 'text-ink-sub'
+                    )}
                   >
                     {crumb.name}
                   </button>
@@ -190,24 +163,17 @@ export function MediaLibraryMain({
 
         {/* Right: "Select all" toggle */}
         {displayedMediaItems.length > 0 && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             data-testid="select-all-btn"
             onClick={onSelectAll}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: 'pointer',
-            }}
+            className="h-11 px-2 text-metadata text-ink-sub hover:text-ink md:h-10"
           >
             {selectedIds.length === displayedMediaItems.length
               ? 'Deselect all'
               : 'Select all'}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -235,6 +201,15 @@ export function MediaLibraryMain({
         debouncedSearch={debouncedSearch}
         folders={folders}
         activeSmartView={activeSmartView}
+        totalMediaCount={mediaItems.length}
+        activeFilterCount={activeFilterCount}
+        activeFilterLabels={activeFilterLabels}
+        currentFolderName={currentFolderName}
+        isError={isError}
+        onRetry={onRetry}
+        onClearSearch={onClearSearch}
+        onClearFilters={onClearFilters}
+        onUploadClick={onUploadClick}
         onNavigateFolder={onNavigateFolder}
         onToggleSelect={onToggleSelect}
         onPreview={onPreview}

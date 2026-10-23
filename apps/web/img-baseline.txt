@@ -1,7 +1,7 @@
 # Raw <img> baseline (spec 137 §3.5 / PR-A4, guardrail check 15 +
 # ESLint @next/next/no-img-element at error in eslint.config.mjs).
 #
-# All 22 raw `<img>` occurrences in apps/web/src live in the 15 files
+# All 20 raw `<img>` occurrences in apps/web/src live in the 13 files
 # below — every one is surface-owned, none is in route/lib code, so
 # PR-A4 converts none of them (spec §3.5 + plan A4: conversions ride
 # the surface rebuilds, §4.1.4). The ESLint rule is off for exactly
@@ -30,11 +30,9 @@
 # Format: <file> <count>
 apps/web/src/components/accounts/account-card.tsx 2
 apps/web/src/components/connect/destination-picker.tsx 1
-apps/web/src/components/media/media-asset-card.tsx 1
 apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
 apps/web/src/components/media/media-preview-modal.tsx 2
-apps/web/src/components/media/media-table-row.tsx 1
 apps/web/src/components/pages/add-page-modal.tsx 3
 apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 2
 apps/web/src/components/pages/dedicated/bulk/bulk-step-review.tsx 2

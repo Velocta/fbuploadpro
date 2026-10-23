@@ -103,11 +103,9 @@ export default [
     files: [
       "apps/web/src/components/accounts/account-card.tsx",
       "apps/web/src/components/connect/destination-picker.tsx",
-      "apps/web/src/components/media/media-asset-card.tsx",
       "apps/web/src/components/media/media-import-progress-row.tsx",
       "apps/web/src/components/media/media-import-staging.tsx",
       "apps/web/src/components/media/media-preview-modal.tsx",
-      "apps/web/src/components/media/media-table-row.tsx",
       "apps/web/src/components/pages/add-page-modal.tsx",
       "apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx",
       "apps/web/src/components/pages/dedicated/bulk/bulk-step-review.tsx",

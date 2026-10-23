@@ -1,17 +1,22 @@
 'use client';
 
 import React from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { FolderPlusIcon, UploadIcon } from 'lucide-react';
+
+import { Button } from '@/components/shared/ui/button';
 
 /**
- * Page header section for the media library, extracted from
- * media-library-explorer.tsx. Includes the toast notification,
- * hidden file picker, and the title/action header.
- * No behavior changes — moved verbatim.
+ * Page header for the media library (spec 133 §6.2 / PR-133-2, PB-13).
+ *
+ * Rebuilt on the shared/ui primitives: "Upload Files" is the surface's
+ * single primary Button, "New Folder" a quiet text action, and the
+ * hidden file input is retained purely as the picker mechanism. The
+ * surface-local toast that used to render here is deleted — all surface
+ * feedback goes through the shared/ui Toast system mounted by the
+ * explorer (one toast system product-wide, UI Rule 11).
  */
 
 export interface MediaLibraryHeaderProps {
-  toastMessage: string | null;
   fileInputRef: React.RefObject<HTMLInputElement | null>;
   onFileInputChange: (files: File[]) => void;
   onNewFolderClick: () => void;
@@ -19,7 +24,6 @@ export interface MediaLibraryHeaderProps {
 }
 
 export function MediaLibraryHeader({
-  toastMessage,
   fileInputRef,
   onFileInputChange,
   onNewFolderClick,
@@ -27,34 +31,12 @@ export function MediaLibraryHeader({
 }: Readonly<MediaLibraryHeaderProps>) {
   return (
     <>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          data-testid="media-toast"
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '24px',
-            backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-            border: '1px solid var(--border-strong, rgba(255,255,255,0.2))',
-            borderRadius: RADII.xs,
-            padding: `${SPACING.xs} ${SPACING.md}`,
-            fontSize: '0.8125rem',
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-            zIndex: 9999,
-          }}
-        >
-          {toastMessage}
-        </div>
-      )}
-
       {/* Hidden File Picker */}
       <input
         ref={fileInputRef}
         type="file"
         multiple
-        style={{ display: 'none' }}
+        className="hidden"
         onChange={(e) => {
           if (e.target.files && e.target.files.length > 0) {
             const files = Array.from(e.target.files);
@@ -64,97 +46,42 @@ export function MediaLibraryHeader({
         }}
       />
 
-      {/* 1. Page Header (No box, plain text) */}
-      <header
-        style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: SPACING.md,
-          marginBottom: SPACING.xl,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <h1
-            data-testid="media-library-title"
-            style={{
-              margin: 0,
-              fontSize: '1.5rem',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              letterSpacing: '-0.02em',
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
+      {/* Page Header (no box, plain text — PB-1/PB-13) */}
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 data-testid="media-library-title" className="text-xxl font-bold tracking-tight text-ink">
             Media Library
           </h1>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '0.875rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
+          <p className="text-body text-ink-sub">
             Upload, organize, and caption your media for publishing queues.
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.lg }}>
-          {/* Quiet New Folder Link */}
-          <button
+        <div className="flex items-center gap-4">
+          {/* Quiet New Folder action */}
+          <Button
             type="button"
+            variant="link"
             data-testid="new-folder-link"
             onClick={onNewFolderClick}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              fontSize: '0.875rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: 'pointer',
-              textDecoration: 'none',
-            }}
+            className="h-11 px-1 text-body md:h-10"
           >
-            + New Folder
-          </button>
+            <FolderPlusIcon aria-hidden />
+            <span>New Folder</span>
+          </Button>
 
-          {/* Single Primary Button: Upload Files */}
-          <button
+          {/* Single Primary Button: Upload Files (UI Rule 1).
+              44px at every width — the surface's primary touch target
+              (spec 142 gate). */}
+          <Button
             type="button"
             data-testid="upload-files-btn"
             onClick={onUploadClick}
-            style={{
-              padding: `${SPACING.xs} ${SPACING.lg}`,
-              backgroundColor: PALETTE.primary,
-              border: 'none',
-              borderRadius: RADII.xs,
-              color: PALETTE.background,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: SPACING.xs,
-            }}
+            className="h-11"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
+            <UploadIcon aria-hidden />
             <span>Upload Files</span>
-          </button>
+          </Button>
         </div>
       </header>
     </>

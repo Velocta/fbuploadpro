@@ -152,7 +152,7 @@ describe("loading boundaries", () => {
   it("media loading uses a tile grid at the library's final geometry", () => {
     const { container } = render(<MediaLoading />);
     expect(skeletonCount(container)).toBeGreaterThanOrEqual(12);
-    expect(container.querySelector(".aspect-square")).not.toBeNull();
+    expect(container.querySelector(".aspect-video")).not.toBeNull();
   });
 });
 

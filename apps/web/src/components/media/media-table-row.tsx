@@ -1,8 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import Image from 'next/image';
 import type { MediaItemResponse } from '@fbuploadpro/contracts';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { FilmIcon, ImageIcon } from 'lucide-react';
+
+import { Button } from '@/components/shared/ui/button';
+import { Checkbox } from '@/components/shared/ui/checkbox';
+import { Input } from '@/components/shared/ui/input';
+import { TableCell, TableRow } from '@/components/shared/ui/table';
+import { cn } from '@/lib/utils';
 import {
   deriveDefaultCaption,
   formatBytes,
@@ -27,65 +34,20 @@ export interface MediaTableRowProps {
   onDeleteRequest?: ((item: MediaItemResponse) => void) | undefined;
 }
 
-function renderRowThumbnailContent(
-  thumbnailSrc: string | null,
-  imgError: boolean,
-  name: string,
-  isVideo: boolean,
-  onError: () => void
-) {
-  if (thumbnailSrc && !imgError) {
-    return (
-      <img
-        src={thumbnailSrc}
-        alt={name}
-        onError={onError}
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          display: 'block',
-        }}
-      />
-    );
-  }
-  if (isVideo) {
-    return (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect width="18" height="18" x="3" y="3" rx="2" />
-        <polygon points="10 8 16 12 10 16 10 8" />
-      </svg>
-    );
-  }
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-      <circle cx="9" cy="9" r="2" />
-      <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-    </svg>
-  );
-}
-
+/**
+ * Table row for one asset (spec 133 §6.2 / PB-6), rebuilt on the
+ * shared/ui Table pattern: hairline row divider, sticky-header table
+ * (in media-library-grid), first column the human identifier
+ * (thumbnail + name), size right-aligned in tabular figures, caption
+ * click-to-edit inline, and row actions Preview / Move / Delete —
+ * always visible, never hover-only (UI Rule 19). No Schedule action
+ * (PB-9). The thumbnail is next/image (spec §6.7).
+ *
+ * Caption (PB-20): a real caption renders as text; with no caption the
+ * filename-derived fallback renders visually distinguished (italic,
+ * muted, marked data-fallback) — it is a display fallback only and
+ * never satisfies a caption status anywhere.
+ */
 export function MediaTableRow({
   item,
   selected = false,
@@ -98,18 +60,14 @@ export function MediaTableRow({
   onMoveRequest,
   onDeleteRequest,
 }: Readonly<MediaTableRowProps>) {
-  const resolvedCaption =
-    item.captionText !== null &&
-    item.captionText !== undefined &&
-    item.captionText.trim().length > 0
-      ? item.captionText
-      : deriveDefaultCaption(item.name);
+  const hasCaption = Boolean(item.captionText && item.captionText.trim().length > 0);
+  const resolvedCaption = hasCaption ? item.captionText! : deriveDefaultCaption(item.name);
 
   const [isEditingCaption, setIsEditingCaption] = useState(initialEditingCaption);
   const [captionDraft, setCaptionDraft] = useState(resolvedCaption);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const shiftKeyRef = useRef(false);
 
   const isVideo = item.mediaType === 'video';
   const detailsLabel = formatMediaDetails(item.aspectRatio, item.durationSeconds);
@@ -128,16 +86,10 @@ export function MediaTableRow({
     }
   };
 
-  let rowBackgroundColor = 'transparent';
-  if (selected) {
-    rowBackgroundColor = `var(--bg-active, ${THEME.default.surfaces.active})`;
-  } else if (isHovered) {
-    rowBackgroundColor = `var(--bg-hover, ${THEME.default.surfaces.hover})`;
-  }
-
   return (
-    <tr
+    <TableRow
       data-testid={`media-row-${item.id}`}
+      data-state={selected ? 'selected' : undefined}
       draggable
       onDragStart={(e) => {
         e.dataTransfer?.setData(
@@ -145,107 +97,61 @@ export function MediaTableRow({
           JSON.stringify({ mediaId: item.id })
         );
       }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={{
-        backgroundColor: rowBackgroundColor,
-        borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        transition: 'background-color 0.12s ease',
-      }}
     >
-      {/* 1. Selection Checkbox */}
-      <td
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          width: '40px',
-          verticalAlign: 'middle',
-        }}
-      >
-        <label
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
+      {/* 1. Selection Checkbox (shared selection model, shift-range) */}
+      <TableCell className="w-10">
+        <span
+          onClickCapture={(e) => {
+            shiftKeyRef.current = e.shiftKey;
           }}
+          className="inline-flex"
         >
-          <input
-            type="checkbox"
-            data-testid={`select-row-${item.id}`}
-            checked={selected}
-            onChange={(e) => {
-              const shiftKey = Boolean(
-                (e.nativeEvent as MouseEvent | undefined)?.shiftKey
-              );
-              onToggleSelect?.(item.id, { shiftKey });
-            }}
-            aria-label={`Select ${item.name}`}
-            style={{
-              margin: 0,
-              cursor: 'pointer',
-              accentColor: PALETTE.primary,
-            }}
-          />
-        </label>
-      </td>
+          <label className="flex size-10 cursor-pointer items-center justify-center">
+            <Checkbox
+              data-testid={`select-row-${item.id}`}
+              checked={selected}
+              onCheckedChange={() =>
+                onToggleSelect?.(item.id, { shiftKey: shiftKeyRef.current })
+              }
+              aria-label={`Select ${item.name}`}
+            />
+          </label>
+        </span>
+      </TableCell>
 
       {/* 2. Preview Thumbnail */}
-      <td
-        style={{
-          padding: `${SPACING.sm} 0`,
-          width: '48px',
-          verticalAlign: 'middle',
-        }}
-      >
+      <TableCell className="w-12 px-0">
         <button
           type="button"
           onClick={() => onPreview?.(item)}
           aria-label={`Preview ${item.name}`}
-          style={{
-            width: '44px',
-            height: '32px',
-            borderRadius: RADII.xs,
-            overflow: 'hidden',
-            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            padding: 0,
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-          }}
+          className="flex h-10 w-11 cursor-pointer items-center justify-center overflow-hidden rounded-xs border border-line bg-subtle p-0 text-ink-dim outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
         >
-          {renderRowThumbnailContent(
-            thumbnailSrc,
-            imgError,
-            item.name,
-            isVideo,
-            () => setImgError(true)
+          {thumbnailSrc && !imgError ? (
+            <Image
+              src={thumbnailSrc}
+              alt={item.name}
+              width={88}
+              height={80}
+              sizes="44px"
+              onError={() => setImgError(true)}
+              className="block h-full w-full object-cover"
+            />
+          ) : isVideo ? (
+            <FilmIcon className="size-4" aria-hidden />
+          ) : (
+            <ImageIcon className="size-4" aria-hidden />
           )}
         </button>
-      </td>
+      </TableCell>
 
       {/* 3. File (Name + Folder Ancestry Link) */}
-      <td
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          verticalAlign: 'middle',
-          maxWidth: '220px',
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <TableCell className="w-55 whitespace-normal">
+        <div className="flex flex-col gap-0.5">
           <span
             title={item.name}
             data-testid={`row-name-${item.id}`}
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
+            className="truncate text-metadata font-medium text-ink"
           >
             {item.name}
           </span>
@@ -254,35 +160,18 @@ export function MediaTableRow({
               type="button"
               onClick={() => onNavigateFolder?.(item.folderId ?? null)}
               title={`Open folder: ${folderPathLabel}`}
-              style={{
-                alignSelf: 'flex-start',
-                backgroundColor: 'transparent',
-                border: 'none',
-                padding: 0,
-                fontSize: '0.6875rem',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
+              className="inline-flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 text-left text-xs text-ink-dim outline-none focus-visible:outline-2 focus-visible:outline-brand-gold"
             >
               <span>{folderPathLabel}</span>
             </button>
           )}
         </div>
-      </td>
+      </TableCell>
 
       {/* 4. Caption (Click-to-Edit) */}
-      <td
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          verticalAlign: 'middle',
-          maxWidth: '240px',
-        }}
-      >
+      <TableCell className="w-60 whitespace-normal">
         {isEditingCaption ? (
-          <input
+          <Input
             type="text"
             data-testid={`table-caption-input-${item.id}`}
             value={captionDraft}
@@ -298,169 +187,95 @@ export function MediaTableRow({
                 setCaptionDraft(resolvedCaption);
               }
             }}
-            style={{
-              width: '100%',
-              padding: '2px 6px',
-              backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-              border: `1px solid ${PALETTE.primary}`,
-              borderRadius: RADII.xs,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              fontSize: '0.75rem',
-              outline: 'none',
-            }}
+            className="h-9 text-xs"
           />
         ) : (
           <button
             type="button"
             data-testid={`table-inline-caption-${item.id}`}
+            data-fallback={hasCaption ? undefined : 'filename'}
             onClick={() => setIsEditingCaption(true)}
             title="Click to edit caption"
-            style={{
-              width: '100%',
-              textAlign: 'left',
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: '2px 0',
-              fontSize: '0.75rem',
-              color: item.captionText
-                ? `var(--text-main, ${THEME.default.text.primary})`
-                : `var(--text-dim, ${THEME.default.text.muted})`,
-              cursor: 'text',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              display: 'block',
-            }}
+            className={cn(
+              'block w-full cursor-text truncate border-0 bg-transparent p-0 py-0.5 text-left text-xs outline-none focus-visible:outline-2 focus-visible:outline-brand-gold',
+              hasCaption ? 'text-ink' : 'text-ink-dim italic'
+            )}
           >
             {isSavingCaption ? 'Saving...' : resolvedCaption}
           </button>
         )}
-      </td>
+      </TableCell>
 
       {/* 5. Details (Merged Ratio & Duration, e.g. "1:1 · 0:45") */}
-      <td
+      <TableCell
         data-testid={`row-details-${item.id}`}
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          verticalAlign: 'middle',
-          fontSize: '0.75rem',
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          fontVariantNumeric: TYPOGRAPHY.tabularNums,
-          whiteSpace: 'nowrap',
-        }}
+        className="text-xs text-ink-sub tabular-nums"
       >
         {detailsLabel}
-      </td>
+      </TableCell>
 
-      {/* 6. Size */}
-      <td
+      {/* 6. Size (right-aligned, tabular) */}
+      <TableCell
         data-testid={`row-size-${item.id}`}
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          verticalAlign: 'middle',
-          fontSize: '0.75rem',
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-          fontVariantNumeric: TYPOGRAPHY.tabularNums,
-          whiteSpace: 'nowrap',
-        }}
+        className="text-right text-xs text-ink-dim tabular-nums"
       >
         {formatBytes(item.fileSize)}
-      </td>
+      </TableCell>
 
       {/* 7. Upload Date (e.g. "Oct 18, 2026") */}
-      <td
+      <TableCell
         data-testid={`row-date-${item.id}`}
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          verticalAlign: 'middle',
-          fontSize: '0.75rem',
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-          fontVariantNumeric: TYPOGRAPHY.tabularNums,
-          whiteSpace: 'nowrap',
-        }}
+        className="text-xs text-ink-dim tabular-nums"
       >
         {formatUploadDate(item.createdAt)}
-      </td>
+      </TableCell>
 
-      {/* 8. Actions (Preview, Move, Delete) — NO Schedule button! */}
-      <td
-        style={{
-          padding: `${SPACING.sm} ${SPACING.md}`,
-          verticalAlign: 'middle',
-          textAlign: 'right',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            opacity: isHovered ? 1 : 0.7,
-            transition: 'opacity 0.12s ease',
-          }}
-        >
+      {/* 8. Actions (Preview, Move, Delete) — NO Schedule button (PB-9) */}
+      <TableCell className="text-right">
+        <div className="inline-flex items-center gap-1.5">
           {onPreview && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               data-testid={`row-action-preview-${item.id}`}
               onClick={() => onPreview(item)}
               aria-label="Preview asset"
-              style={{
-                padding: '3px 8px',
-                backgroundColor: 'transparent',
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.6875rem',
-                cursor: 'pointer',
-              }}
+              className="h-11 px-3 lg:h-8"
             >
               Preview
-            </button>
+            </Button>
           )}
 
           {onMoveRequest && (
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               data-testid={`row-action-move-${item.id}`}
               onClick={() => onMoveRequest(item)}
               aria-label="Move asset"
-              style={{
-                padding: '3px 8px',
-                backgroundColor: 'transparent',
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.6875rem',
-                cursor: 'pointer',
-              }}
+              className="h-11 px-3 lg:h-8"
             >
               Move
-            </button>
+            </Button>
           )}
 
           {onDeleteRequest && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               data-testid={`row-action-delete-${item.id}`}
               onClick={() => onDeleteRequest(item)}
               aria-label="Delete asset"
-              style={{
-                padding: '3px 8px',
-                backgroundColor: 'transparent',
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                color: PALETTE.accent3,
-                fontSize: '0.6875rem',
-                cursor: 'pointer',
-              }}
+              className="h-11 px-3 text-brand-rose hover:text-brand-rose lg:h-8"
             >
               Delete
-            </button>
+            </Button>
           )}
         </div>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

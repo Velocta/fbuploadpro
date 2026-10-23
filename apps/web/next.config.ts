@@ -56,6 +56,14 @@ const nextConfig: NextConfig = {
   //   platform-lookaside.fbsbx.com Facebook Graph profile pictures
   //                                (verbatim in API test fixtures)
   //   graph.facebook.com           Graph picture host
+  //   storage.e2e.invalid          Playwright fixture storage host
+  //                                (tests/e2e/fixtures/tenant.ts +
+  //                                fixtures/api.ts serve media items
+  //                                from it; added in spec 133 PR-133-2
+  //                                per spec §6.7 when the media grid
+  //                                converted to next/image — .invalid
+  //                                is the RFC 2606 non-resolving TLD,
+  //                                so this can never name a real host)
   // YouTube thumbnails (i.ytimg.com) are NOT listed: no surface displays
   // them today (grep: zero hits) — spec §3.5 includes the class only if
   // a surface uses it.
@@ -66,6 +74,7 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: '**.fbcdn.net' },
       { protocol: 'https', hostname: 'platform-lookaside.fbsbx.com' },
       { protocol: 'https', hostname: 'graph.facebook.com' },
+      { protocol: 'https', hostname: 'storage.e2e.invalid' },
     ],
   },
   async headers() {
