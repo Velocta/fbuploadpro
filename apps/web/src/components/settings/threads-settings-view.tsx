@@ -1,15 +1,26 @@
 'use client';
 
+/**
+ * Threads tab — config + approved guide (spec 135 PR-135-3,
+ * spec §5.4 / §8.2).
+ *
+ * A thin config file over the shared platform pattern in
+ * `components/settings/platform/`: the config below and the guide
+ * copy are spec 123's approved text, preserved byte-identical (grep
+ * proof in the PR) — including the Threads pair warning at full
+ * strength — only the construction changed (tokens/primitives, guide
+ * primitives imported from `platform/`). The legacy `initial*`
+ * test-seam props are deleted; tests seed through the query client.
+ */
+
 import React from 'react';
-import { SPACING } from '@/lib/theme';
+import { PlatformCredentialsView } from '@/components/settings/platform/platform-credentials-view';
 import {
-  PlatformCredentialsView,
   PlatformSetupCard,
   SettingsGuideStep,
   GuideDivider,
   MetaDashboardLink,
-  type PlatformCredentialsState,
-} from '@/components/settings/platform-credentials-view';
+} from '@/components/settings/platform/platform-setup-card';
 import { getPlatformCallbackUrls } from '@/lib/platforms/callback-urls';
 
 export const THREADS_CREDENTIALS_CONFIG = {
@@ -25,18 +36,11 @@ export const THREADS_CREDENTIALS_CONFIG = {
 
 export interface ThreadsSettingsViewProps {
   subdomain: string;
-  initialCredentials?: PlatformCredentialsState | null | undefined;
-  initialLoading?: boolean | undefined;
-  initialEditMode?: boolean | undefined;
-  initialShowDisconnectModal?: boolean | undefined;
 }
 
 export function ThreadsSetupGuide() {
   return (
-    <div
-      data-testid="threads-setup-guide"
-      style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}
-    >
+    <div data-testid="threads-setup-guide" className="flex flex-col gap-6">
       <SettingsGuideStep number={1} title="Create your Meta app">
         Open your <MetaDashboardLink testIdPrefix="threads" /> and choose Create app. Give your app a name, add your
         email address if asked, and choose the option for connecting a Threads account. If you
@@ -72,23 +76,13 @@ export function ThreadsSetupGuide() {
   );
 }
 
-export function ThreadsSettingsView({
-  subdomain,
-  initialCredentials,
-  initialLoading,
-  initialEditMode,
-  initialShowDisconnectModal,
-}: Readonly<ThreadsSettingsViewProps>) {
+export function ThreadsSettingsView({ subdomain }: Readonly<ThreadsSettingsViewProps>) {
   const urls = getPlatformCallbackUrls('threads');
 
   return (
     <PlatformCredentialsView
       subdomain={subdomain}
       config={THREADS_CREDENTIALS_CONFIG}
-      initialCredentials={initialCredentials}
-      initialLoading={initialLoading}
-      initialEditMode={initialEditMode}
-      initialShowDisconnectModal={initialShowDisconnectModal}
       setupCard={
         <PlatformSetupCard
           testIdPrefix="threads"

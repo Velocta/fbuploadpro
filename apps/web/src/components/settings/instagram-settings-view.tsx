@@ -1,15 +1,25 @@
 'use client';
 
+/**
+ * Instagram tab — config + approved guide (spec 135 PR-135-3,
+ * spec §5.3 / §8.2).
+ *
+ * A thin config file over the shared platform pattern in
+ * `components/settings/platform/`: the config below and the guide
+ * copy are spec 123's approved text, preserved byte-identical (grep
+ * proof in the PR) — only the construction changed (tokens/primitives,
+ * guide primitives imported from `platform/`). The legacy `initial*`
+ * test-seam props are deleted; tests seed through the query client.
+ */
+
 import React from 'react';
-import { SPACING } from '@/lib/theme';
+import { PlatformCredentialsView } from '@/components/settings/platform/platform-credentials-view';
 import {
-  PlatformCredentialsView,
   PlatformSetupCard,
   SettingsGuideStep,
   GuideDivider,
   MetaDashboardLink,
-  type PlatformCredentialsState,
-} from '@/components/settings/platform-credentials-view';
+} from '@/components/settings/platform/platform-setup-card';
 import { getPlatformCallbackUrls } from '@/lib/platforms/callback-urls';
 
 export const INSTAGRAM_CREDENTIALS_CONFIG = {
@@ -24,18 +34,11 @@ export const INSTAGRAM_CREDENTIALS_CONFIG = {
 
 export interface InstagramSettingsViewProps {
   subdomain: string;
-  initialCredentials?: PlatformCredentialsState | null | undefined;
-  initialLoading?: boolean | undefined;
-  initialEditMode?: boolean | undefined;
-  initialShowDisconnectModal?: boolean | undefined;
 }
 
 export function InstagramSetupGuide() {
   return (
-    <div
-      data-testid="instagram-setup-guide"
-      style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xl }}
-    >
+    <div data-testid="instagram-setup-guide" className="flex flex-col gap-6">
       <SettingsGuideStep number={1} title="Create your Meta app">
         Open your <MetaDashboardLink testIdPrefix="instagram" /> and choose Create app. Give your app a name, add your
         email address if asked, and choose the option for connecting an Instagram account. When
@@ -62,23 +65,13 @@ export function InstagramSetupGuide() {
   );
 }
 
-export function InstagramSettingsView({
-  subdomain,
-  initialCredentials,
-  initialLoading,
-  initialEditMode,
-  initialShowDisconnectModal,
-}: Readonly<InstagramSettingsViewProps>) {
+export function InstagramSettingsView({ subdomain }: Readonly<InstagramSettingsViewProps>) {
   const urls = getPlatformCallbackUrls('instagram');
 
   return (
     <PlatformCredentialsView
       subdomain={subdomain}
       config={INSTAGRAM_CREDENTIALS_CONFIG}
-      initialCredentials={initialCredentials}
-      initialLoading={initialLoading}
-      initialEditMode={initialEditMode}
-      initialShowDisconnectModal={initialShowDisconnectModal}
       setupCard={
         <PlatformSetupCard
           testIdPrefix="instagram"
