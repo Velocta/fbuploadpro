@@ -96,40 +96,39 @@ describe('Nested Media Folders CRUD, Reparenting & Cascading Deletion', () => {
       expect(data.unorganizedCount).toBe(3);
     });
 
-    it('uses database-level { count: "exact", head: true } in Supabase client without fetching full media row lists', async () => {
-      const selectCalls: Array<{ table: string; options?: any }> = [];
-
+    // Helper: a Supabase mock for the folders list handler that records
+    // every from()/select() call so tests can count DB requests.
+    function createListMock(
+      folders: Array<Record<string, unknown>>,
+      itemFolderIds: Array<string | null>
+    ) {
+      const fromCalls: string[] = [];
+      const selectCalls: Array<{ table: string; columns: unknown; options?: unknown }> = [];
       const mockSupabase = {
         from: vi.fn((table: string) => {
+          fromCalls.push(table);
           if (table === 'media_folders') {
             return {
-              select: vi.fn().mockReturnValue({
-                eq: vi.fn().mockReturnValue({
-                  order: vi.fn().mockResolvedValue({
-                    data: [
-                      {
-                        id: folderId,
-                        user_id: userId,
-                        parent_id: null,
-                        name: 'Campaigns',
-                        created_at: new Date('2026-10-07T10:00:00Z'),
-                        updated_at: new Date('2026-10-07T10:00:00Z'),
-                      },
-                    ],
-                    error: null,
+              select: vi.fn((columns: unknown, options?: unknown) => {
+                selectCalls.push({ table, columns, options });
+                return {
+                  eq: vi.fn().mockReturnValue({
+                    order: vi.fn().mockReturnValue({
+                      limit: vi.fn().mockResolvedValue({ data: folders, error: null }),
+                    }),
                   }),
-                }),
+                };
               }),
             };
           }
           if (table === 'media_items') {
             return {
-              select: vi.fn((_columns: string, options?: any) => {
-                selectCalls.push({ table: 'media_items', options });
+              select: vi.fn((columns: unknown, options?: unknown) => {
+                selectCalls.push({ table, columns, options });
                 return {
-                  eq: vi.fn().mockReturnValue({
-                    is: vi.fn().mockResolvedValue({ count: 5, data: null, error: null }),
-                    eq: vi.fn().mockResolvedValue({ count: 12, data: null, error: null }),
+                  eq: vi.fn().mockResolvedValue({
+                    data: itemFolderIds.map((folder_id) => ({ folder_id })),
+                    error: null,
                   }),
                 };
               }),
@@ -138,6 +137,28 @@ describe('Nested Media Folders CRUD, Reparenting & Cascading Deletion', () => {
           return {};
         }),
       };
+      return { mockSupabase, fromCalls, selectCalls };
+    }
+
+    function makeFolder(id: string, name: string, parent_id: string | null = null) {
+      return {
+        id,
+        user_id: userId,
+        parent_id,
+        name,
+        created_at: new Date('2026-10-07T10:00:00Z'),
+        updated_at: new Date('2026-10-07T10:00:00Z'),
+      };
+    }
+
+    it('counts items with a single grouped media_items query (no per-folder counts)', async () => {
+      const folders = [makeFolder(folderId, 'Campaigns')];
+      // 12 items in the folder, 5 unorganized
+      const itemFolderIds: Array<string | null> = [
+        ...Array<string>(12).fill(folderId),
+        ...Array<null>(5).fill(null),
+      ];
+      const { mockSupabase, fromCalls, selectCalls } = createListMock(folders, itemFolderIds);
 
       const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/folders', {
         headers: { cookie: validSessionCookie },
@@ -150,11 +171,84 @@ describe('Nested Media Folders CRUD, Reparenting & Cascading Deletion', () => {
       expect(data.folders[0].itemCount).toBe(12);
       expect(data.unorganizedCount).toBe(5);
 
-      // Verify that media_items selects always passed count: exact and head: true
-      expect(selectCalls.length).toBeGreaterThanOrEqual(2);
-      for (const call of selectCalls) {
-        expect(call.options).toEqual({ count: 'exact', head: true });
+      // Exactly two DB requests total: folders list + one grouped items query
+      expect(fromCalls).toEqual(['media_folders', 'media_items']);
+      const itemSelects = selectCalls.filter((c) => c.table === 'media_items');
+      expect(itemSelects).toHaveLength(1);
+      expect(itemSelects[0].columns).toBe('folder_id');
+      // The old per-folder head-count pattern must not be used
+      expect(itemSelects[0].options).not.toEqual({ count: 'exact', head: true });
+    });
+
+    it('issues a constant number of DB calls regardless of folder count', async () => {
+      for (const folderCount of [0, 1, 5, 25]) {
+        const folders = Array.from({ length: folderCount }, (_, i) =>
+          makeFolder(`11111111-1111-4111-a111-${String(i).padStart(12, '0')}`, `Folder ${i}`)
+        );
+        // One item in the first folder (if any), two unorganized
+        const itemFolderIds: Array<string | null> =
+          folderCount > 0 ? [folders[0].id as string, null, null] : [null, null];
+        const { mockSupabase, fromCalls } = createListMock(folders, itemFolderIds);
+
+        const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/folders', {
+          headers: { cookie: validSessionCookie },
+        });
+        const res = await handleListFolders(req, 'acme', mockSupabase as any);
+
+        expect(res.status).toBe(200);
+        const data = await res.json();
+        expect(data.folders).toHaveLength(folderCount);
+        // Constant: 1 folders query + 1 grouped items query, independent of N
+        expect(fromCalls).toHaveLength(2);
+        expect(fromCalls.filter((t) => t === 'media_items')).toHaveLength(1);
+        if (folderCount > 0) {
+          expect(data.folders[0].itemCount).toBe(1);
+          expect(data.folders.slice(1).every((f: any) => f.itemCount === 0)).toBe(true);
+        }
+        expect(data.unorganizedCount).toBe(2);
       }
+    });
+
+    it('returns correct counts including zero-count and nested folders', async () => {
+      const emptyFolderId = '44444444-4444-4444-a444-444444444444';
+      const folders = [
+        makeFolder(folderId, 'Parent'),
+        makeFolder(childFolderId, 'Child', folderId),
+        makeFolder(emptyFolderId, 'Empty'),
+      ];
+      const itemFolderIds: Array<string | null> = [
+        folderId,
+        folderId,
+        childFolderId,
+        childFolderId,
+        childFolderId,
+        null,
+        null,
+        null,
+        null,
+      ];
+      const { mockSupabase } = createListMock(folders, itemFolderIds);
+
+      const req = new NextRequest('http://localhost:3000/api/tenant/acme/media/folders', {
+        headers: { cookie: validSessionCookie },
+      });
+      const res = await handleListFolders(req, 'acme', mockSupabase as any);
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.folders).toHaveLength(3);
+      const byId = new Map<string, any>(
+        data.folders.map((f: any) => [f.id, f] as [string, any])
+      );
+      expect(byId.get(folderId)?.itemCount).toBe(2);
+      expect(byId.get(folderId)?.subfolderCount).toBe(1);
+      expect(byId.get(folderId)?.parentId).toBeNull();
+      expect(byId.get(childFolderId)?.itemCount).toBe(3);
+      expect(byId.get(childFolderId)?.subfolderCount).toBe(0);
+      expect(byId.get(childFolderId)?.parentId).toBe(folderId);
+      expect(byId.get(emptyFolderId)?.itemCount).toBe(0);
+      expect(byId.get(emptyFolderId)?.subfolderCount).toBe(0);
+      expect(data.unorganizedCount).toBe(4);
     });
   });
 
