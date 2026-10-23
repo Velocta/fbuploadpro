@@ -102,7 +102,13 @@ test.describe('mobile layout', () => {
     const topbar = page.getByTestId('workspace-topbar');
     await expect(topbar).toBeVisible();
     await expectWithinViewport(topbar, page);
-    const sidebarTrigger = page.getByRole('button', { name: 'Toggle Sidebar' });
+    // The current shell renders two "Toggle Sidebar" buttons at tablet
+    // widths and above (sidebar + topbar); assert on the visible one.
+    // Duplicate-control cleanup belongs to the spec 130 shell rebuild.
+    const sidebarTrigger = page
+      .getByRole('button', { name: 'Toggle Sidebar' })
+      .filter({ visible: true })
+      .first();
     await expect(sidebarTrigger).toBeVisible();
     await expectWithinViewport(sidebarTrigger, page);
     await expectNoDocumentOverflow(page);
