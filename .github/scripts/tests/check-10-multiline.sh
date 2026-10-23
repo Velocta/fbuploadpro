@@ -43,7 +43,9 @@ note_ok() { printf 'fixture ok: %s\n' "$1"; }
 # check 6 wants the CSP string in next.config.ts; check 8 wants the
 # inline-style ratchet (fixtures contain no style={{, so 0); check 9 wants
 # the design-system baseline file (fixtures plant no hex/rgb/fontsize/
-# zindex/!important literals, so only arbitrary-allow lines are needed).
+# zindex/!important literals, so only arbitrary-allow lines are needed);
+# check 12 wants the silent-failure baseline file (fixtures plant no
+# silent-failure patterns, so a comments-only baseline passes).
 # ---------------------------------------------------------------------------
 scaffold() {
   local root="$1"
@@ -58,6 +60,9 @@ arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[left,r
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[margin,opacity]
 arbitrary-allow apps/web/src/components/shared/ui/sidebar.tsx transition-[width,height,padding]
 EOF
+  # Check 12 (spec 137) wants the silent-failure baseline file; fixtures
+  # plant no silent-failure patterns, so a comments-only baseline passes.
+  printf '# Fixture baseline: no silent-failure occurrences in this tree.\n' > "$root/apps/web/silent-failure-baseline.txt"
 }
 
 run_guardrails() {
