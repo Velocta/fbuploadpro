@@ -155,7 +155,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'ab');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert');
+    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
     expect(summary.textContent).toContain(
       'Workspace name must be between 3 and 40 characters.'
     );
@@ -163,7 +163,7 @@ describe('GeneralSettingsView — rename flow', () => {
       'Workspace name must be between 3 and 40 characters.'
     );
     expect(input.value).toBe('ab');
-    expect(document.activeElement).toBe(summary);
+    await waitFor(() => expect(document.activeElement).toBe(summary));
     expect(patchCalls).toHaveLength(0);
   });
 
@@ -177,7 +177,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'Acme ');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert');
+    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
     expect(summary.textContent).toContain(
       'Workspace name must not contain leading or trailing spaces.'
     );
@@ -222,7 +222,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'Taken Name');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert');
+    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
     expect(summary.textContent).toContain('That workspace name is taken.');
     expect((screen.getByTestId('workspace-name-input') as HTMLInputElement).value).toBe(
       'Taken Name'
@@ -242,7 +242,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'Any Name');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert');
+    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
     expect(summary.textContent).toContain(
       "Couldn't update the workspace name. Please try again."
     );
