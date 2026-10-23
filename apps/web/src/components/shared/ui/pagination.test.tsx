@@ -1,7 +1,7 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   Pagination,
   PaginationContent,
@@ -34,10 +34,31 @@ describe("Pagination", () => {
         </PaginationContent>
       </Pagination>
     );
-    expect(screen.getByRole("navigation", { name: "pagination" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "pagination" })).toBeInTheDocument();
     const current = screen.getByRole("link", { name: "2" });
-    expect(current.getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Go to previous page" }).getAttribute("href")).toBe("?page=1");
-    expect(screen.getByRole("link", { name: "Go to next page" }).getAttribute("href")).toBe("?page=3");
+    expect(current).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Go to previous page" })).toHaveAttribute("href", "?page=1");
+    expect(screen.getByRole("link", { name: "Go to next page" })).toHaveAttribute("href", "?page=3");
+  });
+
+  it("page links are real anchors a keyboard user can Tab to and activate", async () => {
+    const user = userEvent.setup();
+    const onNavigate = vi.fn((e: React.MouseEvent) => e.preventDefault());
+    render(
+      <Pagination>
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationLink href="?page=2" onClick={onNavigate}>
+              2
+            </PaginationLink>
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    );
+    await user.tab();
+    const link = screen.getByRole("link", { name: "2" });
+    expect(link).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 });

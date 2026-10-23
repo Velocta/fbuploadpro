@@ -1,8 +1,7 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
-import { describe, it, expect, beforeAll } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ensureDomShims } from "./test-utils";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   Dialog,
   DialogTrigger,
@@ -14,8 +13,6 @@ import {
   DialogClose,
 } from "./dialog";
 import { Button } from "./button";
-
-beforeAll(ensureDomShims);
 
 function TestDialog() {
   return (
@@ -42,25 +39,65 @@ function TestDialog() {
 }
 
 describe("Dialog", () => {
-  it("opens on trigger, traps labelled content, Esc closes and focus returns", async () => {
+  it("opens on trigger click, moves focus inside, Esc closes and focus returns", async () => {
+    const user = userEvent.setup();
     render(<TestDialog />);
     const trigger = screen.getByRole("button", { name: "Open dialog" });
-    fireEvent.click(trigger);
+    await user.click(trigger);
     const dialog = screen.getByRole("dialog");
-    expect(dialog.textContent).toContain("Edit post");
-    expect(screen.getByLabelText("Caption")).toBeTruthy();
+    expect(dialog).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Edit post");
+    expect(screen.getByLabelText("Caption")).toBeInTheDocument();
     // Focus moved into the dialog on open.
     expect(dialog.contains(document.activeElement)).toBe(true);
-    fireEvent.keyDown(dialog, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     // Closing returns focus to the trigger.
-    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(trigger).toHaveFocus();
   });
 
-  it("close button closes the dialog", () => {
+  it("traps Tab focus inside the dialog (focus trap cycles both ways)", async () => {
+    const user = userEvent.setup();
     render(<TestDialog />);
-    fireEvent.click(screen.getByRole("button", { name: "Open dialog" }));
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open dialog" }));
+    const dialog = screen.getByRole("dialog");
+    // Tab through every focusable element repeatedly: focus never escapes.
+    for (let i = 0; i < 6; i++) {
+      await user.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    // Shift+Tab cycles backwards, still inside.
+    for (let i = 0; i < 6; i++) {
+      await user.tab({ shift: true });
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+  });
+
+  it("close button closes the dialog and returns focus", async () => {
+    const user = userEvent.setup();
+    render(<TestDialog />);
+    const trigger = screen.getByRole("button", { name: "Open dialog" });
+    await user.click(trigger);
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("Cancel (DialogClose) closes the dialog", async () => {
+    const user = userEvent.setup();
+    render(<TestDialog />);
+    await user.click(screen.getByRole("button", { name: "Open dialog" }));
+    await user.type(screen.getByLabelText("Caption"), "Draft caption");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keyboard-only user can open the dialog with Enter on the trigger", async () => {
+    const user = userEvent.setup();
+    render(<TestDialog />);
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Open dialog" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });

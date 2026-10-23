@@ -1,8 +1,7 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
-import { describe, it, expect, beforeAll, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ensureDomShims } from "./test-utils";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -15,8 +14,6 @@ import {
   AlertDialogCancel,
 } from "./alert-dialog";
 import { Button } from "./button";
-
-beforeAll(ensureDomShims);
 
 function TestAlertDialog({ onAction }: { onAction: () => void }) {
   return (
@@ -40,28 +37,51 @@ function TestAlertDialog({ onAction }: { onAction: () => void }) {
 
 describe("AlertDialog (destructive pattern)", () => {
   it("verb-named confirm, focus starts on Cancel, Esc does NOT dismiss", async () => {
+    const user = userEvent.setup();
     render(<TestAlertDialog onAction={() => undefined} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delete…" }));
+    await user.click(screen.getByRole("button", { name: "Delete…" }));
     const dialog = screen.getByRole("alertdialog");
-    expect(dialog).toBeTruthy();
+    expect(dialog).toBeInTheDocument();
     const cancel = screen.getByRole("button", { name: "Keep post" });
-    expect(screen.getByRole("button", { name: "Delete post" })).toBeTruthy();
-    await waitFor(() => expect(document.activeElement).toBe(cancel));
-    fireEvent.keyDown(dialog, { key: "Escape" });
-    expect(screen.queryByRole("alertdialog")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Delete post" })).toBeInTheDocument();
+    expect(cancel).toHaveFocus();
+    await user.keyboard("{Escape}");
+    // Destructive confirmations are not Esc-dismissible in this design system.
+    expect(screen.queryByRole("alertdialog")).toBeInTheDocument();
   });
 
-  it("Cancel closes without action; Action fires and closes", () => {
+  it("Cancel closes without action and returns focus to the trigger", async () => {
+    const user = userEvent.setup();
     const onAction = vi.fn();
     render(<TestAlertDialog onAction={onAction} />);
-    fireEvent.click(screen.getByRole("button", { name: "Delete…" }));
-    fireEvent.click(screen.getByRole("button", { name: "Keep post" }));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    const trigger = screen.getByRole("button", { name: "Delete…" });
+    await user.click(trigger);
+    await user.click(screen.getByRole("button", { name: "Keep post" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(onAction).not.toHaveBeenCalled();
+    expect(trigger).toHaveFocus();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete…" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete post" }));
+  it("Action fires and closes", async () => {
+    const user = userEvent.setup();
+    const onAction = vi.fn();
+    render(<TestAlertDialog onAction={onAction} />);
+    await user.click(screen.getByRole("button", { name: "Delete…" }));
+    await user.click(screen.getByRole("button", { name: "Delete post" }));
     expect(onAction).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("keyboard-only: Enter on Cancel (the initial focus) dismisses safely", async () => {
+    const user = userEvent.setup();
+    const onAction = vi.fn();
+    render(<TestAlertDialog onAction={onAction} />);
+    const trigger = screen.getByRole("button", { name: "Delete…" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(onAction).not.toHaveBeenCalled();
   });
 });

@@ -1,48 +1,82 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
-import { describe, it, expect, beforeAll } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ensureDomShims } from "./test-utils";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./tabs";
 
-beforeAll(ensureDomShims);
+function TestTabs({ withDisabled = false }: { withDisabled?: boolean }) {
+  return (
+    <Tabs defaultValue="queue">
+      <TabsList aria-label="Sections">
+        <TabsTrigger value="queue">Queue</TabsTrigger>
+        <TabsTrigger value="history">History</TabsTrigger>
+        <TabsTrigger value="settings" disabled={withDisabled}>
+          Settings
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="queue">Queue panel</TabsContent>
+      <TabsContent value="history">History panel</TabsContent>
+      <TabsContent value="settings">Settings panel</TabsContent>
+    </Tabs>
+  );
+}
 
 describe("Tabs (ARIA tabs pattern)", () => {
-  it("renders tabs with roving selection and arrow-key movement", async () => {
-    render(
-      <Tabs defaultValue="queue">
-        <TabsList aria-label="Sections">
-          <TabsTrigger value="queue">Queue</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-        </TabsList>
-        <TabsContent value="queue">Queue panel</TabsContent>
-        <TabsContent value="history">History panel</TabsContent>
-      </Tabs>
-    );
+  it("renders the selected tab and its panel; unselected panels are absent", () => {
+    render(<TestTabs />);
     const queue = screen.getByRole("tab", { name: "Queue" });
-    const history = screen.getByRole("tab", { name: "History" });
-    expect(queue.getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("tabpanel").textContent).toBe("Queue panel");
-    queue.focus();
-    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowRight" });
-    await waitFor(() => expect(history.getAttribute("aria-selected")).toBe("true"));
-    expect(screen.getByRole("tabpanel").textContent).toBe("History panel");
+    expect(queue).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Queue panel");
   });
 
-  it("clicking a tab selects it", () => {
-    render(
-      <Tabs defaultValue="a">
-        <TabsList>
-          <TabsTrigger value="a">A</TabsTrigger>
-          <TabsTrigger value="b">B</TabsTrigger>
-        </TabsList>
-        <TabsContent value="a">Panel A</TabsContent>
-        <TabsContent value="b">Panel B</TabsContent>
-      </Tabs>
-    );
-    // Radix tabs activate on mouse down (the ARIA tabs pattern's
-    // automatic-activation behaviour), which a bare click event skips.
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "B" }));
-    expect(screen.getByRole("tabpanel").textContent).toBe("Panel B");
+  it("arrow keys move selection and focus (automatic activation)", async () => {
+    const user = userEvent.setup();
+    render(<TestTabs />);
+    const queue = screen.getByRole("tab", { name: "Queue" });
+    const history = screen.getByRole("tab", { name: "History" });
+    queue.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(history).toHaveAttribute("aria-selected", "true");
+    expect(history).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("History panel");
+    await user.keyboard("{ArrowLeft}");
+    expect(queue).toHaveAttribute("aria-selected", "true");
+    expect(queue).toHaveFocus();
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Queue panel");
+  });
+
+  it("Home / End jump to the first / last tab", async () => {
+    const user = userEvent.setup();
+    render(<TestTabs />);
+    screen.getByRole("tab", { name: "Queue" }).focus();
+    await user.keyboard("{End}");
+    const settings = screen.getByRole("tab", { name: "Settings" });
+    expect(settings).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("Settings panel");
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("tab", { name: "Queue" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("clicking a tab selects it", async () => {
+    const user = userEvent.setup();
+    render(<TestTabs />);
+    await user.click(screen.getByRole("tab", { name: "History" }));
+    expect(screen.getByRole("tab", { name: "History" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tabpanel")).toHaveTextContent("History panel");
+  });
+
+  it("a disabled tab cannot be selected by click or arrow keys", async () => {
+    const user = userEvent.setup();
+    render(<TestTabs withDisabled />);
+    const settings = screen.getByRole("tab", { name: "Settings" });
+    expect(settings).toBeDisabled();
+    await user.click(settings);
+    expect(settings).toHaveAttribute("aria-selected", "false");
+    screen.getByRole("tab", { name: "History" }).focus();
+    await user.keyboard("{ArrowRight}");
+    // Arrow past the disabled tab never lands the selection on it.
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByRole("tabpanel")).not.toHaveTextContent("Settings panel");
   });
 });
