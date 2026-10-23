@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { THEME, SPACING, RADII, TYPOGRAPHY } from '@/lib/theme';
+import { Card } from '@/components/shared/ui/card';
+import { EmptyState } from '@/components/shared/ui/empty-state';
 
 export interface FdolaStudioWorkspaceProps {
   subdomain: string;
@@ -12,54 +13,16 @@ export function FdolaStudioWorkspace({ subdomain: _subdomain }: Readonly<FdolaSt
     <div
       data-slot="fdola-studio-workspace"
       data-testid="fdola-studio-workspace"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '70vh',
-        padding: `${SPACING.xl} ${SPACING.md}`,
-        boxSizing: 'border-box',
-      }}
+      className="flex flex-col items-center justify-center px-6 py-12"
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-          padding: `${SPACING.xxl} ${SPACING.xl}`,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: SPACING.xs,
-          textAlign: 'center',
-          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontSize: '1.25rem',
-            fontWeight: TYPOGRAPHY.weights.semibold,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            letterSpacing: TYPOGRAPHY.tracking.h1,
-          }}
-        >
-          Fdola Studio
-        </h1>
-        <p
+      <Card className="w-full max-w-120">
+        <EmptyState
+          type="cleared"
+          title="Fdola Studio"
+          description="Desktop Workspace"
           data-testid="fdola-desktop-workspace-empty"
-          style={{
-            margin: 0,
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          }}
-        >
-          Desktop Workspace
-        </p>
-      </div>
+        />
+      </Card>
     </div>
   );
 }
