@@ -11,6 +11,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import {
   createR2S3Client,
   getR2Config,
@@ -232,7 +233,11 @@ export async function handleConfirmUpload(
 
     objectMetadata = await verifier.headObject(body.storageKey);
     verifiedUrl = verifier.getPublicUrl(body.storageKey);
-  } catch (_err) {
+  } catch (err) {
+    logServerError('[media/confirm] Failed to confirm media upload', err, {
+      source: 'media-confirm',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to confirm media upload' },
       { status: 500 }
@@ -377,7 +382,11 @@ export async function handleConfirmUpload(
     });
 
     return NextResponse.json(responsePayload, { status: 201 });
-  } catch (_err) {
+  } catch (err) {
+    logServerError('[media/confirm] Failed to confirm media upload', err, {
+      source: 'media-confirm',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to confirm media upload' },
       { status: 500 }

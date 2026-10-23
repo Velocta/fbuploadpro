@@ -9,6 +9,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleUpdateQueueSlot(
@@ -120,6 +121,10 @@ export async function handleUpdateQueueSlot(
           { status: 409 }
         );
       }
+      logServerError('[pages/slots] Failed to update queue slot', err, {
+        source: 'page-slots',
+        subdomain,
+      });
       return NextResponse.json(
         { error: 'INTERNAL_ERROR', message: 'Failed to update queue slot' },
         { status: 500 }

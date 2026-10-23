@@ -9,6 +9,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleListFolders(
@@ -257,6 +258,10 @@ export async function handleCreateFolder(
           { status: 409 }
         );
       }
+      logServerError('[media/folders] Failed to create folder', err, {
+        source: 'media-folders',
+        subdomain,
+      });
       return NextResponse.json(
         { error: 'INTERNAL_ERROR', message: 'Failed to create folder' },
         { status: 500 }
@@ -309,6 +314,10 @@ export async function handleCreateFolder(
           { status: 409 }
         );
       }
+      logServerError('[media/folders] Folder insert failed', insertErr, {
+        source: 'media-folders',
+        subdomain,
+      });
       return NextResponse.json(
         { error: 'INTERNAL_ERROR', message: 'Failed to create folder' },
         { status: 500 }
@@ -328,7 +337,10 @@ export async function handleCreateFolder(
 
     return NextResponse.json(responsePayload, { status: 201 });
   } catch (err) {
-    console.error('Failed to create folder in Supabase:', err);
+    logServerError('Failed to create folder in Supabase:', err, {
+      source: 'media-folders',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to create folder' },
       { status: 500 }

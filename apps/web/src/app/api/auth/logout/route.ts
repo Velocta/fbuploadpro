@@ -7,6 +7,7 @@ import {
   purgeHostOnlySessionCookie,
 } from '@/lib/auth/session';
 import { buildCentralAppUrl } from '@fbuploadpro/contracts';
+import { logServerError } from '@/lib/server-analytics';
 
 export async function POST(request?: NextRequest) {
   try {
@@ -51,7 +52,9 @@ export async function POST(request?: NextRequest) {
 
     return response;
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Logout failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Log the detail server-side; the client gets the generic message
+    // (the raw error message used to leak here, spec 139 C1 pattern).
+    logServerError('[auth/logout] Logout failed', error, { source: 'auth-logout' });
+    return NextResponse.json({ error: 'Logout failed' }, { status: 500 });
   }
 }

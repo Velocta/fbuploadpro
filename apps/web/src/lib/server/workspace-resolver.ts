@@ -1,5 +1,6 @@
 import type { DatabaseClient, UserRole } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -22,8 +23,13 @@ export async function resolveTenantWorkspaceId(
       const params = isAdmin ? [subdomain] : [subdomain, userId];
       const rows = (await (client as DatabaseClient).query(sql, params)) as Array<{ id: string }>;
       return rows?.[0]?.id ?? null;
-    } catch {
-      // Database query error: workspace unresolved
+    } catch (err) {
+      // Database query error: workspace unresolved. Logged (spec 139
+      // B19) — a DB outage must not silently masquerade as a 404.
+      logServerError('[workspace-resolver] Legacy workspace lookup failed', err, {
+        source: 'workspace-resolver',
+        subdomain,
+      });
       return null;
     }
   }
@@ -40,12 +46,24 @@ export async function resolveTenantWorkspaceId(
     }
     const { data: ws, error } = await query.maybeSingle();
 
-    if (error || !ws?.id) {
+    if (error) {
+      // Logged (spec 139 B19): a query failure is not a missing workspace.
+      logServerError('[workspace-resolver] Workspace lookup failed', error, {
+        source: 'workspace-resolver',
+        subdomain,
+      });
+      return null;
+    }
+    if (!ws?.id) {
       return null;
     }
     return ws.id;
-  } catch {
-    // Query error: workspace unresolved
+  } catch (err) {
+    // Query error: workspace unresolved (logged, spec 139 B19).
+    logServerError('[workspace-resolver] Workspace lookup threw', err, {
+      source: 'workspace-resolver',
+      subdomain,
+    });
     return null;
   }
 }

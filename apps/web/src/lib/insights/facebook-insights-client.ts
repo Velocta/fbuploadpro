@@ -12,6 +12,7 @@ import {
   GRAPH_API_TIMEOUT_MS,
   fetchWithTimeout,
 } from '@/lib/http/fetch-with-timeout';
+import { logServerError } from '@/lib/server-analytics';
 
 export interface PageOverviewResult {
   overview: PageInsightsOverview;
@@ -43,6 +44,11 @@ export async function getPageOverview(
 
     if (!res.ok || data.error) {
       const err = data.error || {};
+      logServerError(
+        '[insights] Graph page overview request failed',
+        new Error(err.message || `Graph request failed with status ${res.status}`),
+        { source: 'facebook-insights-client', fbPageId, status: res.status }
+      );
       const evalResult = evaluateGraphApiError(err.code, err.error_subcode);
 
       let healthStatus: PageInsightsHealthStatus = 'active';
@@ -97,6 +103,13 @@ export async function getPageOverview(
       healthStatus: 'active',
     };
   } catch (err: unknown) {
+    // Fallback behaviour unchanged (zero-filled overview, 'active'
+    // status), but the failure is logged (spec 139 B19) — a Graph
+    // outage must not silently present as a healthy empty page.
+    logServerError('[insights] Graph page overview threw', err, {
+      source: 'facebook-insights-client',
+      fbPageId,
+    });
     const message = err instanceof Error ? err.message : 'Unknown network failure';
     return {
       overview: {
@@ -195,6 +208,16 @@ export async function getPageTimeSeriesInsights(
     );
     const payload = await res.json();
 
+    if (!res.ok || !Array.isArray(payload.data)) {
+      logServerError(
+        '[insights] Graph time-series request failed',
+        new Error(
+          payload?.error?.message || `Graph request failed with status ${res.status}`
+        ),
+        { source: 'facebook-insights-client', fbPageId, status: res.status }
+      );
+    }
+
     if (res.ok && Array.isArray(payload.data)) {
       for (const metric of payload.data) {
         const metricName = metric.name;
@@ -240,8 +263,13 @@ export async function getPageTimeSeriesInsights(
         }
       }
     }
-  } catch (_e) {
-    // If Graph API fails, return the initialized zero-filled array gracefully
+  } catch (err) {
+    // If Graph API fails, return the initialized zero-filled array
+    // gracefully — logged (spec 139 B19), not silent.
+    logServerError('[insights] Graph time-series threw', err, {
+      source: 'facebook-insights-client',
+      fbPageId,
+    });
   }
 
   const timeSeries = Array.from(daysMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -331,6 +359,16 @@ export async function getPageReactionsAndDemographics(
     );
     const payload = await res.json();
 
+    if (!res.ok || !Array.isArray(payload.data)) {
+      logServerError(
+        '[insights] Graph reactions/demographics request failed',
+        new Error(
+          payload?.error?.message || `Graph request failed with status ${res.status}`
+        ),
+        { source: 'facebook-insights-client', fbPageId, status: res.status }
+      );
+    }
+
     if (res.ok && Array.isArray(payload.data)) {
       for (const item of payload.data) {
         const metricName = item.name;
@@ -382,8 +420,13 @@ export async function getPageReactionsAndDemographics(
         reactions.sorry +
         reactions.anger;
     }
-  } catch (_e) {
-    // Graceful fallback with empty default structures
+  } catch (err) {
+    // Graceful fallback with empty default structures — logged
+    // (spec 139 B19), not silent.
+    logServerError('[insights] Graph reactions/demographics threw', err, {
+      source: 'facebook-insights-client',
+      fbPageId,
+    });
   }
 
   return {

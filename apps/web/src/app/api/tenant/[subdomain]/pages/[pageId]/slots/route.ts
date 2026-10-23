@@ -12,6 +12,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { recomputeSlotScheduledTime } from '@/lib/slot-scheduler';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -229,6 +230,10 @@ export async function handleCreateQueueSlot(
           { status: 409 }
         );
       }
+      logServerError('[pages/slots] Failed to create queue slot', err, {
+        source: 'page-slots',
+        subdomain,
+      });
       return NextResponse.json(
         { error: 'INTERNAL_ERROR', message: 'Failed to create queue slot' },
         { status: 500 }

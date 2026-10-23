@@ -11,6 +11,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -127,7 +128,11 @@ export async function handleDiscoverPages(
   let rawToken: string;
   try {
     rawToken = await decryptToken(encryptedToken, encryptionKey);
-  } catch (_e) {
+  } catch (err) {
+    logServerError('[pages/discover] Failed to decrypt account credentials', err, {
+      source: 'pages-discover',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'Failed to decrypt account credentials' },
       { status: 500 }
@@ -142,6 +147,10 @@ export async function handleDiscoverPages(
       'id,name,category,tasks,access_token,followers_count,picture{url}'
     );
   } catch (err: unknown) {
+    logServerError('[pages/discover] Facebook Graph query failed', err, {
+      source: 'pages-discover',
+      subdomain,
+    });
     const status =
       err !== null &&
       typeof err === 'object' &&

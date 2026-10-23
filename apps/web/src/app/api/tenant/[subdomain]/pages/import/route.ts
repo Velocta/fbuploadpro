@@ -13,6 +13,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -123,7 +124,11 @@ export async function handleImportPages(
   let rawToken: string;
   try {
     rawToken = await decryptToken(encryptedToken, encryptionKey);
-  } catch (_e) {
+  } catch (err) {
+    logServerError('[pages/import] Failed to decrypt account credentials', err, {
+      source: 'pages-import',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'Failed to decrypt account credentials' },
       { status: 500 }
@@ -137,7 +142,11 @@ export async function handleImportPages(
       rawToken,
       'id,name,category,tasks,access_token,followers_count,picture{url}'
     );
-  } catch (_err) {
+  } catch (err) {
+    logServerError('[pages/import] Facebook Graph query failed', err, {
+      source: 'pages-import',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'Failed to query Facebook Graph API' },
       { status: 502 }

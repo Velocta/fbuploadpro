@@ -15,6 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '@/lib/storage';
 import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
+import { logServerError } from '@/lib/server-analytics';
 import {
   MediaDownloaderError,
   resolveAndUploadMediaFromUrl,
@@ -411,6 +412,12 @@ export async function handleDownloadMediaFromUrl(
     if (uploadedItemsToCleanup && uploadedItemsToCleanup.length > 0) {
       await cleanupUploadedItems(storage, uploadedItemsToCleanup);
     }
+    if (!(err instanceof MediaDownloaderError) || err.statusCode >= 500) {
+      logServerError('[downloader] Media download failed', err, {
+        source: 'downloader-ingest',
+        subdomain,
+      });
+    }
     if (err instanceof MediaDownloaderError) {
       return NextResponse.json(
         { error: err.code, message: err.message },
@@ -506,14 +513,13 @@ export async function handleGetDownloadJobs(
 
     return NextResponse.json({ success: true, jobs: jobs || [] }, { status: 200 });
   } catch (err: unknown) {
-    const message =
-      err !== null &&
-      typeof err === 'object' &&
-      'message' in err &&
-      typeof err.message === 'string'
-        ? err.message
-        : undefined;
-    return NextResponse.json({ error: 'Internal Error', message }, { status: 500 });
+    // Spec 139 C1: log the detail server-side; the client gets the
+    // generic shape only (the raw error message used to leak here).
+    logServerError('[downloader] Failed to fetch download jobs', err, {
+      source: 'downloader-jobs',
+      subdomain,
+    });
+    return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
   }
 }
 

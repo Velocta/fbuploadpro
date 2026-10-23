@@ -10,6 +10,7 @@ import {
   type PageInsightsResponse,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -144,7 +145,12 @@ export async function handleGetInsights(
   let decryptedToken: string;
   try {
     decryptedToken = await decryptToken(page.encrypted_access_token, encryptionKey);
-  } catch (_err) {
+  } catch (err) {
+    logServerError('[pages/insights] Failed to decrypt Facebook access credentials', err, {
+      source: 'page-insights',
+      subdomain,
+      pageId,
+    });
     return NextResponse.json(
       { error: 'Failed to decrypt Facebook access credentials' },
       { status: 500 }
@@ -261,10 +267,19 @@ export async function handleGetInsights(
       errCode === 613 ||
       errCode === 80001;
 
+    // Spec 139 B3/C1 pattern: the provider detail is logged server-side
+    // only; the client gets the route family's generic message (the raw
+    // Graph error message used to be returned in this body).
+    logServerError('[pages/insights] Facebook Graph request failed', err, {
+      source: 'page-insights',
+      subdomain,
+      pageId,
+      rateLimited: isRateLimited,
+    });
     return NextResponse.json(
       {
         error: isRateLimited ? 'FB_RATE_LIMITED' : 'UPSTREAM_GRAPH_ERROR',
-        message: err instanceof Error ? err.message : 'Facebook Graph API failed to return page insights.',
+        message: 'Facebook Graph API failed to return page insights.',
       },
       { status: isRateLimited ? 429 : 502 }
     );

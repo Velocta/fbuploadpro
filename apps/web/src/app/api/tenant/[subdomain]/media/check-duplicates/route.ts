@@ -10,6 +10,7 @@ import {
   type DatabaseMediaItemRow,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 
@@ -213,7 +214,13 @@ export async function handleCheckDuplicates(
 
   const { rows, error } = await querySupabaseDuplicates(supabase, session.userId, folderId, entries);
   if (error) {
-    return NextResponse.json({ error }, { status: 500 });
+    // Spec 139 C1: the raw PostgREST error stays server-side; the
+    // client gets the route family's generic error shape.
+    logServerError('[media/check-duplicates] Duplicate check query failed', error, {
+      source: 'media-check-duplicates',
+      subdomain,
+    });
+    return NextResponse.json({ error: 'Failed to check duplicates' }, { status: 500 });
   }
 
   const duplicates = findDuplicatesInRows(entries, rows || [], folderId);
