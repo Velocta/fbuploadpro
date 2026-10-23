@@ -46,4 +46,4 @@ apps/web/src/components/ui/tooltip.tsx 3
 apps/web/src/components/workspace/workspace-lifecycle-guard.tsx 4
 apps/web/src/lib/api/errors.ts 1
 apps/web/src/lib/auth/workspaces.ts 5
-apps/web/src/lib/connect/persist.ts 10
+apps/web/src/lib/connect/persist.ts 8
