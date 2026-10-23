@@ -362,6 +362,52 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
     expect(progressUpdates.at(-1)?.completedLinks).toBe(2);
   });
 
+  it('completes an async 202 job through polling and saves the media item the job produced', async () => {
+    const jobId = 'job-async-1';
+    const completedJob = {
+      id: jobId,
+      status: 'completed',
+      source_url: 'https://www.tiktok.com/@creator/video/111',
+      source_platform: 'tiktok',
+      media_id: SAMPLE_DOWNLOADED_ITEMS[0]!.id,
+      folder_id: '11111111-1111-4111-8111-111111111111',
+      progress_percent: 100,
+      error_message: null,
+    };
+
+    const mockFetch = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST') {
+          return new Response(JSON.stringify({ success: true, job: { id: jobId } }), {
+            status: 202,
+          });
+        }
+        if (url.includes('jobId=')) {
+          return new Response(JSON.stringify({ success: true, job: completedJob }), {
+            status: 200,
+          });
+        }
+        // GET /media/<id> — the route returns the BARE item (no envelope)
+        return new Response(JSON.stringify(SAMPLE_DOWNLOADED_ITEMS[0]), {
+          status: 200,
+        });
+      }
+    ) as unknown as typeof fetch;
+
+    const batchResult = await executeDownloaderBatch({
+      subdomain: 'acme',
+      rawInput: 'https://www.tiktok.com/@creator/video/111',
+      folderId: '11111111-1111-4111-8111-111111111111',
+      fetchImpl: mockFetch,
+    });
+
+    expect(batchResult.failedEntries).toHaveLength(0);
+    expect(batchResult.savedEntries).toHaveLength(1);
+    expect(batchResult.savedEntries[0]?.item.id).toBe(SAMPLE_DOWNLOADED_ITEMS[0]!.id);
+    expect(batchResult.savedEntries[0]?.platform).toBe('tiktok');
+  });
+
   it('renders a single unified Windows Copy-style batch progress bar and deduplication notice during active downloads', () => {
     const activeProgress: DownloaderBatchProgressState = {
       status: 'downloading',

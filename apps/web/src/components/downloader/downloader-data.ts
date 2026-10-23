@@ -18,12 +18,12 @@ import { apiFetch, buildTenantApiPath, isApiError } from '@/lib/api';
 import {
   FolderListResponseSchema,
   MediaFolderSchema,
+  MediaItemSchema,
 } from '@/lib/api/schemas/media';
 import {
   DownloaderIngestResponseSchema,
   DownloaderJobPollResponseSchema,
   DownloaderRecentJobsResponseSchema,
-  MediaItemEnvelopeSchema,
   type DownloaderJob,
   type DownloaderJobPollResponse,
 } from '@/lib/api/schemas/downloader';
@@ -306,17 +306,25 @@ async function fetchJobMediaItem(params: {
   const { subdomain, job, fetchImpl, signal } = params;
   if (!job.media_id) return [];
   try {
-    const data = await apiFetch(
+    const body = await apiFetch(
       buildTenantApiPath(subdomain, `/media/${job.media_id}`),
       {
-        schema: MediaItemEnvelopeSchema,
         ...(fetchImpl ? { fetchFn: fetchImpl } : {}),
         ...(signal ? { signal } : {}),
       }
     );
+    // The media GET returns the bare item object (the legacy engine's
+    // `mediaData?.item ?? mediaData` fallback existed for this) — accept
+    // the bare item, tolerating an { item } envelope, and validate.
+    const candidate =
+      body !== null && typeof body === 'object' && 'item' in body
+        ? (body as { item: unknown }).item
+        : body;
+    const parsed = MediaItemSchema.safeParse(candidate);
+    if (!parsed.success) return [];
     return [
       {
-        item: data.item,
+        item: parsed.data,
         sourceUrl: job.source_url,
         platform: job.source_platform,
       },

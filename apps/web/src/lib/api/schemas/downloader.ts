@@ -59,9 +59,3 @@ export const DownloaderRecentJobsResponseSchema = z.object({
 export type DownloaderRecentJobsResponse = z.infer<
   typeof DownloaderRecentJobsResponseSchema
 >;
-
-/** `GET …/media/[mediaId]` success envelope. */
-export const MediaItemEnvelopeSchema = z.object({
-  item: MediaItemSchema,
-});
-export type MediaItemEnvelope = z.infer<typeof MediaItemEnvelopeSchema>;
