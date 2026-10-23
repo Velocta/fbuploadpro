@@ -16,9 +16,27 @@ import {
   useUploadNavigationGuard,
   getInitialViewMode,
   computeActiveFilterCount,
+  readInternalDropPayload,
   type MoveTargetState,
   type MediaLibraryExplorerProps,
 } from './media-library-helpers';
+import {
+  invalidateMediaAll,
+  useBatchCaptionMedia,
+  useBatchDeleteMedia,
+  useBatchMoveMedia,
+  useCreateFolder,
+  useDeleteFolder,
+  useDeleteMediaItem,
+  useMediaFolders,
+  useMediaItems,
+  useRenameFolder,
+  useReparentMedia,
+  useUpdateItemCaption,
+} from './media-data';
+import { useQueryClient } from '@tanstack/react-query';
+import { reportError } from '@/lib/report-error';
+import { setPreference, preferences } from '@/lib/storage/preferences';
 export { MEDIA_VIEW_MODE_STORAGE_KEY } from './media-library-helpers';
 export type { MoveTargetState, MediaLibraryExplorerProps } from './media-library-helpers';
 import { buildFolderBreadcrumbs } from './media-library-breadcrumbs';
@@ -44,11 +62,9 @@ export type { MediaImportModalProps } from './media-import-progress';
 export type { ActiveDropdownKey } from './media-library-filters';
 import { MediaToolbar } from './media-library-toolbar';
 import { type ActiveDropdownKey } from './media-library-filters';
-import { useMediaLibraryActions } from './use-media-library-actions';
 import { MediaLibraryHeader } from './media-library-header';
 import { MediaLibraryMain } from './media-library-main';
 import { MediaLibraryOverlays } from './media-library-overlays';
-import { MEDIA_VIEW_MODE_STORAGE_KEY } from './media-library-helpers';
 export type { MediaViewMode, MediaTypeFilterKey, AspectRatioFilterKey, CaptionStatusFilterKey, SortOptionKey, MediaSmartViewKey } from './media-types';
 
 export type { FolderSubtreeImpact } from './media-library-filters';
@@ -68,10 +84,19 @@ export function MediaLibraryExplorer({
   initialPendingDuplicateUpload,
   initialDeleteFolderTarget = null,
 }: Readonly<MediaLibraryExplorerProps>) {
-  const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
-  const [mediaItems, setMediaItems] = useState<MediaItemResponse[]>(
-    initialMediaItems ?? []
+  // Data (spec 133 §6.1): the React Query cache is the surface's
+  // store. The route hydrates it server-first; the `initial*` props
+  // remain as the test/seed API and feed the queries' initial data.
+  const queryClient = useQueryClient();
+  const foldersQuery = useMediaFolders(subdomain, { initialFolders });
+  const itemsQuery = useMediaItems(subdomain, { initialItems: initialMediaItems });
+  const folders = useMemo<MediaFolder[]>(() => foldersQuery.data ?? [], [foldersQuery.data]);
+  const mediaItems = useMemo<MediaItemResponse[]>(
+    () => itemsQuery.data ?? [],
+    [itemsQuery.data]
   );
+  const isLoading = itemsQuery.isPending || foldersQuery.isPending;
+
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(
     initialCurrentFolderId
   );
@@ -79,20 +104,15 @@ export function MediaLibraryExplorer({
     initialActiveSmartView
   );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(!initialMediaItems);
 
   // View mode
   const [viewMode, setViewMode] = useState<MediaViewMode>(() => getInitialViewMode(initialViewMode));
 
   const handleChangeViewMode = (mode: MediaViewMode) => {
     setViewMode(mode);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(MEDIA_VIEW_MODE_STORAGE_KEY, mode);
-      } catch {
-        // Intentional: localStorage may be unavailable (private mode/quota) — view mode just won't persist.
-      }
-    }
+    // Typed preferences helper (spec 137 §3.9): a failed write
+    // (unavailable/full store) just means the mode won't persist.
+    setPreference(preferences.mediaViewMode, mode);
   };
 
   // Search & Filters
