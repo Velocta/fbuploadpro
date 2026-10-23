@@ -605,9 +605,16 @@ fi
 # (same discipline as checks 9/12-15): any increase or new file+literal
 # fails with file:line; a decrease fails until the baseline entry is
 # removed in the same PR (the baseline burns down as surfaces 130-136
-# rebuild — do NOT add entries). Line-based heuristic, same class as
-# the rest of this script: the width feature must sit on the @media
-# line, which is how every @media query in this tree is written.
+# rebuild — do NOT add entries). The finder parses each @media PRELUDE
+# (from the @media token to its opening brace) instead of a single
+# line, so multi-line preludes are caught; inside a prelude it
+# inspects every parenthesised width feature — (min|max)-width: … and
+# the range form (width <= …) — and extracts EVERY length literal in
+# the feature's value, so resolved values such as
+# (max-width: max(1025px, 100vw)) and non-px units (vw/em/rem) cannot
+# slip past the way the old first-px-on-the-@media-line regex allowed.
+# A literal is on-scale only if it is exactly one of
+# 480px / 768px / 1024px / 1280px.
 # A missing baseline file grants ZERO exemptions (every off-scale
 # literal then fails with file:line) rather than failing on the
 # missing file itself — that keeps the synthetic fixture trees of
@@ -618,23 +625,54 @@ fi
 # EMPTY sorted baseline is not mistaken for the current counts.
 # ---------------------------------------------------------------------------
 RESP_BASELINE="apps/web/responsive-media-baseline.txt"
-RESP_ALLOWED=" 480 768 1024 1280 "
+RESP_ALLOWED=" 480px 768px 1024px 1280px "
   RESP_OCCURRENCES="$(mktemp)"
   RESP_COUNTS_RAW="$(mktemp)"
-  while IFS= read -r match; do
-    rfile="$(printf '%s' "$match" | cut -d: -f1)"
-    rline="$(printf '%s' "$match" | cut -d: -f2)"
-    while IFS= read -r feat; do
-      [ -z "$feat" ] && continue
-      lit="$(printf '%s' "$feat" | grep -oE '[0-9]+(\.[0-9]+)?px' | head -1)"
-      num="${lit%px}"
-      case "$RESP_ALLOWED" in
-        *" $num "*) continue ;;
-      esac
-      printf '%s:%s %s\n' "$rfile" "$rline" "$lit" >> "$RESP_OCCURRENCES"
-      printf '%s %s\n' "$rfile" "$lit" >> "$RESP_COUNTS_RAW"
-    done < <(printf '%s' "$match" | grep -oE '(min|max)-width:[[:space:]]*[0-9]+(\.[0-9]+)?px' || true)
-  done < <(grep -rn '@media' --include='*.css' --include='*.tsx' apps/web/src 2>/dev/null || true)
+  while IFS= read -r rfile; do
+    [ -n "$rfile" ] || continue
+    awk -v allowed="$RESP_ALLOWED" '
+      function emit_group(grp,   rest, lit) {
+        if (grp !~ /(min|max)-width[[:space:]]*:/ && grp !~ /width[[:space:]]*:/ && grp !~ /width[[:space:]]*[<>=]/) return
+        rest = grp
+        while (match(rest, /[0-9]+(\.[0-9]+)?(px|vw|em|rem)/)) {
+          lit = substr(rest, RSTART, RLENGTH)
+          rest = substr(rest, RSTART + RLENGTH)
+          if (index(allowed, " " lit " ") == 0)
+            printf "%s:%d %s\n", FILENAME, startline, lit
+        }
+      }
+      function emit_prelude(pre,   depth, i, c, gs) {
+        depth = 0; gs = 0
+        for (i = 1; i <= length(pre); i++) {
+          c = substr(pre, i, 1)
+          if (c == "(") { if (depth == 0) gs = i; depth++ }
+          else if (c == ")") {
+            depth--
+            if (depth == 0 && gs > 0) { emit_group(substr(pre, gs, i - gs + 1)); gs = 0 }
+          }
+        }
+      }
+      {
+        line = $0
+        if (inpre) { buf = buf " " line; line = "" }
+        while (1) {
+          if (inpre) {
+            b = index(buf, "{")
+            if (b == 0) break
+            emit_prelude(substr(buf, 1, b - 1))
+            line = substr(buf, b + 1)
+            buf = ""; inpre = 0
+            if (length(line) == 0) break
+          } else {
+            idx = index(line, "@media")
+            if (idx == 0) break
+            inpre = 1; startline = FNR; buf = substr(line, idx); line = ""
+          }
+        }
+      }
+    ' "$rfile" >> "$RESP_OCCURRENCES"
+  done < <(find apps/web/src -type f \( -name '*.css' -o -name '*.tsx' -o -name '*.ts' \) 2>/dev/null | sort)
+  awk '{ f = $1; sub(/:[0-9]+$/, "", f); print f, $2 }' "$RESP_OCCURRENCES" > "$RESP_COUNTS_RAW"
   RESP_CURRENT="$(mktemp)"
   sort "$RESP_COUNTS_RAW" | uniq -c | awk '{print $2, $3, $1}' | sort > "$RESP_CURRENT"
   RESP_BASE_SORTED="$(mktemp)"
