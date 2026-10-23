@@ -18,6 +18,45 @@ const FB_RETRY_MAX_ATTEMPTS = 3;
 const FB_RETRY_BASE_DELAY_MS = 1000;
 const FB_RETRY_MAX_DELAY_MS = 8000;
 
+// --- Per-call timeouts (spec 139) ---
+// Every fetch in this client carries an AbortSignal.timeout so a hung
+// connection can never stall a publish job indefinitely. Graph JSON calls
+// are small request/response pairs (15s is generous); media transfers move
+// whole video files, so they get the larger budget.
+export const FB_GRAPH_TIMEOUT_MS = 15_000;
+export const FB_MEDIA_TIMEOUT_MS = 30_000;
+
+/**
+ * Per-call retry policy (spec 139) — every `fetchWithRetry` call site must
+ * declare one of these explicitly:
+ *
+ * - `retryable`: the call is idempotent or strictly pre-publish, so replaying
+ *   it verbatim cannot create a visible post — upload-session `start` calls,
+ *   the unpublished-photo upload behind a photo story (`published: false`),
+ *   and fetching the source media bytes. These keep the historical behaviour:
+ *   retry network failures, HTTP 429/5xx, and transient Graph errors with
+ *   exponential backoff, up to FB_RETRY_MAX_ATTEMPTS.
+ *
+ * - `single-attempt`: the call is publish-mutating (it creates a visible
+ *   post, story, or comment) or carries a one-shot body that cannot be
+ *   replayed (the rupload byte stream). These are NEVER retried by this
+ *   client. A network error or a 5xx on a publish POST is ambiguous: Facebook
+ *   may have processed the request and only the response was lost, so a
+ *   blind retry would double-post. Instead the failure surfaces immediately
+ *   and the retry decision moves up to the queue/publisher layer, which
+ *   retries the whole queue item with its own backoff; if the first attempt
+ *   did land, Facebook's duplicate detection (Graph code 506, and 368 with
+ *   subcode 1404082) answers the retry and the publisher classifies that as
+ *   a permanent failure — the same duplicate handling that already exists
+ *   in `FacebookGraphError` / `evaluateGraphApiError`, not a new mechanism.
+ */
+type FetchRetryPolicy = 'retryable' | 'single-attempt';
+
+interface FetchCallOptions {
+  policy: FetchRetryPolicy;
+  timeoutMs: number;
+}
+
 function sleepMs(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -234,6 +273,10 @@ export function parseGraphRateLimitHeaders(
 export interface FacebookPublishClientOptions {
   baseUrl?: string;
   fetchFn?: typeof fetch;
+  /** Per-attempt timeout for Graph API calls. Defaults to FB_GRAPH_TIMEOUT_MS. */
+  graphTimeoutMs?: number;
+  /** Per-attempt timeout for media transfers. Defaults to FB_MEDIA_TIMEOUT_MS. */
+  mediaTimeoutMs?: number;
 }
 
 function trimTrailingSlashes(str: string): string {
@@ -247,10 +290,24 @@ function trimTrailingSlashes(str: string): string {
 export class FacebookPublishClient implements IFacebookPublishClient {
   private readonly baseUrl: string;
   private readonly fetchFn: typeof fetch;
+  private readonly graphTimeoutMs: number;
+  private readonly mediaTimeoutMs: number;
 
   constructor(options?: FacebookPublishClientOptions) {
     this.baseUrl = trimTrailingSlashes(options?.baseUrl ?? FB_GRAPH_API_BASE_URL);
     this.fetchFn = options?.fetchFn ?? globalThis.fetch;
+    this.graphTimeoutMs = options?.graphTimeoutMs ?? FB_GRAPH_TIMEOUT_MS;
+    this.mediaTimeoutMs = options?.mediaTimeoutMs ?? FB_MEDIA_TIMEOUT_MS;
+  }
+
+  /** Fetch options for a Graph API call under the retryable (pre-publish) policy. */
+  private graphRetryable(): FetchCallOptions {
+    return { policy: 'retryable', timeoutMs: this.graphTimeoutMs };
+  }
+
+  /** Fetch options for a publish-mutating Graph call: exactly one attempt. */
+  private graphPublish(): FetchCallOptions {
+    return { policy: 'single-attempt', timeoutMs: this.graphTimeoutMs };
   }
 
   async publishReel(params: {
@@ -272,7 +329,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       body: JSON.stringify({
         upload_phase: 'start',
       }),
-    });
+    }, this.graphRetryable());
 
     const startData = (await this.parseJsonResponse(startRes)) as {
       video_id?: string;
@@ -308,7 +365,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
         description: caption,
         video_id: videoId,
       }),
-    });
+    }, this.graphPublish());
 
     const finishData = (await this.parseJsonResponse(finishRes)) as {
       success?: boolean;
@@ -347,7 +404,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
         caption,
         published: true,
       }),
-    });
+    }, this.graphPublish());
 
     const data = (await this.parseJsonResponse(res)) as {
       id?: string;
@@ -389,7 +446,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(bodyPayload),
-    });
+    }, this.graphPublish());
 
     const data = (await this.parseJsonResponse(res)) as {
       id?: string;
@@ -433,7 +490,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(bodyPayload),
-    });
+    }, this.graphPublish());
 
     const data = (await this.parseJsonResponse(res)) as {
       id?: string;
@@ -471,7 +528,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
         url: imageUrl,
         published: false,
       }),
-    });
+    }, this.graphRetryable());
 
     const photoData = (await this.parseJsonResponse(photoRes)) as {
       id?: string;
@@ -498,7 +555,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       body: JSON.stringify({
         photo_id: photoId,
       }),
-    });
+    }, this.graphPublish());
 
     const storyData = (await this.parseJsonResponse(storyRes)) as {
       id?: string;
@@ -533,7 +590,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       body: JSON.stringify({
         upload_phase: 'start',
       }),
-    });
+    }, this.graphRetryable());
 
     const startData = (await this.parseJsonResponse(startRes)) as {
       video_id?: string;
@@ -567,7 +624,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
         upload_phase: 'finish',
         video_id: videoId,
       }),
-    });
+    }, this.graphPublish());
 
     const finishData = (await this.parseJsonResponse(finishRes)) as {
       id?: string;
@@ -601,7 +658,7 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       body: JSON.stringify({
         message,
       }),
-    });
+    }, this.graphPublish());
 
     const data = (await this.parseJsonResponse(res)) as {
       id?: string;
@@ -621,28 +678,47 @@ export class FacebookPublishClient implements IFacebookPublishClient {
   }
 
   /**
-   * fetch with exponential backoff. Retries network failures, HTTP 429/5xx,
-   * and transient Graph API errors (e.g. rate-limit 368). Returns the last
-   * response when retries are exhausted so callers' existing error handling applies.
+   * fetch under a per-call retry policy (see FetchRetryPolicy). `retryable`
+   * calls retry network failures, HTTP 429/5xx, and transient Graph API
+   * errors (e.g. rate-limit 368) with exponential backoff; `single-attempt`
+   * (publish-mutating) calls make exactly one attempt — a lost response is
+   * ambiguous and must not be blindly replayed. Returns the last response
+   * when retries are exhausted so callers' existing error handling applies.
+   * Every attempt is bounded by the call's timeout via AbortSignal.timeout.
    */
-  private async fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  private async fetchWithRetry(
+    url: string,
+    init: RequestInit | undefined,
+    options: FetchCallOptions
+  ): Promise<Response> {
+    const maxAttempts = options.policy === 'retryable' ? FB_RETRY_MAX_ATTEMPTS : 1;
     let attempt = 0;
     for (;;) {
       attempt += 1;
       let res: Response;
       try {
-        res = await this.fetchFn(url, init);
+        res = await this.fetchFn(url, this.withTimeout(init, options.timeoutMs));
       } catch (err) {
-        if (attempt >= FB_RETRY_MAX_ATTEMPTS) throw err;
+        if (attempt >= maxAttempts) throw err;
         await sleepMs(retryDelayMs(attempt));
         continue;
       }
       if (res.ok) return res;
-      if (attempt >= FB_RETRY_MAX_ATTEMPTS || !(await isRetryableGraphResponse(res))) {
+      if (attempt >= maxAttempts || !(await isRetryableGraphResponse(res))) {
         return res;
       }
       await sleepMs(retryDelayMs(attempt));
     }
+  }
+
+  /**
+   * Applies a fresh per-attempt timeout to a fetch init, unless the caller
+   * supplied its own signal (none do today — kept so a future caller-managed
+   * cancellation is never silently replaced).
+   */
+  private withTimeout(init: RequestInit | undefined, timeoutMs: number): RequestInit {
+    if (init?.signal) return init;
+    return { ...init, signal: AbortSignal.timeout(timeoutMs) };
   }
 
   private async parseJsonResponse(res: Response): Promise<Record<string, unknown>> {
@@ -666,11 +742,17 @@ export class FacebookPublishClient implements IFacebookPublishClient {
     accessToken: string,
     videoUrl: string
   ): Promise<void> {
-    const videoRes = await this.fetchWithRetry(videoUrl);
+    const videoRes = await this.fetchWithRetry(videoUrl, undefined, {
+      policy: 'retryable',
+      timeoutMs: this.mediaTimeoutMs,
+    });
     if (!videoRes.ok || !videoRes.body) {
       throw new InternalError(`Failed to fetch video from ${videoUrl}: HTTP ${videoRes.status}`);
     }
 
+    // Single-attempt: the request body is a one-shot ReadableStream that
+    // cannot be replayed after a lost response; the queue layer retries the
+    // whole publish (re-fetch + re-upload) instead.
     const uploadRes = await this.fetchWithRetry(uploadUrl, {
       method: 'POST',
       headers: {
@@ -680,203 +762,14 @@ export class FacebookPublishClient implements IFacebookPublishClient {
       },
       body: videoRes.body,
       duplex: 'half',
-    } as RequestInit);
+    } as RequestInit, {
+      policy: 'single-attempt',
+      timeoutMs: this.mediaTimeoutMs,
+    });
 
     if (!uploadRes.ok) {
       const uploadData = await this.parseJsonResponse(uploadRes);
       throw this.createGraphError(uploadRes, uploadData);
     }
-  }
-}
-
-export class MockFacebookPublishClient implements IFacebookPublishClient {
-  public reelsPublished: Array<{
-    pageId: string;
-    accessToken: string;
-    videoUrl: string;
-    caption: string;
-  }> = [];
-
-  public photosPublished: Array<{
-    pageId: string;
-    accessToken: string;
-    imageUrl: string;
-    caption: string;
-  }> = [];
-
-  public textPostsPublished: Array<{
-    pageId: string;
-    message: string;
-    linkUrl?: string | null | undefined;
-  }> = [];
-
-  public videosPublished: Array<{
-    pageId: string;
-    videoUrl: string;
-    caption: string;
-    title?: string | undefined;
-  }> = [];
-
-  public photoStoriesPublished: Array<{
-    pageId: string;
-    imageUrl: string;
-  }> = [];
-
-  public videoStoriesPublished: Array<{
-    pageId: string;
-    videoUrl: string;
-  }> = [];
-
-  public commentsPosted: Array<{
-    postId: string;
-    accessToken: string;
-    message: string;
-  }> = [];
-
-  public nextPostId = 'mock_post_123';
-  public nextCommentId = 'mock_comment_456';
-  public errorToThrow: Error | null = null;
-  public commentErrorToThrow: Error | null = null;
-  public telemetryToReturn?: GraphRateLimitTelemetry | undefined;
-
-  publishReel(params: {
-    pageId: string;
-    accessToken: string;
-    videoUrl: string;
-    caption: string;
-  }): Promise<PublishResult> {
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.reelsPublished.push(params);
-    return Promise.resolve({
-      postId: this.nextPostId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  publishPhoto(params: {
-    pageId: string;
-    accessToken: string;
-    imageUrl: string;
-    caption: string;
-  }): Promise<PublishResult> {
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.photosPublished.push(params);
-    return Promise.resolve({
-      postId: this.nextPostId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  publishTextPost(params: {
-    pageId: string;
-    accessToken: string;
-    message: string;
-    linkUrl?: string | null | undefined;
-  }): Promise<PublishResult> {
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.textPostsPublished.push({
-      pageId: params.pageId,
-      message: params.message,
-      ...(params.linkUrl !== undefined ? { linkUrl: params.linkUrl } : {}),
-    });
-    return Promise.resolve({
-      postId: this.nextPostId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  publishVideo(params: {
-    pageId: string;
-    accessToken: string;
-    videoUrl: string;
-    caption: string;
-    title?: string | undefined;
-  }): Promise<PublishResult> {
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.videosPublished.push({
-      pageId: params.pageId,
-      videoUrl: params.videoUrl,
-      caption: params.caption,
-      ...(params.title !== undefined ? { title: params.title } : {}),
-    });
-    return Promise.resolve({
-      postId: this.nextPostId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  publishPhotoStory(params: {
-    pageId: string;
-    accessToken: string;
-    imageUrl: string;
-  }): Promise<PublishResult> {
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.photoStoriesPublished.push({
-      pageId: params.pageId,
-      imageUrl: params.imageUrl,
-    });
-    return Promise.resolve({
-      postId: this.nextPostId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  publishVideoStory(params: {
-    pageId: string;
-    accessToken: string;
-    videoUrl: string;
-  }): Promise<PublishResult> {
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.videoStoriesPublished.push({
-      pageId: params.pageId,
-      videoUrl: params.videoUrl,
-    });
-    return Promise.resolve({
-      postId: this.nextPostId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  postComment(params: {
-    postId: string;
-    accessToken: string;
-    message: string;
-  }): Promise<{ commentId: string; telemetry?: GraphRateLimitTelemetry | undefined }> {
-    if (this.commentErrorToThrow) {
-      return Promise.reject(this.commentErrorToThrow);
-    }
-    if (this.errorToThrow) {
-      return Promise.reject(this.errorToThrow);
-    }
-    this.commentsPosted.push(params);
-    return Promise.resolve({
-      commentId: this.nextCommentId,
-      ...(this.telemetryToReturn ? { telemetry: this.telemetryToReturn } : {}),
-    });
-  }
-
-  reset(): void {
-    this.reelsPublished = [];
-    this.photosPublished = [];
-    this.textPostsPublished = [];
-    this.videosPublished = [];
-    this.photoStoriesPublished = [];
-    this.videoStoriesPublished = [];
-    this.commentsPosted = [];
-    this.errorToThrow = null;
-    this.commentErrorToThrow = null;
-    this.telemetryToReturn = undefined;
   }
 }

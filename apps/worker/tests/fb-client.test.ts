@@ -1,10 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   FacebookPublishClient,
-  MockFacebookPublishClient,
   FacebookGraphError,
+  FB_GRAPH_TIMEOUT_MS,
+  FB_MEDIA_TIMEOUT_MS,
   parseGraphRateLimitHeaders,
 } from '../src/fb-client.js';
+import { MockFacebookPublishClient } from './mock-fb-client.js';
 
 describe('FacebookPublishClient', () => {
   const pageId = 'page_12345';
@@ -771,4 +773,225 @@ describe('FacebookPublishClient', () => {
       expect(parseGraphRateLimitHeaders(null)).toBeUndefined();
     });
   });
+});
+
+// ==========================================
+// Spec 139 — per-call retry policy + fetch timeouts
+// ==========================================
+
+describe('FacebookPublishClient — retry policy & timeouts (spec 139)', () => {
+  const pageId = 'page_12345';
+  const accessToken = 'EAA_test_token_secret';
+  const videoUrl = 'https://r2.example.com/videos/reel-1.mp4';
+  const imageUrl = 'https://r2.example.com/images/photo-1.jpg';
+  const caption = 'Check out this awesome video! #viral';
+
+  const serverError = () =>
+    new Response(JSON.stringify({ error: { message: 'internal boom', code: 500 } }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+  it('does NOT retry a publish POST on a 5xx (the response may have been lost after Facebook processed it)', async () => {
+    const mockFetch = vi.fn().mockImplementation(() => Promise.resolve(serverError()));
+    const client = new FacebookPublishClient({ fetchFn: mockFetch });
+
+    await expect(
+      client.publishPhoto({ pageId, accessToken, imageUrl, caption })
+    ).rejects.toThrow(/internal boom/);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT retry a publish POST on a network error', async () => {
+    const mockFetch = vi.fn().mockRejectedValue(new TypeError('fetch failed: socket closed'));
+    const client = new FacebookPublishClient({ fetchFn: mockFetch });
+
+    await expect(
+      client.publishTextPost({ pageId, accessToken, message: 'hello' })
+    ).rejects.toThrow(/socket closed/);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT retry a publish POST on 429', async () => {
+    const mockFetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ error: { message: 'rate limited', code: 4 } }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+    const client = new FacebookPublishClient({ fetchFn: mockFetch });
+
+    await expect(
+      client.publishVideo({ pageId, accessToken, videoUrl, caption })
+    ).rejects.toThrow(/rate limited/);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT retry the reel finish phase (the publish-mutating step)', async () => {
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            video_id: 'vid_98765',
+            upload_url: 'https://rupload.facebook.com/video-reels/vid_98765',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(new Response('video-data', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
+      .mockImplementation(() => Promise.resolve(serverError()));
+
+    const client = new FacebookPublishClient({ fetchFn: mockFetch });
+    await expect(client.publishReel({ pageId, accessToken, videoUrl, caption })).rejects.toThrow(
+      /internal boom/
+    );
+    // start + media fetch + rupload + exactly ONE finish attempt
+    expect(mockFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it(
+    'still retries pre-publish calls: the photo-story unpublished upload recovers after 5xx responses',
+    async () => {
+      const mockFetch = vi
+        .fn()
+        .mockImplementationOnce(() => Promise.resolve(serverError()))
+        .mockImplementationOnce(() => Promise.resolve(serverError()))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: 'photo_temp_1' }), { status: 200 })
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ id: 'story_1', post_id: 'story_1' }), { status: 200 })
+        );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const res = await client.publishPhotoStory({ pageId, accessToken, imageUrl });
+
+      expect(res.postId).toBe('story_1');
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // The first three calls are all the same pre-publish (published:false) upload.
+      for (const call of mockFetch.mock.calls.slice(0, 3)) {
+        expect(call[0]).toBe(`https://graph.facebook.com/v26.0/${pageId}/photos`);
+        expect(JSON.parse(call[1].body)).toEqual({ url: imageUrl, published: false });
+      }
+    },
+    15_000
+  );
+
+  it(
+    'still retries a retryable call on network errors: reel start recovers after a socket failure',
+    async () => {
+      const mockFetch = vi
+        .fn()
+        .mockRejectedValueOnce(new TypeError('fetch failed: socket closed'))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              video_id: 'vid_98765',
+              upload_url: 'https://rupload.facebook.com/video-reels/vid_98765',
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        )
+        .mockResolvedValueOnce(new Response('video-data', { status: 200 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ success: true, post_id: 'reel_post_1' }), {
+            status: 200,
+          })
+        );
+
+      const client = new FacebookPublishClient({ fetchFn: mockFetch });
+      const res = await client.publishReel({ pageId, accessToken, videoUrl, caption });
+
+      expect(res.postId).toBe('reel_post_1');
+      expect(mockFetch).toHaveBeenCalledTimes(5);
+    },
+    15_000
+  );
+
+  it('passes an AbortSignal to fetches and exposes the named default timeouts', async () => {
+    expect(FB_GRAPH_TIMEOUT_MS).toBe(15_000);
+    expect(FB_MEDIA_TIMEOUT_MS).toBe(30_000);
+
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ id: 'p1' }), { status: 200 }));
+    const client = new FacebookPublishClient({ fetchFn: mockFetch });
+    await client.publishPhoto({ pageId, accessToken, imageUrl, caption });
+
+    const init = mockFetch.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('aborts a hanging Graph call at the graph timeout', async () => {
+    const mockFetch = vi.fn(
+      (_url: unknown, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (!signal) {
+            reject(new Error('fetch was called without a signal'));
+            return;
+          }
+          if (signal.aborted) {
+            reject(signal.reason);
+            return;
+          }
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        })
+    );
+    const client = new FacebookPublishClient({ fetchFn: mockFetch, graphTimeoutMs: 30 });
+
+    const err = await client
+      .publishTextPost({ pageId, accessToken, message: 'hi' })
+      .catch((e: unknown) => e);
+    expect((err as Error).name).toBe('TimeoutError');
+    // A publish POST is single-attempt even when the attempt times out.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it(
+    'aborts a hanging media fetch at the media timeout, retrying per the retryable policy',
+    async () => {
+      let mediaAttempts = 0;
+      const mockFetch = vi.fn((url: unknown, init?: RequestInit) => {
+        if (String(url).includes('/video_reels')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                video_id: 'vid_1',
+                upload_url: 'https://rupload.facebook.com/video-reels/vid_1',
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          );
+        }
+        mediaAttempts += 1;
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (!signal) {
+            reject(new Error('fetch was called without a signal'));
+            return;
+          }
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      });
+      const client = new FacebookPublishClient({
+        fetchFn: mockFetch,
+        graphTimeoutMs: 1_000,
+        mediaTimeoutMs: 30,
+      });
+
+      const err = await client
+        .publishReel({ pageId, accessToken, videoUrl, caption })
+        .catch((e: unknown) => e);
+      expect((err as Error).name).toBe('TimeoutError');
+      // Media fetch is retryable: all 3 attempts ran and each one timed out.
+      expect(mediaAttempts).toBe(3);
+    },
+    15_000
+  );
 });

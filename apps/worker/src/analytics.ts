@@ -14,6 +14,12 @@ export interface PostHogEnv {
 
 const DEFAULT_HOST = 'https://us.i.posthog.com';
 
+/**
+ * Capture is fire-and-forget telemetry: it must never hang the worker.
+ * A short timeout bounds the fetch even when no waitUntil is available.
+ */
+export const POSTHOG_CAPTURE_TIMEOUT_MS = 5_000;
+
 function toErrorInfo(error: unknown): { message: string; stack?: string | undefined } {
   if (error instanceof Error) {
     return { message: error.message, stack: error.stack };
@@ -52,6 +58,7 @@ export function captureWorkerError(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(POSTHOG_CAPTURE_TIMEOUT_MS),
   }).catch(() => {
     // Never let telemetry break the worker.
   });
