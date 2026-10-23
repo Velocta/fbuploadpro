@@ -14,6 +14,7 @@ import {
   type PublishLimitOverride,
   type PublishOutcome,
   type RefreshedTokenSet,
+  ValidationError,
 } from '@fbuploadpro/contracts';
 import {
   InstagramGraphError,
@@ -531,7 +532,7 @@ export class InstagramPublisher implements Publisher {
         }));
       if (items.length >= 2) return items;
     }
-    throw new Error(
+    throw new ValidationError(
       'A carousel post needs at least two photos or videos. Add the items and try again.'
     );
   }
@@ -544,7 +545,7 @@ export class InstagramPublisher implements Publisher {
 
   private requireMediaUrl(item: DatabaseUnifiedQueueItemRow): string {
     if (!item.media_url) {
-      throw new Error('This post is missing its photo or video. Add the media and try again.');
+      throw new ValidationError('This post is missing its photo or video. Add the media and try again.');
     }
     return item.media_url;
   }
@@ -579,7 +580,7 @@ export class InstagramPublisher implements Publisher {
         return;
       }
       if (status.statusCode === 'ERROR' || status.statusCode === 'EXPIRED') {
-        throw new Error(
+        throw new ValidationError(
           'Instagram could not prepare one of the carousel items. Check the media and try again.'
         );
       }

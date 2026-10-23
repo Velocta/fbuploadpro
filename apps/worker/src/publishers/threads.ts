@@ -14,6 +14,7 @@ import {
   type RefreshedTokenSet,
   type ThreadsCarouselItem,
   type ThreadsPlatformOptions,
+  ValidationError,
 } from '@fbuploadpro/contracts';
 import {
   ThreadsGraphError,
@@ -439,7 +440,7 @@ export class ThreadsPublisher implements Publisher {
 
   private requireMediaUrl(item: DatabaseUnifiedQueueItemRow): string {
     if (!item.media_url) {
-      throw new Error(
+      throw new ValidationError(
         'This post is missing its photo or video. Add the media and try again.'
       );
     }
@@ -463,7 +464,7 @@ export class ThreadsPublisher implements Publisher {
         }));
       if (items.length >= 2) return items;
     }
-    throw new Error(
+    throw new ValidationError(
       'A carousel post needs at least two photos or videos. Add the items and try again.'
     );
   }
