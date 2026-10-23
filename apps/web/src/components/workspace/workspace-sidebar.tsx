@@ -1,5 +1,29 @@
 'use client';
 
+/**
+ * WorkspaceSidebar — rebuilt on the shared/ui Sidebar primitive
+ * (spec 130 §5.2, PR-130-2a). The primitive is the F3 rebuild of the
+ * same upstream shadcn sidebar the legacy file consumed, so the
+ * variant, collapsible icon mode, tooltips, and cookie persistence
+ * carry over; the construction (legacy `components/ui/sidebar`
+ * imports, inline styles, theme presets) is replaced wholesale.
+ *
+ * Behaviour preserved verbatim (spec §4.1):
+ * - Structure and order: branding header (logo + wordmark, a Link to
+ *   Home) → primary group (Home, Media Library, Downloader, Fdola
+ *   Studio) → Facebook collapsible group (default open; Accounts,
+ *   Pages) → one collapsible group per upcoming platform, each with a
+ *   single Accounts item and the testing-placeholder note → footer.
+ * - Spec 110 single-click model: every leaf is a Next.js <Link> that
+ *   navigates on the FIRST click; the leaf click handler only paints
+ *   the active state optimistically and closes the mobile drawer — it
+ *   never preventDefaults and never substitutes a router.push.
+ *   Collapsible parent toggles in icon-collapsed mode navigate via
+ *   router.push and warm the router cache on hover prefetch.
+ * - Active state derives from the current path (Home exact-match, the
+ *   rest prefix-match) with the optimistic-pathname paint on click.
+ */
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -19,12 +43,9 @@ import {
   SidebarMenuSubButton,
   SidebarSeparator,
   SidebarRail,
-  Collapsible,
-  CollapsibleTrigger,
-  CollapsibleContent,
   useSidebar,
-} from '@/components/ui/sidebar';
-import { THEME, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+} from '@/components/shared/ui/sidebar';
+import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand';
 import { buildTenantHref, normalizeTenantPath } from '@/lib/tenant-href';
 import { WorkspaceStudioFooter } from './workspace-studio-footer';
@@ -43,7 +64,53 @@ export interface WorkspaceSidebarProps {
   } | undefined;
 }
 
-export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceName, user }: Readonly<WorkspaceSidebarProps>) {
+function ChevronIcon({ open }: Readonly<{ open: boolean }>) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={cn(
+        'ml-auto shrink-0 text-ink-dim transition-transform duration-base ease-standard',
+        open && 'rotate-90'
+      )}
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+interface NavLeaf {
+  label: string;
+  href: string;
+  isActive: boolean;
+  onLeafClick: (href: string) => void;
+}
+
+function NavSubLeaf({ label, href, isActive, onLeafClick }: Readonly<NavLeaf>) {
+  return (
+    <SidebarMenuSubItem>
+      <SidebarMenuSubButton asChild isActive={isActive}>
+        <Link href={href} onClick={() => onLeafClick(href)}>
+          {label}
+        </Link>
+      </SidebarMenuSubButton>
+    </SidebarMenuSubItem>
+  );
+}
+
+export function WorkspaceSidebar({
+  subdomain,
+  useCleanPaths = false,
+  workspaceName,
+  user,
+}: Readonly<WorkspaceSidebarProps>) {
   const pathname = usePathname();
   const router = useRouter();
   const { state, isMobile, setOpenMobile } = useSidebar();
@@ -68,32 +135,32 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
 
   const isHomeActive = effectivePath === normalizeTenantPath(homeHref, subdomain);
   const isMediaActive = effectivePath.startsWith(normalizeTenantPath(mediaHref, subdomain));
-  const isDownloaderActive = effectivePath.startsWith(normalizeTenantPath(downloaderHref, subdomain));
-  const isFdolaStudioActive = effectivePath.startsWith(normalizeTenantPath(fdolaStudioHref, subdomain));
+  const isDownloaderActive = effectivePath.startsWith(
+    normalizeTenantPath(downloaderHref, subdomain)
+  );
+  const isFdolaStudioActive = effectivePath.startsWith(
+    normalizeTenantPath(fdolaStudioHref, subdomain)
+  );
   const isAccountsActive = effectivePath.startsWith(normalizeTenantPath(accountsHref, subdomain));
   const isPagesActive = effectivePath.startsWith(normalizeTenantPath(pagesHref, subdomain));
 
-  const handleNavigate = (href: string) => {
-    setOptimisticPathname(href);
+  const handleNavigate = (targetHref: string) => {
+    setOptimisticPathname(targetHref);
     if (isMobile) {
       setOpenMobile(false);
     }
-    router.push(href);
+    router.push(targetHref);
   };
 
   /**
    * Click observer for leaf items, which render as Next.js <Link>s
-   * (spec 110). The Link performs the (client-side) navigation itself, so
-   * this handler must never preventDefault or substitute its own
-   * router.push — it only paints the active state immediately and closes
-   * the mobile drawer. Previously every leaf was a <button> whose sole
-   * navigation path was handleNavigate above: the optimistic setState
-   * painted the highlight first and navigation depended entirely on the
-   * imperative router.push that followed it, so a delayed/interrupted push
-   * left the item highlighted without navigating (QA #5 / audit M2).
+   * (spec 110). The Link performs the (client-side) navigation itself,
+   * so this handler must never preventDefault or substitute its own
+   * router.push — it only paints the active state immediately and
+   * closes the mobile drawer.
    */
-  const handleLeafClick = (href: string) => {
-    setOptimisticPathname(href);
+  const handleLeafClick = (targetHref: string) => {
+    setOptimisticPathname(targetHref);
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -102,21 +169,64 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
   /**
    * Hover prefetch for the collapsible parent toggles only: in
    * icon-collapsed mode they still navigate via handleNavigate
-   * (router.push), so warming the router cache on hover is genuinely used
-   * there. Leaf items are Next.js <Link>s and prefetch natively — they do
-   * not use this.
+   * (router.push), so warming the router cache on hover is genuinely
+   * used there. Leaf items are Next.js <Link>s and prefetch natively.
    */
-  const handlePrefetch = (href: string) => {
-    try {
-      router.prefetch(href);
-    } catch {
-      // Ignore prefetch errors
-    }
+  const handlePrefetch = (targetHref: string) => {
+    router.prefetch(targetHref);
   };
+
+  const primaryLeaves = [
+    {
+      label: 'Home',
+      href: homeHref,
+      isActive: isHomeActive,
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Media Library',
+      href: mediaHref,
+      isActive: isMediaActive,
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          <polygon points="10 11 16 14 10 17 10 11" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Downloader',
+      href: downloaderHref,
+      isActive: isDownloaderActive,
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" x2="12" y1="15" y2="3" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Fdola Studio',
+      href: fdolaStudioHref,
+      isActive: isFdolaStudioActive,
+      icon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <rect x="2" y="3" width="20" height="14" rx="2" />
+          <line x1="8" x2="16" y1="21" y2="21" />
+          <line x1="12" x2="12" y1="17" y2="21" />
+        </svg>
+      ),
+    },
+  ];
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">
-      {/* Top Section: Official FBUploadPro Logo & Branding */}
       <SidebarHeader>
         <Link
           href={homeHref}
@@ -124,380 +234,120 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
           data-slot="sidebar-header-branding"
           data-testid="sidebar-branding-link"
           aria-label="FBUploadPro Studio"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: SPACING.sm,
-            padding: isCollapsed ? '6px 0' : `${SPACING.xs} ${SPACING.sm}`,
-            justifyContent: isCollapsed ? 'center' : 'flex-start',
-            textDecoration: 'none',
-            borderRadius: RADII.md,
-            transition: 'background-color 0.15s ease',
-            outline: 'none',
-          }}
+          className={cn(
+            'flex items-center gap-2 rounded-sm px-2 py-1.5 outline-none transition-colors duration-base ease-standard hover:bg-hover focus-visible:outline-2 focus-visible:outline-brand-gold',
+            isCollapsed && 'justify-center px-0'
+          )}
         >
-          {/* Geometric Gold Brand Mark */}
-          <div
-            style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: RADII.sm,
-              backgroundColor: '#12141a',
-              border: '1px solid #1f242d',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-sm border border-line bg-canvas">
             <BrandMark size={20} />
           </div>
-
-          {/* Logotype & Studio Subtitle */}
           {!isCollapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <span
-                style={{
-                  fontSize: '0.9375rem',
-                  fontWeight: TYPOGRAPHY.weights.bold,
-                  color: `var(--text-main, ${THEME.default.text.primary})`,
-                  letterSpacing: TYPOGRAPHY.tracking.caption,
-                  lineHeight: 1.2,
-                }}
-              >
-                FBUploadPro
-              </span>
-              <span
-                style={{
-                  fontSize: '0.6875rem',
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  lineHeight: 1.2,
-                }}
-              >
-                Studio
-              </span>
+            <div className="flex min-w-0 flex-col">
+              <span className="text-body font-bold tracking-caption text-ink">FBUploadPro</span>
+              <span className="text-metadata text-ink-dim">Studio</span>
             </div>
           )}
         </Link>
       </SidebarHeader>
 
-      {/* Primary Navigation Content (Order Strictly Preserved) */}
       <SidebarContent>
-        {/* Top Primary Navigation Group (Home, Media Library & Downloader) */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isHomeActive}
-                  tooltip="Home"
-                  href={homeHref}
-                  onClick={() => handleLeafClick(homeHref)}
-                  leftIcon={
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                      <polyline points="9 22 9 12 15 12 15 22" />
-                    </svg>
-                  }
-                >
-                  Home
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isMediaActive}
-                  tooltip="Media Library"
-                  href={mediaHref}
-                  onClick={() => handleLeafClick(mediaHref)}
-                  leftIcon={
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                      <polygon points="10 11 16 14 10 17 10 11" />
-                    </svg>
-                  }
-                >
-                  Media Library
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isDownloaderActive}
-                  tooltip="Downloader"
-                  href={downloaderHref}
-                  onClick={() => handleLeafClick(downloaderHref)}
-                  leftIcon={
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" x2="12" y1="15" y2="3" />
-                    </svg>
-                  }
-                >
-                  Downloader
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={isFdolaStudioActive}
-                  tooltip="Fdola Studio"
-                  href={fdolaStudioHref}
-                  onClick={() => handleLeafClick(fdolaStudioHref)}
-                  leftIcon={
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <rect x="2" y="3" width="20" height="14" rx="2" />
-                      <line x1="8" x2="16" y1="21" y2="21" />
-                      <line x1="12" x2="12" y1="17" y2="21" />
-                    </svg>
-                  }
-                >
-                  Fdola Studio
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {primaryLeaves.map((leaf) => (
+                <SidebarMenuItem key={leaf.label}>
+                  <SidebarMenuButton asChild isActive={leaf.isActive} tooltip={leaf.label}>
+                    <Link href={leaf.href} onClick={() => handleLeafClick(leaf.href)}>
+                      {leaf.icon}
+                      <span>{leaf.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Separator Line Between Primary Navigation & Platform */}
         <SidebarSeparator />
 
-        {/* Collapsible Facebook -> Accounts Hierarchy */}
         <SidebarGroup>
           <SidebarGroupLabel>Platform</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              <Collapsible
-                open={isFacebookOpen}
-                onOpenChange={setIsFacebookOpen}
-                defaultOpen={true}
-              >
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      tooltip="Facebook — Accounts & Pages"
-                      isActive={isCollapsed && (isAccountsActive || isPagesActive)}
-                      onClick={() => {
-                        if (isCollapsed) {
-                          handleNavigate(accountsHref);
-                        }
-                      }}
-                      onMouseEnter={() => handlePrefetch(accountsHref)}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                        style={{ flexShrink: 0 }}
-                      >
-                        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-                      </svg>
-                      <span
-                        style={{
-                          flex: 1,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Facebook
-                      </span>
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                        style={{
-                          marginLeft: 'auto',
-                          flexShrink: 0,
-                          transform: isFacebookOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                          transition: 'transform 200ms ease',
-                          color: `var(--text-dim, ${THEME.default.text.muted})`,
-                        }}
-                      >
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Facebook — Accounts & Pages"
+                  isActive={isCollapsed && (isAccountsActive || isPagesActive)}
+                  aria-expanded={isCollapsed ? undefined : isFacebookOpen}
+                  onClick={() => {
+                    if (isCollapsed) {
+                      handleNavigate(accountsHref);
+                    } else {
+                      setIsFacebookOpen((prev) => !prev);
+                    }
+                  }}
+                  onMouseEnter={() => handlePrefetch(accountsHref)}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+                    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
+                  </svg>
+                  <span className="flex-1 truncate">Facebook</span>
+                  <ChevronIcon open={isFacebookOpen} />
+                </SidebarMenuButton>
 
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          isActive={isAccountsActive}
-                          href={accountsHref}
-                          onClick={() => handleLeafClick(accountsHref)}
-                        >
-                          Accounts
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                      <SidebarMenuSubItem>
-                        <SidebarMenuSubButton
-                          isActive={isPagesActive}
-                          href={pagesHref}
-                          onClick={() => handleLeafClick(pagesHref)}
-                        >
-                          Pages
-                        </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+                {isFacebookOpen && (
+                  <SidebarMenuSub>
+                    <NavSubLeaf label="Accounts" href={accountsHref} isActive={isAccountsActive} onLeafClick={handleLeafClick} />
+                    <NavSubLeaf label="Pages" href={pagesHref} isActive={isPagesActive} onLeafClick={handleLeafClick} />
+                  </SidebarMenuSub>
+                )}
+              </SidebarMenuItem>
 
-              {/* Upcoming Supported Platforms */}
               {UPCOMING_PLATFORMS.map((platform) => {
                 const platformAccountsHref = href(`/${platform.routeSlug}/accounts`);
                 const isPlatformActive = effectivePath.startsWith(`/${platform.routeSlug}`);
-                const isAccountsSubActive = effectivePath.startsWith(normalizeTenantPath(platformAccountsHref, subdomain));
-                const isOpen = openPlatforms[platform.key] ?? (isPlatformActive ? true : false);
+                const isAccountsSubActive = effectivePath.startsWith(
+                  normalizeTenantPath(platformAccountsHref, subdomain)
+                );
+                const isOpen = openPlatforms[platform.key] ?? isPlatformActive;
 
                 return (
-                  <Collapsible
-                    key={platform.key}
-                    open={isOpen}
-                    onOpenChange={(open) =>
-                      setOpenPlatforms((prev) => ({ ...prev, [platform.key]: open }))
-                    }
-                    defaultOpen={false}
-                  >
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton
-                          tooltip={platform.tooltip}
-                          isActive={isCollapsed && isPlatformActive}
-                          onClick={() => {
-                            if (isCollapsed) {
-                              handleNavigate(platformAccountsHref);
-                            }
-                          }}
-                          onMouseEnter={() => handlePrefetch(platformAccountsHref)}
-                        >
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {platform.icon}
-                          </span>
-                          <span
-                            style={{
-                              flex: 1,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {platform.label}
-                          </span>
-                          <svg
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            aria-hidden="true"
-                            style={{
-                              marginLeft: 'auto',
-                              flexShrink: 0,
-                              transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-                              transition: 'transform 200ms ease',
-                              color: `var(--text-dim, ${THEME.default.text.muted})`,
-                            }}
-                          >
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
-                        </SidebarMenuButton>
-                      </CollapsibleTrigger>
+                  <SidebarMenuItem key={platform.key}>
+                    <SidebarMenuButton
+                      tooltip={platform.tooltip}
+                      isActive={isCollapsed && isPlatformActive}
+                      aria-expanded={isCollapsed ? undefined : isOpen}
+                      onClick={() => {
+                        if (isCollapsed) {
+                          handleNavigate(platformAccountsHref);
+                        } else {
+                          setOpenPlatforms((prev) => ({ ...prev, [platform.key]: !isOpen }));
+                        }
+                      }}
+                      onMouseEnter={() => handlePrefetch(platformAccountsHref)}
+                    >
+                      <span className="inline-flex shrink-0 items-center justify-center">
+                        {platform.icon}
+                      </span>
+                      <span className="flex-1 truncate">{platform.label}</span>
+                      <ChevronIcon open={isOpen} />
+                    </SidebarMenuButton>
 
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          <SidebarMenuSubItem>
-                            <SidebarMenuSubButton
-                              isActive={isAccountsSubActive}
-                              href={platformAccountsHref}
-                              onClick={() => handleLeafClick(platformAccountsHref)}
-                            >
-                              Accounts
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                          <SidebarMenuSubItem>
-                            <div
-                              data-testid={`sidebar-testing-note-${platform.key}`}
-                              style={{
-                                padding: `${SPACING.xs} ${SPACING.sm}`,
-                                fontSize: '0.6875rem',
-                                lineHeight: 1.35,
-                                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                                letterSpacing: TYPOGRAPHY.tracking.body,
-                                userSelect: 'none',
-                              }}
-                            >
-                              {TESTING_PLACEHOLDER_TEXT}
-                            </div>
-                          </SidebarMenuSubItem>
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
+                    {isOpen && (
+                      <SidebarMenuSub>
+                        <NavSubLeaf label="Accounts" href={platformAccountsHref} isActive={isAccountsSubActive} onLeafClick={handleLeafClick} />
+                        <SidebarMenuSubItem>
+                          <div
+                            data-testid={`sidebar-testing-note-${platform.key}`}
+                            className="px-2 py-1 text-metadata leading-normal tracking-body text-ink-dim select-none"
+                          >
+                            {TESTING_PLACEHOLDER_TEXT}
+                          </div>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    )}
+                  </SidebarMenuItem>
                 );
               })}
             </SidebarMenu>
@@ -505,7 +355,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
         </SidebarGroup>
       </SidebarContent>
 
-      {/* Option A Unified Studio Footer (Workspace + Settings + User) */}
       <SidebarFooter>
         <WorkspaceStudioFooter
           subdomain={subdomain}
@@ -516,7 +365,6 @@ export function WorkspaceSidebar({ subdomain, useCleanPaths = false, workspaceNa
         />
       </SidebarFooter>
 
-      {/* Interactive Edge Rail */}
       <SidebarRail />
     </Sidebar>
   );

@@ -1,29 +1,38 @@
 /**
  * @file workspace-sidebar.test.tsx
- * @description Unit tests for WorkspaceSidebar component (Spec 019 & Spec 025 / US2, US3).
+ * @description Behavioural tests for WorkspaceSidebar (spec 130
+ * PR-130-2a migration per spec 137 §4.1 duty 8: the legacy
+ * static-markup assertions are replaced by rendered-behaviour
+ * assertions — clicks, aria state, optimistic active paint — in the
+ * jsdom project. The spec-110 single-click assertions are preserved
+ * in substance and strengthened: a leaf click must paint the active
+ * state WITHOUT calling router.push and WITHOUT preventDefault,
+ * because the leaf is a Next.js <Link> that navigates itself.)
  */
 
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { SidebarProvider } from '@/components/ui';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import { SidebarProvider } from '@/components/shared/ui/sidebar';
+import { SidebarProvider as LegacySidebarProvider } from '@/components/ui/sidebar';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
-import { THEME, PALETTE } from '@/lib/theme';
-import { render } from '../components/setup';
 
 let mockPathname = '/tenant/acme';
 const mockPush = vi.fn();
+const mockPrefetch = vi.fn();
 
 vi.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
   useRouter: () => ({
     push: mockPush,
     replace: vi.fn(),
+    prefetch: mockPrefetch,
   }),
 }));
 
-// Render next/link as a plain anchor tagged with data-next-link, so tests can
-// prove leaves render through Next.js Link (client-side routing) rather than
-// hand-rolled raw <a> elements (which would force full page reloads).
+// Render next/link as a plain anchor tagged with data-next-link, so
+// tests can prove leaves render through Next.js Link (client-side
+// routing) rather than hand-rolled raw <a> elements.
 vi.mock('next/link', async () => {
   const ReactModule = await import('react');
   type MockLinkProps = {
@@ -36,454 +45,169 @@ vi.mock('next/link', async () => {
   };
 });
 
-describe('WorkspaceSidebar Component (Spec 019, Spec 025, Spec 029, Spec 037 & Spec 052)', () => {
-  it('renders FBUploadPro branding in SidebarHeader and Option A studio footer card in SidebarFooter (Spec 052)', () => {
-    mockPathname = '/tenant/acme';
-    const { hasText, hasAttribute, html } = render(
-      <SidebarProvider>
+function Shell({
+  defaultOpen = true,
+  subdomain = 'acme',
+}: Readonly<{ defaultOpen?: boolean; subdomain?: string }>) {
+  return (
+    <SidebarProvider defaultOpen={defaultOpen}>
+      <LegacySidebarProvider>
         <WorkspaceSidebar
-          subdomain="acme"
+          subdomain={subdomain}
           user={{ name: 'Jane Doe', email: 'jane@example.com' }}
         />
-      </SidebarProvider>
-    );
+      </LegacySidebarProvider>
+    </SidebarProvider>
+  );
+}
 
-    // Top Section: FBUploadPro Logo & Branding
-    expect(hasAttribute('data-slot', 'sidebar-header')).toBe(true);
-    expect(hasAttribute('data-testid', 'sidebar-branding-link')).toBe(true);
-    expect(hasText('FBUploadPro')).toBe(true);
-    expect(hasText('Studio')).toBe(true);
-    expect(html).toContain(PALETTE.primary);
-    expect(html).toContain(PALETTE.accent1);
-    expect(html).toContain('fill-opacity="0.35"');
-
-    // Bottom Section: Option A Unified Studio Footer
-    expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
-    expect(hasAttribute('data-size', 'lg')).toBe(true);
-    expect(hasAttribute('data-testid', 'workspace-switcher-trigger')).toBe(true);
-    expect(hasText('acme')).toBe(true);
-    expect(hasText('AC')).toBe(true);
-    expect(html).toContain('m7 15 5 5 5-5');
-    expect(html).toContain('m7 9 5-5 5 5');
-  });
-
-  it('integrates Option A studio footer at bottom with workspace identity and user profile (Spec 052)', () => {
+describe('WorkspaceSidebar (spec 130 rebuild on shared/ui Sidebar)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
     mockPathname = '/tenant/acme';
-    const { hasText, hasAttribute } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
-    expect(hasText('acme')).toBe(true);
-    expect(hasText('jane@example.com')).toBe(true);
-    expect(hasText('AC')).toBe(true);
   });
 
-  it('renders Home, Media Library, Downloader, and Fdola Studio in the primary top group above SidebarSeparator, followed by Collapsible Facebook section', () => {
-    mockPathname = '/tenant/acme';
-    const { hasText, hasAttribute, html } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    // Primary items per user directive
-    expect(hasText('Home')).toBe(true);
-    expect(hasText('Media Library')).toBe(true);
-    expect(hasText('Downloader')).toBe(true);
-    expect(hasText('Fdola Studio')).toBe(true);
-    expect(hasText('Platform')).toBe(true);
-    expect(hasText('Facebook')).toBe(true);
-    expect(hasText('Accounts')).toBe(true);
-
-    // Verify ordering: Home -> Media Library -> Downloader -> Fdola Studio -> Separator -> Platform
-    const homeIndex = html.indexOf('Home');
-    const mediaIndex = html.indexOf('Media Library');
-    const downloaderIndex = html.indexOf('Downloader');
-    const fdolaIndex = html.indexOf('Fdola Studio');
-    const separatorIndex = html.indexOf('data-sidebar="separator"');
-    const platformIndex = html.indexOf('Platform');
-    expect(homeIndex).toBeGreaterThan(-1);
-    expect(mediaIndex).toBeGreaterThan(homeIndex);
-    expect(downloaderIndex).toBeGreaterThan(mediaIndex);
-    expect(fdolaIndex).toBeGreaterThan(downloaderIndex);
-    expect(separatorIndex).toBeGreaterThan(fdolaIndex);
-    expect(platformIndex).toBeGreaterThan(separatorIndex);
-
-    // Separator line present
-    expect(hasAttribute('data-sidebar', 'separator')).toBe(true);
-
-    // Collapsible + CollapsibleTrigger + SidebarMenuSub + SidebarMenuSubButton hierarchy
-    expect(hasAttribute('data-slot', 'collapsible')).toBe(true);
-    expect(hasAttribute('data-slot', 'collapsible-trigger')).toBe(true);
-    expect(hasAttribute('data-slot', 'collapsible-content')).toBe(true);
-    expect(hasAttribute('data-slot', 'sidebar-menu-sub')).toBe(true);
-    expect(hasAttribute('data-slot', 'sidebar-menu-sub-item')).toBe(true);
-    expect(hasAttribute('data-slot', 'sidebar-menu-sub-button')).toBe(true);
-    // Rotating ChevronRight icon path
-    expect(html).toContain('m9 18 6-6-6-6');
+  it('renders branding as a Home link with the FBUploadPro Studio wordmark', () => {
+    render(<Shell />);
+    const branding = screen.getByTestId('sidebar-branding-link');
+    expect(branding).toHaveAttribute('aria-label', 'FBUploadPro Studio');
+    expect(branding).toHaveAttribute('href', '/tenant/acme/');
+    expect(branding).toHaveAttribute('data-next-link', 'true');
+    expect(within(branding).getByText('FBUploadPro')).toBeInTheDocument();
+    expect(within(branding).getByText('Studio')).toBeInTheDocument();
   });
 
-  it('marks Home as active when pathname matches tenant home', () => {
-    mockPathname = '/tenant/acme';
-    const { html } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    // Active state uses active surface and gold primary bar indicator
-    expect(html).toContain(THEME.default.surfaces.active);
-    expect(html).toContain('aria-current="page"');
+  it('renders the primary leaves in order as Next.js Link anchors (spec 110)', () => {
+    render(<Shell />);
+    const expected: Array<[string, string]> = [
+      ['Home', '/tenant/acme/'],
+      ['Media Library', '/tenant/acme/media'],
+      ['Downloader', '/tenant/acme/downloader'],
+      ['Fdola Studio', '/tenant/acme/fdola-studio'],
+      ['Accounts', '/tenant/acme/accounts'],
+      ['Pages', '/tenant/acme/pages'],
+    ];
+    for (const [label, href] of expected) {
+      const link = screen.getByRole('link', { name: new RegExp(`^${label}`) });
+      expect(link, label).toHaveAttribute('href', href);
+      expect(link, label).toHaveAttribute('data-next-link', 'true');
+    }
+    // Order: Home -> Media Library -> Downloader -> Fdola Studio.
+    const links = screen.getAllByRole('link');
+    const labels = links.map((l) => l.textContent || '');
+    const homeIdx = labels.findIndex((t) => t.includes('Home'));
+    const mediaIdx = labels.findIndex((t) => t.includes('Media Library'));
+    const downloaderIdx = labels.findIndex((t) => t.includes('Downloader'));
+    const fdolaIdx = labels.findIndex((t) => t.includes('Fdola Studio'));
+    expect(mediaIdx).toBeGreaterThan(homeIdx);
+    expect(downloaderIdx).toBeGreaterThan(mediaIdx);
+    expect(fdolaIdx).toBeGreaterThan(downloaderIdx);
   });
 
-  it('marks Media Library as active when pathname starts with /tenant/acme/media', () => {
+  it('spec 110: a single click on a leaf paints it active without router.push or preventDefault', () => {
+    render(<Shell />);
+    const media = screen.getByRole('link', { name: /^Media Library/ });
+    expect(media).not.toHaveAttribute('data-active', 'true');
+
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    fireEvent(media, clickEvent);
+
+    expect(clickEvent.defaultPrevented).toBe(false);
+    expect(mockPush).not.toHaveBeenCalled();
+    // The optimistic paint: the clicked leaf becomes the active item
+    // immediately (≤100ms acknowledgement, spec §8 UX-24).
+    expect(media).toHaveAttribute('data-active', 'true');
+    expect(media).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('marks the active leaf from the pathname (prefix match; Home exact)', () => {
     mockPathname = '/tenant/acme/media';
-    const { html, findTags } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
+    render(<Shell />);
+    expect(screen.getByRole('link', { name: /^Media Library/ })).toHaveAttribute(
+      'aria-current',
+      'page'
     );
-
-    expect(html).toContain('aria-current="page"');
-    const anchors = findTags('a');
-    const activeMediaBtn = anchors.find(
-      (b) => b.innerHTML.includes('Media Library') && b.attributes['data-active'] === 'true'
-    );
-    expect(activeMediaBtn).toBeDefined();
+    expect(screen.getByRole('link', { name: /^Home/ })).not.toHaveAttribute('aria-current');
   });
 
-  it('marks Downloader as active when pathname starts with /tenant/acme/downloader', () => {
-    mockPathname = '/tenant/acme/downloader';
-    const { html, findTags } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    expect(html).toContain('aria-current="page"');
-    const anchors = findTags('a');
-    const activeDownloaderBtn = anchors.find(
-      (b) => b.innerHTML.includes('Downloader') && b.attributes['data-active'] === 'true'
-    );
-    expect(activeDownloaderBtn).toBeDefined();
-  });
-
-  it('marks Fdola Studio as active when pathname starts with /tenant/acme/fdola-studio', () => {
-    mockPathname = '/tenant/acme/fdola-studio';
-    const { html, findTags } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    expect(html).toContain('aria-current="page"');
-    const anchors = findTags('a');
-    const activeFdolaBtn = anchors.find(
-      (b) => b.innerHTML.includes('Fdola Studio') && b.attributes['data-active'] === 'true'
-    );
-    expect(activeFdolaBtn).toBeDefined();
-  });
-
-  it('renders Pages directly below Accounts inside the collapsible Facebook sidebar menu as a Next.js Link anchor to /tenant/{subdomain}/pages (Spec 110)', () => {
-    mockPathname = '/tenant/acme';
-    mockPush.mockClear();
-
-    let capturedTree: React.ReactElement | null = null;
-    function CaptureSidebar() {
-      capturedTree = WorkspaceSidebar({
-        subdomain: 'acme',
-        user: { name: 'Jane Doe', email: 'jane@example.com' },
-      });
-      return capturedTree;
-    }
-
-    const { hasText, html, findTags } = render(
-      <SidebarProvider>
-        <CaptureSidebar />
-      </SidebarProvider>
-    );
-
-    expect(hasText('Facebook')).toBe(true);
-    expect(hasText('Accounts')).toBe(true);
-    expect(hasText('Pages')).toBe(true);
-
-    const facebookIdx = html.indexOf('Facebook');
-    const accountsIdx = html.indexOf('Accounts');
-    const pagesIdx = html.indexOf('Pages');
-    expect(facebookIdx).toBeGreaterThan(-1);
-    expect(accountsIdx).toBeGreaterThan(facebookIdx);
-    expect(pagesIdx).toBeGreaterThan(accountsIdx);
-
-    // Spec 110: the Pages leaf renders through next/link with the tenant
-    // href — a single click navigates via Link's client-side routing.
-    // data-next-link is stamped by the next/link test double and would be
-    // absent if the leaf were a raw <a> (full page reload).
-    const anchors = findTags('a');
-    const pagesAnchor = anchors.find(
-      (a) => a.attributes['href'] === '/tenant/acme/pages' && a.attributes['data-sidebar'] === 'menu-sub-button'
-    );
-    expect(pagesAnchor).toBeDefined();
-    expect(pagesAnchor?.attributes['data-next-link']).toBe('true');
-
-    // Locate the Pages leaf in the captured tree: it must carry the href and
-    // its click handler must neither preventDefault nor substitute a
-    // router.push (either would re-break single-click navigation).
-    function findLeafByText(node: React.ReactNode, text: string): any {
-      if (!node || typeof node !== 'object') return null;
-      if (Array.isArray(node)) {
-        for (const item of node) {
-          const found = findLeafByText(item, text);
-          if (found) return found;
-        }
-        return null;
-      }
-      if (React.isValidElement(node)) {
-        const props = node.props as Record<string, any>;
-        if (props.children === text && typeof props.href === 'string') {
-          return node;
-        }
-        if (props.children) {
-          return findLeafByText(props.children, text);
-        }
-      }
-      return null;
-    }
-
-    const pagesLeaf = findLeafByText(capturedTree, 'Pages');
-    expect(pagesLeaf).not.toBeNull();
-    expect(pagesLeaf.props.href).toBe('/tenant/acme/pages');
-    const preventDefault = vi.fn();
-    pagesLeaf.props.onClick({ preventDefault });
-    expect(preventDefault).not.toHaveBeenCalled();
-    expect(mockPush).not.toHaveBeenCalled();
-  });
-
-  it('marks Pages as active when pathname is /tenant/acme/pages or /tenant/acme/pages/[pageId]', () => {
-    mockPathname = '/tenant/acme/pages';
-    const listRender = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    const listAnchors = listRender.findTags('a');
-    const activePagesBtnOnList = listAnchors.find(
-      (b) => b.innerHTML.includes('Pages') && b.attributes['data-active'] === 'true'
-    );
-    expect(activePagesBtnOnList).toBeDefined();
-    expect(activePagesBtnOnList?.attributes['aria-current']).toBe('page');
-
+  it('marks Pages (not Accounts) active on a page-detail path', () => {
     mockPathname = '/tenant/acme/pages/page-uuid-123';
-    const detailRender = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    const detailAnchors = detailRender.findTags('a');
-    const activePagesBtnOnDetail = detailAnchors.find(
-      (b) => b.innerHTML.includes('Pages') && b.attributes['data-active'] === 'true'
-    );
-    const activeAccountsBtnOnDetail = detailAnchors.find(
-      (b) => b.innerHTML.includes('Accounts') && b.attributes['data-active'] === 'true'
-    );
-    expect(activePagesBtnOnDetail).toBeDefined();
-    expect(activePagesBtnOnDetail?.attributes['aria-current']).toBe('page');
-    expect(activeAccountsBtnOnDetail).toBeUndefined();
+    render(<Shell />);
+    expect(screen.getByRole('link', { name: /^Pages/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: /^Accounts/ })).not.toHaveAttribute('aria-current');
   });
 
-  it('renders user details and active workspace in studio footer (Spec 052)', () => {
-    mockPathname = '/tenant/acme';
-    const { hasText, hasAttribute } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
+  it('Facebook group is a collapsible toggle button, open by default, that hides its leaves when closed', () => {
+    render(<Shell />);
+    const toggle = screen.getByRole('button', { name: /Facebook/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: /^Pages/ })).toBeInTheDocument();
 
-    expect(hasAttribute('data-slot', 'sidebar-footer')).toBe(true);
-    expect(hasText('acme')).toBe(true);
-    expect(hasText('jane@example.com')).toBe(true);
-    expect(hasText('AC')).toBe(true);
-  });
-
-  it('renders all upcoming platforms (Instagram, Threads, X (Twitter), TikTok, YouTube) in the Platform group below Facebook', () => {
-    mockPathname = '/tenant/acme';
-    const { hasText, html } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    // Verify Facebook and all 5 upcoming platforms are present
-    expect(hasText('Facebook')).toBe(true);
-    expect(hasText('Instagram')).toBe(true);
-    expect(hasText('Threads')).toBe(true);
-    expect(hasText('X (Twitter)')).toBe(true);
-    expect(hasText('TikTok')).toBe(true);
-    expect(hasText('YouTube')).toBe(true);
-
-    // Verify ordering in HTML
-    const fbIdx = html.indexOf('Facebook');
-    const igIdx = html.indexOf('Instagram');
-    const thIdx = html.indexOf('Threads');
-    const xIdx = html.indexOf('X (Twitter)');
-    const ttIdx = html.indexOf('TikTok');
-    const ytIdx = html.indexOf('YouTube');
-
-    expect(fbIdx).toBeGreaterThan(-1);
-    expect(igIdx).toBeGreaterThan(fbIdx);
-    expect(thIdx).toBeGreaterThan(igIdx);
-    expect(xIdx).toBeGreaterThan(thIdx);
-    expect(ttIdx).toBeGreaterThan(xIdx);
-    expect(ytIdx).toBeGreaterThan(ttIdx);
-  });
-
-  it('displays the Accounts sub-button and testing placeholder note when an upcoming platform is active', () => {
-    mockPathname = '/tenant/acme/instagram/accounts';
-    const { hasText, html } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
-    );
-
-    expect(hasText('Instagram')).toBe(true);
-    expect(hasText('Accounts')).toBe(true);
-    expect(hasText('Being tested — not available for public use')).toBe(true);
-    expect(html).toContain('sidebar-testing-note-instagram');
-  });
-
-  it('renders upcoming platform Accounts sub-items as Next.js Link anchors to /tenant/{subdomain}/{platform}/accounts (Spec 110)', () => {
-    mockPathname = '/tenant/acme/threads/accounts';
-    mockPush.mockClear();
-
-    let capturedTree: React.ReactElement | null = null;
-    function CaptureSidebar() {
-      capturedTree = WorkspaceSidebar({
-        subdomain: 'acme',
-        user: { name: 'Jane Doe', email: 'jane@example.com' },
-      });
-      return capturedTree;
-    }
-
-    const { hasText } = render(
-      <SidebarProvider>
-        <CaptureSidebar />
-      </SidebarProvider>
-    );
-
-    expect(hasText('Threads')).toBe(true);
-    expect(hasText('Being tested — not available for public use')).toBe(true);
-
-    function findAllLeavesByText(node: React.ReactNode, text: string, list: any[] = []): any[] {
-      if (!node || typeof node !== 'object') return list;
-      if (Array.isArray(node)) {
-        for (const item of node) {
-          findAllLeavesByText(item, text, list);
-        }
-        return list;
-      }
-      if (React.isValidElement(node)) {
-        const props = node.props as Record<string, any>;
-        if (props.children === text && typeof props.href === 'string') {
-          list.push(node);
-        }
-        if (props.children) {
-          findAllLeavesByText(props.children, text, list);
-        }
-      }
-      return list;
-    }
-
-    const allAccountsLeaves = findAllLeavesByText(capturedTree, 'Accounts');
-    expect(allAccountsLeaves).toHaveLength(6);
-
-    // Index 0: Facebook, Index 1: Instagram, Index 2: Threads, Index 3: X, Index 4: TikTok, Index 5: YouTube
-    // Spec 110: navigation target lives in the Link href; the click handler
-    // must not preventDefault or substitute a router.push.
-    expect(allAccountsLeaves[0].props.href).toBe('/tenant/acme/accounts');
-    expect(allAccountsLeaves[1].props.href).toBe('/tenant/acme/instagram/accounts');
-    expect(allAccountsLeaves[2].props.href).toBe('/tenant/acme/threads/accounts');
-
-    const preventDefault = vi.fn();
-    allAccountsLeaves[2].props.onClick({ preventDefault });
-    expect(preventDefault).not.toHaveBeenCalled();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('link', { name: /^Pages/ })).not.toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
+
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: /^Pages/ })).toBeInTheDocument();
   });
 
-  it('renders every primary leaf item as a Next.js Link anchor with its tenant href and keeps the Facebook parent as a collapsible toggle button (Spec 110)', () => {
-    mockPathname = '/tenant/acme';
-    const { findTags, html } = render(
-      <SidebarProvider>
-        <WorkspaceSidebar
-          subdomain="acme"
-          user={{ name: 'Jane Doe', email: 'jane@example.com' }}
-        />
-      </SidebarProvider>
+  it('renders all upcoming platforms in order below Facebook', () => {
+    render(<Shell />);
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent || '');
+    const order = ['Facebook', 'Instagram', 'Threads', 'X (Twitter)', 'TikTok', 'YouTube'].map(
+      (label) => buttons.findIndex((t) => t.includes(label))
     );
+    for (const idx of order) expect(idx).toBeGreaterThan(-1);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
 
-    const anchors = findTags('a');
-    const anchorHrefs = anchors.map((a) => a.attributes['href']);
-    expect(anchorHrefs).toContain('/tenant/acme/');
-    expect(anchorHrefs).toContain('/tenant/acme/media');
-    expect(anchorHrefs).toContain('/tenant/acme/downloader');
-    expect(anchorHrefs).toContain('/tenant/acme/fdola-studio');
-    expect(anchorHrefs).toContain('/tenant/acme/accounts');
-    expect(anchorHrefs).toContain('/tenant/acme/pages');
+  it('opening an upcoming platform shows its Accounts leaf and the testing note', () => {
+    mockPathname = '/tenant/acme/instagram/accounts';
+    render(<Shell />);
+    // The active platform group opens by default.
+    expect(screen.getByTestId('sidebar-testing-note-instagram')).toHaveTextContent(
+      'Being tested — not available for public use'
+    );
+    const accountsLeaves = screen
+      .getAllByRole('link', { name: /^Accounts/ })
+      .map((l) => l.getAttribute('href'));
+    expect(accountsLeaves).toContain('/tenant/acme/instagram/accounts');
+  });
 
-    // Every anchor in the sidebar comes from next/link (data-next-link is
-    // stamped by the test double): no raw <a> remains, so no leaf click can
-    // degrade into a full page reload.
-    expect(anchors.length).toBeGreaterThan(0);
-    expect(anchors.every((a) => a.attributes['data-next-link'] === 'true')).toBe(true);
+  it('every platform Accounts leaf href is a tenant Link href (spec 110)', () => {
+    render(<Shell />);
+    for (const label of ['Instagram', 'Threads', 'X (Twitter)', 'TikTok', 'YouTube']) {
+      fireEvent.click(screen.getByRole('button', { name: new RegExp(label.replace(/[()]/g, '\\$&')) }));
+    }
+    const hrefs = screen
+      .getAllByRole('link', { name: /^Accounts/ })
+      .map((l) => l.getAttribute('href'));
+    expect(hrefs).toEqual(
+      expect.arrayContaining([
+        '/tenant/acme/accounts',
+        '/tenant/acme/instagram/accounts',
+        '/tenant/acme/threads/accounts',
+        '/tenant/acme/x/accounts',
+        '/tenant/acme/tiktok/accounts',
+        '/tenant/acme/youtube/accounts',
+      ])
+    );
+  });
 
-    // The Facebook parent is a genuine toggle, not a route: it stays a
-    // <button> wired to the collapsible trigger, initially expanded.
-    expect(html).toContain('data-slot="collapsible-trigger"');
-    expect(html).toContain('aria-expanded="true"');
-    const buttons = findTags('button');
-    const facebookToggle = buttons.find((b) => b.innerHTML.includes('Facebook'));
-    expect(facebookToggle).toBeDefined();
-    expect(facebookToggle?.attributes['data-slot']).toBe('collapsible-trigger');
-    expect(facebookToggle?.attributes['type']).toBe('button');
+  it('in icon-collapsed mode the Facebook toggle navigates via router.push (spec 110 parent model)', () => {
+    render(<Shell defaultOpen={false} />);
+    const toggle = screen.getByRole('button', { name: /Facebook/ });
+    fireEvent.click(toggle);
+    expect(mockPush).toHaveBeenCalledWith('/tenant/acme/accounts');
+  });
+
+  it('renders the studio footer trigger with workspace identity and user email', () => {
+    render(<Shell />);
+    const trigger = screen.getByTestId('workspace-switcher-trigger');
+    expect(trigger).toHaveAttribute('aria-label', 'Workspace and profile menu');
+    expect(screen.getByTestId('workspace-user-avatar')).toHaveTextContent('AC');
+    expect(screen.getByText('jane@example.com')).toBeInTheDocument();
   });
 });
-
-
-
-
