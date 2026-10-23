@@ -1,5 +1,33 @@
 'use client';
 
+/**
+ * Overlay composition for the media library (spec 133 PR-133-3).
+ *
+ * Mounts the surface's overlays from the explorer's state: the
+ * batch action bar, the library dialogs (move / rename / delete
+ * folder / batch delete), the new-folder and batch-caption forms,
+ * the leave-page guard, the import modal (PR-133-4's file), and
+ * the preview modal (PR-133-5's file). Every library-owned overlay
+ * is a shared/ui Dialog/AlertDialog — no hand-rolled fixed layers,
+ * no numeric z-index.
+ *
+ * FROZEN PREVIEW PROPS CONTRACT (for PR-133-5): the preview is
+ * mounted here as
+ *   <MediaPreviewModal item open onOpenChange onSave onDelete />
+ * with `MediaPreviewModalProps` as exported today from
+ * `media-preview-modal.tsx`:
+ *   item: MediaItemResponse | null
+ *   open: boolean
+ *   hasPrevious?: boolean; hasNext?: boolean
+ *   onPrevious?: () => void; onNext?: () => void
+ *   onOpenChange: (open: boolean) => void
+ *   onSave?: (mediaId: string, updates: { name?: string; captionText?: string }) => Promise<void> | void
+ *   onUpdateThumbnail?: (mediaId: string, captured: CapturedVideoFrame) => Promise<void> | void
+ *   onDelete?: (mediaId: string) => Promise<void> | void
+ * PR-133-5 decomposes the preview's internals only — this contract
+ * does not change.
+ */
+
 import React from 'react';
 import dynamic from 'next/dynamic';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
@@ -22,18 +50,11 @@ const MediaImportModal = dynamic(
 import { NewFolderModal } from './new-folder-modal';
 import { LeavePageGuardDialog } from './leave-page-guard-dialog';
 import { MediaPreviewModal } from './media-preview-modal';
-import {
-  MoveTargetDialog,
-  RenameFolderDialog,
-  DeleteFolderDialog,
-  BatchDeleteConfirmDialog,
-} from './media-library-dialogs';
+import { MoveTargetDialog } from './media-move-dialog';
+import { RenameFolderDialog } from './media-rename-folder-dialog';
+import { DeleteFolderDialog } from './media-delete-folder-dialog';
+import { BatchDeleteConfirmDialog } from './media-batch-delete-dialog';
 import type { MoveTargetState } from './media-library-helpers';
-
-/**
- * All modal/dialog overlays for the media library, extracted from
- * media-library-explorer.tsx. No behavior changes — moved verbatim.
- */
 
 export interface MediaLibraryOverlaysProps {
   subdomain: string;
@@ -149,7 +170,7 @@ export function MediaLibraryOverlays({
 
   return (
     <>
-      {/* 6. Floating Batch Action Pill (Bottom Center) */}
+      {/* Floating Batch Action Pill (Bottom Center) */}
       <BatchActionBar
         selectedIds={selectedIds}
         isBusy={isBusy}
@@ -173,7 +194,7 @@ export function MediaLibraryOverlays({
         }}
       />
 
-      {/* 7. Batch Set Caption Modal */}
+      {/* Batch Set Caption Modal */}
       <BatchSetCaptionModal
         isOpen={isBatchCaptionOpen}
         selectedCount={selectedIds.length}
@@ -181,7 +202,7 @@ export function MediaLibraryOverlays({
         onApply={handleBatchCaptionApply}
       />
 
-      {/* 8. New Folder Modal */}
+      {/* New Folder Modal */}
       <NewFolderModal
         isOpen={isNewFolderOpen}
         folders={folders}
@@ -190,7 +211,7 @@ export function MediaLibraryOverlays({
         onCreateFolder={handleCreateFolder}
       />
 
-      {/* 9. Media Import Modal (2-Step Staging & 3-Concurrency Engine) */}
+      {/* Media Import Modal (2-Step Staging & 3-Concurrency Engine) */}
       <MediaImportModal
         subdomain={subdomain}
         isOpen={isImportModalOpen}
@@ -208,7 +229,7 @@ export function MediaLibraryOverlays({
         }}
       />
 
-      {/* 10. Leave Page Protection Dialog */}
+      {/* Leave Page Protection Dialog */}
       <LeavePageGuardDialog
         isOpen={isLeaveGuardOpen}
         activeUploadsCount={activeUploadsCount}
@@ -225,7 +246,7 @@ export function MediaLibraryOverlays({
         }}
       />
 
-      {/* 11. Two-Column Preview Modal */}
+      {/* Two-Column Preview Modal — props contract frozen for PR-133-5 (see header). */}
       <MediaPreviewModal
         item={previewItem}
         open={Boolean(previewItem)}

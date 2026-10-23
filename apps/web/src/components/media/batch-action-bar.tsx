@@ -1,7 +1,21 @@
 'use client';
 
-import React from 'react';
-import { THEME, PALETTE, RADII, TYPOGRAPHY } from '@/lib/theme';
+/**
+ * Batch action bar (spec 133 PR-133-3, spec §6.4 / PB-17).
+ *
+ * The batch-bar pattern in the round-2 floating-pill presentation:
+ * bottom-centre, appears at 1+ selected, always states the count —
+ * "n selected · Move · Set caption · Delete · Clear" — with no
+ * primary/highlighted action inside it. Rebuilt on the shared/ui
+ * Button (44px touch targets) with token styling only: no
+ * box-in-box, hairline border, safe-area-aware bottom clearance
+ * (the spec 142 `pb-safe-offset` utility). It is in the tab order
+ * (keyboard-reachable) and locks out while a batch action runs.
+ */
+
+import * as React from 'react';
+
+import { Button } from '@/components/shared/ui/button';
 
 export interface BatchActionBarProps {
   selectedIds: string[];
@@ -28,148 +42,96 @@ export function BatchActionBar({
     return null;
   }
 
+  const separator = (
+    <span aria-hidden="true" className="text-ink-dim">
+      ·
+    </span>
+  );
+
   return (
-    <div
-      data-testid="batch-action-bar"
-      role="region"
-      aria-label="Batch actions"
-      style={{
-        position: 'fixed',
-        bottom: '24px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 50,
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '8px 16px',
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: '1px solid var(--border-strong, rgba(255, 255, 255, 0.18))',
-        borderRadius: RADII.md,
-        boxShadow: '0 12px 32px rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(12px)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {/* "n selected" */}
-      <span
-        data-testid="batch-selected-count"
-        style={{
-          fontSize: '0.8125rem',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-          fontVariantNumeric: TYPOGRAPHY.tabularNums,
-        }}
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-sticky flex justify-center px-4 pb-safe-offset">
+      <div
+        data-testid="batch-action-bar"
+        role="region"
+        aria-label="Batch actions"
+        className="pointer-events-auto flex max-w-full items-center gap-2.5 overflow-x-auto rounded-md border border-line bg-panel px-4 py-2 whitespace-nowrap shadow-modal"
       >
-        {selectedIds.length} selected
-      </span>
-
-      {onSelectAll && (
-        <button
-          type="button"
-          data-testid="batch-select-all-btn"
-          tabIndex={-1}
-          onClick={onSelectAll}
-          style={{ display: 'none' }}
+        <span
+          data-testid="batch-selected-count"
+          className="text-body font-semibold text-ink tabular-nums"
         >
-          Select all
-        </button>
-      )}
+          {selectedIds.length} selected
+        </span>
 
-      <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>·</span>
-
-      {/* Move Action */}
-      {onBatchMove && (
-        <>
+        {onSelectAll ? (
           <button
             type="button"
-            data-testid="batch-move-btn"
-            disabled={isBusy}
-            onClick={onBatchMove}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: isBusy ? 'not-allowed' : 'pointer',
-            }}
+            data-testid="batch-select-all-btn"
+            tabIndex={-1}
+            onClick={onSelectAll}
+            className="hidden"
           >
-            Move
+            Select all
           </button>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>·</span>
-        </>
-      )}
+        ) : null}
 
-      {/* Set Caption Action */}
-      {onBatchCaption && (
-        <>
-          <button
-            type="button"
-            data-testid="batch-caption-btn"
+        {separator}
+
+        {onBatchMove ? (
+          <>
+            <Button
+              variant="ghost"
+              data-testid="batch-move-btn"
+              disabled={isBusy}
+              onClick={onBatchMove}
+            >
+              Move
+            </Button>
+            {separator}
+          </>
+        ) : null}
+
+        {onBatchCaption ? (
+          <>
+            <Button
+              variant="ghost"
+              data-testid="batch-caption-btn"
+              disabled={isBusy}
+              onClick={onBatchCaption}
+            >
+              Set caption
+            </Button>
+            {separator}
+          </>
+        ) : null}
+
+        {onBatchDelete ? (
+          <>
+            <Button
+              variant="ghost"
+              data-testid="batch-delete-btn"
+              disabled={isBusy}
+              onClick={onBatchDelete}
+              className="text-brand-rose hover:text-brand-rose"
+            >
+              Delete
+            </Button>
+            {separator}
+          </>
+        ) : null}
+
+        {onClearSelection ? (
+          <Button
+            variant="ghost"
+            data-testid="batch-clear-btn"
             disabled={isBusy}
-            onClick={onBatchCaption}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: isBusy ? 'not-allowed' : 'pointer',
-            }}
+            onClick={onClearSelection}
+            className="text-ink-dim"
           >
-            Set caption
-          </button>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>·</span>
-        </>
-      )}
-
-      {/* Delete Action */}
-      {onBatchDelete && (
-        <>
-          <button
-            type="button"
-            data-testid="batch-delete-btn"
-            disabled={isBusy}
-            onClick={onBatchDelete}
-            style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: 0,
-              color: PALETTE.accent3,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: isBusy ? 'not-allowed' : 'pointer',
-            }}
-          >
-            Delete
-          </button>
-          <span style={{ color: `var(--text-dim, ${THEME.default.text.muted})` }}>·</span>
-        </>
-      )}
-
-      {/* Clear Action */}
-      {onClearSelection && (
-        <button
-          type="button"
-          data-testid="batch-clear-btn"
-          disabled={isBusy}
-          onClick={onClearSelection}
-          style={{
-            backgroundColor: 'transparent',
-            border: 'none',
-            padding: 0,
-            color: `var(--text-dim, ${THEME.default.text.muted})`,
-            fontSize: '0.8125rem',
-            fontWeight: TYPOGRAPHY.weights.medium,
-            cursor: isBusy ? 'not-allowed' : 'pointer',
-          }}
-        >
-          Clear
-        </button>
-      )}
+            Clear
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
