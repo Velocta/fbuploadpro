@@ -380,7 +380,7 @@ export function MediaImportModal({
         {/* Scrollable file list */}
         <div
           data-testid="import-files-list"
-          className="flex max-h-[50dvh] flex-col divide-y divide-line overflow-y-auto"
+          className="flex max-h-80 flex-col divide-y divide-line overflow-y-auto sm:max-h-96"
         >
           {/* Duplicate banner (staging mode only) */}
           {step === 'staging' && duplicatesCount > 0 && (

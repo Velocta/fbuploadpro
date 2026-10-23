@@ -12,7 +12,7 @@
  * is disabled at 0 valid files with the reason present (UX Rule 19).
  *
  * The staging thumbnail is a transient `blob:` object URL of a file
- * that has not uploaded yet — OD-133-1(b): an allowlisted raw <img>
+ * that has not uploaded yet — OD-133-1(b): an allowlisted raw img element
  * (the image optimiser cannot process blob: URLs), recorded with its
  * reason in apps/web/img-baseline.txt.
  */
@@ -135,7 +135,7 @@ export function ImportStagingRow({
         >
           {showPreview ? (
             /* OD-133-1(b): transient blob: preview of a not-yet-uploaded
-               file — allowlisted raw <img>; next/image cannot optimise
+               file — allowlisted raw img element; next/image cannot optimise
                blob: URLs. Reason recorded in apps/web/img-baseline.txt.
                (The no-img-element rule is frozen off for this file in
                eslint.config.mjs, per the baseline.) */

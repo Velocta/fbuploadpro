@@ -12,7 +12,7 @@
  * ≥44px target (spec 142).
  *
  * The thumbnail is the same transient `blob:` preview as staging —
- * OD-133-1(b) allowlisted raw <img>, reason in img-baseline.txt.
+ * OD-133-1(b) allowlisted raw img element, reason in img-baseline.txt.
  * The bar's fill width is a per-file dynamic value — the ratchet's
  * sanctioned dynamic-value case (spec §7.10), kept to this one
  * element per row.
@@ -65,7 +65,7 @@ export function ImportProgressRow({
         <div className="flex size-11.5 shrink-0 items-center justify-center overflow-hidden rounded-xs bg-subtle">
           {item.mediaType === 'image' && item.previewUrl ? (
             /* OD-133-1(b): transient blob: preview — allowlisted raw
-               <img>; see media-import-staging.tsx and img-baseline.txt.
+               img element; see media-import-staging.tsx and img-baseline.txt.
                (Rule frozen off for this file in eslint.config.mjs.) */
             <img
               src={item.previewUrl}
@@ -121,7 +121,7 @@ export function ImportProgressRow({
                     ratchet's allowlisted dynamic-value case (§7.10). */}
                 <div
                   className={cn(
-                    'h-full transition-[width] duration-base',
+                    'h-full transition-all duration-base',
                     isPaused ? 'bg-ink-dim' : 'bg-primary'
                   )}
                   style={{ width: `${item.progressPercent}%` }}

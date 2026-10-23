@@ -90,7 +90,7 @@ export function ImportProgressHeader({
         {/* Dynamic overall progress width — allowlisted (§7.10). */}
         <div
           data-testid="aggregate-progress-bar"
-          className="h-full bg-primary transition-[width] duration-base"
+          className="h-full bg-primary transition-all duration-base"
           style={{ width: `${barPercent}%` }}
         />
       </div>
@@ -195,7 +195,7 @@ export function MinimizedUploadPill({
         <div className="h-1 w-full overflow-hidden rounded-full bg-subtle">
           {/* Dynamic overall progress width — allowlisted (§7.10). */}
           <div
-            className="h-full bg-primary transition-[width] duration-base"
+            className="h-full bg-primary transition-all duration-base"
             style={{ width: `${overallPercent}%` }}
           />
         </div>
