@@ -1,1 +1,572 @@
-{"$description":"Primitive design tokens — the raw Binance identity values, captured from the shipped globals.css / theme.ts (spec 129, PR-F1). Hand-edit ONLY files in apps/web/tokens/; everything else is generated. Never reference primitives directly from component code — consume semantic tokens.","breakpoint":{"$description":"One breakpoint set, replacing the ad-hoc 440/639/767/768/1023 scatter. Boundaries align to the shipped media queries (max-width 639/767, min-width 768, max-width 1023).","lg":{"$type":"dimension","$value":"1024px"},"md":{"$type":"dimension","$value":"768px"},"sm":{"$type":"dimension","$value":"640px"},"xl":{"$type":"dimension","$value":"1280px"}},"color":{"alpha":{"emeraldHalo":{"$description":"Operational status halo","$type":"color","$value":"rgba(46, 189, 133, 0.50)"},"goldFocus":{"$description":"Pre-computed focus ring / focus border (both modes) — replaces hand-mixed rgba()","$type":"color","$value":"rgba(250, 215, 52, 0.35)"},"goldHalo":{"$description":"Queued status halo","$type":"color","$value":"rgba(250, 215, 52, 0.50)"},"idleHalo":{"$description":"Idle status halo","$type":"color","$value":"rgba(71, 77, 87, 0.40)"},"roseHalo":{"$description":"Critical status halo","$type":"color","$value":"rgba(246, 70, 93, 0.50)"}},"border":{"darkStrong":{"$description":"Dark-mode strong border","$type":"color","$value":"#2b323c"},"lightStrong":{"$description":"Light-mode strong border","$type":"color","$value":"#cbd5e1"}},"brand":{"bronze":{"$description":"Deep bronze — tertiary highlight, active tab borders, deep pressed states","$type":"color","$value":"#766018"},"emerald":{"$description":"Success — positive status, operational states","$type":"color","$value":"#2ebd85"},"gold":{"$description":"Dominant brand keystone — primary buttons, active moments (14.86:1 AAA on black)","$type":"color","$value":"#fad734"},"peru":{"$description":"Secondary highlight — links, callouts, active underline tabs","$type":"color","$value":"#b29527"},"rose":{"$description":"Danger — negative status, error states, critical alerts","$type":"color","$value":"#f6465d"}},"gray":{"400":{"$description":"Dark-mode secondary text","$type":"color","$value":"#9ca3af"},"500":{"$description":"Dark-mode muted text; idle status colour","$type":"color","$value":"#6b7280"},"mutedLight":{"$description":"Light-mode muted text; light-mode idle dot","$type":"color","$value":"#848e9c"},"slateText":{"$description":"Light-mode secondary text; dark-mode idle dot","$type":"color","$value":"#474d57"}},"neutral":{"black":{"$description":"Pitch black — dark canvas, text on primary","$type":"color","$value":"#000000"},"slate":{"$description":"Pitch slate — dark hairline borders, dividers, dark hover surface","$type":"color","$value":"#1f242d"},"white":{"$description":"Pure white — dark-mode primary text (21.0:1 AAA on black), light-mode panel","$type":"color","$value":"#ffffff"}},"surface":{"darkActive":{"$description":"Dark-mode active/pressed surface","$type":"color","$value":"#262c37"},"darkPanel":{"$description":"Dark-mode panel surface","$type":"color","$value":"#0c0d10"},"darkSubtle":{"$description":"Dark-mode subtle/recessed surface (shipped value; supersedes the #12141a draft that never shipped)","$type":"color","$value":"#121419"},"lightActive":{"$description":"Light-mode active/pressed surface","$type":"color","$value":"#e2e8f0"},"lightCanvas":{"$description":"Light-mode canvas (shipped value; supersedes the #ffffff spec draft, which ships only as the light panel)","$type":"color","$value":"#f6f8fa"},"lightHover":{"$description":"Light-mode hover surface; also the light hairline border","$type":"color","$value":"#eaecef"},"lightSubtle":{"$description":"Light-mode subtle surface (shipped value; supersedes #f8f9fa, which appears nowhere in shipped code)","$type":"color","$value":"#f1f3f5"}}},"font":{"family":{"mono":{"$type":"fontFamily","$value":"ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace"},"sans":{"$type":"fontFamily","$value":"system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif"}},"featureSettings":{"$type":"string","$value":"'cv02', 'cv03', 'cv04', 'cv11'"},"lineHeight":{"body":{"$type":"number","$value":1.5},"heading":{"$description":"Standard headings","$type":"number","$value":1.2},"headingLoose":{"$description":"Small headings","$type":"number","$value":1.3},"headingTight":{"$description":"Display headings (heading range 1.0–1.3)","$type":"number","$value":1.0}},"size":{"$description":"Type scale — 1.25 modular ratio on a 14px product body (UI research §5). The 13px step is the named metadata step (the de-facto 0.8125rem used across dense surfaces), not an accident.","body":{"$description":"Product body size (1rem = 16px; body renders at 0.875rem)","$type":"dimension","$value":"14px"},"lg":{"$description":"14 * 1.25 — lead text, h4","$type":"dimension","$value":"17.5px"},"metadata":{"$description":"Named metadata step — dense tables, captions, secondary labels","$type":"dimension","$value":"13px"},"xl":{"$description":"14 * 1.25^2 — h3","$type":"dimension","$value":"21.88px"},"xs":{"$description":"14 / 1.25^2 — fine print","$type":"dimension","$value":"11.2px"},"xxl":{"$description":"14 * 1.25^3 — h2","$type":"dimension","$value":"27.34px"},"xxxl":{"$description":"14 * 1.25^4 — h1 / display","$type":"dimension","$value":"34.18px"}},"tabularNums":{"$description":"font-variant-numeric value for numeric contexts","$type":"string","$value":"tabular-nums"},"tracking":{"body":{"$type":"dimension","$value":"0.000em"},"caption":{"$type":"dimension","$value":"+0.040em"},"display":{"$type":"dimension","$value":"-0.025em"},"h1":{"$type":"dimension","$value":"-0.020em"},"h2":{"$type":"dimension","$value":"-0.015em"},"h3":{"$type":"dimension","$value":"-0.010em"}},"weight":{"bold":{"$type":"fontWeight","$value":700},"heavy":{"$type":"fontWeight","$value":800},"medium":{"$type":"fontWeight","$value":500},"regular":{"$type":"fontWeight","$value":400},"semibold":{"$type":"fontWeight","$value":600}}},"motion":{"$description":"Motion — exit faster than enter (exit uses the next-shorter duration step). Reduced-motion handling lives in the base CSS layer (PR-F2).","duration":{"base":{"$description":"Default transitions","$type":"duration","$value":{"unit":"ms","value":150}},"fast":{"$description":"Micro feedback, exits","$type":"duration","$value":{"unit":"ms","value":100}},"slow":{"$description":"Panels, drawers","$type":"duration","$value":{"unit":"ms","value":200}},"slower":{"$description":"Large surface entrances","$type":"duration","$value":{"unit":"ms","value":300}}},"easing":{"enter":{"$description":"Decelerate — entrances","$type":"cubicBezier","$value":[0,0,0.2,1]},"exit":{"$description":"Accelerate — exits","$type":"cubicBezier","$value":[0.4,0,1,1]},"linear":{"$type":"cubicBezier","$value":[0,0,1,1]},"standard":{"$type":"cubicBezier","$value":[0.4,0,0.2,1]}}},"radius":{"full":{"$description":"Circular avatars and round indicators only","$type":"dimension","$value":"9999px"},"md":{"$description":"Cards, data tables, sheet containers, dialog modals","$type":"dimension","$value":"8px"},"sm":{"$description":"Buttons, form text inputs, select triggers","$type":"dimension","$value":"6px"},"xs":{"$description":"Checkboxes, micro switches, segmented toggles","$type":"dimension","$value":"4px"}},"shadow":{"$description":"Elevation — tonal surface steps + hairlines are the depth mechanism; shadows exist ONLY for true overlays (menus, dialogs, toasts) and raised cards, per mode.","dark":{"card":{"$type":"shadow","$value":"0 2px 8px rgba(0, 0, 0, 0.60)"},"elevated":{"$type":"shadow","$value":"0 12px 24px -4px rgba(0, 0, 0, 0.85)"},"modal":{"$type":"shadow","$value":"0 24px 48px -8px rgba(0, 0, 0, 0.95)"}},"light":{"card":{"$type":"shadow","$value":"0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02)"},"elevated":{"$type":"shadow","$value":"0 4px 12px -2px rgba(0, 0, 0, 0.08)"},"modal":{"$type":"shadow","$value":"0 20px 32px -4px rgba(0, 0, 0, 0.12)"}}},"space":{"$description":"Spacing ladder — 4/8 system (spec 129 §5.2). The xs–xxxl steps mirror the legacy SPACING export; section/page steps extend the ladder to 64/96.","lg":{"$description":"Standard container padding, card inner margins","$type":"dimension","$value":"16px"},"md":{"$description":"Standard control padding X","$type":"dimension","$value":"12px"},"page":{"$description":"Page-level separation","$type":"dimension","$value":"96px"},"section":{"$description":"Large section separation","$type":"dimension","$value":"64px"},"sm":{"$description":"Compact element spacing, input internal padding Y","$type":"dimension","$value":"8px"},"xl":{"$description":"Card sectional gap, grid gutters","$type":"dimension","$value":"24px"},"xs":{"$description":"Micro gaps, inline icon margins","$type":"dimension","$value":"4px"},"xxl":{"$description":"Page section rhythm","$type":"dimension","$value":"32px"},"xxxl":{"$description":"Major boundary margins","$type":"dimension","$value":"48px"}},"state":{"$description":"Pre-computed state values (Geist pattern) — components consume these instead of hand-mixing rgba() or opacity at the usage site.","disabledOpacity":{"$type":"number","$value":0.5},"focusRingOffset":{"$type":"dimension","$value":"2px"},"focusRingWidth":{"$type":"dimension","$value":"2px"}},"zIndex":{"$description":"Named z-index scale (spec 129 §5.2) replacing the 9500/9999/10000 arms race. Step VALUES preserve today's effective stacking order for existing usages — see the usage→step mapping in PR-F1. F1 defines the tokens only; usage sites migrate in specs 130–136.","base":{"$description":"Normal flow; absorbs today's local 1/2/3/20/40/50/100 stacking inside components","$type":"number","$value":0},"dialog":{"$description":"Modal dialogs (today's 9500 usages — media-library modals/dialogs)","$type":"number","$value":9500},"drawer":{"$description":"Drawers and slide-overs (today's 1000/1100 usages)","$type":"number","$value":1000},"overlayTop":{"$description":"Topmost overlay — desktop titlebar and tooltips (today's 10000 usages; currently the highest stacking in the app)","$type":"number","$value":10000},"popover":{"$description":"Popovers, menus, dropdown panels (today's 9000/9200 usages)","$type":"number","$value":9000},"sticky":{"$description":"Sticky chrome — sidebar container (CSS z-index 30 today) and its rail (20, inside the container's stacking context)","$type":"number","$value":30},"toast":{"$description":"Toasts and top-level guards (today's 9999 usages — ui/dialog overlay tier, leave-page guard, media import staging, media library header)","$type":"number","$value":9999}}}
+{
+  "$description": "Primitive design tokens — the raw Binance identity values, captured from the shipped globals.css / theme.ts (spec 129, PR-F1). Hand-edit ONLY files in apps/web/tokens/; everything else is generated. Never reference primitives directly from component code — consume semantic tokens.",
+  "breakpoint": {
+    "$description": "One breakpoint set, replacing the ad-hoc 440/639/767/768/1023 scatter. Boundaries align to the shipped media queries (max-width 639/767, min-width 768, max-width 1023).",
+    "lg": {
+      "$type": "dimension",
+      "$value": "1024px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "768px"
+    },
+    "sm": {
+      "$type": "dimension",
+      "$value": "640px"
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": "1280px"
+    }
+  },
+  "container": {
+    "$description": "Container scale for max-w-* (Tailwind v4 defaults). Named separately from the spacing ladder: in Tailwind v4, max-w-<key> also resolves through the --spacing-* namespace, so the spacing tokens' xs/sm/md/lg/xl names silently captured max-w-md (=12px) etc. until this scale was defined (found by spec 142's mobile e2e on PR-136A: the login card collapsed to a 12px max-width).",
+    "xs": {
+      "$type": "dimension",
+      "$value": "20rem"
+    },
+    "sm": {
+      "$type": "dimension",
+      "$value": "24rem"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "28rem"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "32rem"
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": "36rem"
+    },
+    "2xl": {
+      "$type": "dimension",
+      "$value": "42rem"
+    },
+    "3xl": {
+      "$type": "dimension",
+      "$value": "48rem"
+    },
+    "4xl": {
+      "$type": "dimension",
+      "$value": "56rem"
+    },
+    "5xl": {
+      "$type": "dimension",
+      "$value": "64rem"
+    },
+    "6xl": {
+      "$type": "dimension",
+      "$value": "72rem"
+    },
+    "7xl": {
+      "$type": "dimension",
+      "$value": "80rem"
+    }
+  },
+  "color": {
+    "alpha": {
+      "emeraldHalo": {
+        "$description": "Operational status halo",
+        "$type": "color",
+        "$value": "rgba(46, 189, 133, 0.50)"
+      },
+      "goldFocus": {
+        "$description": "Pre-computed focus ring / focus border (both modes) — replaces hand-mixed rgba()",
+        "$type": "color",
+        "$value": "rgba(250, 215, 52, 0.35)"
+      },
+      "goldHalo": {
+        "$description": "Queued status halo",
+        "$type": "color",
+        "$value": "rgba(250, 215, 52, 0.50)"
+      },
+      "idleHalo": {
+        "$description": "Idle status halo",
+        "$type": "color",
+        "$value": "rgba(71, 77, 87, 0.40)"
+      },
+      "roseHalo": {
+        "$description": "Critical status halo",
+        "$type": "color",
+        "$value": "rgba(246, 70, 93, 0.50)"
+      }
+    },
+    "border": {
+      "darkStrong": {
+        "$description": "Dark-mode strong border",
+        "$type": "color",
+        "$value": "#2b323c"
+      },
+      "lightStrong": {
+        "$description": "Light-mode strong border",
+        "$type": "color",
+        "$value": "#cbd5e1"
+      }
+    },
+    "brand": {
+      "bronze": {
+        "$description": "Deep bronze — tertiary highlight, active tab borders, deep pressed states",
+        "$type": "color",
+        "$value": "#766018"
+      },
+      "emerald": {
+        "$description": "Success — positive status, operational states",
+        "$type": "color",
+        "$value": "#2ebd85"
+      },
+      "gold": {
+        "$description": "Dominant brand keystone — primary buttons, active moments (14.86:1 AAA on black)",
+        "$type": "color",
+        "$value": "#fad734"
+      },
+      "peru": {
+        "$description": "Secondary highlight — links, callouts, active underline tabs",
+        "$type": "color",
+        "$value": "#b29527"
+      },
+      "rose": {
+        "$description": "Danger — negative status, error states, critical alerts",
+        "$type": "color",
+        "$value": "#f6465d"
+      }
+    },
+    "gray": {
+      "400": {
+        "$description": "Dark-mode secondary text",
+        "$type": "color",
+        "$value": "#9ca3af"
+      },
+      "500": {
+        "$description": "Dark-mode muted text; idle status colour",
+        "$type": "color",
+        "$value": "#6b7280"
+      },
+      "mutedLight": {
+        "$description": "Light-mode muted text; light-mode idle dot",
+        "$type": "color",
+        "$value": "#848e9c"
+      },
+      "slateText": {
+        "$description": "Light-mode secondary text; dark-mode idle dot",
+        "$type": "color",
+        "$value": "#474d57"
+      }
+    },
+    "neutral": {
+      "black": {
+        "$description": "Pitch black — dark canvas, text on primary",
+        "$type": "color",
+        "$value": "#000000"
+      },
+      "slate": {
+        "$description": "Pitch slate — dark hairline borders, dividers, dark hover surface",
+        "$type": "color",
+        "$value": "#1f242d"
+      },
+      "white": {
+        "$description": "Pure white — dark-mode primary text (21.0:1 AAA on black), light-mode panel",
+        "$type": "color",
+        "$value": "#ffffff"
+      }
+    },
+    "surface": {
+      "darkActive": {
+        "$description": "Dark-mode active/pressed surface",
+        "$type": "color",
+        "$value": "#262c37"
+      },
+      "darkPanel": {
+        "$description": "Dark-mode panel surface",
+        "$type": "color",
+        "$value": "#0c0d10"
+      },
+      "darkSubtle": {
+        "$description": "Dark-mode subtle/recessed surface (shipped value; supersedes the #12141a draft that never shipped)",
+        "$type": "color",
+        "$value": "#121419"
+      },
+      "lightActive": {
+        "$description": "Light-mode active/pressed surface",
+        "$type": "color",
+        "$value": "#e2e8f0"
+      },
+      "lightCanvas": {
+        "$description": "Light-mode canvas (shipped value; supersedes the #ffffff spec draft, which ships only as the light panel)",
+        "$type": "color",
+        "$value": "#f6f8fa"
+      },
+      "lightHover": {
+        "$description": "Light-mode hover surface; also the light hairline border",
+        "$type": "color",
+        "$value": "#eaecef"
+      },
+      "lightSubtle": {
+        "$description": "Light-mode subtle surface (shipped value; supersedes #f8f9fa, which appears nowhere in shipped code)",
+        "$type": "color",
+        "$value": "#f1f3f5"
+      }
+    }
+  },
+  "font": {
+    "family": {
+      "mono": {
+        "$type": "fontFamily",
+        "$value": "ui-monospace, SFMono-Regular, Menlo, Consolas, \"Liberation Mono\", monospace"
+      },
+      "sans": {
+        "$type": "fontFamily",
+        "$value": "system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif"
+      }
+    },
+    "featureSettings": {
+      "$type": "string",
+      "$value": "'cv02', 'cv03', 'cv04', 'cv11'"
+    },
+    "lineHeight": {
+      "body": {
+        "$type": "number",
+        "$value": 1.5
+      },
+      "heading": {
+        "$description": "Standard headings",
+        "$type": "number",
+        "$value": 1.2
+      },
+      "headingLoose": {
+        "$description": "Small headings",
+        "$type": "number",
+        "$value": 1.3
+      },
+      "headingTight": {
+        "$description": "Display headings (heading range 1.0–1.3)",
+        "$type": "number",
+        "$value": 1.0
+      }
+    },
+    "size": {
+      "$description": "Type scale — 1.25 modular ratio on a 14px product body (UI research §5). The 13px step is the named metadata step (the de-facto 0.8125rem used across dense surfaces), not an accident.",
+      "body": {
+        "$description": "Product body size (1rem = 16px; body renders at 0.875rem)",
+        "$type": "dimension",
+        "$value": "14px"
+      },
+      "lg": {
+        "$description": "14 * 1.25 — lead text, h4",
+        "$type": "dimension",
+        "$value": "17.5px"
+      },
+      "metadata": {
+        "$description": "Named metadata step — dense tables, captions, secondary labels",
+        "$type": "dimension",
+        "$value": "13px"
+      },
+      "xl": {
+        "$description": "14 * 1.25^2 — h3",
+        "$type": "dimension",
+        "$value": "21.88px"
+      },
+      "xs": {
+        "$description": "14 / 1.25^2 — fine print",
+        "$type": "dimension",
+        "$value": "11.2px"
+      },
+      "xxl": {
+        "$description": "14 * 1.25^3 — h2",
+        "$type": "dimension",
+        "$value": "27.34px"
+      },
+      "xxxl": {
+        "$description": "14 * 1.25^4 — h1 / display",
+        "$type": "dimension",
+        "$value": "34.18px"
+      }
+    },
+    "tabularNums": {
+      "$description": "font-variant-numeric value for numeric contexts",
+      "$type": "string",
+      "$value": "tabular-nums"
+    },
+    "tracking": {
+      "body": {
+        "$type": "dimension",
+        "$value": "0.000em"
+      },
+      "caption": {
+        "$type": "dimension",
+        "$value": "+0.040em"
+      },
+      "display": {
+        "$type": "dimension",
+        "$value": "-0.025em"
+      },
+      "h1": {
+        "$type": "dimension",
+        "$value": "-0.020em"
+      },
+      "h2": {
+        "$type": "dimension",
+        "$value": "-0.015em"
+      },
+      "h3": {
+        "$type": "dimension",
+        "$value": "-0.010em"
+      }
+    },
+    "weight": {
+      "bold": {
+        "$type": "fontWeight",
+        "$value": 700
+      },
+      "heavy": {
+        "$type": "fontWeight",
+        "$value": 800
+      },
+      "medium": {
+        "$type": "fontWeight",
+        "$value": 500
+      },
+      "regular": {
+        "$type": "fontWeight",
+        "$value": 400
+      },
+      "semibold": {
+        "$type": "fontWeight",
+        "$value": 600
+      }
+    }
+  },
+  "motion": {
+    "$description": "Motion — exit faster than enter (exit uses the next-shorter duration step). Reduced-motion handling lives in the base CSS layer (PR-F2).",
+    "duration": {
+      "base": {
+        "$description": "Default transitions",
+        "$type": "duration",
+        "$value": {
+          "unit": "ms",
+          "value": 150
+        }
+      },
+      "fast": {
+        "$description": "Micro feedback, exits",
+        "$type": "duration",
+        "$value": {
+          "unit": "ms",
+          "value": 100
+        }
+      },
+      "slow": {
+        "$description": "Panels, drawers",
+        "$type": "duration",
+        "$value": {
+          "unit": "ms",
+          "value": 200
+        }
+      },
+      "slower": {
+        "$description": "Large surface entrances",
+        "$type": "duration",
+        "$value": {
+          "unit": "ms",
+          "value": 300
+        }
+      }
+    },
+    "easing": {
+      "enter": {
+        "$description": "Decelerate — entrances",
+        "$type": "cubicBezier",
+        "$value": [
+          0,
+          0,
+          0.2,
+          1
+        ]
+      },
+      "exit": {
+        "$description": "Accelerate — exits",
+        "$type": "cubicBezier",
+        "$value": [
+          0.4,
+          0,
+          1,
+          1
+        ]
+      },
+      "linear": {
+        "$type": "cubicBezier",
+        "$value": [
+          0,
+          0,
+          1,
+          1
+        ]
+      },
+      "standard": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.4,
+          0,
+          0.2,
+          1
+        ]
+      }
+    }
+  },
+  "radius": {
+    "full": {
+      "$description": "Circular avatars and round indicators only",
+      "$type": "dimension",
+      "$value": "9999px"
+    },
+    "md": {
+      "$description": "Cards, data tables, sheet containers, dialog modals",
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "sm": {
+      "$description": "Buttons, form text inputs, select triggers",
+      "$type": "dimension",
+      "$value": "6px"
+    },
+    "xs": {
+      "$description": "Checkboxes, micro switches, segmented toggles",
+      "$type": "dimension",
+      "$value": "4px"
+    }
+  },
+  "shadow": {
+    "$description": "Elevation — tonal surface steps + hairlines are the depth mechanism; shadows exist ONLY for true overlays (menus, dialogs, toasts) and raised cards, per mode.",
+    "dark": {
+      "card": {
+        "$type": "shadow",
+        "$value": "0 2px 8px rgba(0, 0, 0, 0.60)"
+      },
+      "elevated": {
+        "$type": "shadow",
+        "$value": "0 12px 24px -4px rgba(0, 0, 0, 0.85)"
+      },
+      "modal": {
+        "$type": "shadow",
+        "$value": "0 24px 48px -8px rgba(0, 0, 0, 0.95)"
+      }
+    },
+    "light": {
+      "card": {
+        "$type": "shadow",
+        "$value": "0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02)"
+      },
+      "elevated": {
+        "$type": "shadow",
+        "$value": "0 4px 12px -2px rgba(0, 0, 0, 0.08)"
+      },
+      "modal": {
+        "$type": "shadow",
+        "$value": "0 20px 32px -4px rgba(0, 0, 0, 0.12)"
+      }
+    }
+  },
+  "space": {
+    "$description": "Spacing ladder — 4/8 system (spec 129 §5.2). The xs–xxxl steps mirror the legacy SPACING export; section/page steps extend the ladder to 64/96.",
+    "lg": {
+      "$description": "Standard container padding, card inner margins",
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "md": {
+      "$description": "Standard control padding X",
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "page": {
+      "$description": "Page-level separation",
+      "$type": "dimension",
+      "$value": "96px"
+    },
+    "section": {
+      "$description": "Large section separation",
+      "$type": "dimension",
+      "$value": "64px"
+    },
+    "sm": {
+      "$description": "Compact element spacing, input internal padding Y",
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "xl": {
+      "$description": "Card sectional gap, grid gutters",
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "xs": {
+      "$description": "Micro gaps, inline icon margins",
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "xxl": {
+      "$description": "Page section rhythm",
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "xxxl": {
+      "$description": "Major boundary margins",
+      "$type": "dimension",
+      "$value": "48px"
+    }
+  },
+  "state": {
+    "$description": "Pre-computed state values (Geist pattern) — components consume these instead of hand-mixing rgba() or opacity at the usage site.",
+    "disabledOpacity": {
+      "$type": "number",
+      "$value": 0.5
+    },
+    "focusRingOffset": {
+      "$type": "dimension",
+      "$value": "2px"
+    },
+    "focusRingWidth": {
+      "$type": "dimension",
+      "$value": "2px"
+    }
+  },
+  "zIndex": {
+    "$description": "Named z-index scale (spec 129 §5.2) replacing the 9500/9999/10000 arms race. Step VALUES preserve today's effective stacking order for existing usages — see the usage→step mapping in PR-F1. F1 defines the tokens only; usage sites migrate in specs 130–136.",
+    "base": {
+      "$description": "Normal flow; absorbs today's local 1/2/3/20/40/50/100 stacking inside components",
+      "$type": "number",
+      "$value": 0
+    },
+    "dialog": {
+      "$description": "Modal dialogs (today's 9500 usages — media-library modals/dialogs)",
+      "$type": "number",
+      "$value": 9500
+    },
+    "drawer": {
+      "$description": "Drawers and slide-overs (today's 1000/1100 usages)",
+      "$type": "number",
+      "$value": 1000
+    },
+    "overlayTop": {
+      "$description": "Topmost overlay — desktop titlebar and tooltips (today's 10000 usages; currently the highest stacking in the app)",
+      "$type": "number",
+      "$value": 10000
+    },
+    "popover": {
+      "$description": "Popovers, menus, dropdown panels (today's 9000/9200 usages)",
+      "$type": "number",
+      "$value": 9000
+    },
+    "sticky": {
+      "$description": "Sticky chrome — sidebar container (CSS z-index 30 today) and its rail (20, inside the container's stacking context)",
+      "$type": "number",
+      "$value": 30
+    },
+    "toast": {
+      "$description": "Toasts and top-level guards (today's 9999 usages — ui/dialog overlay tier, leave-page guard, media import staging, media library header)",
+      "$type": "number",
+      "$value": 9999
+    }
+  }
+}
