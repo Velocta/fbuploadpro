@@ -48,6 +48,9 @@ const SYNC_KEYS = [
   'NEXT_PUBLIC_SIGNUPS_ENABLED',
   'POSTHOG_KEY',
   'POSTHOG_HOST',
+  // Spec 125: the web YouTube connect flow calls Post for Me server-side
+  // with the same key the worker publishes with. Secret, production-only.
+  'POST_FOR_ME_API_KEY',
 ];
 
 async function run() {

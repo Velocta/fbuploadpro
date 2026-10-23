@@ -33,9 +33,9 @@ import type {
 //     the post exists — a successful per-account post result. A bare
 //     create response is never enough on its own.
 //   - Every outcome carries `detail: { provider: 'post-for-me', ... }`
-//     with the provider post/result refs. (Persistence of `detail`
-//     into publish_logs is spec 139's p_detail — the settle mapping
-//     ignores it until that lands; the outcome carries it regardless.)
+//     with the provider post/result refs; the consumer threads it
+//     into `publish_logs.detail` via the settle RPC's `p_detail`
+//     (spec 139, PR #686).
 //   - Duplicate safety: before submitting — and again after any
 //     ambiguous create failure (e.g. a timeout where the provider
 //     may have accepted the post) — the publisher checks provider
