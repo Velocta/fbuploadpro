@@ -159,6 +159,13 @@ function Sidebar({
   if (isMobile) {
     // Mobile: the upstream Sheet behaviour, built on the Dialog primitive —
     // focus trapped while open, Esc closes, focus returns to the trigger.
+    // Safe-area (spec 142, F03): the sheet is flush with the viewport
+    // top, bottom and its anchored side, so it carries the globals.css
+    // safe-area utilities (pt-safe / pb-safe, plus pl-safe or pr-safe on
+    // the anchored edge) — first/last sheet content clears the notch and
+    // the home indicator. Desktop rail below intentionally gets none.
+    // Contract-only for now: this shared Sidebar has no live consumer
+    // yet — spec 130 adopts it in the rebuilt shell (audit H-130).
     return (
       <DialogPrimitive.Root open={openMobile} onOpenChange={setOpenMobile}>
         <DialogPrimitive.Portal>
@@ -169,8 +176,8 @@ function Sidebar({
             data-mobile="true"
             aria-label="Sidebar"
             className={cn(
-              "fixed inset-y-0 z-dialog flex w-72 flex-col bg-panel p-0 text-ink outline-none",
-              side === "left" ? "left-0" : "right-0",
+              "fixed inset-y-0 z-dialog flex w-72 flex-col bg-panel pt-safe pb-safe text-ink outline-none",
+              side === "left" ? "left-0 pl-safe" : "right-0 pr-safe",
               className
             )}
             {...props}
