@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * TikTok tab — connect-info config (spec 135 PR-135-4, spec §5.5).
+ * Copy verbatim as shipped; only the construction changed
+ * (tokens/primitives).
+ */
+
 import React from 'react';
 import { PlatformConnectInfoView } from '@/components/settings/platform-connect-info-view';
 
