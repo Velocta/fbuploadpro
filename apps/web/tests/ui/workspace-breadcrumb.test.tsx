@@ -1,15 +1,19 @@
 /**
  * @file workspace-breadcrumb.test.tsx
- * @description Unit tests for WorkspaceBreadcrumb component and computeBreadcrumbs routine (Spec 052).
+ * @description Behavioural tests for WorkspaceBreadcrumb +
+ * computeBreadcrumbs (Spec 052; migrated to rendered-behaviour
+ * assertions by spec 130 PR-130-2a per spec 137 §4.1 duty 8 — the
+ * computeBreadcrumbs mapping itself is the parity net and does not
+ * change).
  */
 
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import {
   WorkspaceBreadcrumb,
   computeBreadcrumbs,
 } from '@/components/workspace/workspace-breadcrumb';
-import { render } from '../components/setup';
 
 let mockPathname = '/tenant/acme';
 
@@ -23,7 +27,9 @@ describe('WorkspaceBreadcrumb (Spec 052)', () => {
     expect(computeBreadcrumbs('/tenant/acme/', 'acme')).toEqual([{ label: 'Home' }]);
     expect(computeBreadcrumbs('/tenant/acme/media', 'acme')).toEqual([{ label: 'Media Library' }]);
     expect(computeBreadcrumbs('/tenant/acme/downloader', 'acme')).toEqual([{ label: 'Downloader' }]);
-    expect(computeBreadcrumbs('/tenant/acme/fdola-studio', 'acme')).toEqual([{ label: 'Fdola Studio' }]);
+    expect(computeBreadcrumbs('/tenant/acme/fdola-studio', 'acme')).toEqual([
+      { label: 'Fdola Studio' },
+    ]);
     expect(computeBreadcrumbs('/tenant/acme/settings', 'acme')).toEqual([{ label: 'Settings' }]);
     expect(computeBreadcrumbs('/tenant/acme/accounts', 'acme')).toEqual([
       { label: 'Facebook' },
@@ -50,23 +56,35 @@ describe('WorkspaceBreadcrumb (Spec 052)', () => {
       { label: 'X (Twitter)' },
       { label: 'Accounts' },
     ]);
+    expect(computeBreadcrumbs('/tenant/acme/tiktok/accounts', 'acme')).toEqual([
+      { label: 'TikTok' },
+      { label: 'Accounts' },
+    ]);
+    expect(computeBreadcrumbs('/tenant/acme/youtube/accounts', 'acme')).toEqual([
+      { label: 'YouTube' },
+      { label: 'Accounts' },
+    ]);
+    expect(computeBreadcrumbs('', 'acme')).toEqual([{ label: 'Home' }]);
   });
 
-  it('renders breadcrumb trail with accessible ARIA elements and chevron separators', () => {
+  it('renders the trail with the Pages crumb as a link and the last crumb as the current page', () => {
     mockPathname = '/tenant/acme/pages/page-456';
-    const { hasAttribute, hasText, html } = render(
-      <WorkspaceBreadcrumb subdomain="acme" />
-    );
+    render(<WorkspaceBreadcrumb subdomain="acme" />);
 
-    expect(hasAttribute('data-slot', 'workspace-breadcrumb')).toBe(true);
-    expect(hasAttribute('data-testid', 'workspace-breadcrumb')).toBe(true);
-    expect(hasAttribute('aria-label', 'Breadcrumbs')).toBe(true);
-    expect(hasText('Facebook')).toBe(true);
-    expect(hasText('Pages')).toBe(true);
-    expect(hasText('Details')).toBe(true);
-    // Chevron separator icon
-    expect(html).toContain('m9 18 6-6-6-6');
-    // Leaf item has aria-current="page"
-    expect(html).toContain('aria-current="page"');
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumbs' });
+    expect(nav).toHaveAttribute('data-testid', 'workspace-breadcrumb');
+    expect(screen.getByText('Facebook')).toBeInTheDocument();
+    const pagesLink = screen.getByRole('link', { name: 'Pages' });
+    expect(pagesLink).toHaveAttribute('href', '/tenant/acme/pages');
+    const details = screen.getByText('Details');
+    expect(details).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('renders a single Home crumb at the tenant root', () => {
+    mockPathname = '/tenant/acme';
+    render(<WorkspaceBreadcrumb subdomain="acme" />);
+    const home = screen.getByText('Home');
+    expect(home).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 });

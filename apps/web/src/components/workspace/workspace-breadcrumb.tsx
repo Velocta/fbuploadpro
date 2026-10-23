@@ -1,9 +1,19 @@
 'use client';
 
+/**
+ * WorkspaceBreadcrumb — rebuilt on token-backed utilities only
+ * (spec 130 §5.2, PR-130-2a). The `computeBreadcrumbs` mapping is
+ * preserved byte-for-byte in behaviour (spec §4.1): tenant root →
+ * Home; simple top levels; Facebook › Accounts; Facebook › Pages
+ * (› Details, with the Pages crumb a link); platform labels +
+ * Accounts; unknown segments fall back to a title-cased label. The
+ * last crumb carries `aria-current="page"`.
+ */
+
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { THEME, SPACING, TYPOGRAPHY } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 import { buildTenantHref } from '@/lib/tenant-href';
 
 export interface BreadcrumbSegment {
@@ -80,7 +90,10 @@ export interface WorkspaceBreadcrumbProps {
   useCleanPaths?: boolean | undefined;
 }
 
-export function WorkspaceBreadcrumb({ subdomain, useCleanPaths = false }: Readonly<WorkspaceBreadcrumbProps>) {
+export function WorkspaceBreadcrumb({
+  subdomain,
+  useCleanPaths = false,
+}: Readonly<WorkspaceBreadcrumbProps>) {
   const pathname = usePathname() || '';
   const crumbs = computeBreadcrumbs(pathname, subdomain, useCleanPaths);
 
@@ -89,17 +102,7 @@ export function WorkspaceBreadcrumb({ subdomain, useCleanPaths = false }: Readon
       aria-label="Breadcrumbs"
       data-slot="workspace-breadcrumb"
       data-testid="workspace-breadcrumb"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: SPACING.xs,
-        fontSize: '0.8125rem',
-        lineHeight: 1,
-        color: `var(--text-sub, ${THEME.default.text.secondary})`,
-        overflow: 'hidden',
-        whiteSpace: 'nowrap',
-        textOverflow: 'ellipsis',
-      }}
+      className="flex items-center gap-1 overflow-hidden text-body leading-none whitespace-nowrap text-ellipsis text-ink-sub"
     >
       {crumbs.map((crumb, idx) => {
         const isLast = idx === crumbs.length - 1;
@@ -116,11 +119,7 @@ export function WorkspaceBreadcrumb({ subdomain, useCleanPaths = false }: Readon
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 aria-hidden="true"
-                style={{
-                  color: `var(--text-dim, ${THEME.default.text.muted})`,
-                  flexShrink: 0,
-                  opacity: 0.6,
-                }}
+                className="shrink-0 text-ink-dim opacity-60"
               >
                 <path d="m9 18 6-6-6-6" />
               </svg>
@@ -128,25 +127,14 @@ export function WorkspaceBreadcrumb({ subdomain, useCleanPaths = false }: Readon
             {crumb.href && !isLast ? (
               <Link
                 href={crumb.href}
-                style={{
-                  color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                  textDecoration: 'none',
-                  transition: 'color 0.15s ease',
-                }}
+                className="text-ink-sub no-underline transition-colors duration-base ease-standard hover:text-ink"
               >
                 {crumb.label}
               </Link>
             ) : (
               <span
                 aria-current={isLast ? 'page' : undefined}
-                style={{
-                  color: isLast
-                    ? `var(--text-main, ${THEME.default.text.primary})`
-                    : `var(--text-sub, ${THEME.default.text.secondary})`,
-                  fontWeight: isLast
-                    ? TYPOGRAPHY.weights.medium
-                    : TYPOGRAPHY.weights.regular,
-                }}
+                className={cn(isLast ? 'font-medium text-ink' : 'text-ink-sub')}
               >
                 {crumb.label}
               </span>
