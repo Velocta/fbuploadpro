@@ -70,10 +70,28 @@ while IFS= read -r file; do
 done < <(grep -rln -E '__TEST__|__MOCK__|ForTesting' apps/web/src apps/worker/src --include="*.ts" --include="*.tsx" 2>/dev/null | grep -v '/tests/' | grep -v '\.test\.' || true)
 
 # ---------------------------------------------------------------------------
-# Check 6: CSP header present in next.config.ts (spec 087)
+# Check 6: CSP actually issued by middleware via lib/csp.ts (spec 087/139).
+# The old check grepped for 'Content-Security-Policy' in next.config.ts,
+# where the string only appears in a COMMENT — it passed even if no CSP
+# header was ever sent. This asserts the real wiring instead:
+#   - lib/csp.ts defines CSP_HEADER_NAME as a Content-Security-Policy*
+#     header name (the single Phase-2 flip point),
+#   - lib/csp.ts's applyCspHeaders() sets that header on the response,
+#   - middleware.ts uses CSP_HEADER_NAME and calls applyCspHeaders().
 # ---------------------------------------------------------------------------
-if ! grep -q 'Content-Security-Policy' apps/web/next.config.ts 2>/dev/null; then
-  violation "CSP header missing from apps/web/next.config.ts -- the Content-Security-Policy(-Report-Only) header must not be removed"
+CSP_LIB="apps/web/src/lib/csp.ts"
+CSP_MIDDLEWARE="apps/web/src/middleware.ts"
+if ! grep -q -E "export const CSP_HEADER_NAME = 'Content-Security-Policy" "$CSP_LIB" 2>/dev/null; then
+  violation "CSP header name not defined: ${CSP_LIB} must export CSP_HEADER_NAME = 'Content-Security-Policy...' (the single CSP flip point) -- do not remove or rename it"
+fi
+if ! grep -q -E 'export function applyCspHeaders' "$CSP_LIB" 2>/dev/null || ! grep -q -F 'response.headers.set(CSP_HEADER_NAME' "$CSP_LIB" 2>/dev/null; then
+  violation "applyCspHeaders() in ${CSP_LIB} must set the response header via CSP_HEADER_NAME -- the CSP header must actually be issued, not just named"
+fi
+if ! grep -q 'CSP_HEADER_NAME' "$CSP_MIDDLEWARE" 2>/dev/null; then
+  violation "CSP_HEADER_NAME not used in ${CSP_MIDDLEWARE} -- middleware must set the CSP request header via CSP_HEADER_NAME from lib/csp.ts"
+fi
+if ! grep -q -E 'applyCspHeaders\(' "$CSP_MIDDLEWARE" 2>/dev/null; then
+  violation "applyCspHeaders() not called in ${CSP_MIDDLEWARE} -- middleware must apply CSP headers to responses via applyCspHeaders() from lib/csp.ts"
 fi
 
 # ---------------------------------------------------------------------------

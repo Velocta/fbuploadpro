@@ -3,6 +3,14 @@ main = "src/index.ts"
 compatibility_date = "2026-10-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Non-secret deploy-time variables. Worker code branches on ENVIRONMENT
+# (localhost CORS + the test-DB seam are enabled whenever it is not
+# "production"), and the deploy workflow does not set it — so it must be
+# declared here. Secrets are NOT set here; they are provided by the deploy
+# workflow (wrangler secret / CI env).
+[vars]
+ENVIRONMENT = "production"
+
 [triggers]
 # "* * * * *" = claimer tick; "*/15 * * * *" = token-refresh job (spec 121 D6).
 crons = ["* * * * *", "*/15 * * * *"]
