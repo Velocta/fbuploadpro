@@ -12,7 +12,7 @@ import {
 } from '@/lib/theme';
 import type { FacebookPageItem } from '../page-card';
 import type { PostFormat } from '@fbuploadpro/contracts';
-import { formatSlotDisplay } from './tab-posting-times';
+import { formatSlotDisplay } from './posting-times/posting-time-utils';
 
 export interface PageQueueItemSummary {
   id: string;
