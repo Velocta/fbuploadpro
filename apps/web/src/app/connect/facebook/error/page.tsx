@@ -2,9 +2,16 @@
 
 import React, { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { PALETTE } from '@/lib/theme';
+
 import { ConnectStatusLayout } from '@/components/accounts/connect-status-layout';
 
+/**
+ * Reason → copy mapping (spec 136 §3.4, preserved verbatim — OD-136-4
+ * default: keep the existing map). Reasons the entry route emits that
+ * have no specific entry here (`missing_token`, `expired_or_invalid`,
+ * `app_not_configured`) fall through to the default expired/invalid
+ * copy, exactly as before this rebuild.
+ */
 export function getConnectErrorCopy(reason?: string | null): {
   title: string;
   description: string;
@@ -36,27 +43,9 @@ export function ConnectErrorView({
   return (
     <ConnectStatusLayout
       testId="magic-connect-error"
-      iconBg="rgba(246, 70, 93, 0.15)"
-      iconBorder="rgba(246, 70, 93, 0.35)"
-      iconColor={PALETTE.accent3}
+      variant="error"
       title={title}
       description={description}
-      icon={
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      }
     />
   );
 }

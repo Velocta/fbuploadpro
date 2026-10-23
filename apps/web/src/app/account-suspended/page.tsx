@@ -1,59 +1,34 @@
 import type { Metadata } from 'next';
-import React from 'react';
-import { THEME, COMPONENT_STYLES, STATUS_SIGNALS } from '@/lib/theme';
+import * as React from 'react';
+
+import { Card } from '@/components/shared/ui/card';
+import { StatusDot } from '@/components/shared/ui/status-dot';
 
 export const metadata: Metadata = { title: 'Account suspended' };
 
+/**
+ * Account suspended — a static, server-rendered terminal state
+ * (spec 136 §5.5). Rebuilt on shared/ui primitives: the status line
+ * uses the OD-3 research pattern (colour + icon + text via StatusDot)
+ * in place of the former luminous-dot preset, and the copy is
+ * preserved verbatim (§3.4). No interactive elements, no client JS.
+ * Whether the page gains a support action is OD-136-7 — unanswered,
+ * so the existing no-action behaviour is preserved.
+ */
 export default function AccountSuspendedPage() {
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: THEME.default.spacing.lg,
-        backgroundColor: THEME.default.surfaces.canvas,
-        color: THEME.default.text.primary,
-        fontFamily: THEME.default.typography.fontFamily,
-      }}
-    >
-      <div
-        style={{
-          ...COMPONENT_STYLES.card(THEME.default),
-          padding: THEME.default.spacing.xl,
-          maxWidth: '440px',
-          width: '100%',
-          textAlign: 'center',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: THEME.default.spacing.sm, marginBottom: THEME.default.spacing.md }}>
-          <span style={COMPONENT_STYLES.statusDot('critical')} />
-          <span style={{ fontSize: '0.875rem', fontWeight: THEME.default.typography.weights.semibold, color: STATUS_SIGNALS.critical.color }}>
-            Account Suspended
-          </span>
+    <main className="flex min-h-screen items-center justify-center bg-canvas p-4 text-ink">
+      <Card className="w-full max-w-110 items-center gap-0 px-6 py-6 text-center">
+        <div className="mb-3 flex items-center justify-center">
+          <StatusDot status="critical" label="Account Suspended" />
         </div>
-        <h2
-          style={{
-            margin: `0 0 ${THEME.default.spacing.sm} 0`,
-            fontSize: '1.25rem',
-            fontWeight: THEME.default.typography.weights.bold,
-            letterSpacing: THEME.default.typography.tracking.h2,
-          }}
-        >
+        <h1 className="mb-2 text-xl leading-heading font-bold tracking-h2 text-ink">
           Access Restricted
-        </h2>
-        <p
-          style={{
-            margin: `0 0 ${THEME.default.spacing.lg} 0`,
-            color: THEME.default.text.secondary,
-            fontSize: '0.875rem',
-            lineHeight: 1.5,
-          }}
-        >
+        </h1>
+        <p className="mb-4 text-body leading-body text-ink-sub">
           Your account has been suspended. Please contact support to restore access.
         </p>
-      </div>
+      </Card>
     </main>
   );
 }

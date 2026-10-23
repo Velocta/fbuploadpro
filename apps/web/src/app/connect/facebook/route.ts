@@ -4,6 +4,7 @@ import {
   getSessionSecret,
   signOAuthState,
   verifyMagicLinkToken,
+  type Database,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
@@ -12,7 +13,7 @@ import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver'
 
 export async function handleConnectFacebook(
   request: NextRequest,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient<Database>
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';
