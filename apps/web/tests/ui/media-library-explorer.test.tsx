@@ -17,10 +17,6 @@ import {
   formatDuration,
 } from '@/components/media/media-asset-card';
 import { MediaTableRow } from '@/components/media/media-table-row';
-import {
-  MediaPreviewModal,
-  captureVideoFrameAsWebp,
-} from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
 import { MediaImportModal } from '@/components/media/media-import-modal';
 import {
@@ -241,45 +237,13 @@ describe('Spec 029: MediaAssetCard & MediaPreviewModal (US2, US6)', () => {
     expect(formatDuration(125)).toBe('2:05');
   });
 
-  it('renders MediaPreviewModal with video player, technical metadata, Previous/Next navigation controls, and multi-line caption textarea', () => {
-    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const { hasText, hasAttribute, findTags } = render(
-      <MediaPreviewModal
-        item={videoItem}
-        open={true}
-        hasPrevious={true}
-        hasNext={true}
-        onPrevious={vi.fn()}
-        onNext={vi.fn()}
-        onOpenChange={vi.fn()}
-        onSave={vi.fn()}
-        onDelete={vi.fn()}
-      />
-    );
-
-    expect(hasAttribute('data-testid', 'media-preview-modal')).toBe(true);
-    expect(hasAttribute('data-testid', 'modal-video-player')).toBe(true);
-    expect(hasAttribute('data-testid', 'preview-prev-btn')).toBe(true);
-    expect(hasAttribute('data-testid', 'preview-next-btn')).toBe(true);
-    expect(hasAttribute('data-testid', 'modal-filename-input')).toBe(true);
-    expect(hasAttribute('data-testid', 'modal-caption-input')).toBe(true);
-    expect(hasAttribute('data-testid', 'modal-save-caption-btn')).toBe(true);
-    expect(hasAttribute('data-testid', 'modal-delete-media-btn')).toBe(true);
-    expect(hasText('15.0 MB')).toBe(true);
-    expect(hasText('9:16')).toBe(true);
-    expect(hasText('0:45')).toBe(true);
-    expect(hasText('Viral Launch Reel 🔥')).toBe(true);
-
-    const buttons = findTags('button');
-    const prevBtn = buttons.find(
-      (b) => b.attributes['data-testid'] === 'preview-prev-btn'
-    );
-    const nextBtn = buttons.find(
-      (b) => b.attributes['data-testid'] === 'preview-next-btn'
-    );
-    expect(prevBtn?.attributes['disabled']).toBeUndefined();
-    expect(nextBtn?.attributes['disabled']).toBeUndefined();
-  });
+  // PR-133-5 migration (spec §2.5): the MediaPreviewModal render
+  // assertions (video player, technical metadata, Previous/Next,
+  // caption textarea) moved to the behavioural suite
+  // tests/ui/media-preview-modal.test.tsx — the decomposed preview
+  // is a shared/ui Dialog (Radix portal), whose content does not
+  // exist in this suite's static markup; behaviour is asserted live
+  // there instead.
 });
 
 describe('Spec 029: BatchActionBar & Shift+Click Range Selection (US4, US6)', () => {
@@ -623,38 +587,11 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(explorerRender.hasText('Product_Showcase_Banner.png')).toBe(false);
   });
 
-  it('US4: renders "Set Current Frame as Thumbnail" button for video items in MediaPreviewModal (and omits it for images) and provides captureVideoFrameAsWebp fallback', async () => {
-    const videoItem = SAMPLE_MEDIA_ITEMS[0]!;
-    const imageItem = SAMPLE_MEDIA_ITEMS[1]!;
-
-    const videoModal = render(
-      <MediaPreviewModal
-        item={videoItem}
-        open={true}
-        onOpenChange={vi.fn()}
-        onUpdateThumbnail={vi.fn()}
-      />
-    );
-    expect(
-      videoModal.hasAttribute('data-testid', 'set-video-frame-thumbnail-btn')
-    ).toBe(true);
-    expect(videoModal.hasText('Set Current Frame as Thumbnail')).toBe(true);
-
-    const imageModal = render(
-      <MediaPreviewModal
-        item={imageItem}
-        open={true}
-        onOpenChange={vi.fn()}
-        onUpdateThumbnail={vi.fn()}
-      />
-    );
-    expect(
-      imageModal.hasAttribute('data-testid', 'set-video-frame-thumbnail-btn')
-    ).toBe(false);
-
-    const captured = await captureVideoFrameAsWebp(null);
-    expect(captured.dataUrl.startsWith('data:image/webp;base64,')).toBe(true);
-  });
+  // PR-133-5 migration (spec §2.5): the US4 frame-capture assertions
+  // ("Set Current Frame as Thumbnail" for video only +
+  // captureVideoFrameAsWebp's fallback) moved to the behavioural
+  // suite tests/ui/media-preview-modal.test.tsx, against the
+  // decomposed viewer + video-frame-capture.ts.
 
   it('Spec 046 US3: resolveTargetFolderIdForEntry resolves nested subfolder IDs and checkServerDuplicateEntries passes folderId per entry', async () => {
     // PR-133-1: entries typed via the filters module's entry shape (was `any`).
@@ -929,18 +866,10 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     // — the rebuilt modal is a Radix Dialog on the RHF form standard,
     // whose portal content does not exist in static markup.
 
-    // MediaPreviewModal renders delete and save buttons with busy protection
-    const previewModal = render(
-      <MediaPreviewModal
-        open={true}
-        item={SAMPLE_MEDIA_ITEMS[0]}
-        onOpenChange={vi.fn()}
-        onDelete={vi.fn().mockResolvedValue(undefined)}
-        onSave={vi.fn().mockResolvedValue(undefined)}
-      />
-    );
-    expect(previewModal.hasAttribute('data-testid', 'modal-delete-media-btn')).toBe(true);
-    expect(previewModal.hasAttribute('data-testid', 'modal-save-caption-btn')).toBe(true);
+    // PR-133-5 migration (spec §2.5): the MediaPreviewModal lockout
+    // assertions (delete/save disabled while a save is in flight)
+    // moved to the behavioural suite
+    // (tests/ui/media-preview-modal.test.tsx) for the same reason.
   });
 
   it('Spec 070 US3: library-wide global search resets scope to In: Library and displays folder path attribution with "in " prefix', () => {
