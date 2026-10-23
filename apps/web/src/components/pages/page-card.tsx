@@ -343,7 +343,7 @@ export function PageCard({
             data-testid="page-status"
             status={statusSignal}
             label={statusLabel}
-            className="text-body font-semibold tracking-wide"
+            className="font-semibold tracking-wide"
           />
 
           <div
