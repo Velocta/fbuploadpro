@@ -294,6 +294,9 @@ jobs:
     #   - spec 138 claim-RPC parity rig (apps/worker/tests/claim-rpc):
     #     12 cases / 77 checks, CLAIM_RPC_PG_URL, against the post-fix
     #     (all-migrations) database.
+    #   - spec 139 settle-RPC rig (apps/worker/tests/settle-rpc):
+    #     58 assertions, SETTLE_RPC_PG_URL — settle vocabulary incl. the
+    #     deferred outcome (retry_count unchanged across defers).
     #   - spec 138 claim-RPC scale rig: instagram-shaped seed (5,000
     #     destinations, 21,867 publish_logs); asserts one claim call
     #     completes in < 5 s with the expected claim/defer counts. The
@@ -302,7 +305,7 @@ jobs:
     #     CI; if hosted-runner variance ever makes it flaky, drop this
     #     one step to report-only rather than loosening the bound in
     #     the rig itself.
-    name: SQL Rigs (real Postgres — RLS + claim parity/scale)
+    name: SQL Rigs (real Postgres — RLS + claim parity/scale + settle)
     needs: sql-changes
     if: needs.sql-changes.outputs.sql == 'true'
     runs-on: ubuntu-latest
@@ -346,7 +349,7 @@ jobs:
           node --input-type=module -e "
           import pg from 'pg';
           const pool = new pg.Pool({ connectionString: 'postgres://postgres:postgres@localhost:5432/postgres' });
-          for (const db of ['rls117', 'claim138_parity', 'claim138_scale']) {
+          for (const db of ['rls117', 'claim138_parity', 'claim138_scale', 'settle139']) {
             await pool.query('CREATE DATABASE ' + db);
             console.log('created database ' + db);
           }
@@ -362,6 +365,16 @@ jobs:
         env:
           RLS_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/rls117
         run: pnpm --filter @fbuploadpro/worker exec tsx tests/rls-rpc/check.ts
+
+      - name: Spec 139 settle-RPC rig — apply bootstrap + migrations
+        env:
+          SETTLE_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/settle139
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/settle-rpc/db/run-migrations.ts
+
+      - name: Spec 139 settle-RPC rig — 58 assertions (incl. deferred outcome)
+        env:
+          SETTLE_RPC_PG_URL: postgres://postgres:postgres@localhost:5432/settle139
+        run: pnpm --filter @fbuploadpro/worker exec tsx tests/settle-rpc/check.ts
 
       - name: Spec 138 claim-RPC rig — apply bootstrap + migrations (parity DB)
         env:
