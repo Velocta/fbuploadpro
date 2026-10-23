@@ -222,30 +222,44 @@ async function fetchQueueCountsRpc(
   return null;
 }
 
+const QUEUE_COUNT_STATUSES = ['queued', 'publishing', 'published', 'failed'] as const;
+
+/**
+ * Bounded fallback for when the grouped counts RPC is unavailable
+ * (spec 139 A14): one head/count query per status — a constant number
+ * of queries that transfers zero rows, instead of selecting every queue
+ * row for the page and counting in JS (which grew with queue history
+ * and silently truncated at the PostgREST row cap). A count-query error
+ * returns null, so the caller serves the default zero counts exactly as
+ * the old fallback did on failure — there is no silent JS fallback.
+ */
 async function fetchQueueCountsFallback(
   supabase: SupabaseClient,
   pageId: string,
   userId: string
 ): Promise<QueueStatusCounts | null> {
   try {
-    const { data: rows } = await supabase
-      .from('legacy_queue_items')
-      .select('status')
-      .eq('page_id', pageId)
-      .eq('user_id', userId);
-    if (rows) {
-      const counts: QueueStatusCounts = { ...DEFAULT_QUEUE_STATUS_COUNTS };
-      for (const row of rows) {
-        if (row.status in counts) {
-          counts[row.status as keyof QueueStatusCounts]++;
-        }
-      }
-      return counts;
+    const counts: QueueStatusCounts = { ...DEFAULT_QUEUE_STATUS_COUNTS };
+    const perStatus = await Promise.all(
+      QUEUE_COUNT_STATUSES.map(async (status) => {
+        const { count, error } = await supabase
+          .from('legacy_queue_items')
+          .select('id', { head: true, count: 'exact' })
+          .eq('page_id', pageId)
+          .eq('user_id', userId)
+          .eq('status', status);
+        if (error) throw error;
+        return [status, count ?? 0] as const;
+      })
+    );
+    for (const [status, count] of perStatus) {
+      counts[status] = count;
     }
+    return counts;
   } catch {
     // return defaults
+    return null;
   }
-  return null;
 }
 
 async function fetchPageQueueCounts(
