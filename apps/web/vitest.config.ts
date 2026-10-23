@@ -47,6 +47,9 @@ export default defineConfig({
             'tests/auth/**/*.test.ts',
             'tests/domain/**/*.test.ts',
             'tests/lib/**/*.test.ts',
+            // Root-level suites (e.g. the fonts drift guard, PR-A4):
+            // plain node tests that live directly under tests/.
+            'tests/*.test.ts',
             'tests/middleware/**/*.test.ts',
             'tests/security/**/*.test.ts',
             'tests/unit/**/*.test.ts',
@@ -73,6 +76,9 @@ export default defineConfig({
             'src/**/*.test.tsx',
             'tests/auth/**/*.test.tsx',
             'tests/components/**/*.test.tsx',
+            // Behavioural lib suites that render (e.g. the data-layer
+            // provider suite, PR-A1b) live under tests/lib as .tsx.
+            'tests/lib/**/*.test.tsx',
             'tests/ui/**/*.test.{ts,tsx}',
             'tests/unit/**/*.test.tsx',
           ],
