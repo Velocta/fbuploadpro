@@ -8,9 +8,50 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+const DESTINATION_ID = '33333333-3333-4333-8333-333333333333';
+
+const SOCIAL_LIST = {
+  accounts: [
+    {
+      id: '66666666-6666-4666-8666-666666666666',
+      platform: 'facebook',
+      externalAccountId: 'fb-acct',
+      displayName: 'FB',
+      avatarUrl: null,
+      status: 'active',
+      tokenExpiresAt: null,
+      destinations: [
+        {
+          id: DESTINATION_ID,
+          externalDestinationId: 'fb-page-1',
+          name: 'Acme Page',
+          handle: null,
+          avatarUrl: null,
+          timezone: 'UTC',
+          status: 'active',
+        },
+      ],
+    },
+  ],
+};
+
+const ENQUEUE_RESPONSE = {
+  id: '77777777-7777-4777-8777-777777777777',
+  workspaceId: '88888888-8888-4888-8888-888888888888',
+  destinationId: DESTINATION_ID,
+  platform: 'facebook',
+  kind: 'text',
+  platformFormat: null,
+  status: 'queued',
+  scheduledTime: '2026-12-01T09:00:00.000Z',
+  slotId: null,
+  createdAt: '2026-10-24T00:00:00.000Z',
+};
+
 const baseCreate = {
   pageId: 'page-1',
   subdomain: 'acme',
+  fbPageId: 'fb-page-1',
   format: 'text' as const,
   items: [],
   caption: 'Hello',
@@ -22,39 +63,62 @@ const baseCreate = {
   pageName: 'Acme Page',
 };
 
+/** Serves the destination-resolution read; enqueue POSTs are recorded. */
+function makeFetch(posts: Array<Record<string, unknown>>, enqueueStatus = 201) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/accounts/social')) return jsonResponse(SOCIAL_LIST);
+    if (url.includes('/publishing/destination-queue') && init?.method === 'POST') {
+      posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+      return jsonResponse(
+        enqueueStatus === 201 ? ENQUEUE_RESPONSE : { error: 'Queue is unavailable' },
+        enqueueStatus
+      );
+    }
+    throw new Error(`Unexpected fetch ${url}`);
+  });
+}
+
 describe('composer-submit — typed API client plumbing (spec 132 C1.4)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('creates a queue post via the tenant queue endpoint and returns the queue message', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse({ id: 'item-1' }, 201));
+  it('creates a post via the unified destination enqueue and returns the queue message', async () => {
+    const posts: Array<Record<string, unknown>> = [];
+    const fetchMock = makeFetch(posts);
     vi.stubGlobal('fetch', fetchMock);
 
     const message = await submitCreatePost({ ...baseCreate, intent: 'queue' });
 
     expect(message).toBe('Added to queue.');
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe('/api/tenant/acme/publishing/queue');
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(String(init.body))).toMatchObject({
-      pageId: 'page-1',
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({
+      platform: 'facebook',
+      destinationId: DESTINATION_ID,
+      kind: 'text',
       caption: 'Hello',
-      postFormat: 'text',
+      mediaItemIds: [],
+      intent: 'queue',
     });
+    // The legacy page-scoped payload is gone: no pageId, no postFormat.
+    expect(posts[0]).not.toHaveProperty('pageId');
+    expect(posts[0]).not.toHaveProperty('postFormat');
+    const enqueueCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes('/publishing/destination-queue')
+    );
+    expect(enqueueCall?.[0]).toBe('/api/tenant/acme/publishing/destination-queue');
   });
 
   it('surfaces a server failure as an error — never silently (no not-ok-return)', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => jsonResponse({ error: 'Queue is unavailable' }, 500))
-    );
+    const posts: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', makeFetch(posts, 500));
     await expect(submitCreatePost({ ...baseCreate, intent: 'queue' })).rejects.toThrow(
       'Queue is unavailable'
     );
   });
 
-  it('edit + Post now patches then calls publish-now', async () => {
+  it('edit + Post now patches then calls publish-now (legacy item actions — not retargeted)', async () => {
     const urls: string[] = [];
     vi.stubGlobal(
       'fetch',

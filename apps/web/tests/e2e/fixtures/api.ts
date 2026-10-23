@@ -17,6 +17,7 @@
 import type { Page, Route } from '@playwright/test';
 import {
   CONNECTED_ACCOUNT,
+  FACEBOOK_DESTINATION,
   FACEBOOK_PAGE,
   mediaItemFixture,
   queueItemFixture,
@@ -86,6 +87,26 @@ export async function installApiFixtures(
   );
   await page.route(`**/api/tenant/${SUB}/accounts/magic-link`, (route) =>
     json(route, { magicUrl: 'https://connect.e2e.invalid/magic' })
+  );
+
+  // Unified social accounts list: the composer's destination
+  // resolution reads the Facebook destination from here (its external
+  // id is the seeded page's Facebook id).
+  await page.route(`**/api/tenant/${SUB}/accounts/social`, (route) =>
+    json(route, {
+      accounts: [
+        {
+          id: CONNECTED_ACCOUNT.id,
+          platform: 'facebook',
+          externalAccountId: CONNECTED_ACCOUNT.fbAccountId,
+          displayName: CONNECTED_ACCOUNT.displayName,
+          avatarUrl: null,
+          status: 'active',
+          tokenExpiresAt: CONNECTED_ACCOUNT.tokenExpiresAt,
+          destinations: [FACEBOOK_DESTINATION],
+        },
+      ],
+    })
   );
 
   // Pages: the page-detail route and the fallback list.
@@ -162,6 +183,49 @@ export async function installApiFixtures(
       return json(route, { success: true, itemId });
     }
     return json(route, {});
+  });
+
+  // Unified destination enqueue (Phase 7 G4 retarget): the composer +
+  // bulk create paths POST here now. The created item joins the same
+  // fixture queue state (in the legacy list shape the queue panel still
+  // reads), so composer→queue assertions read real app rendering of it,
+  // and the response carries the contracts enqueue shape the typed
+  // client validates.
+  await page.route(`**/api/tenant/${SUB}/publishing/destination-queue`, async (route) => {
+    const req = route.request();
+    if (req.method() !== 'POST') return json(route, {});
+    const body = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+    const kind = typeof body.kind === 'string' ? body.kind : 'text';
+    const platformFormat =
+      typeof body.platformFormat === 'string' ? body.platformFormat : null;
+    const scheduledTime =
+      typeof body.scheduledAt === 'string' ? body.scheduledAt : '2026-12-01T09:00:00.000Z';
+    const item = queueItemFixture({
+      caption: typeof body.caption === 'string' ? body.caption : '',
+      postFormat: platformFormat ?? kind,
+      scheduledTime,
+      mediaId:
+        Array.isArray(body.mediaItemIds) && typeof body.mediaItemIds[0] === 'string'
+          ? body.mediaItemIds[0]
+          : null,
+    });
+    state.queue = [item, ...state.queue];
+    return json(
+      route,
+      {
+        id: item.id,
+        workspaceId: '99999999-9999-4999-8999-999999999999',
+        destinationId: FACEBOOK_DESTINATION.id,
+        platform: 'facebook',
+        kind,
+        platformFormat,
+        status: 'queued',
+        scheduledTime,
+        slotId: null,
+        createdAt: '2026-10-20T00:00:00.000Z',
+      },
+      201
+    );
   });
 
   // Media library: list, folders, and the import pipeline

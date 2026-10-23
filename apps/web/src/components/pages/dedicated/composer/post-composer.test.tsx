@@ -41,13 +41,57 @@ function renderComposer(
   return { ...utils, props: fullProps };
 }
 
-/** Page-read handler; queue POSTs are recorded into `posts`. */
+const DESTINATION_ID = '33333333-3333-4333-8333-333333333333';
+
+const SOCIAL_LIST = {
+  accounts: [
+    {
+      id: '66666666-6666-4666-8666-666666666666',
+      platform: 'facebook',
+      externalAccountId: 'fb-acct',
+      displayName: 'FB',
+      avatarUrl: null,
+      status: 'active',
+      tokenExpiresAt: null,
+      destinations: [
+        {
+          id: DESTINATION_ID,
+          externalDestinationId: 'fb-page-1',
+          name: 'Acme Page',
+          handle: null,
+          avatarUrl: null,
+          timezone: 'UTC',
+          status: 'active',
+        },
+      ],
+    },
+  ],
+};
+
+/** Page-read + destination-resolution handlers; enqueue POSTs are recorded into `posts`. */
 function makeFetch(page: Record<string, unknown>, posts: Array<Record<string, unknown>>) {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url.includes('/publishing/queue') && init?.method === 'POST') {
+    if (url.includes('/publishing/destination-queue') && init?.method === 'POST') {
       posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-      return jsonResponse({ id: 'item-1' }, 201);
+      return jsonResponse(
+        {
+          id: '77777777-7777-4777-8777-777777777777',
+          workspaceId: '88888888-8888-4888-8888-888888888888',
+          destinationId: DESTINATION_ID,
+          platform: 'facebook',
+          kind: 'text',
+          platformFormat: null,
+          status: 'queued',
+          scheduledTime: '2026-12-01T09:00:00.000Z',
+          slotId: null,
+          createdAt: '2026-10-24T00:00:00.000Z',
+        },
+        201
+      );
+    }
+    if (url.includes('/accounts/social')) {
+      return jsonResponse(SOCIAL_LIST);
     }
     if (url.includes('/pages/')) {
       return jsonResponse({ page, queueCounts: { queued: 0, publishing: 0, published: 0, failed: 0 } });
@@ -56,7 +100,7 @@ function makeFetch(page: Record<string, unknown>, posts: Array<Record<string, un
   });
 }
 
-const ACTIVE_PAGE = { pageName: 'Acme Page', status: 'active' };
+const ACTIVE_PAGE = { pageName: 'Acme Page', fbPageId: 'fb-page-1', status: 'active' };
 
 describe('PostComposer — full-page rebuild (spec 132 PR-C1)', () => {
   beforeEach(() => {
@@ -100,7 +144,14 @@ describe('PostComposer — full-page rebuild (spec 132 PR-C1)', () => {
 
     await waitFor(() => expect(props.onSubmitted).toHaveBeenCalledTimes(1));
     expect(posts).toHaveLength(1);
-    expect(posts[0]).toMatchObject({ caption: 'Hello from the test', postFormat: 'text' });
+    expect(posts[0]).toMatchObject({
+      caption: 'Hello from the test',
+      platform: 'facebook',
+      destinationId: DESTINATION_ID,
+      kind: 'text',
+      intent: 'queue',
+    });
+    expect(posts[0]).not.toHaveProperty('postFormat');
     expect(vi.mocked(props.onSubmitted).mock.calls[0]?.[0]).toContain('Added to queue');
   });
 
