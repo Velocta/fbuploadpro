@@ -2,18 +2,16 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   canAccessTenant,
   EnqueueMediaRequestSchema,
-  getSessionSecret,
   ListQueueItemsQuerySchema,
   ListQueueItemsResponseSchema,
   QueueItemSchema,
   validatePostFormatEligibility,
-  verifySessionToken,
   type DatabaseClient,
   type DatabaseMediaItemRow,
   type PostFormat,
 } from '@fbuploadpro/contracts';
 import { calculateNextVacantSlot } from '../../../../../../lib/slot-scheduler';
-import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { extractActiveSession, isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -91,18 +89,10 @@ export async function handleEnqueueMedia(
   subdomain: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -699,18 +689,10 @@ export async function handleListQueueItems(
   subdomain: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

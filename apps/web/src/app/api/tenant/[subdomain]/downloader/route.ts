@@ -3,16 +3,14 @@ import {
   canAccessTenant,
   DownloaderIngestRequestSchema,
   DownloaderIngestResponseSchema,
-  getSessionSecret,
   MediaItemResponseSchema,
   validateSafeRemoteUrl,
-  verifySessionToken,
   type DatabaseClient,
   type IStorageService,
   type MediaItemResponse,
 } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { extractActiveSession, isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '@/lib/storage';
 import {
   MediaDownloaderError,
@@ -206,16 +204,8 @@ async function validateDownloadAuthAndPayload(
   request: NextRequest,
   subdomain: string
 ): Promise<{ errorResponse?: NextResponse; validated?: ValidatedDownloadInput }> {
-  const sessionSecret = getSessionSecret();
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
@@ -429,16 +419,8 @@ export async function handleGetDownloadJobs(
   subdomain: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

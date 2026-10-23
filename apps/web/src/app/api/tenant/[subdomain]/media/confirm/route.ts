@@ -1,13 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { HeadObjectCommand } from '@aws-sdk/client-s3';
+import { extractActiveSession } from '@/lib/route-auth';
 import {
   type DatabaseMediaItemRow,
   canAccessTenant,
   ConfirmUploadRequestSchema,
   deriveDefaultCaptionFromFilename,
-  getSessionSecret,
   MediaItemResponseSchema,
-  verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
@@ -140,18 +139,10 @@ export async function handleConfirmUpload(
   dbClient?: DatabaseClient | SupabaseClient,
   storageVerifier?: MediaStorageVerifier
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

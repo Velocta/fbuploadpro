@@ -11,10 +11,10 @@ import {
   getTokenEncryptionKey,
   type OAuthStatePayload,
   verifyOAuthState,
-  verifySessionToken,
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
+import { extractActiveSession } from '@/lib/route-auth';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
@@ -424,19 +424,15 @@ export async function handleFacebookCallback(
 
   // CSRF validation for direct OAuth flows (Spec Issue 8)
   if (!statePayload.isMagic) {
-    const sessionCookie = request.cookies.get('fbup_session')?.value;
-    if (!sessionCookie) {
+    // Shared guard (spec 139): token verification + live session-active
+    // re-validation, on top of the session/user binding check below.
+    const session = await extractActiveSession(request);
+    if (!session) {
       destinationUrl.searchParams.set('error', 'unauthorized');
       return NextResponse.redirect(destinationUrl);
     }
-    try {
-      const session = await verifySessionToken(sessionCookie, sessionSecret);
-      if (session.userId !== userId) {
-        destinationUrl.searchParams.set('error', 'session_mismatch');
-        return NextResponse.redirect(destinationUrl);
-      }
-    } catch {
-      destinationUrl.searchParams.set('error', 'unauthorized');
+    if (session.userId !== userId) {
+      destinationUrl.searchParams.set('error', 'session_mismatch');
       return NextResponse.redirect(destinationUrl);
     }
   }

@@ -9,6 +9,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import * as authModule from '@/lib/auth/index';
+import { _seedTestUser } from '@/lib/auth/stores';
 import { GET as getByocSettings } from '@/app/api/tenant/[subdomain]/settings/byoc/route';
 
 const VALID_UUID = '00000000-0000-4000-a000-000000000001';
@@ -416,6 +417,19 @@ describe('ISSUE-01: Workspace Ownership Hijack Prevention', () => {
   });
 
   describe('BYOC Settings API workspace lookup (ISSUE-01 regression)', () => {
+    beforeEach(async () => {
+      // Spec 139: the BYOC route re-validates the session against the
+      // live user record — seed the token's user as active.
+      await _seedTestUser({
+        id: VALID_UUID,
+        email: 'operator@gmail.com',
+        name: 'Test User',
+        phone: null,
+        subdomain: 'acme',
+        role: 'user',
+        status: 'active',
+      });
+    });
     it('never calls workspaces.upsert and returns 404 when workspace is not found', async () => {
       const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
       const mockSupabase = {

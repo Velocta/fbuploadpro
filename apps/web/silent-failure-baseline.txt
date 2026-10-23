@@ -15,10 +15,7 @@
 # .github/scripts/regression-guardrails.sh (check 12).
 #
 # Format: <category> <file> <count>
-bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/byoc/route.ts 1
-bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/platform-credentials/[platform]/route.ts 1
-bare-catch-return apps/web/src/app/api/workspaces/route.ts 1
-bare-catch-return apps/web/src/app/api/workspaces/switch/route.ts 1
+bare-catch-return apps/web/src/app/tenant/[subdomain]/workspace-display-name.ts 1
 bare-catch-return apps/web/src/components/media/media-import-utils.ts 1
 bare-catch-return apps/web/src/lib/auth.ts 1
 bare-catch-return apps/web/src/lib/auth/users.ts 1

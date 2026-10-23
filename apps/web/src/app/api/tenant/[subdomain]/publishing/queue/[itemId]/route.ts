@@ -3,14 +3,12 @@ import {
   type DatabaseMediaItemRow,
   type DatabaseQueueItemRow,
   canAccessTenant,
-  getSessionSecret,
   QueueItemSchema,
   UpdateQueueItemRequestSchema,
-  verifySessionToken,
   type DatabaseClient,
   type PostFormat,
 } from '@fbuploadpro/contracts';
-import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { extractActiveSession, isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 function resolveScheduledTime(
@@ -46,18 +44,10 @@ export async function handleUpdateQueueItem(
   itemId: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -328,18 +318,10 @@ export async function handleDeleteQueueItem(
   itemId: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

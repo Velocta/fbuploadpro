@@ -11,6 +11,7 @@ import { POST as generateMagicLink } from '../../src/app/api/tenant/[subdomain]/
 import { GET as forwardMagicLink } from '../../src/app/connect/facebook/route';
 import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
 import * as authModule from '@/lib/auth/clients';
+import { _seedTestUser } from '@/lib/auth/stores';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -91,6 +92,17 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
       TEST_SECRET
     );
     validSessionCookie = `fbup_session=${token}`;
+    // Spec 139: routes re-validate the session against the live user
+    // record — seed the token's user as active so the guard passes.
+    await _seedTestUser({
+      id: userId,
+      email: 'alexander@gmail.com',
+      name: 'Alexander',
+      phone: null,
+      subdomain: 'acme',
+      role: 'user',
+      status: 'active',
+    });
   });
 
   describe('POST /api/tenant/[subdomain]/accounts/magic-link', () => {

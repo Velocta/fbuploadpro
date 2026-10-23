@@ -1,10 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { extractActiveSession } from '@/lib/route-auth';
 import {
   getSessionSecret,
   CreateWorkspaceRequestSchema,
   UpdateWorkspaceRequestSchema,
   generateWorkspaceSubdomain,
-  verifySessionToken,
   signSessionToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
@@ -13,13 +13,10 @@ import { setSessionCookie } from '@/lib/auth/session';
 import { ensureWorkspaceForUser } from '@/lib/auth/workspaces';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
-  const token = request.cookies.get('fbup_session')?.value;
-  if (!token) return null;
-  try {
-    return await verifySessionToken(token, getSessionSecret());
-  } catch {
-    return null;
-  }
+  // Shared guard (spec 139): token verification + live session-active
+  // re-validation, so suspended/deleted users and pre-password-change
+  // tokens are rejected here as on every other route.
+  return extractActiveSession(request);
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

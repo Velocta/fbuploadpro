@@ -2,15 +2,13 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   canAccessTenant,
   DeleteMediaItemResponseSchema,
-  getSessionSecret,
   type IStorageService,
   MediaItemResponseSchema,
   UpdateMediaItemRequestSchema,
-  verifySessionToken,
   type DatabaseClient,
   type DatabaseMediaItemRow,
 } from '@fbuploadpro/contracts';
-import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { extractActiveSession, isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '../../../../../../lib/storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -18,19 +16,9 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function authenticateUser(request: NextRequest, subdomain: string) {
-  const sessionSecret = getSessionSecret();
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return {
-      error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
-    };
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return {
       error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
     };

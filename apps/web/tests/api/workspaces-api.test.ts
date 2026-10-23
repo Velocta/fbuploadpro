@@ -10,6 +10,7 @@ import { GET as listWorkspaces, POST as createWorkspace, PATCH as updateWorkspac
 import { POST as switchWorkspace } from '../../src/app/api/workspaces/switch/route';
 import { authenticateTenantRoute } from '../../src/lib/route-auth';
 import * as authModule from '@/lib/auth/clients';
+import { _seedTestUser } from '@/lib/auth/stores';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 
@@ -32,6 +33,17 @@ describe('Workspaces API Routes (Spec 037 Supabase PostgREST)', () => {
       TEST_SECRET
     );
     validSessionCookie = `fbup_session=${token}`;
+    // Spec 139: routes re-validate the session against the live user
+    // record — seed the token's user as active so the guard passes.
+    await _seedTestUser({
+      id: userId,
+      email: 'alexander@gmail.com',
+      name: 'Alexander',
+      phone: null,
+      subdomain: 'acme',
+      role: 'user',
+      status: 'active',
+    });
   });
 
   it('rejects unauthenticated requests to list or create workspaces', async () => {

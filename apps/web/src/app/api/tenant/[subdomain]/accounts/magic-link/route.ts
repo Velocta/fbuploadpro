@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { extractActiveSession } from '@/lib/route-auth';
 import {
   canAccessTenant,
   getSessionSecret,
   signMagicLinkToken,
-  verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
@@ -43,15 +43,8 @@ export async function handleGenerateMagicLink(
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   // 1. Session auth guard
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

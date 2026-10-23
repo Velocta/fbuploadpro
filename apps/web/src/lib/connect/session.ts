@@ -1,7 +1,9 @@
 /**
  * Session + client resolution shared by the connect routes, following the
  * same pattern as the tenant settings routes (fbup_session cookie,
- * verifySessionToken, canAccessTenant).
+ * verifySessionToken, canAccessTenant). Session extraction also runs
+ * validateSessionActive (spec 139) so a suspended/deleted user or a
+ * token issued before the latest password change is rejected here too.
  */
 import { type NextRequest, NextResponse } from 'next/server';
 import {
@@ -19,11 +21,15 @@ export async function extractConnectSession(
 ): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;
   if (!token) return null;
+  let session: SessionPayload;
   try {
-    return await verifySessionToken(token, getSessionSecret());
+    session = await verifySessionToken(token, getSessionSecret());
   } catch {
     return null;
   }
+  const { validateSessionActive } = await import('@/lib/auth/session');
+  const isActive = await validateSessionActive(session);
+  return isActive ? session : null;
 }
 
 export function resolveConnectDbClient(
