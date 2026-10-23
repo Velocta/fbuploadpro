@@ -539,16 +539,40 @@ class FakeRefreshDb {
     const db = this;
     return {
       select: (_columns: string) => {
-        const filters: Array<[string, unknown]> = [];
+        // Mirrors the spec 139 bounded-scan query shape: eq / lte / gt
+        // predicates, id ordering, and a page limit.
+        const predicates: Array<(row: FakeAccount) => boolean> = [];
+        let limitCount: number | null = null;
         const builder = {
           eq(column: string, value: unknown) {
-            filters.push([column, value]);
+            predicates.push((row) => row[column] === value);
+            return builder;
+          },
+          lte(column: string, value: unknown) {
+            predicates.push(
+              (row) => row[column] !== null && row[column] !== undefined && (row[column] as string) <= (value as string)
+            );
+            return builder;
+          },
+          gt(column: string, value: unknown) {
+            predicates.push(
+              (row) => row[column] !== null && row[column] !== undefined && (row[column] as string) > (value as string)
+            );
+            return builder;
+          },
+          order(_column: string, _options: { ascending: boolean }) {
+            return builder;
+          },
+          limit(count: number) {
+            limitCount = count;
             return builder;
           },
           then: thenable(() => {
-            const rows = [...db.accounts.values()]
-              .filter((row) => filters.every(([col, val]) => row[col] === val))
+            let rows = [...db.accounts.values()]
+              .filter((row) => predicates.every((p) => p(row)))
+              .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
               .map((row) => ({ ...row }));
+            if (limitCount !== null) rows = rows.slice(0, limitCount);
             return { data: rows, error: null };
           }).then,
         };
