@@ -1,120 +1,139 @@
-import React from 'react';
-import { describe, it, expect } from 'vitest';
-import { render } from '../components/setup';
-import { LoginShowcasePanel } from '@/components/auth/login-showcase-panel';
-import LoginPage from '@/app/login/page';
-import { PALETTE } from '@/lib/theme';
+/** @vitest-environment jsdom */
+/**
+ * Login showcase panel — behavioural suite.
+ *
+ * Migrated in spec 136 PR-136A from the legacy static-markup suite
+ * (which asserted byte-level inline styles) when the panel was
+ * rebuilt on design tokens: the expectations are unchanged — the
+ * approved copy of spec 136 §3.1, verbatim, with the headline as
+ * the page's sole top-level heading — but they are asserted on the
+ * rendered DOM (text, structure, token classes), not on style
+ * strings. Accent/structure checks target the token utilities
+ * (text-primary, hairline borders) that replaced the inline styles.
+ */
+import * as React from "react";
+import { describe, it, expect } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import { LoginShowcasePanel } from "@/components/auth/login-showcase-panel";
+import LoginPage from "@/app/login/page";
 
-describe('Login Showcase Panel Redesign (Spec 061)', () => {
-  it('renders brand row with logo mark, bold title, and muted tagline', () => {
-    const { hasText, html } = render(<LoginShowcasePanel />);
+const SUBHEAD =
+  "Schedule reels and posts across Facebook, Instagram, TikTok, YouTube, Threads, and X — they go live while you sleep, even when your laptop is closed.";
 
-    expect(hasText('FBUploadPro')).toBe(true);
-    expect(hasText('Content automation for creators')).toBe(true);
-    // Verifies BrandMark presence via SVG aria-label
-    expect(html).toContain('aria-label="FBUploadPro"');
+const FEATURES: ReadonlyArray<{ title: string; desc: string }> = [
+  {
+    title: "Post from anywhere",
+    desc: "Schedule from your phone or laptop — your posts publish from the cloud.",
+  },
+  {
+    title: "Every platform, one dashboard",
+    desc: "Connect each account once, then run everything from a single place.",
+  },
+  {
+    title: "Your accounts stay yours",
+    desc: "You sign in through each platform directly — your passwords never leave them.",
+  },
+];
+
+describe("Login Showcase Panel (Spec 061 copy, spec 136 token rebuild)", () => {
+  it("renders brand row with logo mark, bold title, and muted tagline", () => {
+    const { container } = render(<LoginShowcasePanel />);
+
+    expect(screen.getByText("FBUploadPro")).toBeTruthy();
+    expect(screen.getByText("Content automation for creators")).toBeTruthy();
+    // BrandMark presence via its SVG aria-label
+    expect(container.innerHTML).toContain('aria-label="FBUploadPro"');
   });
 
-  it('renders unboxed eyebrow label in accent color with wide letter-spacing', () => {
-    const { hasText, html } = render(<LoginShowcasePanel />);
+  it("renders the unboxed eyebrow in the accent colour, uppercase with wide tracking", () => {
+    render(<LoginShowcasePanel />);
 
-    expect(hasText('CREATE · SCHEDULE · GROW')).toBe(true);
-    expect(html).toContain('letter-spacing:0.12em');
-    expect(html).toContain('text-transform:uppercase');
-    expect(html).toContain(PALETTE.primary);
+    const eyebrow = screen.getByText("CREATE · SCHEDULE · GROW");
+    expect(eyebrow.className).toContain("uppercase");
+    expect(eyebrow.className).toContain("tracking-caption");
+    expect(eyebrow.className).toContain("text-primary");
   });
 
-  it('renders three-line headline with line breaks and accent highlight on third line', () => {
-    const { hasText, html } = render(<LoginShowcasePanel />);
+  it("renders the three-line headline as the sole h1, final segment in the accent colour", () => {
+    const { container } = render(<LoginShowcasePanel />);
 
-    expect(hasText('Your pages,')).toBe(true);
-    expect(hasText('posting themselves —')).toBe(true);
-    expect(hasText('100% on the cloud.')).toBe(true);
-    // Assert line break presence
-    expect(html).toContain('Your pages,<br/>posting themselves —<br/>');
-    expect(html).toContain(`color:${PALETTE.primary}`);
+    const headings = container.querySelectorAll("h1");
+    expect(headings).toHaveLength(1);
+    const headline = headings[0]!;
+    // The approved line structure: two line breaks, three segments.
+    expect(headline.querySelectorAll("br")).toHaveLength(2);
+    expect(headline.textContent).toContain("Your pages,");
+    expect(headline.textContent).toContain("posting themselves —");
+    const accent = within(headline).getByText("100% on the cloud.");
+    expect(accent.className).toContain("text-primary");
   });
 
-  it('renders exact subtext with constrained max-width', () => {
-    const { hasText, html } = render(<LoginShowcasePanel />);
-
-    expect(
-      hasText(
-        'Schedule reels and posts across Facebook, Instagram, TikTok, YouTube, Threads, and X — they go live while you sleep, even when your laptop is closed.'
-      )
-    ).toBe(true);
-    expect(html).toContain('max-width:420px');
+  it("renders the exact approved subhead", () => {
+    render(<LoginShowcasePanel />);
+    expect(screen.getByText(SUBHEAD)).toBeTruthy();
   });
 
-  it('renders all three feature list rows with hairline dividers and accent line icons', () => {
-    const { hasText, html } = render(<LoginShowcasePanel />);
+  it("renders all three feature rows with hairline dividers and accent icons", () => {
+    const { container } = render(<LoginShowcasePanel />);
 
-    // Row 1
-    expect(hasText('Post from anywhere')).toBe(true);
-    expect(
-      hasText('Schedule from your phone or laptop — your posts publish from the cloud.')
-    ).toBe(true);
+    for (const feature of FEATURES) {
+      expect(screen.getByText(feature.title)).toBeTruthy();
+      expect(screen.getByText(feature.desc)).toBeTruthy();
+    }
 
-    // Row 2
-    expect(hasText('Every platform, one dashboard')).toBe(true);
-    expect(
-      hasText('Connect each account once, then run everything from a single place.')
-    ).toBe(true);
+    // One accent icon per row, in the token accent colour.
+    const icons = container.querySelectorAll("svg.lucide");
+    expect(icons.length).toBeGreaterThanOrEqual(FEATURES.length);
+    for (const icon of icons) {
+      expect(icon.getAttribute("class")).toContain("text-primary");
+    }
 
-    // Row 3
-    expect(hasText('Your accounts stay yours')).toBe(true);
-    expect(
-      hasText(
-        'You sign in through each platform directly — your passwords never leave them.'
-      )
-    ).toBe(true);
-
-    // SVG line icons with accent stroke and no fill
-    expect(html).toContain(`stroke="${PALETTE.primary}"`);
-    expect(html).toContain('fill="none"');
-
-    // Hairline divider
-    expect(html).toContain('border-bottom:1px solid var(--border-subtle, #1f242d)');
+    // Hairline dividers between rows: the first two rows carry a
+    // bottom border, the last does not.
+    const rows = FEATURES.map((feature) => screen.getByText(feature.title).parentElement!.parentElement!);
+    expect(rows[0]!.className).toContain("border-b");
+    expect(rows[1]!.className).toContain("border-b");
+    expect(rows[2]!.className).not.toContain("border-b");
   });
 
-  it('renders platform line and trust footer with zero forbidden links or emojis', () => {
-    const { hasText, html } = render(<LoginShowcasePanel />);
+  it("renders platform line and trust footer with zero forbidden links or emojis", () => {
+    const { container } = render(<LoginShowcasePanel />);
 
-    expect(
-      hasText('Facebook · Instagram · TikTok · YouTube · Threads · X')
-    ).toBe(true);
-    expect(
-      hasText('Official platform logins · Encrypted end-to-end')
-    ).toBe(true);
+    expect(screen.getByText("Facebook · Instagram · TikTok · YouTube · Threads · X")).toBeTruthy();
+    expect(screen.getByText("Official platform logins · Encrypted end-to-end")).toBeTruthy();
 
-    // Strictly forbidden elements
-    expect(hasText('See how it works')).toBe(false);
-    expect(html).not.toContain('See how it works');
-    // Ensure zero emoji unicode characters
-    expect(/[\u{1F300}-\u{1F9FF}]/u.test(html)).toBe(false);
+    // Strictly forbidden by the approved record (§3.1 absent list).
+    expect(screen.queryByText("See how it works")).toBeNull();
+    expect(container.innerHTML).not.toContain("See how it works");
+    expect(container.querySelector('a[href*="how"]')).toBeNull();
+    // Zero emoji unicode characters.
+    expect(/[\u{1F300}-\u{1F9FF}]/u.test(container.innerHTML)).toBe(false);
   });
 
-  it('renders inside LoginPage with updated card subtext and showcase panel', () => {
-    const { hasText, html } = render(<LoginPage />);
+  it("renders inside LoginPage with the welcome-back subtext and the showcase", () => {
+    const { container } = render(<LoginPage />);
 
-    // Left card subtext
+    // Left card subtext (approved welcome-back copy).
     expect(
-      hasText(
-        'Welcome back! Sign in to keep your content flowing across every platform.'
-      )
-    ).toBe(true);
+      screen.getByText("Welcome back! Sign in to keep your content flowing across every platform.")
+    ).toBeTruthy();
 
-    // Right showcase panel within login page
-    expect(hasText('CREATE · SCHEDULE · GROW')).toBe(true);
-    expect(hasText('Your pages,')).toBe(true);
-    expect(hasText('posting themselves —')).toBe(true);
-    expect(hasText('100% on the cloud.')).toBe(true);
-    expect(hasText('Post from anywhere')).toBe(true);
-    expect(hasText('Every platform, one dashboard')).toBe(true);
-    expect(hasText('Your accounts stay yours')).toBe(true);
+    // The showcase panel within the login page, still the sole h1.
+    expect(screen.getByText("CREATE · SCHEDULE · GROW")).toBeTruthy();
+    expect(container.querySelectorAll("h1")).toHaveLength(1);
+    for (const feature of FEATURES) {
+      expect(screen.getByText(feature.title)).toBeTruthy();
+    }
 
-    // Responsive styles check: showcase panel is hidden on mobile displays, mobile header shown
-    expect(html).toContain('display: none !important');
-    expect(html).toContain('.auth-mobile-header');
+    // Responsive contract, in utility form: the showcase section is
+    // hidden below the lg breakpoint, and the mobile brand header is
+    // present inside the form panel instead.
+    const showcase = container.querySelector('section[aria-label="FBUploadPro Showcase"]');
+    expect(showcase).not.toBeNull();
+    expect(showcase!.className).toContain("hidden");
+    expect(showcase!.className).toContain("lg:block");
+    const formPanel = container.querySelector("main");
+    expect(formPanel).not.toBeNull();
+    expect(within(formPanel as HTMLElement).getByText("FBUploadPro")).toBeTruthy();
   });
 });

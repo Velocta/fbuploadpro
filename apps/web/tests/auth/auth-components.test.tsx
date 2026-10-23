@@ -76,6 +76,11 @@ describe('Auth Redesign Components (Spec 010)', () => {
       expect(hasText('Operational Status')).toBe(false);
     });
 
+    // Spec 136 PR-136A: the layout was rebuilt on token utilities and
+    // its legacy class hooks were deleted with the old implementation,
+    // so panel order is asserted on the semantic elements (the form
+    // panel is the <main>, the showcase is the <section>) instead of
+    // class names. The expectations are unchanged.
     it('renders form panel on the left by default (Spec 022)', () => {
       const { html } = render(
         <AuthSplitLayout title="Sign In" description="Enter credentials">
@@ -83,8 +88,8 @@ describe('Auth Redesign Components (Spec 010)', () => {
         </AuthSplitLayout>
       );
 
-      const formIndex = html.indexOf('class="auth-form-panel"');
-      const showcaseIndex = html.indexOf('class="auth-showcase-panel auth-showcase-right"');
+      const formIndex = html.indexOf('<main');
+      const showcaseIndex = html.indexOf('<section');
 
       expect(formIndex).toBeGreaterThan(-1);
       expect(showcaseIndex).toBeGreaterThan(-1);
@@ -102,13 +107,12 @@ describe('Auth Redesign Components (Spec 010)', () => {
         </AuthSplitLayout>
       );
 
-      const formIndex = html.indexOf('class="auth-form-panel"');
-      const showcaseIndex = html.indexOf('class="auth-showcase-panel"');
+      const formIndex = html.indexOf('<main');
+      const showcaseIndex = html.indexOf('<section');
 
       expect(formIndex).toBeGreaterThan(-1);
       expect(showcaseIndex).toBeGreaterThan(-1);
       expect(showcaseIndex).toBeLessThan(formIndex);
-      expect(html).not.toContain('class="auth-showcase-panel auth-showcase-right"');
     });
   });
 });
