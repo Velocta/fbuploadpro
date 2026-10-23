@@ -1,10 +1,12 @@
 import {
+  DatabaseSocialAccountRowSchema,
   decryptToken,
   encryptToken,
   getTokenRefreshConfig,
   InternalError,
   isTokenRefreshDue,
   PLATFORM_TOKEN_REFRESH_CONFIG,
+  ValidationError,
   type DatabaseSocialAccountRow,
   type Platform,
   type Publisher,
@@ -266,6 +268,43 @@ function deriveTokenIssuedAt(row: RefreshAccountRow, platform: Platform): string
     }
   }
   return row.updated_at;
+}
+
+/**
+ * Boundary validation (spec 139 B15): every scanned `social_accounts`
+ * row is validated ONCE, at load, against the contracts row schema. A
+ * malformed row is a schema/DB failure of the job's own plumbing —
+ * captured to PostHog and thrown as a typed `ValidationError`, aborting
+ * the cycle loudly (the same semantics as a scan DB error). It is never
+ * silently skipped, and it can never be misread as a platform auth
+ * failure, so no account is marked `expired` because of it. The refresh
+ * lease columns are this job's own bookkeeping (not part of the
+ * contracts row) and ride along unvalidated.
+ */
+function validateScanAccountRow(raw: Record<string, unknown>, env: RefreshEnv): RefreshAccountRow {
+  const result = DatabaseSocialAccountRowSchema.safeParse(raw);
+  if (!result.success) {
+    const validationError = new ValidationError(
+      'Malformed social_accounts row failed boundary validation',
+      { issues: result.error.issues }
+    );
+    captureWorkerError(env, validationError, {
+      site: 'runRefreshCycle',
+      kind: 'scan_row_validation_failed',
+      accountId: typeof raw.id === 'string' ? raw.id : null,
+    });
+    console.error(
+      '[refresh] malformed social_accounts row failed boundary validation; aborting cycle:',
+      result.error.issues
+    );
+    throw validationError;
+  }
+  return {
+    ...result.data,
+    refresh_lease_owner: typeof raw.refresh_lease_owner === 'string' ? raw.refresh_lease_owner : null,
+    refresh_lease_expires_at:
+      typeof raw.refresh_lease_expires_at === 'string' ? raw.refresh_lease_expires_at : null,
+  };
 }
 
 function isDue(row: RefreshAccountRow, now: Date): boolean {
@@ -541,10 +580,12 @@ export async function runRefreshCycle(
       console.error('[refresh] failed to scan social_accounts; aborting cycle:', error);
       throw dbError(error);
     }
-    const rows = (Array.isArray(data) ? data : []) as RefreshAccountRow[];
+    const rawRows = (Array.isArray(data) ? data : []) as Array<Record<string, unknown>>;
+    const rows = rawRows.map((raw) => validateScanAccountRow(raw, env));
     if (rows.length === 0) break;
     result.scanned += rows.length;
-    cursor = (rows[rows.length - 1] as RefreshAccountRow).id;
+    const lastRow = rows[rows.length - 1];
+    if (lastRow) cursor = lastRow.id;
 
     for (const row of rows) {
       const config = getTokenRefreshConfig(row.platform);

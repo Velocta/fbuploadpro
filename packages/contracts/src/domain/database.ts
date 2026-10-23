@@ -159,22 +159,31 @@ export interface DatabasePlatformCredentialsRow {
  * `status` uses the unified account vocabulary
  * ('active' | 'expired' | 'revoked' | 'error').
  */
-export const DatabaseSocialAccountRowSchema = z.object({
-  id: z.string().uuid(),
-  workspace_id: z.string().uuid(),
-  platform: PlatformSchema,
-  external_account_id: z.string().min(1).max(255),
-  display_name: z.string().min(1).max(255),
-  avatar_url: z.string().nullable(),
-  encrypted_access_token: z.string().min(1),
-  encrypted_refresh_token: z.string().nullable(),
-  token_expires_at: z.string().datetime({ offset: true }).nullable(),
-  scopes: z.array(z.string()).nullable(),
-  status: z.enum(['active', 'expired', 'revoked', 'error']),
-  metadata: z.record(z.unknown()),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
-});
+export const DatabaseSocialAccountRowSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    platform: PlatformSchema,
+    external_account_id: z.string().min(1).max(255),
+    display_name: z.string().min(1).max(255),
+    avatar_url: z.string().nullable(),
+    encrypted_access_token: z.string().min(1),
+    encrypted_refresh_token: z.string().nullable(),
+    token_expires_at: z.string().datetime({ offset: true }).nullable(),
+    scopes: z.array(z.string()).nullable(),
+    status: z.enum(['active', 'expired', 'revoked', 'error']),
+    metadata: z.record(z.unknown()),
+    created_at: z.string().datetime({ offset: true }),
+    updated_at: z.string().datetime({ offset: true }),
+  })
+  // Boundary correction (spec 139 B15): real PostgREST rows carry
+  // columns these schemas do not model (e.g. the refresh-lease pair
+  // added by migration 20261022130000). Passing unknown keys through —
+  // instead of silently stripping them — keeps a validated row
+  // faithful to the database row; every modelled field above keeps
+  // its full validation. The same correction is applied to the
+  // destination and unified queue-item row schemas below.
+  .passthrough();
 
 export type DatabaseSocialAccountRow = z.infer<typeof DatabaseSocialAccountRowSchema>;
 
@@ -184,24 +193,31 @@ export type DatabaseSocialAccountRow = z.infer<typeof DatabaseSocialAccountRowSc
  * `timezone` is VARCHAR(50), and `encrypted_destination_token` is the
  * only nullable token column.
  */
-export const DatabaseDestinationRowSchema = z.object({
-  id: z.string().uuid(),
-  workspace_id: z.string().uuid(),
-  account_id: z.string().uuid(),
-  platform: PlatformSchema,
-  external_destination_id: z.string().min(1).max(255),
-  name: z.string().min(1).max(255),
-  handle: z.string().max(255).nullable(),
-  avatar_url: z.string().nullable(),
-  timezone: z.string().min(1).max(50),
-  status: z.enum(['active', 'rate_limited', 'disconnected', 'error']),
-  encrypted_destination_token: z.string().nullable(),
-  next_allowed_publish_at: z.string().datetime({ offset: true }).nullable(),
-  rate_usage_pct: z.number().int().min(0).max(100),
-  metadata: z.record(z.unknown()),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
-});
+export const DatabaseDestinationRowSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    account_id: z.string().uuid(),
+    platform: PlatformSchema,
+    external_destination_id: z.string().min(1).max(255),
+    name: z.string().min(1).max(255),
+    handle: z.string().max(255).nullable(),
+    avatar_url: z.string().nullable(),
+    timezone: z.string().min(1).max(50),
+    status: z.enum(['active', 'rate_limited', 'disconnected', 'error']),
+    encrypted_destination_token: z.string().nullable(),
+    next_allowed_publish_at: z.string().datetime({ offset: true }).nullable(),
+    rate_usage_pct: z.number().int().min(0).max(100),
+    metadata: z.record(z.unknown()),
+    created_at: z.string().datetime({ offset: true }),
+    updated_at: z.string().datetime({ offset: true }),
+  })
+  // Boundary correction (spec 139 B15): `.passthrough()` — see the
+  // social_accounts schema above. In particular a real destination
+  // row carrying platform data (e.g. a `platform_options` record with
+  // platform keys such as a TikTok `soundId`) must not lose that data
+  // to unknown-key stripping at the worker trust boundary.
+  .passthrough();
 
 export type DatabaseDestinationRow = z.infer<typeof DatabaseDestinationRowSchema>;
 
@@ -224,35 +240,50 @@ export interface DatabasePostingSlotRow {
  * NO 'reel' (reels are kind 'video' with platform_format 'reel'), and
  * the error columns are TEXT, not numeric.
  */
-export const DatabaseUnifiedQueueItemRowSchema = z.object({
-  id: z.string().uuid(),
-  workspace_id: z.string().uuid(),
-  destination_id: z.string().uuid(),
-  platform: PlatformSchema,
-  kind: z.enum(['text', 'image', 'video', 'story', 'carousel']),
-  platform_format: z.string().max(50).nullable(),
-  caption: z.string(),
-  title: z.string().nullable(),
-  first_comment: z.string().nullable(),
-  media_item_id: z.string().uuid().nullable(),
-  media_url: z.string().nullable(),
-  media_storage_key: z.string().max(500).nullable(),
-  link_url: z.string().nullable(),
-  platform_options: z.record(z.unknown()),
-  scheduled_time: z.string().datetime({ offset: true }),
-  slot_id: z.string().uuid().nullable(),
-  status: z.enum(['queued', 'publishing', 'published', 'failed', 'cancelled']),
-  claimed_at: z.string().datetime({ offset: true }).nullable(),
-  retry_count: z.number().int().nonnegative(),
-  max_retries: z.number().int().nonnegative(),
-  error_code: z.string().nullable(),
-  error_subcode: z.string().nullable(),
-  error_message: z.string().nullable(),
-  external_post_id: z.string().max(255).nullable(),
-  external_comment_id: z.string().max(255).nullable(),
-  created_at: z.string().datetime({ offset: true }),
-  updated_at: z.string().datetime({ offset: true }),
-});
+export const DatabaseUnifiedQueueItemRowSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    destination_id: z.string().uuid(),
+    // Boundary correction (spec 139 B15): the queue item's FK to the
+    // workspace's platform credentials row is NULLABLE — managed
+    // platforms (Post-for-Me YouTube/TikTok) and global-app platforms
+    // (X) hold no per-workspace credentials row, so a real row
+    // legitimately carries NULL here. Optional because claim/load
+    // projections may omit the column entirely.
+    platform_credentials_id: z.string().uuid().nullable().optional(),
+    platform: PlatformSchema,
+    kind: z.enum(['text', 'image', 'video', 'story', 'carousel']),
+    platform_format: z.string().max(50).nullable(),
+    caption: z.string(),
+    title: z.string().nullable(),
+    first_comment: z.string().nullable(),
+    media_item_id: z.string().uuid().nullable(),
+    media_url: z.string().nullable(),
+    media_storage_key: z.string().max(500).nullable(),
+    link_url: z.string().nullable(),
+    // A free-form record on purpose: platform keys the contracts do
+    // not model (e.g. a TikTok `soundId`) pass through untouched —
+    // per-platform strictness lives in the per-platform options
+    // schemas, not in this row boundary.
+    platform_options: z.record(z.unknown()),
+    scheduled_time: z.string().datetime({ offset: true }),
+    slot_id: z.string().uuid().nullable(),
+    status: z.enum(['queued', 'publishing', 'published', 'failed', 'cancelled']),
+    claimed_at: z.string().datetime({ offset: true }).nullable(),
+    retry_count: z.number().int().nonnegative(),
+    max_retries: z.number().int().nonnegative(),
+    error_code: z.string().nullable(),
+    error_subcode: z.string().nullable(),
+    error_message: z.string().nullable(),
+    external_post_id: z.string().max(255).nullable(),
+    external_comment_id: z.string().max(255).nullable(),
+    created_at: z.string().datetime({ offset: true }),
+    updated_at: z.string().datetime({ offset: true }),
+  })
+  // Boundary correction (spec 139 B15): `.passthrough()` — see the
+  // social_accounts schema above.
+  .passthrough();
 
 export type DatabaseUnifiedQueueItemRow = z.infer<typeof DatabaseUnifiedQueueItemRowSchema>;
 

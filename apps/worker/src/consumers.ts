@@ -1,4 +1,7 @@
 import {
+  DatabaseDestinationRowSchema,
+  DatabaseSocialAccountRowSchema,
+  DatabaseUnifiedQueueItemRowSchema,
   decryptToken,
   InternalError,
   ValidationError,
@@ -114,6 +117,88 @@ async function loadRowById(
     throw error instanceof Error ? error : new Error(String(error));
   }
   return (data as Record<string, unknown> | null) ?? null;
+}
+
+/** Mark an error as already captured so batch-level wrappers do not double-report it. */
+function markCaptured(err: unknown): void {
+  if (err && typeof err === 'object') {
+    (err as { __workerCaptured?: boolean }).__workerCaptured = true;
+  }
+}
+
+function isCaptured(err: unknown): boolean {
+  return Boolean(
+    err && typeof err === 'object' && (err as { __workerCaptured?: boolean }).__workerCaptured
+  );
+}
+
+/** Structural shape of the contracts row schemas this module validates with. */
+interface RowSchema<T> {
+  safeParse(
+    data: unknown
+  ): { success: true; data: T } | { success: false; error: { issues: unknown } };
+}
+
+/**
+ * Boundary validation (spec 139 B15): a row loaded from the database is
+ * validated ONCE, at load, against its contracts schema. A malformed
+ * row fails LOUDLY — PostHog capture plus a typed `ValidationError` —
+ * and is never silently skipped or cast into shape: on the publish path
+ * the message stays un-acked for queue retry, and on the DLQ path the
+ * arrival stays loud (see `processDlqMessage`).
+ */
+function validateLoadedRow<T>(
+  schema: RowSchema<T>,
+  table: string,
+  id: string,
+  raw: Record<string, unknown>,
+  env: PostHogEnv
+): T {
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    const validationError = new ValidationError(
+      `Malformed ${table} row failed boundary validation (id=${id})`,
+      { table, id, issues: result.error.issues }
+    );
+    captureWorkerError(env, validationError, {
+      site: 'consumers',
+      kind: 'row_validation_failed',
+      table,
+      rowId: id,
+    });
+    markCaptured(validationError);
+    throw validationError;
+  }
+  return result.data;
+}
+
+async function loadQueueItemRow(
+  db: ConsumerDbClient,
+  id: string,
+  env: PostHogEnv
+): Promise<DatabaseUnifiedQueueItemRow | null> {
+  const raw = await loadRowById(db, 'queue_items', id);
+  return raw ? validateLoadedRow(DatabaseUnifiedQueueItemRowSchema, 'queue_items', id, raw, env) : null;
+}
+
+async function loadDestinationRow(
+  db: ConsumerDbClient,
+  id: string,
+  env: PostHogEnv
+): Promise<DatabaseDestinationRow | null> {
+  const raw = await loadRowById(db, 'destinations', id);
+  return raw ? validateLoadedRow(DatabaseDestinationRowSchema, 'destinations', id, raw, env) : null;
+}
+
+async function loadSocialAccountRow(
+  db: ConsumerDbClient,
+  id: string,
+  env: PostHogEnv
+): Promise<DatabaseSocialAccountRow | null> {
+  const raw = await loadRowById(db, 'social_accounts', id);
+  return raw
+    ? validateLoadedRow(DatabaseSocialAccountRowSchema, 'social_accounts', id, raw, env)
+    : null;
 }
 
 /** Counts-only heartbeat write; the consumer DB handle is the supabase client at runtime. */
@@ -379,12 +464,11 @@ async function processPublishMessage(
     throw new ValidationError('Malformed publish queue message body');
   }
 
-  const itemRow = await loadRowById(deps.db, 'queue_items', body.itemId);
-  if (!itemRow) {
+  const item = await loadQueueItemRow(deps.db, body.itemId, deps.env ?? {});
+  if (!item) {
     console.warn(`[consumer] queue item ${body.itemId} no longer exists; skipping`);
     return 'skipped';
   }
-  const item = itemRow as unknown as DatabaseUnifiedQueueItemRow;
 
   // Current state is honoured: anything no longer in `publishing`
   // (cancelled, edited back to queued, already settled) is skipped.
@@ -412,17 +496,15 @@ async function processPublishMessage(
     return 'settled';
   }
 
-  const destinationRow = await loadRowById(deps.db, 'destinations', item.destination_id);
-  if (!destinationRow) {
+  const destination = await loadDestinationRow(deps.db, item.destination_id, deps.env ?? {});
+  if (!destination) {
     throw new InternalError(`Destination ${item.destination_id} for queue item ${item.id} not found`);
   }
-  const destination = destinationRow as unknown as DatabaseDestinationRow;
 
-  const accountRow = await loadRowById(deps.db, 'social_accounts', destination.account_id);
-  if (!accountRow) {
+  const account = await loadSocialAccountRow(deps.db, destination.account_id, deps.env ?? {});
+  if (!account) {
     throw new InternalError(`Social account ${destination.account_id} for queue item ${item.id} not found`);
   }
-  const account = accountRow as unknown as DatabaseSocialAccountRow;
 
   // State re-check (spec 139): destination/account state may have
   // changed since the claim. Publishing into that state would burn a
@@ -481,12 +563,14 @@ export async function handlePublishBatch(
       if (result === 'settled') settled++;
       message.ack();
     } catch (err) {
-      captureWorkerError(deps.env ?? {}, err, {
-        site: 'handlePublishBatch',
-        kind: 'publish_message_failed',
-        queue: batch.queue,
-        messageId: message.id,
-      });
+      if (!isCaptured(err)) {
+        captureWorkerError(deps.env ?? {}, err, {
+          site: 'handlePublishBatch',
+          kind: 'publish_message_failed',
+          queue: batch.queue,
+          messageId: message.id,
+        });
+      }
       console.error(
         `[consumer] publish message ${message.id} failed; leaving un-acked for queue retry:`,
         err
@@ -528,8 +612,8 @@ async function processDlqMessage(
 
   let item: DatabaseUnifiedQueueItemRow;
   try {
-    const itemRow = await loadRowById(deps.db, 'queue_items', body.itemId);
-    if (!itemRow) {
+    const loaded = await loadQueueItemRow(deps.db, body.itemId, env);
+    if (!loaded) {
       captureWorkerError(
         env,
         new Error(`DLQ message references missing queue item ${body.itemId}`),
@@ -538,13 +622,17 @@ async function processDlqMessage(
       console.error(`[dlq] queue item ${body.itemId} not found (${queueName}); acking`);
       return false;
     }
-    item = itemRow as unknown as DatabaseUnifiedQueueItemRow;
+    item = loaded;
   } catch (err) {
-    captureWorkerError(env, err, {
-      site: 'handleDlqBatch',
-      kind: 'dlq_item_load_failed',
-      queue: queueName,
-    });
+    // A boundary-validation failure was already captured at the load
+    // site with the row context; other load failures capture here.
+    if (!isCaptured(err)) {
+      captureWorkerError(env, err, {
+        site: 'handleDlqBatch',
+        kind: 'dlq_item_load_failed',
+        queue: queueName,
+      });
+    }
     console.error(`[dlq] failed to load queue item ${body.itemId} (${queueName}):`, err);
     return false;
   }
@@ -617,11 +705,13 @@ export async function handleDlqBatch(
     try {
       if (await processDlqMessage(message, queueName, deps)) settledCount++;
     } catch (err) {
-      captureWorkerError(deps.env ?? {}, err, {
-        site: 'handleDlqBatch',
-        kind: 'unexpected',
-        queue: queueName,
-      });
+      if (!isCaptured(err)) {
+        captureWorkerError(deps.env ?? {}, err, {
+          site: 'handleDlqBatch',
+          kind: 'unexpected',
+          queue: queueName,
+        });
+      }
       console.error(`[dlq] unexpected error processing message ${message.id}:`, err);
     } finally {
       message.ack();

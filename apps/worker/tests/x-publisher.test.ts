@@ -26,6 +26,10 @@ import { runRefreshCycle, type RefreshDbClient } from '../src/refresh.js';
 const NOW = new Date('2026-10-22T12:00:00.000Z');
 const X_USER_ID = 'x-user-42';
 
+// Real DB ids are UUIDs (spec 139 B15 boundary validation parses them).
+const WS_ID = '11111111-1111-4111-8111-111111111111';
+const ACCT_ID = '44444444-4444-4444-8444-444444444444';
+
 function makeItem(
   overrides: Partial<DatabaseUnifiedQueueItemRow> = {}
 ): DatabaseUnifiedQueueItemRow {
@@ -627,8 +631,8 @@ class FakeRefreshDb {
 
 async function makeRefreshAccount(): Promise<FakeAccount> {
   return {
-    id: 'acct-1',
-    workspace_id: 'ws-1',
+    id: ACCT_ID,
+    workspace_id: WS_ID,
     platform: 'x',
     external_account_id: X_USER_ID,
     display_name: 'Test User',
@@ -665,7 +669,7 @@ describe('Refresh job with the real XPublisher (spec 127 D6)', () => {
       vi.fn(async () => ({ ok: true }))
     );
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeRefreshAccount());
+    db.accounts.set(ACCT_ID, await makeRefreshAccount());
     const mock = new MockXClient();
     const registry = registryWithX(mock);
     const env = { TOKEN_ENCRYPTION_KEY: MASTER_KEY };
@@ -678,7 +682,7 @@ describe('Refresh job with the real XPublisher (spec 127 D6)', () => {
     expect(mock.refreshCalls).toHaveLength(1);
     expect(a.refreshed + b.refreshed).toBe(1);
     expect(a.skippedLease + b.skippedLease).toBe(1);
-    const stored = db.accounts.get('acct-1') as FakeAccount;
+    const stored = db.accounts.get(ACCT_ID) as FakeAccount;
     expect(await decryptToken(stored.encrypted_access_token, MASTER_KEY)).toBe('new-access');
     expect(
       await decryptToken(stored.encrypted_refresh_token as string, MASTER_KEY)
@@ -692,7 +696,7 @@ describe('Refresh job with the real XPublisher (spec 127 D6)', () => {
       vi.fn(async () => ({ ok: true }))
     );
     const db = new FakeRefreshDb();
-    db.accounts.set('acct-1', await makeRefreshAccount());
+    db.accounts.set(ACCT_ID, await makeRefreshAccount());
     const mock = new MockXClient();
     mock.refreshError = new XApiError(400, {
       error: 'invalid_grant',
@@ -705,7 +709,7 @@ describe('Refresh job with the real XPublisher (spec 127 D6)', () => {
       NOW
     );
     expect(result.expired).toBe(1);
-    expect(db.accounts.get('acct-1')?.status).toBe('expired');
+    expect(db.accounts.get(ACCT_ID)?.status).toBe('expired');
   });
 });
 

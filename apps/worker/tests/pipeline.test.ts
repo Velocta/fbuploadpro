@@ -78,6 +78,17 @@ function fakeBatch(queue: string, messages: ReturnType<typeof fakeMessage>[]) {
   };
 }
 
+// Real DB ids are UUIDs (spec 139 B15 boundary validation parses them);
+// fixtures use fixed valid UUIDs so validated loads accept them.
+const WS_ID = '11111111-1111-4111-8111-111111111111';
+const ITEM_ID = '22222222-2222-4222-8222-222222222222';
+const DEST_ID = '33333333-3333-4333-8333-333333333333';
+const ACCT_ID = '44444444-4444-4444-8444-444444444444';
+const ITEM_LIVE_ID = '55555555-5555-4555-8555-555555555555';
+const ITEM_DONE_ID = '66666666-6666-4666-8666-666666666666';
+const claimRowId = (i: number) =>
+  `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+
 const NON_RECOVERY_TICK = new Date(2026, 0, 1, 10, 7); // minute 7
 const RECOVERY_TICK = new Date(2026, 0, 1, 10, 10); // minute 10
 
@@ -102,7 +113,7 @@ describe('Claimer (spec 121)', () => {
       if (kindSet.includes('video')) return { data: [], error: null }; // heavy lane empty
       const count = fastRounds.shift() ?? 0;
       return {
-        data: Array.from({ length: count }, (_, i) => ({ id: `item-${count}-${i}` })),
+        data: Array.from({ length: count }, (_, i) => ({ id: claimRowId(i) })),
         error: null,
       };
     });
@@ -123,11 +134,13 @@ describe('Claimer (spec 121)', () => {
     // NOT claimed this tick (cap 1); it remains for the next tick.
     expect(fastQ.batches.map((b) => b.length)).toEqual([100, 100, 100, 100, 100]);
     expect(heavyQ.sendBatch).not.toHaveBeenCalled();
-    // Message payload carries ids + derivable fields only.
+    // Message payload carries ids + derivable fields only, plus the
+    // schemaVersion stamped by PublishQueueMessageSchema (spec 139 B15).
     expect(fastQ.batches[0]?.[0]).toEqual({
-      itemId: 'item-500-0',
+      itemId: claimRowId(0),
       platform: 'facebook',
       lane: 'publish-fast',
+      schemaVersion: 1,
     });
     // The tick never publishes.
     expect(publisher.publish).not.toHaveBeenCalled();
@@ -145,7 +158,7 @@ describe('Claimer (spec 121)', () => {
     const registry = createPublisherRegistry();
     registry.register(fakePublisher('facebook', async () => ({ status: 'published' })));
     const rpc = vi.fn(async (_fn: string, _args?: Record<string, unknown>) => ({
-      data: Array.from({ length: 500 }, (_, i) => ({ id: `item-${i}` })),
+      data: Array.from({ length: 500 }, (_, i) => ({ id: claimRowId(i) })),
       error: null,
     }));
     const fastQ = makeQueueProducer();
@@ -172,7 +185,7 @@ describe('Claimer (spec 121)', () => {
         return { data: null, error: new Error('facebook claim boom') };
       }
       // instagram: one row per lane
-      return { data: [{ id: `ig-${String(args?.p_platform)}-1` }], error: null };
+      return { data: [{ id: claimRowId(1) }], error: null };
     });
     const fastQ = makeQueueProducer();
     const heavyQ = makeQueueProducer();
@@ -208,7 +221,7 @@ describe('Claimer (spec 121)', () => {
       const kindSet = (args?.p_lane_kind_set as string[]) ?? [];
       if (kindSet.includes('video')) return { data: [], error: null }; // heavy empty
       return {
-        data: Array.from({ length: 150 }, (_, i) => ({ id: `item-${i}` })),
+        data: Array.from({ length: 150 }, (_, i) => ({ id: claimRowId(i) })),
         error: null,
       };
     });
@@ -286,9 +299,9 @@ async function makeItem(
   overrides: Partial<DatabaseUnifiedQueueItemRow> = {}
 ): Promise<DatabaseUnifiedQueueItemRow> {
   return {
-    id: 'item-1',
-    workspace_id: 'ws-1',
-    destination_id: 'dest-1',
+    id: ITEM_ID,
+    workspace_id: WS_ID,
+    destination_id: DEST_ID,
     platform: 'facebook',
     kind: 'text',
     platform_format: null,
@@ -327,9 +340,9 @@ async function makeConsumerDb(opts: {
   const encryptedAccess = await encryptToken('plain-access-token', MASTER_KEY);
   const encryptedDest = await encryptToken('plain-page-token', MASTER_KEY);
   const destination: DatabaseDestinationRow = {
-    id: 'dest-1',
-    workspace_id: 'ws-1',
-    account_id: 'acct-1',
+    id: DEST_ID,
+    workspace_id: WS_ID,
+    account_id: ACCT_ID,
     platform: 'facebook',
     external_destination_id: 'page-123',
     name: 'Page',
@@ -346,8 +359,8 @@ async function makeConsumerDb(opts: {
     ...opts.destination,
   };
   const account: DatabaseSocialAccountRow = {
-    id: 'acct-1',
-    workspace_id: 'ws-1',
+    id: ACCT_ID,
+    workspace_id: WS_ID,
     platform: 'facebook',
     external_account_id: 'user-123',
     display_name: 'User',
@@ -440,9 +453,9 @@ describe('Publish consumers (spec 121)', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_queue_item_id: 'item-1',
-      p_workspace_id: 'ws-1',
-      p_destination_id: 'dest-1',
+      p_queue_item_id: ITEM_ID,
+      p_workspace_id: WS_ID,
+      p_destination_id: DEST_ID,
       p_outcome_status: 'published',
       p_external_post_id: 'post-42',
       p_external_comment_id: 'comment-7',
@@ -828,7 +841,7 @@ describe('DLQ consumers (spec 121)', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_queue_item_id: 'item-1',
+      p_queue_item_id: ITEM_ID,
       p_outcome_status: 'failed',
       p_error_code: DLQ_ERROR_CODE,
     });
@@ -898,8 +911,8 @@ describe('DLQ consumers (spec 121)', () => {
   });
 
   it('counts only actual settlements in the heartbeat DLQ counter for a mixed batch', async () => {
-    const live = await makeItem({ id: 'item-live', status: 'publishing' });
-    const done = await makeItem({ id: 'item-done', status: 'published' });
+    const live = await makeItem({ id: ITEM_LIVE_ID, status: 'publishing' });
+    const done = await makeItem({ id: ITEM_DONE_ID, status: 'published' });
     const { db, settleCalls, upserts } = await makeConsumerDb({
       item: live,
       extraItems: [done],
@@ -919,7 +932,7 @@ describe('DLQ consumers (spec 121)', () => {
     });
 
     expect(settleCalls).toHaveLength(1);
-    expect(settleCalls[0]).toMatchObject({ p_queue_item_id: 'item-live' });
+    expect(settleCalls[0]).toMatchObject({ p_queue_item_id: ITEM_LIVE_ID });
     expect(liveMsg.ack).toHaveBeenCalledTimes(1);
     expect(doneMsg.ack).toHaveBeenCalledTimes(1);
     expect(upserts).toHaveLength(1);
