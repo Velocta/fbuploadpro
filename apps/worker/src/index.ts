@@ -10,6 +10,7 @@ import { handleQueueBatch, type ConsumerDbClient } from './consumers.js';
 import {
   isTokenEncryptionKeyWellFormed,
   recordHeartbeat,
+  WORKER_HEARTBEAT_NAME,
 } from './heartbeat.js';
 import { createWorkerPublisherRegistry } from './registry.js';
 import {
@@ -17,6 +18,22 @@ import {
   TOKEN_REFRESH_CRON,
   type RefreshDbClient,
 } from './refresh.js';
+import { captureWorkerError } from './analytics.js';
+
+/**
+ * Derive a `waitUntil` callback from an ExecutionContext (spec 139).
+ * Returns undefined when no usable ctx is present (tests, direct calls)
+ * — `captureWorkerError` is a safe no-op without it, it just cannot
+ * extend the isolate's lifetime.
+ */
+export function waitUntilFromCtx(
+  ctx?: ExecutionContext | null
+): ((promise: Promise<unknown>) => void) | undefined {
+  if (!ctx || typeof ctx.waitUntil !== 'function') return undefined;
+  return (promise: Promise<unknown>) => {
+    ctx.waitUntil(promise);
+  };
+}
 
 export { recordHeartbeat, WORKER_HEARTBEAT_NAME } from './heartbeat.js';
 export {
@@ -68,6 +85,8 @@ export interface ScheduledOptions {
   registry?: PublisherRegistry;
   queues?: ClaimerQueues;
   now?: Date;
+  /** Test seam: overrides the waitUntil derived from the ExecutionContext. */
+  waitUntil?: (promise: Promise<unknown>) => void;
 }
 
 export interface QueueOptions {
@@ -104,9 +123,10 @@ function queuesFromEnv(env: Env, overrides?: ClaimerQueues): ClaimerQueues {
 export async function handleScheduled(
   controller: ScheduledController,
   env: Env,
-  _ctx?: ExecutionContext,
+  ctx?: ExecutionContext,
   options?: ScheduledOptions
 ): Promise<void> {
+  const waitUntil = options?.waitUntil ?? waitUntilFromCtx(ctx);
   const db = initWorkerDb(env, options?.db);
   const masterKey = env.TOKEN_ENCRYPTION_KEY;
 
@@ -145,6 +165,12 @@ export async function handleScheduled(
       );
     } catch (err) {
       console.error('[Scheduled] token refresh cycle failed:', err);
+      captureWorkerError(
+        env,
+        err,
+        { site: 'handleScheduled', kind: 'refresh_cycle_failed' },
+        waitUntil
+      );
       throw err;
     }
     return;
@@ -157,6 +183,7 @@ export async function handleScheduled(
       queues: queuesFromEnv(env, options?.queues),
       env,
       now: options?.now ?? new Date(controller.scheduledTime),
+      waitUntil,
     });
 
     await recordHeartbeat(db, {
@@ -166,6 +193,12 @@ export async function handleScheduled(
       enqueuedHeavy: result.enqueuedHeavy,
     });
   } catch (err) {
+    captureWorkerError(
+      env,
+      err,
+      { site: 'handleScheduled', kind: 'claim_error' },
+      waitUntil
+    );
     await recordHeartbeat(db, { success: false, skipReason: 'claim_error' });
     throw err;
   }
@@ -202,10 +235,14 @@ export interface WorkerHealthPayload {
   checks: {
     database: boolean;
     config: boolean;
+    heartbeat: boolean;
   };
 }
 
 const WORKER_HEALTH_TIMEOUT_MS = 2000;
+
+/** Mirrors the web tier's rule (spec 116/139): stale when last successful tick > 180s ago. */
+export const WORKER_HEARTBEAT_STALE_SECONDS = 180;
 
 interface WorkerProbeDb {
   from: (table: string) => {
@@ -247,16 +284,96 @@ async function probeWorkerDatabase(
 }
 
 /**
- * Worker health probe (spec 116): mirrors the web DB probe (workspaces
- * head query, 2s budget) plus env-presence booleans. Sanitized — booleans
- * only, never hosts, values, or error detail (logged server-side only).
+ * Heartbeat-freshness check (spec 139): reads `worker_heartbeats` and
+ * mirrors the web internal tier's semantics — stale when the last
+ * successful tick is more than 180s old. Degrades gracefully on cold
+ * start: no row yet, or a row with no `last_success_at` yet, counts as
+ * healthy (the claimer has simply not completed a tick yet). A missing
+ * DB is NOT graceful (the database check fails alongside it), and a
+ * query error / timeout is reported unhealthy and logged server-side.
+ */
+export async function probeWorkerHeartbeat(
+  db: unknown,
+  timeoutMs = WORKER_HEALTH_TIMEOUT_MS,
+  now: Date = new Date()
+): Promise<boolean> {
+  if (!db || typeof (db as { from?: unknown }).from !== 'function') return false;
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const resolve = async (): Promise<unknown> => {
+      const client = db as {
+        from: (table: string) => Record<string, unknown>;
+      };
+      const table = client.from('worker_heartbeats');
+      if (typeof table.select !== 'function') return { __noProbe: true };
+      let query: unknown = (table.select as (cols: string) => unknown).call(
+        table,
+        'last_success_at'
+      );
+      if (query && typeof (query as { eq?: unknown }).eq === 'function') {
+        query = (
+          query as { eq: (col: string, val: unknown) => unknown }
+        ).eq('worker_name', WORKER_HEARTBEAT_NAME);
+      }
+      if (query && typeof (query as { maybeSingle?: unknown }).maybeSingle === 'function') {
+        return await (query as { maybeSingle: () => Promise<unknown> }).maybeSingle();
+      }
+      if (
+        query &&
+        (typeof query === 'object' || typeof query === 'function') &&
+        typeof (query as { then?: unknown }).then === 'function'
+      ) {
+        return await (query as PromiseLike<unknown>);
+      }
+      // Unrecognised query shape (e.g. a minimal test double): cannot
+      // probe — degrade gracefully rather than false-alarm.
+      return { __noProbe: true };
+    };
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerId = setTimeout(
+        () => reject(new Error('Heartbeat probe timeout exceeded budget')),
+        timeoutMs
+      );
+    });
+    const result = (await Promise.race([resolve(), timeoutPromise])) as {
+      data?: unknown;
+      error?: unknown;
+      __noProbe?: boolean;
+    } | null;
+    if (!result || result.__noProbe) return true;
+    if (result.error) throw result.error;
+    const row = Array.isArray(result.data) ? result.data[0] : result.data;
+    if (!row || typeof row !== 'object') return true; // cold start: no rows yet
+    const lastSuccessAt = (row as { last_success_at?: unknown }).last_success_at;
+    if (!lastSuccessAt || typeof lastSuccessAt !== 'string') return true;
+    const parsed = new Date(lastSuccessAt).getTime();
+    if (Number.isNaN(parsed)) return true;
+    const ageSeconds = Math.max(0, Math.floor((now.getTime() - parsed) / 1000));
+    return ageSeconds <= WORKER_HEARTBEAT_STALE_SECONDS;
+  } catch (err) {
+    console.error(
+      '[health] worker heartbeat probe failed:',
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  } finally {
+    if (timerId) clearTimeout(timerId);
+  }
+}
+
+/**
+ * Worker health probe (spec 116, extended spec 139): mirrors the web DB
+ * probe (workspaces head query, 2s budget) plus env-presence booleans
+ * and the heartbeat-freshness check above. Sanitized — booleans only,
+ * never hosts, values, or error detail (logged server-side only).
  */
 export async function probeWorkerHealth(
   env: Env,
   injectedDb?: unknown,
-  timeoutMs = WORKER_HEALTH_TIMEOUT_MS
+  timeoutMs = WORKER_HEALTH_TIMEOUT_MS,
+  now: Date = new Date()
 ): Promise<{ statusCode: number; payload: WorkerHealthPayload }> {
-  const timestamp = new Date().toISOString();
+  const timestamp = now.toISOString();
   const supabaseUrl = env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
   const config = Boolean(
     supabaseUrl &&
@@ -270,15 +387,16 @@ export async function probeWorkerHealth(
       : ((env as unknown as { __TEST_DB__?: unknown }).__TEST_DB__ ?? null);
   const db = (initWorkerDb(env, injectedDb) ?? testDb) as WorkerProbeDb | null;
   const database = await probeWorkerDatabase(db, timeoutMs);
+  const heartbeat = await probeWorkerHeartbeat(db, timeoutMs, now);
 
-  const ok = database && config;
+  const ok = database && config && heartbeat;
   return {
     statusCode: ok ? 200 : 503,
     payload: {
       status: ok ? 'ok' : 'unhealthy',
       timestamp,
       worker: 'fbuploadpro-worker',
-      checks: { database, config },
+      checks: { database, config, heartbeat },
     },
   };
 }
