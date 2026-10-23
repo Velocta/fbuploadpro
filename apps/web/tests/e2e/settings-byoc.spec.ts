@@ -113,9 +113,9 @@ async function installSettingsFixtures(
       }
       const body = (route.request().postDataJSON() ?? {}) as Record<string, unknown>;
       byoc = {
-        fbAppId: typeof body.appId === 'string' ? body.appId : '',
+        fbAppId: typeof body.fbAppId === 'string' ? body.fbAppId : '',
         fbAppSecret:
-          typeof body.appSecret === 'string' ? body.appSecret : byoc.fbAppSecret,
+          typeof body.fbAppSecret === 'string' ? body.fbAppSecret : byoc.fbAppSecret,
         hasSecret: true,
         status: 'valid',
         connectedAt: CONNECTED_AT,
