@@ -77,7 +77,10 @@ async function gotoMedia(page: Page): Promise<void> {
 }
 
 async function openPreview(page: Page, id: string): Promise<void> {
-  await page.getByTestId(`preview-media-${id}`).click();
+  // The card's Preview pill is the affordance a touch user taps; at
+  // phone widths it overlays the tile button's centre point, so the
+  // tile itself is not the clickable target there.
+  await page.getByTestId(`hover-preview-${id}`).click();
   await expect(page.getByTestId('media-preview-modal')).toBeVisible({
     timeout: 15_000,
   });
