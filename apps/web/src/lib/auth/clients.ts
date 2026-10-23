@@ -13,7 +13,7 @@ let mockSupabaseServiceClientForTesting: SupabaseClient | null = null;
 
 /**
  * Default per-request timeout for the admin (service-role) client
- * (spec 139). Applied via a global fetch wrapper: any single Supabase
+ * (spec 139). Applied via a global fetch wrapper — every single Supabase
  * request that hangs is aborted after this long instead of tying up a
  * serverless invocation indefinitely. Callers that pass their own
  * AbortSignal (e.g. a longer/shorter per-call timeout) keep theirs —
