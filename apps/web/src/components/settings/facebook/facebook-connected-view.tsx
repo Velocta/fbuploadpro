@@ -73,7 +73,9 @@ export function FacebookConnectedView({
         COPY_FEEDBACK_DURATION_MS
       );
     } catch {
-      // Clipboard unavailable: the App ID stays on screen to copy by hand.
+      // Clipboard unavailable: no "copied" feedback — the App ID
+      // stays on screen to copy by hand.
+      setCopied(false);
     }
   };
 

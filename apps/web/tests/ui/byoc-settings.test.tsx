@@ -24,7 +24,7 @@ import { FacebookSettingsView } from '@/components/settings/facebook/facebook-se
 import { createFacebookConnectFormSchema } from '@/components/settings/facebook/facebook-connect-form';
 import { formatConnectedDate } from '@/components/settings/facebook/facebook-connected-view';
 import { queryKeys } from '@/lib/data/query-keys';
-import { Toast } from '@/components/shared/ui/toast';
+import { Toast, toast } from '@/components/shared/ui/toast';
 
 // userEvent interaction tests run long under coverage instrumentation;
 // the per-test budget below replaces the 5s default for this file's
@@ -176,17 +176,24 @@ async function findErrorSummary(): Promise<HTMLElement> {
   return el as unknown as HTMLElement;
 }
 
-beforeEach(() => {
-  searchParamsState.current = new URLSearchParams();
-  installFetchStub();
-  clipboardWriteText.mockClear();
+function installClipboardMock() {
   Object.defineProperty(window.navigator, 'clipboard', {
     value: { writeText: clipboardWriteText },
     configurable: true,
   });
+}
+
+beforeEach(() => {
+  searchParamsState.current = new URLSearchParams();
+  installFetchStub();
+  clipboardWriteText.mockClear();
+  installClipboardMock();
 });
 
 afterEach(() => {
+  // Sonner's store is global: a toast left alive at unmount would be
+  // re-rendered by the next test's Toaster and duplicate its assertions.
+  toast.dismiss();
   cleanup();
   vi.unstubAllGlobals();
 });
@@ -334,6 +341,9 @@ describe('FacebookSettingsView — not connected', () => {
     ).toBeTruthy();
 
     const user = userEvent.setup();
+    // userEvent.setup() installs its own clipboard stub over the
+    // beforeEach mock — re-apply the mock so the write is observable.
+    installClipboardMock();
     await user.click(screen.getByTestId('fb-copy-callback-btn'));
     expect(clipboardWriteText).toHaveBeenCalledWith(address);
     await waitFor(() =>
@@ -501,6 +511,9 @@ describe('FacebookSettingsView — connected state', () => {
 
   it('Copy App ID writes to the clipboard and shows the "App ID copied" feedback', async () => {
     const user = userEvent.setup();
+    // userEvent.setup() installs its own clipboard stub over the
+    // beforeEach mock — re-apply the mock so the write is observable.
+    installClipboardMock();
     renderView(CONNECTED);
 
     await user.click(screen.getByTestId('fb-copy-app-id-btn'));

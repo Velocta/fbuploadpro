@@ -45,8 +45,10 @@ export function FacebookSetupCard() {
         COPY_FEEDBACK_DURATION_MS
       );
     } catch {
-      // Clipboard unavailable (permissions / insecure context): the
-      // address stays on screen for the user to copy by hand.
+      // Clipboard unavailable (permissions / insecure context): no
+      // "copied" feedback — the address stays on screen for the user
+      // to copy by hand.
+      setCopied(false);
     }
   };
 

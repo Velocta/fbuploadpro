@@ -138,8 +138,9 @@ export function FacebookConnectForm({
     } catch {
       // The container has already surfaced the failure (form-scope
       // serverError, or the network-failure toast). The form stays
-      // open with the typed values intact — a failed connect never
-      // clears the input.
+      // open in its attempted state with the typed values intact — a
+      // failed connect never clears the input.
+      setSubmitAttempted(true);
     }
   };
 

@@ -160,10 +160,13 @@ export function FacebookSettingsView({ subdomain }: Readonly<FacebookSettingsVie
     try {
       await disconnectMutation.mutateAsync();
     } catch (error) {
+      // Fully handled here: the failure is toasted and the dialog
+      // stays open (the container closes it only on success). Nothing
+      // awaits this handler's rejection — the dialog fires it and
+      // forgets — so it must not rethrow.
       toast.error(
         isNetworkFailure(error) ? DISCONNECT_NETWORK_MESSAGE : DISCONNECT_FAILURE_MESSAGE
       );
-      throw error;
     }
   };
 
