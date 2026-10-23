@@ -185,8 +185,8 @@ export async function checkRateLimit(
 //   fbuploadpro:lockout:<key>  { attempts, lockedUntil }
 // Semantics (pinned): `maxFailures` failed attempts lock the key for
 // `lockoutDurationMs`; a successful verification clears the counter.
-// Fail-closed in production, exactly like checkRateLimit: any Redis error
-// denies (treats the key as locked) rather than silently allowing.
+// Fail-closed in production, exactly like checkRateLimit — every Redis
+// error denies (treats the key as locked) rather than silently allowing.
 // Non-production keeps the in-memory Map (single instance is fine there).
 // ---------------------------------------------------------------------------
 
