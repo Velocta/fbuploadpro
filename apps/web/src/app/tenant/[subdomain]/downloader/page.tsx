@@ -8,6 +8,7 @@ import {
   prefetchServerQueries,
   serverApiFetch,
 } from '@/lib/data/server';
+import { toMediaFolder } from '@/components/media/media-data';
 import { DownloaderSurface } from '@/components/downloader/downloader-surface';
 
 export const metadata: Metadata = { title: 'Media Downloader' };
@@ -21,15 +22,24 @@ export default async function TenantMediaDownloaderPage({
 
   // Server-first (spec 137 §3.2.4): prefetch the folder list into a
   // throwaway server QueryClient and dehydrate it; the surface island
-  // reads the folders from the cache — no mount fetch-on-mount.
+  // reads the folders from the cache — no mount fetch-on-mount. The
+  // cached shape is the canonical `MediaFolder[]` array (the same
+  // mapping the Media Library's prefetch applies) — never the folders
+  // envelope, which collided with the library's shape on the shared
+  // key (PR-140-5, bug #2).
   const queryClient = createServerQueryClient(subdomain);
   const state = await prefetchServerQueries(queryClient, [
     {
       queryKey: queryKeys.tenant(subdomain).media.folders,
-      queryFn: () =>
-        serverApiFetch(buildTenantApiPath(subdomain, '/media/folders'), {
-          schema: FolderListResponseSchema,
-        }),
+      queryFn: async () => {
+        const data = await serverApiFetch(
+          buildTenantApiPath(subdomain, '/media/folders'),
+          {
+            schema: FolderListResponseSchema,
+          }
+        );
+        return data.folders.map(toMediaFolder);
+      },
     },
   ]);
 
