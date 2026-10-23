@@ -1,5 +1,8 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import { THEME, COMPONENT_STYLES, STATUS_SIGNALS } from '@/lib/theme';
+
+export const metadata: Metadata = { title: 'Account suspended' };
 
 export default function AccountSuspendedPage() {
   return (
