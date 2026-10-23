@@ -12,7 +12,9 @@
     "test": "vitest run --passWithNoTests",
     "test:e2e": "playwright test",
     "tokens:build": "node scripts/build-tokens.mjs",
-    "tokens:check": "node scripts/check-tokens.mjs"
+    "tokens:check": "node scripts/check-tokens.mjs",
+    "bundle:measure": "node scripts/measure-bundle.mjs",
+    "bundle:check": "node scripts/measure-bundle.mjs --check --report-out .next/bundle-report.md"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",
