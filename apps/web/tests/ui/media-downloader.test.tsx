@@ -1515,7 +1515,7 @@ describe('Spec 140 PR-140-4: MediaDownloader — Abort (§3 item 8)', () => {
       expect(
         screen
           .getAllByTestId('downloader-failed-item')
-          .every((el) => el.textContent?.includes('Download was cancelled.'))
+          .every((el) => el.textContent.includes('Download was cancelled.'))
       ).toBe(true);
 
       // The terminal banner state is Cancelled — never 100%/completed.

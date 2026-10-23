@@ -868,7 +868,6 @@ export function useDownloaderFolders(
     if (hasInitialFolders) return;
     if (!foldersQuery.isSuccess || provisionStartedRef.current) return;
     const loadedFolders = foldersQuery.data;
-    if (!loadedFolders) return;
     const existing = findRootDownloadsFolder(loadedFolders);
     provisionStartedRef.current = true;
     if (existing) {
