@@ -22,11 +22,19 @@
  * PR-M142-1 on a separate branch. The `expectMinTouchHeight` helper
  * stays in fixtures/mobile.ts for that slice and surface suites to
  * adopt.
+ *
+ * PR-M142-1 adds the tall-dialog case at the bottom of this file: the
+ * shared Dialog geometry (F04/F05) proven at mobile-320 against the
+ * app's own compiled CSS.
  */
 
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { createFixtureState, installApiFixtures } from './fixtures/api';
-import { expectNoDocumentOverflow, expectWithinViewport } from './fixtures/mobile';
+import {
+  expectMinTouchHeight,
+  expectNoDocumentOverflow,
+  expectWithinViewport,
+} from './fixtures/mobile';
 import { SESSION_COOKIE, TENANT } from './fixtures/tenant';
 
 /**
@@ -111,6 +119,151 @@ test.describe('mobile layout', () => {
       .first();
     await expect(sidebarTrigger).toBeVisible();
     await expectWithinViewport(sidebarTrigger, page);
+    await expectNoDocumentOverflow(page);
+  });
+});
+
+/**
+ * Tall-dialog geometry (spec 142 F04/F05, PR-M142-1).
+ *
+ * No shipped route renders the shared Dialog primitive yet — surfaces
+ * adopt it in specs 130–136 — so this case cannot open a real surface
+ * dialog. Instead it renders a harness page whose markup is the
+ * primitive's exact rendered output (the DialogContent, close-button,
+ * footer and Button class contracts as of this PR, copied from
+ * dialog.tsx / button.tsx) styled by the app's own compiled stylesheet
+ * (the same CSS bundle /login ships). That proves the geometry
+ * contract those classes produce in a real browser: 16px gutters,
+ * dvh-bounded height, internal scrolling, reachable footer actions,
+ * and 44px targets. When a surface ships a shared Dialog, a
+ * surface-owned case should supersede this harness.
+ */
+test.describe('mobile layout — shared dialog geometry (PR-M142-1)', () => {
+  test('tall dialog at 320px: gutters, dvh bound, internal scroll, Action/Cancel reachable', async (
+    { page },
+    testInfo
+  ) => {
+    test.skip(
+      testInfo.project.name !== 'mobile-320',
+      'the tall-dialog case is specified at mobile-320 only'
+    );
+    // A short viewport as well as a narrow one: 320×480.
+    await page.setViewportSize({ width: 320, height: 480 });
+    await page.goto('/login');
+    const cssHrefs = await page
+      .locator('link[rel="stylesheet"]')
+      .evaluateAll((links) =>
+        links
+          .map((link) => link.getAttribute('href'))
+          .filter((href): href is string => Boolean(href))
+      );
+    expect(cssHrefs.length, 'the app ships a compiled stylesheet').toBeGreaterThan(0);
+
+    const buttonBase =
+      'inline-flex shrink-0 items-center justify-center gap-2 rounded-sm text-body font-medium whitespace-nowrap transition-colors duration-base ease-standard outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none disabled:opacity-50';
+    const paragraphs = Array.from(
+      { length: 40 },
+      (_, i) =>
+        `<p>Paragraph ${i + 1}: deleting this workspace removes every queued post, media item and connected account for all members, and cannot be undone.</p>`
+    ).join('');
+    await page.setContent(`<!DOCTYPE html>
+<html>
+  <head>
+    ${cssHrefs.map((href) => `<link rel="stylesheet" href="${href}">`).join('\n')}
+  </head>
+  <body>
+    <div data-slot="dialog-overlay" class="fixed inset-0 z-dialog bg-neutral-black/60"></div>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="harness-dialog-title"
+      data-slot="dialog-content"
+      class="fixed inset-x-4 top-1/2 z-dialog grid max-h-dvh -translate-y-1/2 gap-4 overflow-y-auto rounded-md border border-line bg-panel p-6 text-ink shadow-modal duration-base outline-none sm:right-auto sm:left-1/2 sm:w-full sm:max-w-lg sm:-translate-x-1/2"
+    >
+      <div data-slot="dialog-header" class="flex flex-col gap-2 text-left">
+        <h2 id="harness-dialog-title" data-slot="dialog-title" class="text-lg leading-heading font-semibold">
+          Delete this workspace?
+        </h2>
+        <p data-slot="dialog-description" class="text-body text-ink-sub">
+          Read the consequences in full before confirming.
+        </p>
+      </div>
+      <div class="flex flex-col gap-3 text-body">${paragraphs}</div>
+      <div data-slot="dialog-footer" class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" data-slot="button" class="${buttonBase} border border-line bg-panel text-ink shadow-card hover:bg-hover h-11 px-4 py-2">
+          Cancel
+        </button>
+        <button type="button" data-slot="button" class="${buttonBase} bg-brand-rose text-neutral-white hover:bg-brand-rose/90 focus-visible:outline-brand-rose h-11 px-4 py-2">
+          Delete workspace
+        </button>
+      </div>
+      <button
+        type="button"
+        data-slot="dialog-close"
+        aria-label="Close"
+        class="absolute top-1 right-1 inline-flex size-11 items-center justify-center rounded-sm text-ink-sub outline-none transition-colors hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold disabled:pointer-events-none"
+      >
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M18 6 6 18"></path>
+          <path d="m6 6 12 12"></path>
+        </svg>
+        <span class="sr-only">Close</span>
+      </button>
+    </div>
+  </body>
+</html>`);
+
+    const panel = page.locator('[data-slot="dialog-content"]');
+    await expect(panel).toBeVisible();
+    // The compiled stylesheet is applied (the panel is really fixed).
+    await expect
+      .poll(() => panel.evaluate((el) => getComputedStyle(el).position))
+      .toBe('fixed');
+
+    const viewport = page.viewportSize();
+    if (!viewport) throw new Error('dialog case: page has no viewport');
+    const panelBox = await panel.boundingBox();
+    if (!panelBox) throw new Error('dialog case: panel has no bounding box');
+    // F04: 16px gutters on both sides — never edge-to-edge at 320px.
+    expect(panelBox.x, 'dialog left gutter').toBeGreaterThanOrEqual(12);
+    expect(panelBox.x + panelBox.width, 'dialog right edge inside the viewport').toBeLessThanOrEqual(
+      viewport.width - 12
+    );
+    // F04: height bounded by the (dynamic) viewport, top on screen.
+    expect(panelBox.y, 'dialog top must be on screen').toBeGreaterThanOrEqual(-1);
+    expect(panelBox.height, 'dialog height must not exceed the viewport height').toBeLessThanOrEqual(
+      viewport.height + 1
+    );
+    // Tall content scrolls inside the panel; the document never scrolls sideways.
+    const scrollable = await panel.evaluate((el) => el.scrollHeight > el.clientHeight);
+    expect(scrollable, 'tall dialog content must overflow the panel internally').toBe(true);
+    await expectNoDocumentOverflow(page);
+
+    // F05/F01: close and footer actions are 44px touch targets.
+    const close = page.getByRole('button', { name: 'Close' });
+    await expectMinTouchHeight(close);
+    const closeBox = await close.boundingBox();
+    if (!closeBox) throw new Error('dialog case: close button has no bounding box');
+    expect(closeBox.width, 'close target must be at least 44px wide').toBeGreaterThanOrEqual(44);
+
+    // F04: after scrolling the panel, both footer actions are reachable
+    // inside the panel and meet the touch minimum.
+    await panel.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    for (const name of ['Cancel', 'Delete workspace']) {
+      const action = page.getByRole('button', { name });
+      await expectMinTouchHeight(action);
+      const box = await action.boundingBox();
+      if (!box) throw new Error(`dialog case: ${name} has no bounding box`);
+      expect(box.y, `${name} must be reachable inside the panel`).toBeGreaterThanOrEqual(
+        panelBox.y - 1
+      );
+      expect(
+        box.y + box.height,
+        `${name} must be reachable inside the panel`
+      ).toBeLessThanOrEqual(panelBox.y + panelBox.height + 1);
+    }
     await expectNoDocumentOverflow(page);
   });
 });
