@@ -187,7 +187,9 @@ export function TimezoneSelectorStep({
           type="button"
           data-testid="proceed-to-step2-button"
           disabled={isSameAsActive}
-          disabledReason={isSameAsActive ? 'Choose a different timezone to continue.' : undefined}
+          {...(isSameAsActive
+            ? { disabledReason: 'Choose a different timezone to continue.' }
+            : {})}
           onClick={onProceed}
         >
           Review change
