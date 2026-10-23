@@ -312,9 +312,10 @@ describe("signup OTP step (§5.4 pattern)", () => {
     await user.type(otpField, "123456");
     await user.click(screen.getByRole("button", { name: "Verify & Activate Account" }));
 
+    // Inline under the field and as the summary entry — identical wording.
     expect(
-      await screen.findByText("Verification code has expired. Please request a new one.")
-    ).toBeTruthy();
+      await screen.findAllByText("Verification code has expired. Please request a new one.")
+    ).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Send fresh code" })).toBeTruthy();
   });
 
