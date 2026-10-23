@@ -2,6 +2,9 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
 // Side effect: registers the X connect config (spec 127).
 import '@/lib/connect/platforms/x';
+// Side effect: registers the Instagram + Threads connect configs (spec 124).
+import '@/lib/connect/platforms/instagram';
+import '@/lib/connect/platforms/threads';
 import {
   getPlatformConnectConfig,
   isKnownPlatform,

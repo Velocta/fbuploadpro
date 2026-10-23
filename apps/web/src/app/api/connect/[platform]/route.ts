@@ -3,6 +3,9 @@ import { buildTenantUrl, getSessionSecret } from '@fbuploadpro/contracts';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 // Side effect: registers the X connect config (spec 127).
 import '@/lib/connect/platforms/x';
+// Side effect: registers the Instagram + Threads connect configs (spec 124).
+import '@/lib/connect/platforms/instagram';
+import '@/lib/connect/platforms/threads';
 import {
   getPlatformConnectConfig,
   isByocPlatform,
