@@ -29,14 +29,18 @@ export const YOUTUBE_TITLE_MAX_CHARS = 100;
 export const YOUTUBE_DESCRIPTION_MAX_BYTES = 5000;
 export const YOUTUBE_TAGS_MAX_CHARS = 500;
 
-export const youtubePlatformOptionsSchema = z.object({
-  privacy: z.enum(YOUTUBE_PRIVACY_STATUSES),
-  /** Explicit audience declaration — required on every upload, never omitted. */
-  madeForKids: z.boolean(),
-  tags: z.array(z.string()).optional(),
-  /** YouTube category id (a numeric string, e.g. "22" for People & Blogs). */
-  categoryId: z.string().min(1).optional(),
-});
+export const youtubePlatformOptionsSchema = z
+  .object({
+    privacy: z.enum(YOUTUBE_PRIVACY_STATUSES),
+    /** Explicit audience declaration — required on every upload, never omitted. */
+    madeForKids: z.boolean(),
+    tags: z.array(z.string()).optional(),
+    /** YouTube category id (a numeric string, e.g. "22" for People & Blogs). */
+    categoryId: z.string().min(1).optional(),
+  })
+  // Strict like every sibling platform schema: unknown keys fail
+  // validation instead of being silently stripped.
+  .strict();
 
 export type YouTubePlatformOptions = z.infer<typeof youtubePlatformOptionsSchema>;
 
