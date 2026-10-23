@@ -8,23 +8,35 @@
  * - Real session: the frame tree carries the session's real identity,
  *   the skip link, the content region, the header, the Banner slot and
  *   the Toaster mount.
+ *
+ * PR-130-3 extends the home-page coverage to rendered content
+ * (spec 130 §5.5 / T34): the §4.2 welcome copy verbatim, the
+ * display-name → subdomain-slug fallback, the Card-primitive/token
+ * construction with zero inline styles, and the loading geometry
+ * matching the shipped home. No assertion below replaces or weakens
+ * the PR-130-1 suite above it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 const mockGetSession = vi.fn();
 vi.mock('@/lib/auth', () => ({
   getServerSessionContext: () => mockGetSession(),
 }));
 
+const mockGetDisplayName = vi.fn();
 vi.mock('../../src/app/tenant/[subdomain]/workspace-display-name', () => ({
-  getWorkspaceDisplayName: vi.fn(async () => 'Acme Corp'),
+  getWorkspaceDisplayName: (...args: unknown[]) => mockGetDisplayName(...args),
 }));
 
 import TenantLayout, { generateMetadata } from '../../src/app/tenant/[subdomain]/layout';
-import TenantIndexPage from '../../src/app/tenant/[subdomain]/page';
+import TenantIndexPage, { metadata as homeMetadata } from '../../src/app/tenant/[subdomain]/page';
+import TenantLoading from '../../src/app/tenant/[subdomain]/loading';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { Toaster } from '@/components/shared/ui/toast';
+import { Card } from '@/components/shared/ui/card';
+import { Skeleton } from '@/components/shared/ui/skeleton';
 
 const SESSION = {
   userId: 'user-1',
@@ -58,6 +70,8 @@ async function renderLayout() {
 describe('Tenant Workspace Shell', () => {
   beforeEach(() => {
     mockGetSession.mockReset();
+    mockGetDisplayName.mockReset();
+    mockGetDisplayName.mockResolvedValue('Acme Corp');
   });
 
   it('redirects to login on a null session — never renders a fabricated user', async () => {
@@ -139,5 +153,103 @@ describe('Tenant Workspace Shell', () => {
     const elements = collectElements(pageJsx);
     const heading = elements.find((el) => el.type === 'h1');
     expect(heading?.props.children).toEqual(['Workspace: ', 'Acme Corp']);
+  });
+});
+
+describe('Tenant workspace home — preservation rebuild (spec 130 §5.5, PR-130-3)', () => {
+  beforeEach(() => {
+    mockGetDisplayName.mockReset();
+    mockGetDisplayName.mockResolvedValue('Acme Corp');
+  });
+
+  async function renderHome() {
+    return TenantIndexPage({
+      params: Promise.resolve({ subdomain: 'acme' }),
+    });
+  }
+
+  it('renders the §4.2 welcome copy verbatim — heading and body, nothing added', async () => {
+    const pageJsx = await renderHome();
+    const elements = collectElements(pageJsx);
+
+    // Exactly one heading on the home (logical heading order, §8.5).
+    const headings = elements.filter((el) => el.type === 'h1');
+    expect(headings).toHaveLength(1);
+
+    // Body copy verbatim (§4.2): the welcome sentence, as its own paragraph.
+    const body = elements.find((el) => el.type === 'p');
+    expect(body?.props.children).toBe('Welcome to your FBUploadPro workspace.');
+
+    // OD130-1 = A (preservation): no actions or extra sections ship —
+    // the card contains no links or buttons at all.
+    expect(elements.some((el) => el.type === 'a' || el.type === 'button')).toBe(false);
+
+    // Rendered markup carries both verbatim strings.
+    const html = renderToStaticMarkup(pageJsx).replaceAll('<!-- -->', '');
+    expect(html).toContain('Workspace: Acme Corp');
+    expect(html).toContain('Welcome to your FBUploadPro workspace.');
+  });
+
+  it('falls back to the subdomain slug when the display-name lookup returns null', async () => {
+    mockGetDisplayName.mockResolvedValue(null);
+
+    const pageJsx = await renderHome();
+    const elements = collectElements(pageJsx);
+    const heading = elements.find((el) => el.type === 'h1');
+    // §4.1: the slug is the workspace's real identifier — the deliberate
+    // name-lookup fallback, not fabricated identity data.
+    expect(heading?.props.children).toEqual(['Workspace: ', 'acme']);
+  });
+
+  it('builds the welcome card on the shared/ui Card primitive with tokens and zero inline styles', async () => {
+    const pageJsx = await renderHome();
+    const elements = collectElements(pageJsx);
+
+    const card = elements.find((el) => el.type === Card);
+    expect(card).toBeDefined();
+    expect(card?.props.className).toContain('gap-1');
+    expect(card?.props.className).toContain('px-6');
+
+    // Zero inline styles anywhere in the home tree (§8.1 ratchet duty).
+    expect(elements.every((el) => el.props.style === undefined)).toBe(true);
+
+    // The rendered card carries the primitive's token classes, and the
+    // markup contains no style attribute at all.
+    const html = renderToStaticMarkup(pageJsx);
+    expect(html).toContain('data-slot="card"');
+    expect(html).toContain('bg-panel');
+    expect(html).toContain('border-line');
+    expect(html).not.toContain('style=');
+  });
+
+  it('exports the plain Home section title for the layout template', () => {
+    expect(homeMetadata.title).toBe('Home');
+  });
+
+  it('loading geometry matches the shipped home — same measure, same Card, skeleton rows at final geometry', async () => {
+    const pageJsx = await renderHome();
+    const pageElements = collectElements(pageJsx);
+    const loadingJsx = TenantLoading();
+    const loadingElements = collectElements(loadingJsx);
+
+    // Same outer measure/padding: the skeleton stands where the card lands.
+    const pageOuter = pageJsx as AnyElement;
+    const loadingOuter = loadingJsx as AnyElement;
+    expect(loadingOuter.props.className).toBe(pageOuter.props.className);
+    expect(loadingOuter.props['aria-busy']).toBe('true');
+
+    // Same Card with the same geometry overrides.
+    const pageCard = pageElements.find((el) => el.type === Card);
+    const loadingCard = loadingElements.find((el) => el.type === Card);
+    expect(loadingCard).toBeDefined();
+    expect(loadingCard?.props.className).toBe(pageCard?.props.className);
+
+    // Rows mirror the home's content (heading line + welcome line and
+    // its wrapped second line); the heading skeleton is width-capped so
+    // it cannot overflow the card at 320px.
+    const skeletons = loadingElements.filter((el) => el.type === Skeleton);
+    expect(skeletons).toHaveLength(3);
+    expect(skeletons[0]?.props.className).toContain('max-w-full');
+    expect(skeletons[1]?.props.className).toContain('w-full');
   });
 });
