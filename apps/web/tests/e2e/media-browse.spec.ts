@@ -18,11 +18,7 @@
 
 import { test, expect, type Page } from '@playwright/test';
 import { createFixtureState, installApiFixtures } from './fixtures/api';
-import {
-  expectMinTouchHeight,
-  expectNoDocumentOverflow,
-  expectWithinViewport,
-} from './fixtures/mobile';
+import { expectMinTouchHeight, expectWithinViewport } from './fixtures/mobile';
 import { mediaItemFixture, SESSION_COOKIE, TENANT } from './fixtures/tenant';
 
 const ITEM_A_ID = '55555555-5555-4555-8555-555555555555';
@@ -53,6 +49,29 @@ async function maybeScreenshot(page: Page, name: string): Promise<void> {
   const dir = process.env.MEDIA_SCREENSHOT_DIR;
   if (!dir) return;
   await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true });
+}
+
+/**
+ * The shared `expectNoDocumentOverflow` metric, polled until settled:
+ * on first paint the tenant shell (sidebar) can still be mid-collapse
+ * for a frame, which reads as a transient scroll width. The invariant
+ * is that the SETTLED layout never overflows (spec 142 §3).
+ */
+async function expectNoOverflowSettled(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const doc = document.documentElement;
+          const body = document.body;
+          return (
+            doc.scrollWidth <= doc.clientWidth + 1 &&
+            (body?.scrollWidth ?? 0) <= (body?.clientWidth ?? 0) + 1
+          );
+        }),
+      { timeout: 10_000, intervals: [250, 500, 1000] }
+    )
+    .toBe(true);
 }
 
 test.describe('media browse', () => {
@@ -95,6 +114,30 @@ test.describe('media browse', () => {
       'aria-checked',
       'true'
     );
+
+    // Keyboard walk (browse view): the Type menu opens from the
+    // keyboard, Esc closes it and returns focus to the trigger; the
+    // segmented switch activates from the keyboard.
+    const typeTrigger = page.getByTestId('media-type-select');
+    await typeTrigger.focus();
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByRole('menu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(typeTrigger).toBeFocused();
+    await page.getByTestId('view-mode-table-btn').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('media-table-view')).toBeVisible();
+    await page.getByTestId('view-mode-grid-btn').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('media-assets-grid')).toBeVisible();
+
+    // Greyscale pass capture (states must read without colour — every
+    // state on this view also carries an icon or text).
+    if (process.env.MEDIA_SCREENSHOT_DIR) {
+      await page.addStyleTag({ content: '* { filter: grayscale(1) !important; }' });
+      await maybeScreenshot(page, 'browse-grid-greyscale');
+    }
   });
 
   test('empty library shows the first-use state with Upload as its one action', async ({
@@ -126,7 +169,7 @@ test.describe('media browse', () => {
       await page.setViewportSize({ width, height: 844 });
       await gotoMedia(page);
 
-      await expectNoDocumentOverflow(page);
+      await expectNoOverflowSettled(page);
       await expectMinTouchHeight(page.getByTestId('upload-files-btn'));
       await expectWithinViewport(page.getByTestId('upload-files-btn'), page);
       await expectWithinViewport(page.getByTestId('media-search-input'), page);
@@ -148,7 +191,7 @@ test.describe('media browse', () => {
       await page.getByTestId('view-mode-table-btn').click();
       await expect(page.getByTestId(`media-row-${ITEM_A_ID}`)).toBeVisible();
       await expectMinTouchHeight(page.getByTestId(`row-action-preview-${ITEM_A_ID}`));
-      await expectNoDocumentOverflow(page);
+      await expectNoOverflowSettled(page);
       await maybeScreenshot(page, `browse-mobile-${width}`);
       await page.getByTestId('view-mode-grid-btn').click();
     }
