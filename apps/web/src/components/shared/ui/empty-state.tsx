@@ -7,12 +7,15 @@
  * - cleared: positive confirmation of a finished state, no CTA pressure —
  *   pass no action.
  * - no-permission: why it is empty and who can fix it, one action at most.
+ * - not-found: what's-here framing for a missing thing — the likely
+ *   cause (moved / no longer exists) plus the one primary action back
+ *   to a known place.
  */
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
-const EMPTY_STATE_TYPES = ["first-use", "no-results", "cleared", "no-permission"] as const;
+const EMPTY_STATE_TYPES = ["first-use", "no-results", "cleared", "no-permission", "not-found"] as const;
 type EmptyStateType = (typeof EMPTY_STATE_TYPES)[number];
 
 type EmptyStateProps = React.ComponentProps<"div"> & {
