@@ -160,7 +160,139 @@ fi
 # className strings fail; only token-backed utilities and the token scales
 # may be used. Exceptions need an `arbitrary-allow <file> <token>` line with
 # a reason in apps/web/design-system-baseline.txt.
+#
+# Multi-line hardening (spec 129 follow-up): the scan does NOT work line by
+# line. A small awk lexer first extracts every className attribute
+# expression — className="...", className='...' and className={ ... } with
+# balanced braces and string/template/${} awareness — folding continuation
+# lines into a single record (newlines become spaces), so arbitrary values
+# hidden inside a multi-line cn(...) call or a multi-line template literal
+# are scanned too. (The old line-based scan only ever saw lines carrying
+# the word `className`, so continuation lines were never checked — the
+# sidebar's allowlisted transition-[...] classes included.)
+# Lexer heuristics, same class as the rest of this script: it skips
+# strings/comments while searching (single-quoted search strings bail at
+# end-of-line, which bounds the damage from apostrophes in JSX text), and
+# regex literals inside className expressions can confuse it.
 # ---------------------------------------------------------------------------
+CHECK10_AWK="$(mktemp)"
+cat > "$CHECK10_AWK" <<'AWK_EOF'
+# className-expression extractor for Check 10 (see the shell comments).
+# Emits one record per className attribute expression:
+#   <file>:<line-of-className>:<expression text, newlines folded to spaces>
+BEGIN { buf = "" }
+{ buf = buf $0 "\n" }
+END {
+  len = length(buf)
+  for (j = 1; j <= len; j++) ch[j] = substr(buf, j, 1)
+  n = len
+  state = 0; sm = 0; em = 0; line = 1; startline = 0; out = ""; depth = 0
+  i = 1
+  while (i <= n) {
+    c = ch[i]
+    if (state == 0) {
+      # Searching for the className keyword; sm tracks skipped literals:
+      # 0 code, 1 '..' 2 ".." 3 `..` (opaque), 4 // comment, 5 /* comment.
+      if (sm == 0) {
+        if (c == "'") { sm = 1; i++ }
+        else if (c == "\"") { sm = 2; i++ }
+        else if (c == "`") { sm = 3; i++ }
+        else if (c == "/" && ch[i+1] == "/") { sm = 4; i += 2 }
+        else if (c == "/" && ch[i+1] == "*") { sm = 5; i += 2 }
+        else if (c == "c" && ch[i+1] == "l" && ch[i+2] == "a" && ch[i+3] == "s" && ch[i+4] == "s" && ch[i+5] == "N" && ch[i+6] == "a" && ch[i+7] == "m" && ch[i+8] == "e" && !(ch[i-1] ~ /[A-Za-z0-9_$]/) && !(ch[i+9] ~ /[A-Za-z0-9_$]/)) { startline = line; state = 1; i += 9 }
+        else { if (c == "\n") line++; i++ }
+      } else if (sm == 1 || sm == 2) {
+        q = (sm == 1 ? "'" : "\"")
+        if (c == "\\") { if (ch[i+1] == "\n") line++; i += 2 }
+        else if (c == q || c == "\n") { if (c == "\n") line++; sm = 0; i++ }
+        else i++
+      } else if (sm == 3) {
+        if (c == "\\") { if (ch[i+1] == "\n") line++; i += 2 }
+        else if (c == "`") { sm = 0; i++ }
+        else { if (c == "\n") line++; i++ }
+      } else if (sm == 4) {
+        if (c == "\n") { sm = 0; line++ }
+        i++
+      } else if (sm == 5) {
+        if (c == "*" && ch[i+1] == "/") { sm = 0; i += 2 }
+        else { if (c == "\n") line++; i++ }
+      }
+    } else if (state == 1) {
+      # After the keyword: only whitespace may precede '='.
+      if (c == " " || c == "\t" || c == "\r") i++
+      else if (c == "\n") { line++; i++ }
+      else if (c == "=") { state = 2; i++ }
+      else state = 0
+    } else if (state == 2) {
+      # After '=': dispatch on the value form.
+      if (c == " " || c == "\t" || c == "\r") i++
+      else if (c == "\n") { line++; i++ }
+      else if (c == "\"") { state = 3; out = "\""; i++ }
+      else if (c == "'") { state = 4; out = "'"; i++ }
+      else if (c == "{") { state = 5; em = 0; depth = 1; out = "{"; i++ }
+      else if (c ~ /[A-Za-z_$]/) {
+        out = ""
+        while (i <= n && ch[i] ~ /[A-Za-z0-9_$.]/) { out = out ch[i]; i++ }
+        printf "%s:%d:%s\n", FILENAME, startline, out
+        out = ""; state = 0
+      }
+      else state = 0
+    } else if (state == 3 || state == 4) {
+      # JSX attribute string: ends at the matching quote (JSX has no
+      # backslash escapes in attribute strings); may span lines.
+      q = (state == 3 ? "\"" : "'")
+      if (c == q) { out = out c; printf "%s:%d:%s\n", FILENAME, startline, out; out = ""; state = 0; i++ }
+      else if (c == "\n") { out = out " "; line++; i++ }
+      else { out = out c; i++ }
+    } else if (state == 5) {
+      # Inside className={ ... }: em tracks 0 code, 1 '..', 2 "..",
+      # 3 template, 4 // comment, 5 /* comment. resume[d] records that
+      # depth d was entered from a template ${...} at depth d-1.
+      if (em == 0) {
+        if (c == "'") { em = 1; out = out c; i++ }
+        else if (c == "\"") { em = 2; out = out c; i++ }
+        else if (c == "`") { em = 3; out = out c; i++ }
+        else if (c == "/" && ch[i+1] == "/") { em = 4; out = out " "; i += 2 }
+        else if (c == "/" && ch[i+1] == "*") { em = 5; out = out " "; i += 2 }
+        else if (c == "{") { depth++; out = out c; i++ }
+        else if (c == "}") {
+          depth--; out = out c; i++
+          if (depth == 0) { printf "%s:%d:%s\n", FILENAME, startline, out; out = ""; state = 0 }
+          else if ((depth + 1) in resume) { em = resume[depth + 1]; delete resume[depth + 1] }
+        }
+        else if (c == "\n") { out = out " "; line++; i++ }
+        else { out = out c; i++ }
+      } else if (em == 1 || em == 2) {
+        q = (em == 1 ? "'" : "\"")
+        if (c == "\\") {
+          out = out c; nx = ch[i+1]
+          if (nx == "\n") { out = out " "; line++ } else out = out nx
+          i += 2
+        }
+        else if (c == q) { em = 0; out = out c; i++ }
+        else if (c == "\n") { out = out " "; line++; i++ }
+        else { out = out c; i++ }
+      } else if (em == 3) {
+        if (c == "\\") {
+          out = out c; nx = ch[i+1]
+          if (nx == "\n") { out = out " "; line++ } else out = out nx
+          i += 2
+        }
+        else if (c == "`") { em = 0; out = out c; i++ }
+        else if (c == "$" && ch[i+1] == "{") { resume[depth + 1] = 3; depth++; em = 0; out = out "${"; i += 2 }
+        else if (c == "\n") { out = out " "; line++; i++ }
+        else { out = out c; i++ }
+      } else if (em == 4) {
+        if (c == "\n") { em = 0; out = out " "; line++ }
+        i++
+      } else if (em == 5) {
+        if (c == "*" && ch[i+1] == "/") { em = 0; i += 2 }
+        else { if (c == "\n") line++; i++ }
+      }
+    }
+  }
+}
+AWK_EOF
 while IFS= read -r match; do
   file="${match%%:*}"
   cleaned="$(printf '%s' "$match" | sed -E 's/\$\{[^}]*\}//g')"
@@ -169,9 +301,13 @@ while IFS= read -r match; do
   # legitimately contain "=" and are variants, not values (spec 129 §5.4,
   # PR-F3 coordinator ruling). The old "[^...<>=]+" pattern mangled such a
   # token to "data-[state", flagged it, and made it un-allowlistable.
-  # Delimiters here are quotes, backticks, braces, parens, commas and angle
-  # brackets; whitespace splitting happens via word expansion.
-  for tok in $(printf '%s' "$cleaned" | tr "\"'\`{}(),<>" ' ' || true); do
+  # Delimiters here are quotes, backticks, braces, parens and angle
+  # brackets; whitespace splitting happens via word expansion. Commas are
+  # NOT delimiters (multi-line hardening): bracket-form values may contain
+  # commas (transition-[left,right,width]) and the baseline allowlist
+  # matches exact tokens, so a token must survive tokenisation whole;
+  # cn(...) arguments are already separated by their quotes.
+  for tok in $(printf '%s' "$cleaned" | tr "\"'\`{}()<>" ' ' || true); do
     case "$tok" in
       *' '*|'') continue ;;
     esac
@@ -200,7 +336,12 @@ while IFS= read -r match; do
       fi
     fi
   done
-done < <(grep -rn 'className' --include='*.ts' --include='*.tsx' apps/web/src 2>/dev/null || true)
+done < <(
+  while IFS= read -r c10_file; do
+    awk -f "$CHECK10_AWK" "$c10_file" 2>/dev/null || true
+  done < <(grep -rl 'className' --include='*.ts' --include='*.tsx' apps/web/src 2>/dev/null || true)
+)
+rm -f "$CHECK10_AWK"
 
 # ---------------------------------------------------------------------------
 # Check 11: CSS files under apps/web/src stay literal-free (spec 129 §5.4).
