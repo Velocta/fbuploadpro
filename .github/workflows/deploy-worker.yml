@@ -49,12 +49,13 @@ jobs:
 
       # The wrangler-action aborts the whole deploy when a listed secret
       # has no value, and the X global-app secrets (spec 127, D7) do not
-      # exist until Shahzeb creates the X developer app. The Post for Me
-      # API key (spec 125, D3) does not exist yet either. Build the
-      # secret list dynamically: those names are uploaded only once
-      # their secrets are set, so worker deploys stay green in the
-      # meantime and each platform lights up automatically when its
-      # secrets land.
+      # exist until Shahzeb creates the X developer app. Build the secret
+      # list dynamically: X names are uploaded only once both secrets are
+      # set, so worker deploys stay green in the meantime and X lights up
+      # automatically when the secrets land. The Post for Me key
+      # (specs 125/126) follows the same rule: it does not exist until
+      # Shahzeb creates the provider account, and YouTube/TikTok light
+      # up automatically once it is set.
       - name: Build worker secret list
         id: worker-secrets
         if: steps.check-credentials.outputs.has_token == 'true'
@@ -81,7 +82,7 @@ jobs:
             if [ -n "$POST_FOR_ME_API_KEY" ]; then
               echo "POST_FOR_ME_API_KEY"
             else
-              echo "Post for Me API key is not set yet; deploying without it (YouTube publishing stays dormant)." >&2
+              echo "Post for Me API key is not set yet; deploying without it (YouTube/TikTok publishing stays dormant)." >&2
             fi
             echo "EOF"
           } >> $GITHUB_OUTPUT
@@ -104,6 +105,7 @@ jobs:
           POST_FOR_ME_API_KEY: ${{ secrets.POST_FOR_ME_API_KEY }}
           X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
           X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+          POST_FOR_ME_API_KEY: ${{ secrets.POST_FOR_ME_API_KEY }}
 
       - name: Smoke check worker /health (spec 116)
         if: steps.check-credentials.outputs.has_token == 'true'
