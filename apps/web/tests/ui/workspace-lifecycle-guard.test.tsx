@@ -10,7 +10,7 @@ import {
   setupWorkspaceLifecycleGuard,
 } from '@/components/workspace/workspace-lifecycle-guard';
 import { broadcastAuthEvent, completeAuthRedirect } from '@/lib/auth-broadcast';
-import { render } from '../components/setup';
+import { render } from '@testing-library/react';
 
 describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
   beforeEach(() => {
@@ -19,8 +19,10 @@ describe('WorkspaceLifecycleGuard & Cross-Tab Auth Synchronization', () => {
 
   describe('Component Rendering', () => {
     it('renders null without throwing error', () => {
-      const { html } = render(<WorkspaceLifecycleGuard userId="user-1" userEmail="test@gmail.com" />);
-      expect(html).toBe('');
+      const { container } = render(
+        <WorkspaceLifecycleGuard userId="user-1" userEmail="test@gmail.com" />
+      );
+      expect(container.innerHTML).toBe('');
     });
   });
 

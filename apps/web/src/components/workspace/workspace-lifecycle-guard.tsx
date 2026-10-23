@@ -1,10 +1,153 @@
 'use client';
 
+/**
+ * WorkspaceLifecycleGuard — invisible shell infrastructure, rebuilt
+ * clean (spec 130 §5.3/T25, PR-130-2b). All four duties are preserved
+ * verbatim in behaviour (spec §4.1):
+ *  1. Active-user sync to `fbup_active_user` (the allowlisted auth
+ *     mechanism of spec §3.3 — stays direct localStorage by design).
+ *  2. Cross-tab auth sync: BroadcastChannel `fbup_auth` — LOGOUT →
+ *     `/login?logout=success`; LOGIN / USER_SWITCH / SESSION_CHANGE(D)
+ *     from a different identity (or an explicit USER_SWITCH) → reload;
+ *     same-identity events do not reload. The storage-event fallback
+ *     mirrors this (`fbup_logout_event`, `fbup_active_user` changes).
+ *  3. bfcache restore (`pageshow` persisted) → reload.
+ *  4. The global fetch wrapper's 403 `ACCOUNT_SUSPENDED` →
+ *     `/account-suspended` interception.
+ *
+ * OD130-5 (DEFERRED-to-default, 2026-10-23): the fetch wrapper is
+ * PRESERVED, rebuilt clean — the deferral is recorded here and in
+ * the PR body; its long-term home (typed-client error path vs.
+ * server-side enforcement) is a future decision, not this PR's.
+ *
+ * The rebuild removes the file's 4 `any`s and 4 empty catches: the
+ * wrapper markers live on a typed record, and every catch is a named,
+ * commented contract (best-effort infra must never throw into the
+ * shell — the failure mode each catch guards is stated at the site).
+ */
+
 import { useEffect } from 'react';
 
 export interface WorkspaceLifecycleGuardProps {
   userId?: string | null | undefined;
   userEmail?: string | null | undefined;
+}
+
+interface WrappedFetch {
+  [key: symbol]: unknown;
+}
+
+const FETCH_WRAPPED = Symbol.for('fbup.fetch_wrapped');
+const FETCH_ORIGINAL = Symbol.for('fbup.fetch_original');
+
+function readActiveUserId(fallbackUserId?: string | null): string | null {
+  if (fallbackUserId) return fallbackUserId;
+  let stored: string | null = null;
+  try {
+    stored =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem('fbup_active_user')
+        : null;
+  } catch {
+    // Storage unavailable (private mode / disabled): identity falls
+    // back to "unknown", which never suppresses a reload.
+    stored = null;
+  }
+  return stored;
+}
+
+interface AuthBroadcastData {
+  type?: string;
+  userId?: string;
+  email?: string;
+}
+
+function handleAuthBroadcast(
+  data: AuthBroadcastData,
+  userId?: string | null,
+  userEmail?: string | null
+): void {
+  if (data.type === 'LOGOUT') {
+    window.location.href = '/login?logout=success';
+    return;
+  }
+
+  if (
+    data.type === 'LOGIN' ||
+    data.type === 'USER_SWITCH' ||
+    data.type === 'SESSION_CHANGE' ||
+    data.type === 'SESSION_CHANGED'
+  ) {
+    const incomingUserId = data.userId;
+    const incomingUserEmail = data.email;
+    const activeId = readActiveUserId(userId);
+
+    const isSameUser = Boolean(
+      activeId &&
+        incomingUserId &&
+        activeId === incomingUserId &&
+        (!userEmail ||
+          !incomingUserEmail ||
+          userEmail.toLowerCase() === incomingUserEmail.toLowerCase())
+    );
+
+    // Reload when a different user logs in, a user-switch is
+    // explicitly dispatched, or the identity changed.
+    if (!isSameUser || data.type === 'USER_SWITCH') {
+      window.location.reload();
+    }
+  }
+}
+
+function installSuspendedFetchWrapper(): () => void {
+  if (typeof window === 'undefined' || typeof window.fetch !== 'function') {
+    return () => undefined;
+  }
+
+  const current = window.fetch as typeof window.fetch & WrappedFetch;
+  if (current[FETCH_WRAPPED]) {
+    // Already wrapped (e.g. a second guard mount): keep the existing
+    // wrapper and its captured original; this mount owns no restore.
+    return () => undefined;
+  }
+
+  const originalFetch = window.fetch;
+  const boundFetch = originalFetch.bind(window);
+  const wrappedFetch = (async (...args: Parameters<typeof fetch>) => {
+    const response = await boundFetch(...args);
+    if (response.status === 403) {
+      let suspended = false;
+      try {
+        const clone = response.clone();
+        const data: unknown = await clone.json();
+        if (data !== null && typeof data === 'object') {
+          const body = data as Record<string, unknown>;
+          suspended =
+            body.code === 'ACCOUNT_SUSPENDED' ||
+            (typeof body.error === 'string' &&
+              body.error.toLowerCase().includes('suspended'));
+        }
+      } catch {
+        // Non-JSON or unreadable 403 body: a standard 403 — the
+        // response proceeds to its caller untouched.
+        suspended = false;
+      }
+      if (suspended) {
+        window.location.href = '/account-suspended';
+      }
+    }
+    return response;
+  }) as typeof window.fetch & WrappedFetch;
+
+  wrappedFetch[FETCH_WRAPPED] = true;
+  wrappedFetch[FETCH_ORIGINAL] = originalFetch;
+  window.fetch = wrappedFetch;
+
+  return () => {
+    if (window.fetch === wrappedFetch) {
+      window.fetch = originalFetch;
+    }
+  };
 }
 
 /**
@@ -19,8 +162,14 @@ export function setupWorkspaceLifecycleGuard({
   if (userId && typeof localStorage !== 'undefined') {
     try {
       localStorage.setItem('fbup_active_user', userId);
-    } catch {
-      // Ignore localStorage errors
+    } catch (error) {
+      // Storage unavailable: cross-tab sync degrades to the
+      // BroadcastChannel/storage-event paths below; nothing else
+      // depends on this write succeeding.
+      console.warn(
+        '[workspace-lifecycle-guard] active-user sync unavailable',
+        error,
+      );
     }
   }
 
@@ -29,45 +178,16 @@ export function setupWorkspaceLifecycleGuard({
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       channel = new BroadcastChannel('fbup_auth');
-      channel.onmessage = (event) => {
-        const data = event.data;
-        if (data?.type === 'LOGOUT') {
-          window.location.href = '/login?logout=success';
-          return;
-        }
-
-        if (
-          data?.type === 'LOGIN' ||
-          data?.type === 'USER_SWITCH' ||
-          data?.type === 'SESSION_CHANGE' ||
-          data?.type === 'SESSION_CHANGED'
-        ) {
-          const incomingUserId = data?.userId;
-          const incomingUserEmail = data?.email;
-          const activeId =
-            userId ||
-            (typeof localStorage !== 'undefined'
-              ? localStorage.getItem('fbup_active_user')
-              : null);
-
-          const isSameUser = Boolean(
-            activeId &&
-              incomingUserId &&
-              activeId === incomingUserId &&
-              (!userEmail ||
-                !incomingUserEmail ||
-                userEmail.toLowerCase() === incomingUserEmail.toLowerCase())
-          );
-
-          // Reload when a different user logs in, user-switch is explicitly dispatched, or identity changed
-          if (!isSameUser || data?.type === 'USER_SWITCH') {
-            window.location.reload();
-          }
+      channel.onmessage = (event: MessageEvent<unknown>) => {
+        if (event.data !== null && typeof event.data === 'object') {
+          handleAuthBroadcast(event.data as AuthBroadcastData, userId, userEmail);
         }
       };
     }
   } catch {
-    // Ignore BroadcastChannel errors in environments where unsupported
+    // BroadcastChannel unsupported or blocked: the storage-event
+    // fallback below carries the same synchronization.
+    channel = null;
   }
 
   // 3. Storage event listener for cross-tab logout & identity synchronization
@@ -77,11 +197,7 @@ export function setupWorkspaceLifecycleGuard({
       return;
     }
     if (event.key === 'fbup_active_user') {
-      const activeId =
-        userId ||
-        (typeof localStorage !== 'undefined'
-          ? localStorage.getItem('fbup_active_user')
-          : null);
+      const activeId = readActiveUserId(userId);
       if (
         event.newValue &&
         ((event.oldValue && event.newValue !== event.oldValue) ||
@@ -102,60 +218,33 @@ export function setupWorkspaceLifecycleGuard({
   window.addEventListener('pageshow', handlePageShow);
 
   // 5. Intercept client-side fetch calls for 403 ACCOUNT_SUSPENDED
-  const FETCH_WRAPPED = Symbol.for('fbup.fetch_wrapped');
-  const FETCH_ORIGINAL = Symbol.for('fbup.fetch_original');
-
-  let originalFetch: typeof window.fetch = window.fetch;
-
-  if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
-    if ((window.fetch as any)[FETCH_WRAPPED]) {
-      originalFetch = (window.fetch as any)[FETCH_ORIGINAL] || window.fetch;
-    } else {
-      const boundFetch = window.fetch.bind(window);
-      const wrappedFetch: typeof window.fetch = async (...args) => {
-        const response = await boundFetch(...args);
-        if (response.status === 403) {
-          try {
-            const clone = response.clone();
-            const data = await clone.json();
-            if (
-              data?.code === 'ACCOUNT_SUSPENDED' ||
-              (typeof data?.error === 'string' && data.error.toLowerCase().includes('suspended'))
-            ) {
-              window.location.href = '/account-suspended';
-            }
-          } catch {
-            // Non-JSON or standard 403, proceed normally
-          }
-        }
-        return response;
-      };
-      (wrappedFetch as any)[FETCH_WRAPPED] = true;
-      (wrappedFetch as any)[FETCH_ORIGINAL] = originalFetch;
-      window.fetch = wrappedFetch;
-    }
-  }
+  //    (preserved per OD130-5 preservation default — see file header).
+  const restoreFetch = installSuspendedFetchWrapper();
 
   return () => {
     if (channel) {
       try {
         channel.close();
-      } catch {
-        // Intentional: best-effort cleanup on unmount — nothing to do if close throws.
+      } catch (error) {
+        // Best-effort cleanup on unmount: a close failure has no
+        // observable consequence — the channel is discarded either way.
+        console.warn(
+          '[workspace-lifecycle-guard] BroadcastChannel close failed',
+          error,
+        );
       }
     }
     window.removeEventListener('storage', handleStorage);
     window.removeEventListener('pageshow', handlePageShow);
-    if (typeof window !== 'undefined' && originalFetch) {
-      window.fetch = originalFetch;
-    }
+    restoreFetch();
   };
 }
 
 export function WorkspaceLifecycleGuard(props: WorkspaceLifecycleGuardProps = {}) {
+  const { userId, userEmail } = props;
   useEffect(() => {
-    return setupWorkspaceLifecycleGuard(props);
-  }, [props.userId, props.userEmail]);
+    return setupWorkspaceLifecycleGuard({ userId, userEmail });
+  }, [userId, userEmail]);
 
   return null;
 }

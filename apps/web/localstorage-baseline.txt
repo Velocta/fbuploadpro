@@ -20,5 +20,3 @@
 # Format: <file> <count>
 apps/web/src/components/pages/dedicated/queue/content-tab.tsx 2
 apps/web/src/components/pages/dedicated/tab-insights.tsx 6
-apps/web/src/components/ui/sidebar.tsx 2
-apps/web/src/components/workspace/workspace-studio-footer.tsx 4

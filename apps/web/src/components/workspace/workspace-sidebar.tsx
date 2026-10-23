@@ -48,7 +48,7 @@ import {
 import { cn } from '@/lib/utils';
 import { BrandMark } from '@/components/brand';
 import { buildTenantHref, normalizeTenantPath } from '@/lib/tenant-href';
-import { WorkspaceStudioFooter } from './workspace-studio-footer';
+import { WorkspaceStudioFooter } from './workspace-switcher';
 import { UPCOMING_PLATFORMS, TESTING_PLACEHOLDER_TEXT } from './platform-nav-config';
 
 export interface WorkspaceSidebarProps {
@@ -57,11 +57,13 @@ export interface WorkspaceSidebarProps {
   useCleanPaths?: boolean | undefined;
   /** Server-resolved display name — avoids flashing the internal slug. */
   workspaceName?: string | undefined;
-  user?: {
+  /** Always present in the tenant frame: the layout redirects to
+   * login without a session, so the footer never renders anonymous. */
+  user: {
     name: string;
     email: string;
     avatarUrl?: string | undefined;
-  } | undefined;
+  };
 }
 
 function ChevronIcon({ open }: Readonly<{ open: boolean }>) {
