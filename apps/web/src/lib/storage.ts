@@ -44,6 +44,18 @@ export function getR2Config(): R2Config | null {
   return result.success ? result.data : null;
 }
 
+/**
+ * Explicit network bounds for the R2 S3 client (spec 139). Without
+ * these, the AWS SDK v3 defaults leave request/connection timeouts
+ * disabled (a hung R2 connection can stall a serverless invocation
+ * indefinitely) and the retry count implicit. `requestHandler` is
+ * passed as plain NodeHttpHandler options — the SDK instantiates the
+ * handler from them — so no extra handler package is needed.
+ */
+export const R2_MAX_ATTEMPTS = 3;
+export const R2_REQUEST_TIMEOUT_MS = 15_000;
+export const R2_CONNECTION_TIMEOUT_MS = 5_000;
+
 export function createR2S3Client(config: R2Config): S3Client {
   return new S3Client({
     region: 'auto',
@@ -51,6 +63,12 @@ export function createR2S3Client(config: R2Config): S3Client {
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
+    },
+    maxAttempts: R2_MAX_ATTEMPTS,
+    requestHandler: {
+      connectionTimeout: R2_CONNECTION_TIMEOUT_MS,
+      requestTimeout: R2_REQUEST_TIMEOUT_MS,
+      throwOnRequestTimeout: true,
     },
   });
 }

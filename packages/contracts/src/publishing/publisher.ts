@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type {
   DatabaseDestinationRow,
   DatabaseSocialAccountRow,
@@ -32,19 +33,23 @@ import type {
 
 export type PublishErrorKind = 'retryable' | 'permanent' | 'auth';
 
+export const PublishErrorKindSchema = z.enum(['retryable', 'permanent', 'auth']);
+
 /**
  * Platform-agnostic classification of a publish failure. `code`/`subcode`
  * are strings because unified-schema error codes are TEXT (not every
  * platform's codes are numeric — see the spec 120 settle RPC).
  */
-export interface ClassifiedPublishError {
-  kind: PublishErrorKind;
-  code: string;
-  subcode?: string | undefined;
-  message: string;
+export const ClassifiedPublishErrorSchema = z.object({
+  kind: PublishErrorKindSchema,
+  code: z.string(),
+  subcode: z.string().optional(),
+  message: z.string(),
   /** Publisher-supplied backoff hint for retryable errors, in seconds. */
-  retryDelaySeconds?: number | undefined;
-}
+  retryDelaySeconds: z.number().nonnegative().optional(),
+});
+
+export type ClassifiedPublishError = z.infer<typeof ClassifiedPublishErrorSchema>;
 
 /**
  * Decrypted tokens a publisher may use for one publish/refresh call.
@@ -88,38 +93,42 @@ export interface RefreshedTokenSet {
  *   - `retry`     → RPC outcome `queued` (retry), error from `error`
  *   - `failed`    → RPC outcome `failed`, error from `error`
  */
-export interface PublishOutcome {
-  status: 'published' | 'retry' | 'failed';
+export const PublishOutcomeSchema = z.object({
+  status: z.enum(['published', 'retry', 'failed']),
   /** Platform post id (`queue_items.external_post_id`) on success. */
-  externalPostId?: string | undefined;
+  externalPostId: z.string().optional(),
   /** First-comment id (`queue_items.external_comment_id`) when one was posted. */
-  externalCommentId?: string | null | undefined;
+  externalCommentId: z.string().nullable().optional(),
   /**
    * Non-fatal warning on a published post (e.g. the post went live but
    * its first comment failed) — settled as the publish log's
    * comment warning, exactly like today's Facebook flow.
    */
-  commentWarning?: string | undefined;
+  commentWarning: z.string().optional(),
   /** Classified failure; present whenever `status` is `retry` or `failed`. */
-  error?: ClassifiedPublishError | undefined;
+  error: ClassifiedPublishErrorSchema.optional(),
   /** Backoff before a `retry` outcome becomes due again, in seconds. */
-  retryDelaySeconds?: number | undefined;
+  retryDelaySeconds: z.number().nonnegative().optional(),
   /**
    * Platform session state for `publish_logs.detail`: IG/Threads
    * container ids, YouTube upload session id, provider name/post ref for
    * Post-for-Me platforms, X media ids. Persisted from the first attempt
    * so a retry can resume instead of restarting (spec 119 §11).
    */
-  detail?: Record<string, unknown> | undefined;
+  detail: z.record(z.unknown()).optional(),
   /** Destination status side effect for settlement (e.g. `rate_limited`). */
-  targetDestinationStatus?: DatabaseDestinationRow['status'] | undefined;
+  targetDestinationStatus: z
+    .enum(['active', 'rate_limited', 'disconnected', 'error'])
+    .optional(),
   /** Account status side effect for settlement (`expired` on auth errors). */
-  targetAccountStatus?: DatabaseSocialAccountRow['status'] | undefined;
+  targetAccountStatus: z.enum(['active', 'expired', 'revoked', 'error']).optional(),
   /** Per-destination cooldown for settlement, in seconds. */
-  destinationCooldownSeconds?: number | undefined;
+  destinationCooldownSeconds: z.number().nonnegative().optional(),
   /** Latest per-account rate usage (0–100), when the platform reports it. */
-  rateUsagePct?: number | undefined;
-}
+  rateUsagePct: z.number().min(0).max(100).optional(),
+});
+
+export type PublishOutcome = z.infer<typeof PublishOutcomeSchema>;
 
 /**
  * The shared publisher contract. `publish` reports platform failures as

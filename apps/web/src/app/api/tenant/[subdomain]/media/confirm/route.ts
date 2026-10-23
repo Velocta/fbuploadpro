@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { HeadObjectCommand } from '@aws-sdk/client-s3';
 import {
   type DatabaseMediaItemRow,
   canAccessTenant,
@@ -10,12 +11,134 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import {
+  createR2S3Client,
+  getR2Config,
+  getStorageService,
+  R2StorageProvider,
+} from '../../../../../../lib/storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+/** Media row as the handlers consume it (spec 137 §3.7): the contracts
+ * row minus workspace_id (not projected by these selects), plus the
+ * width/height columns the contracts type does not model yet. */
+type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
+  width: number | null;
+  height: number | null;
+};
+
+/**
+ * Server-side view of an object already uploaded to storage (spec 139).
+ *
+ * The shared storage service (`IStorageService`) has no head-object
+ * operation, so confirmation verifies existence through this narrow
+ * interface instead: the production implementation below issues a raw
+ * HeadObject call with the existing R2 client/config helpers from
+ * `lib/storage`, and tests inject a fake. Only the metadata the confirm
+ * step is allowed to trust is exposed.
+ */
+export interface StorageObjectMetadata {
+  contentLength: number;
+  contentType?: string | undefined;
+}
+
+export interface MediaStorageVerifier {
+  /** Resolves to the object's metadata, or `null` when it does not exist. */
+  headObject(key: string): Promise<StorageObjectMetadata | null>;
+  /** Derives the stored public URL for a key, exactly as upload-url does. */
+  getPublicUrl(key: string): string;
+}
+
+function isStorageNotFoundError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') {
+    return false;
+  }
+  const candidate = err as {
+    name?: string;
+    Code?: string;
+    $metadata?: { httpStatusCode?: number };
+  };
+  return (
+    candidate.$metadata?.httpStatusCode === 404 ||
+    candidate.name === 'NotFound' ||
+    candidate.name === 'NoSuchKey' ||
+    candidate.Code === '404' ||
+    candidate.Code === 'NoSuchKey'
+  );
+}
+
+export function createDefaultMediaStorageVerifier(): MediaStorageVerifier {
+  const config = getR2Config();
+  if (config) {
+    const client = createR2S3Client(config);
+    const provider = new R2StorageProvider(config, client);
+    return {
+      async headObject(key: string) {
+        try {
+          const result = await client.send(
+            new HeadObjectCommand({ Bucket: config.bucketName, Key: key })
+          );
+          if (typeof result.ContentLength !== 'number') {
+            return null;
+          }
+          return {
+            contentLength: result.ContentLength,
+            contentType: result.ContentType,
+          };
+        } catch (err) {
+          if (isStorageNotFoundError(err)) {
+            return null;
+          }
+          throw err;
+        }
+      },
+      getPublicUrl: (key: string) => provider.getPublicUrl(key),
+    };
+  }
+
+  // No R2 configuration: outside production this resolves to the shared
+  // mock storage provider, whose uploaded-object registry is the record
+  // of what was actually uploaded. In production getStorageService()
+  // throws, which the caller turns into a generic failure — an upload
+  // is never confirmed without verification.
+  const storage = getStorageService();
+  return {
+    headObject(key: string) {
+      const uploadedObjects = (
+        storage as unknown as {
+          uploadedObjects?: Map<string, { contentType: string; byteLength: number }>;
+        }
+      ).uploadedObjects;
+      const entry = uploadedObjects?.get(key);
+      if (!entry) {
+        return Promise.resolve(null);
+      }
+      return Promise.resolve({
+        contentLength: entry.byteLength,
+        contentType: entry.contentType,
+      });
+    },
+    getPublicUrl: (key: string) => storage.getPublicUrl(key),
+  };
+}
+
+function uploadVerificationFailed(): NextResponse {
+  // One plain-language message for every verification failure: it does
+  // not reveal whether the problem was ownership, the file, or its size.
+  return NextResponse.json(
+    {
+      error: 'INVALID_REQUEST',
+      message: 'We could not verify this upload. Please try uploading the file again.',
+    },
+    { status: 400 }
+  );
+}
 
 export async function handleConfirmUpload(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient
+  dbClient?: DatabaseClient | SupabaseClient,
+  storageVerifier?: MediaStorageVerifier
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -64,16 +187,72 @@ export async function handleConfirmUpload(
       ? body.captionText
       : deriveDefaultCaptionFromFilename(body.name);
 
+  // 4. Verify the upload against storage before anything is saved
+  // (spec 139). The client-supplied storage key, URL and file size are
+  // never trusted: the key must be the one upload-url minted for this
+  // user and this media item, the object must actually exist, and the
+  // stored size, content type and URL all come from storage itself.
+  //
+  // The ownership check runs before the existence check so a key that
+  // belongs to someone else is never even probed in storage.
+  const expectedMediaKeyPrefix = `users/${session.userId}/media/${body.mediaId}/`;
+  if (!body.storageKey.startsWith(expectedMediaKeyPrefix)) {
+    return uploadVerificationFailed();
+  }
+  const uploadedFileName = body.storageKey.slice(expectedMediaKeyPrefix.length);
+  if (
+    uploadedFileName.length === 0 ||
+    uploadedFileName.includes('/') ||
+    uploadedFileName.includes('\\')
+  ) {
+    return uploadVerificationFailed();
+  }
+
+  let verifier: MediaStorageVerifier;
+  let objectMetadata: StorageObjectMetadata | null;
+  let verifiedUrl: string;
+  let verifiedThumbnailKey: string | null = null;
+  let verifiedThumbnailUrl: string | null = null;
   try {
+    verifier = storageVerifier ?? createDefaultMediaStorageVerifier();
 
-/** Media row as the handlers consume it (spec 137 §3.7): the contracts
- * row minus workspace_id (not projected by these selects), plus the
- * width/height columns the contracts type does not model yet. */
-type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
-  width: number | null;
-  height: number | null;
-};
+    if (body.thumbnailKey) {
+      // Thumbnails are minted by upload-url under the same user's
+      // thumbnails prefix for this media item; the stored thumbnail URL
+      // is derived from that key, never taken from the request. (The
+      // thumbnail itself stays best-effort, so it is not head-checked —
+      // only the main media object is.)
+      const expectedThumbnailKeyPrefix = `users/${session.userId}/thumbnails/${body.mediaId}.`;
+      if (!body.thumbnailKey.startsWith(expectedThumbnailKeyPrefix)) {
+        return uploadVerificationFailed();
+      }
+      verifiedThumbnailKey = body.thumbnailKey;
+      verifiedThumbnailUrl = verifier.getPublicUrl(body.thumbnailKey);
+    }
 
+    objectMetadata = await verifier.headObject(body.storageKey);
+    verifiedUrl = verifier.getPublicUrl(body.storageKey);
+  } catch (_err) {
+    return NextResponse.json(
+      { error: 'INTERNAL_ERROR', message: 'Failed to confirm media upload' },
+      { status: 500 }
+    );
+  }
+
+  if (
+    !objectMetadata ||
+    !Number.isInteger(objectMetadata.contentLength) ||
+    objectMetadata.contentLength <= 0
+  ) {
+    return uploadVerificationFailed();
+  }
+
+  const verifiedFileSize = objectMetadata.contentLength;
+  const verifiedMimeType = objectMetadata.contentType?.trim()
+    ? objectMetadata.contentType.trim()
+    : body.mimeType;
+
+  try {
     let insertedRow: MediaItemRow;
 
     if (
@@ -100,13 +279,13 @@ type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
             session.userId,
             body.folderId ?? null,
             body.name,
-            body.fileSize,
-            body.mimeType,
+            verifiedFileSize,
+            verifiedMimeType,
             body.mediaType,
             body.storageKey,
-            body.url,
-            body.thumbnailKey ?? null,
-            body.thumbnailUrl ?? null,
+            verifiedUrl,
+            verifiedThumbnailKey,
+            verifiedThumbnailUrl,
             body.durationSeconds ?? null,
             body.aspectRatio ?? 'unknown',
             resolvedCaptionText,
@@ -141,13 +320,13 @@ type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
           user_id: session.userId,
           folder_id: body.folderId ?? null,
           name: body.name,
-          file_size: body.fileSize,
-          mime_type: body.mimeType,
+          file_size: verifiedFileSize,
+          mime_type: verifiedMimeType,
           media_type: body.mediaType,
           storage_key: body.storageKey,
-          url: body.url,
-          thumbnail_key: body.thumbnailKey ?? null,
-          thumbnail_url: body.thumbnailUrl ?? null,
+          url: verifiedUrl,
+          thumbnail_key: verifiedThumbnailKey,
+          thumbnail_url: verifiedThumbnailUrl,
           duration_seconds: body.durationSeconds ?? null,
           aspect_ratio: body.aspectRatio ?? 'unknown',
           caption_text: resolvedCaptionText,

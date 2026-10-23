@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export interface DatabaseUserRow {
   id: string;
   email: string;
@@ -127,7 +129,16 @@ export interface DatabaseQueueItemRow {
 }
 
 /** Platforms supported by the unified schema (spec 119 §4.1, spec 120). */
-export type Platform = 'facebook' | 'instagram' | 'threads' | 'youtube' | 'x' | 'tiktok';
+export const PlatformSchema = z.enum([
+  'facebook',
+  'instagram',
+  'threads',
+  'youtube',
+  'x',
+  'tiktok',
+]);
+
+export type Platform = z.infer<typeof PlatformSchema>;
 
 export interface DatabasePlatformCredentialsRow {
   id: string;
@@ -141,41 +152,58 @@ export interface DatabasePlatformCredentialsRow {
   updated_at: string;
 }
 
-export interface DatabaseSocialAccountRow {
-  id: string;
-  workspace_id: string;
-  platform: Platform;
-  external_account_id: string;
-  display_name: string;
-  avatar_url: string | null;
-  encrypted_access_token: string;
-  encrypted_refresh_token: string | null;
-  token_expires_at: string | null;
-  scopes: string[] | null;
-  status: 'active' | 'expired' | 'revoked' | 'error';
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * Runtime schema for a `social_accounts` row (migration
+ * 20261022120000 §4b). Snake-case keys mirror the real table exactly:
+ * `scopes` is TEXT[] (nullable), `metadata` is JSONB NOT NULL, and
+ * `status` uses the unified account vocabulary
+ * ('active' | 'expired' | 'revoked' | 'error').
+ */
+export const DatabaseSocialAccountRowSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  platform: PlatformSchema,
+  external_account_id: z.string().min(1).max(255),
+  display_name: z.string().min(1).max(255),
+  avatar_url: z.string().nullable(),
+  encrypted_access_token: z.string().min(1),
+  encrypted_refresh_token: z.string().nullable(),
+  token_expires_at: z.string().datetime({ offset: true }).nullable(),
+  scopes: z.array(z.string()).nullable(),
+  status: z.enum(['active', 'expired', 'revoked', 'error']),
+  metadata: z.record(z.unknown()),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
 
-export interface DatabaseDestinationRow {
-  id: string;
-  workspace_id: string;
-  account_id: string;
-  platform: Platform;
-  external_destination_id: string;
-  name: string;
-  handle: string | null;
-  avatar_url: string | null;
-  timezone: string;
-  status: 'active' | 'rate_limited' | 'disconnected' | 'error';
-  encrypted_destination_token: string | null;
-  next_allowed_publish_at: string | null;
-  rate_usage_pct: number;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
+export type DatabaseSocialAccountRow = z.infer<typeof DatabaseSocialAccountRowSchema>;
+
+/**
+ * Runtime schema for a `destinations` row (migration
+ * 20261022120000 §4c). `rate_usage_pct` is SMALLINT with a 0–100 CHECK,
+ * `timezone` is VARCHAR(50), and `encrypted_destination_token` is the
+ * only nullable token column.
+ */
+export const DatabaseDestinationRowSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  account_id: z.string().uuid(),
+  platform: PlatformSchema,
+  external_destination_id: z.string().min(1).max(255),
+  name: z.string().min(1).max(255),
+  handle: z.string().max(255).nullable(),
+  avatar_url: z.string().nullable(),
+  timezone: z.string().min(1).max(50),
+  status: z.enum(['active', 'rate_limited', 'disconnected', 'error']),
+  encrypted_destination_token: z.string().nullable(),
+  next_allowed_publish_at: z.string().datetime({ offset: true }).nullable(),
+  rate_usage_pct: z.number().int().min(0).max(100),
+  metadata: z.record(z.unknown()),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+
+export type DatabaseDestinationRow = z.infer<typeof DatabaseDestinationRowSchema>;
 
 export interface DatabasePostingSlotRow {
   id: string;
@@ -188,35 +216,45 @@ export interface DatabasePostingSlotRow {
   updated_at: string;
 }
 
-export interface DatabaseUnifiedQueueItemRow {
-  id: string;
-  workspace_id: string;
-  destination_id: string;
-  platform: Platform;
-  kind: 'text' | 'image' | 'video' | 'story' | 'carousel';
-  platform_format: string | null;
-  caption: string;
-  title: string | null;
-  first_comment: string | null;
-  media_item_id: string | null;
-  media_url: string | null;
-  media_storage_key: string | null;
-  link_url: string | null;
-  platform_options: Record<string, unknown>;
-  scheduled_time: string;
-  slot_id: string | null;
-  status: 'queued' | 'publishing' | 'published' | 'failed' | 'cancelled';
-  claimed_at: string | null;
-  retry_count: number;
-  max_retries: number;
-  error_code: string | null;
-  error_subcode: string | null;
-  error_message: string | null;
-  external_post_id: string | null;
-  external_comment_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
+/**
+ * Runtime schema for a unified `queue_items` row (migration
+ * 20261022120000 §4e). Snake-case keys mirror the real table exactly.
+ * Note the drift this guards: the unified status vocabulary has NO
+ * 'skipped' (legacy 'skipped' backfilled to 'cancelled'), `kind` has
+ * NO 'reel' (reels are kind 'video' with platform_format 'reel'), and
+ * the error columns are TEXT, not numeric.
+ */
+export const DatabaseUnifiedQueueItemRowSchema = z.object({
+  id: z.string().uuid(),
+  workspace_id: z.string().uuid(),
+  destination_id: z.string().uuid(),
+  platform: PlatformSchema,
+  kind: z.enum(['text', 'image', 'video', 'story', 'carousel']),
+  platform_format: z.string().max(50).nullable(),
+  caption: z.string(),
+  title: z.string().nullable(),
+  first_comment: z.string().nullable(),
+  media_item_id: z.string().uuid().nullable(),
+  media_url: z.string().nullable(),
+  media_storage_key: z.string().max(500).nullable(),
+  link_url: z.string().nullable(),
+  platform_options: z.record(z.unknown()),
+  scheduled_time: z.string().datetime({ offset: true }),
+  slot_id: z.string().uuid().nullable(),
+  status: z.enum(['queued', 'publishing', 'published', 'failed', 'cancelled']),
+  claimed_at: z.string().datetime({ offset: true }).nullable(),
+  retry_count: z.number().int().nonnegative(),
+  max_retries: z.number().int().nonnegative(),
+  error_code: z.string().nullable(),
+  error_subcode: z.string().nullable(),
+  error_message: z.string().nullable(),
+  external_post_id: z.string().max(255).nullable(),
+  external_comment_id: z.string().max(255).nullable(),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+
+export type DatabaseUnifiedQueueItemRow = z.infer<typeof DatabaseUnifiedQueueItemRowSchema>;
 
 export interface DatabaseUnifiedPublishLogRow {
   id: string;
@@ -265,14 +303,24 @@ export interface ClaimedUnifiedQueueItemRpcResult {
 }
 
 /**
- * Argument shapes for the NEW unified-schema RPC overloads (spec 119 §4.2).
- * The legacy overloads keep the signatures recorded under `Database.Functions`
- * until the cutover specs (121–123) switch the call sites; a single
- * `Functions` record cannot express two overloads under one name.
+ * Argument shapes for the NEW unified-schema RPC overloads (spec 119 §4.2,
+ * migrations 20261022120000 §6 + 20261022140000). `Database.Functions`
+ * below records THESE unified signatures, because production call sites
+ * (worker claimer/consumers) call the unified overloads. A single
+ * `Functions` record cannot express two overloads under one name, so
+ * the legacy overload shapes are kept as the named `*LegacyArgs`
+ * interfaces below — the legacy RPCs are still present in the database
+ * (spec 117 locked them; spec 120 re-pointed them at the legacy tables)
+ * and are still exercised by raw-SQL checks.
  */
 export interface ClaimDueQueueItemsUnifiedArgs {
   p_platform: Platform;
-  p_lane_kind_set?: string[] | null;
+  /**
+   * Required in the real signature: `p_lane_kind_set TEXT[]` has NO
+   * default in the migration (unlike p_limit / p_max_per_destination).
+   * It is nullable — NULL (or an empty array) claims every kind.
+   */
+  p_lane_kind_set: string[] | null;
   p_limit?: number;
   p_max_per_destination?: number;
 }
@@ -294,10 +342,48 @@ export interface SettleQueueItemOutcomeUnifiedArgs {
   p_target_account_status?: string | null;
   p_destination_cooldown_seconds?: number | null;
   p_rate_usage_pct?: number | null;
+  /**
+   * Platform session state persisted to `publish_logs.detail`
+   * (PublishOutcome.detail). Optional: a parallel migration adds the
+   * `p_detail` parameter with a NULL default, so passing it is safe
+   * against both the current and the extended RPC.
+   */
+  p_detail?: Record<string, unknown> | null;
 }
 
 export interface RecoverStuckPublishingItemsUnifiedArgs {
   p_platform: Platform;
+  p_timeout_minutes?: number;
+}
+
+/** Legacy claim overload: claim_due_queue_items(INT, INT) on legacy_queue_items. */
+export interface ClaimDueQueueItemsLegacyArgs {
+  p_limit?: number;
+  p_max_per_page?: number;
+}
+
+/** Legacy settle overload (16 args): numeric error codes, page vocabulary. */
+export interface SettleQueueItemOutcomeLegacyArgs {
+  p_queue_item_id: string;
+  p_user_id: string;
+  p_fb_page_id: string;
+  p_outcome_status: string;
+  p_fb_post_id?: string | null;
+  p_fb_comment_id?: string | null;
+  p_retry_count?: number;
+  p_retry_delay_seconds?: number;
+  p_error_code?: number | null;
+  p_error_subcode?: number | null;
+  p_error_message?: string | null;
+  p_comment_warning?: string | null;
+  p_target_page_status?: string | null;
+  p_target_account_status?: string | null;
+  p_page_cooldown_seconds?: number | null;
+  p_buc_usage_pct?: number | null;
+}
+
+/** Legacy recover overload: recover_stuck_publishing_items(INT). */
+export interface RecoverStuckPublishingItemsLegacyArgs {
   p_timeout_minutes?: number;
 }
 
@@ -492,8 +578,16 @@ export interface Database {
     };
     Functions: {
       claim_due_queue_items: {
-        Args: { p_limit?: number };
-        Returns: ClaimedQueueItemRpcResult[];
+        Args: ClaimDueQueueItemsUnifiedArgs;
+        Returns: ClaimedUnifiedQueueItemRpcResult[];
+      };
+      settle_queue_item_outcome: {
+        Args: SettleQueueItemOutcomeUnifiedArgs;
+        Returns: void;
+      };
+      recover_stuck_publishing_items: {
+        Args: RecoverStuckPublishingItemsUnifiedArgs;
+        Returns: number;
       };
     };
   };

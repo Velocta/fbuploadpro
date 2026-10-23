@@ -1,90 +1,66 @@
 /**
  * @file fdola-studio.test.tsx
- * @description Unit tests for Fdola Studio components:
- * - FdolaStudioGate (Web browser desktop-only notice)
- * - FdolaStudioWorkspace (Empty desktop app workspace)
- * - FdolaStudioView (Environment-adaptive container)
- * (Spec 057)
+ * @description Behavioural tests for Fdola Studio (spec 141 §3/§6):
+ * - FdolaStudioGate (web browser: coming-soon notice per OD-141-3(c), zero links/buttons)
+ * - FdolaStudioWorkspace (desktop app placeholder)
+ * - FdolaStudioView (environment-adaptive container)
  */
 
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '../components/setup';
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import {
   FdolaStudioGate,
   FdolaStudioWorkspace,
   FdolaStudioView,
 } from '@/components/studio';
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    replace: vi.fn(),
-  }),
-  useParams: () => ({ subdomain: 'acme' }),
-}));
-
 describe('FdolaStudioGate Component (Web Browser)', () => {
-  it('renders centered desktop-only message with zero links or buttons', () => {
-    const { hasAttribute, hasText, html } = render(
-      <FdolaStudioGate subdomain="acme" />
+  it('renders the coming-soon notice with zero links or buttons', () => {
+    const { container } = render(<FdolaStudioGate subdomain="acme" />);
+
+    expect(screen.getByTestId('fdola-studio-gate')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Fdola Studio' })).toBeTruthy();
+    expect(screen.getByTestId('fdola-gate-message').textContent).toBe(
+      'Fdola Studio is coming soon.'
     );
 
-    expect(hasAttribute('data-testid', 'fdola-studio-gate')).toBe(true);
-    expect(hasText('Fdola Studio')).toBe(true);
-    expect(hasAttribute('data-testid', 'fdola-gate-message')).toBe(true);
-    expect(
-      hasText('This feature is only available on desktop. Please download the desktop app.')
-    ).toBe(true);
+    // The retired download instruction must not survive anywhere.
+    expect(container.textContent).not.toContain('download the desktop app');
 
-    // Verify zero download or external launch links and zero buttons
-    expect(html).not.toContain('<a');
-    expect(html).not.toContain('href');
-    expect(html).not.toContain('<button');
-
-    // Verify theme-reactive CSS variables
-    expect(html).toContain('var(--bg-panel');
-    expect(html).toContain('var(--shadow-card');
-    expect(html).toContain('var(--text-sub');
+    // Zero download or external launch links and zero buttons (OD-141-3(c)
+    // keeps this assertion — the copy changed, no action was added).
+    expect(container.querySelectorAll('a')).toHaveLength(0);
+    expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 });
 
 describe('FdolaStudioWorkspace Component (Desktop App Empty View)', () => {
-  it('renders empty desktop workspace placeholder with theme-reactive styles', () => {
-    const { hasAttribute, hasText, html } = render(
-      <FdolaStudioWorkspace subdomain="acme" />
-    );
+  it('renders the desktop workspace placeholder', () => {
+    render(<FdolaStudioWorkspace subdomain="acme" />);
 
-    expect(hasAttribute('data-testid', 'fdola-studio-workspace')).toBe(true);
-    expect(hasText('Fdola Studio')).toBe(true);
-    expect(hasAttribute('data-testid', 'fdola-desktop-workspace-empty')).toBe(true);
-
-    // Verify theme-reactive CSS variables
-    expect(html).toContain('var(--bg-panel');
-    expect(html).toContain('var(--shadow-card');
-    expect(html).toContain('var(--text-sub');
+    expect(screen.getByTestId('fdola-studio-workspace')).toBeTruthy();
+    expect(screen.getByText('Fdola Studio')).toBeTruthy();
+    expect(screen.getByTestId('fdola-desktop-workspace-empty')).toBeTruthy();
+    expect(screen.getByText('Desktop Workspace')).toBeTruthy();
   });
 });
 
 describe('FdolaStudioView Container', () => {
-  it('renders FdolaStudioGate when accessed via web browser', () => {
-    const { hasAttribute, hasText } = render(
-      <FdolaStudioView subdomain="acme" forceDesktop={false} />
-    );
+  it('renders FdolaStudioGate when accessed via web browser', async () => {
+    render(<FdolaStudioView subdomain="acme" forceDesktop={false} />);
 
-    expect(hasAttribute('data-testid', 'fdola-studio-view')).toBe(true);
-    expect(hasAttribute('data-testid', 'fdola-studio-gate')).toBe(true);
-    expect(
-      hasText('This feature is only available on desktop. Please download the desktop app.')
-    ).toBe(true);
+    expect(screen.getByTestId('fdola-studio-view')).toBeTruthy();
+    expect(await screen.findByTestId('fdola-studio-gate')).toBeTruthy();
+    expect(screen.getByTestId('fdola-gate-message').textContent).toBe(
+      'Fdola Studio is coming soon.'
+    );
   });
 
   it('renders FdolaStudioWorkspace when running inside desktop app', () => {
-    const { hasAttribute } = render(
-      <FdolaStudioView subdomain="acme" forceDesktop={true} />
-    );
+    render(<FdolaStudioView subdomain="acme" forceDesktop={true} />);
 
-    expect(hasAttribute('data-testid', 'fdola-studio-view')).toBe(true);
-    expect(hasAttribute('data-testid', 'fdola-studio-workspace')).toBe(true);
+    expect(screen.getByTestId('fdola-studio-view')).toBeTruthy();
+    expect(screen.getByTestId('fdola-studio-workspace')).toBeTruthy();
   });
 });

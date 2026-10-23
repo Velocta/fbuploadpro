@@ -5,6 +5,8 @@ import { cookies } from 'next/headers';
 import { getSessionSecret } from '@fbuploadpro/contracts';
 import { THEME, SPACING, RADII, TYPOGRAPHY, PALETTE } from '@/lib/theme';
 import { DestinationPicker } from '@/components/connect/destination-picker';
+// Side effect: registers the X connect config (spec 127) so its picker mode resolves.
+import '@/lib/connect/platforms/x';
 import {
   getPlatformConnectConfig,
   isKnownPlatform,

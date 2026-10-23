@@ -40,7 +40,9 @@ note_ok() { printf 'fixture ok: %s\n' "$1"; }
 
 # ---------------------------------------------------------------------------
 # Skeleton every fixture tree needs so the OTHER guardrail checks pass:
-# check 6 wants the CSP string in next.config.ts; check 8 wants the
+# check 6 wants the real CSP wiring (CSP_HEADER_NAME + applyCspHeaders in
+# apps/web/src/lib/csp.ts, both used by apps/web/src/middleware.ts);
+# check 8 wants the
 # inline-style ratchet (fixtures contain no style={{, so 0); check 9 wants
 # the design-system baseline file (fixtures plant no hex/rgb/fontsize/
 # zindex/!important literals, so only arbitrary-allow lines are needed);
@@ -49,8 +51,21 @@ note_ok() { printf 'fixture ok: %s\n' "$1"; }
 # ---------------------------------------------------------------------------
 scaffold() {
   local root="$1"
-  mkdir -p "$root/apps/web/src"
-  printf 'const marker = "Content-Security-Policy";\nexport default marker;\n' > "$root/apps/web/next.config.ts"
+  mkdir -p "$root/apps/web/src/lib"
+  cat > "$root/apps/web/src/lib/csp.ts" <<'EOF'
+export const CSP_HEADER_NAME = 'Content-Security-Policy-Report-Only';
+export function applyCspHeaders(response, nonce) {
+  response.headers.set(CSP_HEADER_NAME, buildContentSecurityPolicy(nonce));
+  return response;
+}
+EOF
+  cat > "$root/apps/web/src/middleware.ts" <<'EOF'
+import { applyCspHeaders, CSP_HEADER_NAME } from './lib/csp';
+export function middleware(request) {
+  request.headers.set(CSP_HEADER_NAME, 'x');
+  return applyCspHeaders(response, nonce);
+}
+EOF
   printf '0\n' > "$root/apps/web/inline-style-ratchet.txt"
   cat > "$root/apps/web/design-system-baseline.txt" <<'EOF'
 # Fixture baseline: only the arbitrary-allow exception lines, mirroring

@@ -25,7 +25,6 @@ const PREVIEW_SAFE_KEYS = new Set([
   'NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER',
   'NEXT_PUBLIC_WHATSAPP_DEFAULT_MESSAGE',
   'NEXT_PUBLIC_SIGNUPS_ENABLED',
-  'DEFAULT_STORAGE_QUOTA_BYTES',
 ]);
 
 const SYNC_KEYS = [
@@ -42,7 +41,6 @@ const SYNC_KEYS = [
   'R2_SECRET_ACCESS_KEY',
   'R2_BUCKET_NAME',
   'R2_PUBLIC_URL',
-  'DEFAULT_STORAGE_QUOTA_BYTES',
   'UPSTASH_REDIS_REST_URL',
   'UPSTASH_REDIS_REST_TOKEN',
   'NEXT_PUBLIC_WHATSAPP_SUPPORT_NUMBER',
@@ -50,6 +48,8 @@ const SYNC_KEYS = [
   'NEXT_PUBLIC_SIGNUPS_ENABLED',
   'POSTHOG_KEY',
   'POSTHOG_HOST',
+  'X_CLIENT_ID',
+  'X_CLIENT_SECRET',
 ];
 
 async function run() {
@@ -85,9 +85,7 @@ async function run() {
       continue;
     }
 
-    const isPublicConfig =
-      key.startsWith('NEXT_PUBLIC_') ||
-      key === 'DEFAULT_STORAGE_QUOTA_BYTES';
+    const isPublicConfig = key.startsWith('NEXT_PUBLIC_');
 
     // Secrets are production-only. Syncing production secrets to preview
     // deployments would hand every PR preview build the prod keys.

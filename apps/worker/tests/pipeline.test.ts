@@ -16,6 +16,11 @@ import {
 import {
   handlePublishBatch,
   handleDlqBatch,
+  mapPublishOutcomeToSettleArgs,
+  DEFER_ACCOUNT_NOT_ACTIVE_CODE,
+  DEFER_DESTINATION_COOLDOWN_CODE,
+  DEFER_DESTINATION_NOT_ACTIVE_CODE,
+  DEFAULT_RETRY_DELAY_SECONDS,
   DLQ_ERROR_CODE,
 } from '../src/consumers.js';
 import { recordHeartbeat } from '../src/heartbeat.js';
@@ -158,6 +163,79 @@ describe('Claimer (spec 121)', () => {
     expect(result.claimed).toBe(500 * MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK * 2);
   });
 
+  it('isolates a failing (lane, platform) pair: other platforms still claim (spec 139)', async () => {
+    const registry = createPublisherRegistry();
+    registry.register(fakePublisher('facebook', async () => ({ status: 'published' })));
+    registry.register(fakePublisher('instagram', async () => ({ status: 'published' })));
+    const rpc = vi.fn(async (_fn: string, args?: Record<string, unknown>) => {
+      if (args?.p_platform === 'facebook') {
+        return { data: null, error: new Error('facebook claim boom') };
+      }
+      // instagram: one row per lane
+      return { data: [{ id: `ig-${String(args?.p_platform)}-1` }], error: null };
+    });
+    const fastQ = makeQueueProducer();
+    const heavyQ = makeQueueProducer();
+    const waitUntil = vi.fn((_p: Promise<unknown>) => {});
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true }))
+    );
+    try {
+      const result = await runClaimTick({
+        db: { rpc },
+        registry,
+        queues: { fast: fastQ, heavy: heavyQ },
+        now: NON_RECOVERY_TICK,
+        env: { POSTHOG_KEY: 'test-key' },
+        waitUntil,
+      });
+      // Facebook failed in both lanes, instagram still claimed in both.
+      expect(result.claimed).toBe(2);
+      expect(result.enqueuedFast).toBe(1);
+      expect(result.enqueuedHeavy).toBe(1);
+      // The claim-path failure was captured with waitUntil threaded.
+      expect(waitUntil).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('records per-chunk progress when sendBatch fails mid-batch and still runs the other lane (spec 139)', async () => {
+    const registry = createPublisherRegistry();
+    registry.register(fakePublisher('facebook', async () => ({ status: 'published' })));
+    const rpc = vi.fn(async (_fn: string, args?: Record<string, unknown>) => {
+      const kindSet = (args?.p_lane_kind_set as string[]) ?? [];
+      if (kindSet.includes('video')) return { data: [], error: null }; // heavy empty
+      return {
+        data: Array.from({ length: 150 }, (_, i) => ({ id: `item-${i}` })),
+        error: null,
+      };
+    });
+    let sendCalls = 0;
+    const fastQ = {
+      batches: [] as PublishQueueMessage[][],
+      sendBatch: vi.fn(async (messages: Iterable<{ body: PublishQueueMessage }>) => {
+        sendCalls += 1;
+        if (sendCalls === 2) throw new Error('queue send boom');
+        fastQ.batches.push([...messages].map((m) => m.body));
+      }),
+    };
+    const heavyQ = makeQueueProducer();
+    const result = await runClaimTick({
+      db: { rpc },
+      registry,
+      queues: { fast: fastQ, heavy: heavyQ },
+      now: NON_RECOVERY_TICK,
+    });
+    // First 100-chunk went out, second chunk failed: progress is exact,
+    // the tick did not throw, and the heavy lane was still attempted.
+    expect(result.claimed).toBe(150);
+    expect(result.enqueuedFast).toBe(100);
+    expect(result.enqueuedHeavy).toBe(0);
+    expect(rpc.mock.calls.some((c) => ((c[1] as { p_lane_kind_set: string[] }).p_lane_kind_set ?? []).includes('video'))).toBe(true);
+  });
+
   it('claims only platforms registered in the publisher registry', async () => {
     const registry = createPublisherRegistry(); // empty: nothing is claimable yet
     const rpc = vi.fn(async (_fn: string, _args?: Record<string, unknown>) => ({ data: [], error: null }));
@@ -241,6 +319,9 @@ async function makeItem(
 
 async function makeConsumerDb(opts: {
   item: DatabaseUnifiedQueueItemRow | null;
+  extraItems?: DatabaseUnifiedQueueItemRow[];
+  destination?: Partial<DatabaseDestinationRow>;
+  account?: Partial<DatabaseSocialAccountRow>;
   settleError?: unknown;
 }) {
   const encryptedAccess = await encryptToken('plain-access-token', MASTER_KEY);
@@ -262,6 +343,7 @@ async function makeConsumerDb(opts: {
     metadata: {},
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    ...opts.destination,
   };
   const account: DatabaseSocialAccountRow = {
     id: 'acct-1',
@@ -278,9 +360,13 @@ async function makeConsumerDb(opts: {
     metadata: {},
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    ...opts.account,
   };
+  const queueItems = new Map<string, unknown>();
+  if (opts.item) queueItems.set(opts.item.id, opts.item);
+  for (const extra of opts.extraItems ?? []) queueItems.set(extra.id, extra);
   const tables: Record<string, Map<string, unknown>> = {
-    queue_items: new Map(opts.item ? [[opts.item.id, opts.item]] : []),
+    queue_items: queueItems,
     destinations: new Map([[destination.id, destination]]),
     social_accounts: new Map([[account.id, account]]),
   };
@@ -507,6 +593,205 @@ describe('Publish consumers (spec 121)', () => {
 });
 
 // ==========================================
+// Publish consumers — spec 139 publish safety
+// ==========================================
+
+describe('Publish consumers — spec 139 publish safety', () => {
+  it('does not re-publish an item already carrying external_post_id; settles published from the stored ids', async () => {
+    const item = await makeItem({
+      external_post_id: 'post-existing',
+      external_comment_id: 'comment-existing',
+      retry_count: 2,
+    });
+    const { db, settleCalls } = await makeConsumerDb({ item });
+    const publisher = fakePublisher('facebook', async () => ({
+      status: 'published',
+      externalPostId: 'post-NEW',
+    }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(settleCalls).toHaveLength(1);
+    expect(settleCalls[0]).toMatchObject({
+      p_outcome_status: 'published',
+      p_external_post_id: 'post-existing',
+      p_external_comment_id: 'comment-existing',
+      p_retry_count: 2,
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('threads a publisher detail into p_detail, and omits p_detail when no detail was supplied', async () => {
+    const item = await makeItem();
+    const withDetail = mapPublishOutcomeToSettleArgs(item, {
+      status: 'published',
+      externalPostId: 'post-1',
+      detail: { containerId: 'container-9' },
+    });
+    expect(withDetail.p_detail).toEqual({ containerId: 'container-9' });
+
+    const withoutDetail = mapPublishOutcomeToSettleArgs(item, {
+      status: 'published',
+      externalPostId: 'post-1',
+    });
+    expect('p_detail' in withoutDetail).toBe(false);
+  });
+
+  it('defers to queued without publishing while the destination is in cooldown, delaying until the cooldown ends', async () => {
+    const item = await makeItem();
+    const cooldownEnd = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const { db, settleCalls } = await makeConsumerDb({
+      item,
+      destination: { status: 'rate_limited', next_allowed_publish_at: cooldownEnd },
+    });
+    const publisher = fakePublisher('facebook', async () => ({ status: 'published' }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(settleCalls).toHaveLength(1);
+    expect(settleCalls[0]).toMatchObject({
+      p_outcome_status: 'queued',
+      p_error_code: DEFER_DESTINATION_COOLDOWN_CODE,
+      // No publish attempt was made: the retry budget is untouched.
+      p_retry_count: 0,
+    });
+    const delay = settleCalls[0]?.p_retry_delay_seconds as number;
+    expect(delay).toBeGreaterThan(500);
+    expect(delay).toBeLessThanOrEqual(600);
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers to queued without publishing when the destination is no longer claimable', async () => {
+    const item = await makeItem();
+    const { db, settleCalls } = await makeConsumerDb({
+      item,
+      destination: { status: 'disconnected' },
+    });
+    const publisher = fakePublisher('facebook', async () => ({ status: 'published' }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(settleCalls).toHaveLength(1);
+    expect(settleCalls[0]).toMatchObject({
+      p_outcome_status: 'queued',
+      p_error_code: DEFER_DESTINATION_NOT_ACTIVE_CODE,
+      p_retry_delay_seconds: DEFAULT_RETRY_DELAY_SECONDS,
+      p_retry_count: 0,
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('defers to queued without publishing when the account is not active', async () => {
+    const item = await makeItem();
+    const { db, settleCalls } = await makeConsumerDb({
+      item,
+      account: { status: 'expired' },
+    });
+    const publisher = fakePublisher('facebook', async () => ({ status: 'published' }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+
+    expect(publisher.publish).not.toHaveBeenCalled();
+    expect(settleCalls).toHaveLength(1);
+    expect(settleCalls[0]).toMatchObject({
+      p_outcome_status: 'queued',
+      p_error_code: DEFER_ACCOUNT_NOT_ACTIVE_CODE,
+      p_retry_count: 0,
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('still publishes when a rate_limited destination cooldown has already elapsed (claim-mirroring)', async () => {
+    const item = await makeItem();
+    const elapsed = new Date(Date.now() - 60 * 1000).toISOString();
+    const { db, settleCalls } = await makeConsumerDb({
+      item,
+      destination: { status: 'rate_limited', next_allowed_publish_at: elapsed },
+    });
+    const publisher = fakePublisher('facebook', async () => ({
+      status: 'published',
+      externalPostId: 'post-after-cooldown',
+    }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+    expect(settleCalls[0]).toMatchObject({
+      p_outcome_status: 'published',
+      p_external_post_id: 'post-after-cooldown',
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('captures a PostHog exception when publish processing throws (previously console-only)', async () => {
+    const bodies: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: { body?: string }) => {
+        bodies.push(init?.body ?? '');
+        return { ok: true };
+      })
+    );
+    try {
+      const item = await makeItem();
+      const { db } = await makeConsumerDb({ item });
+      const publisher = fakePublisher('facebook', async () => {
+        throw new Error('unexpected boom');
+      });
+      const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+      await expect(
+        handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+          db: db as never,
+          registry: registryWith(publisher),
+          masterKey: MASTER_KEY,
+          env: { POSTHOG_KEY: 'test-key' },
+        })
+      ).rejects.toThrow('unexpected boom');
+      expect(message.ack).not.toHaveBeenCalled();
+      expect(
+        bodies.some((b) => b.includes('$exception') && b.includes('publish_message_failed'))
+      ).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+// ==========================================
 // DLQ consumers
 // ==========================================
 
@@ -590,6 +875,56 @@ describe('DLQ consumers (spec 121)', () => {
     ).resolves.toBeUndefined();
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
+
+  it('does not settle a DLQ item the recovery sweep already reclaimed to queued, and writes no DLQ heartbeat count', async () => {
+    const item = await makeItem({ status: 'queued' });
+    const { db, settleCalls, upserts } = await makeConsumerDb({ item });
+    const message = fakeMessage(
+      { itemId: item.id, platform: 'facebook', lane: 'publish-fast' },
+      4
+    );
+
+    await handleDlqBatch(fakeBatch('publish-fast-dlq', [message]) as never, {
+      db: db as never,
+      env: { POSTHOG_KEY: 'test-key' },
+    });
+
+    expect(settleCalls).toHaveLength(0);
+    expect(message.ack).toHaveBeenCalledTimes(1);
+    // Stale arrivals are not settlements: no counts-only heartbeat write.
+    expect(upserts).toHaveLength(0);
+    // The arrival itself is still loud.
+    expect(fetchCalls.some((body) => body.includes('$exception'))).toBe(true);
+  });
+
+  it('counts only actual settlements in the heartbeat DLQ counter for a mixed batch', async () => {
+    const live = await makeItem({ id: 'item-live', status: 'publishing' });
+    const done = await makeItem({ id: 'item-done', status: 'published' });
+    const { db, settleCalls, upserts } = await makeConsumerDb({
+      item: live,
+      extraItems: [done],
+    });
+    const liveMsg = fakeMessage(
+      { itemId: live.id, platform: 'facebook', lane: 'publish-fast' },
+      4
+    );
+    const doneMsg = fakeMessage(
+      { itemId: done.id, platform: 'facebook', lane: 'publish-fast' },
+      4
+    );
+
+    await handleDlqBatch(fakeBatch('publish-fast-dlq', [liveMsg, doneMsg]) as never, {
+      db: db as never,
+      env: { POSTHOG_KEY: 'test-key' },
+    });
+
+    expect(settleCalls).toHaveLength(1);
+    expect(settleCalls[0]).toMatchObject({ p_queue_item_id: 'item-live' });
+    expect(liveMsg.ack).toHaveBeenCalledTimes(1);
+    expect(doneMsg.ack).toHaveBeenCalledTimes(1);
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0]?.last_dlq_fast).toBe(1);
+  });
 });
 
 // ==========================================
@@ -626,6 +961,27 @@ describe('Heartbeat lane counters (spec 121)', () => {
       last_enqueued_fast: 9,
       last_enqueued_heavy: 3,
     });
+  });
+
+  it('full tick writes omit last_settled_count when unset, preserving consumer counts (spec 139)', async () => {
+    const { db, upserts } = captureDb();
+    await recordHeartbeat(db as never, {
+      success: true,
+      claimed: 5,
+      enqueuedFast: 5,
+    });
+    expect(upserts[0]?.last_claimed_count).toBe(5);
+    expect('last_settled_count' in (upserts[0] ?? {})).toBe(false);
+  });
+
+  it('full tick writes still carry last_settled_count when explicitly supplied (spec 139)', async () => {
+    const { db, upserts } = captureDb();
+    await recordHeartbeat(db as never, {
+      success: true,
+      claimed: 5,
+      settled: 7,
+    });
+    expect(upserts[0]?.last_settled_count).toBe(7);
   });
 
   it('counts-only writes touch only the counters they carry', async () => {

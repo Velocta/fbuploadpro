@@ -125,8 +125,12 @@ export async function installApiFixtures(
 
   // Media library: list, folders, and the import pipeline
   // (check-duplicates → upload-url → signed PUT → confirm).
+  // PR-133-1: the library now reads through the typed client, whose
+  // schemas require the full list envelopes the real API returns —
+  // the fixtures serve those shapes (folders + unorganizedCount;
+  // items + total/limit/offset/nextCursor).
   await page.route(`**/api/tenant/${SUB}/media/folders`, (route) =>
-    json(route, { folders: [] })
+    json(route, { folders: [], unorganizedCount: 0 })
   );
   await page.route(`**/api/tenant/${SUB}/media/check-duplicates`, (route) =>
     json(route, { duplicates: [] })
@@ -154,10 +158,22 @@ export async function installApiFixtures(
     return json(route, item);
   });
   await page.route(/\/api\/tenant\/[^/]+\/media\?/, (route) =>
-    json(route, { items: state.media })
+    json(route, {
+      items: state.media,
+      total: state.media.length,
+      limit: 500,
+      offset: 0,
+      nextCursor: null,
+    })
   );
   await page.route(`**/api/tenant/${SUB}/media`, (route) =>
-    json(route, { items: state.media })
+    json(route, {
+      items: state.media,
+      total: state.media.length,
+      limit: 500,
+      offset: 0,
+      nextCursor: null,
+    })
   );
 
   // Storage signed URLs: the PUT itself is answered 200 — no real storage.

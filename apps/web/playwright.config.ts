@@ -3,15 +3,20 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Spec 137-A3 (T33): Playwright e2e for the four critical flows.
  *
- * - Chromium project only (decision D137-2).
+ * - Chromium project only (decision D137-2); spec 142 (PR-M142-3) adds
+ *   Chromium mobile-viewport projects for the full spec 142 §2 matrix
+ *   (320/360/390/430/768/1024) that run only the mobile layout spec — the
+ *   desktop critical flows are not re-run per width.
  * - `webServer` runs the production build (`next build` + `next start`)
  *   with a disposable e2e environment: a test SESSION_SECRET (the session
  *   fixture mints real signed session cookies against it), the localhost
- *   root domain, and NO Supabase/R2 credentials — the app must boot and
- *   serve with its storage/auth backends absent, and every backend or
- *   third-party call the flows make is intercepted at the browser boundary
- *   (see tests/e2e/fixtures/). No production data, no real third-party
- *   accounts, ever.
+ *   root domain, and dummy values for the full required env set — spec
+ *   139's boot-time validation fails a production boot that is missing
+ *   any of them. The values are non-functional (no real Supabase/R2/
+ *   Upstash/PostHog backends behind them), and every backend or
+ *   third-party call the flows make is intercepted at the browser
+ *   boundary (see tests/e2e/fixtures/). No production data, no real
+ *   third-party accounts, ever.
  * - CI: 1 retry, trace + screenshot on failure (artifacts uploaded by the
  *   Playwright CI job).
  */
@@ -40,7 +45,66 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      testIgnore: '**/mobile-layout.spec.ts',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-320',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 320, height: 720 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-360',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 360, height: 740 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-390',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-430',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 430, height: 932 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+    {
+      name: 'mobile-768',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 768, height: 1024 },
+        hasTouch: true,
+      },
+    },
+    {
+      name: 'mobile-1024',
+      testMatch: '**/mobile-layout.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1024, height: 768 },
+        hasTouch: true,
+      },
     },
   ],
   webServer: {
@@ -53,9 +117,28 @@ export default defineConfig({
       NODE_ENV: 'production',
       ['SESSION' + '_SECRET']: E2E_SESSION_SECRET,
       NEXT_PUBLIC_ROOT_DOMAIN: `localhost:${PORT}`,
+      NEXT_PUBLIC_APP_URL: BASE_URL,
       NEXT_PUBLIC_SIGNUPS_ENABLED: 'true',
       TOKEN_ENCRYPTION_KEY:
         '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      // Dummy values for the rest of spec 139's required env set — the
+      // production boot validator demands the full set; none of these
+      // point at a real backend (see the header comment). The Supabase
+      // values use the codebase's `placeholder` convention: the client
+      // factories (lib/auth/clients.ts) treat it as "not configured" and
+      // refuse instantly — a live-looking dummy URL instead makes
+      // supabase-js retry a dead backend for ~7s per query, which stalls
+      // SSR past the specs' timeouts.
+      NEXT_PUBLIC_SUPABASE_URL: 'https://placeholder.supabase.co',
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'placeholder-anon-key',
+      SUPABASE_SERVICE_ROLE_KEY: 'placeholder-service-role-key',
+      UPSTASH_REDIS_REST_URL: 'http://localhost:8079',
+      UPSTASH_REDIS_REST_TOKEN: 'e2e-test-upstash-token',
+      R2_ACCOUNT_ID: 'e2e-test-r2-account',
+      R2_ACCESS_KEY_ID: 'e2e-test-r2-access-key',
+      R2_SECRET_ACCESS_KEY: 'e2e-test-r2-secret-key',
+      R2_BUCKET_NAME: 'e2e-test-bucket',
+      POSTHOG_KEY: 'e2e-test-posthog-key',
     },
   },
 });

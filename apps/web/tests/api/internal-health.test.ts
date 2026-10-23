@@ -11,21 +11,44 @@ import {
  * Chainable Supabase-builder mock. Awaiting the builder resolves a head-count
  * style result; .maybeSingle() resolves row-style results.
  */
+type CapturedQuery = {
+  table: string;
+  filters: Record<string, unknown>;
+  lte: Record<string, unknown>;
+  or: string | null;
+};
+
 function createMockDb(options: {
   heartbeat: Record<string, unknown> | null;
   dueCount?: number;
   stuckCount?: number;
   oldestScheduledTime?: string | null;
+  legacyDueCount?: number;
+  legacyStuckCount?: number;
+  legacyOldestScheduledTime?: string | null;
   pageCounts?: Record<string, number>;
   accountCounts?: Record<string, number>;
 }) {
+  const queries: CapturedQuery[] = [];
   const makeBuilder = (table: string) => {
     const filters: Record<string, unknown> = {};
+    const lte: Record<string, unknown> = {};
+    const captured: CapturedQuery = { table, filters, lte, or: null };
+    queries.push(captured);
     const builder: Record<string, unknown> = {};
     const resolveCount = () => {
-      if (table === 'legacy_queue_items') {
+      if (table === 'queue_items') {
         return {
           count: filters.status === 'publishing' ? (options.stuckCount ?? 0) : (options.dueCount ?? 0),
+          error: null,
+        };
+      }
+      if (table === 'legacy_queue_items') {
+        return {
+          count:
+            filters.status === 'publishing'
+              ? (options.legacyStuckCount ?? 0)
+              : (options.legacyDueCount ?? 0),
           error: null,
         };
       }
@@ -42,17 +65,32 @@ function createMockDb(options: {
       filters[_col] = val;
       return builder;
     };
-    builder.lte = () => builder;
+    builder.lte = (col: string, val: unknown) => {
+      lte[col] = val;
+      return builder;
+    };
+    builder.or = (val: string) => {
+      captured.or = val;
+      return builder;
+    };
     builder.order = () => builder;
     builder.limit = () => builder;
     builder.maybeSingle = async () => {
       if (table === 'worker_heartbeats') {
         return { data: options.heartbeat, error: null };
       }
-      if (table === 'legacy_queue_items') {
+      if (table === 'queue_items') {
         return {
           data: options.oldestScheduledTime
             ? { scheduled_time: options.oldestScheduledTime }
+            : null,
+          error: null,
+        };
+      }
+      if (table === 'legacy_queue_items') {
+        return {
+          data: options.legacyOldestScheduledTime
+            ? { scheduled_time: options.legacyOldestScheduledTime }
             : null,
           error: null,
         };
@@ -65,7 +103,18 @@ function createMockDb(options: {
     ) => Promise.resolve(resolveCount()).then(resolve, reject);
     return builder;
   };
-  return { from: vi.fn((table: string) => makeBuilder(table)) } as unknown as SupabaseClient;
+  const db = {
+    from: vi.fn((table: string) => makeBuilder(table)),
+    __queries: queries,
+  } as unknown as SupabaseClient & { __queries: CapturedQuery[] };
+  return db;
+}
+
+function queriesFor(
+  db: SupabaseClient & { __queries: CapturedQuery[] },
+  table: string
+): CapturedQuery[] {
+  return db.__queries.filter((q) => q.table === table);
 }
 
 const NOW = new Date('2026-10-22T12:00:00.000Z');
@@ -170,6 +219,108 @@ describe('Internal Health Probe (/api/internal/health)', () => {
     expect(res.payload.checks.queue.stuckPublishingCount).toBe(2);
     expect(res.payload.checks.queue.dueCount).toBe(5);
     expect(res.payload.checks.queue.oldestDueAgeSeconds).toBe(300);
+  });
+
+  it('reads primary queue counts from the unified queue_items table and legacy counts as a separate field', async () => {
+    const db = createMockDb({
+      heartbeat: freshHeartbeat,
+      dueCount: 7,
+      stuckCount: 0,
+      oldestScheduledTime: '2026-10-22T11:50:00.000Z',
+      legacyDueCount: 3,
+      legacyStuckCount: 0,
+      legacyOldestScheduledTime: '2026-10-22T11:58:00.000Z',
+    });
+    const res = await probeInternalHealth({
+      db,
+      checkStorage: async () => true,
+      now: NOW,
+    });
+    expect(res.payload.status).toBe('ok');
+    // Primary = unified queue_items
+    expect(res.payload.checks.queue.dueCount).toBe(7);
+    expect(res.payload.checks.queue.oldestDueAgeSeconds).toBe(600);
+    expect(res.payload.checks.queue.stuckPublishingCount).toBe(0);
+    // Legacy kept, additive
+    expect(res.payload.checks.queue.legacy.dueCount).toBe(3);
+    expect(res.payload.checks.queue.legacy.oldestDueAgeSeconds).toBe(120);
+    expect(res.payload.checks.queue.legacy.stuckPublishingCount).toBe(0);
+  });
+
+  it('returns degraded when only legacy items are stuck in publishing', async () => {
+    const db = createMockDb({
+      heartbeat: freshHeartbeat,
+      stuckCount: 0,
+      legacyStuckCount: 1,
+    });
+    const res = await probeInternalHealth({
+      db,
+      checkStorage: async () => true,
+      now: NOW,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.payload.status).toBe('degraded');
+    expect(res.payload.checks.queue.stuckPublishingCount).toBe(0);
+    expect(res.payload.checks.queue.legacy.stuckPublishingCount).toBe(1);
+  });
+
+  it('queries the unified queue with claim semantics: queued + scheduled_time due', async () => {
+    const db = createMockDb({ heartbeat: freshHeartbeat });
+    await probeInternalHealth({ db, checkStorage: async () => true, now: NOW });
+    const unified = queriesFor(db, 'queue_items');
+    const due = unified.find((q) => q.filters.status === 'queued');
+    expect(due).toBeDefined();
+    expect(due?.lte.scheduled_time).toBe(NOW.toISOString());
+    // Oldest-due lookup uses the same predicate
+    const oldestLookups = unified.filter(
+      (q) => q.filters.status === 'queued' && q.lte.scheduled_time === NOW.toISOString()
+    );
+    expect(oldestLookups.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('queries unified stuck publishing with COALESCE(claimed_at, updated_at) at the 10-minute recovery threshold', async () => {
+    const db = createMockDb({ heartbeat: freshHeartbeat, stuckCount: 4 });
+    const res = await probeInternalHealth({
+      db,
+      checkStorage: async () => true,
+      now: NOW,
+    });
+    expect(res.payload.checks.queue.stuckPublishingCount).toBe(4);
+    const stuckBefore = '2026-10-22T11:50:00.000Z'; // NOW - 10 minutes
+    const unified = queriesFor(db, 'queue_items');
+    const stuck = unified.find((q) => q.filters.status === 'publishing');
+    expect(stuck).toBeDefined();
+    expect(stuck?.or).toBe(
+      `claimed_at.lte.${stuckBefore},and(claimed_at.is.null,updated_at.lte.${stuckBefore})`
+    );
+    // Legacy stuck keeps the legacy recovery predicate: updated_at only
+    const legacy = queriesFor(db, 'legacy_queue_items');
+    const legacyStuck = legacy.find((q) => q.filters.status === 'publishing');
+    expect(legacyStuck).toBeDefined();
+    expect(legacyStuck?.or).toBeNull();
+    expect(legacyStuck?.lte.updated_at).toBe(stuckBefore);
+  });
+
+  it('reports a stalled unified queue even when the legacy queue is clear', async () => {
+    const db = createMockDb({
+      heartbeat: freshHeartbeat,
+      dueCount: 42,
+      stuckCount: 3,
+      oldestScheduledTime: '2026-10-22T10:00:00.000Z',
+      legacyDueCount: 0,
+      legacyStuckCount: 0,
+      legacyOldestScheduledTime: null,
+    });
+    const res = await probeInternalHealth({
+      db,
+      checkStorage: async () => true,
+      now: NOW,
+    });
+    expect(res.payload.status).toBe('degraded');
+    expect(res.payload.checks.queue.dueCount).toBe(42);
+    expect(res.payload.checks.queue.oldestDueAgeSeconds).toBe(7200);
+    expect(res.payload.checks.queue.legacy.dueCount).toBe(0);
+    expect(res.payload.checks.queue.legacy.oldestDueAgeSeconds).toBeNull();
   });
 
   it('flips to unhealthy when storage is down', async () => {

@@ -100,6 +100,12 @@ export interface ClaimTickDeps {
   env?: PostHogEnv;
   /** Tick time; defaults to now. Drives the every-5th-tick recovery cadence. */
   now?: Date;
+  /**
+   * `ctx.waitUntil` from the scheduled handler (spec 139): threaded to
+   * every `captureWorkerError` call so PostHog captures are not lost
+   * when the isolate would otherwise terminate after the handler returns.
+   */
+  waitUntil?: ((promise: Promise<unknown>) => void) | undefined;
 }
 
 export interface ClaimTickResult {
@@ -123,6 +129,19 @@ function queueForLane(queues: ClaimerQueues, lane: PublishLane): LaneQueueProduc
   return queue;
 }
 
+/** Mark an error as already captured so the per-pair wrapper does not double-report it. */
+function markCaptured(err: unknown): void {
+  if (err && typeof err === 'object') {
+    (err as { __workerCaptured?: boolean }).__workerCaptured = true;
+  }
+}
+
+function isCaptured(err: unknown): boolean {
+  return Boolean(
+    err && typeof err === 'object' && (err as { __workerCaptured?: boolean }).__workerCaptured
+  );
+}
+
 async function claimAndEnqueueLane(
   deps: ClaimTickDeps,
   platform: Platform,
@@ -141,7 +160,15 @@ async function claimAndEnqueueLane(
       p_max_per_destination: CLAIM_MAX_PER_DESTINATION,
     });
     if (error) {
-      throw error instanceof Error ? error : new Error(String(error));
+      const claimError = error instanceof Error ? error : new Error(String(error));
+      captureWorkerError(
+        deps.env ?? {},
+        claimError,
+        { site: 'runClaimTick', kind: 'claim_rpc_error', platform, lane },
+        deps.waitUntil
+      );
+      markCaptured(claimError);
+      throw claimError;
     }
     const rows = (Array.isArray(data) ? data : []) as ClaimedRow[];
     if (rows.length === 0) return;
@@ -160,12 +187,51 @@ async function claimAndEnqueueLane(
     }));
     for (let i = 0; i < messages.length; i += SEND_BATCH_CHUNK_SIZE) {
       const chunk = messages.slice(i, i + SEND_BATCH_CHUNK_SIZE);
-      await queue.sendBatch(chunk.map((body) => ({ body })));
+      try {
+        await queue.sendBatch(chunk.map((body) => ({ body })));
+      } catch (err) {
+        // Per-chunk progress (spec 139): `result` already counts only
+        // the chunks that succeeded, so log the exact gap here — the
+        // claimed-but-not-enqueued remainder is diagnosable from this
+        // line / capture, and is backstopped by the recovery sweep
+        // (claimed rows stuck in `publishing` return to `queued`).
+        const enqueuedForLane =
+          lane === PUBLISH_LANE_FAST ? result.enqueuedFast : result.enqueuedHeavy;
+        // Chunks before offset `i` in this round already went out, so
+        // the not-yet-enqueued remainder of this round is messages - i.
+        console.error(
+          `[claimer] sendBatch failed platform=${platform} lane=${lane} chunkOffset=${i} chunkSize=${chunk.length} claimedTotal=${result.claimed} enqueuedForLane=${enqueuedForLane} claimedButNotEnqueuedThisRound=${messages.length - i}`,
+          err
+        );
+        captureWorkerError(
+          deps.env ?? {},
+          err,
+          {
+            site: 'runClaimTick',
+            kind: 'send_batch_failed',
+            platform,
+            lane,
+            chunkOffset: i,
+            chunkSize: chunk.length,
+            claimedTotal: result.claimed,
+            enqueuedFast: result.enqueuedFast,
+            enqueuedHeavy: result.enqueuedHeavy,
+          },
+          deps.waitUntil
+        );
+        markCaptured(err);
+        throw err;
+      }
       if (lane === PUBLISH_LANE_FAST) {
         result.enqueuedFast += chunk.length;
       } else {
         result.enqueuedHeavy += chunk.length;
       }
+      // Record per-chunk enqueue progress so a later chunk failure in
+      // this batch can be reconciled against what already went out.
+      console.info(
+        `[claimer] enqueued chunk platform=${platform} lane=${lane} chunkOffset=${i} chunkSize=${chunk.length} enqueuedFast=${result.enqueuedFast} enqueuedHeavy=${result.enqueuedHeavy} claimed=${result.claimed}`
+      );
     }
 
     if (rows.length < CLAIM_ROUND_LIMIT) return;
@@ -184,7 +250,8 @@ async function claimAndEnqueueLane(
  */
 export async function runRecoverySweep(
   db: ClaimerDbClient,
-  env: PostHogEnv = {}
+  env: PostHogEnv = {},
+  waitUntil?: (promise: Promise<unknown>) => void
 ): Promise<number> {
   let recovered = 0;
   for (const platform of ALL_PLATFORMS) {
@@ -194,11 +261,16 @@ export async function runRecoverySweep(
         p_timeout_minutes: RECOVERY_TIMEOUT_MINUTES,
       });
       if (error) {
-        captureWorkerError(env, error, {
-          site: 'runRecoverySweep',
-          kind: 'rpc_error',
-          platform,
-        });
+        captureWorkerError(
+          env,
+          error,
+          {
+            site: 'runRecoverySweep',
+            kind: 'rpc_error',
+            platform,
+          },
+          waitUntil
+        );
         console.error('[runRecoverySweep] RPC error:', platform, error);
         continue;
       }
@@ -210,11 +282,16 @@ export async function runRecoverySweep(
         recovered += count;
       }
     } catch (err) {
-      captureWorkerError(env, err, {
-        site: 'runRecoverySweep',
-        kind: 'unexpected',
-        platform,
-      });
+      captureWorkerError(
+        env,
+        err,
+        {
+          site: 'runRecoverySweep',
+          kind: 'unexpected',
+          platform,
+        },
+        waitUntil
+      );
       console.error('[runRecoverySweep] Unexpected error:', platform, err);
     }
   }
@@ -240,13 +317,31 @@ export async function runClaimTick(deps: ClaimTickDeps): Promise<ClaimTickResult
   };
 
   if (isRecoveryTick(now)) {
-    result.recovered = await runRecoverySweep(deps.db, deps.env ?? {});
+    result.recovered = await runRecoverySweep(deps.db, deps.env ?? {}, deps.waitUntil);
   }
 
   const platforms = deps.registry.platforms();
   for (const lane of [PUBLISH_LANE_FAST, PUBLISH_LANE_HEAVY] as const) {
     for (const platform of platforms) {
-      await claimAndEnqueueLane(deps, platform, lane, result);
+      // Per-pair isolation (spec 139): one failing (lane, platform)
+      // pair must not abort the tick for the remaining pairs.
+      try {
+        await claimAndEnqueueLane(deps, platform, lane, result);
+      } catch (err) {
+        if (!isCaptured(err)) {
+          captureWorkerError(
+            deps.env ?? {},
+            err,
+            { site: 'runClaimTick', kind: 'claim_pair_failed', platform, lane },
+            deps.waitUntil
+          );
+        }
+        console.error(
+          `[claimer] claim pair failed platform=${platform} lane=${lane}; continuing with remaining pairs:`,
+          err
+        );
+        continue;
+      }
     }
   }
 

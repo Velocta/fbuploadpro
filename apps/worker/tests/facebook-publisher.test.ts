@@ -6,7 +6,8 @@ import {
   type IFacebookPublishClient,
   type PublisherTokenSet,
 } from '@fbuploadpro/contracts';
-import { FacebookGraphError, MockFacebookPublishClient } from '../src/fb-client.js';
+import { FacebookGraphError } from '../src/fb-client.js';
+import { MockFacebookPublishClient } from './mock-fb-client.js';
 import { FacebookPublisher } from '../src/publishers/facebook.js';
 import { createWorkerPublisherRegistry } from '../src/registry.js';
 

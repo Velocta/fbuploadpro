@@ -92,7 +92,10 @@ export async function handleListFolders(
     .from('media_folders')
     .select('id, user_id, parent_id, name, created_at, updated_at')
     .eq('user_id', session.userId)
-    .order('name', { ascending: true });
+    .order('name', { ascending: true })
+    // Generous bound: folders per user are bounded by product use, but
+    // the list must never be an unbounded query (spec 139).
+    .limit(1000);
 
   if (foldersRes.error) {
     return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Failed to list folders' }, { status: 500 });
@@ -100,27 +103,35 @@ export async function handleListFolders(
 
   const folderRows = foldersRes.data || [];
 
-  // Query unorganized count and per-folder item counts via database-level count ({ count: 'exact', head: true })
-  const [unorganizedCountRes, ...folderItemCountResList] = await Promise.all([
-    supabase
-      .from('media_items')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', session.userId)
-      .is('folder_id', null),
-    ...folderRows.map((folder) =>
-      supabase
-        .from('media_items')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.userId)
-        .eq('folder_id', folder.id)
-    ),
-  ]);
+  // Grouped counts in O(1) requests (spec 139): a single query for the
+  // folder_id of every media item owned by the user, tallied in JS.
+  // This mirrors the fallback pattern used for queue status counts
+  // (single select of the grouping column + in-memory tally in
+  // pages/[pageId]) and replaces the previous 1 + N pattern, which
+  // issued one { count: 'exact', head: true } query per folder.
+  // Follow-up: for libraries with very large item counts, a grouped
+  // RPC (like get_page_queue_status_counts) would avoid transferring
+  // one folder_id row per item; that requires a migration and is out
+  // of scope for this PR. This approach is bounded by item count and
+  // issues a constant number of requests regardless of folder count.
+  const itemFolderRes = await supabase
+    .from('media_items')
+    .select('folder_id')
+    .eq('user_id', session.userId);
 
-  const unorganizedCount = unorganizedCountRes.count ?? 0;
+  if (itemFolderRes.error) {
+    return NextResponse.json({ error: 'INTERNAL_ERROR', message: 'Failed to list folders' }, { status: 500 });
+  }
+
+  let unorganizedCount = 0;
   const itemCounts = new Map<string, number>();
-  folderRows.forEach((folder, idx) => {
-    itemCounts.set(folder.id, folderItemCountResList[idx]?.count ?? 0);
-  });
+  for (const row of (itemFolderRes.data || []) as Array<{ folder_id: string | null }>) {
+    if (row.folder_id == null) {
+      unorganizedCount++;
+    } else {
+      itemCounts.set(row.folder_id, (itemCounts.get(row.folder_id) || 0) + 1);
+    }
+  }
 
   const subfolderCounts = new Map<string, number>();
   for (const folder of folderRows) {
