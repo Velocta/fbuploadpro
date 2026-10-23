@@ -114,13 +114,19 @@ jobs:
         run: pnpm --filter @fbuploadpro/web run tokens:check
 
   bundle-report:
-    # Bundle visibility (spec 137 §3.6.2 / PR-A4): builds apps/web with
-    # the bundle analyzer and uploads the report as an artifact on PRs
-    # touching the web app. Budgets are report-only (decision D137-3) —
-    # this job never fails on size; it exists so every PR's bundle
-    # impact is visible. (Like the other jobs it runs under this
-    # workflow's main-targeted triggers; stacked PRs show Vercel only.)
-    name: Bundle Report (analyzer artifact)
+    # Bundle visibility and enforcement (spec 137 §3.6.2 / PR-A4;
+    # D137-3 superseded 2026-10-24): builds apps/web with the bundle
+    # analyzer, measures the emitted JS, and fails when the shared
+    # bundle, any page route, or total client JS exceeds the budgets
+    # in apps/web/bundle-budgets.json (measured baseline + 5%
+    # headroom). The analyzer report and budget report remain CI
+    # artifacts, including on failure. This job is intentionally not
+    # path-gated on pull requests: gating by changed paths could skip
+    # exactly the shared/config/CI changes that alter bundles, so every
+    # PR gets the measurement and the gate. It is not a required
+    # branch-protection check; enforcement is part of the PR merge
+    # gate, alongside the required checks.
+    name: Bundle Report & Budgets (enforced)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
@@ -144,7 +150,7 @@ jobs:
       - name: Build contracts (web build dependency)
         run: pnpm --filter @fbuploadpro/contracts build
 
-      - name: Webpack build with bundle analyzer (report-only)
+      - name: Webpack build with bundle analyzer
         # The analyzer needs a webpack build; production stays on
         # Turbopack. next.config.ts scopes its route-type-validator
         # exemption to ANALYZE=true builds for exactly this run.
@@ -152,11 +158,20 @@ jobs:
         env:
           ANALYZE: 'true'
 
-      - name: Upload bundle analyzer report
+      - name: Measure bundle and enforce budgets
+        # Fails with the route/metric, actual size, budget, and overage
+        # for every violation. The generated Markdown report is
+        # uploaded by the next step even when this step fails.
+        run: pnpm --filter @fbuploadpro/web run bundle:check
+
+      - name: Upload bundle reports
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: bundle-analyzer-report
-          path: apps/web/.next/analyze/
+          path: |
+            apps/web/.next/analyze/
+            apps/web/.next/bundle-report.md
           if-no-files-found: warn
 
   e2e-changes:

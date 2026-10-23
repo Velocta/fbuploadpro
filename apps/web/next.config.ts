@@ -1,12 +1,13 @@
 import type { NextConfig } from 'next';
 import bundleAnalyzer from '@next/bundle-analyzer';
 
-// Bundle visibility (spec 137 §3.6.2): the analyzer runs on a webpack
-// build (`ANALYZE=true npx next build --webpack`) and emits its report
-// under .next/analyze/; the CI bundle-report job uploads that report as
-// an artifact on apps/web PRs. Budgets are report-only (decision
-// D137-3) — the measured baseline lives in PR-A4; enforced numbers are
-// proposed from it later. Production builds stay on Turbopack.
+// Bundle visibility and budgets (spec 137 §3.6.2): the analyzer runs
+// on a webpack build (`ANALYZE=true npx next build --webpack`) and
+// emits its report under .next/analyze/; the CI bundle job uploads the
+// analyzer report and the measured budget report as artifacts on PRs.
+// D137-3's report-only posture was superseded on 2026-10-24: budgets
+// in apps/web/bundle-budgets.json are enforced by the CI bundle job.
+// Production builds stay on Turbopack.
 const analyzeBuild = process.env.ANALYZE === 'true';
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: analyzeBuild,
