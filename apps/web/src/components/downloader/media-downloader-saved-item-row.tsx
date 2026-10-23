@@ -1,25 +1,22 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import type {
   DownloaderSourcePlatform,
   MediaFolder,
   MediaItemResponse,
 } from '@fbuploadpro/contracts';
-import {
-  THEME,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-} from '@/lib/theme';
+import { Button } from '@/components/shared/ui';
 import { formatFolderAncestryPath } from '@/components/media/media-library-explorer';
 import { deriveDefaultCaption, formatBytes } from '@/lib/upload-queue-helpers';
 import type { DownloaderSavedEntry } from './downloader-data';
 
 /**
- * Saved-item row for the downloader results list, extracted from
- * media-downloader.tsx. No behavior changes — moved verbatim.
+ * Saved-item row for the downloader results list (spec 140 PR-140-2,
+ * T13) — rebuilt on tokens/Tailwind with a `next/image` thumbnail;
+ * `formatPlatformLabel` and the Open in Folder behaviour are preserved
+ * exactly (§3 item 9).
  */
 
 export function formatPlatformLabel(platform: DownloaderSourcePlatform): string {
@@ -45,17 +42,13 @@ export function formatPlatformLabel(platform: DownloaderSourcePlatform): string 
   }
 }
 
-function renderSavedItemPreview(item: MediaItemResponse, previewSrc: string | null) {
+function SavedItemPreview({
+  item,
+  previewSrc,
+}: Readonly<{ item: MediaItemResponse; previewSrc: string | null }>) {
   if (!previewSrc) {
     return (
-      <span
-        style={{
-          fontSize: '0.6875rem',
-          fontWeight: TYPOGRAPHY.weights.semibold,
-          color: `var(--text-dim, ${THEME.default.text.muted})`,
-          textTransform: 'uppercase',
-        }}
-      >
+      <span className="text-metadata font-semibold uppercase text-ink-dim">
         {item.mediaType}
       </span>
     );
@@ -68,28 +61,21 @@ function renderSavedItemPreview(item: MediaItemResponse, previewSrc: string | nu
         muted
         playsInline
         preload="metadata"
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-        }}
+        className="h-full w-full object-cover"
       />
     );
   }
 
   return (
-    <img
+    <Image
       src={previewSrc}
       alt={item.name}
-      style={{
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-      }}
+      fill
+      sizes="64px"
+      className="object-cover"
     />
   );
 }
-
 
 export function DownloaderSavedItemRow({
   entry,
@@ -111,111 +97,32 @@ export function DownloaderSavedItemRow({
   return (
     <article
       data-testid={`downloader-saved-item-${item.id}`}
-      style={{
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        padding: SPACING.md,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: SPACING.md,
-        flexWrap: 'wrap',
-      }}
+      className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-line bg-panel p-4"
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: SPACING.md,
-          minWidth: 0,
-          flex: 1,
-        }}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-4">
         {/* Thumbnail / Video Preview */}
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: RADII.sm,
-            backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            overflow: 'hidden',
-            flexShrink: 0,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {renderSavedItemPreview(item, previewSrc)}
+        <div className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-sm border border-line bg-subtle">
+          <SavedItemPreview item={item} previewSrc={previewSrc} />
         </div>
 
         {/* Asset Details & Auto-Populated Caption */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: SPACING.xs,
-            minWidth: 0,
-            flex: 1,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: SPACING.sm,
-              flexWrap: 'wrap',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '0.875rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 truncate text-body font-semibold text-ink">
               {item.name}
             </span>
 
-            <span
-              style={{
-                fontSize: '0.75rem',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              }}
-            >
+            <span className="text-metadata tabular-nums text-ink-dim">
               {formatBytes(item.fileSize)}
             </span>
 
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                padding: `2px ${SPACING.xs}`,
-              }}
-            >
+            <span className="rounded-xs border border-line bg-subtle px-1.5 py-0.5 text-metadata font-medium text-ink-sub">
               {formatPlatformLabel(platform)}
             </span>
 
             <span
               data-testid={`downloader-item-folder-${item.id}`}
-              style={{
-                fontSize: '0.6875rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.xs,
-                padding: `2px ${SPACING.xs}`,
-              }}
+              className="rounded-xs border border-line bg-subtle px-1.5 py-0.5 text-metadata font-medium text-ink-sub"
             >
               {folderPathLabel}
             </span>
@@ -223,14 +130,7 @@ export function DownloaderSavedItemRow({
 
           <p
             data-testid={`downloader-item-caption-${item.id}`}
-            style={{
-              margin: 0,
-              fontSize: '0.8125rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
+            className="truncate text-body text-ink-sub"
           >
             {resolvedCaption}
           </p>
@@ -238,25 +138,18 @@ export function DownloaderSavedItemRow({
       </div>
 
       {/* Open in Folder Action */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.xs }}>
-        <button
+      <div className="flex items-center gap-1">
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           data-testid={`downloader-open-folder-${item.id}`}
           data-slot="downloader-open-folder-btn"
           onClick={() => onOpenInFolder(item.folderId)}
-          style={{
-            ...COMPONENT_STYLES.secondaryButton(THEME.default),
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            height: '34px',
-            fontSize: '0.8125rem',
-            whiteSpace: 'nowrap',
-          }}
         >
           Open in Folder
-        </button>
+        </Button>
       </div>
     </article>
   );
 }
-

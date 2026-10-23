@@ -7,8 +7,4 @@
 # (specs 130–136), never back in. When a change lowers the count, update
 # this file in the same PR; the guardrail fails on a stale (too-high)
 # number too, so the ratchet cannot silently loosen.
-1526
-
-
-
-
+1459

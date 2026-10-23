@@ -1,7 +1,7 @@
 # Raw <img> baseline (spec 137 §3.5 / PR-A4, guardrail check 15 +
 # ESLint @next/next/no-img-element at error in eslint.config.mjs).
 #
-# All 23 raw `<img>` occurrences in apps/web/src live in the 16 files
+# All 22 raw `<img>` occurrences in apps/web/src live in the 15 files
 # below — every one is surface-owned, none is in route/lib code, so
 # PR-A4 converts none of them (spec §3.5 + plan A4: conversions ride
 # the surface rebuilds, §4.1.4). The ESLint rule is off for exactly
@@ -14,8 +14,6 @@
 # preview exception, decided per case in the surface PR per §3.5):
 #   src/components/accounts/account-card.tsx              131 (Accounts)
 #   src/components/connect/destination-picker.tsx         131 (destinations)
-#   src/components/downloader/media-downloader-saved-item-row.tsx
-#                                                         downloader future upgrade spec (kept per D137-4)
 #   src/components/media/media-asset-card.tsx             133 (Media Library)
 #   src/components/media/media-import-progress-row.tsx    133 — transient blob: upload preview class (§3.5)
 #   src/components/media/media-import-staging.tsx         133 — transient blob: upload preview class (§3.5)
@@ -34,7 +32,6 @@
 # Format: <file> <count>
 apps/web/src/components/accounts/account-card.tsx 2
 apps/web/src/components/connect/destination-picker.tsx 1
-apps/web/src/components/downloader/media-downloader-saved-item-row.tsx 1
 apps/web/src/components/media/media-asset-card.tsx 1
 apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
