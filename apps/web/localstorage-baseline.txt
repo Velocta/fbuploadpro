@@ -1,0 +1,26 @@
+# localStorage baseline (spec 137 §3.9 / PR-A1b, guardrail check 13).
+#
+# Direct `localStorage` access in apps/web/src is ALLOWLIST-ONLY:
+#   apps/web/src/lib/storage/preferences.ts        typed preferences helper
+#   apps/web/src/app/layout.tsx                    theme-init script (129)
+#   apps/web/src/lib/auth-broadcast.ts             auth cross-tab broadcast
+#   apps/web/src/components/workspace/workspace-lifecycle-guard.tsx
+#                                                  receiving half of the
+#                                                  auth broadcast mechanism
+#
+# Pre-existing usages outside the allowlist are frozen here per file
+# (occurrence counts, same discipline as checks 9/12): any increase or
+# any new file fails CI, and a decrease fails until this file is
+# updated in the same PR. Each frozen usage is classified in PR-A1b's
+# per-site table (spec §3.9) with a named migration owner — the surface
+# that owns the file deletes or migrates it in its rebuild (§4.1.7).
+# Server-owned data in localStorage is banned outright; new device
+# preferences go through the typed helper, never direct access.
+#
+# Format: <file> <count>
+apps/web/src/components/media/media-library-explorer.tsx 2
+apps/web/src/components/media/media-library-helpers.ts 2
+apps/web/src/components/pages/dedicated/queue/content-tab.tsx 2
+apps/web/src/components/pages/dedicated/tab-insights.tsx 6
+apps/web/src/components/ui/sidebar.tsx 2
+apps/web/src/components/workspace/workspace-studio-footer.tsx 4

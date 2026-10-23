@@ -8,7 +8,9 @@ import {
   signSessionToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient, setSessionCookie, ensureWorkspaceForUser } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { setSessionCookie } from '@/lib/auth/session';
+import { ensureWorkspaceForUser } from '@/lib/auth/workspaces';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
   const token = request.cookies.get('fbup_session')?.value;

@@ -10,7 +10,7 @@ import {
 import { POST as generateMagicLink } from '../../src/app/api/tenant/[subdomain]/accounts/magic-link/route';
 import { GET as forwardMagicLink } from '../../src/app/connect/facebook/route';
 import { handleFacebookCallback } from '../../src/app/api/auth/facebook/callback/route';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/clients';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
@@ -213,7 +213,7 @@ describe('Magic Link Facebook Connection Endpoints (Spec 027)', () => {
         TEST_SECRET
       );
 
-      const authModule = await import('../../src/lib/supabase-auth');
+      const authModule = await import('../../src/lib/auth/clients');
       const mockSupabase = {
         from: vi.fn((table: string) => {
           if (table === 'workspaces') {

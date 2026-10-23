@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
   getSupabaseAdminClient,
   getCookieDomain,
+} from '@/lib/auth/clients';
+import {
   purgeHostOnlySessionCookie,
-} from '@/lib/supabase-auth';
+} from '@/lib/auth/session';
 import { buildCentralAppUrl } from '@fbuploadpro/contracts';
 
 export async function POST(request?: NextRequest) {

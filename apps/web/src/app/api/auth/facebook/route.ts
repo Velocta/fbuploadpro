@@ -6,14 +6,14 @@ import {
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
 export async function handleInitiateFacebookOAuth(
   request: NextRequest,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || '';

@@ -7,12 +7,46 @@ import {
   isSessionAuthorizedForSubdomain,
   type DatabaseClient,
   type Database,
+  type DatabaseFacebookAccountRow,
+  type DatabaseFacebookPageRow,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import type { PostgrestError } from '@supabase/supabase-js';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-function mapAccountRowToView(row: Record<string, any>) {
+/**
+ * One facebook_accounts row as the list mapper consumes it (spec 137
+ * §3.7). Legacy SQL rows and Supabase rows both land here; date fields
+ * arrive as strings from Supabase and may be Date objects from the raw
+ * driver, and the mapper tolerates the camelCase aliases the legacy
+ * query path produces.
+ */
+interface AccountRow {
+  id: string;
+  fb_account_id?: string | null;
+  fbAccountId?: string | null;
+  display_name?: string | null;
+  displayName?: string | null;
+  profile_picture_url?: string | null;
+  profilePictureUrl?: string | null;
+  gender?: string | null;
+  account_link?: string | null;
+  accountLink?: string | null;
+  status?: DatabaseFacebookAccountRow['status'] | null;
+  token_expires_at?: string | Date | null;
+  tokenExpiresAt?: string | Date | null;
+  connected_pages_count?: number | string | null;
+  connectedPagesCount?: number | string | null;
+  connected_pages?: unknown;
+  connectedPages?: unknown;
+  created_at?: string | Date | null;
+  createdAt?: string | Date | null;
+  updated_at?: string | Date | null;
+  updatedAt?: string | Date | null;
+}
+
+function mapAccountRowToView(row: AccountRow) {
   const rawExpiresAt = row.token_expires_at || row.tokenExpiresAt;
   const tokenExpiresAt = rawExpiresAt ? new Date(rawExpiresAt) : null;
   const computedStatus = evaluateAccountHealth({
@@ -43,7 +77,7 @@ function mapAccountRowToView(row: Record<string, any>) {
 function syncExpiredAccountStatus(
   accountId: string,
   userId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): void {
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     dbClient.query(
@@ -51,13 +85,13 @@ function syncExpiredAccountStatus(
        SET status = 'expired', updated_at = now()
        WHERE id = $1 AND user_id = $2`,
       [accountId, userId]
-    ).catch((err: any) => {
+    ).catch((err: unknown) => {
       console.error('[handleListAccounts] Failed to persist expired account status:', err);
     });
     return;
   }
 
-  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+  const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
   if (!supabase) return;
 
   supabase
@@ -65,7 +99,7 @@ function syncExpiredAccountStatus(
     .update({ status: 'expired', updated_at: new Date().toISOString() })
     .eq('id', accountId)
     .eq('user_id', userId)
-    .then(({ error }: { error: any }) => {
+    .then(({ error }: { error: PostgrestError | null }) => {
       if (error) {
         console.error('[handleListAccounts] Failed to persist expired account status via Supabase:', error);
       }
@@ -76,8 +110,8 @@ async function fetchLegacyAccounts(
   dbClient: DatabaseClient,
   workspaceId: string,
   userId: string
-): Promise<Array<Record<string, any>>> {
-  return (await dbClient.query(
+): Promise<AccountRow[]> {
+  return dbClient.query<AccountRow>(
     `SELECT
       fa.id,
       fa.fb_account_id,
@@ -110,14 +144,14 @@ async function fetchLegacyAccounts(
     GROUP BY fa.id
     ORDER BY fa.created_at DESC`,
     [userId, workspaceId]
-  )) as Array<Record<string, any>>;
+  );
 }
 
 async function fetchSupabaseAccounts(
   supabase: SupabaseClient<Database>,
   workspaceId: string,
   userId: string
-): Promise<{ rows?: Array<Record<string, any>>; error?: string }> {
+): Promise<{ rows?: AccountRow[]; error?: string }> {
   const { data: accountsData, error } = await supabase
     .from('facebook_accounts')
     .select(`
@@ -147,14 +181,21 @@ async function fetchSupabaseAccounts(
     return { error: error.message };
   }
 
-  const rows = (accountsData || []).map((acc: any) => {
+  // The contracts Database type resolves this joined select to never[]
+  // (its table entries carry no Relationships metadata for supabase-js),
+  // so the result is asserted once, here at the boundary, to the row
+  // shape the select actually returns.
+  const accountRows = (accountsData || []) as Array<
+    DatabaseFacebookAccountRow & { facebook_pages: DatabaseFacebookPageRow[] | null }
+  >;
+  const rows = accountRows.map((acc) => {
     const activePages = (acc.facebook_pages || []).filter(
-      (p: any) => p.status !== 'disconnected' && p.workspace_id === workspaceId
+      (p) => p.status !== 'disconnected' && p.workspace_id === workspaceId
     );
     return {
       ...acc,
       connected_pages_count: activePages.length,
-      connected_pages: activePages.map((p: any) => ({
+      connected_pages: activePages.map((p) => ({
         id: p.id,
         pageName: p.page_name,
         profilePictureUrl: p.profile_picture_url,
@@ -197,7 +238,7 @@ export async function handleListAccounts(
   }
 
   // 4. Query connected accounts with connected page count and linked pages aggregation scoped to workspace
-  let rows: Array<Record<string, any>> = [];
+  let rows: AccountRow[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     rows = await fetchLegacyAccounts(dbClient as DatabaseClient, workspaceId, session.userId);
@@ -230,7 +271,7 @@ export async function handleListAccounts(
     if (aExpired !== bExpired) {
       return bExpired - aExpired;
     }
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return new Date(b.createdAt ?? '').getTime() - new Date(a.createdAt ?? '').getTime();
   });
 
   const parsed = ListFacebookAccountsResponseSchema.safeParse({

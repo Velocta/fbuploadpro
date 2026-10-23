@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
-import { resendPasswordResetOtpViaSupabase } from '@/lib/supabase-auth';
+import { resendPasswordResetOtpViaSupabase } from '@/lib/auth/password-reset';
 
 export async function POST(request: NextRequest) {
   try {

@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest';
+import { queryKeys } from '@/lib/data/query-keys';
+
+describe('queryKeys factory (spec 137 §3.2.3)', () => {
+  it('roots the cache at the tenant scope', () => {
+    expect(queryKeys.all).toEqual(['tenant']);
+    expect(queryKeys.tenant('acme').all).toEqual(['tenant', 'acme']);
+  });
+
+  it('scopes every resource under its tenant', () => {
+    const tenant = queryKeys.tenant('acme');
+    for (const key of [
+      tenant.accounts.list,
+      tenant.pages.list,
+      tenant.queue.items('page-1'),
+      tenant.media.list,
+      tenant.settings.byoc,
+      tenant.insights.page('page-1', '28d'),
+      tenant.workspaces.list,
+    ]) {
+      expect(key.slice(0, 2)).toEqual(['tenant', 'acme']);
+    }
+  });
+
+  it('isolates tenants from each other', () => {
+    expect(queryKeys.tenant('acme').pages.list).not.toEqual(
+      queryKeys.tenant('globex').pages.list
+    );
+  });
+
+  it('builds hierarchical keys — detail and child keys extend their parents', () => {
+    const tenant = queryKeys.tenant('acme');
+    expect(tenant.pages.detail('page-1')).toEqual(['tenant', 'acme', 'pages', 'page-1']);
+    expect(tenant.pages.slots('page-1')).toEqual(['tenant', 'acme', 'pages', 'page-1', 'slots']);
+    expect(tenant.pages.slots('page-1').slice(0, tenant.pages.all.length)).toEqual([
+      ...tenant.pages.all,
+    ]);
+    expect(tenant.queue.items('page-1')).toEqual(['tenant', 'acme', 'queue', 'page-1', 'items']);
+    expect(tenant.queue.statusCounts('page-1')).toEqual([
+      'tenant',
+      'acme',
+      'queue',
+      'page-1',
+      'status-counts',
+    ]);
+    expect(tenant.accounts.detail('acc-1')).toEqual(['tenant', 'acme', 'accounts', 'acc-1']);
+    expect(tenant.accounts.socialList).toEqual(['tenant', 'acme', 'accounts', 'social']);
+    expect(tenant.destinations.detail('dest-1')).toEqual([
+      'tenant',
+      'acme',
+      'destinations',
+      'dest-1',
+    ]);
+    expect(tenant.media.detail('media-1')).toEqual(['tenant', 'acme', 'media', 'media-1']);
+    expect(tenant.media.folders).toEqual(['tenant', 'acme', 'media', 'folders']);
+    expect(tenant.settings.platformCredentials('instagram')).toEqual([
+      'tenant',
+      'acme',
+      'settings',
+      'platform-credentials',
+      'instagram',
+    ]);
+    expect(tenant.insights.page('page-1', '7d')).toEqual([
+      'tenant',
+      'acme',
+      'insights',
+      'page-1',
+      '7d',
+    ]);
+  });
+
+  it('is deterministic — the same inputs produce equal keys for invalidation', () => {
+    expect(queryKeys.tenant('acme').queue.items('p1')).toEqual(
+      queryKeys.tenant('acme').queue.items('p1')
+    );
+    expect(queryKeys.tenant('acme').queue.items('p1')).not.toEqual(
+      queryKeys.tenant('acme').queue.items('p2')
+    );
+  });
+});

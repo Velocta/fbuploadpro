@@ -1,0 +1,70 @@
+# Silent-failure baseline (spec 137 §3.1 / PR-A1a, guardrail check 12).
+#
+# The pattern family below is BANNED in apps/web/src:
+#   not-ok-return     `if (!res.ok) return;` (or `return null/undefined;`)
+#                     — a failed request silently abandons the operation
+#   bare-catch-return a catch block whose whole body is a bare return
+#   empty-catch       a catch block whose whole body is empty/comments
+#
+# Pre-existing occurrences are frozen here per file+category, exactly
+# like the design-system baseline (check 9): any increase or new file
+# fails CI, and a decrease fails until this file is updated in the same
+# PR. Existing occurrences are NOT fixed by PR-A1a — they are deleted
+# by the surface rebuilds that own each file (spec 137 §4.1.2).
+# Counts were produced by the scanner embedded in
+# .github/scripts/regression-guardrails.sh (check 12).
+#
+# Format: <category> <file> <count>
+bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/byoc/route.ts 1
+bare-catch-return apps/web/src/app/api/tenant/[subdomain]/settings/platform-credentials/[platform]/route.ts 1
+bare-catch-return apps/web/src/app/api/workspaces/route.ts 1
+bare-catch-return apps/web/src/app/api/workspaces/switch/route.ts 1
+bare-catch-return apps/web/src/app/tenant/[subdomain]/workspace-display-name.ts 1
+bare-catch-return apps/web/src/components/media/media-import-utils.ts 1
+bare-catch-return apps/web/src/components/media/media-library-filters.ts 1
+bare-catch-return apps/web/src/components/media/media-library-helpers.ts 2
+bare-catch-return apps/web/src/lib/auth.ts 1
+bare-catch-return apps/web/src/lib/auth/clients.ts 1
+bare-catch-return apps/web/src/lib/auth/users.ts 1
+bare-catch-return apps/web/src/lib/connect/platform-callback.ts 2
+bare-catch-return apps/web/src/lib/connect/session.ts 1
+bare-catch-return apps/web/src/lib/server/workspace-resolver.ts 2
+bare-catch-return apps/web/src/middleware.ts 1
+empty-catch apps/web/src/app/api/auth/facebook/callback/route.ts 1
+empty-catch apps/web/src/app/api/tenant/[subdomain]/downloader/route.ts 1
+empty-catch apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts 3
+empty-catch apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/route.ts 3
+empty-catch apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts 3
+empty-catch apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
+empty-catch apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 2
+empty-catch apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
+empty-catch apps/web/src/components/accounts/connect-account-modal.tsx 1
+empty-catch apps/web/src/components/desktop/desktop-titlebar.tsx 1
+empty-catch apps/web/src/components/downloader/media-downloader.tsx 2
+empty-catch apps/web/src/components/media/media-import-modal.tsx 1
+empty-catch apps/web/src/components/media/media-library-explorer.tsx 2
+empty-catch apps/web/src/components/media/use-media-library-actions.ts 1
+empty-catch apps/web/src/components/pages/add-page-modal.tsx 1
+empty-catch apps/web/src/components/pages/dedicated/composer/post-composer.tsx 1
+empty-catch apps/web/src/components/pages/dedicated/page-header.tsx 1
+empty-catch apps/web/src/components/pages/dedicated/queue/content-tab.tsx 5
+empty-catch apps/web/src/components/pages/dedicated/tab-insights.tsx 2
+empty-catch apps/web/src/components/pages/dedicated/tab-settings.tsx 2
+empty-catch apps/web/src/components/settings/byoc-settings-view.tsx 2
+empty-catch apps/web/src/components/settings/general-settings-view.tsx 1
+empty-catch apps/web/src/components/ui/sidebar.tsx 1
+empty-catch apps/web/src/components/workspace/create-workspace-modal.tsx 1
+empty-catch apps/web/src/components/workspace/workspace-lifecycle-guard.tsx 4
+empty-catch apps/web/src/components/workspace/workspace-sidebar.tsx 1
+empty-catch apps/web/src/components/workspace/workspace-studio-footer.tsx 4
+empty-catch apps/web/src/lib/auth-redirect.ts 1
+empty-catch apps/web/src/lib/auth/login.ts 1
+empty-catch apps/web/src/lib/insights/facebook-insights-client.ts 2
+empty-catch apps/web/src/lib/media-downloader.ts 3
+empty-catch apps/web/src/lib/server-analytics.ts 1
+empty-catch apps/web/src/lib/timezones.ts 1
+not-ok-return apps/web/src/components/accounts/connect-account-modal.tsx 1
+not-ok-return apps/web/src/components/media/media-import-modal.tsx 1
+not-ok-return apps/web/src/components/media/media-library-filters.ts 1
+not-ok-return apps/web/src/components/pages/dedicated/composer/post-composer.tsx 1
+not-ok-return apps/web/src/components/pages/dedicated/queue/content-tab.tsx 1

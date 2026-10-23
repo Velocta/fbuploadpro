@@ -1,5 +1,8 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import { THEME, PALETTE, RADII } from '@/lib/theme';
+
+export const metadata: Metadata = { title: 'Facebook connected' };
 import { ConnectStatusLayout } from '@/components/accounts/connect-status-layout';
 
 export default function FacebookConnectSuccessPage() {

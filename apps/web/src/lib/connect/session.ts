@@ -10,7 +10,7 @@ import {
   verifySessionToken,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { ConnectDbClient } from './persist';
 

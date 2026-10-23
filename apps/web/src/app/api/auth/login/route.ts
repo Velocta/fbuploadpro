@@ -3,9 +3,13 @@ import type { NextRequest } from 'next/server';
 import { LoginRequestSchema } from '@fbuploadpro/contracts';
 import {
   loginTenantUser,
-  resendSignupOtpViaSupabase,
+} from '@/lib/auth/login';
+import {
   setSessionCookie,
-} from '@/lib/supabase-auth';
+} from '@/lib/auth/session';
+import {
+  resendSignupOtpViaSupabase,
+} from '@/lib/auth/signup';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 import {

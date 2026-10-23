@@ -5,8 +5,10 @@ import {
   getSessionSecret,
   verifySessionToken,
   type DatabaseClient,
+  type DatabaseFacebookPageRow,
+  type SessionPayload,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -16,7 +18,34 @@ const UpdatePageRequestSchema = z.object({
   timezone: z.string().min(1).max(50).optional(),
 });
 
-function formatPageRow(row: any) {
+/**
+ * One facebook_pages row as formatPageRow consumes it (spec 137
+ * §3.7): snake_case (SQL/Supabase) and camelCase (legacy) spellings,
+ * plus the joined account display name. `tasks` stays unknown — the
+ * formatter narrows it (array | JSON string) itself.
+ */
+interface PageDetailRow {
+  id: string;
+  facebook_account_id?: string | null;
+  facebookAccountId?: string | null;
+  account_display_name?: string | null;
+  facebook_accounts?: { display_name: string } | null;
+  fb_page_id?: string | null;
+  fbPageId?: string | null;
+  page_name?: string | null;
+  pageName?: string | null;
+  profile_picture_url?: string | null;
+  category?: string | null;
+  timezone?: string | null;
+  starting_followers?: number | string | null;
+  current_followers?: number | string | null;
+  status: DatabaseFacebookPageRow['status'];
+  tasks?: unknown;
+  created_at: string;
+  updated_at: string;
+}
+
+function formatPageRow(row: PageDetailRow) {
   let parsedTasks: string[] = [];
   if (Array.isArray(row.tasks)) {
     parsedTasks = row.tasks;
@@ -54,7 +83,7 @@ function formatPageRow(row: any) {
 async function authenticateTenantRequest(
   request: NextRequest,
   subdomain: string
-): Promise<{ errorResponse?: NextResponse; session?: any }> {
+): Promise<{ errorResponse?: NextResponse; session?: SessionPayload }> {
   const secretKey = getSessionSecret();
 
   const token = request.cookies.get('fbup_session')?.value;
@@ -74,13 +103,13 @@ async function authenticateTenantRequest(
 }
 
 async function fetchActivePageById(
-  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+  client: DatabaseClient | SupabaseClient | null | undefined,
   pageId: string,
   userId: string,
   workspaceId: string
 ) {
   if (client && 'query' in client && typeof client.query === 'function') {
-    const rows = (await client.query(
+    const rows = await client.query<PageDetailRow>(
       `SELECT 
         p.id,
         p.facebook_account_id,
@@ -101,7 +130,7 @@ async function fetchActivePageById(
       WHERE p.id = $1 AND p.user_id = $2 AND p.workspace_id = $3
         AND p.status != 'disconnected'`,
       [pageId, userId, workspaceId]
-    )) as Record<string, unknown>[];
+    );
 
     if (!rows || rows.length === 0 || !rows[0]) {
       return null;
@@ -109,7 +138,7 @@ async function fetchActivePageById(
     return formatPageRow(rows[0]);
   }
 
-  const supabase = (client && 'from' in client ? client : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+  const supabase = (client && 'from' in client ? client : getSupabaseAdminClient()) as SupabaseClient | null;
   if (!supabase) return null;
 
   const { data, error } = await supabase
@@ -170,7 +199,7 @@ async function fetchQueueCountsLegacy(
 }
 
 async function fetchQueueCountsRpc(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   pageId: string,
   userId: string
 ): Promise<QueueStatusCounts | null> {
@@ -194,7 +223,7 @@ async function fetchQueueCountsRpc(
 }
 
 async function fetchQueueCountsFallback(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   pageId: string,
   userId: string
 ): Promise<QueueStatusCounts | null> {
@@ -220,7 +249,7 @@ async function fetchQueueCountsFallback(
 }
 
 async function fetchPageQueueCounts(
-  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+  client: DatabaseClient | SupabaseClient | null | undefined,
   pageId: string,
   userId: string
 ): Promise<QueueStatusCounts> {
@@ -231,7 +260,7 @@ async function fetchPageQueueCounts(
     return counts ?? { ...DEFAULT_QUEUE_STATUS_COUNTS };
   }
 
-  const supabase = ('from' in client ? client : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+  const supabase = ('from' in client ? client : getSupabaseAdminClient()) as SupabaseClient | null;
   if (!supabase) return { ...DEFAULT_QUEUE_STATUS_COUNTS };
 
   const rpcCounts = await fetchQueueCountsRpc(supabase, pageId, userId);
@@ -245,7 +274,7 @@ export async function handleGetPage(
   request: NextRequest,
   subdomain: string,
   pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const auth = await authenticateTenantRequest(request, subdomain);
   if (auth.errorResponse) return auth.errorResponse;
@@ -271,7 +300,7 @@ export async function handleUpdatePage(
   request: NextRequest,
   subdomain: string,
   pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const auth = await authenticateTenantRequest(request, subdomain);
   if (auth.errorResponse) return auth.errorResponse;
@@ -314,12 +343,15 @@ export async function handleUpdatePage(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
     if (parsed.data.status || parsed.data.timezone) {
-      const updates: Record<string, any> = {
+      const updates: Partial<DatabaseFacebookPageRow> & {
+        rate_limited_at?: string | null;
+        next_allowed_publish_at?: string | null;
+      } = {
         updated_at: new Date().toISOString(),
       };
       if (parsed.data.status) {
@@ -354,7 +386,7 @@ export async function handleDisconnectPage(
   request: NextRequest,
   subdomain: string,
   pageId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const auth = await authenticateTenantRequest(request, subdomain);
   if (auth.errorResponse) return auth.errorResponse;
@@ -391,7 +423,7 @@ export async function handleDisconnectPage(
       [session.userId, pageId]
     );
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

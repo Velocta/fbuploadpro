@@ -25,7 +25,7 @@ import type {
   ExchangedAccount,
 } from './registry';
 
-export type ConnectDbClient = DatabaseClient | SupabaseClient<any>;
+export type ConnectDbClient = DatabaseClient | SupabaseClient;
 
 /** Rows always carry a platform; this only guards malformed legacy data. */
 const FALLBACK_PLATFORM: Platform = 'facebook';

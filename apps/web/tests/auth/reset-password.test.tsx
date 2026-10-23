@@ -5,11 +5,15 @@ import { render } from '../components/setup';
 import ResetPasswordPage from '../../src/app/reset-password/page';
 import { POST as resetPasswordHandler } from '../../src/app/api/auth/reset-password/route';
 import {
+  _setMockSupabaseClient,
+} from '../../src/lib/auth/clients';
+import {
+  resetUserPassword,
+} from '../../src/lib/auth/password-reset';
+import {
   _setResetTokenForTesting,
   _resetAuthStores,
-  _setMockSupabaseClient,
-  resetUserPassword,
-} from '../../src/lib/supabase-auth';
+} from '../../src/lib/auth/stores';
 import {
   createPasswordResetOtp,
   _resetOtpStore,

@@ -113,6 +113,52 @@ jobs:
       - name: Design token parity check (spec 129)
         run: pnpm --filter @fbuploadpro/web run tokens:check
 
+  bundle-report:
+    # Bundle visibility (spec 137 §3.6.2 / PR-A4): builds apps/web with
+    # the bundle analyzer and uploads the report as an artifact on PRs
+    # touching the web app. Budgets are report-only (decision D137-3) —
+    # this job never fails on size; it exists so every PR's bundle
+    # impact is visible. (Like the other jobs it runs under this
+    # workflow's main-targeted triggers; stacked PRs show Vercel only.)
+    name: Bundle Report (analyzer artifact)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build contracts (web build dependency)
+        run: pnpm --filter @fbuploadpro/contracts build
+
+      - name: Webpack build with bundle analyzer (report-only)
+        # The analyzer needs a webpack build; production stays on
+        # Turbopack. next.config.ts scopes its route-type-validator
+        # exemption to ANALYZE=true builds for exactly this run.
+        run: pnpm --filter @fbuploadpro/web exec next build --webpack
+        env:
+          ANALYZE: 'true'
+
+      - name: Upload bundle analyzer report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: bundle-analyzer-report
+          path: apps/web/.next/analyze/
+          if-no-files-found: warn
+
   e2e-changes:
     name: Detect apps/web changes (Playwright gate)
     runs-on: ubuntu-latest

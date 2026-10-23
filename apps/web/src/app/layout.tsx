@@ -5,6 +5,7 @@ import { DesktopTitleBar } from '@/components/desktop';
 import { WhatsAppSupportButton } from '@/components/support';
 import { Analytics } from '@vercel/analytics/next';
 import { PostHogProvider } from '@/components/posthog-provider';
+import { fontSansClassName } from './fonts';
 
 export const metadata: Metadata = {
   title: 'FBUploadPro',
@@ -51,7 +52,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body>
+      <body className={fontSansClassName}>
         <PostHogProvider
           apiKey={process.env.POSTHOG_KEY}
           host={process.env.POSTHOG_HOST || 'https://us.i.posthog.com'}

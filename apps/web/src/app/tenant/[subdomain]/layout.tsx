@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import React from 'react';
 import { headers } from 'next/headers';
 import { shouldUseCleanTenantPaths } from '@/lib/tenant-href';
@@ -6,12 +7,35 @@ import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb';
 import { WorkspaceLifecycleGuard } from '@/components/workspace/workspace-lifecycle-guard';
 import { getServerSessionContext } from '@/lib/auth';
+import { DataProvider } from '@/lib/data/provider';
 import { SPACING, THEME } from '@/lib/theme';
 import { getWorkspaceDisplayName } from './workspace-display-name';
 
 interface TenantLayoutProps {
   params: Promise<{ subdomain: string }>;
   children: React.ReactNode;
+}
+
+/**
+ * Metadata standard (spec 137 §3.3.4 / PR-A2): tenant route titles follow
+ * `<Section> · <Workspace name>`; segments export a plain section title
+ * and this template appends the workspace name, resolved from the same
+ * server context the layout body uses. The default is the workspace name
+ * itself for segments that export no title.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ subdomain: string }>;
+}): Promise<Metadata> {
+  const { subdomain } = await params;
+  const workspaceName = (await getWorkspaceDisplayName(subdomain)) ?? subdomain;
+  return {
+    title: {
+      template: `%s · ${workspaceName}`,
+      default: workspaceName,
+    },
+  };
 }
 
 export default async function TenantLayout({ params, children }: Readonly<TenantLayoutProps>) {
@@ -42,6 +66,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
       };
 
   return (
+    <DataProvider subdomain={subdomain}>
     <SidebarProvider>
       <WorkspaceLifecycleGuard userId={session?.userId} userEmail={session?.email} />
       <WorkspaceSidebar subdomain={subdomain} useCleanPaths={useCleanPaths} user={user} workspaceName={workspaceName ?? undefined} />
@@ -77,5 +102,6 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
         {children}
       </SidebarInset>
     </SidebarProvider>
+    </DataProvider>
   );
 }

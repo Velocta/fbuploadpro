@@ -4,7 +4,7 @@ import {
   getTokenEncryptionKey,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { getR2Config } from '@/lib/storage';
 
 export type HealthStatus = 'ok' | 'degraded' | 'unhealthy';

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { resetUserPassword, resetUserPasswordWithOtp } from '@/lib/supabase-auth';
+import {
+  resetUserPassword,
+  resetUserPasswordWithOtp,
+} from '@/lib/auth/password-reset';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  type DatabaseMediaItemRow,
   canAccessTenant,
   ConfirmUploadRequestSchema,
   deriveDefaultCaptionFromFilename,
@@ -8,13 +9,13 @@ import {
   verifySessionToken,
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export async function handleConfirmUpload(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -64,7 +65,16 @@ export async function handleConfirmUpload(
       : deriveDefaultCaptionFromFilename(body.name);
 
   try {
-    let insertedRow: any;
+
+/** Media row as the handlers consume it (spec 137 §3.7): the contracts
+ * row minus workspace_id (not projected by these selects), plus the
+ * width/height columns the contracts type does not model yet. */
+type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
+  width: number | null;
+  height: number | null;
+};
+
+    let insertedRow: MediaItemRow;
 
     if (
       dbClient &&
@@ -72,7 +82,7 @@ export async function handleConfirmUpload(
         ('withTransaction' in dbClient && typeof (dbClient as unknown as Record<string, unknown>).withTransaction === 'function'))
     ) {
       const executeInsert = async (tx: {
-        query: (sql: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number }>;
+        query: (sql: string, params?: unknown[]) => Promise<{ rows: MediaItemRow[]; rowCount?: number }>;
       }) => {
         const insertRes = await tx.query(
           `INSERT INTO media_items (
@@ -113,13 +123,13 @@ export async function handleConfirmUpload(
       } else {
         insertedRow = await executeInsert({
           query: async (sql, params) => {
-            const rows = await dbClient.query(sql, params);
+            const rows = await dbClient.query<MediaItemRow>(sql, params);
             return { rows, rowCount: rows.length };
           },
         });
       }
     } else {
-      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+      const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
       if (!supabase) {
         return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
       }

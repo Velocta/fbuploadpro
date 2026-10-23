@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/index';
 
 const VALID_UUID = '00000000-0000-4000-a000-000000000001';
 

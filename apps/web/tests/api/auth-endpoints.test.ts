@@ -5,7 +5,10 @@ import { POST as handleVerifyOtp } from '../../src/app/api/auth/signup/verify-ot
 import { POST as handleLogin } from '../../src/app/api/auth/login/route';
 import { POST as handleLogout } from '../../src/app/api/auth/logout/route';
 import { POST as handleForgotPassword } from '../../src/app/api/auth/forgot-password/route';
-import { _seedTestUser, _resetAuthStores } from '../../src/lib/supabase-auth';
+import {
+  _seedTestUser,
+  _resetAuthStores,
+} from '../../src/lib/auth/stores';
 import { getPendingSignup, _resetOtpStore } from '../../src/lib/otp-service';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
 

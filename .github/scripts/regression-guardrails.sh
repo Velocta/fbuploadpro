@@ -369,6 +369,216 @@ while IFS= read -r cssfile; do
 done < <(find apps/web/src -name '*.css' 2>/dev/null | grep -v 'styles/tokens.generated.css' || true)
 
 # ---------------------------------------------------------------------------
+# Check 12: silent-failure pattern family banned (spec 137 §3.1 / PR-A1a).
+# In data code a failed request or a caught error must surface — never
+# vanish. Banned in apps/web/src:
+#   not-ok-return     `if (!res.ok) return;` (or return null/undefined;)
+#   bare-catch-return a catch block whose whole body is a bare return
+#   empty-catch       a catch block whose whole body is empty / comments
+# Pre-existing occurrences are frozen per file+category in
+# apps/web/silent-failure-baseline.txt (same discipline as check 9):
+# any increase or new file fails; a decrease fails until the baseline
+# is updated in the same PR. Existing occurrences ride the surface
+# rebuilds that own each file (spec 137 §4.1.2) — this check stops new
+# ones from the day it lands. New code talks to the API through
+# apps/web/src/lib/api (typed client: throws ApiError, never swallows).
+# ---------------------------------------------------------------------------
+SF_BASELINE="apps/web/silent-failure-baseline.txt"
+if [ -f "$SF_BASELINE" ]; then
+  SF_SCANNER="$(mktemp)"
+  cat > "$SF_SCANNER" <<'PERL_EOF'
+use strict;
+use warnings;
+my %counts;
+for my $file (@ARGV) {
+  open my $fh, '<', $file or next;
+  local $/;
+  my $content = <$fh>;
+  close $fh;
+  next unless defined $content;
+  my $notok = 0;
+  $notok++ while $content =~ /if\s*\(\s*!\s*[A-Za-z_\$][A-Za-z0-9_\$]*\.ok\s*\)\s*\{?\s*return\s*(?:null|undefined)?\s*;\s*\}?/g;
+  $counts{"not-ok-return $file"} += $notok if $notok;
+  while ($content =~ /catch\s*(?:\([^)]*\))?\s*\{/g) {
+    my $rest = substr($content, pos($content));
+    while (1) {
+      if    ($rest =~ s/\A\s+//)          { next; }
+      elsif ($rest =~ s/\A\/\/[^\n]*//)   { next; }
+      elsif ($rest =~ s/\A\/\*.*?\*\///s) { next; }
+      last;
+    }
+    if ($rest =~ /\A\}/) {
+      $counts{"empty-catch $file"}++;
+    }
+    elsif ($rest =~ /\Areturn\s*(?:null|undefined)?\s*;\s*\}/) {
+      $counts{"bare-catch-return $file"}++;
+    }
+  }
+}
+for my $key (sort keys %counts) {
+  my ($cat, $file) = split / /, $key, 2;
+  print "$cat $file $counts{$key}\n";
+}
+PERL_EOF
+  SF_CURRENT="$(mktemp)"
+  find apps/web/src -name '*.ts' -o -name '*.tsx' | sort | xargs perl "$SF_SCANNER" > "$SF_CURRENT" 2>/dev/null || true
+  SF_BASE_SORTED="$(mktemp)"
+  grep -E '^(not-ok-return|bare-catch-return|empty-catch)[[:space:]]' "$SF_BASELINE" | sort > "$SF_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    cat_name="$(printf '%s' "$change" | awk '{print $2}')"
+    fname="$(printf '%s' "$change" | awk '{print $3}')"
+    old_n="$(printf '%s' "$change" | awk '{print $4}')"
+    new_n="$(printf '%s' "$change" | awk '{print $5}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "silent-failure ban (${cat_name}): ${fname} has ${new_n} occurrence(s), baseline is ${old_n} -- surface the error (throw / present via the ladder); data code uses the typed client in src/lib/api (spec 137 §3.1); do not raise the baseline"
+    else
+      violation "silent-failure baseline STALE (${cat_name}): ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/silent-failure-baseline.txt in this PR (spec 137 PR-A1a)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1" "$2]=$3; seen[$1" "$2]=1; next }
+    { cur[$1" "$2]=$3; seen[$1" "$2]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$SF_BASE_SORTED" "$SF_CURRENT")
+  rm -f "$SF_SCANNER" "$SF_CURRENT" "$SF_BASE_SORTED"
+else
+  violation "silent-failure baseline file missing: apps/web/silent-failure-baseline.txt (spec 137 PR-A1a)"
+fi
+
+# ---------------------------------------------------------------------------
+# Check 13: localStorage allowlist (spec 137 §3.9 / PR-A1b).
+# Direct localStorage access in apps/web/src is allowlist-only:
+#   lib/storage/preferences.ts (typed helper), app/layout.tsx (theme-init,
+#   spec 129), lib/auth-broadcast.ts + workspace-lifecycle-guard.tsx (the
+#   auth cross-tab broadcast mechanism). Every other usage is frozen per
+#   file in apps/web/localstorage-baseline.txt (same discipline as checks
+#   9/12): any new file or increase fails; a decrease fails until the
+#   baseline is updated in the same PR. Frozen usages are classified in
+#   PR-A1b's per-site table with named migration owners (spec 137 §4.1.7).
+# ---------------------------------------------------------------------------
+LS_BASELINE="apps/web/localstorage-baseline.txt"
+LS_ALLOWLIST=" apps/web/src/lib/storage/preferences.ts apps/web/src/app/layout.tsx apps/web/src/lib/auth-broadcast.ts apps/web/src/components/workspace/workspace-lifecycle-guard.tsx "
+if [ -f "$LS_BASELINE" ]; then
+  LS_CURRENT="$(mktemp)"
+  while IFS= read -r ls_file; do
+    case "$LS_ALLOWLIST" in
+      *" $ls_file "*) continue ;;
+    esac
+    ls_count="$(grep -o 'localStorage' "$ls_file" 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$ls_count" -gt 0 ] && printf '%s %s\n' "$ls_file" "$ls_count" >> "$LS_CURRENT"
+  done < <(find apps/web/src -name '*.ts' -o -name '*.tsx' | sort)
+  LS_BASE_SORTED="$(mktemp)"
+  grep -E '^apps/web/src/' "$LS_BASELINE" | sort > "$LS_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    old_n="$(printf '%s' "$change" | awk '{print $3}')"
+    new_n="$(printf '%s' "$change" | awk '{print $4}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "localStorage allowlist: ${fname} has ${new_n} occurrence(s), baseline is ${old_n} -- direct access is allowlist-only (spec 137 §3.9); device preferences go through src/lib/storage/preferences.ts; do not raise the baseline"
+    else
+      violation "localStorage baseline STALE: ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/localstorage-baseline.txt in this PR (spec 137 PR-A1b)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1]=$2; seen[$1]=1; next }
+    { cur[$1]=$2; seen[$1]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$LS_BASE_SORTED" "$LS_CURRENT")
+  rm -f "$LS_CURRENT" "$LS_BASE_SORTED"
+else
+  violation "localStorage baseline file missing: apps/web/localstorage-baseline.txt (spec 137 PR-A1b)"
+fi
+
+# ---------------------------------------------------------------------------
+# Check 14: `any` ratchet (spec 137 §3.7 / PR-A4).
+# Type-position `any` in apps/web/src may only go DOWN. Counting method
+# (the baseline of record, recorded in apps/web/any-baseline.txt):
+# occurrences of the type-position pattern below via grep -oE — prose
+# uses of the word "any" do not count. Frozen per file (same discipline
+# as checks 9/12/13): any increase or new file fails; a decrease fails
+# until the baseline is updated in the same PR. PR-A4 cleared the whole
+# API-route/lib-owned share (205 -> 58); each residual names its owning
+# surface in the baseline header (spec 137 §4.1.6).
+# ---------------------------------------------------------------------------
+ANY_BASELINE="apps/web/any-baseline.txt"
+ANY_PAT='(:[[:space:]]*any\b|as[[:space:]]+any\b|<any[[:space:]]*[>,]|,[[:space:]]*any[[:space:]]*[>,]|\bany\[\])'
+if [ -f "$ANY_BASELINE" ]; then
+  ANY_CURRENT="$(mktemp)"
+  while IFS= read -r any_file; do
+    any_count="$(grep -oE "$ANY_PAT" "$any_file" 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$any_count" -gt 0 ] && printf '%s %s\n' "$any_file" "$any_count" >> "$ANY_CURRENT"
+  done < <(find apps/web/src -name '*.ts' -o -name '*.tsx' | sort)
+  ANY_BASE_SORTED="$(mktemp)"
+  grep -E '^apps/web/src/' "$ANY_BASELINE" | sort > "$ANY_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    old_n="$(printf '%s' "$change" | awk '{print $3}')"
+    new_n="$(printf '%s' "$change" | awk '{print $4}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "any ratchet INCREASED: ${fname} has ${new_n} type-position any occurrence(s), baseline is ${old_n} -- type the boundary properly (zod-inferred types, contracts row types, unknown + narrowing); do not raise the baseline (spec 137 §3.7)"
+    else
+      violation "any baseline STALE: ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/any-baseline.txt in this PR (spec 137 PR-A4)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1]=$2; seen[$1]=1; next }
+    { cur[$1]=$2; seen[$1]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$ANY_BASE_SORTED" "$ANY_CURRENT")
+  rm -f "$ANY_CURRENT" "$ANY_BASE_SORTED"
+else
+  violation "any baseline file missing: apps/web/any-baseline.txt (spec 137 PR-A4)"
+fi
+
+# ---------------------------------------------------------------------------
+# Check 15: raw <img> freeze (spec 137 §3.5 / PR-A4).
+# ESLint @next/next/no-img-element is an error across apps/web/src with
+# a per-file freeze for the 16 surface-owned files that still carry the
+# 23 pre-existing raw <img> elements; this check is the count-level
+# backstop (it also covers files ESLint's freeze list names): counts
+# frozen per file in apps/web/img-baseline.txt — any increase or new
+# file fails; a decrease fails until the baseline (and the ESLint
+# freeze list, when a file reaches zero) is updated in the same PR.
+# Conversions to next/image ride the surface rebuilds (§4.1.4).
+# ---------------------------------------------------------------------------
+IMG_BASELINE="apps/web/img-baseline.txt"
+if [ -f "$IMG_BASELINE" ]; then
+  IMG_CURRENT="$(mktemp)"
+  while IFS= read -r img_file; do
+    img_count="$(grep -o '<img' "$img_file" 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$img_count" -gt 0 ] && printf '%s %s\n' "$img_file" "$img_count" >> "$IMG_CURRENT"
+  done < <(find apps/web/src -name '*.ts' -o -name '*.tsx' | sort)
+  IMG_BASE_SORTED="$(mktemp)"
+  grep -E '^apps/web/src/' "$IMG_BASELINE" | sort > "$IMG_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    old_n="$(printf '%s' "$change" | awk '{print $3}')"
+    new_n="$(printf '%s' "$change" | awk '{print $4}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "raw <img> INCREASED: ${fname} has ${new_n} occurrence(s), baseline is ${old_n} -- use next/image (spec 137 §3.5); do not raise the baseline"
+    else
+      violation "img baseline STALE: ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/img-baseline.txt (and the ESLint freeze list when a file reaches zero) in this PR (spec 137 PR-A4)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1]=$2; seen[$1]=1; next }
+    { cur[$1]=$2; seen[$1]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$IMG_BASE_SORTED" "$IMG_CURRENT")
+  rm -f "$IMG_CURRENT" "$IMG_BASE_SORTED"
+else
+  violation "img baseline file missing: apps/web/img-baseline.txt (spec 137 PR-A4)"
+fi
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 count="$(wc -l < "$VIOLATIONS_FILE" | tr -d ' ')"

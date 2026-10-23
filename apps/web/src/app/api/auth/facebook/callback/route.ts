@@ -15,7 +15,7 @@ import {
   type DatabaseClient,
   type Database,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 
@@ -92,7 +92,7 @@ async function fetchGraphPageTokenMap(
 }
 
 export async function refreshConnectedPageTokens(
-  db: DatabaseClient | SupabaseClient<any> | null | undefined,
+  db: DatabaseClient | SupabaseClient | null | undefined,
   userId: string,
   workspaceId: string,
   accountRowId: string,
@@ -102,7 +102,7 @@ export async function refreshConnectedPageTokens(
 ): Promise<void> {
   const supabase =
     db && 'from' in db
-      ? (db as SupabaseClient<any>)
+      ? (db as SupabaseClient)
       : !db || !('query' in db)
         ? getSupabaseAdminClient()
         : null;
@@ -265,7 +265,7 @@ function getCallbackEnvConfig() {
 }
 
 async function upsertConnectedFacebookAccount(
-  db: DatabaseClient | SupabaseClient<any> | null | undefined,
+  db: DatabaseClient | SupabaseClient | null | undefined,
   userId: string,
   workspaceId: string,
   meProfile: FacebookUserProfileResponse,
@@ -274,7 +274,7 @@ async function upsertConnectedFacebookAccount(
 ): Promise<{ accountRowId: string | undefined; alreadyExisted: boolean }> {
   const supabase =
     db && 'from' in db
-      ? (db as SupabaseClient<any>)
+      ? (db as SupabaseClient)
       : !db || !('query' in db)
         ? getSupabaseAdminClient()
         : null;
