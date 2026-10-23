@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import * as React from 'react';
 
 import { Card } from '@/components/shared/ui/card';
 import { StatusDot } from '@/components/shared/ui/status-dot';

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import * as React from 'react';
 
 import { ConnectStatusLayout } from '@/components/accounts/connect-status-layout';
 
