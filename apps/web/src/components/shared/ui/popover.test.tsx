@@ -1,34 +1,60 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
-import { describe, it, expect, beforeAll } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ensureDomShims } from "./test-utils";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Popover, PopoverTrigger, PopoverContent, PopoverHeader, PopoverTitle, PopoverDescription } from "./popover";
 import { Button } from "./button";
 
-beforeAll(ensureDomShims);
+function TestPopover() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline">Details</Button>
+      </PopoverTrigger>
+      <PopoverContent>
+        <PopoverHeader>
+          <PopoverTitle>Post details</PopoverTitle>
+          <PopoverDescription>Scheduled for tomorrow.</PopoverDescription>
+        </PopoverHeader>
+        <label>
+          Note <input aria-label="Note" />
+        </label>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 describe("Popover", () => {
-  it("opens anchored content; Esc closes and returns focus to the trigger", async () => {
-    render(
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline">Details</Button>
-        </PopoverTrigger>
-        <PopoverContent>
-          <PopoverHeader>
-            <PopoverTitle>Post details</PopoverTitle>
-            <PopoverDescription>Scheduled for tomorrow.</PopoverDescription>
-          </PopoverHeader>
-        </PopoverContent>
-      </Popover>
-    );
+  it("opens anchored content on click; Esc closes and returns focus to the trigger", async () => {
+    const user = userEvent.setup();
+    render(<TestPopover />);
     const trigger = screen.getByRole("button", { name: "Details" });
-    fireEvent.click(trigger);
+    await user.click(trigger);
     const content = screen.getByText("Post details").closest('[data-slot="popover-content"]') as HTMLElement;
     expect(content).not.toBeNull();
-    fireEvent.keyDown(content, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByText("Post details")).toBeNull());
-    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(screen.getByText("Scheduled for tomorrow.")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByText("Post details")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("interactive content inside the popover is reachable and typeable", async () => {
+    const user = userEvent.setup();
+    render(<TestPopover />);
+    await user.click(screen.getByRole("button", { name: "Details" }));
+    const note = screen.getByLabelText("Note");
+    await user.click(note);
+    await user.type(note, "Follow up");
+    expect(note).toHaveValue("Follow up");
+  });
+
+  it("clicking the trigger again closes the popover (toggle)", async () => {
+    const user = userEvent.setup();
+    render(<TestPopover />);
+    const trigger = screen.getByRole("button", { name: "Details" });
+    await user.click(trigger);
+    expect(screen.getByText("Post details")).toBeInTheDocument();
+    await user.click(trigger);
+    expect(screen.queryByText("Post details")).not.toBeInTheDocument();
   });
 });

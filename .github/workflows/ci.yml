@@ -159,3 +159,73 @@ jobs:
           path: apps/web/.next/analyze/
           if-no-files-found: warn
 
+  e2e-changes:
+    name: Detect apps/web changes (Playwright gate)
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.diff.outputs.web }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check whether apps/web changed
+        id: diff
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            RANGE="${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}"
+          else
+            RANGE="${{ github.event.before }}...${{ github.event.after }}"
+          fi
+          if git diff --name-only "$RANGE" -- apps/web | grep -q .; then
+            echo "web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "web=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  playwright:
+    name: Playwright E2E (Chromium)
+    needs: e2e-changes
+    if: needs.e2e-changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@7088e561eb65bb68695d245aa206f005ef30921d # v4.1.0
+        with:
+          version: 9.15.9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build contracts (web build dependency)
+        run: pnpm --filter @fbuploadpro/contracts build
+
+      - name: Install Chromium for Playwright
+        run: pnpm --filter @fbuploadpro/web exec playwright install --with-deps chromium
+
+      - name: Run Playwright e2e (production build, 1 retry in CI)
+        run: pnpm --filter @fbuploadpro/web run test:e2e
+
+      - name: Upload Playwright report and traces on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-artifacts
+          path: |
+            apps/web/playwright-report/
+            apps/web/tests/e2e/.results/
+          retention-days: 14
+          if-no-files-found: ignore
+

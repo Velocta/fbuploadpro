@@ -31,6 +31,11 @@ coverage/
 *.lcov
 .vitest/
 
+# Playwright (spec 137-A3)
+test-results/
+playwright-report/
+apps/web/tests/e2e/.results/
+
 # OS & Editor
 .DS_Store
 Thumbs.db

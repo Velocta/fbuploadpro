@@ -1,14 +1,14 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Button } from "./button";
 
 describe("Button", () => {
   it("renders a real button with the gold primary variant by default", () => {
     render(<Button>Publish</Button>);
     const btn = screen.getByRole("button", { name: "Publish" });
-    expect(btn.getAttribute("data-variant")).toBe("default");
+    expect(btn).toHaveAttribute("data-variant", "default");
     expect(btn.className).toContain("bg-primary");
     expect(btn.className).toContain("text-on-primary");
     expect(btn.className).toContain("h-10");
@@ -20,16 +20,31 @@ describe("Button", () => {
     expect(btn.className).not.toMatch(/-\[/);
   });
 
-  it("fires onClick and is a non-submit button by default", () => {
+  it("fires onClick and is a non-submit button by default", async () => {
+    const user = userEvent.setup();
     const onClick = vi.fn();
     render(<Button onClick={onClick}>Save</Button>);
     const btn = screen.getByRole("button", { name: "Save" });
-    expect(btn.getAttribute("type")).toBe("button");
-    fireEvent.click(btn);
+    expect(btn).toHaveAttribute("type", "button");
+    await user.click(btn);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it("loading state: spinner geometry, aria-busy, activation blocked", () => {
+  it("keyboard: Tab reaches it, Enter and Space activate it", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(<Button onClick={onClick}>Save</Button>);
+    await user.tab();
+    const btn = screen.getByRole("button", { name: "Save" });
+    expect(btn).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(onClick).toHaveBeenCalledTimes(1);
+    await user.keyboard(" ");
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
+  it("loading state: spinner geometry, aria-busy, activation blocked", async () => {
+    const user = userEvent.setup();
     const onClick = vi.fn();
     render(
       <Button loading onClick={onClick}>
@@ -37,16 +52,30 @@ describe("Button", () => {
       </Button>
     );
     const btn = screen.getByRole("button", { name: /Saving/ });
-    expect(btn.getAttribute("aria-busy")).toBe("true");
-    expect((btn as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(btn);
+    expect(btn).toHaveAttribute("aria-busy", "true");
+    expect(btn).toBeDisabled();
+    await user.click(btn);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("disabled button cannot be activated by click or keyboard", async () => {
+    const user = userEvent.setup();
+    const onClick = vi.fn();
+    render(
+      <Button disabled onClick={onClick}>
+        Schedule
+      </Button>
+    );
+    const btn = screen.getByRole("button", { name: "Schedule" });
+    expect(btn).toBeDisabled();
+    await user.click(btn);
     expect(onClick).not.toHaveBeenCalled();
   });
 
   it("disabled-with-a-reason exposes the reason as its description", () => {
     render(<Button disabledReason="Connect a Page first">Schedule</Button>);
     const btn = screen.getByRole("button", { name: "Schedule" });
-    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(btn).toBeDisabled();
     const describedBy = btn.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy as string)?.textContent).toBe("Connect a Page first");
@@ -59,7 +88,7 @@ describe("Button", () => {
       </Button>
     );
     const link = screen.getByRole("link", { name: "Queue" });
-    expect(link.getAttribute("href")).toBe("/queue");
+    expect(link).toHaveAttribute("href", "/queue");
     expect(link.className).toContain("bg-primary");
   });
 });
