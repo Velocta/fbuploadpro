@@ -1,8 +1,9 @@
 /**
  * Spec 139 db-hygiene assertion suite (real PostgreSQL, SQL level).
  *
- * Proves the two changes in
- * supabase/migrations/20261023193000_db_hygiene.sql:
+ * Proves the changes in
+ * supabase/migrations/20261023193000_db_hygiene.sql and
+ * supabase/migrations/20261024100000_posting_slots_unique.sql:
  *
  *   1. idx_queue_items_publishing_claimed — a partial index on
  *      public.queue_items (platform, claimed_at) WHERE status =
@@ -39,11 +40,21 @@
  *           eligibility for the shape, not about beating the
  *           planner's cost model on a small table);
  *       (f) the migration is idempotent (re-applying the file exits
- *           clean and the state above still holds).
+ *           clean and the state above still holds);
+ *       (g) uq_posting_slots_destination_time exists as a UNIQUE
+ *           constraint on public.posting_slots (destination_id,
+ *           time_of_day) — spec 139 N5: a duplicate insert at the same
+ *           destination + time fails 23505 (including with
+ *           is_active = false — the constraint is plain, not partial,
+ *           matching the legacy page_queue_slots semantics where
+ *           is_active is toggled in place and removal is a hard
+ *           DELETE), while a distinct time or a distinct destination
+ *           succeeds; the migration file is idempotent.
  *   vulnerable — run against a database built with
  *     DB_HYGIENE_MIGRATIONS_UNTIL=20261023120000_rls_rpc_hardening.sql
  *     (pre-hygiene). Asserts the findings are still present (index
- *     absent, PUBLIC EXECUTE intact), proving the rig detects them.
+ *     absent, PUBLIC EXECUTE intact, posting_slots unique absent —
+ *     a duplicate insert succeeds), proving the rig detects them.
  *     Trigger-firing and recovery sections still run: they document
  *     the pre-state behaviour the migration must preserve.
  *
@@ -447,6 +458,129 @@ async function sectionIdempotent(pool: Pool): Promise<void> {
   check(again.ok, `re-applying ${file} exits clean`, `${again.code} ${again.message}`);
 }
 
+const DEST_A = 'f0000000-0000-0000-0000-000000000002';
+const DEST_B = 'f0000000-0000-0000-0000-0000000000b2';
+const ACCOUNT_A = 'f0000000-0000-0000-0000-000000000001';
+
+async function sectionPostingSlots(pool: Pool): Promise<void> {
+  console.log('\n(g) posting_slots UNIQUE(destination_id, time_of_day) — spec 139 N5');
+  // Self-cleaning: the section commits its probes, so clear any slots it
+  // owns before and after (fixture reset truncates destinations CASCADE,
+  // which already removes slots, but re-runs of check.ts on one database
+  // must see the same start state).
+  await pool.query('DELETE FROM public.posting_slots WHERE destination_id = ANY($1::uuid[])', [
+    [DEST_A, DEST_B],
+  ]);
+  await pool.query('DELETE FROM public.destinations WHERE id = $1', [DEST_B]);
+
+  const { rows } = await pool.query<{ contype: string; columns: string | null }>(`
+    SELECT c.contype::text AS contype,
+           (SELECT string_agg(a.attname, ',' ORDER BY k.ord)
+              FROM unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+              JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+           ) AS columns
+      FROM pg_constraint c
+      JOIN pg_class t ON t.oid = c.conrelid
+      JOIN pg_namespace n ON n.oid = t.relnamespace
+     WHERE n.nspname = 'public' AND t.relname = 'posting_slots'
+       AND c.conname = 'uq_posting_slots_destination_time'
+  `);
+  if (!hardened) {
+    check(rows.length === 0, 'constraint absent before the N5 migration (finding present)');
+    const first = await attemptSuper(
+      pool,
+      'INSERT INTO public.posting_slots (destination_id, time_of_day) VALUES ($1::uuid, $2::time)',
+      [DEST_A, '09:30']
+    );
+    check(first.ok, 'vulnerable: first slot insert succeeds', `${first.code} ${first.message}`);
+    const dup = await attemptSuper(
+      pool,
+      'INSERT INTO public.posting_slots (destination_id, time_of_day) VALUES ($1::uuid, $2::time)',
+      [DEST_A, '09:30']
+    );
+    check(dup.ok, 'vulnerable: duplicate (destination_id, time_of_day) insert succeeds (finding present)', `${dup.code} ${dup.message}`);
+    await pool.query('DELETE FROM public.posting_slots WHERE destination_id = ANY($1::uuid[])', [
+      [DEST_A, DEST_B],
+    ]);
+    return;
+  }
+  check(rows.length === 1, 'constraint exists', `found ${rows.length}`);
+  if (rows.length === 1) {
+    check(rows[0]!.contype === 'u', 'constraint is UNIQUE (contype u)', rows[0]!.contype);
+    check(
+      rows[0]!.columns === 'destination_id,time_of_day',
+      'constraint columns are (destination_id, time_of_day) in order',
+      rows[0]!.columns ?? 'null'
+    );
+  }
+
+  const first = await attemptSuper(
+    pool,
+    'INSERT INTO public.posting_slots (destination_id, time_of_day) VALUES ($1::uuid, $2::time)',
+    [DEST_A, '09:30']
+  );
+  check(first.ok, 'first slot at (dest A, 09:30) inserts', `${first.code} ${first.message}`);
+
+  const dup = await attemptSuper(
+    pool,
+    'INSERT INTO public.posting_slots (destination_id, time_of_day) VALUES ($1::uuid, $2::time)',
+    [DEST_A, '09:30']
+  );
+  check(
+    !dup.ok && dup.code === '23505' && (dup.message ?? '').includes('uq_posting_slots_destination_time'),
+    'duplicate active slot at (dest A, 09:30) rejected 23505 by uq_posting_slots_destination_time',
+    dup.ok ? 'insert succeeded' : `${dup.code} ${dup.message}`
+  );
+
+  const dupInactive = await attemptSuper(
+    pool,
+    'INSERT INTO public.posting_slots (destination_id, time_of_day, is_active) VALUES ($1::uuid, $2::time, false)',
+    [DEST_A, '09:30']
+  );
+  check(
+    !dupInactive.ok && dupInactive.code === '23505',
+    'duplicate INACTIVE slot at (dest A, 09:30) also rejected — plain unique, is_active is a toggle, not soft-delete',
+    dupInactive.ok ? 'insert succeeded' : `${dupInactive.code} ${dupInactive.message}`
+  );
+
+  const otherTime = await attemptSuper(
+    pool,
+    'INSERT INTO public.posting_slots (destination_id, time_of_day) VALUES ($1::uuid, $2::time)',
+    [DEST_A, '10:45']
+  );
+  check(otherTime.ok, 'distinct time at dest A (10:45) inserts', `${otherTime.code} ${otherTime.message}`);
+
+  const mkDest = await attemptSuper(
+    pool,
+    `INSERT INTO public.destinations (id, workspace_id, account_id, platform, external_destination_id, name, encrypted_destination_token, status)
+     VALUES ($1::uuid, $2::uuid, $3::uuid, 'facebook', 'ext-dest-b', 'Rig Unified Dest B', 'dummy-encrypted-destination-token', 'active')`,
+    [DEST_B, WS_A, ACCOUNT_A]
+  );
+  check(mkDest.ok, 'second destination fixture inserts', `${mkDest.code} ${mkDest.message}`);
+  const otherDest = await attemptSuper(
+    pool,
+    'INSERT INTO public.posting_slots (destination_id, time_of_day) VALUES ($1::uuid, $2::time)',
+    [DEST_B, '09:30']
+  );
+  check(otherDest.ok, 'same time at a distinct destination (dest B, 09:30) inserts', `${otherDest.code} ${otherDest.message}`);
+
+  const file = readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('_posting_slots_unique.sql'))
+    .sort()
+    .at(-1);
+  check(file !== undefined, 'posting_slots unique migration file found', migrationsDir);
+  if (file) {
+    const sql = readFileSync(join(migrationsDir, file), 'utf8');
+    const again = await attemptSuper(pool, sql);
+    check(again.ok, `re-applying ${file} exits clean (idempotent)`, `${again.code} ${again.message}`);
+  }
+
+  await pool.query('DELETE FROM public.posting_slots WHERE destination_id = ANY($1::uuid[])', [
+    [DEST_A, DEST_B],
+  ]);
+  await pool.query('DELETE FROM public.destinations WHERE id = $1', [DEST_B]);
+}
+
 async function dumpState(pool: Pool): Promise<void> {
   const { rows } = await pool.query<{ line: string }>(`
     SELECT format('%s  proacl=%s', p.proname, COALESCE(p.proacl::text, '(default: EXECUTE TO PUBLIC)')) AS line
@@ -460,6 +594,13 @@ async function dumpState(pool: Pool): Promise<void> {
     `SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_queue_items_publishing_claimed'`
   );
   console.log(`  index: ${idx.rows[0]?.indexdef ?? '(absent)'}`);
+  const uq = await pool.query<{ def: string }>(
+    `SELECT pg_get_constraintdef(c.oid) AS def FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.conrelid JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE n.nspname = 'public' AND t.relname = 'posting_slots'
+        AND c.conname = 'uq_posting_slots_destination_time'`
+  );
+  console.log(`  posting_slots unique: ${uq.rows[0]?.def ?? '(absent)'}`);
 }
 
 async function main(): Promise<void> {
@@ -478,6 +619,7 @@ async function main(): Promise<void> {
     await sectionRecovery(pool);
     await sectionExplain(pool);
     await sectionIdempotent(pool);
+    await sectionPostingSlots(pool);
     await dumpState(pool);
   } finally {
     await pool.end();
