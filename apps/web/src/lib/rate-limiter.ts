@@ -25,13 +25,18 @@ interface LockoutEntry {
 }
 
 const rateLimitStore = new Map<string, WindowEntry>();
+// Non-production fallback ONLY (dev/test, single instance). Production
+// lockout state lives in Upstash — see the lockout section below.
 const lockoutStore = new Map<string, LockoutEntry>();
 // ---------------------------------------------------------------------------
-// Distributed rate limiting (production) via Upstash Redis.
+// Distributed rate limiting + OTP lockout (production) via Upstash Redis.
 //
-// The in-memory Maps below are per-serverless-instance and therefore only a
+// The in-memory Maps are per-serverless-instance and therefore only a
 // speed bump on Vercel — an attacker can spread requests across instances.
-// In production every check goes through Upstash sliding windows instead.
+// In production every check goes through Upstash instead: sliding windows
+// for rate limits, and a per-key attempts/lockedUntil hash for OTP lockout
+// (spec 139 B2 — the lockout trio below mirrors checkRateLimit's pattern:
+// same Redis client, same fail-closed discipline).
 // ---------------------------------------------------------------------------
 
 let sharedRedis: Redis | null = null;
@@ -174,10 +179,57 @@ export async function checkRateLimit(
   };
 }
 
+// ---------------------------------------------------------------------------
+// OTP lockout (spec 139 B2). Failed-attempt counters and lockout deadlines
+// are shared across instances in production via a Redis hash per key:
+//   fbuploadpro:lockout:<key>  { attempts, lockedUntil }
+// Semantics (pinned): `maxFailures` failed attempts lock the key for
+// `lockoutDurationMs`; a successful verification clears the counter.
+// Fail-closed in production, exactly like checkRateLimit: any Redis error
+// denies (treats the key as locked) rather than silently allowing.
+// Non-production keeps the in-memory Map (single instance is fine there).
+// ---------------------------------------------------------------------------
+
+const LOCKOUT_KEY_PREFIX = 'fbuploadpro:lockout';
+const LOCKOUT_FAIL_CLOSED_RETRY_SECONDS = 60;
+
+function lockoutRedisKey(key: string): string {
+  return `${LOCKOUT_KEY_PREFIX}:${key}`;
+}
+
+function parseLockoutEntry(raw: Record<string, unknown> | null): LockoutEntry {
+  const attempts = Number(raw?.attempts ?? 0);
+  const lockedUntil = Number(raw?.lockedUntil ?? 0);
+  return {
+    attempts: Number.isFinite(attempts) && attempts > 0 ? Math.floor(attempts) : 0,
+    lockedUntil: Number.isFinite(lockedUntil) && lockedUntil > 0 ? lockedUntil : 0,
+  };
+}
+
 /**
  * Check if a key is currently under a lockout penalty.
  */
-export function isLockedOut(key: string): { locked: boolean; retryAfterSeconds: number } {
+export async function isLockedOut(
+  key: string
+): Promise<{ locked: boolean; retryAfterSeconds: number }> {
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const entry = parseLockoutEntry(await getRedis().hgetall(lockoutRedisKey(key)));
+      if (entry.lockedUntil > Date.now()) {
+        const retryAfterSeconds = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
+        return { locked: true, retryAfterSeconds: Math.max(1, retryAfterSeconds) };
+      }
+      return { locked: false, retryAfterSeconds: 0 };
+    } catch (err) {
+      logServerError(
+        '[RateLimiter] Upstash lockout check failed; treating key as locked (fail-closed).',
+        err,
+        { key: key.slice(0, 32) }
+      );
+      return { locked: true, retryAfterSeconds: LOCKOUT_FAIL_CLOSED_RETRY_SECONDS };
+    }
+  }
+
   cleanupStores();
   const now = Date.now();
   const entry = lockoutStore.get(key);
@@ -196,11 +248,69 @@ export function isLockedOut(key: string): { locked: boolean; retryAfterSeconds: 
 /**
  * Record a failed attempt. If failed attempts reach `maxFailures`, locks out for `lockoutDurationMs`.
  */
-export function recordFailedAttempt(
+export async function recordFailedAttempt(
   key: string,
   maxFailures: number = 5,
   lockoutDurationMs: number = 15 * 60 * 1000 // 15 minutes default
-): LockoutResult {
+): Promise<LockoutResult> {
+  if (process.env.NODE_ENV === 'production') {
+    const redisKey = lockoutRedisKey(key);
+    try {
+      const redis = getRedis();
+      const now = Date.now();
+      const entry = parseLockoutEntry(await redis.hgetall(redisKey));
+
+      // If a previous lockout expired, the counter starts over.
+      if (entry.lockedUntil > 0 && now >= entry.lockedUntil) {
+        entry.attempts = 0;
+        entry.lockedUntil = 0;
+      }
+
+      entry.attempts += 1;
+
+      if (entry.attempts >= maxFailures) {
+        entry.lockedUntil = now + lockoutDurationMs;
+      }
+
+      await redis.hset(redisKey, {
+        attempts: entry.attempts,
+        lockedUntil: entry.lockedUntil,
+      });
+      // The whole entry lives for one lockout window: a counting entry
+      // decays after `lockoutDurationMs` without further failures, and a
+      // locked entry expires exactly when its lockout ends.
+      await redis.expire(redisKey, Math.max(1, Math.ceil(lockoutDurationMs / 1000)));
+
+      if (entry.lockedUntil > now) {
+        return {
+          locked: true,
+          attempts: entry.attempts,
+          remainingAttempts: 0,
+          retryAfterSeconds: Math.ceil((entry.lockedUntil - now) / 1000),
+        };
+      }
+
+      return {
+        locked: false,
+        attempts: entry.attempts,
+        remainingAttempts: Math.max(0, maxFailures - entry.attempts),
+        retryAfterSeconds: 0,
+      };
+    } catch (err) {
+      logServerError(
+        '[RateLimiter] Upstash lockout record failed; treating key as locked (fail-closed).',
+        err,
+        { key: key.slice(0, 32), maxFailures, lockoutDurationMs }
+      );
+      return {
+        locked: true,
+        attempts: maxFailures,
+        remainingAttempts: 0,
+        retryAfterSeconds: LOCKOUT_FAIL_CLOSED_RETRY_SECONDS,
+      };
+    }
+  }
+
   cleanupStores();
   const now = Date.now();
   let entry = lockoutStore.get(key);
@@ -240,7 +350,20 @@ export function recordFailedAttempt(
 /**
  * Clear lockout and attempt count on successful verification.
  */
-export function clearLockout(key: string): void {
+export async function clearLockout(key: string): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      await getRedis().del(lockoutRedisKey(key));
+    } catch (err) {
+      // Fail-closed by construction: a failed clear leaves the counter in
+      // place. Logged — never silently swallowed.
+      logServerError('[RateLimiter] Upstash lockout clear failed.', err, {
+        key: key.slice(0, 32),
+      });
+    }
+    return;
+  }
+
   lockoutStore.delete(key);
 }
 
