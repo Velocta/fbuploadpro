@@ -22,7 +22,6 @@
 # Residual owners:
 #   src/app/connect/facebook/route.ts            136 (entry/connect route)
 #   src/app/tenant/[subdomain]/pages/[pageId]/page.tsx  131 (page section)
-#   src/components/downloader/media-downloader-engine.ts  downloader future upgrade spec (kept per D137-4)
 #   src/components/media/* (4 files)             133 (Media Library)
 #   src/components/pages/dedicated/schedule-timezone-modal.tsx  134
 #   src/components/pages/dedicated/tab-insights.tsx  131
@@ -35,7 +34,6 @@
 # Format: <file> <count>
 apps/web/src/app/connect/facebook/route.ts 1
 apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 8
-apps/web/src/components/downloader/media-downloader-engine.ts 5
 apps/web/src/components/media/media-import-modal.tsx 1
 apps/web/src/components/media/media-import-upload-engine.ts 1
 apps/web/src/components/media/media-import-utils.ts 2

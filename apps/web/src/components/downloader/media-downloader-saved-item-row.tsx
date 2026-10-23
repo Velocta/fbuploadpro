@@ -15,7 +15,7 @@ import {
 } from '@/lib/theme';
 import { formatFolderAncestryPath } from '@/components/media/media-library-explorer';
 import { deriveDefaultCaption, formatBytes } from '@/lib/upload-queue-helpers';
-import type { DownloaderSavedEntry } from './media-downloader';
+import type { DownloaderSavedEntry } from './downloader-data';
 
 /**
  * Saved-item row for the downloader results list, extracted from

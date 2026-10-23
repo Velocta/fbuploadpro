@@ -2,11 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  type DownloaderSourcePlatform,
-  type MediaFolder,
-  type MediaItemResponse,
-} from '@fbuploadpro/contracts';
+import { type MediaFolder } from '@fbuploadpro/contracts';
 import {
   THEME,
   PALETTE,
@@ -18,190 +14,21 @@ import {
 import { DownloaderSavedItemRow } from './media-downloader-saved-item-row';
 import { DownloaderNewFolderDialog } from './media-downloader-new-folder-dialog';
 import {
-  DEFAULT_DOWNLOADS_FOLDER_NAME,
-  findRootDownloadsFolder,
   buildMediaFolderHref,
   validateDownloaderBatchInput,
   resolveInitialDownloaderFolderId,
   sortFoldersForDownloader,
   getProgressTextColor,
 } from './media-downloader-helpers';
-import { executeDownloaderBatch, retryFailedDownloadEntry } from './media-downloader-engine';
-// Re-export moved helpers to preserve public API (tests import from this module)
-export {
-  validateDownloaderBatchInput,
-  buildMediaFolderHref,
-} from './media-downloader-helpers';
-export { executeDownloaderBatch, retryFailedDownloadEntry } from './media-downloader-engine';
-
-
-export interface DownloaderBatchProgressState {
-  status: 'idle' | 'downloading' | 'completed' | 'cancelled';
-  totalLinks: number;
-  completedLinks: number;
-  currentUrl: string | null;
-  duplicateCount: number;
-  invalidCount: number;
-  stage?: 'resolving' | 'streaming' | undefined;
-  stagePercent?: number | undefined;
-}
-
-export interface DownloaderFailedEntry {
-  id: string;
-  url: string;
-  folderId: string | null;
-  errorMessage: string;
-}
-
-export interface DownloaderSavedEntry {
-  item: MediaItemResponse;
-  sourceUrl: string;
-  platform: DownloaderSourcePlatform;
-}
-
-export interface InitializeDownloaderFoldersResult {
-  folders: MediaFolder[];
-  selectedFolderId: string | null;
-  createdDefaultFolder: boolean;
-}
-
-/**
- * Finds an existing root-level "Downloads" folder (case-insensitive) in a folder list.
- */
-
-/**
- * Builds the Media Library URL for navigating directly to a target folder (or All Media root).
- */
-
-/**
- * Builds a unique ID for a failed download entry from its batch index.
- */
-
-/**
- * Fetches existing workspace folders and selects the root-level "Downloads" folder.
- * If no root-level "Downloads" folder exists yet, automatically provisions it via POST.
- */
-export async function initializeDownloaderFolders(params: {
-  subdomain: string;
-  fetchImpl?: typeof fetch;
-}): Promise<InitializeDownloaderFoldersResult> {
-  const { subdomain, fetchImpl = fetch } = params;
-
-  const listRes = await fetchImpl(`/api/tenant/${subdomain}/media/folders`);
-  let folders: MediaFolder[] = [];
-  if (listRes.ok) {
-    const data = (await listRes.json()) as { folders?: MediaFolder[] };
-    folders = Array.isArray(data.folders) ? data.folders : [];
-  }
-
-  const existingDownloads = findRootDownloadsFolder(folders);
-  if (existingDownloads) {
-    return {
-      folders,
-      selectedFolderId: existingDownloads.id,
-      createdDefaultFolder: false,
-    };
-  }
-
-  const createRes = await fetchImpl(`/api/tenant/${subdomain}/media/folders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: DEFAULT_DOWNLOADS_FOLDER_NAME,
-      parentId: null,
-    }),
-  });
-
-  if (createRes.ok) {
-    const createdFolder = (await createRes.json()) as MediaFolder;
-    const updatedFolders = [...folders, createdFolder];
-    return {
-      folders: updatedFolders,
-      selectedFolderId: createdFolder.id,
-      createdDefaultFolder: true,
-    };
-  }
-
-  if (createRes.status === 409) {
-    const retryListRes = await fetchImpl(`/api/tenant/${subdomain}/media/folders`);
-    if (retryListRes.ok) {
-      const retryData = (await retryListRes.json()) as { folders?: MediaFolder[] };
-      const refreshedFolders = Array.isArray(retryData.folders) ? retryData.folders : folders;
-      const matched = findRootDownloadsFolder(refreshedFolders);
-      return {
-        folders: refreshedFolders,
-        selectedFolderId: matched ? matched.id : null,
-        createdDefaultFolder: false,
-      };
-    }
-  }
-
-  return {
-    folders,
-    selectedFolderId: null,
-    createdDefaultFolder: false,
-  };
-}
-
-/**
- * Creates a new destination folder inline from the Downloader and returns the updated folder list
- * along with the newly created folder's ID so it is immediately selected.
- */
-export async function createDownloaderFolder(params: {
-  subdomain: string;
-  name: string;
-  parentId: string | null;
-  existingFolders: MediaFolder[];
-  fetchImpl?: typeof fetch;
-}): Promise<{
-  folder: MediaFolder;
-  folders: MediaFolder[];
-  selectedFolderId: string;
-}> {
-  const { subdomain, name, parentId, existingFolders, fetchImpl = fetch } = params;
-  const trimmedName = name.trim();
-  if (!trimmedName) {
-    throw new Error('Please enter a folder name.');
-  }
-
-  const res = await fetchImpl(`/api/tenant/${subdomain}/media/folders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      name: trimmedName,
-      parentId,
-    }),
-  });
-
-  if (!res.ok) {
-    let errorMessage = 'Could not create folder. Please try a different name.';
-    try {
-      const errBody = (await res.json()) as { message?: string };
-      if (errBody.message) {
-        errorMessage = errBody.message;
-      }
-    } catch (_e) {
-      // Fallback to default message
-    }
-    throw new Error(errorMessage);
-  }
-
-  const createdFolder = (await res.json()) as MediaFolder;
-  const updatedFolders = [...existingFolders, createdFolder];
-
-  return {
-    folder: createdFolder,
-    folders: updatedFolders,
-    selectedFolderId: createdFolder.id,
-  };
-}
-
-/**
- * Validates raw multi-line URL input and deduplicates identical links within the batch.
- */
-
-
-
+import {
+  useCreateDownloaderFolder,
+  useDownloaderBatch,
+  useDownloaderFolders,
+  useRecentDownloaderJobs,
+  type DownloaderBatchProgressState,
+  type DownloaderFailedEntry,
+  type DownloaderSavedEntry,
+} from './downloader-data';
 
 export interface MediaDownloaderProps {
   subdomain: string;
@@ -232,10 +59,18 @@ export function MediaDownloader({
 }: Readonly<MediaDownloaderProps>) {
   const router = useRouter();
 
-  const [folders, setFolders] = useState<MediaFolder[]>(initialFolders ?? []);
+  const { folders, autoSelectedFolderId } = useDownloaderFolders(subdomain, {
+    initialFolders,
+  });
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(() =>
     resolveInitialDownloaderFolderId(initialSelectedFolderId, initialFolders)
   );
+
+  useEffect(() => {
+    if (autoSelectedFolderId !== null && selectedFolderId === null) {
+      setSelectedFolderId(autoSelectedFolderId);
+    }
+  }, [autoSelectedFolderId, selectedFolderId]);
 
   const [urlInput, setUrlInput] = useState(initialUrlInput);
   const [urlError, setUrlError] = useState<string | null>(initialUrlError);
@@ -255,6 +90,41 @@ export function MediaDownloader({
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  const downloaderBatch = useDownloaderBatch(subdomain);
+  const createFolderMutation = useCreateDownloaderFolder(subdomain);
+  const recentJobsQuery = useRecentDownloaderJobs(subdomain);
+  const mergedRecentIdsRef = useRef<Set<string>>(new Set());
+
+  // OD-140-2: hydrate the Recent list from stored jobs on mount (latest 50)
+  useEffect(() => {
+    const data = recentJobsQuery.data;
+    if (!data) return;
+    const mergedIds = mergedRecentIdsRef.current;
+    const newSaved = data.savedEntries.filter(
+      (entry) => !mergedIds.has(entry.item.id)
+    );
+    const newFailed = data.failedEntries.filter(
+      (entry) => !mergedIds.has(entry.id)
+    );
+    if (newSaved.length === 0 && newFailed.length === 0) return;
+    for (const entry of newSaved) mergedIds.add(entry.item.id);
+    for (const entry of newFailed) mergedIds.add(entry.id);
+    if (newSaved.length > 0) {
+      setSavedEntries((prev) => [
+        ...prev,
+        ...newSaved.filter(
+          (entry) => !prev.some((p) => p.item.id === entry.item.id)
+        ),
+      ]);
+    }
+    if (newFailed.length > 0) {
+      setFailedEntries((prev) => [
+        ...prev,
+        ...newFailed.filter((entry) => !prev.some((p) => p.id === entry.id)),
+      ]);
+    }
+  }, [recentJobsQuery.data]);
+
   const handleAbortDownload = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -273,33 +143,6 @@ export function MediaDownloader({
   const [newFolderParentId, setNewFolderParentId] = useState<string | null>(null);
   const [newFolderError, setNewFolderError] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
-
-  // Auto-provision or select root-level "Downloads" folder on mount when not pre-populated
-  useEffect(() => {
-    if (initialFolders !== undefined) {
-      return;
-    }
-    let cancelled = false;
-
-    const loadFolders = async () => {
-      try {
-        const result = await initializeDownloaderFolders({ subdomain });
-        if (!cancelled) {
-          setFolders(result.folders);
-          if (result.selectedFolderId !== null) {
-            setSelectedFolderId(result.selectedFolderId);
-          }
-        }
-      } catch (_err) {
-        // Keep All Media root fallback if offline
-      }
-    };
-
-    void loadFolders();
-    return () => {
-      cancelled = true;
-    };
-  }, [subdomain, initialFolders]);
 
   const isDownloading = batchProgress?.status === 'downloading';
 
@@ -323,13 +166,11 @@ export function MediaDownloader({
     setIsCreatingFolder(true);
     setNewFolderError(null);
     try {
-      const created = await createDownloaderFolder({
-        subdomain,
+      const created = await createFolderMutation.mutateAsync({
         name: trimmed,
         parentId: newFolderParentId,
         existingFolders: folders,
       });
-      setFolders(created.folders);
       setSelectedFolderId(created.selectedFolderId);
       setIsNewFolderDialogOpen(false);
       setNewFolderName('');
@@ -367,8 +208,7 @@ export function MediaDownloader({
     abortControllerRef.current = controller;
 
     try {
-      const result = await executeDownloaderBatch({
-        subdomain,
+      const result = await downloaderBatch.execute({
         rawInput: urlInput,
         folderId: selectedFolderId,
         signal: controller.signal,
@@ -379,9 +219,6 @@ export function MediaDownloader({
 
       if (result.savedEntries.length > 0) {
         setSavedEntries((prev) => [...result.savedEntries, ...prev]);
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
-        }
       }
       if (result.failedEntries.length > 0) {
         setFailedEntries((prev) => [...result.failedEntries, ...prev]);
@@ -396,8 +233,7 @@ export function MediaDownloader({
 
   const handleRetryFailedEntry = async (entry: DownloaderFailedEntry) => {
     setRetryingId(entry.id);
-    const retryResult = await retryFailedDownloadEntry({
-      subdomain,
+    const retryResult = await downloaderBatch.retry({
       entry,
       targetFolderId: entry.folderId ?? selectedFolderId,
     });
@@ -406,9 +242,6 @@ export function MediaDownloader({
     if (retryResult.ok) {
       setFailedEntries((prev) => prev.filter((item) => item.id !== entry.id));
       setSavedEntries((prev) => [...retryResult.savedEntries, ...prev]);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('fbuploadpro:download-completed'));
-      }
     } else if (retryResult.errorMessage) {
       setFailedEntries((prev) =>
         prev.map((item) =>
