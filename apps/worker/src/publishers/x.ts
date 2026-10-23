@@ -148,7 +148,15 @@ function resolveMedia(item: DatabaseUnifiedQueueItemRow): {
   if (format === 'gif' || url.endsWith('.gif')) {
     return { kind: 'gif', mediaType: 'image/gif', mediaCategory: 'tweet_gif' };
   }
-  if (item.kind === 'video' || format === 'video' || /\.(mp4|mov|webm)$/.test(url)) {
+  if (/\.(mov|webm)$/.test(url)) {
+    // v1 enforces the conservative official spec (MP4 only, spec 127
+    // Scope.3) — never mislabel another container as video/mp4.
+    throw new XApiError(400, {
+      error: 'unsupported_video_format',
+      detail: 'Only MP4 videos can be posted to X — this file is not an MP4 video.',
+    });
+  }
+  if (item.kind === 'video' || format === 'video' || url.endsWith('.mp4')) {
     return { kind: 'video', mediaType: 'video/mp4', mediaCategory: 'tweet_video' };
   }
   const mediaType = url.endsWith('.png')
@@ -211,13 +219,25 @@ export class XPublisher implements Publisher {
       clientSecret: this.clientSecret,
       refreshToken: tokens.refreshToken,
     });
+    if (!refreshed.refreshToken) {
+      // X refresh tokens are rotating and single-use: the stored token
+      // was spent by this call. If the endpoint returned no replacement,
+      // there is nothing safe to persist — fail auth-class so the
+      // account goes `expired` (reconnect) instead of storing a spent
+      // token that would look alive and fail forever.
+      throw new XApiError(401, {
+        error: 'invalid_grant',
+        detail:
+          'X did not return a new refresh token, so this connection cannot be refreshed safely.',
+      });
+    }
     const expiresAt =
       refreshed.expiresIn !== undefined
         ? new Date(this.now().getTime() + refreshed.expiresIn * 1000).toISOString()
         : (tokens.tokenExpiresAt ?? null);
     return {
       accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken ?? tokens.refreshToken,
+      refreshToken: refreshed.refreshToken,
       tokenExpiresAt: expiresAt,
     };
   }
