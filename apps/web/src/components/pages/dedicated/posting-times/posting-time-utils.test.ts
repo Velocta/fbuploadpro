@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import type { PageSlotSummary } from './tab-dashboard';
-import { formatSlotDisplay, getPostingTimeFormInitialState } from './tab-posting-times';
+import type { PageSlotSummary } from '../tab-dashboard';
+import { formatSlotDisplay, getPostingTimeFormInitialState } from './posting-time-utils';
 
 function makeSlot(overrides: Partial<PageSlotSummary> = {}): PageSlotSummary {
   return {

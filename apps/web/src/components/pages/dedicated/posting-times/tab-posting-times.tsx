@@ -1,0 +1,211 @@
+'use client';
+
+/**
+ * Posting-times tab orchestrator (spec 134 §3.3) — composition only:
+ * header, loading skeleton at final geometry, the typed empty state,
+ * the slot rows, and the three closed-by-default dialogs (add/edit
+ * form, delete confirm, timezone flow) loaded via next/dynamic so a
+ * closed surface ships none of their code (spec 137 §4.1 duty 5).
+ *
+ * Behaviour preserved from specs 105/106/112 (§5.1): slot CRUD +
+ * toggle through the route's callbacks, the Edit fallback of
+ * delete + re-add when no update callback is provided, and the
+ * timezone change applying through `onUpdateTimezone` when present.
+ * Data still arrives via the section route's props (131 owns the
+ * route); this panel holds no copy of server slot data beyond the
+ * route-provided props it renders.
+ */
+import * as React from 'react';
+import dynamic from 'next/dynamic';
+
+import { Skeleton } from '@/components/shared/ui/skeleton';
+import type { FacebookPageItem } from '../../page-card';
+import type { PageSlotSummary } from '../tab-dashboard';
+import { PostingTimeRow } from './posting-time-row';
+import { PostingTimesEmptyState } from './posting-times-empty-state';
+import { PostingTimesHeader } from './posting-times-header';
+
+const PostingTimeForm = dynamic(
+  () => import('./posting-time-form').then((m) => ({ default: m.PostingTimeForm })),
+  { ssr: false }
+);
+const DeleteSlotConfirm = dynamic(
+  () => import('./delete-slot-confirm').then((m) => ({ default: m.DeleteSlotConfirm })),
+  { ssr: false }
+);
+const ScheduleTimezoneModal = dynamic(
+  () =>
+    import('./timezone/schedule-timezone-modal').then((m) => ({
+      default: m.ScheduleTimezoneModal,
+    })),
+  { ssr: false }
+);
+
+export interface PageTabPostingTimesProps {
+  page: FacebookPageItem;
+  slots: PageSlotSummary[];
+  isLoading?: boolean;
+  pendingQueueCount?: number;
+  onAddSlot: (data: {
+    slotTime: string;
+    timezone: string;
+    allowedFormats?: string[];
+  }) => Promise<void>;
+  onUpdateSlot?: (
+    slotId: string,
+    data: {
+      slotTime?: string;
+      timezone?: string;
+      isActive?: boolean;
+      allowedFormats?: string[];
+    }
+  ) => Promise<void>;
+  onUpdateTimezone?: (newTimezone: string) => Promise<void>;
+  onToggleSlot: (slotId: string, isActive: boolean) => Promise<void>;
+  onDeleteSlot: (slotId: string) => Promise<void>;
+}
+
+export function PageTabPostingTimes({
+  page,
+  slots,
+  isLoading = false,
+  pendingQueueCount = 0,
+  onAddSlot,
+  onUpdateSlot,
+  onUpdateTimezone,
+  onToggleSlot,
+  onDeleteSlot,
+}: Readonly<PageTabPostingTimesProps>) {
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [isTimezoneModalOpen, setIsTimezoneModalOpen] = React.useState(false);
+  const [editingSlot, setEditingSlot] = React.useState<PageSlotSummary | null>(null);
+  const [togglingId, setTogglingId] = React.useState<string | null>(null);
+  const [slotToDelete, setSlotToDelete] = React.useState<PageSlotSummary | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [fallbackTimezone, setFallbackTimezone] = React.useState('UTC');
+
+  const activeTimezone = page.timezone || slots[0]?.timezone || fallbackTimezone;
+
+  const handleTimezoneChange = async (newTz: string) => {
+    setFallbackTimezone(newTz);
+    if (onUpdateTimezone) {
+      await onUpdateTimezone(newTz);
+    }
+  };
+
+  const handleToggle = async (slot: PageSlotSummary) => {
+    setTogglingId(slot.id);
+    try {
+      await onToggleSlot(slot.id, !slot.isActive);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleOpenAdd = () => {
+    setEditingSlot(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (slot: PageSlotSummary) => {
+    setEditingSlot(slot);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveModal = async (data: {
+    slotTime: string;
+    timezone: string;
+    allowedFormats: string[];
+  }) => {
+    if (editingSlot) {
+      if (onUpdateSlot) {
+        await onUpdateSlot(editingSlot.id, data);
+      } else {
+        await onDeleteSlot(editingSlot.id);
+        await onAddSlot(data);
+      }
+    } else {
+      await onAddSlot(data);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!slotToDelete) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteSlot(slotToDelete.id);
+      setSlotToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <div data-testid="page-tab-calendar" className="flex flex-col gap-6">
+      <PostingTimesHeader
+        activeTimezone={activeTimezone}
+        onOpenAddModal={handleOpenAdd}
+        onOpenTimezoneModal={() => setIsTimezoneModalOpen(true)}
+      />
+
+      {isLoading && (
+        <div data-testid="calendar-loading" aria-busy="true" className="flex flex-col gap-2">
+          <span className="sr-only">Loading posting schedule...</span>
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      )}
+
+      {!isLoading && slots.length === 0 && (
+        <PostingTimesEmptyState onOpenAddModal={handleOpenAdd} />
+      )}
+
+      {!isLoading && slots.length > 0 && (
+        <div data-testid="slots-grid" className="flex flex-col rounded-md border border-line">
+          {slots.map((slot) => (
+            <PostingTimeRow
+              key={slot.id}
+              slot={slot}
+              isToggling={togglingId === slot.id}
+              onToggle={handleToggle}
+              onEdit={handleOpenEdit}
+              onRemove={setSlotToDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Add / Edit form. Mounted only while open and keyed by the slot
+          being edited, so its form state initializes fresh from the
+          target slot on every open (spec 112 #19). */}
+      {isModalOpen && (
+        <PostingTimeForm
+          key={editingSlot?.id ?? 'add'}
+          activeTimezone={activeTimezone}
+          slotToEdit={editingSlot}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveModal}
+        />
+      )}
+
+      {slotToDelete && (
+        <DeleteSlotConfirm
+          slotToDelete={slotToDelete}
+          isDeleting={isDeleting}
+          onClose={() => setSlotToDelete(null)}
+          onConfirmDelete={handleConfirmDelete}
+        />
+      )}
+
+      <ScheduleTimezoneModal
+        isOpen={isTimezoneModalOpen}
+        activeTimezone={activeTimezone}
+        slotsCount={slots.length}
+        pendingQueueCount={pendingQueueCount}
+        onClose={() => setIsTimezoneModalOpen(false)}
+        onConfirmTimezone={handleTimezoneChange}
+      />
+    </div>
+  );
+}

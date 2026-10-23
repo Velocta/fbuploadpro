@@ -1,0 +1,155 @@
+'use client';
+
+/**
+ * Timezone-change flow, step 2 (spec 134 §3.3): review the impact
+ * before applying — current vs new zone, the preserved clock-time
+ * behaviour, automatic queue realignment, and the real counts of
+ * posting times and queued posts that realign (spec 106 behaviour,
+ * preserved verbatim). Rebuilt clean-room on shared/ui + tokens.
+ */
+import * as React from 'react';
+import { ArrowRightIcon, CheckIcon, InfoIcon } from 'lucide-react';
+
+import { Button } from '@/components/shared/ui/button';
+import { DialogFooter } from '@/components/shared/ui/dialog';
+import {
+  findTimezoneEntry,
+  getTimezoneUtcOffset,
+} from '@/lib/timezones';
+
+export interface TimezoneReviewStepProps {
+  activeTimezone: string;
+  selectedTimezone: string;
+  slotsCount: number;
+  pendingQueueCount: number;
+  isSubmitting: boolean;
+  errorMessage: string | null;
+  onBack: () => void;
+  onConfirm: () => void;
+}
+
+export function TimezoneReviewStep({
+  activeTimezone,
+  selectedTimezone,
+  slotsCount,
+  pendingQueueCount,
+  isSubmitting,
+  errorMessage,
+  onBack,
+  onConfirm,
+}: Readonly<TimezoneReviewStepProps>) {
+  const currentEntry = React.useMemo(() => findTimezoneEntry(activeTimezone), [activeTimezone]);
+  const newEntry = React.useMemo(() => findTimezoneEntry(selectedTimezone), [selectedTimezone]);
+  const currentOffset = React.useMemo(() => getTimezoneUtcOffset(activeTimezone), [activeTimezone]);
+  const newOffset = React.useMemo(
+    () => getTimezoneUtcOffset(selectedTimezone),
+    [selectedTimezone]
+  );
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-metadata font-semibold tracking-wide text-brand-gold uppercase">
+        Step 2 of 2: Review impact
+      </p>
+
+      {/* Transition preview */}
+      <div
+        data-testid="timezone-transition-card"
+        className="flex items-center gap-2 rounded-md border border-line bg-subtle p-4"
+      >
+        <div className="flex flex-1 flex-col">
+          <span className="text-metadata font-semibold tracking-wide text-ink-dim uppercase">
+            Current timezone
+          </span>
+          <span className="text-body font-semibold text-ink">{currentEntry.city}</span>
+          <span className="text-metadata text-ink-sub">
+            {currentOffset} · {activeTimezone}
+          </span>
+        </div>
+        <span
+          aria-hidden
+          className="flex size-7 items-center justify-center rounded-full bg-hover text-brand-gold"
+        >
+          <ArrowRightIcon className="size-3.5" />
+        </span>
+        <div className="flex flex-1 flex-col">
+          <span className="text-metadata font-semibold tracking-wide text-brand-gold uppercase">
+            New timezone
+          </span>
+          <span className="text-body font-semibold text-ink">{newEntry.city}</span>
+          <span className="text-metadata text-ink-sub">
+            {newOffset} · {selectedTimezone}
+          </span>
+        </div>
+      </div>
+
+      {/* Impact explanation */}
+      <div className="flex flex-col gap-2 rounded-md border border-line p-4 text-body leading-relaxed text-ink-sub">
+        <div className="flex items-start gap-2">
+          <InfoIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-brand-gold" />
+          <p>
+            <strong className="text-ink">Clock times are preserved:</strong> Your posting slots
+            will publish at their exact clock times in the new timezone. For example, a 10:00 AM
+            slot will now publish at 10:00 AM {newEntry.city} time.
+          </p>
+        </div>
+        <div className="flex items-start gap-2">
+          <CheckIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-brand-gold" />
+          <p>
+            <strong className="text-ink">Automatic queue realignment:</strong> Pending queued
+            items linked to slots will automatically shift forward to avoid publishing in the
+            past.
+          </p>
+        </div>
+      </div>
+
+      {/* Impact numbers */}
+      <div data-testid="timezone-impact-metrics" className="grid grid-cols-2 gap-2">
+        <div className="rounded-sm border border-line bg-subtle p-2">
+          <div className="text-metadata font-semibold tracking-wide text-ink-dim uppercase">
+            Posting times
+          </div>
+          <div className="mt-0.5 text-lg font-bold text-ink">{slotsCount}</div>
+          <div className="text-metadata text-ink-sub">Active publishing times</div>
+        </div>
+        <div className="rounded-sm border border-line bg-subtle p-2">
+          <div className="text-metadata font-semibold tracking-wide text-ink-dim uppercase">
+            Queued posts
+          </div>
+          <div className="mt-0.5 text-lg font-bold text-ink">{pendingQueueCount}</div>
+          <div className="text-metadata text-ink-sub">Posts realigned automatically</div>
+        </div>
+      </div>
+
+      {errorMessage ? (
+        <div
+          data-testid="timezone-update-error"
+          role="alert"
+          className="rounded-sm border border-brand-rose bg-panel px-3 py-2 text-body text-brand-rose"
+        >
+          {errorMessage}
+        </div>
+      ) : null}
+
+      <DialogFooter className="sm:justify-between">
+        <Button
+          type="button"
+          variant="outline"
+          data-testid="back-to-step1-button"
+          disabled={isSubmitting}
+          onClick={onBack}
+        >
+          Back
+        </Button>
+        <Button
+          type="button"
+          data-testid="confirm-timezone-update-button"
+          loading={isSubmitting}
+          onClick={onConfirm}
+        >
+          {isSubmitting ? 'Updating…' : 'Update timezone'}
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}

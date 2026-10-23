@@ -15,7 +15,7 @@ import {
   DedicatedPageHeader,
   PageTabDashboard,
   PageTabQueue,
-  PageTabCalendar,
+  PageTabPostingTimes,
   PageTabInsights,
   PageTabSettings,
   PostComposer,
@@ -595,7 +595,7 @@ export default function TenantDedicatedPageView({
             )}
 
             {activeTab === 'calendar' && (
-              <PageTabCalendar
+              <PageTabPostingTimes
                 page={page}
                 slots={slots}
                 isLoading={isLoadingSlots}
