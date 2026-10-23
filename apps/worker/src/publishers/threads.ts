@@ -687,6 +687,8 @@ export class ThreadsPublisher implements Publisher {
    * through the destination-override seam), the post defers for an hour
    * instead of publishing into a certain rejection. Best effort — an
    * unreadable quota (no usage reported) never blocks a publish.
+   * Settles via the `deferred` outcome (spec 139): the deferral does
+   * NOT consume retry budget — hitting the cap is not the post's fault.
    */
   private publishingLimitOutcome(liveLimit: {
     resolved: ReturnType<typeof resolvePublishLimit>;
@@ -698,7 +700,7 @@ export class ThreadsPublisher implements Publisher {
       return null;
     }
     return {
-      status: 'retry',
+      status: 'deferred',
       error: {
         kind: 'retryable',
         code: 'publishing_limit_reached',

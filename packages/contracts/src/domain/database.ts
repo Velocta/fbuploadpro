@@ -293,7 +293,7 @@ export interface DatabaseUnifiedPublishLogRow {
   destination_id: string;
   platform: Platform;
   attempt_no: number;
-  result: 'success' | 'retry' | 'failure';
+  result: 'success' | 'retry' | 'failure' | 'deferred';
   external_post_id: string | null;
   response_code: number | null;
   response_message: string | null;
@@ -360,6 +360,14 @@ export interface SettleQueueItemOutcomeUnifiedArgs {
   p_queue_item_id: string;
   p_workspace_id: string;
   p_destination_id: string;
+  /**
+   * Settle vocabulary: `published` | `queued`/`retry` (a failed attempt;
+   * the item's retry_count becomes p_retry_count) | `failed` |
+   * `deferred` (spec 139, 2026-10-24: a deferral that is not the item's
+   * fault — cap hit, platform-wide pause — the item returns to `queued`
+   * and its retry_count is left UNCHANGED by the RPC, whatever
+   * p_retry_count carries).
+   */
   p_outcome_status: string;
   p_external_post_id?: string | null;
   p_external_comment_id?: string | null;

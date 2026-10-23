@@ -251,6 +251,9 @@ async function callSettleRpc(
  *     the `publish_logs` row the RPC writes).
  *   - `retry` → outcome `queued` with the publisher's retry delay
  *     (falling back to the error's backoff hint, then the default).
+ *   - `deferred` → outcome `deferred` with the publisher's deferral
+ *     delay; the stored retry count does NOT advance — deferrals
+ *     (platform caps, platform-wide pauses) are not the item's fault.
  *   - `failed` → outcome `failed`; an `auth`-classified error with no
  *     explicit account status still cascades the account to `expired`
  *     via `p_target_account_status` — settled by the RPC, never by a
@@ -258,10 +261,13 @@ async function callSettleRpc(
  *
  * `p_retry_count` convention (matching the RPC, which derives the log's
  * attempt number as `p_retry_count + 1` and stores `p_retry_count` as
- * the item's new retry count on non-published outcomes): published
+ * the item's new retry count on retry/failed outcomes): published
  * passes the item's current count so the logged attempt number is
  * exact; retry/failed pass the incremented count so the stored retry
- * count advances.
+ * count advances. Deferred passes the item's current count — and the
+ * RPC's `deferred` branch ignores the value for the stored count
+ * entirely (it never writes retry_count), so a deferral cannot consume
+ * retry budget even if a future caller passes the wrong number.
  *
  * `detail` threading (spec 139): a publisher's `PublishOutcome.detail`
  * (platform session state for `publish_logs.detail`) is carried into
@@ -302,6 +308,18 @@ export function mapPublishOutcomeToSettleArgs(
       ...base,
       p_outcome_status: 'queued',
       p_retry_count: item.retry_count + 1,
+      p_retry_delay_seconds:
+        outcome.retryDelaySeconds ??
+        outcome.error?.retryDelaySeconds ??
+        DEFAULT_RETRY_DELAY_SECONDS,
+    };
+  }
+
+  if (outcome.status === 'deferred') {
+    return {
+      ...base,
+      p_outcome_status: 'deferred',
+      p_retry_count: item.retry_count,
       p_retry_delay_seconds:
         outcome.retryDelaySeconds ??
         outcome.error?.retryDelaySeconds ??
@@ -423,14 +441,16 @@ export function evaluatePublishReadiness(
 }
 
 /**
- * Settle args for a readiness deferral: back to `queued` via the same
- * settle vocabulary a publisher `retry` outcome uses, so the claimer
- * re-claims the item once it is due AND eligible again (the claim RPC
- * re-applies the same eligibility test, so a still-ineligible item is
- * never hot-looped). Deliberate differences from a `retry` settle:
- *   - `p_retry_count` is NOT incremented — no publish attempt was made,
- *     so no retry budget is consumed (mirroring claim-time D5
- *     deferral, which reschedules without touching the retry count).
+ * Settle args for a readiness deferral: back to `queued` via the
+ * settle RPC's `deferred` outcome (spec 139 defer outcome), so the
+ * claimer re-claims the item once it is due AND eligible again (the
+ * claim RPC re-applies the same eligibility test, so a still-ineligible
+ * item is never hot-looped). Deliberate differences from a `retry`
+ * settle:
+ *   - the RPC's deferred branch does NOT write `retry_count` — no
+ *     publish attempt was made, so no retry budget is consumed (the
+ *     stored count is unchanged whatever is passed here; claim-time
+ *     D5 deferral likewise reschedules without touching the count).
  *   - the delay is the deferral's own: for a cooldown it is the exact
  *     time until `next_allowed_publish_at`, so the item becomes due in
  *     step with the destination becoming eligible.
@@ -443,7 +463,7 @@ export function buildDeferSettleArgs(
     p_queue_item_id: item.id,
     p_workspace_id: item.workspace_id,
     p_destination_id: item.destination_id,
-    p_outcome_status: 'queued',
+    p_outcome_status: 'deferred',
     p_external_post_id: null,
     p_external_comment_id: null,
     p_retry_count: item.retry_count,

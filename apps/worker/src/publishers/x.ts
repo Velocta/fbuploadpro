@@ -43,7 +43,8 @@ import {
 //  - 402 credits-exhausted is PLATFORM-WIDE (our one app, D4): a
 //    distinct error code, a platform-level PostHog exception, a long
 //    deferral, and NO account expiry. See `creditsExhaustedOutcome`
-//    for the exact retry rule and its known tension.
+//    for the exact deferral rule (settles `deferred`; no retry budget
+//    is consumed).
 //  - `x-rate-limit-*` headers tighten the destination via
 //    `destinationCooldownSeconds` (mapping in `rateLimitOutcomeParts`).
 
@@ -388,18 +389,16 @@ export class XPublisher implements Publisher {
   }
 
   /**
-   * The platform-wide 402 outcome (spec 127 Scope.5). RULE AS
-   * IMPLEMENTED, stated plainly: the unified settle vocabulary has no
-   * "defer without counting" outcome — the consumer maps every `retry`
-   * outcome to the settle RPC with `retry_count + 1` (consumers.ts,
-   * which this spec does not own). So a 402 returns `retry` with the
-   * distinct code `x_platform_credits_exhausted`, a one-hour retry
-   * delay AND a one-hour destination cooldown, no account-status side
-   * effect (accounts never expire over our balance), plus a
-   * platform-level PostHog exception. The retry_count increment is the
-   * vocabulary's doing, not an account fault signal; the PR flags this
-   * as a spec tension for the coordinator (a defer-without-increment
-   * outcome belongs to the settle-vocabulary owners, spec 139).
+   * The platform-wide 402 outcome (spec 127 Scope.5), settled via the
+   * `deferred` outcome (spec 139 defer outcome, Shahzeb 2026-10-24):
+   * a 402 returns `deferred` with the distinct code
+   * `x_platform_credits_exhausted`, a one-hour deferral delay AND a
+   * one-hour destination cooldown, no account-status side effect
+   * (accounts never expire over our balance), plus a platform-level
+   * PostHog exception. The settle RPC's deferred branch does not
+   * write retry_count, so an item paused by an empty shared balance
+   * consumes NO retry budget while it waits — the vocabulary tension
+   * this path originally flagged is resolved.
    */
   private creditsExhaustedOutcome(extracted: ExtractedXError): PublishOutcome {
     captureWorkerError(
@@ -411,7 +410,7 @@ export class XPublisher implements Publisher {
       '[XPublisher] X platform credits exhausted (402): every X post is paused until the shared balance is topped up (auto-recharge must be on).'
     );
     return {
-      status: 'retry',
+      status: 'deferred',
       error: {
         kind: 'retryable',
         code: X_CREDITS_EXHAUSTED_CODE,
