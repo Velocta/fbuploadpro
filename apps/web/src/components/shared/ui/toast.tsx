@@ -10,6 +10,7 @@
  * - A critical or destructive outcome NEVER lives only in a toast — use
  *   Banner (persistent) or AlertDialog (decision). Reversible removals use
  *   a toast WITH Undo (pass an action on the toast call).
+ * - Action/cancel buttons are 44px tall (spec 142 F05).
  * - Styling is token classes via Sonner's classNames slots — no inline
  *   style variables, no second toast implementation anywhere.
  */
@@ -39,8 +40,8 @@ function Toast({ ...props }: ToasterProps) {
             "group toast group flex items-start gap-2 rounded-md border border-line bg-panel p-4 text-body text-ink shadow-elevated",
           title: "font-medium",
           description: "text-ink-sub",
-          actionButton: "bg-primary text-on-primary rounded-sm px-3 h-8 font-medium",
-          cancelButton: "bg-subtle text-ink rounded-sm px-3 h-8 font-medium",
+          actionButton: "bg-primary text-on-primary rounded-sm px-3 h-11 font-medium",
+          cancelButton: "bg-subtle text-ink rounded-sm px-3 h-11 font-medium",
           closeButton: "text-ink-sub hover:text-ink",
           success: "text-brand-emerald",
           error: "text-brand-rose",

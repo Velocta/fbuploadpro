@@ -5,7 +5,9 @@
  * (matrix §8) and UI Rule 22, a Banner is persistent state affecting the
  * whole page or account (e.g. an expired connection) and carries its own
  * fix action. It sits at the top of a view, is never a toast, and stays
- * until the state resolves or the user dismisses it. Colour + icon + text
+ * until the state resolves or the user dismisses it. Geometry (spec 142
+ * F14/F05): the row wraps, the fix action moves to its own full-width row
+ * below `sm`, and the dismiss control is a 44px target. Colour + icon + text
  * (OD-3): the variant's icon always renders alongside the message.
  */
 import * as React from "react";
@@ -36,7 +38,7 @@ function Banner({ variant = "info", title, description, action, onDismiss, class
       data-slot="banner"
       data-variant={variant}
       role={role}
-      className={cn("flex w-full items-start gap-3 border-b px-4 py-3 text-body", classes, className)}
+      className={cn("flex w-full flex-wrap items-start gap-3 border-b px-4 py-3 text-body", classes, className)}
       {...props}
     >
       <Icon className="mt-0.5 size-5 shrink-0" aria-hidden />
@@ -44,13 +46,13 @@ function Banner({ variant = "info", title, description, action, onDismiss, class
         <p className="font-medium">{title}</p>
         {description ? <p className="text-ink-sub">{description}</p> : null}
       </div>
-      {action}
+      {action ? <div className="max-sm:order-last max-sm:w-full">{action}</div> : null}
       {onDismiss ? (
         <button
           type="button"
           onClick={onDismiss}
           aria-label="Dismiss banner"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-sm text-ink-sub outline-none hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-sm text-ink-sub outline-none hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold"
         >
           <XIcon className="size-4" aria-hidden />
         </button>

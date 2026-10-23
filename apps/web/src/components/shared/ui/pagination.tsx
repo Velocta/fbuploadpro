@@ -3,7 +3,9 @@
  * publish logs and search results (matrix §10) because position, totals and
  * bookmarking matter there. Links are real anchors (href-driven, so a page
  * position is shareable); the current page carries aria-current="page" and
- * the outline variant. Targets are 40px via the Button size scale.
+ * the outline variant. Targets are 44px via the Button size scale
+ * (spec 142 F01/F15), and the row wraps and centres when many links
+ * exceed a compact viewport instead of overflowing it.
  */
 import * as React from "react";
 import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from "lucide-react";
@@ -25,7 +27,7 @@ function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
 
 function PaginationContent({ className, ...props }: React.ComponentProps<"ul">) {
   return (
-    <ul data-slot="pagination-content" className={cn("flex flex-row items-center gap-1", className)} {...props} />
+    <ul data-slot="pagination-content" className={cn("flex flex-row flex-wrap items-center justify-center gap-1", className)} {...props} />
   );
 }
 
@@ -76,7 +78,7 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<"span"
     <span
       aria-hidden
       data-slot="pagination-ellipsis"
-      className={cn("flex size-10 items-center justify-center", className)}
+      className={cn("flex size-11 items-center justify-center", className)}
       {...props}
     >
       <MoreHorizontalIcon className="size-4" />

@@ -17,6 +17,14 @@ describe("Switch", () => {
     expect(sw).toHaveAttribute("aria-checked", "false");
   });
 
+  it("spec 142 F08: hit area expands to 44px at both sizes, visual track unchanged", () => {
+    render(<Switch aria-label="Auto-post" />);
+    const sw = screen.getByRole("switch", { name: "Auto-post" });
+    expect(sw.className).toContain("hit-area-44");
+    expect(sw.className).toContain("h-6");
+    expect(sw.className).toContain("w-11");
+  });
+
   it("toggles with Space when focused (keyboard user)", async () => {
     const user = userEvent.setup();
     render(<Switch aria-label="Auto-post" />);

@@ -30,6 +30,15 @@ describe("Tabs (ARIA tabs pattern)", () => {
     expect(screen.getByRole("tabpanel")).toHaveTextContent("Queue panel");
   });
 
+  it("spec 142 F07: list is viewport-bounded and scrollable; triggers are 44px", () => {
+    render(<TestTabs />);
+    const list = screen.getByRole("tablist");
+    expect(list.className).toContain("max-w-full");
+    expect(list.className).toContain("overflow-x-auto");
+    expect(screen.getByRole("tab", { name: "Queue" }).className).toContain("h-11");
+    expect(screen.getByRole("tab", { name: "History" }).className).toContain("h-11");
+  });
+
   it("arrow keys move selection and focus (automatic activation)", async () => {
     const user = userEvent.setup();
     render(<TestTabs />);

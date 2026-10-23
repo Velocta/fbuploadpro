@@ -21,6 +21,13 @@ describe("Checkbox", () => {
     expect(box).toHaveAttribute("aria-checked", "false");
   });
 
+  it("spec 142 F08: visual box stays 24px, hit area expands to 44px", () => {
+    render(<Checkbox aria-label="Select row" />);
+    const box = screen.getByRole("checkbox", { name: "Select row" });
+    expect(box.className).toContain("size-6");
+    expect(box.className).toContain("hit-area-44");
+  });
+
   it("toggles with Space when focused (keyboard user)", async () => {
     const user = userEvent.setup();
     const onCheckedChange = vi.fn();

@@ -24,11 +24,24 @@ import {
 } from "./form";
 
 describe("Input / Textarea", () => {
-  it("input renders with the 40px field contract and placeholder", () => {
+  it("input renders with the 44px field contract and placeholder", () => {
     render(<Input aria-label="Name" placeholder="Your name" />);
     const input = screen.getByLabelText("Name");
-    expect(input.className).toContain("h-10");
+    expect(input.className).toContain("h-11");
     expect(input.getAttribute("placeholder")).toBe("Your name");
+  });
+
+  it("spec 142 F02: fields are 16px below sm and 14px body at sm and up", () => {
+    render(<Input aria-label="Name" placeholder="Your name" />);
+    const input = screen.getByLabelText("Name");
+    // text-base resolves to 1rem (16px) — the iOS no-focus-zoom size;
+    // sm:text-body restores the 14px product body size at sm and up.
+    expect(input.className).toContain("text-base");
+    expect(input.className).toContain("sm:text-body");
+    render(<Textarea aria-label="Caption" rows={4} />);
+    const area = screen.getByLabelText("Caption");
+    expect(area.className).toContain("text-base");
+    expect(area.className).toContain("sm:text-body");
   });
 
   it("textarea renders multiline with token classes", () => {

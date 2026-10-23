@@ -4,8 +4,9 @@
  * Button — shadcn base (cva variants + Radix Slot for asChild), adapted:
  * - Styling: token-backed utilities only. Primary is the Binance gold-on-black
  *   pairing (bg-primary / text-on-primary); shadcn's default theme is gone.
- * - Sizes per UI Rule 8: default/lg/icon targets are 40px+ (primary/touch
- *   band 40–48px); sm is the dense-table size and never a page primary.
+ * - Sizes per UI Rule 8 + spec 142 (F01): default and icon targets are
+ *   44px (the primary touch band); sm/icon-sm stay explicitly dense
+ *   (32px), are non-primary only, and are never a page primary.
  * - Five states: `loading` renders a spinner at the button's final geometry
  *   with aria-busy and blocks activation; `disabledReason` implements
  *   disabled-with-a-reason (UI Rule 16 / UX Rule 19) — the reason is exposed
@@ -32,10 +33,10 @@ const buttonVariants = cva(
         link: "text-link underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
+        default: "h-11 px-4 py-2",
         sm: "h-8 gap-1.5 px-3 text-metadata",
         lg: "h-11 px-6 text-lg",
-        icon: "size-10",
+        icon: "size-11",
         "icon-sm": "size-8",
         "icon-lg": "size-11",
       },
