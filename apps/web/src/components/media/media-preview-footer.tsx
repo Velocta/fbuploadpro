@@ -45,22 +45,28 @@ export function MediaPreviewFooter({
           {saveError}
         </p>
       ) : null}
-      <div className="flex items-center justify-between gap-2">
+      {/* PB-8 arrangement on sm+: Delete left, Cancel + Save right,
+          one row. On phones the row is wider than the dialog, so it
+          stacks — Delete on its own row, the actions right-aligned
+          below — and nothing clips (spec 142). */}
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
         {hasDelete ? (
           <Button
             variant="ghost"
             data-testid="modal-delete-media-btn"
             disabled={isBusy}
             onClick={onDelete}
-            className={cn('text-brand-rose hover:bg-brand-rose/10 hover:text-brand-rose')}
+            className={cn(
+              'self-start text-brand-rose hover:bg-brand-rose/10 hover:text-brand-rose sm:self-auto'
+            )}
           >
             {isDeleting ? 'Deleting...' : 'Delete asset'}
           </Button>
         ) : (
-          <span />
+          <span className="max-sm:hidden" />
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 max-sm:w-full max-sm:justify-end">
           <Button variant="ghost" disabled={isBusy} onClick={onCancel}>
             Cancel
           </Button>

@@ -256,10 +256,14 @@ test.describe('media preview', () => {
       await expectRealPixels(page, 'modal-image-preview');
       await expect(page.getByTestId('modal-preview-placeholder')).toHaveCount(0);
 
-      // Primary actions meet the 44px touch minimum.
+      // Primary actions meet the 44px touch minimum and are fully
+      // inside the viewport (the footer stacks on phones — a clipped
+      // Save button is a gate failure, not a cosmetic nit).
       await expectMinTouchHeight(page.getByTestId('modal-save-caption-btn'));
       await expectMinTouchHeight(page.getByTestId('modal-delete-media-btn'));
       await expectMinTouchHeight(page.getByTestId('modal-filename-input'));
+      await expectWithinViewport(page.getByTestId('modal-save-caption-btn'), page);
+      await expectWithinViewport(page.getByTestId('modal-delete-media-btn'), page);
 
       if (width < 768) {
         // Single column on phones: the media sits above the metadata
