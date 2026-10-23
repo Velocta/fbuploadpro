@@ -608,10 +608,17 @@ fi
 # rebuild — do NOT add entries). Line-based heuristic, same class as
 # the rest of this script: the width feature must sit on the @media
 # line, which is how every @media query in this tree is written.
+# A missing baseline file grants ZERO exemptions (every off-scale
+# literal then fails with file:line) rather than failing on the
+# missing file itself — that keeps the synthetic fixture trees of
+# .github/scripts/tests/check-10-multiline.sh, which plant no @media
+# literals and scaffold only the baselines they exercise, green
+# without weakening enforcement on any real literal. The diff awk
+# below classifies its two inputs by FILENAME (not NR==FNR) so an
+# EMPTY sorted baseline is not mistaken for the current counts.
 # ---------------------------------------------------------------------------
 RESP_BASELINE="apps/web/responsive-media-baseline.txt"
 RESP_ALLOWED=" 480 768 1024 1280 "
-if [ -f "$RESP_BASELINE" ]; then
   RESP_OCCURRENCES="$(mktemp)"
   RESP_COUNTS_RAW="$(mktemp)"
   while IFS= read -r match; do
@@ -631,7 +638,9 @@ if [ -f "$RESP_BASELINE" ]; then
   RESP_CURRENT="$(mktemp)"
   sort "$RESP_COUNTS_RAW" | uniq -c | awk '{print $2, $3, $1}' | sort > "$RESP_CURRENT"
   RESP_BASE_SORTED="$(mktemp)"
-  grep -E '^apps/web/src/' "$RESP_BASELINE" | sort | uniq -c | awk '{print $2, $3, $1}' | sort > "$RESP_BASE_SORTED"
+  if [ -f "$RESP_BASELINE" ]; then
+    grep -E '^apps/web/src/' "$RESP_BASELINE" | sort | uniq -c | awk '{print $2, $3, $1}' | sort > "$RESP_BASE_SORTED"
+  fi
   while IFS= read -r change; do
     [ -z "$change" ] && continue
     kind="$(printf '%s' "$change" | awk '{print $1}')"
@@ -648,15 +657,12 @@ if [ -f "$RESP_BASELINE" ]; then
       violation "responsive baseline STALE: ${fname} ${lit} dropped from ${old_n} to ${new_n} -- remove the entry from apps/web/responsive-media-baseline.txt in this PR (spec 139 M-G1 burn-down)"
     fi
   done < <(awk '
-    NR==FNR { base[$1" "$2]=$3; seen[$1" "$2]=1; next }
+    FILENAME==ARGV[1] { base[$1" "$2]=$3; seen[$1" "$2]=1; next }
     { cur[$1" "$2]=$3; seen[$1" "$2]=1 }
     END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
       if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
   ' "$RESP_BASE_SORTED" "$RESP_CURRENT")
   rm -f "$RESP_OCCURRENCES" "$RESP_COUNTS_RAW" "$RESP_CURRENT" "$RESP_BASE_SORTED"
-else
-  violation "responsive baseline file missing: apps/web/responsive-media-baseline.txt (spec 139 M-G1)"
-fi
 
 # ---------------------------------------------------------------------------
 # Report
