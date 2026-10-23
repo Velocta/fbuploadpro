@@ -27,6 +27,9 @@ const themeInitScript = `
         var match = document.cookie.match(/(?:^|;\\s*)fbup_theme=([^;]+)/);
         if (match) theme = match[1];
       }
+      if (!theme && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        theme = 'light';
+      }
       var resolved = theme === 'light' ? 'light' : 'dark';
       document.documentElement.dataset.theme = resolved;
       document.documentElement.classList.remove('dark', 'light');

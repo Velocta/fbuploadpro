@@ -58,6 +58,25 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Readonly<TextareaProps>>
   };
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        .fbu-textarea-field:focus {
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 3px var(--ring-focus) !important;
+        }
+        .fbu-textarea-field.has-error:focus {
+          border-color: var(--accent-3) !important;
+          box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
+        }
+        .fbu-textarea-field::placeholder {
+          color: var(--text-dim);
+          opacity: 1;
+        }
+        .fbu-textarea-field:hover:not(:disabled):not(:focus) {
+          border-color: var(--border-strong);
+        }
+      `}</style>
     <div
       className={containerClassName}
         style={{
@@ -169,6 +188,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, Readonly<TextareaProps>>
           )}
         </div>
       </div>
+    </>
     );
   });
 

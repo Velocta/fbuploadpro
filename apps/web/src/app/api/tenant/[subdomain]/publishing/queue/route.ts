@@ -177,7 +177,7 @@ export async function handleEnqueueMedia(
         finalScheduledTime = new Date(requestedScheduledTime).toISOString();
       } else {
         const existingQueued = (await dbClient.query(
-          `SELECT scheduled_time FROM queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
+          `SELECT scheduled_time FROM legacy_queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
           [pageId, session.userId]
         )) as Record<string, unknown>[];
 
@@ -235,7 +235,7 @@ export async function handleEnqueueMedia(
       }
 
       const existingQueued = (await dbClient.query(
-        `SELECT scheduled_time FROM queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
+        `SELECT scheduled_time FROM legacy_queue_items WHERE fb_page_id = $1 AND user_id = $2 AND status = 'queued'`,
         [pageId, session.userId]
       )) as Record<string, unknown>[];
 
@@ -270,7 +270,7 @@ export async function handleEnqueueMedia(
     }
 
     const insertRows = (await dbClient.query(
-      `INSERT INTO queue_items (
+      `INSERT INTO legacy_queue_items (
          user_id,
          fb_page_id,
          slot_id,
@@ -462,7 +462,7 @@ export async function handleEnqueueMedia(
       finalScheduledTime = new Date(requestedScheduledTime).toISOString();
     } else {
       const { data: existingQueued } = await supabase
-        .from('queue_items')
+        .from('legacy_queue_items')
         .select('scheduled_time')
         .eq('fb_page_id', pageId)
         .eq('user_id', session.userId)
@@ -522,7 +522,7 @@ export async function handleEnqueueMedia(
     }
 
     const { data: existingQueued } = await supabase
-      .from('queue_items')
+      .from('legacy_queue_items')
       .select('scheduled_time')
       .eq('fb_page_id', pageId)
       .eq('user_id', session.userId)
@@ -558,9 +558,9 @@ export async function handleEnqueueMedia(
     finalScheduledTime = computed.scheduledTime.toISOString();
   }
 
-  // 8. Insert into queue_items
+  // 8. Insert into legacy_queue_items
   const { data: createdRow, error: insertErr } = await supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .insert({
       user_id: session.userId,
       fb_page_id: pageId,
@@ -696,7 +696,7 @@ export async function handleListQueueItems(
     const whereClause = conditions.join(' AND ');
 
     // 5. Total count
-    const countSql = `SELECT COUNT(*) AS total FROM queue_items qi WHERE ${whereClause}`;
+    const countSql = `SELECT COUNT(*) AS total FROM legacy_queue_items qi WHERE ${whereClause}`;
     const countRows = (await dbClient.query(countSql, params)) as Record<string, unknown>[];
     const total = countRows.length > 0 ? Number(countRows[0].total) : 0;
 
@@ -728,7 +728,7 @@ export async function handleListQueueItems(
         m.url AS media_url,
         m.aspect_ratio AS media_aspect_ratio,
         m.duration_seconds AS media_duration_seconds
-      FROM queue_items qi
+      FROM legacy_queue_items qi
       LEFT JOIN media_items m ON qi.media_id = m.id AND qi.user_id = m.user_id
       WHERE ${whereClause}
       ORDER BY qi.scheduled_time ASC, qi.created_at ASC
@@ -781,7 +781,7 @@ export async function handleListQueueItems(
 
     const statusCountSql = `
       SELECT qi.status, COUNT(*) as cnt
-      FROM queue_items qi
+      FROM legacy_queue_items qi
       WHERE qi.user_id = $1
         AND EXISTS (SELECT 1 FROM facebook_pages fp WHERE fp.id = qi.fb_page_id AND fp.workspace_id = $2 AND fp.user_id = $1)
         ${pageId ? 'AND qi.fb_page_id = $3' : ''}
@@ -835,7 +835,7 @@ export async function handleListQueueItems(
   }
 
   let queryBuilder = supabase
-    .from('queue_items')
+    .from('legacy_queue_items')
     .select(
       'id, user_id, fb_page_id, slot_id, media_id, post_format, link_url, scheduled_time, caption, first_comment, status, retry_count, max_retries, fb_post_id, fb_comment_id, published_at, created_at, updated_at, media:media_items(name, media_type, thumbnail_url, url, aspect_ratio, duration_seconds)',
       { count: 'exact' }
@@ -926,7 +926,7 @@ export async function handleListQueueItems(
   } else {
     try {
       const { data: statusRows } = await supabase
-        .from('queue_items')
+        .from('legacy_queue_items')
         .select('status')
         .eq('user_id', session.userId)
         .in('fb_page_id', workspacePageIds);

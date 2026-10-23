@@ -1,11 +1,10 @@
 /**
- * @file theme.ts
- * @description Canonical Design System Theme Configuration & Tokens for FBUploadPro Webapp.
- * 
- * STRICT ARCHITECTURAL RULE:
- * NEVER declare or hardcode ad-hoc colors, borders, shadows, or styling literals in components.
- * ALWAYS import and reference all visual properties, palette colors, spacing, and status indicators
- * directly from this file (or via the corresponding CSS variables defined in globals.css).
+ * GENERATED — do not edit; source: apps/web/tokens/
+ * Regenerate with: pnpm --filter @fbuploadpro/web tokens:build
+ *
+ * Canonical Design System Theme Configuration & Tokens for FBUploadPro Webapp.
+ * Hand-edit the DTCG token JSON in apps/web/tokens/ only — this file is a
+ * generated mirror. CI (tokens:check) fails if it drifts from the source.
  */
 
 // ============================================================================
@@ -61,7 +60,7 @@ export const RADII = {
   sm: '6px',
   /** 8px: Cards, data tables, sheet containers, dialog modals */
   md: '8px',
-  /** 9999px: Strictly reserved for circular avatars and 6px status micro-dots. NEVER for capsule pill badges. */
+  /** 9999px: Strictly reserved for circular avatars and round indicators. */
   full: '9999px',
 } as const;
 
@@ -92,25 +91,25 @@ export const TYPOGRAPHY = {
 } as const;
 
 // ============================================================================
-// 4. UNBOXED STATUS SIGNALS (Strictly Zero Capsule / Pill Badges)
+// 4. STATUS SIGNALS (colour + icon + text — spec 129 OD-3; never colour alone)
 // ============================================================================
 
 export const STATUS_SIGNALS = {
   operational: {
-    color: PALETTE.accent4,
-    dot: PALETTE.accent4,
+    color: '#2ebd85',
+    dot: '#2ebd85',
     halo: '0 0 8px rgba(46, 189, 133, 0.50)',
     label: 'Operational',
   },
   queued: {
-    color: PALETTE.primary,
-    dot: PALETTE.primary,
+    color: '#fad734',
+    dot: '#fad734',
     halo: '0 0 8px rgba(250, 215, 52, 0.50)',
     label: 'Queued',
   },
   critical: {
-    color: PALETTE.accent3,
-    dot: PALETTE.accent3,
+    color: '#f6465d',
+    dot: '#f6465d',
     halo: '0 0 8px rgba(246, 70, 93, 0.50)',
     label: 'Critical',
   },
@@ -224,7 +223,7 @@ export const LIGHT_THEME: ThemeTokens = {
 };
 
 // ============================================================================
-// 6. CANONICAL ACCESSORS & REUSABLE COMPONENT PRESETS
+// 6. CANONICAL ACCESSORS & SCALES
 // ============================================================================
 
 export const THEME = {
@@ -233,75 +232,39 @@ export const THEME = {
   default: DARK_THEME,
 } as const;
 
-/**
- * Pre-composed, standard component style presets to prevent ad-hoc styling.
- */
-export const COMPONENT_STYLES = {
-  /**
-   * Primary Action Button Preset (Gold fill, bold black text, inset highlight)
-   * WCAG AAA 14.86:1 contrast ratio.
-   */
-  primaryButton: {
-    height: '38px',
-    padding: `0 ${SPACING.md}`,
-    backgroundColor: PALETTE.primary,
-    color: PALETTE.background,
-    border: 'none',
-    borderRadius: RADII.sm,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    fontSize: '0.875rem',
-    cursor: 'pointer',
-    boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.35)',
-    transition: 'all 0.12s ease',
+/** Motion scale — duration tokens + easings (exit faster than enter). */
+export const MOTION = {
+  duration: {
+    fast: '100ms',
+    base: '150ms',
+    slow: '200ms',
+    slower: '300ms',
   },
-  /**
-   * Secondary Action Button Preset (1px hairline border)
-   */
-  secondaryButton: (theme: ThemeTokens = DARK_THEME) => ({
-    height: '38px',
-    padding: `0 ${SPACING.md}`,
-    backgroundColor: 'transparent',
-    color: `var(--text-main, ${theme.text.primary})`,
-    border: `1px solid var(--border-subtle, ${theme.borders.hairline})`,
-    borderRadius: RADII.sm,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    fontSize: '0.875rem',
-    cursor: 'pointer',
-    transition: 'all 0.12s ease',
-  }),
-  /**
-   * Text Input Resting State Preset (DESIGN.md Section 7.2)
-   */
-  input: (theme: ThemeTokens = DARK_THEME) => ({
-    height: '38px',
-    backgroundColor: theme.surfaces.canvas,
-    color: theme.text.primary,
-    border: `1px solid ${theme.mode === 'light' ? theme.borders.strong : theme.borders.hairline}`,
-    borderRadius: RADII.sm,
-    padding: `0 ${SPACING.sm}`,
-    fontSize: '0.875rem',
-    outline: 'none',
-    transition: 'all 0.15s ease',
-  }),
-  /**
-   * Card / Panel Container Preset (DESIGN.md Section 6 & 7)
-   */
-  card: (theme: ThemeTokens = DARK_THEME) => ({
-    backgroundColor: theme.surfaces.panel,
-    border: `1px solid ${theme.borders.hairline}`,
-    borderRadius: RADII.md,
-    boxShadow: theme.shadows.card,
-  }),
-  /**
-   * Unboxed Status Dot Preset (DESIGN.md Section 7.3)
-   */
-  statusDot: (type: keyof typeof STATUS_SIGNALS, mode: 'dark' | 'light' = 'dark') => ({
-    width: '6px',
-    height: '6px',
-    borderRadius: RADII.full,
-    backgroundColor: type === 'idle' && mode === 'light' ? STATUS_SIGNALS.idle.dotLight : STATUS_SIGNALS[type].dot,
-    boxShadow: STATUS_SIGNALS[type].halo,
-    display: 'inline-block',
-    flexShrink: 0,
-  }),
+  easing: {
+    standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
+    enter: 'cubic-bezier(0, 0, 0.2, 1)',
+    exit: 'cubic-bezier(0.4, 0, 1, 1)',
+    linear: 'cubic-bezier(0, 0, 1, 1)',
+  },
 } as const;
+
+/** Named z-index scale — replaces ad-hoc 9500/9999/10000 values. */
+export const Z_INDEX = {
+  base: 0,
+  sticky: 30,
+  drawer: 1000,
+  popover: 9000,
+  dialog: 9500,
+  toast: 9999,
+  overlayTop: 10000,
+} as const;
+
+/** One breakpoint set (px) — replaces the 440/639/767/768/1023 scatter. */
+export const BREAKPOINTS = {
+  sm: '640px',
+  md: '768px',
+  lg: '1024px',
+  xl: '1280px',
+} as const;
+
+export { COMPONENT_STYLES } from "./component-styles";

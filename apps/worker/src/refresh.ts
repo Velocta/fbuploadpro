@@ -1,0 +1,459 @@
+import {
+  decryptToken,
+  encryptToken,
+  getTokenRefreshConfig,
+  InternalError,
+  isTokenRefreshDue,
+  type DatabaseSocialAccountRow,
+  type Platform,
+  type Publisher,
+  type PublisherRegistry,
+  type RefreshedTokenSet,
+} from '@fbuploadpro/contracts';
+import { captureWorkerError, type PostHogEnv } from './analytics.js';
+
+// ==========================================
+// Token refresh job (spec 121 Scope 9, D6 DECIDED)
+// ==========================================
+//
+// A SEPARATE scheduled job (cron `*/15 * * * *`, see wrangler.toml) that
+// is the ONLY writer of rotated/refreshed tokens in the worker. The
+// claimer and the queue consumers contain zero token-refresh calls: an
+// auth error at publish time settles the account `expired` via the
+// settle RPC, it never triggers a refresh-and-retry (D6).
+//
+// Per-connection single-flight lease (columns from the sibling spec 121
+// migration 20261022130000, PR #649 — this code targets those columns at
+// runtime and does not ship the migration): BEFORE any platform call,
+// the job acquires the lease with ONE conditional update —
+//
+//   UPDATE social_accounts
+//   SET refresh_lease_owner = <run-scoped uuid>,
+//       refresh_lease_expires_at = <cycle now> + REFRESH_LEASE_TTL_MS
+//   WHERE id = <account id>
+//     AND (refresh_lease_owner IS NULL OR refresh_lease_expires_at < <cycle now>)
+//
+// Exactly one concurrent run can affect the row, so exactly one run can
+// spend a given refresh token. A run that affects 0 rows skips the
+// account silently (counted as skipped-lease). Every later write in the
+// cycle (persist, expire, release) is additionally guarded by
+// `refresh_lease_owner = <run id>`, so a run can only ever touch its
+// own lease.
+//
+// Atomic persist invariant: on a successful refresh the job writes
+// {new encrypted access token, new encrypted refresh token, new
+// token_expires_at, lease released} as ONE update, before any other
+// code can use the new tokens. X's refresh tokens are single-use and
+// rotating, which makes the window between the platform call and this
+// persist the known-loss window: if the worker crashes (or the persist
+// itself fails) after the platform spent the old refresh token, the
+// database still stores that now-spent token. The lease is left to
+// expire (REFRESH_LEASE_TTL_MS) rather than being released, and the
+// next run that re-acquires the lease retries with the spent token,
+// receives `invalid_grant`, and marks the account `expired` for
+// re-authentication. That is inherent to single-use rotation — the
+// connection is honestly dead at the platform — not a state this job
+// can recover from or should hide.
+//
+// Failure semantics:
+//   - Refresh failure classified `auth` (or code `invalid_grant`) via
+//     the publisher's `mapError`: the account is set `status='expired'`
+//     in one update that also releases the lease, a PostHog $exception
+//     is raised, and the job never retry-loops — later scans only read
+//     `status='active'` rows, so an expired account is never revisited.
+//   - Any other refresh failure (retryable or otherwise non-auth): the
+//     lease is released, the stored tokens are left untouched, and the
+//     account is counted deferred — the next scheduled run retries.
+//   - A persist failure after a successful platform refresh is logged
+//     loudly + captured to PostHog and counted deferred; the lease is
+//     deliberately NOT released (its expiry is the backstop) — see the
+//     crash-window note above for what the next run then observes.
+//   - DB errors on the scan or on a lease acquire (e.g. the lease
+//     columns are not migrated yet) ABORT the cycle with a thrown
+//     error after a loud log + PostHog capture. The job never treats a
+//     schema/DB failure as a platform auth failure, so it can never
+//     silently mark accounts `expired` because of its own plumbing.
+//
+// Scan scope: `social_accounts` only. `destinations` carries
+// `encrypted_destination_token` but the unified schema gives it NO
+// expiry signal (no token_expires_at column and no expiry key defined
+// in `metadata`), so there is nothing truthful to compute due-ness
+// from for destination tokens — Facebook Page tokens ride on the
+// account-level user token, whose lapse is detected on the account
+// row. The destinations lease columns exist for a future
+// destination-scoped refresher; this job does not invent a column.
+//
+// Due-ness: computed with the contracts `isTokenRefreshDue(platform,
+// snapshot, now)`. The snapshot needs `tokenIssuedAt` for the
+// Instagram/Threads minimum-age rule (token must be >= 24 h old), but
+// `social_accounts` has no issued-at column, so it is DERIVED as
+// `token_expires_at - accessTokenLifetimeSeconds` when the platform
+// config fixes a lifetime (Instagram/Threads: 60 days; X: ~2 h), and
+// falls back to the row's `updated_at` (the last write to the row,
+// which includes the last refresh persist) when it does not. The
+// derivation is conservative in the safe direction: with the 7-day
+// refresh threshold against a 60-day lifetime, a due token is ~53+
+// days old under either derivation, far past the 24 h minimum age.
+//
+// Facebook is lapse-detection only (contracts strategy
+// 'lapse-detection'): there is no refresh grant to spend, so this job
+// NEVER calls a publisher for a Facebook account — even if one were
+// registered. `isTokenRefreshDue` opens the lapse check once expiry is
+// within the 7-day threshold, but the status flip fires only when
+// `token_expires_at` has actually passed: a still-valid token inside
+// the window stays `active` and is re-checked on later runs. The flip
+// is a conditional update on `status='active'`, which is idempotent
+// and race-safe on its own, so Facebook rows deliberately do NOT take
+// the lease.
+//
+// Platforms with no registered publisher (ALL platforms in this PR —
+// the registry is empty until specs 122/124–127 land) are skipped
+// before any lease or platform call: the job runs cleanly and reports
+// zero refreshed. Provider-managed platforms (YouTube/TikTok) are
+// never due per the contracts config.
+
+/** Cron expression for the token-refresh job (wrangler.toml triggers). */
+export const TOKEN_REFRESH_CRON = '*/15 * * * *';
+
+/** Cron expression for the claimer tick (wrangler.toml triggers). */
+export const CLAIM_TICK_CRON = '* * * * *';
+
+/** How long a per-connection refresh lease is held before another run may take it over. */
+export const REFRESH_LEASE_TTL_MS = 5 * 60 * 1000;
+
+export interface RefreshEnv extends PostHogEnv {
+  TOKEN_ENCRYPTION_KEY?: string;
+}
+
+/** One DB result from the refresh job's Supabase-shaped client. */
+export interface RefreshDbResult {
+  data: unknown;
+  error: unknown;
+}
+
+export interface RefreshSelectQuery extends PromiseLike<RefreshDbResult> {
+  eq(column: string, value: unknown): RefreshSelectQuery;
+}
+
+export interface RefreshUpdateQuery extends PromiseLike<RefreshDbResult> {
+  eq(column: string, value: unknown): RefreshUpdateQuery;
+  or(filter: string): RefreshUpdateQuery;
+  select(columns?: string): RefreshUpdateQuery;
+}
+
+export interface RefreshTableQuery {
+  select(columns: string): RefreshSelectQuery;
+  update(values: Record<string, unknown>): RefreshUpdateQuery;
+}
+
+/**
+ * The slice of the Supabase client the refresh job uses. Every update
+ * ends in `.select('id')` so the affected-row count is observable —
+ * that count IS the lease protocol's win/lose signal.
+ */
+export interface RefreshDbClient {
+  from(table: string): RefreshTableQuery;
+}
+
+/** Structured per-cycle counters (logged on every run). */
+export interface RefreshCycleResult {
+  /** Active accounts returned by the scan. */
+  scanned: number;
+  /** Scanned accounts that were eligible and due (incl. lapsed Facebook). */
+  due: number;
+  /** Accounts whose tokens were refreshed and atomically persisted. */
+  refreshed: number;
+  /** Due accounts skipped because another live run holds the lease. */
+  skippedLease: number;
+  /** Due accounts deferred to the next run (transient failure / persist failure). */
+  deferredTransient: number;
+  /** Accounts flipped to `status='expired'` (auth failure or Facebook lapse). */
+  expired: number;
+}
+
+/** Social-account row fields the refresh job reads (subset of the full row). */
+interface RefreshAccountRow extends DatabaseSocialAccountRow {
+  refresh_lease_owner?: string | null;
+  refresh_lease_expires_at?: string | null;
+}
+
+function dbError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+async function runUpdate(
+  db: RefreshDbClient,
+  build: (table: RefreshTableQuery) => RefreshUpdateQuery
+): Promise<Record<string, unknown>[]> {
+  const { data, error } = await build(db.from('social_accounts'));
+  if (error) throw dbError(error);
+  return (Array.isArray(data) ? data : []) as Record<string, unknown>[];
+}
+
+/** Derives the snapshot's issued-at for the minimum-age rule (see header). */
+function deriveTokenIssuedAt(row: RefreshAccountRow, platform: Platform): string | null {
+  const config = getTokenRefreshConfig(platform);
+  if (row.token_expires_at && config.accessTokenLifetimeSeconds !== null) {
+    const expiresMs = new Date(row.token_expires_at).getTime();
+    if (!Number.isNaN(expiresMs)) {
+      return new Date(expiresMs - config.accessTokenLifetimeSeconds * 1000).toISOString();
+    }
+  }
+  return row.updated_at;
+}
+
+function isDue(row: RefreshAccountRow, now: Date): boolean {
+  return isTokenRefreshDue(
+    row.platform,
+    { tokenExpiresAt: row.token_expires_at, tokenIssuedAt: deriveTokenIssuedAt(row, row.platform) },
+    now
+  );
+}
+
+/** Acquires the per-connection lease; true when this run won the row. */
+async function tryAcquireLease(
+  db: RefreshDbClient,
+  accountId: string,
+  runId: string,
+  now: Date
+): Promise<boolean> {
+  const leaseExpiresAt = new Date(now.getTime() + REFRESH_LEASE_TTL_MS).toISOString();
+  const nowIso = now.toISOString();
+  const rows = await runUpdate(db, (table) =>
+    table
+      .update({ refresh_lease_owner: runId, refresh_lease_expires_at: leaseExpiresAt })
+      .eq('id', accountId)
+      .or(`refresh_lease_owner.is.null,refresh_lease_expires_at.lt.${nowIso}`)
+      .select('id')
+  );
+  return rows.length > 0;
+}
+
+/** Releases this run's lease without touching tokens or status. */
+async function releaseLease(
+  db: RefreshDbClient,
+  accountId: string,
+  runId: string
+): Promise<void> {
+  await runUpdate(db, (table) =>
+    table
+      .update({ refresh_lease_owner: null, refresh_lease_expires_at: null })
+      .eq('id', accountId)
+      .eq('refresh_lease_owner', runId)
+      .select('id')
+  );
+}
+
+/** Flips a lease-holding account to `expired` and releases the lease in one update. */
+async function markExpiredHoldingLease(
+  db: RefreshDbClient,
+  accountId: string,
+  runId: string
+): Promise<void> {
+  await runUpdate(db, (table) =>
+    table
+      .update({ status: 'expired', refresh_lease_owner: null, refresh_lease_expires_at: null })
+      .eq('id', accountId)
+      .eq('refresh_lease_owner', runId)
+      .select('id')
+  );
+}
+
+/**
+ * Facebook lapse flip: a pure status change, conditional on the row
+ * still being `active`, so concurrent runs converge without a lease.
+ */
+async function markFacebookLapsed(db: RefreshDbClient, accountId: string): Promise<boolean> {
+  const rows = await runUpdate(db, (table) =>
+    table.update({ status: 'expired' }).eq('id', accountId).eq('status', 'active').select('id')
+  );
+  return rows.length > 0;
+}
+
+interface RefreshAccountContext {
+  db: RefreshDbClient;
+  registry: PublisherRegistry;
+  env: RefreshEnv;
+  masterKey: string;
+  runId: string;
+  now: Date;
+  result: RefreshCycleResult;
+}
+
+async function refreshOneAccount(
+  ctx: RefreshAccountContext,
+  row: RefreshAccountRow,
+  publisher: Publisher
+): Promise<void> {
+  const { db, env, masterKey, runId, result } = ctx;
+
+  let acquired: boolean;
+  try {
+    acquired = await tryAcquireLease(db, row.id, runId, ctx.now);
+  } catch (err) {
+    // A lease-acquire failure is the job's own plumbing (e.g. lease
+    // columns not yet migrated) — fail the whole cycle loudly rather
+    // than misreading it as anything about this account.
+    captureWorkerError(env, err, { site: 'runRefreshCycle', kind: 'lease_acquire_failed', accountId: row.id, platform: row.platform });
+    console.error(`[refresh] lease acquire failed for account ${row.id} (${row.platform}); aborting cycle:`, err);
+    throw err;
+  }
+  if (!acquired) {
+    result.skippedLease++;
+    return;
+  }
+
+  let refreshedTokens: RefreshedTokenSet;
+  try {
+    const tokens = {
+      accessToken: await decryptToken(row.encrypted_access_token, masterKey),
+      refreshToken: row.encrypted_refresh_token
+        ? await decryptToken(row.encrypted_refresh_token, masterKey)
+        : null,
+      tokenExpiresAt: row.token_expires_at ?? null,
+    };
+    refreshedTokens = await publisher.refreshTokens(row, tokens);
+  } catch (err) {
+    const classified = publisher.mapError(err);
+    const isAuthFailure =
+      classified.kind === 'auth' || classified.code.toLowerCase().includes('invalid_grant');
+    if (isAuthFailure) {
+      try {
+        await markExpiredHoldingLease(db, row.id, runId);
+      } catch (expireErr) {
+        captureWorkerError(env, expireErr, { site: 'runRefreshCycle', kind: 'mark_expired_failed', accountId: row.id, platform: row.platform });
+        console.error(`[refresh] failed to mark account ${row.id} (${row.platform}) expired after auth failure:`, expireErr);
+        throw expireErr;
+      }
+      result.expired++;
+      captureWorkerError(env, err, { site: 'runRefreshCycle', kind: 'refresh_auth_failed', accountId: row.id, platform: row.platform, code: classified.code });
+      console.error(
+        `[refresh] account ${row.id} (${row.platform}) marked expired: token refresh failed with auth error ${classified.code}: ${classified.message}`
+      );
+      return;
+    }
+    // Transient / non-auth failure: release the lease, leave the stored
+    // tokens untouched, and let the next scheduled run retry.
+    try {
+      await releaseLease(db, row.id, runId);
+    } catch (releaseErr) {
+      captureWorkerError(env, releaseErr, { site: 'runRefreshCycle', kind: 'lease_release_failed', accountId: row.id, platform: row.platform });
+      console.error(`[refresh] failed to release lease for account ${row.id} (${row.platform}) after transient failure:`, releaseErr);
+    }
+    result.deferredTransient++;
+    console.warn(
+      `[refresh] account ${row.id} (${row.platform}) refresh deferred (${classified.kind}/${classified.code}): ${classified.message}`
+    );
+    return;
+  }
+
+  // Atomic persist: new tokens + new expiry + lease release in ONE
+  // update, owner-guarded, before any other code can use the tokens.
+  try {
+    const encryptedAccessToken = await encryptToken(refreshedTokens.accessToken, masterKey);
+    const encryptedRefreshToken = refreshedTokens.refreshToken
+      ? await encryptToken(refreshedTokens.refreshToken, masterKey)
+      : row.encrypted_refresh_token;
+    const rows = await runUpdate(db, (table) =>
+      table
+        .update({
+          encrypted_access_token: encryptedAccessToken,
+          encrypted_refresh_token: encryptedRefreshToken,
+          token_expires_at: refreshedTokens.tokenExpiresAt ?? row.token_expires_at,
+          refresh_lease_owner: null,
+          refresh_lease_expires_at: null,
+        })
+        .eq('id', row.id)
+        .eq('refresh_lease_owner', runId)
+        .select('id')
+    );
+    if (rows.length === 0) {
+      throw new InternalError('persist matched no row — the refresh lease was lost before persist');
+    }
+  } catch (err) {
+    // The platform may already have spent the old refresh token (X
+    // rotation): see the crash-window note in the header. Loud, counted
+    // deferred, lease left to expire as the backstop — never expired
+    // here on a guess.
+    captureWorkerError(env, err, { site: 'runRefreshCycle', kind: 'refresh_persist_failed', accountId: row.id, platform: row.platform });
+    console.error(
+      `[refresh] CRITICAL: failed to persist refreshed tokens for account ${row.id} (${row.platform}) after a successful platform refresh:`,
+      err
+    );
+    result.deferredTransient++;
+    return;
+  }
+
+  result.refreshed++;
+}
+
+/**
+ * Runs one token-refresh cycle: scan active social accounts, refresh
+ * the due ones through their registered publisher under the
+ * per-connection lease, and lapse-detect Facebook accounts.
+ */
+export async function runRefreshCycle(
+  db: RefreshDbClient,
+  registry: PublisherRegistry,
+  env: RefreshEnv,
+  now: Date = new Date()
+): Promise<RefreshCycleResult> {
+  const masterKey = env.TOKEN_ENCRYPTION_KEY;
+  if (!masterKey) {
+    throw new InternalError('TOKEN_ENCRYPTION_KEY is not configured; cannot run token refresh cycle');
+  }
+
+  const result: RefreshCycleResult = {
+    scanned: 0,
+    due: 0,
+    refreshed: 0,
+    skippedLease: 0,
+    deferredTransient: 0,
+    expired: 0,
+  };
+  const runId = crypto.randomUUID();
+
+  const { data, error } = await db.from('social_accounts').select('*').eq('status', 'active');
+  if (error) {
+    captureWorkerError(env, error, { site: 'runRefreshCycle', kind: 'scan_failed' });
+    console.error('[refresh] failed to scan social_accounts; aborting cycle:', error);
+    throw dbError(error);
+  }
+  const rows = (Array.isArray(data) ? data : []) as RefreshAccountRow[];
+  result.scanned = rows.length;
+
+  for (const row of rows) {
+    const config = getTokenRefreshConfig(row.platform);
+
+    if (config.strategy === 'lapse-detection') {
+      // Facebook: no refresh call ever. The flip fires only once the
+      // token has actually lapsed (see header).
+      if (!isDue(row, now)) continue;
+      if (!row.token_expires_at || new Date(row.token_expires_at).getTime() > now.getTime()) {
+        continue;
+      }
+      result.due++;
+      if (await markFacebookLapsed(db, row.id)) {
+        result.expired++;
+        console.warn(`[refresh] facebook account ${row.id} marked expired: user token lapsed`);
+      }
+      continue;
+    }
+
+    // Refreshable platforms need a stored refresh token to spend.
+    if (!row.encrypted_refresh_token) continue;
+    if (!isDue(row, now)) continue;
+    result.due++;
+
+    const publisher = registry.get(row.platform);
+    if (!publisher) continue; // No module registered yet — by design (specs 122/124–127).
+
+    await refreshOneAccount({ db, registry, env, masterKey, runId, now, result }, row, publisher);
+  }
+
+  console.info(
+    `[refresh] cycle scanned=${result.scanned} due=${result.due} refreshed=${result.refreshed} ` +
+      `skipped-lease=${result.skippedLease} deferred-transient=${result.deferredTransient} expired=${result.expired}`
+  );
+  return result;
+}

@@ -744,7 +744,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('SELECT count(*)::int as count FROM page_queue_slots')) {
             return Promise.resolve([{ count: 2 }]);
           }
-          if (sql.includes('FROM queue_items qi')) {
+          if (sql.includes('FROM legacy_queue_items qi')) {
             return Promise.resolve([
               {
                 id: 'queue-item-1',
@@ -758,7 +758,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
               },
             ]);
           }
-          if (sql.includes('UPDATE queue_items')) {
+          if (sql.includes('UPDATE legacy_queue_items')) {
             updateQueries.push({ sql, params });
             return Promise.resolve([]);
           }
@@ -804,7 +804,7 @@ describe('Page Queue Slots CRUD (T121, T122, T123)', () => {
           if (sql.includes('SELECT count(*)::int as count FROM page_queue_slots')) {
             return Promise.resolve([{ count: 1 }]);
           }
-          if (sql.includes('FROM queue_items qi')) {
+          if (sql.includes('FROM legacy_queue_items qi')) {
             queriedQueueItemsSql = sql;
             return Promise.resolve([]);
           }

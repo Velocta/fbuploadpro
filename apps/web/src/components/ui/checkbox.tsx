@@ -47,6 +47,16 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
   };
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        .fbu-checkbox-wrapper:focus-visible .fbu-checkbox-box {
+          box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
+        }
+        .fbu-checkbox-wrapper:hover:not(.is-disabled) .fbu-checkbox-box {
+          border-color: var(--border-strong, #b29527);
+        }
+      `}</style>
     <div
       id={checkboxId}
         role="checkbox"
@@ -149,6 +159,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           </div>
         )}
       </div>
+    </>
     );
   });
 

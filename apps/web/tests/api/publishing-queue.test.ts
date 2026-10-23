@@ -216,10 +216,10 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
               },
             ]);
           }
-          if (sql.includes('FROM queue_items WHERE') && sql.includes("status = 'queued'")) {
+          if (sql.includes('FROM legacy_queue_items WHERE') && sql.includes("status = 'queued'")) {
             return Promise.resolve([]);
           }
-          if (sql.includes('INSERT INTO queue_items')) {
+          if (sql.includes('INSERT INTO legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: queueItemId,
@@ -306,7 +306,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
               },
             ]);
           }
-          if (sql.includes('INSERT INTO queue_items')) {
+          if (sql.includes('INSERT INTO legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: queueItemId,
@@ -447,7 +447,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
           if (sql.includes('FROM facebook_pages')) {
             return Promise.resolve([{ id: pageId, status: 'active' }]);
           }
-          if (sql.includes('INSERT INTO queue_items')) {
+          if (sql.includes('INSERT INTO legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: queueItemId,
@@ -523,7 +523,7 @@ describe('Publishing Queue Route Handlers (T125, T126, T127)', () => {
               },
             ]);
           }
-          if (sql.includes('INSERT INTO queue_items')) {
+          if (sql.includes('INSERT INTO legacy_queue_items')) {
             return Promise.resolve([
               {
                 id: queueItemId,

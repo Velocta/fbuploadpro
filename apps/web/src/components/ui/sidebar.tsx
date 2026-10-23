@@ -171,6 +171,89 @@ export function SidebarProvider({
 
   return (
     <SidebarContext.Provider value={contextValue}>
+      {/* Sidebar primitive + state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        [data-slot="sidebar-wrapper"] {
+          display: flex;
+          min-height: calc(100svh - var(--desktop-titlebar-height, 0px));
+          width: 100%;
+          background-color: var(--bg-canvas);
+          color: var(--text-main);
+        }
+        [data-slot="sidebar-gap"] {
+          position: relative;
+          background-color: transparent;
+          transition: width 200ms linear, min-width 200ms linear;
+          flex-shrink: 0;
+        }
+        [data-slot="sidebar-container"] {
+          position: fixed;
+          top: var(--desktop-titlebar-height, 0px);
+          bottom: 0;
+          height: calc(100svh - var(--desktop-titlebar-height, 0px));
+          z-index: 30;
+          display: flex;
+          transition: left 200ms linear, right 200ms linear, width 200ms linear;
+        }
+        [data-sidebar="sidebar"] {
+          background-color: var(--bg-panel);
+          color: var(--text-main);
+          border-color: var(--border-subtle);
+          display: flex;
+          height: 100%;
+          width: 100%;
+          flex-direction: column;
+        }
+        [data-slot="sidebar-menu-button"]:hover:not(:disabled),
+        [data-slot="sidebar-menu-sub-button"]:hover:not(:disabled),
+        [data-slot="sidebar-trigger"]:hover:not(:disabled),
+        [data-slot="sidebar-group-action"]:hover:not(:disabled),
+        [data-slot="sidebar-menu-action"]:hover:not(:disabled),
+        .sidebar-dropdown-item:hover:not(:disabled) {
+          background-color: var(--bg-hover) !important;
+          color: var(--text-main) !important;
+        }
+        [data-slot="sidebar-menu-button"][data-active="true"],
+        [data-slot="sidebar-menu-sub-button"][data-active="true"] {
+          background-color: var(--bg-active) !important;
+          color: var(--text-main) !important;
+          font-weight: 500;
+        }
+        [data-slot="sidebar-menu-button"]:focus-visible,
+        [data-slot="sidebar-menu-sub-button"]:focus-visible,
+        [data-slot="sidebar-trigger"]:focus-visible,
+        [data-slot="sidebar-group-action"]:focus-visible,
+        [data-slot="sidebar-menu-action"]:focus-visible,
+        .sidebar-dropdown-item:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px var(--ring-focus);
+        }
+        [data-slot="sidebar-rail"] {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          z-index: 20;
+          width: 16px;
+          border: none;
+          padding: 0;
+          background: transparent;
+          transition: all 150ms linear;
+        }
+        [data-slot="sidebar-rail"]::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          left: 50%;
+          width: 2px;
+          transform: translateX(-50%);
+          background-color: transparent;
+          transition: background-color 150ms ease;
+        }
+        [data-slot="sidebar-rail"]:hover::after {
+          background-color: var(--primary);
+        }
+      `}</style>
       <div
         data-slot="sidebar-wrapper"
         className={className}

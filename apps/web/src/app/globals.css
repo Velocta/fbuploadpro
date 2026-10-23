@@ -1,436 +1,296 @@
 /**
  * @file globals.css
- * @description Global CSS custom properties and theme definitions for FBUploadPro Webapp.
- * 
- * STRICT ARCHITECTURAL RULE:
- * Always consume color, spacing, radius, and elevation tokens from here or from @web/lib/theme.
- * NEVER hardcode ad-hoc styling literals in component styles.
+ * @description Global stylesheet for FBUploadPro Webapp — Tailwind CSS v4 on top
+ * of the generated design tokens (spec 129, PR-F2).
+ *
+ * ARCHITECTURE:
+ * - The single source of truth for values is `apps/web/tokens/` (DTCG JSON).
+ *   `src/styles/tokens.generated.css` is generated from it — never edit the
+ *   generated file, and never hand-copy a value into this file: the Tailwind
+ *   `@theme` below references the generated `var(--…)` variables only.
+ * - Cascade layers are declared explicitly, in this order:
+ *     theme, base, components, utilities, overrides
+ *   `theme` holds the token variables + the Tailwind theme mapping,
+ *   `base` holds preflight + element defaults, `components` holds opt-in
+ *   component class hooks, `utilities` holds token-backed utilities, and
+ *   `overrides` is last — the ONLY layer where important declarations
+ *   (the bang-flagged kind) may appear
+ *   (each use needs a comment citing why; enforced by
+ *   .github/scripts/regression-guardrails.sh).
+ * - Component state styles and page layout classes do NOT live here — they
+ *   live with their components/pages (spec 129 T12 evictions).
+ * - Consume semantic tokens (`--bg-*`, `--text-*`, `--border-*`, token-backed
+ *   utilities) from component code. Never hardcode styling literals —
+ *   enforcement lives in the regression guardrails + the design-system
+ *   baseline (apps/web/design-system-baseline.txt).
  */
 
-:root {
-  /* Core Primitives (Section 3.1 & 3.2 of DESIGN.md) */
-  --primary: #fad734;
-  --accent-1: #b29527;
-  --accent-2: #766018;
-  --accent-3: #f6465d;
-  --accent-4: #2ebd85;
+/* Layer order — declared first so nothing can out-rank `overrides`. */
+@layer theme, base, components, utilities, overrides;
 
-  /* Official 8-Color Palette Aliases */
-  --color-primary: #fad734;
-  --color-accent-1: #b29527;
-  --color-accent-2: #766018;
-  --color-accent-3: #f6465d;
-  --color-accent-4: #2ebd85;
-  --color-background: #000000;
-  --color-text: #ffffff;
-  --color-neutral: #1f242d;
-  --background: #000000;
-  --text: #ffffff;
-  --neutral: #1f242d;
+/* Generated design tokens (source: apps/web/tokens/). Unlayered on purpose:
+   custom-property definitions must apply at full strength in both modes. */
+@import "../styles/tokens.generated.css";
 
-  /* Default (Dark Mode) Tokens */
-  --bg-canvas: #000000;
-  --bg-panel: #0c0d10;
-  --bg-surface: var(--bg-panel);
-  --bg-subtle: #121419;
-  --bg-hover: #1f242d;
-  --bg-active: #262c37;
-  --text-main: #ffffff;
-  --text-sub: #9ca3af;
-  --text-dim: #6b7280;
-  --text-muted: var(--text-sub);
-  --text-on-primary: #000000;
-  --border-subtle: #1f242d;
-  --border-strong: #2b323c;
-  --border-focus: rgba(250, 215, 52, 0.35);
-  --ring-focus: rgba(250, 215, 52, 0.35);
+/* Tailwind v4 — emits its theme/base (preflight)/components/utilities layers. */
+@import "tailwindcss";
 
-  /* Spacing Scale */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-lg: 16px;
-  --space-xl: 24px;
-  --space-xxl: 32px;
-  --space-xxxl: 48px;
+/* The app's dark mode is the [data-theme] token swap (init script in
+   layout.tsx), not the OS media query — bind Tailwind's `dark:` variant to it. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-  /* Radii */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-full: 9999px;
+/* ============================================================================
+ * THEME — Tailwind theme mapping, fed ONLY by the generated token variables
+ * (`@theme inline`: utilities resolve these var() references at the use site,
+ * so the token files stay the single source — no value is copied here).
+ * ========================================================================== */
+@theme inline {
+  /* Brand + primitive colours (generated names, re-exported as utilities) */
+  --color-brand-gold: var(--color-brand-gold);
+  --color-brand-peru: var(--color-brand-peru);
+  --color-brand-bronze: var(--color-brand-bronze);
+  --color-brand-rose: var(--color-brand-rose);
+  --color-brand-emerald: var(--color-brand-emerald);
+  --color-neutral-black: var(--color-neutral-black);
+  --color-neutral-white: var(--color-neutral-white);
+  --color-neutral-slate: var(--color-neutral-slate);
+  --color-gray-400: var(--color-gray-400);
+  --color-gray-500: var(--color-gray-500);
+  --color-gray-muted-light: var(--color-gray-muted-light);
+  --color-gray-slate-text: var(--color-gray-slate-text);
+  --color-surface-dark-panel: var(--color-surface-dark-panel);
+  --color-surface-dark-subtle: var(--color-surface-dark-subtle);
+  --color-surface-dark-active: var(--color-surface-dark-active);
+  --color-surface-light-canvas: var(--color-surface-light-canvas);
+  --color-surface-light-subtle: var(--color-surface-light-subtle);
+  --color-surface-light-hover: var(--color-surface-light-hover);
+  --color-surface-light-active: var(--color-surface-light-active);
+  --color-border-dark-strong: var(--color-border-dark-strong);
+  --color-border-light-strong: var(--color-border-light-strong);
+  --color-alpha-gold-focus: var(--color-alpha-gold-focus);
+  --color-alpha-gold-halo: var(--color-alpha-gold-halo);
+  --color-alpha-rose-halo: var(--color-alpha-rose-halo);
+  --color-alpha-emerald-halo: var(--color-alpha-emerald-halo);
+  --color-alpha-idle-halo: var(--color-alpha-idle-halo);
 
-  /* Typography */
-  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-features: 'cv02', 'cv03', 'cv04', 'cv11';
+  /* Semantic colours (swap per [data-theme] via the generated tokens) */
+  --color-primary: var(--color-brand-gold);
+  --color-canvas: var(--bg-canvas);
+  --color-panel: var(--bg-panel);
+  --color-subtle: var(--bg-subtle);
+  --color-hover: var(--bg-hover);
+  --color-active: var(--bg-active);
+  --color-ink: var(--text-main);
+  --color-ink-sub: var(--text-sub);
+  --color-ink-dim: var(--text-dim);
+  --color-on-primary: var(--text-on-primary);
+  --color-link: var(--text-link);
+  --color-line: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-signal-operational: var(--signal-operational);
+  --color-signal-queued: var(--signal-queued);
+  --color-signal-critical: var(--signal-critical);
+  --color-signal-idle: var(--signal-idle);
 
-  /* Elevation Shadows (Default Dark) */
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.60);
-  --shadow-elevated: 0 12px 24px -4px rgba(0, 0, 0, 0.85);
-  --shadow-modal: 0 24px 48px -8px rgba(0, 0, 0, 0.95);
+  /* Type */
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+  --text-xs: var(--font-size-xs);
+  --text-body: var(--font-size-body);
+  --text-metadata: var(--font-size-metadata);
+  --text-lg: var(--font-size-lg);
+  --text-xl: var(--font-size-xl);
+  --text-xxl: var(--font-size-xxl);
+  --text-xxxl: var(--font-size-xxxl);
+  --leading-body: var(--font-line-height-body);
+  --leading-heading: var(--font-line-height-heading);
+  --leading-heading-loose: var(--font-line-height-heading-loose);
+  --leading-heading-tight: var(--font-line-height-heading-tight);
+  --tracking-body: var(--font-tracking-body);
+  --tracking-caption: var(--font-tracking-caption);
+  --tracking-display: var(--font-tracking-display);
+  --tracking-h1: var(--font-tracking-h1);
+  --tracking-h2: var(--font-tracking-h2);
+  --tracking-h3: var(--font-tracking-h3);
+  --font-weight-regular: var(--font-weight-regular);
+  --font-weight-medium: var(--font-weight-medium);
+  --font-weight-semibold: var(--font-weight-semibold);
+  --font-weight-bold: var(--font-weight-bold);
+  --font-weight-heavy: var(--font-weight-heavy);
 
-  /* Status Signals */
-  --signal-operational: #2ebd85;
-  --signal-queued: #fad734;
-  --signal-critical: #f6465d;
-  --signal-idle: #474d57;
+  /* Radii + spacing (token ladder only — arbitrary values are banned) */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-full: var(--radius-full);
+  --spacing-xs: var(--space-xs);
+  --spacing-sm: var(--space-sm);
+  --spacing-md: var(--space-md);
+  --spacing-lg: var(--space-lg);
+  --spacing-xl: var(--space-xl);
+  --spacing-xxl: var(--space-xxl);
+  --spacing-xxxl: var(--space-xxxl);
+  --spacing-section: var(--space-section);
+  --spacing-page: var(--space-page);
 
-  /* Shadcn Sidebar Layout Dimensions */
-  --sidebar-width: 256px;
-  --sidebar-width-mobile: 288px;
-  --sidebar-width-icon: 48px;
+  /* Elevation (semantic, per-mode) */
+  --shadow-card: var(--shadow-card);
+  --shadow-elevated: var(--shadow-elevated);
+  --shadow-modal: var(--shadow-modal);
 
-  /* Desktop Shell Window Clearance (Spec 035) */
-  --desktop-titlebar-height: 0px;
+  /* Z-index (named semantic steps only) */
+  --z-index-base: var(--z-index-base);
+  --z-index-sticky: var(--z-index-sticky);
+  --z-index-drawer: var(--z-index-drawer);
+  --z-index-popover: var(--z-index-popover);
+  --z-index-dialog: var(--z-index-dialog);
+  --z-index-toast: var(--z-index-toast);
+  --z-index-overlay-top: var(--z-index-overlay-top);
+
+  /* Breakpoints are NOT re-mapped here: Tailwind substitutes breakpoint
+     values into @media queries, where var() references are invalid CSS
+     (LightningCSS rejects them at build time). Tailwind v4's default
+     breakpoint scale (40/48/64/80rem = 640/768/1024/1280px) is numerically
+     identical to the tokenised set in the generated --breakpoint-* variables,
+     which remain the source for hand-written CSS media queries. If the token
+     breakpoints ever change, they must be set here as concrete values in the
+     same change (the one sanctioned exception to no-copied-values, forced by
+     the media-query limitation). */
+
+  /* Motion */
+  --duration-fast: var(--motion-duration-fast);
+  --duration-base: var(--motion-duration-base);
+  --duration-slow: var(--motion-duration-slow);
+  --duration-slower: var(--motion-duration-slower);
+  --ease-standard: var(--motion-easing-standard);
+  --ease-enter: var(--motion-easing-enter);
+  --ease-exit: var(--motion-easing-exit);
+  --ease-linear: var(--motion-easing-linear);
 }
 
-[data-theme="light"],
-.light {
-  --bg-canvas: #f6f8fa;
-  --bg-panel: #ffffff;
-  --bg-surface: var(--bg-panel);
-  --bg-subtle: #f1f3f5;
-  --bg-hover: #eaecef;
-  --bg-active: #e2e8f0;
-  --text-main: #000000;
-  --text-sub: #474d57;
-  --text-dim: #848e9c;
-  --text-muted: var(--text-sub);
-  --text-on-primary: #000000;
-  --border-subtle: #eaecef;
-  --border-strong: #cbd5e1;
-  --border-focus: rgba(250, 215, 52, 0.35);
-  --ring-focus: rgba(250, 215, 52, 0.35);
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02);
-  --shadow-elevated: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
-  --shadow-modal: 0 20px 32px -4px rgba(0, 0, 0, 0.12);
-  --signal-idle: #848e9c;
-}
+@layer theme {
+  /* Legacy variable aliases — pre-token names that shipped in the old
+     globals.css and are still consumed by unconverted surfaces (and by the
+     generated theme.ts fallbacks). Each is a pure var() alias of a generated
+     token (no copied values), preserving the exact shipped behaviour in both
+     modes — e.g. --text stays neutral-white in light mode too, exactly as it
+     shipped, and --text-muted keeps its shipped meaning of var(--text-sub).
+     Aliases die with their last consumer in specs 130–136. */
+  :root {
+    --primary: var(--color-brand-gold);
+    --accent-1: var(--color-brand-peru);
+    --accent-2: var(--color-brand-bronze);
+    --accent-3: var(--color-brand-rose);
+    --accent-4: var(--color-brand-emerald);
+    --color-primary: var(--color-brand-gold);
+    --color-accent-1: var(--color-brand-peru);
+    --color-accent-2: var(--color-brand-bronze);
+    --color-accent-3: var(--color-brand-rose);
+    --color-accent-4: var(--color-brand-emerald);
+    --color-background: var(--color-neutral-black);
+    --color-text: var(--color-neutral-white);
+    --color-neutral: var(--color-neutral-slate);
+    --background: var(--color-neutral-black);
+    --text: var(--color-neutral-white);
+    --neutral: var(--color-neutral-slate);
+    --bg-surface: var(--bg-panel);
+    --text-muted: var(--text-sub);
+    --ring-focus: var(--border-focus);
+    --font-family: var(--font-family-sans);
+    --font-features: var(--font-feature-settings);
 
-[data-theme="dark"],
-.dark {
-  --bg-canvas: #000000;
-  --bg-panel: #0c0d10;
-  --bg-surface: var(--bg-panel);
-  --bg-subtle: #121419;
-  --bg-hover: #1f242d;
-  --bg-active: #262c37;
-  --text-main: #ffffff;
-  --text-sub: #9ca3af;
-  --text-dim: #6b7280;
-  --text-muted: var(--text-sub);
-  --text-on-primary: #000000;
-  --border-subtle: #1f242d;
-  --border-strong: #2b323c;
-  --border-focus: rgba(250, 215, 52, 0.35);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.60);
-  --shadow-elevated: 0 12px 24px -4px rgba(0, 0, 0, 0.85);
-  --shadow-modal: 0 24px 48px -8px rgba(0, 0, 0, 0.95);
-}
+    /* Shell layout dimensions (consumed by the sidebar + desktop shell;
+       component-owned layout constants, kept global while the shell is
+       legacy — the sidebar primitive rebuild (spec 129 F3 / spec 130)
+       re-homes them). */
+    --sidebar-width: 256px;
+    --sidebar-width-mobile: 288px;
+    --sidebar-width-icon: 48px;
 
-html,
-body {
-  margin: 0;
-  padding: 0;
-  padding-top: var(--desktop-titlebar-height, 0px);
-  background-color: var(--bg-canvas);
-  color: var(--text-main);
-  font-family: var(--font-family);
-  font-feature-settings: var(--font-features);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-.tabular-nums {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Responsive Mobile/Desktop Visibility */
-@media (min-width: 768px) {
-  .mobile-only {
-    display: none !important;
+    /* Desktop shell window clearance (spec 035) — 0px on web. */
+    --desktop-titlebar-height: 0px;
   }
-}
 
-@media (max-width: 767px) {
-  .desktop-only {
-    display: none !important;
+  /* Global keyframes: `spin` is referenced by name from inline styles across
+     unrelated components (buttons, settings, insights), so it stays global.
+     The skeleton's `fbu-shimmer` keyframes moved with the skeleton (T12). */
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 }
 
 /* ============================================================================
- * SHADCN SIDEBAR PRIMITIVES & REACTIVE THEME STATES (Spec 025)
- * ============================================================================ */
-
-[data-slot="sidebar-wrapper"] {
-  display: flex;
-  min-height: calc(100svh - var(--desktop-titlebar-height, 0px));
-  width: 100%;
-  background-color: var(--bg-canvas);
-  color: var(--text-main);
-}
-
-[data-slot="sidebar-gap"] {
-  position: relative;
-  background-color: transparent;
-  transition: width 200ms linear, min-width 200ms linear;
-  flex-shrink: 0;
-}
-
-[data-slot="sidebar-container"] {
-  position: fixed;
-  top: var(--desktop-titlebar-height, 0px);
-  bottom: 0;
-  height: calc(100svh - var(--desktop-titlebar-height, 0px));
-  z-index: 30;
-  display: flex;
-  transition: left 200ms linear, right 200ms linear, width 200ms linear;
-}
-
-[data-sidebar="sidebar"] {
-  background-color: var(--bg-panel);
-  color: var(--text-main);
-  border-color: var(--border-subtle);
-  display: flex;
-  height: 100%;
-  width: 100%;
-  flex-direction: column;
-}
-
-[data-slot="sidebar-menu-button"]:hover:not(:disabled),
-[data-slot="sidebar-menu-sub-button"]:hover:not(:disabled),
-[data-slot="sidebar-trigger"]:hover:not(:disabled),
-[data-slot="sidebar-group-action"]:hover:not(:disabled),
-[data-slot="sidebar-menu-action"]:hover:not(:disabled),
-.sidebar-dropdown-item:hover:not(:disabled) {
-  background-color: var(--bg-hover) !important;
-  color: var(--text-main) !important;
-}
-
-[data-slot="sidebar-menu-button"][data-active="true"],
-[data-slot="sidebar-menu-sub-button"][data-active="true"] {
-  background-color: var(--bg-active) !important;
-  color: var(--text-main) !important;
-  font-weight: 500;
-}
-
-[data-slot="sidebar-menu-button"]:focus-visible,
-[data-slot="sidebar-menu-sub-button"]:focus-visible,
-[data-slot="sidebar-trigger"]:focus-visible,
-[data-slot="sidebar-group-action"]:focus-visible,
-[data-slot="sidebar-menu-action"]:focus-visible,
-.sidebar-dropdown-item:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--ring-focus);
-}
-
-[data-slot="sidebar-rail"] {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  z-index: 20;
-  width: 16px;
-  border: none;
-  padding: 0;
-  background: transparent;
-  transition: all 150ms linear;
-}
-
-[data-slot="sidebar-rail"]::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-50%);
-  background-color: transparent;
-  transition: background-color 150ms ease;
-}
-
-[data-slot="sidebar-rail"]:hover::after {
-  background-color: var(--primary);
-}
-
-/* ====================================================================
- * UI Primitive Component Styles & Animations (.fbu-*)
- * ==================================================================== */
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes fbu-shimmer {
-  0% {
-    background-position: -200% 0;
+ * BASE — Tailwind preflight (from the import above) + our element defaults.
+ * ========================================================================== */
+@layer base {
+  /* Native widgets/scrollbars follow the active mode. Dark is the default
+     mode; the init script in layout.tsx sets data-theme before first paint
+     (stored fbup_theme preference wins; first visits fall back to the OS
+     prefers-color-scheme — see layout.tsx). */
+  :root,
+  [data-theme="dark"] {
+    color-scheme: dark;
   }
-  100% {
-    background-position: 200% 0;
+  [data-theme="light"] {
+    color-scheme: light;
+  }
+
+  html,
+  body {
+    padding-top: var(--desktop-titlebar-height, 0px);
+    background-color: var(--bg-canvas);
+    color: var(--text-main);
+    font-family: var(--font-family-sans);
+    font-feature-settings: var(--font-feature-settings);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Focus-visible baseline (UI Rule 17): 2px outline + 2px offset, ≥3:1 in
+     both modes (gold on dark = 14.86:1; bronze on light = ~5.9:1).
+     Component focus treatments live in the components layer and override
+     this baseline. */
+  :focus-visible {
+    outline: var(--state-focus-ring-width) solid var(--color-brand-gold);
+    outline-offset: var(--state-focus-ring-offset);
+  }
+  [data-theme="light"] :focus-visible {
+    outline-color: var(--color-brand-bronze);
+  }
+
+  /* Selection basic (spec 129 §5.3): the pre-computed gold focus alpha. */
+  ::selection {
+    background-color: var(--color-alpha-gold-focus);
+  }
+
+  /* Reduced motion: CSS-driven motion collapses. (Inline-style animations
+     are not reachable from CSS without important declarations; they convert
+     with their surfaces in specs 130–136.) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms;
+      animation-iteration-count: 1;
+      transition-duration: 0.01ms;
+    }
   }
 }
 
-/* Button */
-.fbu-btn:focus-visible {
-  box-shadow: 0 0 0 3px var(--ring-focus) !important;
-}
-.fbu-btn-primary:not(:disabled):hover {
-  filter: brightness(1.08);
-}
-.fbu-btn-primary:not(:disabled):active {
-  filter: brightness(0.94);
-}
-.fbu-btn-secondary:not(:disabled):hover {
-  background-color: var(--bg-hover) !important;
-  border-color: var(--border-strong) !important;
-}
-.fbu-btn-secondary:not(:disabled):active {
-  background-color: var(--bg-active) !important;
-}
-.fbu-btn-ghost:not(:disabled):hover {
-  background-color: var(--bg-hover) !important;
-}
-.fbu-btn-ghost:not(:disabled):active {
-  background-color: var(--bg-active) !important;
-}
-.fbu-btn-danger:not(:disabled):hover {
-  filter: brightness(1.10);
-}
-.fbu-btn-danger:not(:disabled):active {
-  filter: brightness(0.90);
-}
-.fbu-btn-link:not(:disabled):hover {
-  text-decoration: underline !important;
+/* ============================================================================
+ * COMPONENTS — opt-in class hooks for the primitives layer
+ * (apps/web/src/components/shared/ui, spec 129 PR-F3) land here. Surfaces may
+ * not add page-layout classes to the global file.
+ * ========================================================================== */
+@layer components {
 }
 
-/* Checkbox */
-.fbu-checkbox-wrapper:focus-visible .fbu-checkbox-box {
-  box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
+/* ============================================================================
+ * OVERRIDES — the sole home of important declarations in this file. Every declaration
+ * here must carry a comment citing why nothing weaker works. Currently: none
+ * needed (the 31 legacy occurrences were evicted to their components or
+ * removed as dead — spec 129 T13, see PR-F2).
+ * ========================================================================== */
+@layer overrides {
 }
-.fbu-checkbox-wrapper:hover:not(.is-disabled) .fbu-checkbox-box {
-  border-color: var(--border-strong, #b29527);
-}
-
-/* Input */
-.fbu-input-field:focus {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--ring-focus) !important;
-}
-.fbu-input-field.has-error:focus {
-  border-color: var(--accent-3) !important;
-  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
-}
-.fbu-input-field::placeholder {
-  color: var(--text-dim);
-  opacity: 1;
-}
-.fbu-input-field:hover:not(:disabled):not(:focus) {
-  border-color: var(--border-strong);
-}
-.fbu-password-toggle:focus-visible {
-  outline: 2px solid var(--primary) !important;
-  outline-offset: 2px !important;
-}
-
-/* Select */
-.fbu-select-field:focus {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--ring-focus) !important;
-}
-.fbu-select-field.has-error:focus {
-  border-color: var(--accent-3) !important;
-  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
-}
-.fbu-select-field:hover:not(:disabled):not(:focus) {
-  border-color: var(--border-strong);
-}
-
-/* Skeleton */
-.fbu-skeleton-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--bg-subtle) 25%,
-    var(--bg-hover) 37%,
-    var(--bg-subtle) 63%
-  );
-  background-size: 200% 100%;
-  animation: fbu-shimmer 1.4s ease infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .fbu-skeleton-shimmer {
-    animation: none !important;
-    background: var(--bg-subtle) !important;
-  }
-}
-
-/* Switch */
-.fbu-switch-button:focus-visible {
-  box-shadow: 0 0 0 3px var(--ring-focus, rgba(250, 215, 52, 0.35)) !important;
-}
-
-/* Textarea */
-.fbu-textarea-field:focus {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--ring-focus) !important;
-}
-.fbu-textarea-field.has-error:focus {
-  border-color: var(--accent-3) !important;
-  box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
-}
-.fbu-textarea-field::placeholder {
-  color: var(--text-dim);
-  opacity: 1;
-}
-.fbu-textarea-field:hover:not(:disabled):not(:focus) {
-  border-color: var(--border-strong);
-}
-
-/* Workspace Settings General Tab */
-.workspace-name-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
-  background-color: var(--bg-canvas);
-  border-radius: var(--radius-sm, 6px);
-  border: 1px solid var(--border-subtle);
-}
-.workspace-name-edit-container {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.workspace-name-edit-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-@media (max-width: 639px) {
-  .workspace-name-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .workspace-name-edit-btn {
-    width: 100%;
-  }
-  .workspace-name-edit-container {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .workspace-name-edit-actions {
-    width: 100%;
-  }
-  .workspace-name-action-btn {
-    flex: 1 1 0;
-    width: 100%;
-  }
-}
-

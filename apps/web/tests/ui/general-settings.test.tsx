@@ -62,7 +62,7 @@ describe('Spec 061: Workspace Settings General Tab Redesign', () => {
       expect(hasText('General')).toBe(true);
       expect(hasText('Facebook')).toBe(true);
       expect(hasAttribute('data-testid', 'settings-tab-general')).toBe(true);
-      expect(hasAttribute('data-testid', 'settings-tab-byoc')).toBe(true);
+      expect(hasAttribute('data-testid', 'settings-tab-facebook')).toBe(true);
     });
   });
 

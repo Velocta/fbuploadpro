@@ -86,6 +86,29 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   }
 
   return (
+    <>
+      {/* Component state styles — evicted verbatim from globals.css (spec 129 T12); important-declaration counts are frozen in apps/web/design-system-baseline.txt. */}
+      <style>{`
+        .fbu-input-field:focus {
+          border-color: var(--primary) !important;
+          box-shadow: 0 0 0 3px var(--ring-focus) !important;
+        }
+        .fbu-input-field.has-error:focus {
+          border-color: var(--accent-3) !important;
+          box-shadow: 0 0 0 3px rgba(246, 70, 93, 0.35) !important;
+        }
+        .fbu-input-field::placeholder {
+          color: var(--text-dim);
+          opacity: 1;
+        }
+        .fbu-input-field:hover:not(:disabled):not(:focus) {
+          border-color: var(--border-strong);
+        }
+        .fbu-password-toggle:focus-visible {
+          outline: 2px solid var(--primary) !important;
+          outline-offset: 2px !important;
+        }
+      `}</style>
     <div
       className={containerClassName}
         style={{
@@ -226,6 +249,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           </span>
         )}
       </div>
+    </>
     );
   });
 

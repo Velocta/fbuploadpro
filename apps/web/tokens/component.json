@@ -1,0 +1,1 @@
+{"$description":"Component tokens — ONLY where a primitive genuinely needs one (spec 129 §5.2). The default is semantic consumption; this file stays deliberately near-empty. control.height is the shared 38px control height the shipped button/input presets are built on.","component":{"control":{"height":{"$type":"dimension","$value":"38px"}}}}
