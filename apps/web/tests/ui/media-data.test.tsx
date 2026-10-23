@@ -219,11 +219,14 @@ describe('media-data mutations', () => {
     await act(async () => {
       updateCaption?.mutate({ mediaId: ITEM.id, captionText: 'optimistic' });
     });
-    // Optimistic value is visible before the failure settles.
+    // Optimistic value is visible while the PATCH is still in flight.
     await waitFor(() => {
       expect(screen.getByTestId('items').textContent).toBe('Reel.mp4:optimistic');
     });
-    // After the failed PATCH, the cache rolls back to the server value.
+    // Release the gate: the PATCH fails and the cache rolls back.
+    await act(async () => {
+      releaseItemPatch?.();
+    });
     await waitFor(() => {
       expect(screen.getByTestId('items').textContent).toBe('Reel.mp4:original caption');
     });
