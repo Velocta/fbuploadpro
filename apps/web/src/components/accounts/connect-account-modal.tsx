@@ -2,7 +2,7 @@
 
 /**
  * Connect account modal (spec 131 PR-131-1, spec §8.2) — rebuilt on
- * the shared/ui `Dialog` primitive (the legacy `components/ui/dialog`
+ * the shared/ui `Dialog` primitive (the legacy ui dialog
  * import is deleted) with token-backed utilities only. Its two raw
  * fetches (magic-link generation + connection polling) now go through
  * the typed API client with zod schemas (spec §8.1); the poll outcome

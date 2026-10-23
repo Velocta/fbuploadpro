@@ -3,7 +3,7 @@
 /**
  * Account card (spec 131 PR-131-1) — rebuilt on the design system:
  * token-backed Tailwind utilities only (zero inline styles), avatars
- * on `next/image` (the file's 2 raw `<img>` are deleted), and status
+ * on `next/image` (the file's 2 raw img elements are deleted), and status
  * as colour + icon + text via the shared/ui `StatusDot` (spec §6.4.1 /
  * OD-3) fed by the single account-health model in `account-health.ts`
  * (logic carried over untouched). Layout, copy, testids, and the

@@ -40,6 +40,11 @@ import {
   getConnectErrorCopy,
 } from '@/app/connect/facebook/error/page';
 import { render } from '../components/setup';
+import {
+  render as renderBehavioural,
+  screen,
+  fireEvent,
+} from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -270,12 +275,18 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
     });
   });
 
+  // Spec 131 PR-131-1 (named suite migration, spec §8.7): the rebuilt
+  // dialog/modal components sit on the shared/ui Radix primitives,
+  // whose content renders through a portal — invisible to the legacy
+  // static-markup helper. These blocks therefore render behaviourally
+  // (Testing Library, jsdom project) with equivalent assertions, plus
+  // the interaction checks the research pattern requires.
   describe('DisconnectAccountDialog', () => {
-    it('renders destructive linked pages warning and linked page names list when connectedPagesCount > 0 (Spec 031)', () => {
-      const onConfirm = vi.fn();
+    it('renders destructive linked pages warning and linked page names list when connectedPagesCount > 0 (Spec 031)', async () => {
+      const onConfirm = vi.fn().mockResolvedValue(undefined);
       const onOpenChange = vi.fn();
 
-      const { hasText, hasAttribute } = render(
+      renderBehavioural(
         <DisconnectAccountDialog
           account={mockActiveAccount}
           open={true}
@@ -284,24 +295,31 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
         />
       );
 
-      expect(hasText('Disconnect Sarah Connor?')).toBe(true);
-      expect(hasText('This account will no longer be available')).toBe(true);
-      expect(hasAttribute('data-testid', 'disconnect-linked-pages-warning')).toBe(true);
-      expect(hasAttribute('data-testid', 'disconnect-linked-pages-list')).toBe(true);
-      expect(hasText('3 linked Facebook pages')).toBe(true);
-      expect(hasText('Before you disconnect')).toBe(true);
-      expect(hasText('Cyberdyne Reels')).toBe(true);
-      expect(hasText('Tech Resistance Daily')).toBe(true);
-      expect(hasText('Future Chronicles')).toBe(true);
-      expect(hasAttribute('data-testid', 'disconnect-cancel-btn')).toBe(true);
-      expect(hasAttribute('data-testid', 'disconnect-confirm-btn')).toBe(true);
+      expect(screen.getByText('Disconnect Sarah Connor?')).toBeTruthy();
+      expect(screen.getByText('This account will no longer be available')).toBeTruthy();
+      expect(screen.getByTestId('disconnect-linked-pages-warning')).toBeTruthy();
+      expect(screen.getByTestId('disconnect-linked-pages-list')).toBeTruthy();
+      expect(screen.getByText('3 linked Facebook pages')).toBeTruthy();
+      expect(screen.getByText('Before you disconnect')).toBeTruthy();
+      expect(screen.getByText('Cyberdyne Reels')).toBeTruthy();
+      expect(screen.getByText('Tech Resistance Daily')).toBeTruthy();
+      expect(screen.getByText('Future Chronicles')).toBeTruthy();
+      expect(screen.getByTestId('disconnect-cancel-btn')).toBeTruthy();
+      expect(screen.getByTestId('disconnect-confirm-btn')).toBeTruthy();
+
+      // Alert-dialog pattern (UI Rule 3): focus starts on Cancel.
+      expect(document.activeElement).toBe(screen.getByTestId('disconnect-cancel-btn'));
+
+      // The verb-named confirm fires with the account id.
+      fireEvent.click(screen.getByTestId('disconnect-confirm-btn'));
+      expect(onConfirm).toHaveBeenCalledWith('acc-123');
     });
 
     it('renders calm neutral notice when connectedPagesCount === 0 without Before you disconnect warning (Spec 029)', () => {
       const onConfirm = vi.fn();
       const onOpenChange = vi.fn();
 
-      const { hasText, hasAttribute } = render(
+      renderBehavioural(
         <DisconnectAccountDialog
           account={mockZeroPagesAccount}
           open={true}
@@ -310,15 +328,19 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
         />
       );
 
-      expect(hasText('Disconnect Zero Pages Profile?')).toBe(true);
-      expect(hasAttribute('data-testid', 'disconnect-zero-pages-notice')).toBe(true);
+      expect(screen.getByText('Disconnect Zero Pages Profile?')).toBeTruthy();
+      expect(screen.getByTestId('disconnect-zero-pages-notice')).toBeTruthy();
       expect(
-        hasText(
+        screen.getByText(
           "No Facebook Pages are linked to this account yet. It's safe to remove — you can reconnect it any time."
         )
-      ).toBe(true);
-      expect(hasText('Before you disconnect')).toBe(false);
-      expect(hasAttribute('data-testid', 'disconnect-linked-pages-warning')).toBe(false);
+      ).toBeTruthy();
+      expect(screen.queryByText('Before you disconnect')).toBeNull();
+      expect(screen.queryByTestId('disconnect-linked-pages-warning')).toBeNull();
+
+      // Cancel closes through onOpenChange.
+      fireEvent.click(screen.getByTestId('disconnect-cancel-btn'));
+      expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
 
@@ -358,7 +380,7 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
       const onOpenChange = vi.fn();
       const onAccountConnected = vi.fn();
 
-      const { hasText, hasAttribute } = render(
+      renderBehavioural(
         <ConnectAccountModal
           subdomain="acme"
           open={true}
@@ -368,15 +390,19 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
         />
       );
 
-      expect(hasText('Connect Facebook Account')).toBe(true);
-      expect(hasText('This Browser')).toBe(true);
-      expect(hasText('Different Browser or Phone')).toBe(true);
-      expect(hasAttribute('data-testid', 'connect-option-direct')).toBe(true);
-      expect(hasAttribute('data-testid', 'connect-option-magic')).toBe(true);
+      expect(screen.getByText('Connect Facebook Account')).toBeTruthy();
+      expect(screen.getByText('This Browser')).toBeTruthy();
+      expect(screen.getByText('Different Browser or Phone')).toBeTruthy();
+      expect(screen.getByTestId('connect-option-direct')).toBeTruthy();
+      expect(screen.getByTestId('connect-option-magic')).toBeTruthy();
+
+      // Cancel closes through onOpenChange.
+      fireEvent.click(screen.getByTestId('connect-close-btn'));
+      expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
     it('renders "Reconnect {displayName}" as the modal title when reconnectingAccount is provided (Spec 029)', () => {
-      const { hasText } = render(
+      renderBehavioural(
         <ConnectAccountModal
           subdomain="acme"
           open={true}
@@ -386,8 +412,8 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
         />
       );
 
-      expect(hasText('Reconnect John Doe')).toBe(true);
-      expect(hasText('Connect Facebook Account')).toBe(false);
+      expect(screen.getByText('Reconnect John Doe')).toBeTruthy();
+      expect(screen.queryByText('Connect Facebook Account')).toBeNull();
     });
 
     it('renders click-to-copy magic link input when countdown is active and inline regenerate button when expired at 0:00 (Spec 029)', () => {
@@ -643,7 +669,7 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
 
     it('ByocConfigPromptModal renders advisory modal when open is true with link to settings', () => {
       const onClose = vi.fn();
-      const openModal = render(
+      const openModal = renderBehavioural(
         <ByocConfigPromptModal
           subdomain="acme"
           open={true}
@@ -651,27 +677,29 @@ describe('Facebook Accounts UI Components (Spec 027, Spec 029 & Spec 031)', () =
         />
       );
 
-      expect(openModal.hasAttribute('data-testid', 'byoc-config-prompt-modal')).toBe(true);
-      expect(openModal.hasAttribute('data-testid', 'byoc-prompt-title')).toBe(true);
-      expect(openModal.hasText('Facebook App Credentials Required')).toBe(true);
+      expect(screen.getByTestId('byoc-config-prompt-modal')).toBeTruthy();
+      expect(screen.getByTestId('byoc-prompt-title')).toBeTruthy();
+      expect(screen.getByText('Facebook App Credentials Required')).toBeTruthy();
       expect(
-        openModal.hasText(
-          'Before connecting Facebook accounts, your workspace must configure its Facebook App ID and App Secret.'
-        )
-      ).toBe(true);
-      expect(openModal.hasAttribute('data-testid', 'byoc-prompt-cancel-btn')).toBe(true);
-      expect(openModal.hasAttribute('data-testid', 'byoc-prompt-settings-link')).toBe(true);
-      expect(openModal.getAttribute('href')).toBe('/tenant/acme/settings?tab=byoc');
+        screen.getByTestId('byoc-prompt-description').textContent
+      ).toContain(
+        'Before connecting Facebook accounts, your workspace must configure its Facebook App ID and App Secret.'
+      );
+      expect(screen.getByTestId('byoc-prompt-cancel-btn')).toBeTruthy();
+      expect(screen.getByTestId('byoc-prompt-settings-link')).toBeTruthy();
+      expect(
+        screen.getByTestId('byoc-prompt-settings-link').getAttribute('href')
+      ).toBe('/tenant/acme/settings?tab=byoc');
 
-      const closedModal = render(
+      openModal.unmount();
+      renderBehavioural(
         <ByocConfigPromptModal
           subdomain="acme"
           open={false}
           onClose={onClose}
         />
       );
-      expect(closedModal.hasAttribute('data-testid', 'byoc-config-prompt-modal')).toBe(false);
-      expect(closedModal.html).toBe('');
+      expect(screen.queryByTestId('byoc-config-prompt-modal')).toBeNull();
     });
 
     it('resolveOAuthRedirectNotice resolves credentials_required error into descriptive user warning', () => {
