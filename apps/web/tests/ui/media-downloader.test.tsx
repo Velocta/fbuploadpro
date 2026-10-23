@@ -34,7 +34,14 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { PALETTE } from '@/lib/theme';
@@ -44,9 +51,15 @@ import {
   createDownloaderFolder,
   executeDownloaderBatch,
   retryFailedDownloadEntry,
+  useDownloaderFolders,
   type DownloaderBatchProgressState,
   type DownloaderFailedEntry,
 } from '@/components/downloader/downloader-data';
+import {
+  mediaFoldersQuery,
+  useMediaFolders,
+} from '@/components/media/media-data';
+import { createQueryClient } from '@/lib/data/query-client';
 import {
   validateDownloaderBatchInput,
   buildMediaFolderHref,
@@ -1447,15 +1460,83 @@ describe('Spec 140 PR-140-4: MediaDownloader — Abort (§3 item 8)', () => {
     ).toBe(true);
   });
 
-  // PR-140-4 NOTE: a UI-level multi-item abort test (start a 4-link
-  // batch, save 1, abort with 3 in flight, assert the banner's final
-  // state) was written for §3 item 8 and EXCLUDED from this PR because
-  // it exposes a genuine product bug — see the PR-140-4 report. The
-  // data-layer abort test above covers the §3.8 semantics that hold
-  // today (saved stays saved, in-flight items surface as cancelled,
-  // no new items start, a cancelled progress state is emitted); the
-  // failing assertion was the banner's FINAL state after a multi-item
-  // abort, which settles on 'completed'/100% instead of 'Cancelled'.
+  it(
+    'ends the banner on Cancelled after a multi-item UI abort, keeps the saved item in Recent, and never starts the queued item (§3 item 8)',
+    async () => {
+      // PR-140-5: this is the UI abort test PR-140-4 had to exclude —
+      // it exposed the abort end-state bug (the banner settled on
+      // 'completed'/100% after a multi-item abort). 5 links: the
+      // first saves instantly, the next 3 hang in flight, and the 5th
+      // is still queued behind the 3-worker pool when Abort lands.
+      const urls = [0, 1, 2, 3, 4].map(
+        (i) => `https://www.tiktok.com/@creator/video/60${i}`
+      );
+      installSurfaceFetchStub({
+        onIngestPost: (body, init) => {
+          if (body.url === urls[0]) {
+            return Promise.resolve(
+              jsonResponse(
+                {
+                  sourceUrl: body.url,
+                  platform: 'tiktok',
+                  items: [SAMPLE_DOWNLOADED_ITEMS[0]],
+                },
+                201
+              )
+            );
+          }
+          return hangUntilAbort(init);
+        },
+      });
+      const user = userEvent.setup();
+      renderDownloader();
+
+      const urlInput = screen.getByTestId('downloader-url-input');
+      await user.type(urlInput, urls.join('\n'));
+      await user.click(screen.getByTestId('downloader-submit-button'));
+
+      // Item 0 saved, its freed slot started item 3 — 4 POSTs in
+      // total, items 1–3 hanging, item 4 still queued.
+      await vi.waitFor(() => expect(downloaderPostCalls).toHaveLength(4));
+
+      await user.click(screen.getByTestId('abort-download-btn'));
+
+      // Wait until the batch has fully unwound: the three in-flight
+      // items surface as cancelled failures in Recent. Only then is
+      // the banner's state the TERMINAL state (asserting right after
+      // the click would pass even on the buggy code, whose last
+      // unwinding worker overwrote 'cancelled' with 'completed').
+      await waitFor(() => {
+        expect(
+          screen.getAllByTestId('downloader-failed-item')
+        ).toHaveLength(3);
+      });
+      expect(screen.getByText('1 saved · 3 failed')).toBeTruthy();
+      expect(
+        screen
+          .getAllByTestId('downloader-failed-item')
+          .every((el) => el.textContent?.includes('Download was cancelled.'))
+      ).toBe(true);
+
+      // The terminal banner state is Cancelled — never 100%/completed.
+      expect(screen.getByTestId('downloader-progress-percent').textContent).toBe(
+        'Cancelled'
+      );
+
+      // The already-saved item remains in Recent Downloads…
+      expect(
+        screen.getByTestId(
+          `downloader-saved-item-${SAMPLE_DOWNLOADED_ITEMS[0]!.id}`
+        )
+      ).toBeTruthy();
+      // …and the queued item was never started.
+      expect(downloaderPostCalls).toHaveLength(4);
+      expect(downloaderPostCalls.map((call) => call.url)).not.toContain(
+        urls[4]
+      );
+    },
+    INTERACTION_TIMEOUT
+  );
 });
 
 describe('Spec 140 PR-140-4: MediaDownloader — Retry through the UI & the input-clearing rule (§3 items 10, 11)', () => {
@@ -1847,6 +1928,109 @@ describe('Spec 140 PR-140-4: MediaDownloader — Mount hydration & Recent order 
         `downloader-saved-item-${makeBatchItem(1).id}`,
         `downloader-saved-item-${makeBatchItem(2).id}`,
       ]);
+    },
+    INTERACTION_TIMEOUT
+  );
+});
+
+describe('Spec 140 PR-140-5: Downloader ↔ Media Library folders cache shape (bug #2 regression)', () => {
+  // One shared QueryClient per test, built by the production factory
+  // (60s reference staleTime): within the freshness window the second
+  // surface reads the first surface's cached value WITHOUT refetching
+  // — exactly the SPA-navigation read that crashed the explorer when
+  // the downloader cached the `{ folders, unorganizedCount }` envelope
+  // under the key whose canonical shape is `MediaFolder[]`.
+  function sharedWrapper(queryClient: QueryClient) {
+    return function Wrapper({
+      children,
+    }: {
+      children: React.ReactNode;
+    }) {
+      return (
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      );
+    };
+  }
+
+  it(
+    '(a) downloader-first: the folders cache populated through the downloader reads back as an array through the library query',
+    async () => {
+      installSurfaceFetchStub();
+      const queryClient = createQueryClient('acme');
+      const wrapper = sharedWrapper(queryClient);
+
+      const downloader = renderHook(() => useDownloaderFolders('acme'), {
+        wrapper,
+      });
+      await waitFor(() =>
+        expect(downloader.result.current.folders).toHaveLength(3)
+      );
+      expect(downloader.result.current.autoSelectedFolderId).toBe(
+        SAMPLE_FOLDERS[0]!.id
+      );
+
+      // Read the cache through the library's own query definition:
+      // an array must come back and array operations must work (the
+      // explorer calls `.filter` on this value during render).
+      const cached = queryClient.getQueryData(
+        mediaFoldersQuery('acme').queryKey
+      );
+      expect(Array.isArray(cached)).toBe(true);
+      const folders = cached as MediaFolder[];
+      expect(
+        folders.filter((folder) => folder.parentId === null).map((f) => f.name)
+      ).toEqual(expect.arrayContaining(['Downloads', 'Campaign A']));
+
+      // The library hook on the same client sees the same array.
+      const library = renderHook(() => useMediaFolders('acme'), { wrapper });
+      expect(Array.isArray(library.result.current.data)).toBe(true);
+      expect(library.result.current.data?.map((folder) => folder.id)).toEqual(
+        SAMPLE_FOLDERS.map((folder) => folder.id)
+      );
+    },
+    INTERACTION_TIMEOUT
+  );
+
+  it(
+    '(b) library-first: the downloader still provisions and selects Downloads from a library-populated array cache',
+    async () => {
+      installSurfaceFetchStub();
+      const queryClient = createQueryClient('acme');
+      const wrapper = sharedWrapper(queryClient);
+
+      // Populate the shared cache through the library's query first.
+      const libraryFolders = await queryClient.fetchQuery(
+        mediaFoldersQuery('acme')
+      );
+      expect(Array.isArray(libraryFolders)).toBe(true);
+      expect(libraryFolders).toHaveLength(3);
+
+      const downloader = renderHook(() => useDownloaderFolders('acme'), {
+        wrapper,
+      });
+      // The downloader reads the array shape directly: every folder
+      // is listed and the existing root Downloads folder is selected
+      // by the provisioning pass (no creation POST needed).
+      await waitFor(() =>
+        expect(downloader.result.current.folders).toHaveLength(3)
+      );
+      expect(downloader.result.current.folders.map((folder) => folder.id)).toEqual(
+        SAMPLE_FOLDERS.map((folder) => folder.id)
+      );
+      await waitFor(() =>
+        expect(downloader.result.current.autoSelectedFolderId).toBe(
+          SAMPLE_FOLDERS[0]!.id
+        )
+      );
+      expect(folderPostCalls).toHaveLength(0);
+      // …and the cache still holds the canonical array shape.
+      expect(
+        Array.isArray(
+          queryClient.getQueryData(mediaFoldersQuery('acme').queryKey)
+        )
+      ).toBe(true);
     },
     INTERACTION_TIMEOUT
   );

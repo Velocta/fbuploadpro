@@ -28,6 +28,7 @@ import {
   type DownloaderJobPollResponse,
 } from '@/lib/api/schemas/downloader';
 import { queryKeys } from '@/lib/data/query-keys';
+import { mediaFoldersQuery } from '@/components/media/media-data';
 import {
   DEFAULT_DOWNLOADS_FOLDER_NAME,
   findRootDownloadsFolder,
@@ -658,6 +659,12 @@ export async function executeDownloaderBatch(
         ...(fetchImpl ? { fetchImpl } : {}),
         ...(signal ? { signal } : {}),
         onStageChange: (stage, stagePercent) => {
+          // §3.8: once aborted, no stage emission may overwrite the
+          // cancelled end-state while an aborted item unwinds.
+          if (signal?.aborted) {
+            emitCancelled();
+            return;
+          }
           onProgress?.({
             status: 'downloading',
             totalLinks: urls.length,
@@ -674,14 +681,21 @@ export async function executeDownloaderBatch(
       outcomes[idx] = outcome;
       completedLinks += 1;
 
-      onProgress?.({
-        status: completedLinks === urls.length ? 'completed' : 'downloading',
-        totalLinks: urls.length,
-        completedLinks,
-        currentUrl: null,
-        duplicateCount,
-        invalidCount: invalidUrls.length,
-      });
+      // §3.8: cancelled items count toward completedLinks as they
+      // unwind, so an aborted batch must never emit the terminal
+      // 'completed' state — its terminal visible state is 'cancelled'.
+      if (signal?.aborted) {
+        emitCancelled();
+      } else {
+        onProgress?.({
+          status: completedLinks === urls.length ? 'completed' : 'downloading',
+          totalLinks: urls.length,
+          completedLinks,
+          currentUrl: null,
+          duplicateCount,
+          invalidCount: invalidUrls.length,
+        });
+      }
     }
   };
 
@@ -833,21 +847,16 @@ export function useDownloaderFolders(
   const initialFolders = options?.initialFolders;
   const hasInitialFolders = initialFolders !== undefined;
 
+  // The folders cache is shared platform-wide under
+  // `queryKeys.tenant(sub).media.folders` and its canonical shape is
+  // the `MediaFolder[]` array defined by the library's
+  // `mediaFoldersQuery` — reuse that definition verbatim (one queryFn
+  // for the key) instead of caching the folders envelope here, which
+  // collided with the library's array shape on cross-surface
+  // navigation (PR-140-5, bug #2).
   const foldersQuery = useQuery({
-    queryKey: queryKeys.tenant(subdomain).media.folders,
-    queryFn: async ({ signal }) =>
-      apiFetch(buildTenantApiPath(subdomain, '/media/folders'), {
-        schema: FolderListResponseSchema,
-        signal,
-      }),
-    ...(hasInitialFolders
-      ? {
-          initialData: {
-            folders: initialFolders,
-            unorganizedCount: 0,
-          },
-        }
-      : {}),
+    ...mediaFoldersQuery(subdomain),
+    ...(hasInitialFolders ? { initialData: initialFolders } : {}),
   });
 
   const [autoSelectedFolderId, setAutoSelectedFolderId] = useState<string | null>(
@@ -858,7 +867,8 @@ export function useDownloaderFolders(
   useEffect(() => {
     if (hasInitialFolders) return;
     if (!foldersQuery.isSuccess || provisionStartedRef.current) return;
-    const loadedFolders = foldersQuery.data.folders;
+    const loadedFolders = foldersQuery.data;
+    if (!loadedFolders) return;
     const existing = findRootDownloadsFolder(loadedFolders);
     provisionStartedRef.current = true;
     if (existing) {
@@ -871,10 +881,10 @@ export function useDownloaderFolders(
     })
       .then((result) => {
         if (result.createdDefaultFolder) {
-          queryClient.setQueryData(queryKeys.tenant(subdomain).media.folders, {
-            folders: result.folders,
-            unorganizedCount: 0,
-          });
+          queryClient.setQueryData(
+            queryKeys.tenant(subdomain).media.folders,
+            result.folders
+          );
         }
         if (result.selectedFolderId !== null) {
           setAutoSelectedFolderId(result.selectedFolderId);
@@ -890,7 +900,7 @@ export function useDownloaderFolders(
   ]);
 
   return {
-    folders: foldersQuery.data?.folders ?? [],
+    folders: foldersQuery.data ?? [],
     autoSelectedFolderId,
   };
 }
@@ -911,10 +921,10 @@ export function useCreateDownloaderFolder(subdomain: string) {
         existingFolders: vars.existingFolders,
       }),
     onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.tenant(subdomain).media.folders, {
-        folders: result.folders,
-        unorganizedCount: 0,
-      });
+      queryClient.setQueryData(
+        queryKeys.tenant(subdomain).media.folders,
+        result.folders
+      );
     },
   });
 }
