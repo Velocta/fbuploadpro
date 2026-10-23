@@ -7,7 +7,6 @@ import ForgotPasswordPage from '../../src/app/forgot-password/page';
 import ResetPasswordPage from '../../src/app/reset-password/page';
 import { Input } from '../../src/components/ui';
 import { PasswordInput } from '../../src/components/auth/password-input';
-import { FormErrorCallout } from '../../src/components/auth/form-error-callout';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
@@ -43,27 +42,12 @@ describe('Auth Inline Error Highlighting & Edge Cases (Spec 016)', () => {
     });
   });
 
-  describe('FormErrorCallout Component', () => {
-    it('returns null when message is null or empty', () => {
-      const { html: htmlNull } = render(<FormErrorCallout message={null} />);
-      expect(htmlNull).toBe('');
-
-      const { html: htmlUndefined } = render(<FormErrorCallout message={undefined} />);
-      expect(htmlUndefined).toBe('');
-    });
-
-    it('renders compact alert with theme styling when message is provided', () => {
-      const { html, hasText } = render(
-        <FormErrorCallout message="Invalid email or password. Please try again." />
-      );
-
-      expect(hasText('Invalid email or password. Please try again.')).toBe(true);
-      expect(html).toContain('role="alert"');
-      expect(html).toContain('fbu-form-error-callout');
-      // Must use theme error accent (accent-3 / #F6465D)
-      expect(html.toLowerCase()).toContain('#f6465d');
-    });
-  });
+  // Spec 136 PR-136C: the `FormErrorCallout` describe that lived here is
+  // deleted with the component itself — its last consumer (the forgot
+  // page) converted to the form standard's `FormErrorSummary`, and no
+  // local error pattern survives (UI Rule 11). Form-level errors on the
+  // recovery forms are covered behaviourally in
+  // `src/app/forgot-password/page.test.tsx`.
 
   describe('LoginPage Inline Validation', () => {
     it('does not render top-level Alert error box on initial render', () => {
