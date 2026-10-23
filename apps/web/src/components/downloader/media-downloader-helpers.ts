@@ -3,7 +3,6 @@
 import type { MediaFolder } from '@fbuploadpro/contracts';
 import { deduplicateBatchUrls } from '@fbuploadpro/contracts';
 import { formatFolderAncestryPath } from '@/components/media/media-library-explorer';
-import { PALETTE } from '@/lib/theme';
 
 /**
  * Pure helper functions for the media downloader, extracted from
@@ -112,9 +111,18 @@ export function sortFoldersForDownloader(
   return withPaths;
 }
 
-export function getProgressTextColor(status?: string): string {
-  if (status === 'completed') return PALETTE.accent4;
-  if (status === 'cancelled') return PALETTE.accent3;
-  return PALETTE.primary;
+/**
+ * Presentation tone for the batch progress percent, as a token key —
+ * the progress component maps it to token-backed classes (spec 140
+ * PR-140-2: helpers stay pure and return data, never style values).
+ * Tones preserve the legacy palette mapping: completed → emerald
+ * (accent4), cancelled → rose (accent3), otherwise primary gold.
+ */
+export type DownloaderProgressTone = 'primary' | 'success' | 'danger';
+
+export function getProgressTone(status?: string): DownloaderProgressTone {
+  if (status === 'completed') return 'success';
+  if (status === 'cancelled') return 'danger';
+  return 'primary';
 }
 

@@ -8,7 +8,7 @@ import {
   prefetchServerQueries,
   serverApiFetch,
 } from '@/lib/data/server';
-import { MediaDownloader } from '@/components/downloader/media-downloader';
+import { DownloaderSurface } from '@/components/downloader/downloader-surface';
 
 export const metadata: Metadata = { title: 'Media Downloader' };
 
@@ -35,7 +35,7 @@ export default async function TenantMediaDownloaderPage({
 
   return (
     <DataHydration state={state}>
-      <MediaDownloader subdomain={subdomain} />
+      <DownloaderSurface subdomain={subdomain} />
     </DataHydration>
   );
 }
