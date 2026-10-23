@@ -30,3 +30,4 @@ export * from './publishing/x-options.js';
 export * from './publishing/instagram-options.js';
 export * from './publishing/threads-options.js';
 export * from './publishing/tiktok-options.js';
+export * from './publishing/destination-enqueue.js';
