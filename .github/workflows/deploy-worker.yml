@@ -71,7 +71,9 @@ jobs:
               echo "X_CLIENT_ID"
               echo "X_CLIENT_SECRET"
             else
-              echo "X app secrets are not set yet; deploying without them (X publishing stays dormant)."
+              # NOTE: anything echoed inside this block lands in the
+              # secret list itself — log lines must go to stderr.
+              echo "X app secrets are not set yet; deploying without them (X publishing stays dormant)." >&2
             fi
             echo "EOF"
           } >> $GITHUB_OUTPUT
