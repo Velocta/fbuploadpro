@@ -1,10 +1,17 @@
 import type { NextResponse } from 'next/server';
 
-// Phase 1 (spec 114): CSP stays Report-Only. This constant is the single
-// flip point for Phase 2 enforcement — change it to
-// 'Content-Security-Policy' (plus the theme-script hash) in that PR.
-// No other file may hardcode the header name.
-export const CSP_HEADER_NAME = 'Content-Security-Policy-Report-Only';
+// Phase 2 (spec 114 / spec 139): CSP is enforcing. This constant is the
+// single source of the header name — no other file may hardcode it.
+// Violation reporting (report-to / report-uri) stays wired exactly as in
+// the Report-Only phase, so violations keep reporting after enforcement.
+export const CSP_HEADER_NAME = 'Content-Security-Policy';
+
+// SHA-256 (base64) of the exact evaluated contents of the inline
+// themeInitScript in src/app/layout.tsx. That script carries no nonce, so
+// this hash is what lets it run under enforcement. Do not edit by hand:
+// tests/middleware/csp-theme-hash.test.ts recomputes the hash from
+// layout.tsx and fails CI if the script and this value drift apart.
+export const THEME_INIT_SCRIPT_SHA256 = 'VJ5aiRQUDIxt2IqW7rL948ZVJ2ybNt0IZrHkS9RUcfk=';
 
 export const CSP_REPORT_PATH = '/api/csp-report';
 
@@ -32,7 +39,7 @@ export function generateNonce(): string {
 export function buildContentSecurityPolicy(nonce: string): string {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}'`,
+    `script-src 'self' 'nonce-${nonce}' 'sha256-${THEME_INIT_SCRIPT_SHA256}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "connect-src 'self' https://*.supabase.co https://us.i.posthog.com",
