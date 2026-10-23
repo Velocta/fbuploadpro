@@ -24,7 +24,6 @@ import {
 import { BatchActionBar } from '@/components/media/batch-action-bar';
 import { NewFolderModal } from '@/components/media/new-folder-modal';
 import { BatchSetCaptionModal } from '@/components/media/batch-set-caption-modal';
-import { MediaImportModal } from '@/components/media/media-import-modal';
 import {
   MediaLibraryExplorer,
   MEDIA_VIEW_MODE_STORAGE_KEY,
@@ -977,103 +976,9 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
   });
 });
 
-describe('Spec 072: MediaImportModal Staging, Progress, Duplicates & Concurrency Purification', () => {
-  it('US1 & US2: renders destination folder pill, live subtext, 46px thumbnail tiles, and X removal', () => {
-    const validFile1 = new File(['valid video content'], 'promo.mp4', { type: 'video/mp4' });
-    const validFile2 = new File(['valid image content'], 'banner.png', { type: 'image/png' });
-
-    const modal = render(
-      <MediaImportModal
-        subdomain="acme"
-        isOpen={true}
-        initialFiles={[validFile1, validFile2]}
-        currentFolderId={null}
-        folders={SAMPLE_FOLDERS}
-        onClose={vi.fn()}
-        onUploadSuccess={vi.fn()}
-      />
-    );
-
-    // Header & Subtext
-    expect(modal.hasText('Import media')).toBe(true);
-    expect(modal.hasText('2 files selected · will be added to Library')).toBe(true);
-    expect(modal.hasAttribute('data-testid', 'destination-folder-pill')).toBe(true);
-    expect(modal.hasText('To: Library')).toBe(true);
-
-    // Staging rows with 46px thumbnail tiles and names
-    expect(modal.hasText('promo.mp4')).toBe(true);
-    expect(modal.hasText('banner.png')).toBe(true);
-    expect(modal.hasText('Start import (2)')).toBe(true);
-  });
-
-  it('US1: destination pill defaults to current active folder', () => {
-    const file = new File(['sample'], 'clip.mp4', { type: 'video/mp4' });
-
-    const modal = render(
-      <MediaImportModal
-        subdomain="acme"
-        isOpen={true}
-        initialFiles={[file]}
-        currentFolderId="11111111-1111-4111-8111-111111111111"
-        folders={SAMPLE_FOLDERS}
-        onClose={vi.fn()}
-        onUploadSuccess={vi.fn()}
-      />
-    );
-
-    expect(modal.hasText('To: Campaign A')).toBe(true);
-    expect(modal.hasText('1 file selected · will be added to Campaign A')).toBe(true);
-  });
-
-  it('US3: non-blocking validation flags unsupported MIME, empty, and oversized files and excludes from import count', () => {
-    const unsupportedFile = new File(['text'], 'notes.txt', { type: 'text/plain' });
-    const emptyFile = new File([], 'empty.mp4', { type: 'video/mp4' });
-    const oversizedFile = new File([new Uint8Array(10)], 'huge.mp4', { type: 'video/mp4' });
-    Object.defineProperty(oversizedFile, 'size', { value: 600 * 1024 * 1024 });
-
-    const modal = render(
-      <MediaImportModal
-        subdomain="acme"
-        isOpen={true}
-        initialFiles={[unsupportedFile, emptyFile, oversizedFile]}
-        currentFolderId={null}
-        folders={SAMPLE_FOLDERS}
-        onClose={vi.fn()}
-        onUploadSuccess={vi.fn()}
-      />
-    );
-
-    expect(modal.hasText("can't upload — not a supported format")).toBe(true);
-    expect(modal.hasText('empty file')).toBe(true);
-    expect(modal.hasText('too large — 500 MB max')).toBe(true);
-
-    // Excluded from count; button is disabled with Start import (0)
-    expect(modal.hasText('Start import (0)')).toBe(true);
-    const startBtn = modal.findTags('button').find((b) => b.attributes['data-testid'] === 'start-import-btn');
-    expect(startBtn?.attributes.disabled).toBeDefined();
-  });
-
-  it('US5: purges technical concurrency copy from staging UI', () => {
-    const validFile = new File(['data'], 'test.mp4', { type: 'video/mp4' });
-
-    const modal = render(
-      <MediaImportModal
-        subdomain="acme"
-        isOpen={true}
-        initialFiles={[validFile]}
-        currentFolderId={null}
-        folders={SAMPLE_FOLDERS}
-        onClose={vi.fn()}
-        onUploadSuccess={vi.fn()}
-      />
-    );
-
-    expect(modal.hasText('Uploads run 3 at a time')).toBe(false);
-    expect(modal.hasText('wait in line')).toBe(false);
-    expect(modal.hasText('concurrency')).toBe(false);
-    expect(modal.hasText('+ Add more')).toBe(true);
-    expect(modal.hasText('Cancel')).toBe(true);
-  });
-});
-
-
+// Spec 072's MediaImportModal assertions (staging, progress,
+// duplicates, concurrency-copy purification) MIGRATED in PR-133-4 to
+// the behavioural suite tests/ui/media-import-modal.test.tsx: the
+// rebuilt dialog renders through the shared/ui Dialog (Radix portal),
+// which does not exist in this suite's static markup, and behaviour —
+// not markup — is what the rebuild must preserve (spec §2.5).
