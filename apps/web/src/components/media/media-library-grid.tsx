@@ -30,19 +30,19 @@ export interface MediaCanvasProps {
   folders: MediaFolder[];
   activeSmartView: MediaSmartViewKey | null;
   /** Total assets in the library (unfiltered), for the loaded/total line. */
-  totalMediaCount?: number;
+  totalMediaCount?: number | undefined;
   /** Number of active local filters (Type/Ratio/Captions). */
-  activeFilterCount?: number;
+  activeFilterCount?: number | undefined;
   /** Human labels of the active local filters, echoed in the empty state. */
-  activeFilterLabels?: string[];
+  activeFilterLabels?: string[] | undefined;
   /** Name of the folder being viewed (folder-empty state), if any. */
-  currentFolderName?: string | null;
+  currentFolderName?: string | null | undefined;
   /** The library query failed (section-scope error state). */
-  isError?: boolean;
-  onRetry?: () => void;
-  onClearSearch?: () => void;
-  onClearFilters?: () => void;
-  onUploadClick?: () => void;
+  isError?: boolean | undefined;
+  onRetry?: (() => void) | undefined;
+  onClearSearch?: (() => void) | undefined;
+  onClearFilters?: (() => void) | undefined;
+  onUploadClick?: (() => void) | undefined;
   onNavigateFolder: (folderId: string | null) => void;
   onToggleSelect: (mediaId: string, options?: { shiftKey?: boolean | undefined }) => void;
   onPreview: (item: MediaItemResponse) => void;
