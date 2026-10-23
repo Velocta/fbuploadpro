@@ -48,6 +48,8 @@ const SYNC_KEYS = [
   'NEXT_PUBLIC_SIGNUPS_ENABLED',
   'POSTHOG_KEY',
   'POSTHOG_HOST',
+  'X_CLIENT_ID',
+  'X_CLIENT_SECRET',
 ];
 
 async function run() {
