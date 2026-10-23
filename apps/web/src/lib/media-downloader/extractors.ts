@@ -2,6 +2,10 @@ import {
   parseJsonPayloadCandidates,
   type RemoteMediaCandidate,
 } from '@fbuploadpro/contracts';
+import {
+  MEDIA_FETCH_TIMEOUT_MS,
+  fetchWithTimeout,
+} from '@/lib/http/fetch-with-timeout';
 
 export async function tryResolveFromFxTwitter(
   sourceUrl: URL,
@@ -12,9 +16,12 @@ export async function tryResolveFromFxTwitter(
     return [];
   }
   try {
-    const fxRes = await fetchFn(`https://api.fxtwitter.com/status/${statusMatch[1]}`, {
-      headers: { Accept: 'application/json' },
-    });
+    const fxRes = await fetchWithTimeout(
+      `https://api.fxtwitter.com/status/${statusMatch[1]}`,
+      { headers: { Accept: 'application/json' } },
+      MEDIA_FETCH_TIMEOUT_MS,
+      fetchFn
+    );
     if (!fxRes.ok) {
       return [];
     }
@@ -35,14 +42,19 @@ export async function tryResolveViaExternalExtractor(
     return [];
   }
   try {
-    const extRes = await fetchFn(configuredExtractorUrl.trim(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+    const extRes = await fetchWithTimeout(
+      configuredExtractorUrl.trim(),
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ url: canonicalSourceUrl }),
       },
-      body: JSON.stringify({ url: canonicalSourceUrl }),
-    });
+      MEDIA_FETCH_TIMEOUT_MS,
+      fetchFn
+    );
     if (!extRes.ok) {
       return [];
     }

@@ -18,6 +18,10 @@ import {
   validateAndNormalizeStreamUrl,
 } from './resolvers';
 import type { UploadedDownloadedMediaItem } from './index';
+import {
+  MEDIA_FETCH_TIMEOUT_MS,
+  fetchWithTimeoutToHeaders,
+} from '@/lib/http/fetch-with-timeout';
 
 const MAX_THUMBNAIL_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_CAPTION_LENGTH = 5000;
@@ -137,12 +141,19 @@ async function tryUploadVideoThumbnail(
   }
 
   try {
-    const response = await fetchFn(safeCheck.url.toString(), {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
-        Accept: 'image/webp,image/jpeg,image/*,*/*;q=0.8',
+    // Headers-only timeout: the thumbnail body is read as a stream
+    // below, so a whole-request signal would abort it mid-read.
+    const response = await fetchWithTimeoutToHeaders(
+      safeCheck.url.toString(),
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+          Accept: 'image/webp,image/jpeg,image/*,*/*;q=0.8',
+        },
       },
-    });
+      MEDIA_FETCH_TIMEOUT_MS,
+      fetchFn
+    );
     if (!response.ok) {
       return { thumbnailKey: null, thumbnailUrl: null };
     }

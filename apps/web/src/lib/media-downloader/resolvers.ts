@@ -12,6 +12,10 @@ import {
   resolveAllowedMimeType,
 } from './mime';
 import { tryResolveFromFxTwitter } from './extractors';
+import {
+  MEDIA_FETCH_TIMEOUT_MS,
+  fetchWithTimeoutToHeaders,
+} from '@/lib/http/fetch-with-timeout';
 
 export type DownloaderErrorCode =
   | 'UNSAFE_URL'
@@ -64,13 +68,24 @@ export async function fetchCandidateResponse(
     response = prefetchedResponse;
   } else {
     try {
-      response = await fetchFn(normalizedStreamUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
-          Accept: '*/*',
+      // Streaming download: this response's body is consumed as a
+      // stream by the caller (readResponseBytesWithLimit), so the
+      // timeout must bound only the time to response headers — a
+      // whole-request AbortSignal.timeout would abort large bodies
+      // mid-stream. fetchWithTimeoutToHeaders clears its timer once
+      // headers arrive, keeping the stream intact.
+      response = await fetchWithTimeoutToHeaders(
+        normalizedStreamUrl,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+            Accept: '*/*',
+          },
+          redirect: 'follow',
         },
-        redirect: 'follow',
-      });
+        MEDIA_FETCH_TIMEOUT_MS,
+        fetchFn
+      );
     } catch {
       throw new MediaDownloaderError(
         'DOWNLOAD_FAILED',
@@ -175,13 +190,21 @@ export async function resolveCandidatesBuiltIn(
 
   let initialResponse: Response;
   try {
-    initialResponse = await fetchFn(normalizedUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
-        Accept: '*/*',
+    // Headers-only timeout: a direct-media response here is kept as
+    // a prefetched stream and read later, so a whole-request signal
+    // would abort its body mid-stream (see fetchCandidateResponse).
+    initialResponse = await fetchWithTimeoutToHeaders(
+      normalizedUrl,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; FBUploadProMediaBot/1.0)',
+          Accept: '*/*',
+        },
+        redirect: 'follow',
       },
-      redirect: 'follow',
-    });
+      MEDIA_FETCH_TIMEOUT_MS,
+      fetchFn
+    );
   } catch {
     throw new MediaDownloaderError(
       'DOWNLOAD_FAILED',
