@@ -1,12 +1,16 @@
-'use client';
-
+import type { Metadata } from 'next';
 import React from 'react';
-import { useParams } from 'next/navigation';
 import { FdolaStudioView } from '@/components/studio';
 
-export default function TenantFdolaStudioPage() {
-  const params = useParams();
-  const subdomain = (params?.subdomain as string) || '';
+/** Title resolves through the tenant layout's `<Section> · <Workspace>` template (§3.3.4). */
+export const metadata: Metadata = { title: 'Fdola Studio' };
+
+interface TenantFdolaStudioPageProps {
+  params: Promise<{ subdomain: string }>;
+}
+
+export default async function TenantFdolaStudioPage({ params }: Readonly<TenantFdolaStudioPageProps>) {
+  const { subdomain } = await params;
 
   return <FdolaStudioView subdomain={subdomain} />;
 }
