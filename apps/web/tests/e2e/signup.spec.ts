@@ -83,7 +83,7 @@ test.describe('signup → OTP', () => {
     await page.getByRole('button', { name: 'Create Account' }).click();
 
     await expect(page.getByRole('heading', { name: 'Verify Your Email' })).toBeVisible();
-    await expect(page.getByText(SIGNUP_USER.email)).toBeVisible();
+    await expect(page.getByText(SIGNUP_USER.email, { exact: true })).toBeVisible();
     const otp = page.getByLabel('6-Digit Verification Code');
     await expect(otp).toBeVisible();
     await expect(otp).toHaveAttribute('autocomplete', 'one-time-code');
