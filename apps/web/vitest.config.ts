@@ -57,10 +57,6 @@ export default defineConfig({
             'tests/middleware/**/*.test.ts',
             'tests/security/**/*.test.ts',
             'tests/unit/**/*.test.ts',
-            // Static-render + pure-logic suite: it asserts behaviour
-            // "outside the browser" (no window), so it stays on node even
-            // though it lives under tests/ui.
-            'tests/ui/platform-settings-tabs.test.tsx',
           ],
         },
       },
@@ -72,8 +68,6 @@ export default defineConfig({
           exclude: [
             '**/node_modules/**',
             '**/dist/**',
-            // Runs in the node project instead — see its include note.
-            '**/tests/ui/platform-settings-tabs.test.tsx',
           ],
           setupFiles: ['./tests/setup/jsdom.setup.ts'],
           include: [
