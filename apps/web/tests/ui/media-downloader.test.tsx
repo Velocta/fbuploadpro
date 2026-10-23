@@ -567,8 +567,8 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
       // Must render a single semantic progress element
       const progressBars = document.querySelectorAll('progress');
       expect(progressBars).toHaveLength(1);
-      expect(progressBars[0]?.getAttribute('value')).toBe('50');
-      expect(progressBars[0]?.getAttribute('max')).toBe('100');
+      expect(progressBars[0]!.getAttribute('value')).toBe('50');
+      expect(progressBars[0]!.getAttribute('max')).toBe('100');
     },
     INTERACTION_TIMEOUT
   );
