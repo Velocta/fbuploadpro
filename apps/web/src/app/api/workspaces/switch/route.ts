@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { extractActiveSession } from '@/lib/route-auth';
 import {
   getSessionSecret,
   SwitchWorkspaceRequestSchema,
-  verifySessionToken,
   signSessionToken,
   buildTenantUrl,
   type SessionPayload,
@@ -11,13 +11,10 @@ import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { setSessionCookie } from '@/lib/auth/session';
 
 async function extractSession(request: NextRequest): Promise<SessionPayload | null> {
-  const token = request.cookies.get('fbup_session')?.value;
-  if (!token) return null;
-  try {
-    return await verifySessionToken(token, getSessionSecret());
-  } catch {
-    return null;
-  }
+  // Shared guard (spec 139): token verification + live session-active
+  // re-validation, so suspended/deleted users and pre-password-change
+  // tokens are rejected here as on every other route.
+  return extractActiveSession(request);
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

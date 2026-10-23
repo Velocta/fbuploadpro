@@ -3,8 +3,8 @@ import {
   buildSubdomainOAuthRedirectUri,
   getSessionSecret,
   signOAuthState,
-  verifySessionToken,
 } from '@fbuploadpro/contracts';
+import { extractActiveSession } from '@/lib/route-auth';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
@@ -21,16 +21,10 @@ export async function handleInitiateFacebookOAuth(
     process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
   try {
-    const sessionCookie = request.cookies.get('fbup_session')?.value;
-    if (!sessionCookie) {
-      const loginUrl = new URL('/login', request.url);
-      return NextResponse.redirect(loginUrl);
-    }
-
-    let session;
-    try {
-      session = await verifySessionToken(sessionCookie, sessionSecret);
-    } catch (_e) {
+    // Shared guard (spec 139): token verification + live session-active
+    // re-validation; missing/invalid/inactive sessions go to login.
+    const session = await extractActiveSession(request);
+    if (!session) {
       const loginUrl = new URL('/login', request.url);
       return NextResponse.redirect(loginUrl);
     }

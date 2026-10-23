@@ -1,11 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { extractActiveSession } from '@/lib/route-auth';
 import {
   canAccessTenant,
   decryptToken,
-  getSessionSecret,
   getTokenEncryptionKey,
   PageInsightsQuerySchema,
-  verifySessionToken,
   type DatabaseClient,
   type PageInsightsResponse,
 } from '@fbuploadpro/contracts';
@@ -29,18 +28,10 @@ export async function handleGetInsights(
   pageId: string,
   options?: HandleGetInsightsOptions
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
   const encryptionKey = getTokenEncryptionKey();
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

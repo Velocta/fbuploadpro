@@ -3,13 +3,11 @@ import {
   canAccessTenant,
   CheckDuplicatesRequestSchema,
   CheckDuplicatesResponseSchema,
-  getSessionSecret,
   MediaItemResponseSchema,
-  verifySessionToken,
   type DatabaseClient,
   type DatabaseMediaItemRow,
 } from '@fbuploadpro/contracts';
-import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { extractActiveSession, isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 
@@ -161,17 +159,9 @@ export async function handleCheckDuplicates(
   subdomain: string,
   dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
-  const sessionSecret = getSessionSecret();
 
-  const sessionCookie = request.cookies.get('fbup_session')?.value;
-  if (!sessionCookie) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  let session;
-  try {
-    session = await verifySessionToken(sessionCookie, sessionSecret);
-  } catch (_e) {
+  const session = await extractActiveSession(request);
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

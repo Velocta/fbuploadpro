@@ -2,12 +2,11 @@ import { type NextRequest, NextResponse } from 'next/server';
 import {
   DisconnectPageResponseSchema,
   FacebookPageViewSchema,
-  getSessionSecret,
-  verifySessionToken,
   type DatabaseClient,
   type DatabaseFacebookPageRow,
   type SessionPayload,
 } from '@fbuploadpro/contracts';
+import { extractActiveSession } from '@/lib/route-auth';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -84,22 +83,19 @@ async function authenticateTenantRequest(
   request: NextRequest,
   subdomain: string
 ): Promise<{ errorResponse?: NextResponse; session?: SessionPayload }> {
-  const secretKey = getSessionSecret();
-
-  const token = request.cookies.get('fbup_session')?.value;
-  if (!token) {
+  // Shared guard (spec 139) for token verification + live
+  // session-active re-validation; this route keeps its own stricter
+  // tenant rule below (exact subdomain match or admin) instead of
+  // canAccessTenant.
+  const verified = await extractActiveSession(request);
+  if (!verified) {
     return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
 
-  try {
-    const verified = await verifySessionToken(token, secretKey);
-    if (verified.subdomain !== subdomain && verified.role !== 'admin') {
-      return { errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-    }
-    return { session: verified };
-  } catch (_e) {
-    return { errorResponse: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  if (verified.subdomain !== subdomain && verified.role !== 'admin') {
+    return { errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
+  return { session: verified };
 }
 
 async function fetchActivePageById(
