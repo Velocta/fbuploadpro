@@ -1,8 +1,55 @@
 'use client';
 
-import React, { useState } from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+/**
+ * Batch "Set caption" modal (spec 133 PR-133-3, spec §6.4 / PB-5).
+ *
+ * Rebuilt on the shared/ui Dialog + the spec 137 form standard
+ * (react-hook-form + zod). Behaviour preserved exactly: title
+ * "Set caption", subtext "Applies to n files", two modes — Replace
+ * existing captions / Add to the end of existing captions (append
+ * lands after a line break, applied by the data layer) — one
+ * textarea with a character counter, empty text disables
+ * "Apply to n files" with the reason present, Cancel changes
+ * nothing, and success presents "Caption updated on n files"
+ * through the shared Toast system (the explorer's handler).
+ *
+ * The form state lives outside the Dialog content so a cancelled
+ * draft survives a close/reopen exactly as the legacy modal's did;
+ * a successful apply clears the text.
+ */
+
+import * as React from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+import { Button } from '@/components/shared/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shared/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+} from '@/components/shared/ui/form';
+import { Textarea } from '@/components/shared/ui/textarea';
 import type { BatchCaptionMode } from './media-types';
+
+const batchCaptionSchema = z.object({
+  mode: z.enum(['replace', 'append']),
+  captionText: z.string(),
+});
+
+type BatchCaptionValues = z.infer<typeof batchCaptionSchema>;
+
+const CAPTION_LIMIT = 2200;
 
 export interface BatchSetCaptionModalProps {
   isOpen: boolean;
@@ -17,236 +64,126 @@ export function BatchSetCaptionModal({
   onClose,
   onApply,
 }: Readonly<BatchSetCaptionModalProps>) {
-  const [mode, setMode] = useState<BatchCaptionMode>('replace');
-  const [captionText, setCaptionText] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const form = useForm<BatchCaptionValues>({
+    resolver: zodResolver(batchCaptionSchema),
+    mode: 'onTouched',
+    defaultValues: { mode: 'replace', captionText: '' },
+  });
 
-  if (!isOpen) return null;
-
+  const captionText = form.watch('captionText');
+  const isSubmitting = form.formState.isSubmitting;
   const trimmedText = captionText.trim();
   const canSubmit = trimmedText.length > 0 && !isSubmitting;
   const targetLabel = selectedCount === 1 ? '1 file' : `${selectedCount} files`;
-  const submitLabel = isSubmitting ? 'Applying...' : `Apply to ${targetLabel}`;
 
-  const handleSubmit = async (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-
-    setIsSubmitting(true);
-    try {
-      await onApply(trimmedText, mode);
-      setCaptionText('');
-      onClose();
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleValid = async (values: BatchCaptionValues) => {
+    await onApply(values.captionText.trim(), values.mode);
+    form.reset({ mode: values.mode, captionText: '' });
+    onClose();
   };
 
   return (
-    <dialog
-      open
-      aria-labelledby="batch-caption-title"
-      onPointerDown={(e) => {
-        if (!isSubmitting && e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
-      onKeyDown={(e) => {
-        if (!isSubmitting && e.key === 'Escape') {
-          onClose();
-        }
-      }}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        maxWidth: 'none',
-        maxHeight: 'none',
-        margin: 0,
-        border: 'none',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9500,
-        padding: SPACING.md,
-        boxSizing: 'border-box',
+    <Dialog
+      open={isOpen}
+      onOpenChange={(next) => {
+        if (!next && !isSubmitting) onClose();
       }}
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '460px',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-          borderRadius: RADII.md,
-          padding: SPACING.xl,
-          boxShadow: '0 20px 48px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: SPACING.md,
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <h2
-            id="batch-caption-title"
-            style={{
-              margin: 0,
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Set caption
-          </h2>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '0.8125rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            }}
-          >
+      <DialogContent data-testid="batch-set-caption-dialog" className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Set caption</DialogTitle>
+          <DialogDescription>
             Applies to {selectedCount} file{selectedCount === 1 ? '' : 's'}.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          {/* Modes: Replace vs Append */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-            }}
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={form.handleSubmit(handleValid)}
           >
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.sm,
-                fontSize: '0.8125rem',
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                cursor: 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="captionMode"
-                value="replace"
-                disabled={isSubmitting}
-                checked={mode === 'replace'}
-                onChange={() => setMode('replace')}
-                style={{ accentColor: PALETTE.primary, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
-              />
-              <span>Replace existing captions</span>
-            </label>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: SPACING.sm,
-                fontSize: '0.8125rem',
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <input
-                type="radio"
-                name="captionMode"
-                value="append"
-                disabled={isSubmitting}
-                checked={mode === 'append'}
-                onChange={() => setMode('append')}
-                style={{ accentColor: PALETTE.primary, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}
-              />
-              <span>Add to the end of existing captions</span>
-            </label>
-          </div>
-
-          {/* Caption Textarea + Character Counter */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <textarea
-              data-testid="batch-caption-textarea"
-              rows={4}
-              disabled={isSubmitting}
-              value={captionText}
-              onChange={(e) => setCaptionText(e.target.value)}
-              placeholder="Enter caption text..."
-              style={{
-                width: '100%',
-                padding: SPACING.sm,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                border: '1px solid var(--border-strong, rgba(255,255,255,0.15))',
-                borderRadius: RADII.xs,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.875rem',
-                lineHeight: 1.45,
-                outline: 'none',
-                resize: 'vertical',
-                boxSizing: 'border-box',
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
+            <FormField
+              control={form.control}
+              name="mode"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex flex-col" role="radiogroup" aria-label="Caption mode">
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body text-ink">
+                      <input
+                        type="radio"
+                        name={field.name}
+                        value="replace"
+                        checked={field.value === 'replace'}
+                        disabled={isSubmitting}
+                        onChange={() => field.onChange('replace')}
+                        className="size-4 shrink-0 accent-primary"
+                      />
+                      <span>Replace existing captions</span>
+                    </label>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-body text-ink">
+                      <input
+                        type="radio"
+                        name={field.name}
+                        value="append"
+                        checked={field.value === 'append'}
+                        disabled={isSubmitting}
+                        onChange={() => field.onChange('append')}
+                        className="size-4 shrink-0 accent-primary"
+                      />
+                      <span>Add to the end of existing captions</span>
+                    </label>
+                  </div>
+                </FormItem>
+              )}
             />
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                fontSize: '0.75rem',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-              }}
-            >
-              {captionText.length} / 2,200
-            </div>
-          </div>
 
-          {/* Footer Actions */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: SPACING.sm,
-            }}
-          >
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={onClose}
-              style={{
-                padding: `${SPACING.xs} ${SPACING.md}`,
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                opacity: isSubmitting ? 0.6 : 1,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              data-testid="apply-batch-caption"
-              disabled={!canSubmit}
-              style={{
-                padding: `${SPACING.xs} ${SPACING.lg}`,
-                backgroundColor: canSubmit ? PALETTE.primary : 'rgba(250, 215, 52, 0.3)',
-                color: PALETTE.background,
-                border: 'none',
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.semibold,
-                cursor: canSubmit ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {submitLabel}
-            </button>
-          </div>
-        </form>
-      </div>
-    </dialog>
+            <FormField
+              control={form.control}
+              name="captionText"
+              render={({ field }) => (
+                <FormItem id="batch-caption-textarea-item">
+                  <FormLabel className="sr-only">Caption</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      data-testid="batch-caption-textarea"
+                      rows={4}
+                      placeholder="Enter caption text..."
+                      disabled={isSubmitting}
+                      value={field.value}
+                      onBlur={field.onBlur}
+                      onChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="flex justify-end text-metadata text-ink-dim tabular-nums">
+                    {captionText.length} / {CAPTION_LIMIT.toLocaleString('en-US')}
+                  </div>
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button variant="ghost" disabled={isSubmitting} onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                data-testid="apply-batch-caption"
+                loading={isSubmitting}
+                disabled={!canSubmit}
+                {...(!isSubmitting && trimmedText.length === 0
+                  ? { disabledReason: 'Enter a caption first.' }
+                  : {})}
+              >
+                {isSubmitting ? 'Applying...' : `Apply to ${targetLabel}`}
+              </Button>
+            </DialogFooter>
+            {!isSubmitting && trimmedText.length === 0 ? (
+              <p className="text-right text-metadata text-ink-dim">
+                Enter a caption first.
+              </p>
+            ) : null}
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,7 +1,32 @@
 'use client';
 
-import React from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY } from '@/lib/theme';
+/**
+ * Leave-page guard (spec 133 PR-133-3, spec §6.4 / PB-19).
+ *
+ * Rebuilt with AlertDialog semantics: while uploads are active the
+ * user must make an explicit choice — the dialog cannot be
+ * dismissed by outside click or Esc, and focus starts on the safe
+ * choice. "Stay on this page" is the primary action (it is also
+ * the AlertDialog Cancel control, so the primitive's
+ * focus-on-Cancel lands on it); "Leave anyway" is the quiet
+ * action. The copy names the upload count and the furthest-along
+ * file, exactly as PB-19 requires. The browser's native
+ * beforeunload warning is armed separately by the explorer's
+ * navigation guard — only while uploads are active.
+ */
+
+import * as React from 'react';
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/shared/ui/alert-dialog';
 
 export interface LeavePageGuardDialogProps {
   isOpen: boolean;
@@ -18,131 +43,41 @@ export function LeavePageGuardDialog({
   onStay,
   onLeaveAnyway,
 }: Readonly<LeavePageGuardDialogProps>) {
-  if (!isOpen) return null;
-
   return (
-    <dialog
-      open
-      aria-labelledby="leave-guard-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        width: '100vw',
-        height: '100vh',
-        maxWidth: 'none',
-        maxHeight: 'none',
-        margin: 0,
-        border: 'none',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 9999,
-        padding: SPACING.md,
-        boxSizing: 'border-box',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '440px',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-strong, ${THEME.default.borders.strong})`,
-          borderRadius: RADII.md,
-          padding: SPACING.xl,
-          boxShadow: '0 20px 48px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: SPACING.md,
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <h2
-            id="leave-guard-title"
-            style={{
-              margin: 0,
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Uploads still in progress
-          </h2>
-          <p
-            style={{
-              margin: 0,
-              fontSize: '0.875rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              lineHeight: 1.45,
-            }}
-          >
-            Leaving now will cancel {activeUploadsCount} upload{activeUploadsCount === 1 ? '' : 's'} — they'll be lost and you'll need to start over.
+    <AlertDialog open={isOpen}>
+      <AlertDialogContent data-testid="leave-page-guard-dialog" className="sm:max-w-md">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Uploads still in progress</AlertDialogTitle>
+          <AlertDialogDescription>
+            Leaving now will cancel {activeUploadsCount} upload
+            {activeUploadsCount === 1 ? '' : 's'} — they&apos;ll be lost and
+            you&apos;ll need to start over.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        {furthestAlongFile ? (
+          <p className="truncate rounded-sm bg-subtle px-3 py-2 text-body text-ink-sub tabular-nums">
+            {furthestAlongFile.name} · {Math.round(furthestAlongFile.progressPercent)}%
           </p>
+        ) : null}
 
-          {furthestAlongFile && (
-            <div
-              style={{
-                marginTop: SPACING.xs,
-                padding: `${SPACING.xs} ${SPACING.sm}`,
-                backgroundColor: `var(--bg-subtle, ${THEME.default.surfaces.subtle})`,
-                borderRadius: RADII.xs,
-                fontSize: '0.8125rem',
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontVariantNumeric: TYPOGRAPHY.tabularNums,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {furthestAlongFile.name} · {Math.round(furthestAlongFile.progressPercent)}%
-            </div>
-          )}
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: SPACING.sm,
-            marginTop: SPACING.sm,
-          }}
-        >
-          <button
-            type="button"
+        <AlertDialogFooter>
+          <AlertDialogAction
+            variant="ghost"
+            data-testid="leave-guard-leave-btn"
             onClick={onLeaveAnyway}
-            style={{
-              padding: `${SPACING.xs} ${SPACING.md}`,
-              backgroundColor: 'transparent',
-              border: 'none',
-              borderRadius: RADII.xs,
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.medium,
-              cursor: 'pointer',
-            }}
           >
             Leave anyway
-          </button>
-          <button
-            type="button"
+          </AlertDialogAction>
+          <AlertDialogCancel
+            variant="default"
+            data-testid="leave-guard-stay-btn"
             onClick={onStay}
-            style={{
-              padding: `${SPACING.xs} ${SPACING.lg}`,
-              backgroundColor: PALETTE.primary,
-              border: 'none',
-              borderRadius: RADII.xs,
-              color: PALETTE.background,
-              fontSize: '0.8125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              cursor: 'pointer',
-            }}
           >
             Stay on this page
-          </button>
-        </div>
-      </div>
-    </dialog>
+          </AlertDialogCancel>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

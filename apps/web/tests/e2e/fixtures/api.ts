@@ -179,6 +179,27 @@ export async function installApiFixtures(
       nextCursor: null,
     })
   );
+  // Single-item PATCH (caption edits — inline, preview save, and the
+  // batch-caption flow, which PATCHes each selected item; PR-133-3).
+  // Registered after the collection routes above; non-PATCH requests
+  // fall back to them (folders, check-duplicates, upload-url, …).
+  await page.route(`**/api/tenant/${SUB}/media/*`, async (route) => {
+    const req = route.request();
+    if (req.method() !== 'PATCH') return route.fallback();
+    const id = new URL(req.url()).pathname.split('/').at(-1);
+    const body = (req.postDataJSON() ?? {}) as Record<string, unknown>;
+    const index = state.media.findIndex((m) => m.id === id);
+    if (index === -1) return json(route, { error: 'not found' }, 404);
+    const updated = {
+      ...state.media[index],
+      ...(typeof body.captionText === 'string'
+        ? { captionText: body.captionText }
+        : {}),
+      ...(typeof body.name === 'string' ? { name: body.name } : {}),
+    };
+    state.media[index] = updated;
+    return json(route, updated);
+  });
 
   // Storage signed URLs: the PUT itself is answered 200 — no real storage.
   await page.route('https://storage.e2e.invalid/**', (route) =>
