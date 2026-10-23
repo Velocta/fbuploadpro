@@ -7,6 +7,7 @@
  * or Esc dismissal — Radix AlertDialog mechanics provide all three.
  * Copy preserved from the legacy surface (spec §5.1).
  */
+import * as React from 'react';
 import {
   AlertDialog,
   AlertDialogAction,

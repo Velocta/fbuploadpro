@@ -5,6 +5,7 @@
  * EmptyState (UI Rule 23) — what posting times do, plus the view's one
  * primary action. Copy preserved from the legacy surface (spec §5.1).
  */
+import * as React from 'react';
 import { ClockIcon } from 'lucide-react';
 
 import { Button } from '@/components/shared/ui/button';

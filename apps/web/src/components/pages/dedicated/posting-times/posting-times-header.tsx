@@ -7,6 +7,7 @@
  * the view's one primary action (UI Rule 1). Rebuilt clean-room on
  * shared/ui + tokens (spec 129 §1).
  */
+import * as React from 'react';
 import { PlusIcon } from 'lucide-react';
 
 import { Button } from '@/components/shared/ui/button';

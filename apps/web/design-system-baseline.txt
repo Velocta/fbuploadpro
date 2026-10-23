@@ -60,7 +60,6 @@ rgb apps/web/src/components/pages/dedicated/page-header.tsx 3
 rgb apps/web/src/components/pages/dedicated/schedule-timezone-modal.tsx 5
 rgb apps/web/src/components/pages/dedicated/tab-dashboard.tsx 1
 rgb apps/web/src/components/pages/dedicated/tab-insights.tsx 2
-rgb apps/web/src/components/pages/dedicated/tab-posting-times.tsx 2
 rgb apps/web/src/components/pages/dedicated/tab-settings.tsx 6
 rgb apps/web/src/components/pages/page-card.tsx 4
 rgb apps/web/src/components/pages/pages-empty-state.tsx 2

@@ -10,6 +10,7 @@
  * shared/ui + tokens — layout separates with hairline dividers and
  * spacing, no box-in-box (UI Rule 13).
  */
+import * as React from 'react';
 import { Button } from '@/components/shared/ui/button';
 import { StatusDot } from '@/components/shared/ui/status-dot';
 import { Switch } from '@/components/shared/ui/switch';

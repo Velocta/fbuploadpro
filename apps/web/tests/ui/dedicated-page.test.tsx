@@ -12,7 +12,6 @@ import {
   DedicatedPageHeader,
   PageTabDashboard,
   PageTabQueue,
-  PageTabCalendar,
   PageTabPostingTimes,
   PageTabSettings,
   PostComposer,
@@ -603,9 +602,11 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
       const toggleBtn = findElementByTestId(tree, 'toggle-slot-btn-slot-1');
       expect(toggleBtn).not.toBeNull();
-      expect(toggleBtn?.props.role).toBe('switch');
-      expect(toggleBtn?.props['aria-checked']).toBe(true);
-      await toggleBtn?.props.onClick();
+      // Spec 134 rebuild: the row's toggle is the shared/ui Switch —
+      // checked + onCheckedChange are its contract (role="switch" and
+      // aria-checked are rendered by Radix from these props).
+      expect(toggleBtn?.props.checked).toBe(true);
+      await toggleBtn?.props.onCheckedChange(false);
 
       expect(onToggleSlot).toHaveBeenCalledWith('slot-1', false);
     });
@@ -649,9 +650,9 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
       expect(tzModalSelect).toBeNull();
     });
 
-    it('renders backwards-compatible PageTabCalendar export seamlessly', () => {
+    it('renders the posting-times tab (the PageTabCalendar alias was deleted in spec 134 §8)', () => {
       const { hasText, hasAttribute } = render(
-        <PageTabCalendar
+        <PageTabPostingTimes
           page={samplePage}
           slots={sampleSlots}
           onAddSlot={vi.fn()}
