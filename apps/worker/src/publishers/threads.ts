@@ -140,6 +140,14 @@ export function isThreadsContainerNotFound(err: unknown): boolean {
 export function classifyThreadsError(err: unknown): ClassifiedPublishError {
   const { code, subcode, message, httpStatus } = extractError(err);
 
+  // Our own pre-flight validation (missing media, bad carousel, …) is a
+  // definitive content problem — permanent, never retried. ValidationError
+  // carries a string code that extractError cannot read as a number, so
+  // it must be recognised before the numeric branches, or it falls into
+  // the code-undefined retryable branch by mistake.
+  if (err instanceof ValidationError) {
+    return { kind: 'permanent', code: 'validation', message };
+  }
   if (code === 190 || code === 102 || code === 10 || (code !== undefined && code >= 200 && code <= 299)) {
     return {
       kind: 'auth',
@@ -276,21 +284,34 @@ export class ThreadsPublisher implements Publisher {
 
     // ---- Live quota read (D5) — best effort, never blocks the post ----
     const liveLimit = await this.readLiveLimit(threadsUserId, accessToken);
-    void liveLimit;
+
+    // At the platform-reported cap the post DEFERS (D5) — the live
+    // total overrides the claim-side default, and publishing into a
+    // certain rejection would fail the post instead of pausing it.
+    const limitOutcome = this.publishingLimitOutcome(liveLimit);
+    if (limitOutcome) return limitOutcome;
 
     // ---- Main post through the state machine ----
-    const main = await this.publishOne(
-      this.mainContainerParams(item, options, threadsUserId, accessToken),
-      threadsUserId,
-      accessToken,
-      item
-    );
+    // mainContainerParams validates content (a media post with no media
+    // URL, a carousel with too few items) and throws ValidationError —
+    // the params must be built inside a guard: evaluated as an argument
+    // the throw escaped publish() entirely, the queue message was never
+    // settled, and the item burned retries into the DLQ instead of
+    // failing permanently as a content problem.
+    let mainParams: ThreadsContainerCreateParams;
+    try {
+      mainParams = this.mainContainerParams(item, options, threadsUserId, accessToken);
+    } catch (err) {
+      return this.failureOutcome(err, item, undefined, liveLimit);
+    }
+    const main = await this.publishOne(mainParams, threadsUserId, accessToken, item, liveLimit);
     if (main.outcome) return main.outcome;
     const mediaId = main.mediaId as string;
     const detail: Record<string, unknown> = {
       platform: 'threads',
       containerId: main.containerId,
       mediaId,
+      ...(liveLimit.detail ? { publishingLimit: liveLimit.detail } : {}),
     };
 
     // ---- Reply chain: in-order follow-ups, warning on failure ----
@@ -319,7 +340,8 @@ export class ThreadsPublisher implements Publisher {
           },
           threadsUserId,
           accessToken,
-          item
+          item,
+          liveLimit
         );
         if (stepResult.outcome || !stepResult.mediaId) {
           warning =
@@ -353,7 +375,10 @@ export class ThreadsPublisher implements Publisher {
   private async readLiveLimit(
     threadsUserId: string,
     accessToken: string
-  ): Promise<{ resolved: ReturnType<typeof resolvePublishLimit> }> {
+  ): Promise<{
+    resolved: ReturnType<typeof resolvePublishLimit>;
+    detail?: Record<string, unknown> | undefined;
+  }> {
     try {
       const limit = await this.client.getPublishingLimit({
         threadsUserId,
@@ -368,7 +393,15 @@ export class ThreadsPublisher implements Publisher {
               },
             }
           : undefined;
-      return { resolved: resolvePublishLimit('threads', override) };
+      return {
+        resolved: resolvePublishLimit('threads', override),
+        detail: {
+          ...(limit.usage !== undefined ? { usage: limit.usage } : {}),
+          ...(limit.totalCount !== undefined
+            ? { totalCount: limit.totalCount }
+            : {}),
+        },
+      };
     } catch {
       return { resolved: resolvePublishLimit('threads') };
     }
@@ -478,7 +511,11 @@ export class ThreadsPublisher implements Publisher {
     params: ThreadsContainerCreateParams,
     threadsUserId: string,
     accessToken: string,
-    item: DatabaseUnifiedQueueItemRow
+    item: DatabaseUnifiedQueueItemRow,
+    liveLimit?: {
+      resolved: ReturnType<typeof resolvePublishLimit>;
+      detail?: Record<string, unknown> | undefined;
+    }
   ): Promise<{
     mediaId?: string | undefined;
     containerId?: string | undefined;
@@ -509,7 +546,7 @@ export class ThreadsPublisher implements Publisher {
         }
         effectiveParams = { ...params, children: childIds };
       } catch (err) {
-        return { outcome: this.failureOutcome(err, item, undefined) };
+        return { outcome: this.failureOutcome(err, item, undefined, liveLimit) };
       }
     }
 
@@ -518,7 +555,7 @@ export class ThreadsPublisher implements Publisher {
       const created = await this.client.createContainer(effectiveParams);
       containerId = created.containerId;
     } catch (err) {
-      return { outcome: this.failureOutcome(err, item, undefined) };
+      return { outcome: this.failureOutcome(err, item, undefined, liveLimit) };
     }
     const detail: Record<string, unknown> = { platform: 'threads', containerId };
 
@@ -585,12 +622,12 @@ export class ThreadsPublisher implements Publisher {
               return { mediaId: containerId, containerId };
             }
             return {
-              outcome: this.failureOutcome(secondErr, item, detail),
+              outcome: this.failureOutcome(secondErr, item, detail, liveLimit),
             };
           }
         }
       }
-      return { outcome: this.failureOutcome(err, item, detail) };
+      return { outcome: this.failureOutcome(err, item, detail, liveLimit) };
     }
   }
 
@@ -644,10 +681,46 @@ export class ThreadsPublisher implements Publisher {
     return 'retry';
   }
 
+  /**
+   * D5 live-cap enforcement: when the platform-reported usage reaches
+   * the resolved cap (the live total overrides the claim-side default
+   * through the destination-override seam), the post defers for an hour
+   * instead of publishing into a certain rejection. Best effort — an
+   * unreadable quota (no usage reported) never blocks a publish.
+   */
+  private publishingLimitOutcome(liveLimit: {
+    resolved: ReturnType<typeof resolvePublishLimit>;
+    detail?: Record<string, unknown> | undefined;
+  }): PublishOutcome | null {
+    const maxCount = liveLimit.resolved?.publishedPosts?.maxCount;
+    const usage = liveLimit.detail?.usage;
+    if (maxCount === undefined || typeof usage !== 'number' || usage < maxCount) {
+      return null;
+    }
+    return {
+      status: 'retry',
+      error: {
+        kind: 'retryable',
+        code: 'publishing_limit_reached',
+        message:
+          'This Threads account has reached its publishing limit for now. The post will be tried again later.',
+      },
+      retryDelaySeconds: 3600,
+      detail: {
+        platform: 'threads',
+        ...(liveLimit.detail ? { publishingLimit: liveLimit.detail } : {}),
+      },
+    };
+  }
+
   private failureOutcome(
     err: unknown,
     item: DatabaseUnifiedQueueItemRow,
-    detail: Record<string, unknown> | undefined
+    detail: Record<string, unknown> | undefined,
+    liveLimit?: {
+      resolved: ReturnType<typeof resolvePublishLimit>;
+      detail?: Record<string, unknown> | undefined;
+    }
   ): PublishOutcome {
     const classified = classifyThreadsError(err);
     const canRetry =
@@ -660,7 +733,10 @@ export class ThreadsPublisher implements Publisher {
       ...(classified.kind === 'auth'
         ? { targetAccountStatus: 'expired' as const }
         : {}),
-      detail: detail ?? { platform: 'threads' },
+      detail: {
+        ...(detail ?? { platform: 'threads' }),
+        ...(liveLimit?.detail ? { publishingLimit: liveLimit.detail } : {}),
+      },
     };
   }
 }

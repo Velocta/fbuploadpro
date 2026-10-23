@@ -57,6 +57,13 @@ export const queryKeys = {
           [...tenantRoot, 'media', mediaId] as const,
       },
 
+      downloader: {
+        all: [...tenantRoot, 'downloader'] as const,
+        jobs: [...tenantRoot, 'downloader', 'jobs'] as const,
+        job: (jobId: string) =>
+          [...tenantRoot, 'downloader', 'jobs', jobId] as const,
+      },
+
       settings: {
         all: [...tenantRoot, 'settings'] as const,
         byoc: [...tenantRoot, 'settings', 'byoc'] as const,

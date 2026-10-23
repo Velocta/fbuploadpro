@@ -39,6 +39,12 @@ import type { PublishQueueMessage } from './claimer.js';
 // stays un-acked, the batch handler rethrows, and Cloudflare Queues
 // retries the message with backoff until it lands in the lane DLQ.
 //
+// Batch handling (spec 139 B12): messages within one batch are
+// processed with bounded concurrency — cap equal to the batch size —
+// because batch items are independent (each loads and settles its own
+// queue row) and serial processing wasted the batch window on summed
+// per-item Graph latency. See `mapWithBoundedConcurrency`.
+//
 // Spec 139 publish-safety defences layered on top of that contract:
 //   - Idempotency: an item already carrying `external_post_id` is
 //     settled `published` from the stored ids, never re-published.
@@ -453,6 +459,45 @@ export function buildDeferSettleArgs(
   };
 }
 
+/**
+ * Maps `items` through `task` with at most `concurrency` tasks in
+ * flight at once, resolving with one settled result per item IN INPUT
+ * ORDER — `Promise.allSettled` semantics: a rejecting task is captured
+ * in its own result slot and never aborts, skips, or delays the tasks
+ * beside it. Implemented as a small worker pool over a shared index,
+ * so there are no chunk barriers: a slow item occupies only its own
+ * slot, never the whole batch.
+ */
+export async function mapWithBoundedConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length);
+  if (items.length === 0) {
+    return results;
+  }
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  let nextIndex = 0;
+  const runners = Array.from({ length: limit }, async () => {
+    for (;;) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) return;
+      const item = items[index];
+      if (item === undefined) return;
+      try {
+        const value = await task(item);
+        results[index] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[index] = { status: 'rejected', reason };
+      }
+    }
+  });
+  await Promise.allSettled(runners);
+  return results;
+}
+
 type ProcessResult = 'settled' | 'skipped';
 
 async function processPublishMessage(
@@ -549,33 +594,62 @@ async function processPublishMessage(
  * Messages that settle or are legitimately skipped are acked; a message
  * whose processing throws stays un-acked and the handler rethrows after
  * the batch so Cloudflare Queues retries it with backoff.
+ *
+ * Intra-batch concurrency (spec 139 B12): messages are processed
+ * CONCURRENTLY with the cap set to the batch size — every message in
+ * the batch may be in flight at once, and the batch itself is the
+ * bound (Cloudflare caps the batch via `max_batch_size` in
+ * wrangler.toml — 10 publish-fast, 5 publish-heavy — which is
+ * unchanged). Per-item semantics are identical to the previous serial
+ * loop: each item's error is captured and logged in its own handler,
+ * the settled count is aggregated once at the end, and the first
+ * failure IN BATCH ORDER is rethrown only after every message has
+ * finished processing — one item's failure never aborts, skips, or
+ * delays the settlement of the others.
  */
 export async function handlePublishBatch(
   batch: MessageBatch<PublishQueueMessage>,
   deps: ConsumerDeps
 ): Promise<void> {
+  const results = await mapWithBoundedConcurrency(
+    batch.messages,
+    batch.messages.length,
+    async (
+      message
+    ): Promise<{ settled: boolean; failed: boolean; error?: unknown }> => {
+      try {
+        const result = await processPublishMessage(message, deps);
+        message.ack();
+        return { settled: result === 'settled', failed: false };
+      } catch (err) {
+        if (!isCaptured(err)) {
+          captureWorkerError(deps.env ?? {}, err, {
+            site: 'handlePublishBatch',
+            kind: 'publish_message_failed',
+            queue: batch.queue,
+            messageId: message.id,
+          });
+        }
+        console.error(
+          `[consumer] publish message ${message.id} failed; leaving un-acked for queue retry:`,
+          err
+        );
+        return { settled: false, failed: true, error: err };
+      }
+    }
+  );
+
   let settled = 0;
   const failures: unknown[] = [];
-
-  for (const message of batch.messages) {
-    try {
-      const result = await processPublishMessage(message, deps);
-      if (result === 'settled') settled++;
-      message.ack();
-    } catch (err) {
-      if (!isCaptured(err)) {
-        captureWorkerError(deps.env ?? {}, err, {
-          site: 'handlePublishBatch',
-          kind: 'publish_message_failed',
-          queue: batch.queue,
-          messageId: message.id,
-        });
-      }
-      console.error(
-        `[consumer] publish message ${message.id} failed; leaving un-acked for queue retry:`,
-        err
-      );
-      failures.push(err);
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      if (result.value.settled) settled++;
+      if (result.value.failed) failures.push(result.value.error);
+    } else {
+      // Defensive: the per-message task above captures its own errors,
+      // so a rejected slot should be unreachable — but never let one
+      // vanish: it counts as a failure and is rethrown below.
+      failures.push(result.reason);
     }
   }
 
@@ -700,23 +774,34 @@ export async function handleDlqBatch(
   const lane: PublishLane =
     queueName === PUBLISH_HEAVY_DLQ_NAME ? 'publish-heavy' : 'publish-fast';
 
-  let settledCount = 0;
-  for (const message of batch.messages) {
-    try {
-      if (await processDlqMessage(message, queueName, deps)) settledCount++;
-    } catch (err) {
-      if (!isCaptured(err)) {
-        captureWorkerError(deps.env ?? {}, err, {
-          site: 'handleDlqBatch',
-          kind: 'unexpected',
-          queue: queueName,
-        });
+  // Same intra-batch concurrency as the publish lanes (spec 139 B12):
+  // cap = batch size, per-item semantics unchanged — each message is
+  // acked after its own settlement attempt, whatever its outcome.
+  const results = await mapWithBoundedConcurrency(
+    batch.messages,
+    batch.messages.length,
+    async (message): Promise<boolean> => {
+      try {
+        return await processDlqMessage(message, queueName, deps);
+      } catch (err) {
+        if (!isCaptured(err)) {
+          captureWorkerError(deps.env ?? {}, err, {
+            site: 'handleDlqBatch',
+            kind: 'unexpected',
+            queue: queueName,
+          });
+        }
+        console.error(`[dlq] unexpected error processing message ${message.id}:`, err);
+        return false;
+      } finally {
+        message.ack();
       }
-      console.error(`[dlq] unexpected error processing message ${message.id}:`, err);
-    } finally {
-      message.ack();
     }
-  }
+  );
+  const settledCount = results.reduce(
+    (count, result) => count + (result.status === 'fulfilled' && result.value ? 1 : 0),
+    0
+  );
 
   // Heartbeat DLQ counters count actual settlements only (spec 139):
   // a batch of stale arrivals that settled nothing must not inflate

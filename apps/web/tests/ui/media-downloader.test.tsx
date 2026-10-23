@@ -9,20 +9,36 @@
 
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { MediaFolder, MediaItemResponse } from '@fbuploadpro/contracts';
 import { PALETTE, RADII } from '@/lib/theme';
+import { MediaDownloader } from '@/components/downloader/media-downloader';
 import {
-  MediaDownloader,
   initializeDownloaderFolders,
   createDownloaderFolder,
-  validateDownloaderBatchInput,
   executeDownloaderBatch,
   retryFailedDownloadEntry,
-  buildMediaFolderHref,
   type DownloaderBatchProgressState,
   type DownloaderFailedEntry,
-} from '@/components/downloader/media-downloader';
+} from '@/components/downloader/downloader-data';
+import {
+  validateDownloaderBatchInput,
+  buildMediaFolderHref,
+} from '@/components/downloader/media-downloader-helpers';
 import { render } from '../components/setup';
+
+/**
+ * Spec 140 PR-140-1 data-path setup: the surface now reads its data
+ * through React Query hooks (downloader-data.ts), so renders are
+ * wrapped in a QueryClientProvider. Behaviour assertions are unchanged
+ * in this PR; the behavioural migration lands in PR-140-4.
+ */
+function renderDownloader(ui: React.ReactElement) {
+  const queryClient = new QueryClient();
+  return render(
+    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+  );
+}
 
 const mockPush = vi.fn();
 
@@ -111,9 +127,12 @@ const SAMPLE_DOWNLOADED_ITEMS: MediaItemResponse[] = [
 describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder Selection & Inline New Folder (US2)', () => {
   it('auto-selects an existing root-level Downloads folder on load without issuing a POST request', async () => {
     const mockFetch = vi.fn(async () => {
-      return new Response(JSON.stringify({ folders: SAMPLE_FOLDERS }), {
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({ folders: SAMPLE_FOLDERS, unorganizedCount: 0 }),
+        {
+          status: 200,
+        }
+      );
     }) as unknown as typeof fetch;
 
     const result = await initializeDownloaderFolders({
@@ -125,7 +144,10 @@ describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder 
     expect(result.selectedFolderId).toBe('11111111-1111-4111-8111-111111111111');
     expect(result.folders).toHaveLength(3);
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(mockFetch).toHaveBeenCalledWith('/api/tenant/acme/media/folders');
+    expect(
+      (mockFetch as unknown as { mock: { calls: unknown[][] } }).mock
+        .calls[0]?.[0]
+    ).toBe('/api/tenant/acme/media/folders');
   });
 
   it('auto-creates a root-level Downloads folder via POST /api/tenant/acme/media/folders when not yet present and selects it', async () => {
@@ -152,9 +174,10 @@ describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder 
           status: 201,
         });
       }
-      return new Response(JSON.stringify({ folders: foldersWithoutDownloads }), {
-        status: 200,
-      });
+      return new Response(
+        JSON.stringify({ folders: foldersWithoutDownloads, unorganizedCount: 0 }),
+        { status: 200 }
+      );
     }) as unknown as typeof fetch;
 
     const result = await initializeDownloaderFolders({
@@ -169,7 +192,7 @@ describe('Spec 031: MediaDownloader — Default Downloads Folder, Nested Folder 
   });
 
   it('renders destination folder selector with All Media (Root), Downloads default selected, nested ancestry paths, and inline New Folder dialog', () => {
-    const { hasText, hasAttribute, findTags } = render(
+    const { hasText, hasAttribute, findTags } = renderDownloader(
       <MediaDownloader
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
@@ -254,7 +277,7 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
     expect(invalidCheck.valid).toBe(false);
     expect(invalidCheck.errorMessage).toContain('valid public link');
 
-    const { hasText, hasAttribute, findByRole } = render(
+    const { hasText, hasAttribute, findByRole } = renderDownloader(
       <MediaDownloader
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
@@ -339,6 +362,52 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
     expect(progressUpdates.at(-1)?.completedLinks).toBe(2);
   });
 
+  it('completes an async 202 job through polling and saves the media item the job produced', async () => {
+    const jobId = 'job-async-1';
+    const completedJob = {
+      id: jobId,
+      status: 'completed',
+      source_url: 'https://www.tiktok.com/@creator/video/111',
+      source_platform: 'tiktok',
+      media_id: SAMPLE_DOWNLOADED_ITEMS[0]!.id,
+      folder_id: '11111111-1111-4111-8111-111111111111',
+      progress_percent: 100,
+      error_message: null,
+    };
+
+    const mockFetch = vi.fn(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input);
+        if (init?.method === 'POST') {
+          return new Response(JSON.stringify({ success: true, job: { id: jobId } }), {
+            status: 202,
+          });
+        }
+        if (url.includes('jobId=')) {
+          return new Response(JSON.stringify({ success: true, job: completedJob }), {
+            status: 200,
+          });
+        }
+        // GET /media/<id> — the route returns the BARE item (no envelope)
+        return new Response(JSON.stringify(SAMPLE_DOWNLOADED_ITEMS[0]), {
+          status: 200,
+        });
+      }
+    ) as unknown as typeof fetch;
+
+    const batchResult = await executeDownloaderBatch({
+      subdomain: 'acme',
+      rawInput: 'https://www.tiktok.com/@creator/video/111',
+      folderId: '11111111-1111-4111-8111-111111111111',
+      fetchImpl: mockFetch,
+    });
+
+    expect(batchResult.failedEntries).toHaveLength(0);
+    expect(batchResult.savedEntries).toHaveLength(1);
+    expect(batchResult.savedEntries[0]?.item.id).toBe(SAMPLE_DOWNLOADED_ITEMS[0]!.id);
+    expect(batchResult.savedEntries[0]?.platform).toBe('tiktok');
+  });
+
   it('renders a single unified Windows Copy-style batch progress bar and deduplication notice during active downloads', () => {
     const activeProgress: DownloaderBatchProgressState = {
       status: 'downloading',
@@ -349,7 +418,7 @@ describe('Spec 031: MediaDownloader — Validation, Batch URL Deduplication & Un
       invalidCount: 0,
     };
 
-    const { hasText, hasAttribute, findTags } = render(
+    const { hasText, hasAttribute, findTags } = renderDownloader(
       <MediaDownloader
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}
@@ -381,7 +450,7 @@ describe('Spec 031: MediaDownloader — Recent Downloads List, Open in Folder & 
       errorMessage: 'This post is private or unavailable for cloud download.',
     };
 
-    const { hasText, hasAttribute, html } = render(
+    const { hasText, hasAttribute, html } = renderDownloader(
       <MediaDownloader
         subdomain="acme"
         initialFolders={SAMPLE_FOLDERS}

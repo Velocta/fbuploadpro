@@ -108,10 +108,12 @@ export function validateInstagramCaption(caption: string): string | null {
 // Media descriptors (carousel items + media facts the composer knows)
 // ==========================================
 
-export const InstagramCarouselItemSchema = z.object({
-  mediaUrl: z.string().url(),
-  mediaType: z.enum(['image', 'video']),
-});
+export const InstagramCarouselItemSchema = z
+  .object({
+    mediaUrl: z.string().url(),
+    mediaType: z.enum(['image', 'video']),
+  })
+  .strict();
 export type InstagramCarouselItem = z.infer<typeof InstagramCarouselItemSchema>;
 
 /**
@@ -120,14 +122,16 @@ export type InstagramCarouselItem = z.infer<typeof InstagramCarouselItemSchema>;
  * optional: when a fact is unknown the schema cannot check it, and the
  * platform's own rejection remains the backstop.
  */
-export const InstagramMediaFactsSchema = z.object({
-  mimeType: z.string().optional(),
-  sizeBytes: z.number().int().nonnegative().optional(),
-  widthPx: z.number().int().positive().optional(),
-  heightPx: z.number().int().positive().optional(),
-  durationSeconds: z.number().nonnegative().optional(),
-  fps: z.number().positive().optional(),
-});
+export const InstagramMediaFactsSchema = z
+  .object({
+    mimeType: z.string().optional(),
+    sizeBytes: z.number().int().nonnegative().optional(),
+    widthPx: z.number().int().positive().optional(),
+    heightPx: z.number().int().positive().optional(),
+    durationSeconds: z.number().nonnegative().optional(),
+    fps: z.number().positive().optional(),
+  })
+  .strict();
 export type InstagramMediaFacts = z.infer<typeof InstagramMediaFactsSchema>;
 
 /**
@@ -185,12 +189,14 @@ export function validateInstagramVideoFacts(
 // platform_options schema
 // ==========================================
 
-export const InstagramTrialParamsSchema = z.object({
-  /** Trial Reels are shown to non-followers first. */
-  graduationStrategy: z
-    .enum(['SS_PERFORMANCE', 'SS_PERFORMANCE_WITH_MANUAL_REVIEW', 'MANUAL'])
-    .optional(),
-});
+export const InstagramTrialParamsSchema = z
+  .object({
+    /** Trial Reels are shown to non-followers first. */
+    graduationStrategy: z
+      .enum(['SS_PERFORMANCE', 'SS_PERFORMANCE_WITH_MANUAL_REVIEW', 'MANUAL'])
+      .optional(),
+  })
+  .strict();
 export type InstagramTrialParams = z.infer<typeof InstagramTrialParamsSchema>;
 
 export const InstagramPlatformOptionsSchema = z

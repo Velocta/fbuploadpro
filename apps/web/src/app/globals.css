@@ -123,15 +123,27 @@
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-full: var(--radius-full);
-  --spacing-xs: var(--space-xs);
-  --spacing-sm: var(--space-sm);
-  --spacing-md: var(--space-md);
-  --spacing-lg: var(--space-lg);
-  --spacing-xl: var(--space-xl);
-  --spacing-xxl: var(--space-xxl);
-  --spacing-xxxl: var(--space-xxxl);
-  --spacing-section: var(--space-section);
-  --spacing-page: var(--space-page);
+  /* NOTE: the named spacing tokens are deliberately NOT mapped into
+     the --spacing-* namespace. In Tailwind v4, max-w-* (and w-*, h-*,
+     min-w-*) resolve named keys through --spacing-* too, so mapping
+     --spacing-md: var(--space-md) silently made max-w-md 12px (the
+     login card collapsed; caught by spec 142's mobile e2e on PR-136A).
+     Spacing utilities use the numeric scale (calc on the --spacing
+     base); the named ladder stays available as var(--space-*) for
+     hand-written CSS. */
+
+  /* Container scale (max-w-*) — its own token family, see tokens. */
+  --container-xs: var(--container-xs);
+  --container-sm: var(--container-sm);
+  --container-md: var(--container-md);
+  --container-lg: var(--container-lg);
+  --container-xl: var(--container-xl);
+  --container-2xl: var(--container-2xl);
+  --container-3xl: var(--container-3xl);
+  --container-4xl: var(--container-4xl);
+  --container-5xl: var(--container-5xl);
+  --container-6xl: var(--container-6xl);
+  --container-7xl: var(--container-7xl);
 
   /* Elevation (semantic, per-mode) */
   --shadow-card: var(--shadow-card);
