@@ -15,7 +15,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export async function handleBatchMedia(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>,
+  dbClient?: DatabaseClient | SupabaseClient,
   storageService?: IStorageService
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
@@ -118,7 +118,7 @@ export async function handleBatchMedia(
     )) as Record<string, unknown>[]) ?? [];
 
     const keysToDelete = mediaRows
-      .flatMap((item: any) => [item.storage_key, item.thumbnail_key])
+      .flatMap((item) => [item.storage_key, item.thumbnail_key])
       .filter((k): k is string => Boolean(k));
 
     await Promise.all(

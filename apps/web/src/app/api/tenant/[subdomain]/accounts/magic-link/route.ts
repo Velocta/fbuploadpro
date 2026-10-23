@@ -36,7 +36,7 @@ async function extractExpectedAccountFromBody(request: NextRequest): Promise<{
 export async function handleGenerateMagicLink(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const appUrl =

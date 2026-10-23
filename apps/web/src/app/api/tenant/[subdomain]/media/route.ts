@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  type DatabaseMediaItemRow,
   canAccessTenant,
   getSessionSecret,
   MediaListQuerySchema,
@@ -22,6 +23,15 @@ export function sanitizePostgrestSearchPattern(input: string): string {
     .replaceAll('_', '\\_');
   return `"%${escaped}%"`;
 }
+
+
+/** Media row as the handlers consume it (spec 137 §3.7): the contracts
+ * row minus workspace_id (not projected by these selects), plus the
+ * width/height columns the contracts type does not model yet. */
+type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
+  width: number | null;
+  height: number | null;
+};
 
 export async function handleListMedia(
   request: NextRequest,
@@ -84,11 +94,11 @@ export async function handleListMedia(
   } = parsedQuery.data;
 
   let total = 0;
-  let rows: any[] = [];
+  let rows: MediaItemRow[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
     const conditions: string[] = ['user_id = $1'];
-    const params: any[] = [session.userId];
+    const params: unknown[] = [session.userId];
 
     if (folderId === 'unorganized') {
       conditions.push('folder_id IS NULL');
@@ -164,11 +174,11 @@ export async function handleListMedia(
     if (cursor) {
       const queryParams = [...params, limit];
       const itemsSql = `SELECT * FROM media_items WHERE ${cursorWhereClause} ORDER BY created_at DESC, id DESC LIMIT $${queryParams.length}`;
-      rows = (await dbClient.query(itemsSql, queryParams)) as Record<string, unknown>[];
+      rows = await dbClient.query<MediaItemRow>(itemsSql, queryParams);
     } else {
       const queryParams = [...params, limit, offset];
       const itemsSql = `SELECT * FROM media_items WHERE ${cursorWhereClause} ORDER BY ${orderColumn} ${orderDirection} LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`;
-      rows = (await dbClient.query(itemsSql, queryParams)) as Record<string, unknown>[];
+      rows = await dbClient.query<MediaItemRow>(itemsSql, queryParams);
     }
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;

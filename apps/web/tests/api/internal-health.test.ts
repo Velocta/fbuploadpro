@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signSessionToken } from '@fbuploadpro/contracts';
 import {
@@ -64,7 +65,7 @@ function createMockDb(options: {
     ) => Promise.resolve(resolveCount()).then(resolve, reject);
     return builder;
   };
-  return { from: vi.fn((table: string) => makeBuilder(table)) };
+  return { from: vi.fn((table: string) => makeBuilder(table)) } as unknown as SupabaseClient;
 }
 
 const NOW = new Date('2026-10-22T12:00:00.000Z');

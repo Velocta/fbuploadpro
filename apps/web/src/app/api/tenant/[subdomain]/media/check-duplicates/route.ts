@@ -7,11 +7,21 @@ import {
   MediaItemResponseSchema,
   verifySessionToken,
   type DatabaseClient,
+  type DatabaseMediaItemRow,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-function formatMediaRow(row: any) {
+
+/** Media row as the handlers consume it (spec 137 §3.7): the contracts
+ * row minus workspace_id (not projected by these selects), plus the
+ * width/height columns the contracts type does not model yet. */
+type MediaItemRow = Omit<DatabaseMediaItemRow, 'workspace_id'> & {
+  width: number | null;
+  height: number | null;
+};
+
+function formatMediaRow(row: MediaItemRow) {
   return MediaItemResponseSchema.parse({
     id: row.id,
     userId: row.user_id,
@@ -37,12 +47,15 @@ function formatMediaRow(row: any) {
   });
 }
 
+/** The parsed media-item view formatMediaRow produces (spec 137 §3.7). */
+type MediaItemView = ReturnType<typeof formatMediaRow>;
+
 function findDuplicatesInRows(
   entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null | undefined }>,
-  rows: Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>,
+  rows: MediaItemRow[],
   globalFolderId?: string | null
-): Array<{ clientKey: string; existingItem: any }> {
-  const duplicates: Array<{ clientKey: string; existingItem: any }> = [];
+): Array<{ clientKey: string; existingItem: MediaItemView }> {
+  const duplicates: Array<{ clientKey: string; existingItem: MediaItemView }> = [];
   for (const entry of entries) {
     const targetFolder = entry.folderId !== undefined ? entry.folderId : (globalFolderId ?? null);
     const match = rows.find(
@@ -66,7 +79,7 @@ async function queryLegacyDuplicates(
   userId: string,
   folderId: string | null | undefined,
   entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null | undefined }>
-): Promise<Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>> {
+): Promise<MediaItemRow[]> {
   const fileSizes = entries.map((e) => e.fileSize);
   const names = entries.map((e) => e.name.toLowerCase());
   const folderIds = Array.from(
@@ -96,20 +109,20 @@ async function queryLegacyDuplicates(
       AND LOWER(name) = ANY($3::text[])
       AND file_size = ANY($4::bigint[])
   `;
-  return (await dbClient.query(query, [
+  return dbClient.query<MediaItemRow>(query, [
     userId,
     nonNullFolders,
     names,
     fileSizes,
-  ])) as Array<Record<string, unknown> & { name: string; file_size: number | string; folder_id?: string | null }>;
+  ]);
 }
 
 async function querySupabaseDuplicates(
-  supabase: SupabaseClient<any>,
+  supabase: SupabaseClient,
   userId: string,
   folderId: string | null | undefined,
   entries: Array<{ clientKey: string; name: string; fileSize: number; folderId?: string | null | undefined }>
-): Promise<{ rows?: any[]; error?: string }> {
+): Promise<{ rows?: MediaItemRow[]; error?: string }> {
   const folderIds = Array.from(
     new Set(
       entries.map((e) => (e.folderId !== undefined ? e.folderId : (folderId ?? null)))
@@ -140,13 +153,13 @@ async function querySupabaseDuplicates(
   if (error) {
     return { error: error.message };
   }
-  return { rows: rows || [] };
+  return { rows: (rows || []) as MediaItemRow[] };
 }
 
 export async function handleCheckDuplicates(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 

@@ -14,7 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export async function handleListFolders(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -151,7 +151,7 @@ export async function handleListFolders(
 export async function handleCreateFolder(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -231,8 +231,13 @@ export async function handleCreateFolder(
       });
 
       return NextResponse.json(responsePayload, { status: 201 });
-    } catch (err: any) {
-      if (err?.code === '23505') {
+    } catch (err: unknown) {
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'code' in err &&
+        err.code === '23505'
+      ) {
         return NextResponse.json(
           {
             error: 'FOLDER_NAME_ALREADY_EXISTS',

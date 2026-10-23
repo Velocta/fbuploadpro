@@ -19,7 +19,7 @@ import {
 } from '@/lib/insights/facebook-insights-client';
 
 export interface HandleGetInsightsOptions {
-  dbClient?: DatabaseClient | SupabaseClient<any>;
+  dbClient?: DatabaseClient | SupabaseClient;
   fetchImpl?: typeof fetch;
 }
 
@@ -108,7 +108,7 @@ export async function handleGetInsights(
       status: found.status as string,
     };
   } else {
-    const supabase = (client && 'from' in client ? client : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (client && 'from' in client ? client : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -193,7 +193,7 @@ export async function handleGetInsights(
     }
 
     if (overviewResult.rawError) {
-      const graphError: any = new Error(overviewResult.rawError);
+      const graphError = new Error(overviewResult.rawError) as Error & { code?: number };
       if (overviewResult.healthStatus === 'rate_limited') {
         graphError.code = 80001;
       }
@@ -239,13 +239,17 @@ export async function handleGetInsights(
         'Cache-Control': 'private, no-cache, no-store, must-revalidate',
       },
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const errCode =
+      err !== null && typeof err === 'object' && 'code' in err
+        ? err.code
+        : undefined;
     const isRateLimited =
-      err?.code === 4 ||
-      err?.code === 17 ||
-      err?.code === 32 ||
-      err?.code === 613 ||
-      err?.code === 80001;
+      errCode === 4 ||
+      errCode === 17 ||
+      errCode === 32 ||
+      errCode === 613 ||
+      errCode === 80001;
 
     return NextResponse.json(
       {

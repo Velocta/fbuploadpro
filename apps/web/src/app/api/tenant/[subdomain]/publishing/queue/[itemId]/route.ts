@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  type DatabaseMediaItemRow,
+  type DatabaseQueueItemRow,
   canAccessTenant,
   getSessionSecret,
   QueueItemSchema,
@@ -32,11 +34,17 @@ function resolveScheduledTime(
   return new Date().toISOString();
 }
 
+/** Media columns the item handlers read (spec 137 §3.7). */
+type QueueMediaRecord = Pick<
+  DatabaseMediaItemRow,
+  'name' | 'media_type' | 'url' | 'thumbnail_url' | 'aspect_ratio' | 'duration_seconds'
+>;
+
 export async function handleUpdateQueueItem(
   request: NextRequest,
   subdomain: string,
   itemId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -142,14 +150,14 @@ export async function handleUpdateQueueItem(
     const updated = updateRows[0];
 
     // 6. Fetch joined media details if present
-    let mediaRecord: any = null;
+    let mediaRecord: QueueMediaRecord | null = null;
     if (updated.media_id) {
-      const mediaRows = (await dbClient.query(
+      const mediaRows = await dbClient.query<QueueMediaRecord>(
         `SELECT id, name, media_type, url, thumbnail_url, aspect_ratio, duration_seconds
          FROM media_items
          WHERE id = $1 AND user_id = $2`,
         [updated.media_id, session.userId]
-      )) as Record<string, unknown>[];
+      );
       mediaRecord = mediaRows?.[0] ?? null;
     }
 
@@ -238,7 +246,10 @@ export async function handleUpdateQueueItem(
   }
   const newStatus = parsed.data.status ?? existing.status;
 
-  const updatePayload: Record<string, any> = {
+  const updatePayload: Partial<DatabaseQueueItemRow> & {
+    post_format?: PostFormat | null;
+    link_url?: string | null;
+  } = {
     caption: newCaption,
     first_comment: newFirstComment,
     scheduled_time: newScheduledTime,
@@ -262,7 +273,7 @@ export async function handleUpdateQueueItem(
     return NextResponse.json({ error: 'Failed to update queue item' }, { status: 500 });
   }
 
-  let mediaRecord: any = null;
+  let mediaRecord: QueueMediaRecord | null = null;
   if (updated.media_id) {
     const { data: mediaData } = await supabase
       .from('media_items')
@@ -315,7 +326,7 @@ export async function handleDeleteQueueItem(
   request: NextRequest,
   subdomain: string,
   itemId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 

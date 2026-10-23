@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import nextPlugin from "@next/eslint-plugin-next";
 
 export default [
   js.configs.recommended,
@@ -74,6 +75,54 @@ export default [
     files: ["**/tests/**", "**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-unused-vars": "off"
+    }
+  },
+  {
+    // Raw <img> ban (spec 137 §3.5 / PR-A4): every image in apps/web
+    // goes through next/image so it is optimised and layout-stable.
+    // The rule is an error across apps/web/src; the files listed in
+    // the next block are the pre-existing surface-owned occurrences,
+    // frozen per file in apps/web/img-baseline.txt (guardrail check
+    // 15, decrease-only) until each surface's rebuild converts them
+    // (spec 137 §4.1.4). New raw <img> anywhere else fails lint.
+    files: ["apps/web/src/**/*.{ts,tsx}"],
+    plugins: {
+      "@next/next": nextPlugin
+    },
+    rules: {
+      "@next/next/no-img-element": "error"
+    }
+  },
+  {
+    // Per-file freeze for the ban above (spec 137 §3.5): these files
+    // keep their existing raw <img> elements — and may only lose them
+    // (guardrail check 15 fails on any increase or unrecorded
+    // decrease) — until their owning surface rebuild converts them to
+    // next/image. Reasons per file are recorded in
+    // apps/web/img-baseline.txt.
+    files: [
+      "apps/web/src/components/accounts/account-card.tsx",
+      "apps/web/src/components/connect/destination-picker.tsx",
+      "apps/web/src/components/downloader/media-downloader-saved-item-row.tsx",
+      "apps/web/src/components/media/media-asset-card.tsx",
+      "apps/web/src/components/media/media-import-progress-row.tsx",
+      "apps/web/src/components/media/media-import-staging.tsx",
+      "apps/web/src/components/media/media-preview-modal.tsx",
+      "apps/web/src/components/media/media-table-row.tsx",
+      "apps/web/src/components/pages/add-page-modal.tsx",
+      "apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx",
+      "apps/web/src/components/pages/dedicated/bulk/bulk-step-review.tsx",
+      "apps/web/src/components/pages/dedicated/composer/composer-media-area.tsx",
+      "apps/web/src/components/pages/dedicated/composer/composer-preview.tsx",
+      "apps/web/src/components/pages/dedicated/page-header.tsx",
+      "apps/web/src/components/pages/dedicated/queue/queue-row.tsx",
+      "apps/web/src/components/pages/page-card.tsx"
+    ],
+    plugins: {
+      "@next/next": nextPlugin
+    },
+    rules: {
+      "@next/next/no-img-element": "off"
     }
   },
 ];
