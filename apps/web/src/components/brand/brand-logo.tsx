@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { PALETTE } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
 export interface BrandMarkProps extends React.SVGProps<SVGSVGElement> {
@@ -9,9 +10,11 @@ export interface BrandMarkProps extends React.SVGProps<SVGSVGElement> {
 }
 
 /**
- * Official FBUploadPro Brand Mark (spec 130 PR-130-1: rebuilt on
- * design tokens — fills are token-backed utilities, never literals).
- * Implements the 4-path geometric anatomy:
+ * Official FBUploadPro Brand Mark (spec 130 PR-130-1: layout and
+ * wordmark rebuilt on token-backed utilities; the four path fills
+ * keep referencing the generated token values from `lib/theme`,
+ * the token system's generated output — no colour literals remain
+ * in this file). Implements the 4-path geometric anatomy:
  * 1. Primary gold upload arrow and "F" crown/spine (brand gold token)
  * 2. White specular edge highlight (neutral white token, 0.35 opacity)
  * 3. Peru accent middle crossbar and active stream wing (brand peru token)
@@ -37,21 +40,21 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
       {/* Primary gold: unified ascending upload arrow + "F" crown and spine */}
       <path
         d="M24 11L12 23L17 28L20 25V51L28 45V23H45L53 15H28L24 11Z"
-        className="fill-brand-gold"
+        fill={PALETTE.primary}
       />
 
       {/* Specular edge highlight: neutral white at 0.35 opacity */}
       <path
         d="M24 11L12 23L13.2 24.2L24 13.4L28 17.4H50.6L53 15H28L24 11Z"
-        className="fill-neutral-white"
+        fill={PALETTE.text}
         fillOpacity={0.35}
       />
 
       {/* Peru accent: middle "F" crossbar and active stream wing */}
-      <path d="M32 30H48L40 38H32V30Z" className="fill-brand-peru" />
+      <path d="M32 30H48L40 38H32V30Z" fill={PALETTE.accent1} />
 
       {/* Bronze accent: recurring queue slot anchor */}
-      <path d="M32 43H41L35 49H32V43Z" className="fill-brand-bronze" />
+      <path d="M32 43H41L35 49H32V43Z" fill={PALETTE.accent2} />
     </svg>
   );
 };
