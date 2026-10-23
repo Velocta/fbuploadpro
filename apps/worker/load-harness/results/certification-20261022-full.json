@@ -1,0 +1,2311 @@
+{
+  "spec": "122 load-proof harness (spec 119 §5.2 / D11)",
+  "label": "full",
+  "generatedAt": "2026-10-22T18:33:21.367Z",
+  "scale": 1,
+  "seedPlan": [
+    {
+      "platform": "facebook",
+      "items": 300000,
+      "destinations": 3000
+    },
+    {
+      "platform": "instagram",
+      "items": 100000,
+      "destinations": 5000
+    },
+    {
+      "platform": "threads",
+      "items": 100000,
+      "destinations": 1000
+    },
+    {
+      "platform": "youtube",
+      "items": 200000,
+      "destinations": 2000
+    },
+    {
+      "platform": "x",
+      "items": 100000,
+      "destinations": 2000
+    },
+    {
+      "platform": "tiktok",
+      "items": 200000,
+      "destinations": 2000
+    }
+  ],
+  "seeded": 1000000,
+  "seedSeconds": 39.29,
+  "drainSeconds": 6425.6,
+  "ticks": 813,
+  "totalClaimed": 1020180,
+  "enqueuedFast": 612130,
+  "enqueuedHeavy": 408050,
+  "deliveredBatches": 142825,
+  "messageRetries": 0,
+  "dlqArrivals": 0,
+  "finalCensus": [
+    {
+      "status": "failed",
+      "n": 10051
+    },
+    {
+      "status": "published",
+      "n": 989949
+    }
+  ],
+  "perPlatform": [
+    {
+      "platform": "facebook",
+      "status": "failed",
+      "n": 2921
+    },
+    {
+      "platform": "facebook",
+      "status": "published",
+      "n": 297079
+    },
+    {
+      "platform": "instagram",
+      "status": "failed",
+      "n": 1022
+    },
+    {
+      "platform": "instagram",
+      "status": "published",
+      "n": 98978
+    },
+    {
+      "platform": "threads",
+      "status": "failed",
+      "n": 1009
+    },
+    {
+      "platform": "threads",
+      "status": "published",
+      "n": 98991
+    },
+    {
+      "platform": "tiktok",
+      "status": "failed",
+      "n": 1978
+    },
+    {
+      "platform": "tiktok",
+      "status": "published",
+      "n": 198022
+    },
+    {
+      "platform": "x",
+      "status": "failed",
+      "n": 1025
+    },
+    {
+      "platform": "x",
+      "status": "published",
+      "n": 98975
+    },
+    {
+      "platform": "youtube",
+      "status": "failed",
+      "n": 2096
+    },
+    {
+      "platform": "youtube",
+      "status": "published",
+      "n": 197904
+    }
+  ],
+  "publishLogsByResult": [
+    {
+      "result": "failure",
+      "n": 10051
+    },
+    {
+      "result": "retry",
+      "n": 20180
+    },
+    {
+      "result": "success",
+      "n": 989949
+    }
+  ],
+  "settledPublished": 989949,
+  "settledFailed": 10051,
+  "retriedThenPublished": 20180,
+  "mockLedger": {
+    "itemsSeen": 1000000,
+    "totalAttempts": 1020180,
+    "totalSuccesses": 989949
+  },
+  "lost": 0,
+  "accountedTerminal": 1000000,
+  "duplicates": 0,
+  "duplicateItems": [],
+  "blendedItemsPerSecond": 155.63,
+  "itemsPerDayAtRunConcurrency": 13446209,
+  "concurrencyUsed": {
+    "fast": 20,
+    "heavy": 10
+  },
+  "wranglerConcurrency": {
+    "fast": 20,
+    "heavy": 10
+  },
+  "itemsPerDayAtWranglerConcurrency": 13446209,
+  "claimTick": {
+    "all": {
+      "n": 813,
+      "p50": 205,
+      "p95": 6736,
+      "max": 8335
+    },
+    "bands": [
+      {
+        "band": "~100% (1M)",
+        "n": 21,
+        "p50": 6773,
+        "p95": 7508,
+        "max": 7536
+      },
+      {
+        "band": "~75%",
+        "n": 42,
+        "p50": 6856,
+        "p95": 8090,
+        "max": 8335
+      },
+      {
+        "band": "~50%",
+        "n": 51,
+        "p50": 4784,
+        "p95": 6335,
+        "max": 7011
+      },
+      {
+        "band": "~25%",
+        "n": 80,
+        "p50": 2696,
+        "p95": 4133,
+        "max": 4709
+      },
+      {
+        "band": "~10%",
+        "n": 619,
+        "p50": 84,
+        "p95": 1433,
+        "max": 2184
+      }
+    ],
+    "claimerConstants": {
+      "CLAIM_ROUND_LIMIT": 500,
+      "CLAIM_MAX_PER_DESTINATION": 3,
+      "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK": 1
+    }
+  },
+  "mockLatencyMs": {
+    "fast": {
+      "facebook": 25,
+      "instagram": 35,
+      "threads": 30,
+      "x": 20,
+      "tiktok": 30,
+      "youtube": 40
+    },
+    "heavy": {
+      "facebook": 120,
+      "instagram": 150,
+      "threads": 120,
+      "x": 140,
+      "tiktok": 150,
+      "youtube": 200
+    }
+  },
+  "throughputSnapshots": [
+    {
+      "elapsedSeconds": 21,
+      "settled": 7977,
+      "remaining": 992023
+    },
+    {
+      "elapsedSeconds": 43,
+      "settled": 17242,
+      "remaining": 982758
+    },
+    {
+      "elapsedSeconds": 60,
+      "settled": 24330,
+      "remaining": 975670
+    },
+    {
+      "elapsedSeconds": 77,
+      "settled": 30203,
+      "remaining": 969797
+    },
+    {
+      "elapsedSeconds": 92,
+      "settled": 31644,
+      "remaining": 968356
+    },
+    {
+      "elapsedSeconds": 107,
+      "settled": 32698,
+      "remaining": 967302
+    },
+    {
+      "elapsedSeconds": 123,
+      "settled": 35837,
+      "remaining": 964163
+    },
+    {
+      "elapsedSeconds": 139,
+      "settled": 37549,
+      "remaining": 962451
+    },
+    {
+      "elapsedSeconds": 154,
+      "settled": 38609,
+      "remaining": 961391
+    },
+    {
+      "elapsedSeconds": 170,
+      "settled": 41887,
+      "remaining": 958113
+    },
+    {
+      "elapsedSeconds": 185,
+      "settled": 43431,
+      "remaining": 956569
+    },
+    {
+      "elapsedSeconds": 200,
+      "settled": 44476,
+      "remaining": 955524
+    },
+    {
+      "elapsedSeconds": 217,
+      "settled": 47932,
+      "remaining": 952068
+    },
+    {
+      "elapsedSeconds": 232,
+      "settled": 49336,
+      "remaining": 950664
+    },
+    {
+      "elapsedSeconds": 247,
+      "settled": 50367,
+      "remaining": 949633
+    },
+    {
+      "elapsedSeconds": 264,
+      "settled": 53874,
+      "remaining": 946126
+    },
+    {
+      "elapsedSeconds": 279,
+      "settled": 55260,
+      "remaining": 944740
+    },
+    {
+      "elapsedSeconds": 295,
+      "settled": 56313,
+      "remaining": 943687
+    },
+    {
+      "elapsedSeconds": 310,
+      "settled": 59527,
+      "remaining": 940473
+    },
+    {
+      "elapsedSeconds": 326,
+      "settled": 61122,
+      "remaining": 938878
+    },
+    {
+      "elapsedSeconds": 341,
+      "settled": 62149,
+      "remaining": 937851
+    },
+    {
+      "elapsedSeconds": 357,
+      "settled": 65735,
+      "remaining": 934265
+    },
+    {
+      "elapsedSeconds": 373,
+      "settled": 67020,
+      "remaining": 932980
+    },
+    {
+      "elapsedSeconds": 388,
+      "settled": 68077,
+      "remaining": 931923
+    },
+    {
+      "elapsedSeconds": 403,
+      "settled": 71007,
+      "remaining": 928993
+    },
+    {
+      "elapsedSeconds": 418,
+      "settled": 72827,
+      "remaining": 927173
+    },
+    {
+      "elapsedSeconds": 433,
+      "settled": 73858,
+      "remaining": 926142
+    },
+    {
+      "elapsedSeconds": 450,
+      "settled": 77194,
+      "remaining": 922806
+    },
+    {
+      "elapsedSeconds": 465,
+      "settled": 78707,
+      "remaining": 921293
+    },
+    {
+      "elapsedSeconds": 480,
+      "settled": 79743,
+      "remaining": 920257
+    },
+    {
+      "elapsedSeconds": 497,
+      "settled": 83063,
+      "remaining": 916937
+    },
+    {
+      "elapsedSeconds": 512,
+      "settled": 84569,
+      "remaining": 915431
+    },
+    {
+      "elapsedSeconds": 527,
+      "settled": 85593,
+      "remaining": 914407
+    },
+    {
+      "elapsedSeconds": 544,
+      "settled": 88980,
+      "remaining": 911020
+    },
+    {
+      "elapsedSeconds": 560,
+      "settled": 90489,
+      "remaining": 909511
+    },
+    {
+      "elapsedSeconds": 575,
+      "settled": 91532,
+      "remaining": 908468
+    },
+    {
+      "elapsedSeconds": 591,
+      "settled": 94632,
+      "remaining": 905368
+    },
+    {
+      "elapsedSeconds": 606,
+      "settled": 96346,
+      "remaining": 903654
+    },
+    {
+      "elapsedSeconds": 621,
+      "settled": 97382,
+      "remaining": 902618
+    },
+    {
+      "elapsedSeconds": 638,
+      "settled": 100441,
+      "remaining": 899559
+    },
+    {
+      "elapsedSeconds": 653,
+      "settled": 102237,
+      "remaining": 897763
+    },
+    {
+      "elapsedSeconds": 669,
+      "settled": 103255,
+      "remaining": 896745
+    },
+    {
+      "elapsedSeconds": 685,
+      "settled": 106317,
+      "remaining": 893683
+    },
+    {
+      "elapsedSeconds": 700,
+      "settled": 108122,
+      "remaining": 891878
+    },
+    {
+      "elapsedSeconds": 715,
+      "settled": 109146,
+      "remaining": 890854
+    },
+    {
+      "elapsedSeconds": 734,
+      "settled": 112024,
+      "remaining": 887976
+    },
+    {
+      "elapsedSeconds": 749,
+      "settled": 114027,
+      "remaining": 885973
+    },
+    {
+      "elapsedSeconds": 764,
+      "settled": 115059,
+      "remaining": 884941
+    },
+    {
+      "elapsedSeconds": 780,
+      "settled": 118321,
+      "remaining": 881679
+    },
+    {
+      "elapsedSeconds": 795,
+      "settled": 119887,
+      "remaining": 880113
+    },
+    {
+      "elapsedSeconds": 810,
+      "settled": 120920,
+      "remaining": 879080
+    },
+    {
+      "elapsedSeconds": 827,
+      "settled": 124233,
+      "remaining": 875767
+    },
+    {
+      "elapsedSeconds": 843,
+      "settled": 125812,
+      "remaining": 874188
+    },
+    {
+      "elapsedSeconds": 858,
+      "settled": 126846,
+      "remaining": 873154
+    },
+    {
+      "elapsedSeconds": 875,
+      "settled": 130058,
+      "remaining": 869942
+    },
+    {
+      "elapsedSeconds": 890,
+      "settled": 131687,
+      "remaining": 868313
+    },
+    {
+      "elapsedSeconds": 905,
+      "settled": 132734,
+      "remaining": 867266
+    },
+    {
+      "elapsedSeconds": 923,
+      "settled": 136198,
+      "remaining": 863802
+    },
+    {
+      "elapsedSeconds": 938,
+      "settled": 137537,
+      "remaining": 862463
+    },
+    {
+      "elapsedSeconds": 953,
+      "settled": 138595,
+      "remaining": 861405
+    },
+    {
+      "elapsedSeconds": 970,
+      "settled": 141771,
+      "remaining": 858229
+    },
+    {
+      "elapsedSeconds": 986,
+      "settled": 143462,
+      "remaining": 856538
+    },
+    {
+      "elapsedSeconds": 1001,
+      "settled": 144501,
+      "remaining": 855499
+    },
+    {
+      "elapsedSeconds": 1017,
+      "settled": 147715,
+      "remaining": 852285
+    },
+    {
+      "elapsedSeconds": 1032,
+      "settled": 149316,
+      "remaining": 850684
+    },
+    {
+      "elapsedSeconds": 1047,
+      "settled": 150375,
+      "remaining": 849625
+    },
+    {
+      "elapsedSeconds": 1063,
+      "settled": 153603,
+      "remaining": 846397
+    },
+    {
+      "elapsedSeconds": 1078,
+      "settled": 155150,
+      "remaining": 844850
+    },
+    {
+      "elapsedSeconds": 1093,
+      "settled": 156175,
+      "remaining": 843825
+    },
+    {
+      "elapsedSeconds": 1110,
+      "settled": 159582,
+      "remaining": 840418
+    },
+    {
+      "elapsedSeconds": 1125,
+      "settled": 161061,
+      "remaining": 838939
+    },
+    {
+      "elapsedSeconds": 1140,
+      "settled": 162087,
+      "remaining": 837913
+    },
+    {
+      "elapsedSeconds": 1156,
+      "settled": 165080,
+      "remaining": 834920
+    },
+    {
+      "elapsedSeconds": 1171,
+      "settled": 166866,
+      "remaining": 833134
+    },
+    {
+      "elapsedSeconds": 1186,
+      "settled": 167893,
+      "remaining": 832107
+    },
+    {
+      "elapsedSeconds": 1203,
+      "settled": 171166,
+      "remaining": 828834
+    },
+    {
+      "elapsedSeconds": 1218,
+      "settled": 172792,
+      "remaining": 827208
+    },
+    {
+      "elapsedSeconds": 1233,
+      "settled": 173831,
+      "remaining": 826169
+    },
+    {
+      "elapsedSeconds": 1251,
+      "settled": 176231,
+      "remaining": 823769
+    },
+    {
+      "elapsedSeconds": 1266,
+      "settled": 178580,
+      "remaining": 821420
+    },
+    {
+      "elapsedSeconds": 1282,
+      "settled": 179610,
+      "remaining": 820390
+    },
+    {
+      "elapsedSeconds": 1300,
+      "settled": 183239,
+      "remaining": 816761
+    },
+    {
+      "elapsedSeconds": 1315,
+      "settled": 184581,
+      "remaining": 815419
+    },
+    {
+      "elapsedSeconds": 1330,
+      "settled": 185615,
+      "remaining": 814385
+    },
+    {
+      "elapsedSeconds": 1346,
+      "settled": 188810,
+      "remaining": 811190
+    },
+    {
+      "elapsedSeconds": 1361,
+      "settled": 190427,
+      "remaining": 809573
+    },
+    {
+      "elapsedSeconds": 1376,
+      "settled": 191475,
+      "remaining": 808525
+    },
+    {
+      "elapsedSeconds": 1394,
+      "settled": 194582,
+      "remaining": 805418
+    },
+    {
+      "elapsedSeconds": 1409,
+      "settled": 196315,
+      "remaining": 803685
+    },
+    {
+      "elapsedSeconds": 1424,
+      "settled": 197331,
+      "remaining": 802669
+    },
+    {
+      "elapsedSeconds": 1440,
+      "settled": 200608,
+      "remaining": 799392
+    },
+    {
+      "elapsedSeconds": 1456,
+      "settled": 202184,
+      "remaining": 797816
+    },
+    {
+      "elapsedSeconds": 1471,
+      "settled": 203247,
+      "remaining": 796753
+    },
+    {
+      "elapsedSeconds": 1487,
+      "settled": 206273,
+      "remaining": 793727
+    },
+    {
+      "elapsedSeconds": 1502,
+      "settled": 208072,
+      "remaining": 791928
+    },
+    {
+      "elapsedSeconds": 1517,
+      "settled": 209105,
+      "remaining": 790895
+    },
+    {
+      "elapsedSeconds": 1534,
+      "settled": 211938,
+      "remaining": 788062
+    },
+    {
+      "elapsedSeconds": 1549,
+      "settled": 213920,
+      "remaining": 786080
+    },
+    {
+      "elapsedSeconds": 1565,
+      "settled": 214957,
+      "remaining": 785043
+    },
+    {
+      "elapsedSeconds": 1581,
+      "settled": 218171,
+      "remaining": 781829
+    },
+    {
+      "elapsedSeconds": 1596,
+      "settled": 219812,
+      "remaining": 780188
+    },
+    {
+      "elapsedSeconds": 1611,
+      "settled": 220839,
+      "remaining": 779161
+    },
+    {
+      "elapsedSeconds": 1629,
+      "settled": 224113,
+      "remaining": 775887
+    },
+    {
+      "elapsedSeconds": 1644,
+      "settled": 225734,
+      "remaining": 774266
+    },
+    {
+      "elapsedSeconds": 1659,
+      "settled": 226773,
+      "remaining": 773227
+    },
+    {
+      "elapsedSeconds": 1675,
+      "settled": 230244,
+      "remaining": 769756
+    },
+    {
+      "elapsedSeconds": 1691,
+      "settled": 231634,
+      "remaining": 768366
+    },
+    {
+      "elapsedSeconds": 1706,
+      "settled": 232692,
+      "remaining": 767308
+    },
+    {
+      "elapsedSeconds": 1721,
+      "settled": 235897,
+      "remaining": 764103
+    },
+    {
+      "elapsedSeconds": 1737,
+      "settled": 237473,
+      "remaining": 762527
+    },
+    {
+      "elapsedSeconds": 1752,
+      "settled": 238509,
+      "remaining": 761491
+    },
+    {
+      "elapsedSeconds": 1769,
+      "settled": 241892,
+      "remaining": 758108
+    },
+    {
+      "elapsedSeconds": 1784,
+      "settled": 243379,
+      "remaining": 756621
+    },
+    {
+      "elapsedSeconds": 1799,
+      "settled": 244420,
+      "remaining": 755580
+    },
+    {
+      "elapsedSeconds": 1816,
+      "settled": 247616,
+      "remaining": 752384
+    },
+    {
+      "elapsedSeconds": 1831,
+      "settled": 249232,
+      "remaining": 750768
+    },
+    {
+      "elapsedSeconds": 1846,
+      "settled": 250265,
+      "remaining": 749735
+    },
+    {
+      "elapsedSeconds": 1862,
+      "settled": 253392,
+      "remaining": 746608
+    },
+    {
+      "elapsedSeconds": 1877,
+      "settled": 255095,
+      "remaining": 744905
+    },
+    {
+      "elapsedSeconds": 1893,
+      "settled": 256138,
+      "remaining": 743862
+    },
+    {
+      "elapsedSeconds": 1908,
+      "settled": 259082,
+      "remaining": 740918
+    },
+    {
+      "elapsedSeconds": 1923,
+      "settled": 260963,
+      "remaining": 739037
+    },
+    {
+      "elapsedSeconds": 1939,
+      "settled": 261997,
+      "remaining": 738003
+    },
+    {
+      "elapsedSeconds": 1955,
+      "settled": 265198,
+      "remaining": 734802
+    },
+    {
+      "elapsedSeconds": 1971,
+      "settled": 266860,
+      "remaining": 733140
+    },
+    {
+      "elapsedSeconds": 1986,
+      "settled": 267864,
+      "remaining": 732136
+    },
+    {
+      "elapsedSeconds": 2003,
+      "settled": 270927,
+      "remaining": 729073
+    },
+    {
+      "elapsedSeconds": 2018,
+      "settled": 272745,
+      "remaining": 727255
+    },
+    {
+      "elapsedSeconds": 2033,
+      "settled": 273787,
+      "remaining": 726213
+    },
+    {
+      "elapsedSeconds": 2050,
+      "settled": 276407,
+      "remaining": 723593
+    },
+    {
+      "elapsedSeconds": 2065,
+      "settled": 278551,
+      "remaining": 721449
+    },
+    {
+      "elapsedSeconds": 2080,
+      "settled": 279590,
+      "remaining": 720410
+    },
+    {
+      "elapsedSeconds": 2097,
+      "settled": 282550,
+      "remaining": 717450
+    },
+    {
+      "elapsedSeconds": 2112,
+      "settled": 284455,
+      "remaining": 715545
+    },
+    {
+      "elapsedSeconds": 2127,
+      "settled": 285478,
+      "remaining": 714522
+    },
+    {
+      "elapsedSeconds": 2145,
+      "settled": 288073,
+      "remaining": 711927
+    },
+    {
+      "elapsedSeconds": 2160,
+      "settled": 290314,
+      "remaining": 709686
+    },
+    {
+      "elapsedSeconds": 2176,
+      "settled": 291345,
+      "remaining": 708655
+    },
+    {
+      "elapsedSeconds": 2192,
+      "settled": 294386,
+      "remaining": 705614
+    },
+    {
+      "elapsedSeconds": 2207,
+      "settled": 296202,
+      "remaining": 703798
+    },
+    {
+      "elapsedSeconds": 2222,
+      "settled": 297235,
+      "remaining": 702765
+    },
+    {
+      "elapsedSeconds": 2238,
+      "settled": 300052,
+      "remaining": 699948
+    },
+    {
+      "elapsedSeconds": 2253,
+      "settled": 302048,
+      "remaining": 697952
+    },
+    {
+      "elapsedSeconds": 2268,
+      "settled": 303078,
+      "remaining": 696922
+    },
+    {
+      "elapsedSeconds": 2284,
+      "settled": 306004,
+      "remaining": 693996
+    },
+    {
+      "elapsedSeconds": 2299,
+      "settled": 307880,
+      "remaining": 692120
+    },
+    {
+      "elapsedSeconds": 2314,
+      "settled": 308921,
+      "remaining": 691079
+    },
+    {
+      "elapsedSeconds": 2331,
+      "settled": 311864,
+      "remaining": 688136
+    },
+    {
+      "elapsedSeconds": 2346,
+      "settled": 313774,
+      "remaining": 686226
+    },
+    {
+      "elapsedSeconds": 2361,
+      "settled": 314807,
+      "remaining": 685193
+    },
+    {
+      "elapsedSeconds": 2378,
+      "settled": 317725,
+      "remaining": 682275
+    },
+    {
+      "elapsedSeconds": 2393,
+      "settled": 319667,
+      "remaining": 680333
+    },
+    {
+      "elapsedSeconds": 2408,
+      "settled": 320703,
+      "remaining": 679297
+    },
+    {
+      "elapsedSeconds": 2423,
+      "settled": 323533,
+      "remaining": 676467
+    },
+    {
+      "elapsedSeconds": 2439,
+      "settled": 325511,
+      "remaining": 674489
+    },
+    {
+      "elapsedSeconds": 2454,
+      "settled": 326533,
+      "remaining": 673467
+    },
+    {
+      "elapsedSeconds": 2473,
+      "settled": 329117,
+      "remaining": 670883
+    },
+    {
+      "elapsedSeconds": 2488,
+      "settled": 331394,
+      "remaining": 668606
+    },
+    {
+      "elapsedSeconds": 2503,
+      "settled": 332409,
+      "remaining": 667591
+    },
+    {
+      "elapsedSeconds": 2519,
+      "settled": 335413,
+      "remaining": 664587
+    },
+    {
+      "elapsedSeconds": 2534,
+      "settled": 337271,
+      "remaining": 662729
+    },
+    {
+      "elapsedSeconds": 2550,
+      "settled": 338310,
+      "remaining": 661690
+    },
+    {
+      "elapsedSeconds": 2565,
+      "settled": 341206,
+      "remaining": 658794
+    },
+    {
+      "elapsedSeconds": 2580,
+      "settled": 343125,
+      "remaining": 656875
+    },
+    {
+      "elapsedSeconds": 2595,
+      "settled": 344144,
+      "remaining": 655856
+    },
+    {
+      "elapsedSeconds": 2611,
+      "settled": 346949,
+      "remaining": 653051
+    },
+    {
+      "elapsedSeconds": 2627,
+      "settled": 348954,
+      "remaining": 651046
+    },
+    {
+      "elapsedSeconds": 2642,
+      "settled": 349974,
+      "remaining": 650026
+    },
+    {
+      "elapsedSeconds": 2659,
+      "settled": 352624,
+      "remaining": 647376
+    },
+    {
+      "elapsedSeconds": 2674,
+      "settled": 354851,
+      "remaining": 645149
+    },
+    {
+      "elapsedSeconds": 2690,
+      "settled": 355877,
+      "remaining": 644123
+    },
+    {
+      "elapsedSeconds": 2706,
+      "settled": 358388,
+      "remaining": 641612
+    },
+    {
+      "elapsedSeconds": 2722,
+      "settled": 360684,
+      "remaining": 639316
+    },
+    {
+      "elapsedSeconds": 2737,
+      "settled": 361703,
+      "remaining": 638297
+    },
+    {
+      "elapsedSeconds": 2754,
+      "settled": 364597,
+      "remaining": 635403
+    },
+    {
+      "elapsedSeconds": 2769,
+      "settled": 366625,
+      "remaining": 633375
+    },
+    {
+      "elapsedSeconds": 2784,
+      "settled": 367646,
+      "remaining": 632354
+    },
+    {
+      "elapsedSeconds": 2801,
+      "settled": 370545,
+      "remaining": 629455
+    },
+    {
+      "elapsedSeconds": 2816,
+      "settled": 372508,
+      "remaining": 627492
+    },
+    {
+      "elapsedSeconds": 2831,
+      "settled": 373533,
+      "remaining": 626467
+    },
+    {
+      "elapsedSeconds": 2848,
+      "settled": 376422,
+      "remaining": 623578
+    },
+    {
+      "elapsedSeconds": 2863,
+      "settled": 378376,
+      "remaining": 621624
+    },
+    {
+      "elapsedSeconds": 2878,
+      "settled": 379394,
+      "remaining": 620606
+    },
+    {
+      "elapsedSeconds": 2895,
+      "settled": 382281,
+      "remaining": 617719
+    },
+    {
+      "elapsedSeconds": 2911,
+      "settled": 384316,
+      "remaining": 615684
+    },
+    {
+      "elapsedSeconds": 2926,
+      "settled": 385325,
+      "remaining": 614675
+    },
+    {
+      "elapsedSeconds": 2942,
+      "settled": 387880,
+      "remaining": 612120
+    },
+    {
+      "elapsedSeconds": 2957,
+      "settled": 390141,
+      "remaining": 609859
+    },
+    {
+      "elapsedSeconds": 2972,
+      "settled": 391181,
+      "remaining": 608819
+    },
+    {
+      "elapsedSeconds": 2989,
+      "settled": 394022,
+      "remaining": 605978
+    },
+    {
+      "elapsedSeconds": 3004,
+      "settled": 396028,
+      "remaining": 603972
+    },
+    {
+      "elapsedSeconds": 3019,
+      "settled": 397039,
+      "remaining": 602961
+    },
+    {
+      "elapsedSeconds": 3036,
+      "settled": 399688,
+      "remaining": 600312
+    },
+    {
+      "elapsedSeconds": 3051,
+      "settled": 401854,
+      "remaining": 598146
+    },
+    {
+      "elapsedSeconds": 3066,
+      "settled": 402840,
+      "remaining": 597160
+    },
+    {
+      "elapsedSeconds": 3084,
+      "settled": 405610,
+      "remaining": 594390
+    },
+    {
+      "elapsedSeconds": 3099,
+      "settled": 407725,
+      "remaining": 592275
+    },
+    {
+      "elapsedSeconds": 3114,
+      "settled": 408744,
+      "remaining": 591256
+    },
+    {
+      "elapsedSeconds": 3133,
+      "settled": 411318,
+      "remaining": 588682
+    },
+    {
+      "elapsedSeconds": 3148,
+      "settled": 413638,
+      "remaining": 586362
+    },
+    {
+      "elapsedSeconds": 3163,
+      "settled": 414665,
+      "remaining": 585335
+    },
+    {
+      "elapsedSeconds": 3179,
+      "settled": 417539,
+      "remaining": 582461
+    },
+    {
+      "elapsedSeconds": 3194,
+      "settled": 419538,
+      "remaining": 580462
+    },
+    {
+      "elapsedSeconds": 3209,
+      "settled": 420561,
+      "remaining": 579439
+    },
+    {
+      "elapsedSeconds": 3225,
+      "settled": 423110,
+      "remaining": 576890
+    },
+    {
+      "elapsedSeconds": 3240,
+      "settled": 425366,
+      "remaining": 574634
+    },
+    {
+      "elapsedSeconds": 3255,
+      "settled": 426376,
+      "remaining": 573624
+    },
+    {
+      "elapsedSeconds": 3272,
+      "settled": 429187,
+      "remaining": 570813
+    },
+    {
+      "elapsedSeconds": 3287,
+      "settled": 431262,
+      "remaining": 568738
+    },
+    {
+      "elapsedSeconds": 3302,
+      "settled": 432265,
+      "remaining": 567735
+    },
+    {
+      "elapsedSeconds": 3319,
+      "settled": 434974,
+      "remaining": 565026
+    },
+    {
+      "elapsedSeconds": 3334,
+      "settled": 437099,
+      "remaining": 562901
+    },
+    {
+      "elapsedSeconds": 3350,
+      "settled": 438135,
+      "remaining": 561865
+    },
+    {
+      "elapsedSeconds": 3368,
+      "settled": 440862,
+      "remaining": 559138
+    },
+    {
+      "elapsedSeconds": 3383,
+      "settled": 443061,
+      "remaining": 556939
+    },
+    {
+      "elapsedSeconds": 3398,
+      "settled": 444080,
+      "remaining": 555920
+    },
+    {
+      "elapsedSeconds": 3415,
+      "settled": 446764,
+      "remaining": 553236
+    },
+    {
+      "elapsedSeconds": 3430,
+      "settled": 448882,
+      "remaining": 551118
+    },
+    {
+      "elapsedSeconds": 3445,
+      "settled": 449868,
+      "remaining": 550132
+    },
+    {
+      "elapsedSeconds": 3462,
+      "settled": 452697,
+      "remaining": 547303
+    },
+    {
+      "elapsedSeconds": 3478,
+      "settled": 454838,
+      "remaining": 545162
+    },
+    {
+      "elapsedSeconds": 3493,
+      "settled": 455852,
+      "remaining": 544148
+    },
+    {
+      "elapsedSeconds": 3509,
+      "settled": 458631,
+      "remaining": 541369
+    },
+    {
+      "elapsedSeconds": 3525,
+      "settled": 460712,
+      "remaining": 539288
+    },
+    {
+      "elapsedSeconds": 3544,
+      "settled": 463543,
+      "remaining": 536457
+    },
+    {
+      "elapsedSeconds": 3559,
+      "settled": 465906,
+      "remaining": 534094
+    },
+    {
+      "elapsedSeconds": 3575,
+      "settled": 469589,
+      "remaining": 530411
+    },
+    {
+      "elapsedSeconds": 3594,
+      "settled": 472384,
+      "remaining": 527616
+    },
+    {
+      "elapsedSeconds": 3609,
+      "settled": 474780,
+      "remaining": 525220
+    },
+    {
+      "elapsedSeconds": 3624,
+      "settled": 478524,
+      "remaining": 521476
+    },
+    {
+      "elapsedSeconds": 3643,
+      "settled": 481275,
+      "remaining": 518725
+    },
+    {
+      "elapsedSeconds": 3658,
+      "settled": 483685,
+      "remaining": 516315
+    },
+    {
+      "elapsedSeconds": 3673,
+      "settled": 487367,
+      "remaining": 512633
+    },
+    {
+      "elapsedSeconds": 3691,
+      "settled": 490101,
+      "remaining": 509899
+    },
+    {
+      "elapsedSeconds": 3706,
+      "settled": 492490,
+      "remaining": 507510
+    },
+    {
+      "elapsedSeconds": 3721,
+      "settled": 496245,
+      "remaining": 503755
+    },
+    {
+      "elapsedSeconds": 3738,
+      "settled": 498677,
+      "remaining": 501323
+    },
+    {
+      "elapsedSeconds": 3754,
+      "settled": 501303,
+      "remaining": 498697
+    },
+    {
+      "elapsedSeconds": 3769,
+      "settled": 505069,
+      "remaining": 494931
+    },
+    {
+      "elapsedSeconds": 3787,
+      "settled": 507543,
+      "remaining": 492457
+    },
+    {
+      "elapsedSeconds": 3802,
+      "settled": 510244,
+      "remaining": 489756
+    },
+    {
+      "elapsedSeconds": 3817,
+      "settled": 514151,
+      "remaining": 485849
+    },
+    {
+      "elapsedSeconds": 3833,
+      "settled": 516726,
+      "remaining": 483274
+    },
+    {
+      "elapsedSeconds": 3848,
+      "settled": 519034,
+      "remaining": 480966
+    },
+    {
+      "elapsedSeconds": 3863,
+      "settled": 522924,
+      "remaining": 477076
+    },
+    {
+      "elapsedSeconds": 3881,
+      "settled": 525269,
+      "remaining": 474731
+    },
+    {
+      "elapsedSeconds": 3896,
+      "settled": 527788,
+      "remaining": 472212
+    },
+    {
+      "elapsedSeconds": 3911,
+      "settled": 531036,
+      "remaining": 468964
+    },
+    {
+      "elapsedSeconds": 3927,
+      "settled": 532374,
+      "remaining": 467626
+    },
+    {
+      "elapsedSeconds": 3942,
+      "settled": 536308,
+      "remaining": 463692
+    },
+    {
+      "elapsedSeconds": 3958,
+      "settled": 538420,
+      "remaining": 461580
+    },
+    {
+      "elapsedSeconds": 3973,
+      "settled": 541025,
+      "remaining": 458975
+    },
+    {
+      "elapsedSeconds": 3989,
+      "settled": 544805,
+      "remaining": 455195
+    },
+    {
+      "elapsedSeconds": 4004,
+      "settled": 545677,
+      "remaining": 454323
+    },
+    {
+      "elapsedSeconds": 4019,
+      "settled": 549604,
+      "remaining": 450396
+    },
+    {
+      "elapsedSeconds": 4034,
+      "settled": 551667,
+      "remaining": 448333
+    },
+    {
+      "elapsedSeconds": 4050,
+      "settled": 554252,
+      "remaining": 445748
+    },
+    {
+      "elapsedSeconds": 4065,
+      "settled": 558016,
+      "remaining": 441984
+    },
+    {
+      "elapsedSeconds": 4080,
+      "settled": 558892,
+      "remaining": 441108
+    },
+    {
+      "elapsedSeconds": 4095,
+      "settled": 562760,
+      "remaining": 437240
+    },
+    {
+      "elapsedSeconds": 4111,
+      "settled": 564847,
+      "remaining": 435153
+    },
+    {
+      "elapsedSeconds": 4126,
+      "settled": 567503,
+      "remaining": 432497
+    },
+    {
+      "elapsedSeconds": 4141,
+      "settled": 571280,
+      "remaining": 428720
+    },
+    {
+      "elapsedSeconds": 4157,
+      "settled": 572157,
+      "remaining": 427843
+    },
+    {
+      "elapsedSeconds": 4172,
+      "settled": 576106,
+      "remaining": 423894
+    },
+    {
+      "elapsedSeconds": 4187,
+      "settled": 578256,
+      "remaining": 421744
+    },
+    {
+      "elapsedSeconds": 4202,
+      "settled": 580727,
+      "remaining": 419273
+    },
+    {
+      "elapsedSeconds": 4217,
+      "settled": 584448,
+      "remaining": 415552
+    },
+    {
+      "elapsedSeconds": 4232,
+      "settled": 585340,
+      "remaining": 414660
+    },
+    {
+      "elapsedSeconds": 4247,
+      "settled": 589210,
+      "remaining": 410790
+    },
+    {
+      "elapsedSeconds": 4263,
+      "settled": 591336,
+      "remaining": 408664
+    },
+    {
+      "elapsedSeconds": 4278,
+      "settled": 593938,
+      "remaining": 406062
+    },
+    {
+      "elapsedSeconds": 4293,
+      "settled": 597654,
+      "remaining": 402346
+    },
+    {
+      "elapsedSeconds": 4308,
+      "settled": 598564,
+      "remaining": 401436
+    },
+    {
+      "elapsedSeconds": 4323,
+      "settled": 602477,
+      "remaining": 397523
+    },
+    {
+      "elapsedSeconds": 4339,
+      "settled": 604576,
+      "remaining": 395424
+    },
+    {
+      "elapsedSeconds": 4354,
+      "settled": 607183,
+      "remaining": 392817
+    },
+    {
+      "elapsedSeconds": 4369,
+      "settled": 610865,
+      "remaining": 389135
+    },
+    {
+      "elapsedSeconds": 4384,
+      "settled": 611777,
+      "remaining": 388223
+    },
+    {
+      "elapsedSeconds": 4399,
+      "settled": 615607,
+      "remaining": 384393
+    },
+    {
+      "elapsedSeconds": 4415,
+      "settled": 617713,
+      "remaining": 382287
+    },
+    {
+      "elapsedSeconds": 4430,
+      "settled": 620368,
+      "remaining": 379632
+    },
+    {
+      "elapsedSeconds": 4445,
+      "settled": 624124,
+      "remaining": 375876
+    },
+    {
+      "elapsedSeconds": 4461,
+      "settled": 624996,
+      "remaining": 375004
+    },
+    {
+      "elapsedSeconds": 4476,
+      "settled": 628875,
+      "remaining": 371125
+    },
+    {
+      "elapsedSeconds": 4492,
+      "settled": 630993,
+      "remaining": 369007
+    },
+    {
+      "elapsedSeconds": 4507,
+      "settled": 633661,
+      "remaining": 366339
+    },
+    {
+      "elapsedSeconds": 4522,
+      "settled": 637439,
+      "remaining": 362561
+    },
+    {
+      "elapsedSeconds": 4537,
+      "settled": 638334,
+      "remaining": 361666
+    },
+    {
+      "elapsedSeconds": 4553,
+      "settled": 641404,
+      "remaining": 358596
+    },
+    {
+      "elapsedSeconds": 4568,
+      "settled": 643348,
+      "remaining": 356652
+    },
+    {
+      "elapsedSeconds": 4583,
+      "settled": 644616,
+      "remaining": 355384
+    },
+    {
+      "elapsedSeconds": 4598,
+      "settled": 646968,
+      "remaining": 353032
+    },
+    {
+      "elapsedSeconds": 4617,
+      "settled": 648739,
+      "remaining": 351261
+    },
+    {
+      "elapsedSeconds": 4632,
+      "settled": 650464,
+      "remaining": 349536
+    },
+    {
+      "elapsedSeconds": 4647,
+      "settled": 652775,
+      "remaining": 347225
+    },
+    {
+      "elapsedSeconds": 4662,
+      "settled": 653672,
+      "remaining": 346328
+    },
+    {
+      "elapsedSeconds": 4677,
+      "settled": 656139,
+      "remaining": 343861
+    },
+    {
+      "elapsedSeconds": 4692,
+      "settled": 657920,
+      "remaining": 342080
+    },
+    {
+      "elapsedSeconds": 4708,
+      "settled": 659322,
+      "remaining": 340678
+    },
+    {
+      "elapsedSeconds": 4723,
+      "settled": 661629,
+      "remaining": 338371
+    },
+    {
+      "elapsedSeconds": 4741,
+      "settled": 663545,
+      "remaining": 336455
+    },
+    {
+      "elapsedSeconds": 4756,
+      "settled": 665142,
+      "remaining": 334858
+    },
+    {
+      "elapsedSeconds": 4771,
+      "settled": 667397,
+      "remaining": 332603
+    },
+    {
+      "elapsedSeconds": 4786,
+      "settled": 668328,
+      "remaining": 331672
+    },
+    {
+      "elapsedSeconds": 4801,
+      "settled": 670747,
+      "remaining": 329253
+    },
+    {
+      "elapsedSeconds": 4817,
+      "settled": 672476,
+      "remaining": 327524
+    },
+    {
+      "elapsedSeconds": 4832,
+      "settled": 673988,
+      "remaining": 326012
+    },
+    {
+      "elapsedSeconds": 4847,
+      "settled": 676210,
+      "remaining": 323790
+    },
+    {
+      "elapsedSeconds": 4862,
+      "settled": 677145,
+      "remaining": 322855
+    },
+    {
+      "elapsedSeconds": 4877,
+      "settled": 679581,
+      "remaining": 320419
+    },
+    {
+      "elapsedSeconds": 4893,
+      "settled": 681469,
+      "remaining": 318531
+    },
+    {
+      "elapsedSeconds": 4908,
+      "settled": 682826,
+      "remaining": 317174
+    },
+    {
+      "elapsedSeconds": 4923,
+      "settled": 685142,
+      "remaining": 314858
+    },
+    {
+      "elapsedSeconds": 4938,
+      "settled": 686038,
+      "remaining": 313962
+    },
+    {
+      "elapsedSeconds": 4953,
+      "settled": 688517,
+      "remaining": 311483
+    },
+    {
+      "elapsedSeconds": 4968,
+      "settled": 690738,
+      "remaining": 309262
+    },
+    {
+      "elapsedSeconds": 4983,
+      "settled": 691702,
+      "remaining": 308298
+    },
+    {
+      "elapsedSeconds": 4998,
+      "settled": 694035,
+      "remaining": 305965
+    },
+    {
+      "elapsedSeconds": 5016,
+      "settled": 695851,
+      "remaining": 304149
+    },
+    {
+      "elapsedSeconds": 5031,
+      "settled": 697483,
+      "remaining": 302517
+    },
+    {
+      "elapsedSeconds": 5046,
+      "settled": 699802,
+      "remaining": 300198
+    },
+    {
+      "elapsedSeconds": 5061,
+      "settled": 700697,
+      "remaining": 299303
+    },
+    {
+      "elapsedSeconds": 5076,
+      "settled": 703165,
+      "remaining": 296835
+    },
+    {
+      "elapsedSeconds": 5091,
+      "settled": 705414,
+      "remaining": 294586
+    },
+    {
+      "elapsedSeconds": 5107,
+      "settled": 706389,
+      "remaining": 293611
+    },
+    {
+      "elapsedSeconds": 5122,
+      "settled": 708717,
+      "remaining": 291283
+    },
+    {
+      "elapsedSeconds": 5139,
+      "settled": 710517,
+      "remaining": 289483
+    },
+    {
+      "elapsedSeconds": 5154,
+      "settled": 712157,
+      "remaining": 287843
+    },
+    {
+      "elapsedSeconds": 5170,
+      "settled": 714457,
+      "remaining": 285543
+    },
+    {
+      "elapsedSeconds": 5185,
+      "settled": 715395,
+      "remaining": 284605
+    },
+    {
+      "elapsedSeconds": 5200,
+      "settled": 717862,
+      "remaining": 282138
+    },
+    {
+      "elapsedSeconds": 5215,
+      "settled": 720118,
+      "remaining": 279882
+    },
+    {
+      "elapsedSeconds": 5230,
+      "settled": 721097,
+      "remaining": 278903
+    },
+    {
+      "elapsedSeconds": 5246,
+      "settled": 723440,
+      "remaining": 276560
+    },
+    {
+      "elapsedSeconds": 5263,
+      "settled": 725165,
+      "remaining": 274835
+    },
+    {
+      "elapsedSeconds": 5278,
+      "settled": 726880,
+      "remaining": 273120
+    },
+    {
+      "elapsedSeconds": 5293,
+      "settled": 729071,
+      "remaining": 270929
+    },
+    {
+      "elapsedSeconds": 5308,
+      "settled": 730027,
+      "remaining": 269973
+    },
+    {
+      "elapsedSeconds": 5323,
+      "settled": 732445,
+      "remaining": 267555
+    },
+    {
+      "elapsedSeconds": 5338,
+      "settled": 734262,
+      "remaining": 265738
+    },
+    {
+      "elapsedSeconds": 5354,
+      "settled": 735719,
+      "remaining": 264281
+    },
+    {
+      "elapsedSeconds": 5369,
+      "settled": 737977,
+      "remaining": 262023
+    },
+    {
+      "elapsedSeconds": 5384,
+      "settled": 738884,
+      "remaining": 261116
+    },
+    {
+      "elapsedSeconds": 5399,
+      "settled": 741331,
+      "remaining": 258669
+    },
+    {
+      "elapsedSeconds": 5414,
+      "settled": 743316,
+      "remaining": 256684
+    },
+    {
+      "elapsedSeconds": 5429,
+      "settled": 744556,
+      "remaining": 255444
+    },
+    {
+      "elapsedSeconds": 5444,
+      "settled": 746913,
+      "remaining": 253087
+    },
+    {
+      "elapsedSeconds": 5462,
+      "settled": 748528,
+      "remaining": 251472
+    },
+    {
+      "elapsedSeconds": 5477,
+      "settled": 750346,
+      "remaining": 249654
+    },
+    {
+      "elapsedSeconds": 5492,
+      "settled": 752625,
+      "remaining": 247375
+    },
+    {
+      "elapsedSeconds": 5507,
+      "settled": 753547,
+      "remaining": 246453
+    },
+    {
+      "elapsedSeconds": 5522,
+      "settled": 756014,
+      "remaining": 243986
+    },
+    {
+      "elapsedSeconds": 5537,
+      "settled": 758268,
+      "remaining": 241732
+    },
+    {
+      "elapsedSeconds": 5552,
+      "settled": 759242,
+      "remaining": 240758
+    },
+    {
+      "elapsedSeconds": 5568,
+      "settled": 762267,
+      "remaining": 237733
+    },
+    {
+      "elapsedSeconds": 5583,
+      "settled": 765395,
+      "remaining": 234605
+    },
+    {
+      "elapsedSeconds": 5600,
+      "settled": 770031,
+      "remaining": 229969
+    },
+    {
+      "elapsedSeconds": 5615,
+      "settled": 773118,
+      "remaining": 226882
+    },
+    {
+      "elapsedSeconds": 5630,
+      "settled": 776962,
+      "remaining": 223038
+    },
+    {
+      "elapsedSeconds": 5646,
+      "settled": 779999,
+      "remaining": 220001
+    },
+    {
+      "elapsedSeconds": 5661,
+      "settled": 783073,
+      "remaining": 216927
+    },
+    {
+      "elapsedSeconds": 5676,
+      "settled": 786985,
+      "remaining": 213015
+    },
+    {
+      "elapsedSeconds": 5691,
+      "settled": 790720,
+      "remaining": 209280
+    },
+    {
+      "elapsedSeconds": 5706,
+      "settled": 794283,
+      "remaining": 205717
+    },
+    {
+      "elapsedSeconds": 5722,
+      "settled": 797539,
+      "remaining": 202461
+    },
+    {
+      "elapsedSeconds": 5738,
+      "settled": 800765,
+      "remaining": 199235
+    },
+    {
+      "elapsedSeconds": 5753,
+      "settled": 804686,
+      "remaining": 195314
+    },
+    {
+      "elapsedSeconds": 5768,
+      "settled": 808433,
+      "remaining": 191567
+    },
+    {
+      "elapsedSeconds": 5783,
+      "settled": 812289,
+      "remaining": 187711
+    },
+    {
+      "elapsedSeconds": 5798,
+      "settled": 815534,
+      "remaining": 184466
+    },
+    {
+      "elapsedSeconds": 5815,
+      "settled": 819155,
+      "remaining": 180845
+    },
+    {
+      "elapsedSeconds": 5830,
+      "settled": 823154,
+      "remaining": 176846
+    },
+    {
+      "elapsedSeconds": 5845,
+      "settled": 827617,
+      "remaining": 172383
+    },
+    {
+      "elapsedSeconds": 5860,
+      "settled": 831561,
+      "remaining": 168439
+    },
+    {
+      "elapsedSeconds": 5876,
+      "settled": 835977,
+      "remaining": 164023
+    },
+    {
+      "elapsedSeconds": 5891,
+      "settled": 840083,
+      "remaining": 159917
+    },
+    {
+      "elapsedSeconds": 5906,
+      "settled": 844729,
+      "remaining": 155271
+    },
+    {
+      "elapsedSeconds": 5921,
+      "settled": 849550,
+      "remaining": 150450
+    },
+    {
+      "elapsedSeconds": 5937,
+      "settled": 853753,
+      "remaining": 146247
+    },
+    {
+      "elapsedSeconds": 5953,
+      "settled": 858306,
+      "remaining": 141694
+    },
+    {
+      "elapsedSeconds": 5968,
+      "settled": 862874,
+      "remaining": 137126
+    },
+    {
+      "elapsedSeconds": 5983,
+      "settled": 867440,
+      "remaining": 132560
+    },
+    {
+      "elapsedSeconds": 6000,
+      "settled": 872011,
+      "remaining": 127989
+    },
+    {
+      "elapsedSeconds": 6015,
+      "settled": 877127,
+      "remaining": 122873
+    },
+    {
+      "elapsedSeconds": 6030,
+      "settled": 881252,
+      "remaining": 118748
+    },
+    {
+      "elapsedSeconds": 6045,
+      "settled": 885751,
+      "remaining": 114249
+    },
+    {
+      "elapsedSeconds": 6060,
+      "settled": 890810,
+      "remaining": 109190
+    },
+    {
+      "elapsedSeconds": 6075,
+      "settled": 894894,
+      "remaining": 105106
+    },
+    {
+      "elapsedSeconds": 6090,
+      "settled": 898923,
+      "remaining": 101077
+    },
+    {
+      "elapsedSeconds": 6106,
+      "settled": 903730,
+      "remaining": 96270
+    },
+    {
+      "elapsedSeconds": 6121,
+      "settled": 908530,
+      "remaining": 91470
+    },
+    {
+      "elapsedSeconds": 6136,
+      "settled": 912607,
+      "remaining": 87393
+    },
+    {
+      "elapsedSeconds": 6151,
+      "settled": 917174,
+      "remaining": 82826
+    },
+    {
+      "elapsedSeconds": 6167,
+      "settled": 923592,
+      "remaining": 76408
+    },
+    {
+      "elapsedSeconds": 6182,
+      "settled": 930864,
+      "remaining": 69136
+    },
+    {
+      "elapsedSeconds": 6198,
+      "settled": 937873,
+      "remaining": 62127
+    },
+    {
+      "elapsedSeconds": 6213,
+      "settled": 943548,
+      "remaining": 56452
+    },
+    {
+      "elapsedSeconds": 6228,
+      "settled": 950319,
+      "remaining": 49681
+    },
+    {
+      "elapsedSeconds": 6243,
+      "settled": 957889,
+      "remaining": 42111
+    },
+    {
+      "elapsedSeconds": 6259,
+      "settled": 964202,
+      "remaining": 35798
+    },
+    {
+      "elapsedSeconds": 6274,
+      "settled": 971655,
+      "remaining": 28345
+    },
+    {
+      "elapsedSeconds": 6289,
+      "settled": 979508,
+      "remaining": 20492
+    },
+    {
+      "elapsedSeconds": 6304,
+      "settled": 987298,
+      "remaining": 12702
+    },
+    {
+      "elapsedSeconds": 6319,
+      "settled": 991112,
+      "remaining": 8888
+    },
+    {
+      "elapsedSeconds": 6334,
+      "settled": 992314,
+      "remaining": 7686
+    },
+    {
+      "elapsedSeconds": 6350,
+      "settled": 993520,
+      "remaining": 6480
+    },
+    {
+      "elapsedSeconds": 6365,
+      "settled": 994707,
+      "remaining": 5293
+    },
+    {
+      "elapsedSeconds": 6380,
+      "settled": 995897,
+      "remaining": 4103
+    },
+    {
+      "elapsedSeconds": 6395,
+      "settled": 997106,
+      "remaining": 2894
+    },
+    {
+      "elapsedSeconds": 6410,
+      "settled": 998492,
+      "remaining": 1508
+    },
+    {
+      "elapsedSeconds": 6425,
+      "settled": 999987,
+      "remaining": 13
+    }
+  ],
+  "successesByPlatformLane": {
+    "facebook|publish-fast": 178275,
+    "instagram|publish-fast": 59369,
+    "threads|publish-fast": 59411,
+    "facebook|publish-heavy": 118804,
+    "youtube|publish-fast": 118732,
+    "x|publish-fast": 59385,
+    "tiktok|publish-fast": 118812,
+    "instagram|publish-heavy": 39609,
+    "threads|publish-heavy": 39580,
+    "youtube|publish-heavy": 79172,
+    "x|publish-heavy": 39590,
+    "tiktok|publish-heavy": 79210
+  },
+  "tuning": {
+    "claimerConstants": {
+      "CLAIM_ROUND_LIMIT": 500,
+      "CLAIM_MAX_PER_DESTINATION": 3,
+      "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK": 1,
+      "note": "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK tuned 4 → 1 on this branch (see claimer.ts comment + results md). CLAIM_ROUND_LIMIT and CLAIM_MAX_PER_DESTINATION unchanged from main."
+    },
+    "harnessDbConfig": "pgserver PostgreSQL, ALTER SYSTEM: shared_buffers=1GB, effective_cache_size=3GB, work_mem=64MB, random_page_cost=1.1, synchronous_commit=off, max_wal_size=4GB, checkpoint_timeout=15min, checkpoint_completion_target=0.9. synchronous_commit/checkpoint settings are bulk-run settings for a disposable synthetic database (durability is irrelevant — the seed is reproducible); they are NOT production recommendations. Adapter sessions SET work_mem=64MB.",
+    "pacing": "Claim ticks run only while shim pending < 20,000 messages."
+  }
+}

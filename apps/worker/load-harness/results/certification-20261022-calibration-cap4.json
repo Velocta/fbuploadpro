@@ -1,0 +1,225 @@
+{
+  "spec": "122 load-proof harness (spec 119 §5.2 / D11)",
+  "label": "calibration",
+  "generatedAt": "2026-10-22T11:02:33.096Z",
+  "scale": 0.05,
+  "seedPlan": [
+    {
+      "platform": "facebook",
+      "items": 15000,
+      "destinations": 3000
+    },
+    {
+      "platform": "instagram",
+      "items": 5000,
+      "destinations": 5000
+    },
+    {
+      "platform": "threads",
+      "items": 5000,
+      "destinations": 1000
+    },
+    {
+      "platform": "youtube",
+      "items": 10000,
+      "destinations": 2000
+    },
+    {
+      "platform": "x",
+      "items": 5000,
+      "destinations": 2000
+    },
+    {
+      "platform": "tiktok",
+      "items": 10000,
+      "destinations": 2000
+    }
+  ],
+  "seeded": 50000,
+  "seedSeconds": 5.14,
+  "drainSeconds": 523.66,
+  "ticks": 1445,
+  "totalClaimed": 50975,
+  "enqueuedFast": 30553,
+  "enqueuedHeavy": 20422,
+  "deliveredBatches": 7141,
+  "messageRetries": 0,
+  "dlqArrivals": 0,
+  "finalCensus": [
+    {
+      "status": "failed",
+      "n": 549
+    },
+    {
+      "status": "published",
+      "n": 49451
+    }
+  ],
+  "perPlatform": [
+    {
+      "platform": "facebook",
+      "status": "failed",
+      "n": 160
+    },
+    {
+      "platform": "facebook",
+      "status": "published",
+      "n": 14840
+    },
+    {
+      "platform": "instagram",
+      "status": "failed",
+      "n": 61
+    },
+    {
+      "platform": "instagram",
+      "status": "published",
+      "n": 4939
+    },
+    {
+      "platform": "threads",
+      "status": "failed",
+      "n": 49
+    },
+    {
+      "platform": "threads",
+      "status": "published",
+      "n": 4951
+    },
+    {
+      "platform": "tiktok",
+      "status": "failed",
+      "n": 118
+    },
+    {
+      "platform": "tiktok",
+      "status": "published",
+      "n": 9882
+    },
+    {
+      "platform": "x",
+      "status": "failed",
+      "n": 50
+    },
+    {
+      "platform": "x",
+      "status": "published",
+      "n": 4950
+    },
+    {
+      "platform": "youtube",
+      "status": "failed",
+      "n": 111
+    },
+    {
+      "platform": "youtube",
+      "status": "published",
+      "n": 9889
+    }
+  ],
+  "publishLogsByResult": [
+    {
+      "result": "failure",
+      "n": 549
+    },
+    {
+      "result": "retry",
+      "n": 975
+    },
+    {
+      "result": "success",
+      "n": 49451
+    }
+  ],
+  "settledPublished": 49451,
+  "settledFailed": 549,
+  "retriedThenPublished": 975,
+  "mockLedger": {
+    "itemsSeen": 50000,
+    "totalAttempts": 50975,
+    "totalSuccesses": 49451
+  },
+  "lost": 0,
+  "accountedTerminal": 50000,
+  "duplicates": 0,
+  "duplicateItems": [],
+  "blendedItemsPerSecond": 95.48,
+  "itemsPerDayAtRunConcurrency": 8249628,
+  "concurrencyUsed": {
+    "fast": 20,
+    "heavy": 10
+  },
+  "wranglerConcurrency": {
+    "fast": 20,
+    "heavy": 10
+  },
+  "itemsPerDayAtWranglerConcurrency": 8249628,
+  "claimTick": {
+    "all": {
+      "n": 1445,
+      "p50": 32,
+      "p95": 226,
+      "max": 113017
+    },
+    "bands": [
+      {
+        "band": "~100% (1M)",
+        "n": 1,
+        "p50": 113017,
+        "p95": 113017,
+        "max": 113017
+      },
+      {
+        "band": "~75%",
+        "n": 10,
+        "p50": 802,
+        "p95": 9454,
+        "max": 9454
+      },
+      {
+        "band": "~50%",
+        "n": 134,
+        "p50": 167,
+        "p95": 733,
+        "max": 1478
+      },
+      {
+        "band": "~25%",
+        "n": 511,
+        "p50": 56,
+        "p95": 229,
+        "max": 936
+      },
+      {
+        "band": "~10%",
+        "n": 789,
+        "p50": 11,
+        "p95": 57,
+        "max": 173
+      }
+    ],
+    "claimerConstants": {
+      "CLAIM_ROUND_LIMIT": 500,
+      "CLAIM_MAX_PER_DESTINATION": 3,
+      "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK": 4
+    }
+  },
+  "mockLatencyMs": {
+    "fast": {
+      "facebook": 25,
+      "instagram": 35,
+      "threads": 30,
+      "x": 20,
+      "tiktok": 30,
+      "youtube": 40
+    },
+    "heavy": {
+      "facebook": 120,
+      "instagram": 150,
+      "threads": 120,
+      "x": 140,
+      "tiktok": 150,
+      "youtube": 200
+    }
+  }
+}

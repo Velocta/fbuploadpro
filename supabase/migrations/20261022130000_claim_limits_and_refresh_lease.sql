@@ -28,6 +28,13 @@
 --   instagram: 100 published / rolling 24 h, 25 calls / rolling 1 h
 --   threads:   250 published / rolling 24 h
 --   x:         100 published / rolling 15 min
+-- Canonical source (A-1, ratified by Shahzeb 2026-10-22): the seeded
+--   values' canonical source is
+--   packages/contracts/src/publishing/limits.ts (PLATFORM_PUBLISH_LIMITS);
+--   this table is the enforcement copy the claim RPC reads. The
+--   contracts parity test at
+--   packages/contracts/tests/publishing/limits-parity.test.ts guards
+--   drift between the two and fails CI if they diverge.
 --   facebook / youtube / tiktok: no rows — no cap enforced by this RPC
 --     (facebook keeps next_allowed_publish_at throttling; YouTube/TikTok
 --     provider limits arrive with specs 125/126). Later specs add caps by
