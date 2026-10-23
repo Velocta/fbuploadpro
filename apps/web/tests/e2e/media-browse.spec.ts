@@ -41,8 +41,10 @@ function seedTwoItems(state: ReturnType<typeof createFixtureState>): void {
 
 async function gotoMedia(page: Page): Promise<void> {
   await page.goto(`/tenant/${TENANT.subdomain}/media`);
-  await expect(page.getByTestId(`media-card-${ITEM_A_ID}`)).toBeVisible();
-  await expect(page.getByTestId(`media-card-${ITEM_B_ID}`)).toBeVisible();
+  // The explorer hydrates from the server prefetch, then the client
+  // query serves the fixture items — allow for a slow first paint.
+  await expect(page.getByTestId(`media-card-${ITEM_A_ID}`)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId(`media-card-${ITEM_B_ID}`)).toBeVisible({ timeout: 30_000 });
 }
 
 async function maybeScreenshot(page: Page, name: string): Promise<void> {
