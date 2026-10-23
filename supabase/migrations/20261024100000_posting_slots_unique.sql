@@ -30,8 +30,10 @@
 --   returned ZERO rows (no duplicate groups at all, active or inactive),
 --   so this constraint applies with no data change and no dedupe.
 -- No data changes. No other object is created, altered or dropped.
--- Idempotent: the DO block swallows duplicate_object, so re-applying
--- this file (rig idempotency runs) exits clean.
+-- Idempotent: the DO block swallows duplicate_object (constraint name
+-- taken) and duplicate_table (42P07 — the constraint's backing index
+-- relation name taken, the error a re-applied ADD CONSTRAINT actually
+-- raises), so re-applying this file (rig idempotency runs) exits clean.
 -- =============================================================================
 
 DO $$
@@ -40,5 +42,5 @@ BEGIN
     ADD CONSTRAINT uq_posting_slots_destination_time
     UNIQUE (destination_id, time_of_day);
 EXCEPTION
-  WHEN duplicate_object THEN NULL;
+  WHEN duplicate_object OR duplicate_table THEN NULL;
 END $$;
