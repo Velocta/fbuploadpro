@@ -175,7 +175,7 @@
     },
     "routes": {
       "/": {
-        "firstLoadGzipBytes": 1,
+        "firstLoadGzipBytes": 149334,
         "firstLoadRawBytes": 495743,
         "routeSpecificGzipBytes": 8793,
         "routeSpecificRawBytes": 22244
