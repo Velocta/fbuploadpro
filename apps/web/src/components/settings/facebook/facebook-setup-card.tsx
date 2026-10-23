@@ -76,7 +76,7 @@ export function FacebookSetupCard() {
           <span
             id="fb-callback-url-display"
             data-testid="fb-signin-address"
-            className="min-w-0 truncate font-mono text-metadata text-link"
+            className="min-w-0 break-all font-mono text-metadata text-link"
           >
             {callbackUrl}
           </span>
