@@ -8,7 +8,6 @@
  * prefilled message.
  */
 
-import React from 'react';
 import Link from 'next/link';
 
 import { Button } from '@/components/shared/ui/button';

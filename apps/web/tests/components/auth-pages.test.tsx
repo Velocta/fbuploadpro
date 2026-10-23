@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import { render } from './setup';
 import SignupPage from '../../src/app/signup/page';
 import LoginPage from '../../src/app/login/page';
-import { PALETTE } from '@/lib/theme';
 
 describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
   describe('SignupPage', () => {
@@ -25,9 +24,15 @@ describe('Auth Pages UI (Spec 009 & Spec 010)', () => {
       expect(html).toContain('href="/login"');
     });
 
-    it('applies primary brand styling to submit action button', () => {
+    // Migrated by spec 136 PR-136B: the signup form is on the §3.8 form
+    // standard — its submit is the shared/ui Button primitive (token
+    // classes), not the legacy inline-styled button this assertion was
+    // written against. Behavioural coverage lives in
+    // src/app/signup/page.test.tsx.
+    it('renders the submit action on the shared/ui Button primitive', () => {
       const { html } = render(<SignupPage />);
-      expect(html).toContain(`background-color:${PALETTE.primary}`);
+      expect(html).toContain('data-slot="button"');
+      expect(html).toContain('bg-primary');
     });
 
     it('does not contain robotic developer slop or decorative operational status dots', () => {
