@@ -37,18 +37,22 @@ describe("Select", () => {
     expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 
-  it("spec 142 F01/F02/F09: 44px trigger, 16px-below-sm text, 44px items, available-height panel", async () => {
+  it("geometry (spec 142 F01/F02/F09): 44px trigger, 16px-below-sm field text, 44px items, available-height panel", async () => {
     const user = userEvent.setup();
     render(<TestSelect />);
     const trigger = screen.getByRole("combobox", { name: "Platform" });
-    expect(trigger.className).toContain("h-11");
+    expect(trigger.className).toContain("data-[size=default]:h-11");
     expect(trigger.className).toContain("text-base");
     expect(trigger.className).toContain("sm:text-body");
     await user.click(trigger);
     const listbox = screen.getByRole("listbox");
-    expect(listbox.className).toContain("max-h-(--radix-select-content-available-height)");
-    expect(listbox.className).not.toContain("max-h-96");
-    expect(screen.getByRole("option", { name: "Facebook" }).className).toContain("min-h-11");
+    const content = listbox.closest('[data-slot="select-content"]') as HTMLElement;
+    expect(content.className).toContain("max-h-(--radix-select-content-available-height)");
+    expect(content.className).toContain("max-w-(--radix-select-content-available-width)");
+    expect(content.className).not.toContain("max-h-96");
+    for (const name of ["Facebook", "Instagram", "Pro"]) {
+      expect(screen.getByRole("option", { name }).className).toContain("min-h-11");
+    }
   });
 
   it("keyboard: arrows move through options, Enter selects, value is announced on the trigger", async () => {
