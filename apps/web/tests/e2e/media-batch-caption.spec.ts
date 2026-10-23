@@ -90,7 +90,11 @@ test.describe('media batch caption', () => {
     await expect(page.getByText('Applies to 2 files.')).toBeVisible();
     const apply = page.getByTestId('apply-batch-caption');
     await expect(apply).toBeDisabled();
-    await expect(page.getByText('Enter a caption first.')).toBeVisible();
+    // The reason renders visibly beside the button (the Button also
+    // carries it as an sr-only accessible description).
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: 'Enter a caption first.' })
+    ).toBeVisible();
     await maybeScreenshot(page, 'dialog-batch-caption-empty');
 
     // Replace mode is the default; type the caption and apply.
@@ -115,16 +119,18 @@ test.describe('media batch caption', () => {
     await maybeScreenshot(page, 'dialog-batch-caption-applied');
   });
 
-  test('dialogs at 320/390/768: fit viewport, 44px actions, no overflow', async ({
-    page,
-    context,
-  }) => {
-    await context.addCookies([SESSION_COOKIE]);
-    const state = createFixtureState();
-    seedTwoUncaptionedItems(state);
-    await installApiFixtures(page, state);
+  // One test per width (320 / 390 / 768) so each stays well inside
+  // the per-test budget while walking all three dialogs.
+  for (const width of [320, 390, 768]) {
+    test(`dialogs at ${width}px: fit viewport, 44px actions, no overflow`, async ({
+      page,
+      context,
+    }) => {
+      await context.addCookies([SESSION_COOKIE]);
+      const state = createFixtureState();
+      seedTwoUncaptionedItems(state);
+      await installApiFixtures(page, state);
 
-    for (const width of [320, 390, 768]) {
       await page.setViewportSize({ width, height: 844 });
       await gotoMedia(page);
 
@@ -175,6 +181,6 @@ test.describe('media batch caption', () => {
       await page.keyboard.press('Escape');
       await expect(moveDialog).toBeHidden();
       await page.getByTestId('batch-clear-btn').click();
-    }
-  });
+    });
+  }
 });
