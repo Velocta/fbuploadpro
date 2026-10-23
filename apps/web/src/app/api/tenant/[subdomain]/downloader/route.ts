@@ -197,7 +197,7 @@ async function persistResolvedMediaItems(
 }
 
 interface ValidatedDownloadInput {
-  session: { userId: string; email?: string; [key: string]: any };
+  session: { userId: string; email?: string; [key: string]: unknown };
   body: { url: string; folderId?: string | null | undefined };
 }
 
@@ -266,7 +266,7 @@ async function validateDownloadAuthAndPayload(
 }
 
 async function verifyTargetFolderOwnership(
-  dbClient: DatabaseClient | SupabaseClient<any> | undefined,
+  dbClient: DatabaseClient | SupabaseClient | undefined,
   targetFolderId: string | null,
   userId: string
 ): Promise<boolean> {
@@ -290,7 +290,7 @@ async function verifyTargetFolderOwnership(
 }
 
 async function persistMediaRecords(
-  dbClient: DatabaseClient | SupabaseClient<any> | undefined,
+  dbClient: DatabaseClient | SupabaseClient | undefined,
   userId: string,
   targetFolderId: string | null,
   resolvedItems: Awaited<ReturnType<typeof resolveAndUploadMediaFromUrl>>['items']
@@ -343,7 +343,7 @@ async function persistMediaRecords(
 export async function handleDownloadMediaFromUrl(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>,
+  dbClient?: DatabaseClient | SupabaseClient,
   storageService?: IStorageService,
   fetchImpl?: typeof fetch,
   extractorApiUrl?: string | null
@@ -426,7 +426,7 @@ export async function handleDownloadMediaFromUrl(
 export async function handleGetDownloadJobs(
   request: NextRequest,
   subdomain: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
   const sessionCookie = request.cookies.get('fbup_session')?.value;
@@ -455,7 +455,7 @@ export async function handleGetDownloadJobs(
           'SELECT * FROM media_download_jobs WHERE id = $1 AND user_id = $2',
           [jobId, session.userId]
         );
-        const rows = normalizeQueryRows<any>(res);
+        const rows = normalizeQueryRows<Record<string, unknown>>(res);
         if (rows.length === 0) {
           return NextResponse.json({ error: 'Job not found' }, { status: 404 });
         }
@@ -466,7 +466,7 @@ export async function handleGetDownloadJobs(
         'SELECT * FROM media_download_jobs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
         [session.userId]
       );
-      const rows = normalizeQueryRows<any>(res);
+      const rows = normalizeQueryRows<Record<string, unknown>>(res);
       return NextResponse.json({ success: true, jobs: rows }, { status: 200 });
     }
 
@@ -501,8 +501,15 @@ export async function handleGetDownloadJobs(
     }
 
     return NextResponse.json({ success: true, jobs: jobs || [] }, { status: 200 });
-  } catch (err: any) {
-    return NextResponse.json({ error: 'Internal Error', message: err?.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message =
+      err !== null &&
+      typeof err === 'object' &&
+      'message' in err &&
+      typeof err.message === 'string'
+        ? err.message
+        : undefined;
+    return NextResponse.json({ error: 'Internal Error', message }, { status: 500 });
   }
 }
 

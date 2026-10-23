@@ -1,6 +1,16 @@
 import { defineConfig } from 'vitest/config';
 import path from 'path';
 
+/**
+ * Spec 137-A3 (T30): Vitest project split.
+ *
+ * - `node` project: the existing API / security / domain / lib / middleware
+ *   suites. Their environment and behaviour are untouched.
+ * - `jsdom` project: component / UI tests. They render into a real DOM
+ *   (jsdom) and assert on behaviour — interaction, keyboard, focus, async
+ *   states — via Testing Library + user-event + jest-dom matchers wired in
+ *   `tests/setup/jsdom.setup.ts`.
+ */
 export default defineConfig({
   resolve: {
     alias: {
@@ -29,5 +39,55 @@ export default defineConfig({
         'src/lib/report-error.ts': { lines: 100 },
       },
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'node',
+          environment: 'node',
+          include: [
+            'src/**/*.test.ts',
+            'tests/api/**/*.test.ts',
+            'tests/auth/**/*.test.ts',
+            'tests/domain/**/*.test.ts',
+            'tests/lib/**/*.test.ts',
+            // Root-level suites (e.g. the fonts drift guard, PR-A4):
+            // plain node tests that live directly under tests/.
+            'tests/*.test.ts',
+            'tests/middleware/**/*.test.ts',
+            'tests/security/**/*.test.ts',
+            'tests/unit/**/*.test.ts',
+            // Static-render + pure-logic suite: it asserts behaviour
+            // "outside the browser" (no window), so it stays on node even
+            // though it lives under tests/ui.
+            'tests/ui/platform-settings-tabs.test.tsx',
+          ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'jsdom',
+          environment: 'jsdom',
+          exclude: [
+            '**/node_modules/**',
+            '**/dist/**',
+            // Runs in the node project instead — see its include note.
+            '**/tests/ui/platform-settings-tabs.test.tsx',
+          ],
+          setupFiles: ['./tests/setup/jsdom.setup.ts'],
+          include: [
+            'src/**/*.test.tsx',
+            'tests/auth/**/*.test.tsx',
+            'tests/components/**/*.test.tsx',
+            // Behavioural lib suites that render (e.g. the data-layer
+            // provider suite, PR-A1b) live under tests/lib as .tsx.
+            'tests/lib/**/*.test.tsx',
+            'tests/ui/**/*.test.{ts,tsx}',
+            'tests/unit/**/*.test.tsx',
+          ],
+        },
+      },
+    ],
   },
 });

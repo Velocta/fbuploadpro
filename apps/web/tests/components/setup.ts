@@ -1,7 +1,19 @@
 /**
  * @file setup.ts
- * @description React 19 / Node-compatible test helpers using renderToStaticMarkup.
- * Zero external DOM dependency (no jsdom / happy-dom needed).
+ * @description Shared render helper for the LEGACY component suites only.
+ *
+ * Spec 137-A3 (T32) disposition: as the app's component-test harness this
+ * static-markup approach is SUPERSEDED — new and migrated component tests
+ * render into jsdom with Testing Library + user-event (see the jsdom
+ * Vitest project and src/components/shared/ui/*.test.tsx). This file is
+ * retained solely because the legacy suites that import it
+ * (tests/components/**, parts of tests/auth/** and tests/ui/** — full
+ * inventory in PR-A3) assert on byte-level CSS text inside <style> blocks
+ * and style attributes, which only static serialization preserves; a
+ * live-DOM render normalizes that CSS (42 assertions across 12 files) and
+ * those suites are surface-owned: they migrate to behavioural tests at
+ * their surfaces' rebuilds (spec 137 §4.1.8) and this helper is deleted
+ * with the last of them. Do NOT write new tests against this helper.
  */
 
 import React from 'react';

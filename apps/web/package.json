@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "test": "vitest run --passWithNoTests",
+    "test:e2e": "playwright test",
     "tokens:build": "node scripts/build-tokens.mjs",
     "tokens:check": "node scripts/check-tokens.mjs"
   },
@@ -40,9 +41,11 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.4.2",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/node": "^22.13.4",

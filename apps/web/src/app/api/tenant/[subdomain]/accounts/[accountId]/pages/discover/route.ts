@@ -49,14 +49,27 @@ export async function handleDiscoverPages(
   }
 
   // 4. Fetch account and composite ownership (user_id, workspace_id, accountId)
-  let account: any = null;
-  let importedRows: any[] = [];
+  // Row shapes as consumed below (spec 137 §3.7): the account fields this
+  // handler reads, in both the snake_case (SQL/Supabase) and camelCase
+  // (legacy) spellings, and the imported-page id rows.
+  interface AccountLookupRow {
+    encrypted_access_token?: string | null;
+    encryptedAccessToken?: string | null;
+    display_name?: string | null;
+    displayName?: string | null;
+  }
+  interface ImportedPageIdRow {
+    fb_page_id: string;
+    fbPageId?: string;
+  }
+  let account: AccountLookupRow | null = null;
+  let importedRows: ImportedPageIdRow[] = [];
 
   if (dbClient && 'query' in dbClient && typeof dbClient.query === 'function') {
-    const accounts = (await dbClient.query(
+    const accounts = await dbClient.query<AccountLookupRow>(
       'SELECT * FROM facebook_accounts WHERE id = $1 AND user_id = $2 AND workspace_id = $3',
       [accountId, session.userId, workspaceId]
-    )) as Record<string, unknown>[];
+    );
 
     if (!accounts || accounts.length === 0 || !accounts[0]) {
       return NextResponse.json(
@@ -66,10 +79,10 @@ export async function handleDiscoverPages(
     }
     account = accounts[0];
 
-    importedRows = (await dbClient.query(
+    importedRows = await dbClient.query<ImportedPageIdRow>(
       "SELECT fb_page_id FROM facebook_pages WHERE user_id = $1 AND workspace_id = $2 AND status != 'disconnected'",
       [session.userId, workspaceId]
-    )) as Record<string, unknown>[];
+    );
   } else {
     const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<Database> | null;
     if (!supabase) {
@@ -104,6 +117,12 @@ export async function handleDiscoverPages(
 
   const encryptedToken =
     account.encrypted_access_token || account.encryptedAccessToken;
+  if (!encryptedToken) {
+    return NextResponse.json(
+      { error: 'Failed to decrypt account credentials' },
+      { status: 500 }
+    );
+  }
 
   let rawToken: string;
   try {
@@ -116,16 +135,23 @@ export async function handleDiscoverPages(
   }
 
   // 4. Query Facebook Graph API v26.0 /me/accounts with pagination
-  let rawItems: any[] = [];
+  let rawItems: Awaited<ReturnType<typeof fetchAllFacebookPages>> = [];
   try {
     rawItems = await fetchAllFacebookPages(
       rawToken,
       'id,name,category,tasks,access_token,followers_count,picture{url}'
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const status =
+      err !== null &&
+      typeof err === 'object' &&
+      'status' in err &&
+      typeof err.status === 'number'
+        ? err.status
+        : 500;
     return NextResponse.json(
       { error: 'Failed to query Facebook Graph API' },
-      { status: typeof err?.status === 'number' ? err.status : 500 }
+      { status }
     );
   }
 

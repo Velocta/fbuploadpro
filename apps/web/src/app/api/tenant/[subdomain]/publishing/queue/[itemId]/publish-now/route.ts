@@ -11,7 +11,7 @@ export async function handlePublishNow(
   request: NextRequest,
   subdomain: string,
   itemId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const auth = await authenticateTenantRoute(request, subdomain);
   if (auth.errorResponse) return auth.errorResponse;

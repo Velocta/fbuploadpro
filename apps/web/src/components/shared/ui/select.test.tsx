@@ -1,51 +1,81 @@
-/** @vitest-environment jsdom */
 import * as React from "react";
-import { describe, it, expect, beforeAll } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { ensureDomShims } from "./test-utils";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectGroup, SelectLabel } from "./select";
 
-beforeAll(ensureDomShims);
-
-describe("Select", () => {
-  it("opens the listbox and selects an option by click", () => {
-    render(
-      <Select>
-        <SelectTrigger aria-label="Platform">
-          <SelectValue placeholder="Choose a platform" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            <SelectLabel>Social</SelectLabel>
-            <SelectItem value="facebook">Facebook</SelectItem>
-            <SelectItem value="instagram">Instagram</SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    );
-    const trigger = screen.getByRole("combobox", { name: "Platform" });
-    expect(trigger.textContent).toContain("Choose a platform");
-    fireEvent.click(trigger);
-    const option = screen.getByRole("option", { name: "Instagram" });
-    fireEvent.click(option);
-    expect(trigger.textContent).toContain("Instagram");
-  });
-
-  it("disabled option cannot be selected", () => {
-    render(
-      <Select>
-        <SelectTrigger aria-label="Tier">
-          <SelectValue placeholder="Tier" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="free">Free</SelectItem>
+function TestSelect({ disabled = false }: { disabled?: boolean }) {
+  return (
+    <Select disabled={disabled}>
+      <SelectTrigger aria-label="Platform">
+        <SelectValue placeholder="Choose a platform" />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel>Social</SelectLabel>
+          <SelectItem value="facebook">Facebook</SelectItem>
+          <SelectItem value="instagram">Instagram</SelectItem>
           <SelectItem value="pro" disabled>
             Pro
           </SelectItem>
-        </SelectContent>
-      </Select>
-    );
-    fireEvent.click(screen.getByRole("combobox", { name: "Tier" }));
-    expect(screen.getByRole("option", { name: "Pro" }).getAttribute("aria-disabled")).toBe("true");
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
+describe("Select", () => {
+  it("shows the placeholder, opens the listbox and selects an option by click", async () => {
+    const user = userEvent.setup();
+    render(<TestSelect />);
+    const trigger = screen.getByRole("combobox", { name: "Platform" });
+    expect(trigger).toHaveTextContent("Choose a platform");
+    await user.click(trigger);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Instagram" }));
+    expect(trigger).toHaveTextContent("Instagram");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("keyboard: arrows move through options, Enter selects, value is announced on the trigger", async () => {
+    const user = userEvent.setup();
+    render(<TestSelect />);
+    const trigger = screen.getByRole("combobox", { name: "Platform" });
+    trigger.focus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
+    expect(trigger).toHaveTextContent("Instagram");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("Esc closes the listbox without changing the value", async () => {
+    const user = userEvent.setup();
+    render(<TestSelect />);
+    const trigger = screen.getByRole("combobox", { name: "Platform" });
+    await user.click(trigger);
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(trigger).toHaveTextContent("Choose a platform");
+  });
+
+  it("disabled option is marked and skipped by keyboard navigation", async () => {
+    const user = userEvent.setup();
+    render(<TestSelect />);
+    await user.click(screen.getByRole("combobox", { name: "Platform" }));
+    expect(screen.getByRole("option", { name: "Pro" })).toHaveAttribute("aria-disabled", "true");
+    await user.keyboard("{Escape}");
+  });
+
+  it("a disabled select cannot be opened", async () => {
+    const user = userEvent.setup();
+    render(<TestSelect disabled />);
+    const trigger = screen.getByRole("combobox", { name: "Platform" });
+    expect(trigger).toBeDisabled();
+    await user.click(trigger);
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
   });
 });

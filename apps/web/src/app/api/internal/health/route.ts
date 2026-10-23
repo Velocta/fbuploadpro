@@ -6,6 +6,7 @@ import {
   verifySessionToken,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createR2S3Client, getR2Config } from '@/lib/storage';
 
 /**
@@ -61,9 +62,9 @@ export interface InternalHealthPayload {
 }
 
 export interface InternalHealthDeps {
-  // Supabase-like client (service role). Typed loosely: the builder chain
-  // shape differs per query, as elsewhere in this codebase.
-  db?: any;
+  // Supabase client (service role) — the app's client-factory type
+  // (spec 137 §3.7: the untyped generic lives in the factory, not here).
+  db?: SupabaseClient;
   checkStorage?: () => Promise<boolean>;
   now?: Date;
 }
@@ -116,7 +117,7 @@ async function defaultCheckStorage(): Promise<boolean> {
 }
 
 async function countByStatus(
-  db: any,
+  db: SupabaseClient,
   table: string,
   statuses: readonly string[]
 ): Promise<Record<string, number>> {
@@ -155,7 +156,7 @@ const EMPTY_QUEUE: QueueCheck = {
   stuckPublishingCount: 0,
 };
 
-async function checkHeartbeat(db: any, now: Date): Promise<HeartbeatCheck> {
+async function checkHeartbeat(db: SupabaseClient, now: Date): Promise<HeartbeatCheck> {
   try {
     const { data, error } = await db
       .from('worker_heartbeats')
@@ -186,7 +187,7 @@ async function checkHeartbeat(db: any, now: Date): Promise<HeartbeatCheck> {
   }
 }
 
-async function checkQueue(db: any, now: Date): Promise<QueueCheck> {
+async function checkQueue(db: SupabaseClient, now: Date): Promise<QueueCheck> {
   try {
     const timestamp = now.toISOString();
     const stuckBefore = new Date(

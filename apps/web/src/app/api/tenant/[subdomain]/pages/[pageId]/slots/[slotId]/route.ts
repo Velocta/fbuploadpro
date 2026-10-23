@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import {
+  type DatabasePageQueueSlotRow,
   canAccessTenant,
   getSessionSecret,
   PageQueueSlotSchema,
@@ -15,7 +16,7 @@ export async function handleUpdateQueueSlot(
   subdomain: string,
   pageId: string,
   slotId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -104,8 +105,13 @@ export async function handleUpdateQueueSlot(
       });
 
       return NextResponse.json(responsePayload, { status: 200 });
-    } catch (err: any) {
-      if (err?.code === '23505') {
+    } catch (err: unknown) {
+      if (
+        err !== null &&
+        typeof err === 'object' &&
+        'code' in err &&
+        err.code === '23505'
+      ) {
         return NextResponse.json(
           {
             error: 'SLOT_ALREADY_EXISTS',
@@ -120,7 +126,7 @@ export async function handleUpdateQueueSlot(
       );
     }
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }
@@ -137,7 +143,7 @@ export async function handleUpdateQueueSlot(
     }
     const pageTimezone = String(pageData.timezone || 'UTC');
 
-    const updatePayload: Record<string, any> = {
+    const updatePayload: Partial<DatabasePageQueueSlotRow> & { allowed_formats?: string[] } = {
       updated_at: new Date().toISOString(),
     };
     if (parsed.data.slotTime !== undefined) updatePayload.slot_time = parsed.data.slotTime;
@@ -194,7 +200,7 @@ export async function handleDeleteQueueSlot(
   subdomain: string,
   pageId: string,
   slotId: string,
-  dbClient?: DatabaseClient | SupabaseClient<any>
+  dbClient?: DatabaseClient | SupabaseClient
 ): Promise<NextResponse> {
   const sessionSecret = getSessionSecret();
 
@@ -240,7 +246,7 @@ export async function handleDeleteQueueSlot(
 
     return NextResponse.json({ success: true, slotId });
   } else {
-    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient<any> | null;
+    const supabase = (dbClient && 'from' in dbClient ? dbClient : getSupabaseAdminClient()) as SupabaseClient | null;
     if (!supabase) {
       return NextResponse.json({ error: 'Database service unavailable' }, { status: 500 });
     }

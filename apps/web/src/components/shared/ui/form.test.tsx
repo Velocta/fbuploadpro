@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+/** @vitest-environment jsdom */
 import * as React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -36,6 +37,35 @@ describe("Input / Textarea", () => {
     expect(area.tagName).toBe("TEXTAREA");
     expect(area.className).toContain("min-h-16");
   });
+  it("typing into the input updates its value (controlled behaviour)", async () => {
+    const user = userEvent.setup();
+    render(<Input aria-label="Name" placeholder="Your name" />);
+    const input = screen.getByLabelText("Name");
+    await user.click(input);
+    await user.type(input, "Boss");
+    expect(input).toHaveValue("Boss");
+  });
+
+  it("disabled input cannot be typed into", async () => {
+    const user = userEvent.setup();
+    render(<Input aria-label="Name" disabled />);
+    const input = screen.getByLabelText("Name");
+    expect(input).toBeDisabled();
+    await user.type(input, "Nope");
+    expect(input).toHaveValue("");
+  });
+
+  it("textarea renders multiline with token classes and accepts typed text", async () => {
+    const user = userEvent.setup();
+    render(<Textarea aria-label="Caption" rows={4} />);
+    const area = screen.getByLabelText("Caption");
+    expect(area.tagName).toBe("TEXTAREA");
+    expect(area.className).toContain("min-h-16");
+    await user.type(area, "Line one");
+    expect(area).toHaveValue("Line one");
+  });
+});
+
 });
 
 describe("Field + FormErrorSummary (form error pattern)", () => {
@@ -88,6 +118,44 @@ describe("Field + FormErrorSummary (form error pattern)", () => {
     expect(screen.getByText("Invalid email or password")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Invalid email or password" })).toBeNull();
   });
+  it("a failed submit pattern never clears typed input", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <Field id="handle" label="Page handle">
+        <Input />
+      </Field>
+    );
+    const input = screen.getByLabelText(/Page handle/);
+    await user.type(input, "boss-page");
+    expect(input).toHaveValue("boss-page");
+    // The error state arrives (as after a failed submit): input is preserved.
+    rerender(
+      <Field id="handle" label="Page handle" error="Handle is already taken">
+        <Input />
+      </Field>
+    );
+    expect(screen.getByLabelText(/Page handle/)).toHaveValue("boss-page");
+    expect(screen.getByLabelText(/Page handle/)).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("summary lists errors as links to their fields and can receive focus", () => {
+    render(
+      <FormErrorSummary
+        errors={[
+          { fieldId: "handle", message: "Handle is already taken" },
+          { fieldId: "city", message: "City is required" },
+        ]}
+      />
+    );
+    const summary = screen.getByRole("alert");
+    expect(summary).toHaveAttribute("tabindex", "-1");
+    const link = screen.getByRole("link", { name: "Handle is already taken" });
+    expect(link).toHaveAttribute("href", "#handle");
+    // The pattern: on submit failure the consumer moves focus to the summary.
+    (summary as HTMLElement).focus();
+    expect(summary).toHaveFocus();
+  });
+
 });
 
 /* ------------------------------------------------------------------ */

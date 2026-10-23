@@ -7,7 +7,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * Returns null if the workspace does not exist or does not belong to the user.
  */
 export async function resolveTenantWorkspaceId(
-  client: DatabaseClient | SupabaseClient<any> | null | undefined,
+  client: DatabaseClient | SupabaseClient | null | undefined,
   subdomain: string,
   userId: string,
   role?: UserRole | string
