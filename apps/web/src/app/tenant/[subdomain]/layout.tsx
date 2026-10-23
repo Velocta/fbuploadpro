@@ -6,6 +6,7 @@ import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb';
 import { WorkspaceLifecycleGuard } from '@/components/workspace/workspace-lifecycle-guard';
 import { getServerSessionContext } from '@/lib/auth';
+import { DataProvider } from '@/lib/data/provider';
 import { SPACING, THEME } from '@/lib/theme';
 import { getWorkspaceDisplayName } from './workspace-display-name';
 
@@ -42,6 +43,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
       };
 
   return (
+    <DataProvider subdomain={subdomain}>
     <SidebarProvider>
       <WorkspaceLifecycleGuard userId={session?.userId} userEmail={session?.email} />
       <WorkspaceSidebar subdomain={subdomain} useCleanPaths={useCleanPaths} user={user} workspaceName={workspaceName ?? undefined} />
@@ -77,5 +79,6 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
         {children}
       </SidebarInset>
     </SidebarProvider>
+    </DataProvider>
   );
 }

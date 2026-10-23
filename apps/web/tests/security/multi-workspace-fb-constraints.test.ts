@@ -15,10 +15,14 @@ import {
 } from '@fbuploadpro/contracts';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import {
-  validateSessionActive,
   _setMockSupabaseClient,
+} from '@/lib/auth/clients';
+import {
+  validateSessionActive,
+} from '@/lib/auth/session';
+import {
   _resetAuthStores,
-} from '@/lib/supabase-auth';
+} from '@/lib/auth/stores';
 
 const USER_ID = '11111111-1111-4111-a111-111111111111';
 const WORKSPACE_A = '22222222-2222-4222-a222-222222222222';

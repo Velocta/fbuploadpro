@@ -6,7 +6,7 @@
  * Asserts that:
  * 1. auth-contracts.test.ts asserts tenant root redirection ('/') or canonical tenant paths, not banned '/dashboard' per Principle 14.
  * 2. AuthSuccessResponseSchema redirectUrl defaults and tests reflect canonical workspace root.
- * 3. AuthUser interface in supabase-auth.ts and user models decouple user.subdomain to align with Principle 27 (workspaces table as source of truth).
+ * 3. AuthUser interface in auth/users.ts and user models decouple user.subdomain to align with Principle 27 (workspaces table as source of truth).
  */
 
 import { describe, expect, it } from 'vitest';
@@ -29,8 +29,8 @@ describe('ISSUE-16: Legacy /dashboard Route and user.subdomain Lingering in Cont
     expect(content).not.toContain('/dashboard');
   });
 
-  it('verifies AuthUser in apps/web/src/lib/supabase-auth.ts documents workspace authority per Principle 27', () => {
-    const filePath = path.resolve(process.cwd(), 'src/lib/supabase-auth.ts');
+  it('verifies AuthUser in apps/web/src/lib/auth/users.ts documents workspace authority per Principle 27', () => {
+    const filePath = path.resolve(process.cwd(), 'src/lib/auth/users.ts');
     const content = fs.readFileSync(filePath, 'utf-8');
 
     expect(content).toContain('Principle 27');

@@ -9,12 +9,20 @@ import {
   _resetOtpStore,
 } from '../../src/lib/otp-service';
 import {
-  resetUserPasswordWithOtp,
-  signUpTenantUser,
   loginTenantUser,
+} from '../../src/lib/auth/login';
+import {
+  resetUserPasswordWithOtp,
+} from '../../src/lib/auth/password-reset';
+import {
   validateSessionActive,
+} from '../../src/lib/auth/session';
+import {
+  signUpTenantUser,
+} from '../../src/lib/auth/signup';
+import {
   _resetAuthStores,
-} from '../../src/lib/supabase-auth';
+} from '../../src/lib/auth/stores';
 import { _resetRateLimiter } from '../../src/lib/rate-limiter';
 import { verifySessionToken } from '@fbuploadpro/contracts';
 

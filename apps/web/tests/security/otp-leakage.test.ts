@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { signUpTenantUser, sendPasswordResetOtpViaSupabase } from '@/lib/supabase-auth';
+import { sendPasswordResetOtpViaSupabase } from '@/lib/auth/password-reset';
+import { signUpTenantUser } from '@/lib/auth/signup';
 
 describe('Security Audit: Zero OTP Token Leakage in Logging (ISSUE-15)', () => {
   let logSpy: any;

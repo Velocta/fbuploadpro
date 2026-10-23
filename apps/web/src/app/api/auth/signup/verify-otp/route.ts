@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { canonicalizeGmailAddress } from '@fbuploadpro/contracts';
 import {
-  verifySignupOtpViaSupabase,
   setSessionCookie,
-} from '@/lib/supabase-auth';
+} from '@/lib/auth/session';
+import {
+  verifySignupOtpViaSupabase,
+} from '@/lib/auth/signup';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 

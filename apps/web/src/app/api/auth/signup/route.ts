@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { SignupRequestSchema, isSignupEnabled } from '@fbuploadpro/contracts';
-import { signUpTenantUser } from '@/lib/supabase-auth';
+import { signUpTenantUser } from '@/lib/auth/signup';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
 

@@ -1,5 +1,5 @@
 import { getServerSessionContext } from '@/lib/auth';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 
 /**
  * Server-only: resolve the workspace display name for a tenant subdomain.

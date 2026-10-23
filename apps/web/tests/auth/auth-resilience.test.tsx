@@ -6,7 +6,7 @@ import { POST as signupHandler } from '../../src/app/api/auth/signup/route';
 import { POST as forgotPasswordHandler } from '../../src/app/api/auth/forgot-password/route';
 import { POST as resetPasswordHandler } from '../../src/app/api/auth/reset-password/route';
 import { sanitizeAuthErrorMessage } from '../../src/lib/auth-errors';
-import { _setMockSupabaseClient } from '../../src/lib/supabase-auth';
+import { _setMockSupabaseClient } from '../../src/lib/auth/clients';
 import { render } from '../components/setup';
 import { Alert } from '../../src/components/ui';
 

@@ -6,7 +6,7 @@ import {
   PUT as savePlatformCredentials,
   DELETE as deletePlatformCredentials,
 } from '@/app/api/tenant/[subdomain]/settings/platform-credentials/[platform]/route';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/clients';
 
 const TEST_SECRET = 'super-secret-session-signing-key-minimum-32-chars-long';
 const TEST_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';

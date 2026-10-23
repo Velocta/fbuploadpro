@@ -448,6 +448,52 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Check 13: localStorage allowlist (spec 137 §3.9 / PR-A1b).
+# Direct localStorage access in apps/web/src is allowlist-only:
+#   lib/storage/preferences.ts (typed helper), app/layout.tsx (theme-init,
+#   spec 129), lib/auth-broadcast.ts + workspace-lifecycle-guard.tsx (the
+#   auth cross-tab broadcast mechanism). Every other usage is frozen per
+#   file in apps/web/localstorage-baseline.txt (same discipline as checks
+#   9/12): any new file or increase fails; a decrease fails until the
+#   baseline is updated in the same PR. Frozen usages are classified in
+#   PR-A1b's per-site table with named migration owners (spec 137 §4.1.7).
+# ---------------------------------------------------------------------------
+LS_BASELINE="apps/web/localstorage-baseline.txt"
+LS_ALLOWLIST=" apps/web/src/lib/storage/preferences.ts apps/web/src/app/layout.tsx apps/web/src/lib/auth-broadcast.ts apps/web/src/components/workspace/workspace-lifecycle-guard.tsx "
+if [ -f "$LS_BASELINE" ]; then
+  LS_CURRENT="$(mktemp)"
+  while IFS= read -r ls_file; do
+    case "$LS_ALLOWLIST" in
+      *" $ls_file "*) continue ;;
+    esac
+    ls_count="$(grep -o 'localStorage' "$ls_file" 2>/dev/null | wc -l | tr -d ' ')"
+    [ "$ls_count" -gt 0 ] && printf '%s %s\n' "$ls_file" "$ls_count" >> "$LS_CURRENT"
+  done < <(find apps/web/src -name '*.ts' -o -name '*.tsx' | sort)
+  LS_BASE_SORTED="$(mktemp)"
+  grep -E '^apps/web/src/' "$LS_BASELINE" | sort > "$LS_BASE_SORTED"
+  while IFS= read -r change; do
+    [ -z "$change" ] && continue
+    kind="$(printf '%s' "$change" | awk '{print $1}')"
+    fname="$(printf '%s' "$change" | awk '{print $2}')"
+    old_n="$(printf '%s' "$change" | awk '{print $3}')"
+    new_n="$(printf '%s' "$change" | awk '{print $4}')"
+    if [ "$kind" = "INCREASE" ]; then
+      violation "localStorage allowlist: ${fname} has ${new_n} occurrence(s), baseline is ${old_n} -- direct access is allowlist-only (spec 137 §3.9); device preferences go through src/lib/storage/preferences.ts; do not raise the baseline"
+    else
+      violation "localStorage baseline STALE: ${fname} dropped from ${old_n} to ${new_n} -- update apps/web/localstorage-baseline.txt in this PR (spec 137 PR-A1b)"
+    fi
+  done < <(awk '
+    NR==FNR { base[$1]=$2; seen[$1]=1; next }
+    { cur[$1]=$2; seen[$1]=1 }
+    END { for (k in seen) { b=base[k]+0; c=cur[k]+0;
+      if (c>b) print "INCREASE", k, b, c; else if (c<b) print "DECREASE", k, b, c } }
+  ' "$LS_BASE_SORTED" "$LS_CURRENT")
+  rm -f "$LS_CURRENT" "$LS_BASE_SORTED"
+else
+  violation "localStorage baseline file missing: apps/web/localstorage-baseline.txt (spec 137 PR-A1b)"
+fi
+
+# ---------------------------------------------------------------------------
 # Report
 # ---------------------------------------------------------------------------
 count="$(wc -l < "$VIOLATIONS_FILE" | tr -d ' ')"

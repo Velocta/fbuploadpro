@@ -5,7 +5,7 @@ import {
   getSessionSecret,
   verifySessionToken,
 } from '@fbuploadpro/contracts';
-import { getSupabaseAdminClient } from '@/lib/supabase-auth';
+import { getSupabaseAdminClient } from '@/lib/auth/clients';
 import { createR2S3Client, getR2Config } from '@/lib/storage';
 
 /**

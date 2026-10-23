@@ -20,6 +20,8 @@ export default defineConfig({
       // wider test-harness migration.
       thresholds: {
         'src/lib/api/**': { lines: 100 },
+        'src/lib/data/**': { lines: 100 },
+        'src/lib/storage/**': { lines: 100 },
         'src/lib/report-error.ts': { lines: 100 },
       },
     },

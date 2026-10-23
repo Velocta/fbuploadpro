@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { resolveUniqueSubdomain, _setMockSupabaseClient } from '@/lib/supabase-auth';
+import { _setMockSupabaseClient } from '@/lib/auth/clients';
+import { resolveUniqueSubdomain } from '@/lib/auth/workspaces';
 
 describe('resolveUniqueSubdomain (ISSUE-08)', () => {
   afterEach(() => {

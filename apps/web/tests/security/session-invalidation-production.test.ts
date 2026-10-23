@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { signSessionToken, type SessionPayload } from '@fbuploadpro/contracts';
-import * as authModule from '@/lib/supabase-auth';
+import * as authModule from '@/lib/auth/index';
 
 const SESSION_SECRET = 'test-secret-at-least-32-chars-long-123456';
 const USER_ID = '11111111-2222-4333-a444-555555555555';
