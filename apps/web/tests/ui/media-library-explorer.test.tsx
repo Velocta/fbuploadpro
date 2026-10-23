@@ -22,8 +22,7 @@ import {
   captureVideoFrameAsWebp,
 } from '@/components/media/media-preview-modal';
 import { BatchActionBar } from '@/components/media/batch-action-bar';
-import { NewFolderModal } from '@/components/media/new-folder-modal';
-import { BatchSetCaptionModal } from '@/components/media/batch-set-caption-modal';
+import { MediaImportModal } from '@/components/media/media-import-modal';
 import {
   MediaLibraryExplorer,
   MEDIA_VIEW_MODE_STORAGE_KEY,
@@ -414,7 +413,7 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
   });
 
 
-  it('renders MediaLibraryExplorer with breadcrumb navigation, nested subfolders, destructive delete folder modal impact, and strict theme compliance', () => {
+  it('renders MediaLibraryExplorer with breadcrumb navigation, nested subfolders, and strict theme compliance', () => {
     const campaignA = SAMPLE_FOLDERS[0]!;
     const { hasText, hasAttribute, html } = renderExplorer(
         <MediaLibraryExplorer
@@ -451,11 +450,12 @@ describe('Spec 029: MediaLibraryExplorer, Global Search, Infinite Scroll, URL Sy
     expect(hasText('Reels')).toBe(true);
     expect(hasText('Photos')).toBe(true);
 
-    // Destructive Delete Folder confirmation modal displays exact recursive subfolder & media file counts
-    expect(hasAttribute('data-testid', 'delete-folder-modal')).toBe(true);
-    expect(hasAttribute('data-testid', 'delete-folder-impact-summary')).toBe(true);
-    expect(hasText('3 subfolders')).toBe(true);
-    expect(hasText('14 media files')).toBe(true);
+    // PR-133-3 migration (spec §2.5): the destructive Delete Folder
+    // confirmation's impact assertions moved to the behavioural
+    // suite (tests/ui/media-library-dialogs.test.tsx) — the rebuilt
+    // dialog is a Radix AlertDialog, whose portal content does not
+    // exist in static markup. The behaviour (exact recursive
+    // subfolder & media file counts) is asserted there live.
 
     // Zero decorative status dots (status is colour + icon + text, OD-3).
     expect(html).not.toContain('data-slot="status-dot"');
@@ -903,7 +903,7 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     expect(folderExplorer.hasAttribute('data-testid', 'media-views-rail')).toBe(false);
   });
 
-  it('Spec 071 US2 & US3: action states on BatchActionBar, NewFolderModal, and MediaPreviewModal lock out duplicate actions', () => {
+  it('Spec 071 US2 & US3: action states on BatchActionBar and MediaPreviewModal lock out duplicate actions', () => {
     // BatchActionBar with isBusy=true disables all action buttons
     const batchBar = render(
       <BatchActionBar
@@ -923,19 +923,11 @@ describe('Spec 030: Grid vs. Compact Table View, Resumable Upload Controls, Aspe
     const captionBtn = batchBar.findTags('button').find((b) => b.attributes['data-testid'] === 'batch-caption-btn');
     expect(captionBtn?.attributes.disabled).toBeDefined();
 
-    // NewFolderModal renders disabled submit when empty or duplicate
-    const newFolderModal = render(
-      <NewFolderModal
-        isOpen={true}
-        folders={SAMPLE_FOLDERS}
-        initialParentId={null}
-        onClose={vi.fn()}
-        onCreateFolder={vi.fn().mockResolvedValue(undefined)}
-      />
-    );
-    const createBtn = newFolderModal.findTags('button').find((b) => b.attributes['data-testid'] === 'submit-create-folder');
-    expect(createBtn?.attributes.disabled).toBeDefined();
-    expect(newFolderModal.hasText('Create folder')).toBe(true);
+    // PR-133-3 migration (spec §2.5): the NewFolderModal lockout
+    // assertions (disabled submit when empty or duplicate) moved to
+    // the behavioural suite (tests/ui/media-library-dialogs.test.tsx)
+    // — the rebuilt modal is a Radix Dialog on the RHF form standard,
+    // whose portal content does not exist in static markup.
 
     // MediaPreviewModal renders delete and save buttons with busy protection
     const previewModal = render(
