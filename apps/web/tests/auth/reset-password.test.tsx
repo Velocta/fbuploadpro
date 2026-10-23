@@ -142,7 +142,7 @@ describe('Password Recovery - Reset Password (US2)', () => {
 
     it('returns 200 when valid 6-digit OTP, email, and password are provided', async () => {
       const email = 'alex.otp.testuser@gmail.com';
-      const { otp } = createPasswordResetOtp(email);
+      const { otp } = await createPasswordResetOtp(email);
 
       const req = new NextRequest('http://localhost:3000/api/auth/reset-password', {
         method: 'POST',

@@ -31,7 +31,7 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
       email: 'sarah.session@gmail.com',
       password: 'SecurePassword123!',
     });
-    expect(verifySignupOtp('sarah.session@gmail.com', _signup.simulatedOtp!).success).toBe(true);
+    expect((await verifySignupOtp('sarah.session@gmail.com', _signup.simulatedOtp!)).success).toBe(true);
     const { token } = await loginTenantUser({ email: 'sarah.session@gmail.com', password: 'SecurePassword123!' });
 
     const payload = await verifySessionToken(token, SESSION_SECRET);
@@ -50,7 +50,7 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
       email,
       password: originalPassword,
     });
-    expect(verifySignupOtp(email, _signup.simulatedOtp!).success).toBe(true);
+    expect((await verifySignupOtp(email, _signup.simulatedOtp!)).success).toBe(true);
     const { token: initialToken } = await loginTenantUser({ email, password: originalPassword });
 
     const initialSession = await verifySessionToken(initialToken, SESSION_SECRET);
@@ -59,7 +59,7 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
 
     // 2. Perform password reset with OTP
     const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
-    const { otp } = createPasswordResetOtp(email);
+    const { otp } = await createPasswordResetOtp(email);
 
     await resetUserPasswordWithOtp({
       email,
@@ -94,7 +94,7 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
       email,
       password: 'Password123!',
     });
-    expect(verifySignupOtp(email, _signup.simulatedOtp!).success).toBe(true);
+    expect((await verifySignupOtp(email, _signup.simulatedOtp!)).success).toBe(true);
     const { token: initialToken } = await loginTenantUser({ email, password: 'Password123!' });
 
     const initialSession = await verifySessionToken(initialToken, SESSION_SECRET);
@@ -102,7 +102,7 @@ describe('Session Lifetime Synchronization & Invalidation (AUTH-05 / AUTH-07 / S
 
     // Reset password in the same second (NO artificial sleep/delay)
     const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
-    const { otp } = createPasswordResetOtp(email);
+    const { otp } = await createPasswordResetOtp(email);
 
     await resetUserPasswordWithOtp({
       email,

@@ -27,7 +27,7 @@ describe('ISSUE-34: Plaintext Password Storage & Universal Auth Bypass via Colon
     const rawPassword = 'MySecret:Password123!';
     const email = 'colon-user@gmail.com';
 
-    createPendingSignup({
+    await createPendingSignup({
       name: 'Colon User',
       phone: '+15555550123',
       email,
@@ -70,7 +70,7 @@ describe('ISSUE-34: Plaintext Password Storage & Universal Auth Bypass via Colon
     const legitimateHash = hashPasswordSync(rawPassword);
     const email = 'prehashed-user@gmail.com';
 
-    createPendingSignup({
+    await createPendingSignup({
       name: 'Prehashed User',
       phone: '+15555550124',
       email,

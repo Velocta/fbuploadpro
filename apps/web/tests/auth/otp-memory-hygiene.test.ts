@@ -21,11 +21,11 @@ describe('Credential Zero-Retention in OTP Staging (AUTH-02 / Spec 017 US3)', ()
     _resetAuthStores();
   });
 
-  it('stages credentials with PBKDF2 pre-hashing and never retains plaintext password', () => {
+  it('stages credentials with PBKDF2 pre-hashing and never retains plaintext password', async () => {
     const rawPassword = 'SuperSecretPlaintextPassword!99';
     const email = 'zero.retention@gmail.com';
 
-    const { otp } = createPendingSignup({
+    const { otp } = await createPendingSignup({
       name: 'Ellen Ripley',
       phone: '+14155552671',
       email,
@@ -54,7 +54,7 @@ describe('Credential Zero-Retention in OTP Staging (AUTH-02 / Spec 017 US3)', ()
     expect(serialized).not.toContain(rawPassword);
 
     // 5. Verify OTP and ensure verification payload delivers pre-hashed credential
-    const verification = verifySignupOtp(email, otp);
+    const verification = await verifySignupOtp(email, otp);
     expect(verification.success).toBe(true);
     expect(verification.signupData).toBeDefined();
 
@@ -67,14 +67,14 @@ describe('Credential Zero-Retention in OTP Staging (AUTH-02 / Spec 017 US3)', ()
     const rawPassword = 'AnotherSecretPassword!42';
     const email = 'ripley.login@gmail.com';
 
-    const { otp } = createPendingSignup({
+    const { otp } = await createPendingSignup({
       name: 'Ellen Ripley',
       phone: '+14155552671',
       email,
       password: rawPassword,
     });
 
-    const verification = verifySignupOtp(email, otp);
+    const verification = await verifySignupOtp(email, otp);
     expect(verification.success).toBe(true);
     expect(verification.signupData).toBeDefined();
 
@@ -86,7 +86,7 @@ describe('Credential Zero-Retention in OTP Staging (AUTH-02 / Spec 017 US3)', ()
       email: staged.email,
       hashedPassword: staged.hashedPassword,
     });
-    const verifyRes2 = verifySignupOtp(staged.email, signupRes.simulatedOtp!);
+    const verifyRes2 = await verifySignupOtp(staged.email, signupRes.simulatedOtp!);
     expect(verifyRes2.success).toBe(true);
     const { user, token } = await loginTenantUser({ email: staged.email, password: rawPassword });
     expect(user).toBeDefined();

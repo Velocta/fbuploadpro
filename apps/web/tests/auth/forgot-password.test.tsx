@@ -123,7 +123,7 @@ describe('Password Recovery - Forgot Password (US1 & Spec 018 US3)', () => {
 
     it('enforces 60-second cooldown on resend attempts', async () => {
       const email = 'cooldown.user@gmail.com';
-      createPasswordResetOtp(email);
+      await createPasswordResetOtp(email);
 
       const req = new NextRequest('http://localhost:3000/api/auth/forgot-password/resend', {
         method: 'POST',

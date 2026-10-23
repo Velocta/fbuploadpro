@@ -42,7 +42,7 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       expect(() => validateOtpServiceConfig()).not.toThrow();
     });
 
-    it('warns in production when createPendingSignup fallback is invoked', () => {
+    it('warns in production when createPendingSignup fallback is invoked', async () => {
       process.env = {
         ...process.env,
         NODE_ENV: 'production',
@@ -52,12 +52,15 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
 
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      createPendingSignup({
+      // This test asserts only the fallback warning. The creation itself is
+      // allowed to reject here: with no Upstash configured, the spec-139 B2
+      // lockout check fails closed in production and denies the attempt.
+      await createPendingSignup({
         name: 'Test Agent',
         phone: '+14155552671',
         email: 'agent.serverless@gmail.com',
         password: 'ValidPassword123!',
-      });
+      }).catch(() => {});
 
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('[OTP Service] Fallback in-memory pendingSignup used in production')
@@ -150,7 +153,9 @@ describe('[ISSUE-25] Serverless State Hygiene & Distributed Cache Enforcement', 
       const { createPasswordResetOtp } = await import('../../src/lib/otp-service');
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      createPasswordResetOtp('reset.agent@gmail.com');
+      // Same allowance as the signup case above: this asserts the warning;
+      // the fail-closed production lockout may reject the creation itself.
+      await createPasswordResetOtp('reset.agent@gmail.com').catch(() => {});
 
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('[OTP Service] Fallback in-memory pendingPasswordReset used in production')

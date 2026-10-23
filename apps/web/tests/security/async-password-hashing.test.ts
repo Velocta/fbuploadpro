@@ -61,7 +61,7 @@ describe('ISSUE-37: Non-Blocking Asynchronous PBKDF2 Password Hashing', () => {
     const email = 'async-user@gmail.com';
     const password = 'UserPassword123!';
 
-    createPendingSignup({
+    await createPendingSignup({
       name: 'Async User',
       phone: '+15555550199',
       email,
