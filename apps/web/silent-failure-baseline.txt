@@ -24,12 +24,8 @@ bare-catch-return apps/web/src/lib/auth.ts 1
 bare-catch-return apps/web/src/lib/auth/users.ts 1
 bare-catch-return apps/web/src/lib/connect/platform-callback.ts 2
 bare-catch-return apps/web/src/lib/connect/session.ts 1
-bare-catch-return apps/web/src/lib/server/workspace-resolver.ts 2
 bare-catch-return apps/web/src/middleware.ts 1
-empty-catch apps/web/src/app/api/auth/facebook/callback/route.ts 1
 empty-catch apps/web/src/app/api/tenant/[subdomain]/media/[mediaId]/route.ts 3
-empty-catch apps/web/src/app/api/tenant/[subdomain]/pages/[pageId]/route.ts 3
-empty-catch apps/web/src/app/api/tenant/[subdomain]/publishing/queue/route.ts 3
 empty-catch apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
 empty-catch apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 2
 empty-catch apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
@@ -52,7 +48,6 @@ empty-catch apps/web/src/components/workspace/workspace-sidebar.tsx 1
 empty-catch apps/web/src/components/workspace/workspace-studio-footer.tsx 4
 empty-catch apps/web/src/lib/auth-redirect.ts 1
 empty-catch apps/web/src/lib/auth/login.ts 1
-empty-catch apps/web/src/lib/insights/facebook-insights-client.ts 2
 empty-catch apps/web/src/lib/server-analytics.ts 1
 empty-catch apps/web/src/lib/timezones.ts 1
 not-ok-return apps/web/src/components/accounts/connect-account-modal.tsx 1

@@ -16,6 +16,7 @@ import {
   type Database,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveWorkspaceFacebookCredentials } from '@/lib/server/byoc-resolver';
 import {
@@ -51,8 +52,12 @@ async function resolveOAuthErrorTarget(
         requestUrl,
         rootDomain
       );
-    } catch (_e) {
-      // Fallback to /accounts if state cannot be verified
+    } catch (err) {
+      // Fallback to /accounts if state cannot be verified — logged
+      // (spec 139 B3), not silent.
+      logServerError('[FacebookOAuth] Callback state verification failed', err, {
+        source: 'facebook-oauth-callback',
+      });
     }
   }
   target.searchParams.set('error', error);

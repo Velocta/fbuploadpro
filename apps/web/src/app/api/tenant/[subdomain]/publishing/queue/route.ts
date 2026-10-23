@@ -16,6 +16,7 @@ import { calculateNextVacantSlot } from '../../../../../../lib/slot-scheduler';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
+import { logServerError } from '@/lib/server-analytics';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -892,8 +893,13 @@ export async function handleListQueueItems(
         else if (row.status === 'skipped') skippedCount = cnt;
         else if (row.status === 'cancelled') cancelledCount = cnt;
       }
-    } catch (_e) {
-      // Non-fatal counter fallback
+    } catch (err) {
+      // Non-fatal counter fallback — counts stay at zero, but the
+      // failure is logged (spec 139 B19), not silent.
+      logServerError('[publishing/queue] Legacy status-count query failed', err, {
+        source: 'publishing-queue-list',
+        subdomain,
+      });
     }
 
     const responsePayload = ListQueueItemsResponseSchema.parse({
@@ -1028,8 +1034,12 @@ export async function handleListQueueItems(
         cancelledCount = Number(counts.cancelled_count ?? 0);
         rpcCountsApplied = true;
       }
-    } catch (_e) {
-      // Fall through to the bounded fallback below.
+    } catch (err) {
+      // Fall through to the bounded fallback below — logged (spec 139 B19).
+      logServerError('[publishing/queue] Status-count RPC failed', err, {
+        source: 'publishing-queue-list',
+        subdomain,
+      });
     }
   }
 
@@ -1057,8 +1067,12 @@ export async function handleListQueueItems(
         else if (status === 'skipped') skippedCount = count;
         else if (status === 'cancelled') cancelledCount = count;
       }
-    } catch (_e) {
-      // Fallback: counts stay at zero, as before.
+    } catch (err) {
+      // Fallback: counts stay at zero, as before — logged (spec 139 B19).
+      logServerError('[publishing/queue] Bounded status-count fallback failed', err, {
+        source: 'publishing-queue-list',
+        subdomain,
+      });
     }
   }
 

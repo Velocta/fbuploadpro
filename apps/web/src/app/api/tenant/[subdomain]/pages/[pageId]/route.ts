@@ -9,6 +9,7 @@ import {
   type SessionPayload,
 } from '@fbuploadpro/contracts';
 import { getSupabaseAdminClient } from '@/lib/auth/clients';
+import { logServerError } from '@/lib/server-analytics';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
@@ -192,8 +193,13 @@ async function fetchQueueCountsLegacy(
         failed: Number(rows[0].failed ?? 0),
       };
     }
-  } catch {
-    // fallback
+  } catch (err) {
+    // Fallback to the next counter strategy — logged (spec 139 B19):
+    // queue counters must not silently zero.
+    logServerError('[pages] Legacy queue-count query failed', err, {
+      source: 'page-queue-counts',
+      pageId,
+    });
   }
   return null;
 }
@@ -208,6 +214,12 @@ async function fetchQueueCountsRpc(
       p_page_id: pageId,
       p_user_id: userId,
     });
+    if (error) {
+      logServerError('[pages] Queue-count RPC returned an error', error, {
+        source: 'page-queue-counts',
+        pageId,
+      });
+    }
     if (!error && data && data.length > 0) {
       return {
         queued: Number(data[0].queued ?? 0),
@@ -216,8 +228,12 @@ async function fetchQueueCountsRpc(
         failed: Number(data[0].failed ?? 0),
       };
     }
-  } catch {
-    // fallback
+  } catch (err) {
+    // Fallback to the bounded counter below — logged (spec 139 B19).
+    logServerError('[pages] Queue-count RPC failed', err, {
+      source: 'page-queue-counts',
+      pageId,
+    });
   }
   return null;
 }
@@ -256,8 +272,12 @@ async function fetchQueueCountsFallback(
       counts[status] = count;
     }
     return counts;
-  } catch {
-    // return defaults
+  } catch (err) {
+    // Caller serves the default zero counts — logged (spec 139 B19).
+    logServerError('[pages] Bounded queue-count fallback failed', err, {
+      source: 'page-queue-counts',
+      pageId,
+    });
   }
   return null;
 }

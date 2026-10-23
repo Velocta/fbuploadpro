@@ -12,6 +12,7 @@ import {
   type DatabaseClient,
 } from '@fbuploadpro/contracts';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
+import { logServerError } from '@/lib/server-analytics';
 import { getStorageService } from '../../../../../../../lib/storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -209,6 +210,10 @@ export async function handleUpdateFolder(
           { status: 409 }
         );
       }
+      logServerError('[media/folders] Failed to update folder', err, {
+        source: 'media-folders',
+        subdomain,
+      });
       return NextResponse.json(
         { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
         { status: 500 }
@@ -305,6 +310,10 @@ export async function handleUpdateFolder(
           { status: 409 }
         );
       }
+      logServerError('[media/folders] Folder update failed', updateErr, {
+        source: 'media-folders',
+        subdomain,
+      });
       return NextResponse.json(
         { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
         { status: 500 }
@@ -337,7 +346,10 @@ export async function handleUpdateFolder(
 
     return NextResponse.json(responsePayload);
   } catch (err) {
-    console.error('Failed to update folder in Supabase:', err);
+    logServerError('Failed to update folder in Supabase:', err, {
+      source: 'media-folders',
+      subdomain,
+    });
     return NextResponse.json(
       { error: 'INTERNAL_ERROR', message: 'Failed to update folder' },
       { status: 500 }
