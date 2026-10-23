@@ -37,6 +37,11 @@ describe("Tabs (ARIA tabs pattern)", () => {
     expect(list.className).toContain("overflow-x-auto");
     expect(screen.getByRole("tab", { name: "Queue" }).className).toContain("h-11");
     expect(screen.getByRole("tab", { name: "History" }).className).toContain("h-11");
+    // Triggers must never shrink (the list scrolls instead): shrink-0 has to
+    // survive tailwind-merge in the rendered class list — it is dropped when
+    // paired with flex-1, which is why the trigger uses grow + basis-0.
+    expect(screen.getByRole("tab", { name: "Queue" }).className).toContain("shrink-0");
+    expect(screen.getByRole("tab", { name: "Queue" }).className).not.toContain("flex-1");
   });
 
   it("arrow keys move selection and focus (automatic activation)", async () => {
