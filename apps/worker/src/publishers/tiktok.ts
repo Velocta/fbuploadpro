@@ -446,6 +446,7 @@ export class TikTokPublisher implements Publisher {
     return (
       results.find(
         (result) =>
+          result.success &&
           result.social_account_id === providerAccountId &&
           stringField(result.platform_data, ['title', 'caption']) === matchKey
       ) ?? null
