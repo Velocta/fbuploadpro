@@ -56,6 +56,7 @@ export {
   TOKEN_REFRESH_CRON,
   CLAIM_TICK_CRON,
   REFRESH_LEASE_TTL_MS,
+  REFRESH_BACKLOG_EVENT,
 } from './refresh.js';
 export type { RefreshCycleResult, RefreshDbClient } from './refresh.js';
 

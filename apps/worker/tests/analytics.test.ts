@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { captureWorkerError, POSTHOG_CAPTURE_TIMEOUT_MS } from '../src/analytics.js';
+import {
+  captureWorkerError,
+  captureWorkerEvent,
+  POSTHOG_CAPTURE_TIMEOUT_MS,
+} from '../src/analytics.js';
 
 describe('captureWorkerError — PostHog capture timeout (spec 139)', () => {
   afterEach(() => {
@@ -61,4 +65,49 @@ describe('captureWorkerError — PostHog capture timeout (spec 139)', () => {
     },
     15_000
   );
+});
+
+describe('captureWorkerEvent — named operational events (spec 139 residue)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('no-ops without a PostHog key and never calls fetch', () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    captureWorkerEvent({}, 'refresh_backlog_beyond_cap', { scanned: 500 });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('posts the named event (not $exception) with its properties on the worker identity', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    let captured: Promise<unknown> | undefined;
+    captureWorkerEvent(
+      { POSTHOG_KEY: 'phc_test_key' },
+      'refresh_backlog_beyond_cap',
+      { scanned: 500, scanCap: 500 },
+      (p) => {
+        captured = p;
+      }
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [unknown, RequestInit];
+    expect(String(url)).toBe('https://us.i.posthog.com/capture/');
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    const body = JSON.parse(String(init.body)) as {
+      event: string;
+      distinct_id: string;
+      properties: Record<string, unknown>;
+    };
+    expect(body.event).toBe('refresh_backlog_beyond_cap');
+    expect(body.distinct_id).toBe('worker');
+    expect(body.properties).toMatchObject({ scanned: 500, scanCap: 500 });
+    await captured;
+  });
 });

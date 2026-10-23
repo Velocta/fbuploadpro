@@ -14,7 +14,7 @@ import {
   type PublisherTokenSet,
   type RefreshedTokenSet,
 } from '@fbuploadpro/contracts';
-import { captureWorkerError, type PostHogEnv } from './analytics.js';
+import { captureWorkerError, captureWorkerEvent, type PostHogEnv } from './analytics.js';
 
 // ==========================================
 // Token refresh job (spec 121 Scope 9, D6 DECIDED)
@@ -107,6 +107,20 @@ import { captureWorkerError, type PostHogEnv } from './analytics.js';
 // the superset across platforms; the per-platform thresholds and the
 // minimum-age rule are finer than any single SQL predicate).
 //
+// Backlog signal (spec 139 residue, CTO ceiling #1): stopping AT the
+// cap is ambiguous — the due window may be exactly exhausted, or a
+// backlog may extend past the cap and defer silently cycle after
+// cycle. When a cycle ends at the cap, the job probes ONE row past
+// the last scanned id under the same window predicates. A hit sets
+// `scanTruncated` on the result and fires the backlog signal on the
+// channels this job already reports through — a structured warn log
+// line with the cycle counts and a PostHog `refresh_backlog_beyond_cap`
+// event (refresh deliberately owns no heartbeat row; see index.ts) —
+// so a backlog outgrowing the cap is visible the cycle it happens,
+// not discovered when tokens start lapsing. A probe failure is itself
+// captured + logged; it never aborts a cycle whose refresh work
+// already succeeded, and it never fabricates a truncation claim.
+//
 // Scan scope: `social_accounts` only. `destinations` carries
 // `encrypted_destination_token` but the unified schema gives it NO
 // expiry signal (no token_expires_at column and no expiry key defined
@@ -173,6 +187,14 @@ export const REFRESH_SCAN_PAGE_SIZE = 100;
 /** Per-cycle work bound: a cycle scans at most this many due-window rows. */
 export const REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE = 500;
 
+/**
+ * PostHog event fired when a cycle's scan is truncated by the
+ * per-cycle cap with eligible accounts still beyond it (spec 139
+ * residue). Stateless per cycle: a later cycle that covers the
+ * backlog fires nothing, which is what "cleared" means for it.
+ */
+export const REFRESH_BACKLOG_EVENT = 'refresh_backlog_beyond_cap';
+
 /** Optional scan-bound overrides (tests use these to exercise pagination cheaply). */
 export interface RefreshCycleOptions {
   pageSize?: number;
@@ -237,6 +259,17 @@ export interface RefreshCycleResult {
   deferredTransient: number;
   /** Accounts flipped to `status='expired'` (auth failure or Facebook lapse). */
   expired: number;
+  /** The effective per-cycle scan cap this cycle ran under. */
+  scanCap: number;
+  /**
+   * True when the scan stopped at `scanCap` AND the one-row probe past
+   * the last scanned id confirmed more due-window accounts remain
+   * unscanned — the backlog exceeds one cycle's coverage and the
+   * remainder defers to later cycles (see the backlog-signal note in
+   * the header). False whenever the scan exhausted the due window,
+   * including when it ends exactly at the cap with nothing behind it.
+   */
+  scanTruncated: boolean;
 }
 
 /** Social-account row fields the refresh job reads (subset of the full row). */
@@ -551,14 +584,13 @@ export async function runRefreshCycle(
     skippedLease: 0,
     deferredTransient: 0,
     expired: 0,
+    scanCap: saneBound(options.maxAccountsPerCycle, REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE),
+    scanTruncated: false,
   };
   const runId = crypto.randomUUID();
 
   const pageSize = saneBound(options.pageSize, REFRESH_SCAN_PAGE_SIZE);
-  const maxAccountsPerCycle = saneBound(
-    options.maxAccountsPerCycle,
-    REFRESH_SCAN_MAX_ACCOUNTS_PER_CYCLE
-  );
+  const maxAccountsPerCycle = result.scanCap;
   // Due-window predicate: only rows expiring within the widest
   // platform refresh horizon can be due this cycle (see header).
   const dueBeforeIso = new Date(now.getTime() + REFRESH_DUE_WINDOW_SECONDS * 1000).toISOString();
@@ -619,9 +651,60 @@ export async function runRefreshCycle(
     if (rows.length < pageLimit) break;
   }
 
+  // Backlog probe (see the header's backlog-signal note): reaching
+  // this point with `scanned` at the cap means every page came back
+  // full — the window may or may not continue past the last scanned
+  // id. One keyset probe row settles it. (A short or empty page breaks
+  // the loop with `scanned` strictly below the cap, so the probe runs
+  // exactly when truncation is possible.)
+  if (result.scanned >= maxAccountsPerCycle && cursor !== null) {
+    try {
+      const { data, error } = await db
+        .from('social_accounts')
+        .select('id')
+        .eq('status', 'active')
+        .lte('token_expires_at', dueBeforeIso)
+        .gt('id', cursor)
+        .order('id', { ascending: true })
+        .limit(1);
+      if (error) throw dbError(error);
+      result.scanTruncated = Array.isArray(data) && data.length > 0;
+    } catch (err) {
+      captureWorkerError(env, err, {
+        site: 'runRefreshCycle',
+        kind: 'refresh_backlog_probe_failed',
+        scanned: result.scanned,
+        scanCap: maxAccountsPerCycle,
+      });
+      console.error(
+        '[refresh] backlog probe failed; whether the scan was truncated is unknown for this cycle:',
+        err
+      );
+    }
+  }
+
+  if (result.scanTruncated) {
+    console.warn(
+      `[refresh] BACKLOG beyond per-cycle scan cap: scanned=${result.scanned} cap=${maxAccountsPerCycle} ` +
+        `due=${result.due} refreshed=${result.refreshed} deferred-transient=${result.deferredTransient} expired=${result.expired} — ` +
+        `eligible due-window accounts remain unscanned and defer to later cycles`
+    );
+    captureWorkerEvent(env, REFRESH_BACKLOG_EVENT, {
+      site: 'runRefreshCycle',
+      scanned: result.scanned,
+      scanCap: maxAccountsPerCycle,
+      due: result.due,
+      refreshed: result.refreshed,
+      skippedLease: result.skippedLease,
+      deferredTransient: result.deferredTransient,
+      expired: result.expired,
+    });
+  }
+
   console.info(
     `[refresh] cycle scanned=${result.scanned} due=${result.due} refreshed=${result.refreshed} ` +
-      `skipped-lease=${result.skippedLease} deferred-transient=${result.deferredTransient} expired=${result.expired}`
+      `skipped-lease=${result.skippedLease} deferred-transient=${result.deferredTransient} expired=${result.expired} ` +
+      `scan-truncated=${result.scanTruncated}`
   );
   return result;
 }
