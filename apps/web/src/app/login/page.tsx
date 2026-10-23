@@ -20,8 +20,11 @@
  * suspended-account redirect, server 400 field errors mapped inline,
  * the reset-success / signed-out / password-changed banners, the email
  * prefill parameter, and the password field's show/hide toggle +
- * Caps Lock warning. Approved copy and the split layout/showcase are
- * untouched — this is a behaviour/standard conversion, not a redesign.
+ * Caps Lock warning. Approved copy is unchanged — A6 was a
+ * behaviour/standard conversion, not a redesign. Spec 136 (PR-136A)
+ * later re-skinned this page's presentation residue (the footer
+ * prompt/link) and the split layout/showcase chrome onto tokens;
+ * the form logic, schema, and copy remain A6's, untouched.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -46,7 +49,6 @@ import {
 import { Input } from '@/components/shared/ui/input';
 import { Button } from '@/components/shared/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/shared/ui/alert';
-import { PALETTE, THEME, TYPOGRAPHY } from '@/lib/theme';
 import { sanitizeAuthErrorMessage } from '@/lib/auth-errors';
 import { sanitizeAuthRedirectUrl } from '@/lib/auth-redirect';
 import { completeAuthRedirect } from '@/lib/auth-broadcast';
@@ -253,15 +255,11 @@ export default function LoginPage({ initialResetSuccess = false }: LoginPageProp
       description="Welcome back! Sign in to keep your content flowing across every platform."
       showcase={<LoginShowcasePanel />}
       footer={
-        <span style={{ fontSize: '0.8125rem', color: `var(--text-sub, ${THEME.default.text.secondary})` }}>
+        <span className="text-metadata text-ink-sub">
           Don&apos;t have an account?{' '}
           <Link
             href={returnUrl ? `/signup?returnUrl=${encodeURIComponent(returnUrl)}` : '/signup'}
-            style={{
-              color: PALETTE.primary,
-              textDecoration: 'none',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-            }}
+            className="font-semibold text-primary no-underline"
           >
             Create one
           </Link>
