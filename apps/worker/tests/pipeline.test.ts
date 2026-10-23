@@ -813,7 +813,7 @@ describe('Publish consumers — spec 139 publish safety', () => {
     expect('p_detail' in withoutDetail).toBe(false);
   });
 
-  it('defers to queued without publishing while the destination is in cooldown, delaying until the cooldown ends', async () => {
+  it('defers without publishing while the destination is in cooldown, delaying until the cooldown ends', async () => {
     const item = await makeItem();
     const cooldownEnd = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const { db, settleCalls } = await makeConsumerDb({
@@ -833,7 +833,7 @@ describe('Publish consumers — spec 139 publish safety', () => {
     expect(publisher.publish).not.toHaveBeenCalled();
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_outcome_status: 'queued',
+      p_outcome_status: 'deferred',
       p_error_code: DEFER_DESTINATION_COOLDOWN_CODE,
       // No publish attempt was made: the retry budget is untouched.
       p_retry_count: 0,
@@ -844,7 +844,7 @@ describe('Publish consumers — spec 139 publish safety', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
-  it('defers to queued without publishing when the destination is no longer claimable', async () => {
+  it('defers without publishing when the destination is no longer claimable', async () => {
     const item = await makeItem();
     const { db, settleCalls } = await makeConsumerDb({
       item,
@@ -863,7 +863,7 @@ describe('Publish consumers — spec 139 publish safety', () => {
     expect(publisher.publish).not.toHaveBeenCalled();
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_outcome_status: 'queued',
+      p_outcome_status: 'deferred',
       p_error_code: DEFER_DESTINATION_NOT_ACTIVE_CODE,
       p_retry_delay_seconds: DEFAULT_RETRY_DELAY_SECONDS,
       p_retry_count: 0,
@@ -871,7 +871,7 @@ describe('Publish consumers — spec 139 publish safety', () => {
     expect(message.ack).toHaveBeenCalledTimes(1);
   });
 
-  it('defers to queued without publishing when the account is not active', async () => {
+  it('defers without publishing when the account is not active', async () => {
     const item = await makeItem();
     const { db, settleCalls } = await makeConsumerDb({
       item,
@@ -890,9 +890,105 @@ describe('Publish consumers — spec 139 publish safety', () => {
     expect(publisher.publish).not.toHaveBeenCalled();
     expect(settleCalls).toHaveLength(1);
     expect(settleCalls[0]).toMatchObject({
-      p_outcome_status: 'queued',
+      p_outcome_status: 'deferred',
       p_error_code: DEFER_ACCOUNT_NOT_ACTIVE_CODE,
       p_retry_count: 0,
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles a publisher deferral via the deferred outcome with the retry count unchanged (spec 139 defer outcome)', async () => {
+    const item = await makeItem({ retry_count: 2 });
+    const { db, settleCalls } = await makeConsumerDb({ item });
+    const publisher = fakePublisher('facebook', async () => ({
+      status: 'deferred',
+      error: {
+        kind: 'retryable',
+        code: 'publishing_limit_reached',
+        message: 'This account has reached its publishing limit for now.',
+      },
+      retryDelaySeconds: 3600,
+      detail: { platform: 'facebook', publishingLimit: { usage: 50 } },
+    }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(publisher),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+    expect(settleCalls).toHaveLength(1);
+    expect(settleCalls[0]).toMatchObject({
+      p_outcome_status: 'deferred',
+      p_error_code: 'publishing_limit_reached',
+      p_retry_delay_seconds: 3600,
+      // The deferral is not the item's fault: the count is NOT advanced.
+      p_retry_count: 2,
+      p_detail: { platform: 'facebook', publishingLimit: { usage: 50 } },
+    });
+    expect(message.ack).toHaveBeenCalledTimes(1);
+  });
+
+  it('repeated deferrals never advance the retry count, while a real retry does (spec 139 defer outcome)', async () => {
+    const item = await makeItem({ retry_count: 2 });
+    const { db, settleCalls } = await makeConsumerDb({ item });
+    const deferring = fakePublisher('facebook', async () => ({
+      status: 'deferred',
+      error: {
+        kind: 'retryable',
+        code: 'publishing_limit_reached',
+        message: 'This account has reached its publishing limit for now.',
+      },
+      retryDelaySeconds: 3600,
+    }));
+
+    // Three consecutive claim → publish → defer cycles. The mock row
+    // keeps retry_count = 2 because the real RPC's deferred branch
+    // leaves the stored count untouched (proven in the settle-rpc rig);
+    // the worker must therefore hand the RPC the same count every time.
+    for (let pass = 0; pass < 3; pass += 1) {
+      const message = fakeMessage({
+        itemId: item.id,
+        platform: 'facebook',
+        lane: 'publish-fast',
+      });
+      await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+        db: db as never,
+        registry: registryWith(deferring),
+        masterKey: MASTER_KEY,
+        env: {},
+      });
+      expect(message.ack).toHaveBeenCalledTimes(1);
+    }
+
+    expect(settleCalls).toHaveLength(3);
+    for (const call of settleCalls) {
+      expect(call).toMatchObject({
+        p_outcome_status: 'deferred',
+        p_retry_count: 2,
+      });
+    }
+
+    // Control: a genuine failed attempt DOES advance the count.
+    const retrying = fakePublisher('facebook', async () => ({
+      status: 'retry',
+      error: { kind: 'retryable', code: 'transient', message: 'boom' },
+      retryDelaySeconds: 300,
+    }));
+    const message = fakeMessage({ itemId: item.id, platform: 'facebook', lane: 'publish-fast' });
+    await handlePublishBatch(fakeBatch('publish-fast', [message]) as never, {
+      db: db as never,
+      registry: registryWith(retrying),
+      masterKey: MASTER_KEY,
+      env: {},
+    });
+    expect(settleCalls).toHaveLength(4);
+    expect(settleCalls[3]).toMatchObject({
+      p_outcome_status: 'queued',
+      p_retry_count: 3,
     });
     expect(message.ack).toHaveBeenCalledTimes(1);
   });

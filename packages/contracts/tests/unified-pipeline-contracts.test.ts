@@ -426,6 +426,21 @@ describe('PublishOutcomeSchema', () => {
       targetAccountStatus: 'expired',
     };
     expect(PublishOutcomeSchema.parse(failed)).toEqual(failed);
+
+    // Spec 139 defer outcome: a deferral carries its reason in `error`
+    // and its delay in `retryDelaySeconds`; it never advances the
+    // item's retry_count at settle time.
+    const deferred: PublishOutcome = {
+      status: 'deferred',
+      error: {
+        kind: 'retryable',
+        code: 'publishing_limit_reached',
+        message: 'This account has reached its publishing limit for now.',
+      },
+      retryDelaySeconds: 3600,
+      detail: { platform: 'instagram', publishingLimit: { usage: 50 } },
+    };
+    expect(PublishOutcomeSchema.parse(JSON.parse(JSON.stringify(deferred)))).toEqual(deferred);
   });
 
   it('rejects malformed outcomes', () => {
