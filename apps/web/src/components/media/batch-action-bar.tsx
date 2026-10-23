@@ -54,7 +54,7 @@ export function BatchActionBar({
         data-testid="batch-action-bar"
         role="region"
         aria-label="Batch actions"
-        className="pointer-events-auto flex max-w-full min-w-0 items-center gap-2.5 overflow-x-auto rounded-md border border-line bg-panel px-4 py-2 whitespace-nowrap shadow-modal"
+        className="pointer-events-auto flex max-w-full min-w-0 flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-md border border-line bg-panel px-4 py-2 shadow-modal"
       >
         <span
           data-testid="batch-selected-count"

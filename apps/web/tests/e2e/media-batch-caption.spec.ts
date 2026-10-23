@@ -60,6 +60,20 @@ async function maybeScreenshot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${dir}/${name}.png`, fullPage: true });
 }
 
+/**
+ * Viewport (not full-page) screenshot for open Select panels: a
+ * full-page capture resizes the viewport, which closes Radix
+ * poppers — the panel evidence must not disturb the interaction.
+ */
+async function maybeViewportScreenshot(
+  page: Page,
+  name: string
+): Promise<void> {
+  const dir = process.env.MEDIA_SCREENSHOT_DIR;
+  if (!dir) return;
+  await page.screenshot({ path: `${dir}/${name}.png` });
+}
+
 test.describe('media batch caption', () => {
   test('select 2 → Set caption → Replace → Apply → both assets captioned', async ({
     page,
@@ -100,7 +114,7 @@ test.describe('media batch caption', () => {
     // Replace mode is the default; type the caption and apply.
     await page.getByTestId('batch-caption-textarea').fill('Harbour at dusk');
     await expect(apply).toBeEnabled();
-    await expect(page.getByText('14 / 2,200')).toBeVisible();
+    await expect(page.getByText('15 / 2,200')).toBeVisible();
     await apply.click();
 
     // Success is stated with the count, and both assets flip status.
@@ -166,7 +180,7 @@ test.describe('media batch caption', () => {
       const libraryOption = page.getByRole('option', { name: 'Library' });
       await expect(libraryOption).toBeVisible();
       await expectWithinViewport(libraryOption, page);
-      await maybeScreenshot(page, `dialog-new-folder-select-${width}`);
+      await maybeViewportScreenshot(page, `dialog-new-folder-select-${width}`);
       await libraryOption.click();
       await page.keyboard.press('Escape');
       await expect(folderDialog).toBeHidden();
@@ -181,7 +195,7 @@ test.describe('media batch caption', () => {
       const moveLibraryOption = page.getByRole('option', { name: 'Library' });
       await expect(moveLibraryOption).toBeVisible();
       await expectWithinViewport(moveLibraryOption, page);
-      await maybeScreenshot(page, `dialog-move-select-${width}`);
+      await maybeViewportScreenshot(page, `dialog-move-select-${width}`);
       await moveLibraryOption.click();
       await page.keyboard.press('Escape');
       await expect(moveDialog).toBeHidden();
