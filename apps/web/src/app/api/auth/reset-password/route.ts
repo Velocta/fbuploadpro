@@ -6,6 +6,7 @@ import {
 } from '@/lib/auth/password-reset';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
+import { bodyTooLargeResponse, readJsonBody } from '@/lib/request-body';
 
 function extractRecoveryToken(token: unknown, code: unknown): string | undefined {
   if (typeof token === 'string' && token.trim()) {
@@ -36,7 +37,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const bodyResult = await readJsonBody(request);
+    if (!bodyResult.ok) {
+      if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
+      return NextResponse.json(
+        { error: 'Invalid JSON request body' },
+        { status: 400 }
+      );
+    }
+    const body = bodyResult.value as Record<string, unknown> | null;
     const { password, email, otp, token, token_hash, code } = body || {};
 
     if (!password || typeof password !== 'string' || password.length < 8) {

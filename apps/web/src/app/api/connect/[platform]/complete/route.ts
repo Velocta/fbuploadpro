@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getSessionSecret } from '@fbuploadpro/contracts';
+import { z } from 'zod';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 import { isKnownPlatform } from '@/lib/connect/registry';
 import {
   verifyPendingDestinations,
@@ -23,11 +25,29 @@ import {
  * pending cookie can be persisted; anything else is ignored. Returns the
  * unified Accounts landing URL.
  */
+/**
+ * Body schema for completing a connect flow (spec 139 Wave B, audit C2:
+ * this body was previously read with ad-hoc type checks only). Entries
+ * that are not strings are dropped, exactly as before; the array itself
+ * must be present and bounded.
+ */
+const ConnectCompleteRequestSchema = z.object({
+  destinationIds: z
+    .array(z.unknown())
+    .max(500)
+    .transform((ids) =>
+      ids.filter((id): id is string => typeof id === 'string')
+    ),
+});
+
 export async function handleConnectComplete(
   request: NextRequest,
   platformParam: string,
   dbClient?: ConnectDbClient
 ): Promise<NextResponse> {
+  const limited = await enforceIpRateLimit(request, 'connect_complete', 20);
+  if (limited) return limited;
+
   if (!isKnownPlatform(platformParam)) {
     return NextResponse.json({ error: 'Unknown platform' }, { status: 404 });
   }
@@ -68,22 +88,18 @@ export async function handleConnectComplete(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { destinationIds?: unknown };
-  try {
-    body = (await request.json()) as { destinationIds?: unknown };
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json(
       { error: 'Please choose at least one destination to add.' },
       { status: 400 }
     );
   }
 
+  const parsedBody = ConnectCompleteRequestSchema.safeParse(bodyResult.value);
   const requestedIds = new Set(
-    Array.isArray(body.destinationIds)
-      ? body.destinationIds.filter(
-          (id): id is string => typeof id === 'string'
-        )
-      : []
+    parsedBody.success ? parsedBody.data.destinationIds : []
   );
   const picked = pending.destinations.filter((destination) =>
     requestedIds.has(destination.externalDestinationId)

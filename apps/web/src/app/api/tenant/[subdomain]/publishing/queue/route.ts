@@ -15,6 +15,7 @@ import {
 import { calculateNextVacantSlot } from '../../../../../../lib/slot-scheduler';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { resolveTenantWorkspaceId } from '@/lib/server/workspace-resolver';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -129,15 +130,15 @@ export async function handleEnqueueMedia(
   }
 
   // 3. Request body validation
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch (_e) {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
     return NextResponse.json(
       { error: 'INVALID_REQUEST', message: 'Invalid JSON payload' },
       { status: 400 }
     );
   }
+  const rawBody: unknown = bodyResult.value;
 
   const parsed = EnqueueMediaRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -1089,5 +1090,7 @@ export async function POST(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_queue_enqueue', 60);
+  if (limited) return limited;
   return handleEnqueueMedia(request, subdomain);
 }

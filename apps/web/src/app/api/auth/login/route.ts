@@ -12,6 +12,7 @@ import {
 } from '@/lib/auth/signup';
 import { formatAuthErrorResponse } from '@/lib/auth-errors';
 import { checkRateLimit, extractClientIp, RATE_LIMIT_WINDOW_MS } from '@/lib/rate-limiter';
+import { bodyTooLargeResponse, readJsonBody } from '@/lib/request-body';
 import {
   findPendingSignup,
   verifyPendingSignupPassword,
@@ -36,7 +37,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
+    const bodyResult = await readJsonBody(request);
+    if (!bodyResult.ok) {
+      if (bodyResult.reason === 'too-large') return bodyTooLargeResponse();
+      return NextResponse.json({ error: 'Invalid JSON request body' }, { status: 400 });
+    }
+    const body: unknown = bodyResult.value;
     const parseResult = LoginRequestSchema.safeParse(body);
 
     if (!parseResult.success) {

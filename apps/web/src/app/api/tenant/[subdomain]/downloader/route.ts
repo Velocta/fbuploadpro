@@ -14,6 +14,7 @@ import {
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isLegacyClient, getRouteSupabase } from '@/lib/route-auth';
 import { getStorageService } from '@/lib/storage';
+import { bodyTooLargeResponse, enforceIpRateLimit, readJsonBody } from '@/lib/request-body';
 import {
   MediaDownloaderError,
   resolveAndUploadMediaFromUrl,
@@ -224,10 +225,11 @@ async function validateDownloadAuthAndPayload(
     return { errorResponse: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
 
-  let rawBody: unknown;
-  try {
-    rawBody = await request.json();
-  } catch {
+  const bodyResult = await readJsonBody(request);
+  if (!bodyResult.ok) {
+    if (bodyResult.reason === 'too-large') {
+      return { errorResponse: bodyTooLargeResponse() };
+    }
     return {
       errorResponse: NextResponse.json(
         { error: 'INVALID_REQUEST', message: 'Invalid JSON request payload.' },
@@ -235,6 +237,7 @@ async function validateDownloadAuthAndPayload(
       ),
     };
   }
+  const rawBody: unknown = bodyResult.value;
 
   const parsed = DownloaderIngestRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
@@ -519,6 +522,8 @@ export async function POST(
   context: { params: Promise<{ subdomain: string }> }
 ): Promise<NextResponse> {
   const { subdomain } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_downloader', 10);
+  if (limited) return limited;
   return handleDownloadMediaFromUrl(request, subdomain);
 }
 

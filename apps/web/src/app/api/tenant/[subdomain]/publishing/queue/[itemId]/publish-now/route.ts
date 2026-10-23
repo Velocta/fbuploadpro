@@ -6,6 +6,7 @@ import {
 } from '@/lib/route-auth';
 import type { DatabaseClient } from '@fbuploadpro/contracts';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { enforceIpRateLimit } from '@/lib/request-body';
 
 export async function handlePublishNow(
   request: NextRequest,
@@ -106,5 +107,7 @@ export async function POST(
   context: { params: Promise<{ subdomain: string; itemId: string }> }
 ): Promise<NextResponse> {
   const { subdomain, itemId } = await context.params;
+  const limited = await enforceIpRateLimit(request, 'tenant_publish_now', 30);
+  if (limited) return limited;
   return handlePublishNow(request, subdomain, itemId);
 }
