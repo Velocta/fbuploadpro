@@ -7,20 +7,15 @@ import { FormatSelector } from '../composer/format-selector';
 import { PostingTimeQuickAdd } from '../composer/posting-time-quick-add';
 import { type ComposerMediaItem } from '../composer/composer-media-area';
 import {
-  composerLabelStyle,
-  composerHintStyle,
-  composerErrorStyle,
-  composerFieldStyle,
-  composerInputStyle,
-  segmentedOptionStyle,
-} from '../composer/composer-styles';
-import {
   formatSlotShort,
   getNextSlotForFormat,
   parseDateTimeLocalValue,
   toDateTimeLocalValue,
 } from '../composer/queue-slot-utils';
-import { SPACING } from '@/lib/theme';
+import { Button } from '@/components/shared/ui/button';
+import { Input } from '@/components/shared/ui/input';
+import { Textarea } from '@/components/shared/ui/textarea';
+import { cn } from '@/lib/utils';
 import {
   computeBulkQueueTimes,
   describeQueueRange,
@@ -100,6 +95,11 @@ export function getBulkDetailsValidity(input: BulkDetailsValidityInput): boolean
   return getNextSlotForFormat(input.slots, input.format) !== null;
 }
 
+const DESTINATIONS: Array<{ id: BulkDestination; label: string }> = [
+  { id: 'queue', label: 'Queue' },
+  { id: 'schedule', label: 'Schedule' },
+];
+
 export function BulkStepDetails(props: Readonly<BulkStepDetailsProps>) {
   const {
     pageId,
@@ -132,85 +132,96 @@ export function BulkStepDetails(props: Readonly<BulkStepDetailsProps>) {
   };
 
   return (
-    <div data-testid="bulk-step-details" style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
+    <div data-testid="bulk-step-details" className="flex flex-col gap-6">
       {/* Format */}
-      <div style={composerFieldStyle}>
-        <span style={composerLabelStyle}>Format</span>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-body font-medium text-ink">Format</span>
         <FormatSelector value={format} onChange={onFormatChange} />
         {excluded.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <p data-testid="bulk-excluded-summary" style={{ ...composerErrorStyle, margin: 0 }}>
+          <div className="flex flex-col gap-1.5">
+            <p data-testid="bulk-excluded-summary" className="m-0 text-metadata font-medium text-brand-rose">
               {summarizeExcluded(excluded, format)}
             </p>
             {suggestedFormat && suggestedFormat !== format && (
-              <button
-                type="button"
-                data-testid="bulk-switch-format-btn"
-                onClick={() => onFormatChange(suggestedFormat)}
-                style={{ ...segmentedOptionStyle(false), alignSelf: 'flex-start', cursor: 'pointer' }}
-              >
-                Switch to {formatLabel(suggestedFormat)} instead
-              </button>
+              <div>
+                <Button
+                  variant="secondary"
+                  data-testid="bulk-switch-format-btn"
+                  onClick={() => onFormatChange(suggestedFormat)}
+                >
+                  Switch to {formatLabel(suggestedFormat)} instead
+                </Button>
+              </div>
             )}
           </div>
         )}
         {eligible.length > 0 && (
-          <p style={{ ...composerHintStyle, margin: 0 }}>
+          <p className="m-0 text-metadata text-ink-sub">
             {eligible.length} post{eligible.length === 1 ? '' : 's'} will be added.
           </p>
         )}
       </div>
 
       {/* Shared caption */}
-      <div style={composerFieldStyle}>
-        <span style={composerLabelStyle}>Caption (applies to all)</span>
-        <textarea
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="bulk-shared-caption-field" className="text-body font-medium text-ink">
+          Caption (applies to all)
+        </label>
+        <Textarea
+          id="bulk-shared-caption-field"
           data-testid="bulk-shared-caption"
           value={sharedCaption}
           maxLength={CAPTION_MAX}
           rows={3}
           placeholder="Leave empty to keep each post's library caption."
           onChange={(e) => onSharedCaptionChange(e.target.value)}
-          style={{ ...composerInputStyle(), resize: 'vertical', minHeight: '72px' }}
+          className="min-h-18 resize-y"
         />
-        <span style={composerHintStyle}>
+        <span className="text-metadata text-ink-sub">
           {sharedCaption.length.toLocaleString('en-US')} / {CAPTION_MAX.toLocaleString('en-US')} — you can change each caption in the next step.
         </span>
       </div>
 
-      {/* Destination */}
-      <div style={composerFieldStyle}>
-        <span style={composerLabelStyle}>Destination</span>
-        <div style={{ display: 'flex', gap: SPACING.xs }} role="radiogroup" aria-label="Destination">
-          {(
-            [
-              { id: 'queue', label: 'Queue' },
-              { id: 'schedule', label: 'Schedule' },
-            ] as Array<{ id: BulkDestination; label: string }>
-          ).map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={destination === option.id}
-              data-testid={`bulk-destination-${option.id}`}
-              onClick={() => onDestinationChange(option.id)}
-              style={{ ...segmentedOptionStyle(destination === option.id), cursor: 'pointer' }}
-            >
-              {option.label}
-            </button>
-          ))}
+      {/* Destination — queue-first: there is no Post now in bulk (§5.11). */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-body font-medium text-ink">Destination</span>
+        <div
+          role="radiogroup"
+          aria-label="Destination"
+          className="flex max-w-full flex-wrap gap-1 border-b border-line"
+        >
+          {DESTINATIONS.map((option) => {
+            const isActive = destination === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={isActive}
+                data-testid={`bulk-destination-${option.id}`}
+                onClick={() => onDestinationChange(option.id)}
+                className={cn(
+                  'inline-flex min-h-11 shrink-0 items-center border-b-2 px-3 text-body font-medium whitespace-nowrap transition-colors duration-fast outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold',
+                  isActive
+                    ? 'border-brand-gold font-semibold text-ink'
+                    : 'border-transparent text-ink-sub hover:text-ink'
+                )}
+              >
+                {option.label}
+              </button>
+            );
+          })}
         </div>
 
         {destination === 'queue' && queueRangeLabel && (
-          <p data-testid="bulk-queue-range" style={{ ...composerHintStyle, margin: 0 }}>
+          <p data-testid="bulk-queue-range" className="m-0 text-metadata text-ink-sub">
             {queueRangeLabel}
           </p>
         )}
 
         {showNoSlotsNotice && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <p style={{ ...composerHintStyle, margin: 0 }}>
+          <div className="flex flex-col gap-1.5">
+            <p className="m-0 text-metadata text-ink-sub">
               Set posting times first — your posts will go out automatically at these times.
             </p>
             <PostingTimeQuickAdd pageId={pageId} subdomain={subdomain} onAdded={onSlotAdded} />
@@ -218,8 +229,8 @@ export function BulkStepDetails(props: Readonly<BulkStepDetailsProps>) {
         )}
 
         {showNoCoverageNotice && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <p data-testid="bulk-no-coverage-notice" style={{ ...composerErrorStyle, margin: 0 }}>
+          <div className="flex flex-col gap-1.5">
+            <p data-testid="bulk-no-coverage-notice" className="m-0 text-metadata font-medium text-brand-rose">
               No posting time covers {formatLabel(format)} yet.
             </p>
             <PostingTimeQuickAdd pageId={pageId} subdomain={subdomain} onAdded={onSlotAdded} />
@@ -227,16 +238,19 @@ export function BulkStepDetails(props: Readonly<BulkStepDetailsProps>) {
         )}
 
         {destination === 'schedule' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <input
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="bulk-schedule-datetime-field" className="text-body font-medium text-ink">
+              Date and time
+            </label>
+            <Input
+              id="bulk-schedule-datetime-field"
               type="datetime-local"
               data-testid="bulk-schedule-datetime"
               value={scheduleDate ? toDateTimeLocalValue(scheduleDate, scheduleTimezone) : ''}
               min={toDateTimeLocalValue(new Date(), scheduleTimezone)}
               onChange={(e) => handleScheduleInput(e.target.value)}
-              style={composerInputStyle()}
             />
-            <p style={{ ...composerHintStyle, margin: 0 }}>
+            <p className="m-0 text-metadata text-ink-sub">
               All {eligible.length} post{eligible.length === 1 ? '' : 's'} go{eligible.length === 1 ? 'es' : ''} out at the same time
               {scheduleDate ? ` — ${formatSlotShort(scheduleDate, scheduleTimezone)}` : ''}. This is unusual for a
               queue, but allowed.
