@@ -7,6 +7,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '../components/setup';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   DedicatedPageHeader,
   PageTabDashboard,
@@ -834,6 +835,20 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
   /* ====================================================================
    * Composer: PostComposer (spec 103 — replaces EnqueueModal)
    * ==================================================================== */
+  // Spec 132 PR-C1: the rebuilt composer reads through React Query, so
+  // its renders need a QueryClient ancestor (the tenant layout provides
+  // one in the app). Static markup never runs effects, so no fetch fires.
+  const composerQueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  function ComposerUnderTest(props: React.ComponentProps<typeof PostComposer>) {
+    return (
+      <QueryClientProvider client={composerQueryClient}>
+        <PostComposer {...props} />
+      </QueryClientProvider>
+    );
+  }
+
   describe('PostComposer Component', () => {
     const composerProps = {
       pageId: 'page-101',
@@ -844,7 +859,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     };
 
     it('renders the composer dialog with title and intent selector', () => {
-      const { hasAttribute, hasText } = render(<PostComposer {...composerProps} />);
+      const { hasAttribute, hasText } = render(<ComposerUnderTest {...composerProps} />);
 
       expect(hasAttribute('data-testid', 'post-composer')).toBe(true);
       expect(hasText('Create post')).toBe(true);
@@ -855,7 +870,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('renders 5 format selector buttons', () => {
-      const { hasAttribute } = render(<PostComposer {...composerProps} />);
+      const { hasAttribute } = render(<ComposerUnderTest {...composerProps} />);
 
       expect(hasAttribute('data-testid', 'composer-format-selector')).toBe(true);
       expect(hasAttribute('data-testid', 'composer-format-text')).toBe(true);
@@ -866,7 +881,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('opens with an empty media area and no pre-selected assets', () => {
-      const { hasAttribute, hasText } = render(<PostComposer {...composerProps} />);
+      const { hasAttribute, hasText } = render(<ComposerUnderTest {...composerProps} />);
 
       expect(hasAttribute('data-testid', 'composer-media-area')).toBe(true);
       expect(hasText('No media selected yet.')).toBe(true);
@@ -876,7 +891,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('shows the computed queue line when a slot covers the format', () => {
-      const { hasAttribute, hasText } = render(<PostComposer {...composerProps} />);
+      const { hasAttribute, hasText } = render(<ComposerUnderTest {...composerProps} />);
 
       expect(hasAttribute('data-testid', 'composer-queue-goes-out')).toBe(true);
       expect(hasText('Goes out at the next posting time for Reels:')).toBe(true);
@@ -884,7 +899,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('disables the queue intent and offers quick-add when no posting times exist', () => {
       const { hasAttribute, hasText } = render(
-        <PostComposer {...composerProps} slots={[]} />
+        <ComposerUnderTest {...composerProps} slots={[]} />
       );
 
       expect(hasText('Set posting times first')).toBe(true);
@@ -896,7 +911,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
         { id: 'slot-1', slotTime: '09:00', timezone: 'UTC', isActive: true, allowedFormats: ['image'] },
       ];
       const { hasAttribute, hasText } = render(
-        <PostComposer {...composerProps} slots={photoOnly} initialIntent="queue" />
+        <ComposerUnderTest {...composerProps} slots={photoOnly} initialIntent="queue" />
       );
 
       expect(hasAttribute('data-testid', 'composer-no-covering-slot-notice')).toBe(true);
@@ -905,7 +920,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('hides media and link fields appropriately for reel format', () => {
-      const { hasAttribute } = render(<PostComposer {...composerProps} />);
+      const { hasAttribute } = render(<ComposerUnderTest {...composerProps} />);
 
       // Reel: media shown, link hidden, portrait hint visible
       expect(hasAttribute('data-testid', 'composer-media-area')).toBe(true);
@@ -915,7 +930,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('pre-fills for edit and locks media in edit mode', () => {
       const { hasAttribute, hasText } = render(
-        <PostComposer
+        <ComposerUnderTest
           {...composerProps}
           initialPost={{
             id: 'item-1',
@@ -939,11 +954,14 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('renders a disabled submit until the post is valid', () => {
-      const { html } = render(<PostComposer {...composerProps} />);
-      const submitIdx = html.indexOf('data-testid="submit-post-composer-btn"');
-      expect(submitIdx).toBeGreaterThan(-1);
-      const buttonHtml = html.slice(Math.max(0, submitIdx - 200), submitIdx + 120);
-      expect(buttonHtml).toContain('disabled');
+      const { html } = render(<ComposerUnderTest {...composerProps} />);
+      // Spec 132 PR-C1 test migration (same behaviour asserted): the
+      // shared/ui Button renders `disabled` earlier in the same tag than
+      // the legacy fixed 200-char window reached, so assert on the whole
+      // submit button tag instead of a character window.
+      const btnMatch = /<button\b[^>]*data-testid="submit-post-composer-btn"[^>]*>/.exec(html);
+      expect(btnMatch).not.toBeNull();
+      expect(btnMatch![0]).toContain('disabled');
     });
 
     it('caps every format at one media item with plain-language notices', () => {
@@ -969,7 +987,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
     });
 
     it('never allows multi-file selection on the upload input', () => {
-      const { html } = render(<PostComposer {...composerProps} />);
+      const { html } = render(<ComposerUnderTest {...composerProps} />);
       const inputMatch = /<input\b[^>]*data-testid="composer-file-input"[^>]*>/.exec(html);
       expect(inputMatch).not.toBeNull();
       expect(inputMatch![0]).not.toContain('multiple');
@@ -977,7 +995,7 @@ describe('Dedicated Facebook Page Workspace (Spec 036)', () => {
 
     it('locks the format selector in edit mode', () => {
       const { html, hasText } = render(
-        <PostComposer
+        <ComposerUnderTest
           {...composerProps}
           initialPost={{
             id: 'item-1',

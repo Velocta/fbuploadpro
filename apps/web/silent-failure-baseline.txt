@@ -33,7 +33,6 @@ empty-catch apps/web/src/components/accounts/connect-account-modal.tsx 1
 empty-catch apps/web/src/components/media/media-import-modal.tsx 1
 empty-catch apps/web/src/components/media/media-library-explorer.tsx 1
 empty-catch apps/web/src/components/pages/add-page-modal.tsx 1
-empty-catch apps/web/src/components/pages/dedicated/composer/post-composer.tsx 1
 empty-catch apps/web/src/components/pages/dedicated/page-header.tsx 1
 empty-catch apps/web/src/components/pages/dedicated/queue/content-tab.tsx 5
 empty-catch apps/web/src/components/pages/dedicated/tab-insights.tsx 2
@@ -50,5 +49,4 @@ empty-catch apps/web/src/lib/server-analytics.ts 1
 empty-catch apps/web/src/lib/timezones.ts 1
 not-ok-return apps/web/src/components/accounts/connect-account-modal.tsx 1
 not-ok-return apps/web/src/components/media/media-import-modal.tsx 1
-not-ok-return apps/web/src/components/pages/dedicated/composer/post-composer.tsx 1
 not-ok-return apps/web/src/components/pages/dedicated/queue/content-tab.tsx 1
