@@ -240,7 +240,7 @@ describe('Lane routing (spec 121 Scope.2)', () => {
   });
 });
 
-describe('Per-account posting limits (spec 121 Scope.8, D5)', () => {
+describe('Per-destination posting limits (spec 121 Scope.8, D5)', () => {
   it('carries the decided defaults per platform', () => {
     expect(PLATFORM_PUBLISH_LIMITS.instagram).toEqual({
       publishedPosts: { maxCount: 100, windowSeconds: 86400 },

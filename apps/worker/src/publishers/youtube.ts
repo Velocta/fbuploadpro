@@ -47,8 +47,8 @@ import type {
 //     silently. (ASSUMPTION / live-verification-pending: the docs
 //     document only `title` in YouTube platform_data — see PR.)
 //
-// Per-account limit (D5): Post for Me's public docs state NO
-// per-account YouTube upload limit — pricing is plan-level post
+// Per-destination limit (D5): Post for Me's public docs state NO
+// per-destination YouTube upload limit — pricing is plan-level post
 // volume, and the contracts `youtube: {}` limit entry therefore
 // stays empty (no invented number). The plan-level guardrail is the
 // provider plan's post volume; see the spec 125 PR record.

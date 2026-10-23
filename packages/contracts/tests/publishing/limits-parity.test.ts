@@ -12,7 +12,7 @@ import type { PlatformPublishLimitConfig } from '../../src/publishing/limits.js'
 // =============================================================================
 //
 // PLATFORM_PUBLISH_LIMITS in packages/contracts/src/publishing/limits.ts is
-// the canonical source for the D5 per-account posting limits. The
+// the canonical source for the D5 per-destination posting limits. The
 // destination_claim_limits seed in supabase/migrations is the enforcement
 // copy the claim RPC reads at runtime. This test fails if the two drift in
 // either direction: a seeded row with no config entry, or a config window

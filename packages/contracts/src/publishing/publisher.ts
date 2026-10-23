@@ -124,7 +124,7 @@ export const PublishOutcomeSchema = z.object({
   targetAccountStatus: z.enum(['active', 'expired', 'revoked', 'error']).optional(),
   /** Per-destination cooldown for settlement, in seconds. */
   destinationCooldownSeconds: z.number().nonnegative().optional(),
-  /** Latest per-account rate usage (0–100), when the platform reports it. */
+  /** Latest per-destination rate usage (0–100), when the platform reports it. */
   rateUsagePct: z.number().min(0).max(100).optional(),
 });
 
