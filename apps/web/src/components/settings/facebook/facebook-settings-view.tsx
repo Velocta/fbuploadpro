@@ -1,0 +1,275 @@
+'use client';
+
+/**
+ * Facebook tab — container (spec 135 PR-135-2, spec §5.2 / §6.2 / §8.1).
+ *
+ * Replaces the 1,268-line `byoc-settings-view.tsx` (deleted in this
+ * PR) with the §8.1 decomposition: this container owns the data and
+ * the state machine (loading / load error / not-connected /
+ * connected / edit, plus the disconnect dialog's open state); the
+ * form, the connected view, the "One more step" card, and the
+ * disconnect dialog are the sibling modules in this folder.
+ *
+ * Data (spec §6.2): the BYOC payload arrives server-first through
+ * the settings route's dehydration (`queryKeys.settings.byoc`) and
+ * is read/refetched here with React Query over the typed API client,
+ * validated by `ByocSettingsResponseSchema` — no raw fetch, no
+ * fetch-on-mount for initial data. The legacy `initial*` test-seam
+ * props are deleted with the old file; tests seed through the query
+ * client / fetch mocks.
+ *
+ * Mutations and invalidation (named per spec §6.2): connect (PUT)
+ * and disconnect (DELETE) both invalidate `queryKeys.settings.byoc`
+ * on success, so the tab re-reads the saved state and lands on the
+ * state the server reports — connect ends on the connected view,
+ * disconnect ends on the not-connected form (UI Rule 26).
+ *
+ * Outcomes follow the interruption ladder (UI Rule 2): validation
+ * and server save/test failures at form scope (§6.3), operation
+ * outcomes and network failures as toasts from the single shared/ui
+ * Toast system (the hand-rolled toast is deleted), the reconnect
+ * notice as a persistent Banner, and the destructive decision as an
+ * AlertDialog. §5.2's sentences are verbatim throughout, including
+ * the fixed network-failure sentences.
+ */
+
+import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { api, buildTenantApiPath, getErrorMessage, isApiError } from '@/lib/api';
+import {
+  ByocSettingsResponseSchema,
+  DeleteByocResponseSchema,
+  SaveCredentialsResponseSchema,
+  type ByocSettingsResponse,
+} from '@/lib/api/schemas/settings';
+import { queryKeys } from '@/lib/data/query-keys';
+import { Banner } from '@/components/shared/ui/banner';
+import { Button } from '@/components/shared/ui/button';
+import { Skeleton } from '@/components/shared/ui/skeleton';
+import { StatusDot } from '@/components/shared/ui/status-dot';
+import { toast } from '@/components/shared/ui/toast';
+
+import {
+  FacebookConnectForm,
+  type FacebookConnectPayload,
+} from './facebook-connect-form';
+import { FacebookConnectedView } from './facebook-connected-view';
+import { FacebookDisconnectDialog } from './facebook-disconnect-dialog';
+import { FacebookSetupCard } from './facebook-setup-card';
+
+const SAVE_FAILURE_MESSAGE = "Couldn't save your Facebook app details. Please try again.";
+const DISCONNECT_FAILURE_MESSAGE = "Couldn't disconnect Facebook. Please try again.";
+const CONNECT_NETWORK_MESSAGE = 'Network error while connecting Facebook.';
+const DISCONNECT_NETWORK_MESSAGE = 'Network error while disconnecting Facebook.';
+
+export interface FacebookSettingsViewProps {
+  subdomain: string;
+}
+
+function isNetworkFailure(error: unknown): boolean {
+  return isApiError(error) && error.kind === 'network';
+}
+
+/** Loading state: a Skeleton at the card's final geometry; the
+ *  shipped loading text is preserved as the accessible name (§5.2). */
+function FacebookSettingsLoading() {
+  return (
+    <div
+      data-testid="byoc-loading"
+      aria-busy="true"
+      aria-label="Loading your Facebook app details…"
+      className="flex w-full max-w-3xl flex-col gap-6"
+    >
+      <span className="sr-only">Loading your Facebook app details…</span>
+      <div className="flex flex-col gap-6 rounded-md border border-line bg-panel p-6">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-6 w-44" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </div>
+        <Skeleton className="h-4 w-56" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-36" />
+      </div>
+    </div>
+  );
+}
+
+export function FacebookSettingsView({ subdomain }: Readonly<FacebookSettingsViewProps>) {
+  const queryClient = useQueryClient();
+  const tenant = queryKeys.tenant(subdomain);
+  const byocPath = buildTenantApiPath(subdomain, '/settings/byoc');
+
+  const searchParams = useSearchParams();
+  const showReconnectNotice = searchParams.get('notice') === 'reconnect';
+
+  const [isEditMode, setIsEditMode] = React.useState(false);
+  const [disconnectOpen, setDisconnectOpen] = React.useState(false);
+  const [serverError, setServerError] = React.useState<string | null>(null);
+
+  const byocQuery = useQuery({
+    queryKey: tenant.settings.byoc,
+    queryFn: ({ signal }) =>
+      api.get(byocPath, { schema: ByocSettingsResponseSchema, signal }),
+  });
+
+  const connectMutation = useMutation({
+    mutationFn: (payload: FacebookConnectPayload) =>
+      api.put(byocPath, payload, { schema: SaveCredentialsResponseSchema }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tenant.settings.byoc });
+      setIsEditMode(false);
+      toast.success('Your Facebook app is connected.');
+    },
+  });
+
+  const disconnectMutation = useMutation({
+    mutationFn: () => api.delete(byocPath, { schema: DeleteByocResponseSchema }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: tenant.settings.byoc });
+      setDisconnectOpen(false);
+      setIsEditMode(false);
+      toast.success('Your Facebook app has been disconnected.');
+    },
+  });
+
+  const handleConnect = async (payload: FacebookConnectPayload): Promise<void> => {
+    setServerError(null);
+    try {
+      await connectMutation.mutateAsync(payload);
+    } catch (error) {
+      if (isNetworkFailure(error)) {
+        // §5.2's fixed sentence — a network failure never borrows a
+        // server message, so the two failure paths stay distinct.
+        toast.error(CONNECT_NETWORK_MESSAGE);
+      } else if (isApiError(error) && error.kind === 'http') {
+        // The server's own plain-language message takes precedence,
+        // at form scope (spec §6.3); the fixed §5.2 sentence is the
+        // fallback when the server returned none.
+        setServerError(getErrorMessage(error, SAVE_FAILURE_MESSAGE));
+      } else {
+        setServerError(SAVE_FAILURE_MESSAGE);
+      }
+      throw error;
+    }
+  };
+
+  const handleDisconnect = async (): Promise<void> => {
+    try {
+      await disconnectMutation.mutateAsync();
+    } catch (error) {
+      toast.error(
+        isNetworkFailure(error) ? DISCONNECT_NETWORK_MESSAGE : DISCONNECT_FAILURE_MESSAGE
+      );
+      throw error;
+    }
+  };
+
+  if (byocQuery.isPending && !byocQuery.data) {
+    return <FacebookSettingsLoading />;
+  }
+
+  const credentials: ByocSettingsResponse | undefined = byocQuery.data;
+
+  if (!credentials) {
+    // Load failure is a state, not a silent fall-through to the form:
+    // the ladder's error rung, with the recovery action in place.
+    return (
+      <div className="flex w-full max-w-3xl flex-col gap-6">
+        <Banner
+          variant="critical"
+          title="Couldn't load your Facebook app details. Please try again."
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              data-testid="fb-load-retry-btn"
+              onClick={() => void byocQuery.refetch()}
+            >
+              Try again
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const hasSavedCredentials = Boolean(credentials.fbAppId && credentials.hasSecret);
+  const isConnectedState = hasSavedCredentials && !isEditMode;
+
+  return (
+    <div className="flex w-full max-w-3xl flex-col gap-6">
+      {showReconnectNotice && (
+        <Banner
+          variant="warning"
+          data-testid="byoc-reconnect-notice"
+          title="Facebook requires an app to reconnect accounts. Add your App ID and App Secret below, then reconnect."
+        />
+      )}
+
+      <section
+        data-testid="facebook-settings-card"
+        aria-labelledby="facebook-settings-heading"
+        className="flex flex-col gap-6 rounded-md border border-line bg-panel p-6 shadow-card"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 id="facebook-settings-heading" className="text-lg font-semibold text-ink">
+              Connect Facebook
+            </h2>
+            <p className="mt-1 text-body text-ink-sub">
+              {isConnectedState
+                ? 'Your Facebook app is linked and publishing is ready to go.'
+                : 'Link your Facebook app to start publishing from this workspace.'}
+            </p>
+          </div>
+          <div data-testid="facebook-status-badge" className="shrink-0">
+            <StatusDot
+              status={isConnectedState ? 'operational' : 'idle'}
+              label={isConnectedState ? 'Connected' : 'Not connected'}
+            />
+          </div>
+        </div>
+
+        {isConnectedState ? (
+          <FacebookConnectedView
+            fbAppId={credentials.fbAppId}
+            fbAppSecret={credentials.fbAppSecret}
+            connectedAt={credentials.connectedAt}
+            onEditDetails={() => {
+              setServerError(null);
+              setIsEditMode(true);
+            }}
+            onDisconnectClick={() => setDisconnectOpen(true)}
+          />
+        ) : (
+          <FacebookConnectForm
+            key={isEditMode ? 'edit' : 'connect'}
+            initialAppId={credentials.fbAppId}
+            hasExistingSecret={credentials.hasSecret}
+            isEditMode={isEditMode}
+            isConnecting={connectMutation.isPending}
+            serverError={serverError}
+            onConnect={handleConnect}
+            onCancelEdit={() => {
+              setServerError(null);
+              setIsEditMode(false);
+            }}
+          />
+        )}
+      </section>
+
+      {/* "One more step" — add/edit only, never in the connected state (§5.2). */}
+      {(!hasSavedCredentials || isEditMode) && <FacebookSetupCard />}
+
+      <FacebookDisconnectDialog
+        open={disconnectOpen}
+        isDisconnecting={disconnectMutation.isPending}
+        onOpenChange={setDisconnectOpen}
+        onConfirm={handleDisconnect}
+      />
+    </div>
+  );
+}

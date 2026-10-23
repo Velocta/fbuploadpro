@@ -26,8 +26,8 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/components/settings/general-settings-view', () => ({
   GeneralSettingsView: () => <div>General panel</div>,
 }));
-vi.mock('@/components/settings/byoc-settings-view', () => ({
-  BYOCSettingsView: () => <div>Facebook panel</div>,
+vi.mock('@/components/settings/facebook/facebook-settings-view', () => ({
+  FacebookSettingsView: () => <div>Facebook panel</div>,
 }));
 vi.mock('@/components/settings/instagram-settings-view', () => ({
   InstagramSettingsView: () => <div>Instagram panel</div>,

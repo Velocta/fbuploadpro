@@ -64,9 +64,9 @@ export function resolveSettingsTab(param: string | null | undefined): SettingsTa
   return 'general';
 }
 
-const BYOCSettingsView = React.lazy(() =>
-  import('@/components/settings/byoc-settings-view').then((m) => ({
-    default: m.BYOCSettingsView,
+const FacebookSettingsView = React.lazy(() =>
+  import('@/components/settings/facebook/facebook-settings-view').then((m) => ({
+    default: m.FacebookSettingsView,
   }))
 );
 const InstagramSettingsView = React.lazy(() =>
@@ -157,7 +157,7 @@ export function SettingsShell({ subdomain, initialTab }: Readonly<SettingsShellP
         </TabsContent>
         <TabsContent value="facebook">
           <React.Suspense fallback={<TabPanelFallback />}>
-            <BYOCSettingsView subdomain={subdomain} />
+            <FacebookSettingsView subdomain={subdomain} />
           </React.Suspense>
         </TabsContent>
         <TabsContent value="instagram">
