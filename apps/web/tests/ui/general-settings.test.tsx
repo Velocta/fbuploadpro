@@ -76,6 +76,22 @@ function installFetchStub() {
   );
 }
 
+
+/** The submit-failure summary, by its data-slot: the inline
+ *  FormMessage also carries role="alert", so a role query is
+ *  ambiguous exactly when both are present (the validation cases). */
+async function findErrorSummary(): Promise<HTMLElement> {
+  let el: HTMLElement | null = null;
+  await waitFor(
+    () => {
+      el = document.querySelector<HTMLElement>('[data-slot="form-error-summary"]');
+      expect(el).not.toBeNull();
+    },
+    { timeout: 10_000 }
+  );
+  return el as unknown as HTMLElement;
+}
+
 beforeEach(() => {
   installFetchStub();
 });
@@ -160,7 +176,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'ab');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
+    const summary = await findErrorSummary();
     expect(summary.textContent).toContain(
       'Workspace name must be between 3 and 40 characters.'
     );
@@ -182,7 +198,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'Acme ');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
+    const summary = await findErrorSummary();
     expect(summary.textContent).toContain(
       'Workspace name must not contain leading or trailing spaces.'
     );
@@ -227,7 +243,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'Taken Name');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
+    const summary = await findErrorSummary();
     expect(summary.textContent).toContain('That workspace name is taken.');
     expect((screen.getByTestId('workspace-name-input') as HTMLInputElement).value).toBe(
       'Taken Name'
@@ -247,7 +263,7 @@ describe('GeneralSettingsView — rename flow', () => {
     await user.type(input, 'Any Name');
     await user.click(screen.getByTestId('workspace-name-save-btn'));
 
-    const summary = await screen.findByRole('alert', {}, { timeout: 10_000 });
+    const summary = await findErrorSummary();
     expect(summary.textContent).toContain(
       "Couldn't update the workspace name. Please try again."
     );
