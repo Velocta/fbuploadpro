@@ -203,7 +203,7 @@ describe('Preview metadata + editors (PB-8)', () => {
     const captionInput = screen.getByTestId('modal-caption-input');
     await user.clear(captionInput);
     await user.type(captionInput, '  Fresh caption  ');
-    expect(screen.getByText('15 / 2,200')).toBeInTheDocument();
+    expect(screen.getByText('17 / 2,200')).toBeInTheDocument();
 
     await user.click(screen.getByTestId('modal-save-caption-btn'));
     await waitFor(() =>
