@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { THEME, SPACING, RADII, TYPOGRAPHY, PALETTE } from '@/lib/theme';
+import { Card } from '@/components/shared/ui/card';
 
 export interface FdolaStudioGateProps {
   subdomain?: string;
@@ -12,47 +12,14 @@ export function FdolaStudioGate({ subdomain: _subdomain }: Readonly<FdolaStudioG
     <div
       data-slot="fdola-studio-gate"
       data-testid="fdola-studio-gate"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '70vh',
-        padding: `${SPACING.xl} ${SPACING.md}`,
-        boxSizing: 'border-box',
-      }}
+      className="flex flex-col items-center justify-center px-6 py-12"
     >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-          border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-          borderRadius: RADII.md,
-          padding: `${SPACING.xxl} ${SPACING.xl}`,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: SPACING.lg,
-          boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-          textAlign: 'center',
-        }}
-      >
+      <Card className="w-full max-w-120 items-center gap-4 px-6 py-8 text-center">
         {/* Studio Icon Container */}
         <div
           data-slot="studio-gate-icon"
           data-testid="studio-gate-icon"
-          style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: RADII.md,
-            backgroundColor: `var(--bg-active, ${THEME.default.surfaces.active})`,
-            border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: PALETTE.primary,
-          }}
+          className="flex size-12 items-center justify-center rounded-md border border-line bg-active text-primary"
         >
           <svg
             width="24"
@@ -71,33 +38,14 @@ export function FdolaStudioGate({ subdomain: _subdomain }: Readonly<FdolaStudioG
           </svg>
         </div>
 
-        {/* Title & Desktop Only Notice */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '1.25rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-              letterSpacing: TYPOGRAPHY.tracking.h1,
-            }}
-          >
-            Fdola Studio
-          </h1>
-          <p
-            data-testid="fdola-gate-message"
-            style={{
-              margin: 0,
-              fontSize: '0.875rem',
-              color: `var(--text-sub, ${THEME.default.text.secondary})`,
-              lineHeight: 1.5,
-              maxWidth: '380px',
-            }}
-          >
-            This feature is only available on desktop. Please download the desktop app.
+        {/* Title & Coming Soon Notice (OD-141-3(c)) */}
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl leading-heading font-semibold text-ink">Fdola Studio</h1>
+          <p data-testid="fdola-gate-message" className="max-w-96 text-body text-ink-sub">
+            Fdola Studio is coming soon.
           </p>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
