@@ -1,0 +1,401 @@
+{
+  "spec": "122 load-proof harness (spec 119 §5.2 / D11)",
+  "label": "calibration",
+  "generatedAt": "2026-10-22T11:26:31.638Z",
+  "scale": 0.05,
+  "seedPlan": [
+    {
+      "platform": "facebook",
+      "items": 15000,
+      "destinations": 3000
+    },
+    {
+      "platform": "instagram",
+      "items": 5000,
+      "destinations": 5000
+    },
+    {
+      "platform": "threads",
+      "items": 5000,
+      "destinations": 1000
+    },
+    {
+      "platform": "youtube",
+      "items": 10000,
+      "destinations": 2000
+    },
+    {
+      "platform": "x",
+      "items": 5000,
+      "destinations": 2000
+    },
+    {
+      "platform": "tiktok",
+      "items": 10000,
+      "destinations": 2000
+    }
+  ],
+  "seeded": 50000,
+  "seedSeconds": 6.27,
+  "drainSeconds": 474.25,
+  "ticks": 1274,
+  "totalClaimed": 50975,
+  "enqueuedFast": 30553,
+  "enqueuedHeavy": 20422,
+  "deliveredBatches": 7142,
+  "messageRetries": 0,
+  "dlqArrivals": 0,
+  "finalCensus": [
+    {
+      "status": "failed",
+      "n": 549
+    },
+    {
+      "status": "published",
+      "n": 49451
+    }
+  ],
+  "perPlatform": [
+    {
+      "platform": "facebook",
+      "status": "failed",
+      "n": 160
+    },
+    {
+      "platform": "facebook",
+      "status": "published",
+      "n": 14840
+    },
+    {
+      "platform": "instagram",
+      "status": "failed",
+      "n": 61
+    },
+    {
+      "platform": "instagram",
+      "status": "published",
+      "n": 4939
+    },
+    {
+      "platform": "threads",
+      "status": "failed",
+      "n": 49
+    },
+    {
+      "platform": "threads",
+      "status": "published",
+      "n": 4951
+    },
+    {
+      "platform": "tiktok",
+      "status": "failed",
+      "n": 118
+    },
+    {
+      "platform": "tiktok",
+      "status": "published",
+      "n": 9882
+    },
+    {
+      "platform": "x",
+      "status": "failed",
+      "n": 50
+    },
+    {
+      "platform": "x",
+      "status": "published",
+      "n": 4950
+    },
+    {
+      "platform": "youtube",
+      "status": "failed",
+      "n": 111
+    },
+    {
+      "platform": "youtube",
+      "status": "published",
+      "n": 9889
+    }
+  ],
+  "publishLogsByResult": [
+    {
+      "result": "failure",
+      "n": 549
+    },
+    {
+      "result": "retry",
+      "n": 975
+    },
+    {
+      "result": "success",
+      "n": 49451
+    }
+  ],
+  "settledPublished": 49451,
+  "settledFailed": 549,
+  "retriedThenPublished": 975,
+  "mockLedger": {
+    "itemsSeen": 50000,
+    "totalAttempts": 50975,
+    "totalSuccesses": 49451
+  },
+  "lost": 0,
+  "accountedTerminal": 50000,
+  "duplicates": 0,
+  "duplicateItems": [],
+  "blendedItemsPerSecond": 105.43,
+  "itemsPerDayAtRunConcurrency": 9109043,
+  "concurrencyUsed": {
+    "fast": 20,
+    "heavy": 10
+  },
+  "wranglerConcurrency": {
+    "fast": 20,
+    "heavy": 10
+  },
+  "itemsPerDayAtWranglerConcurrency": 9109043,
+  "claimTick": {
+    "all": {
+      "n": 1274,
+      "p50": 24,
+      "p95": 150,
+      "max": 13738
+    },
+    "bands": [
+      {
+        "band": "~100% (1M)",
+        "n": 3,
+        "p50": 9852,
+        "p95": 13738,
+        "max": 13738
+      },
+      {
+        "band": "~75%",
+        "n": 5,
+        "p50": 1373,
+        "p95": 1982,
+        "max": 1982
+      },
+      {
+        "band": "~50%",
+        "n": 12,
+        "p50": 337,
+        "p95": 1085,
+        "max": 1085
+      },
+      {
+        "band": "~25%",
+        "n": 451,
+        "p50": 65,
+        "p95": 176,
+        "max": 372
+      },
+      {
+        "band": "~10%",
+        "n": 803,
+        "p50": 11,
+        "p95": 82,
+        "max": 254
+      }
+    ],
+    "claimerConstants": {
+      "CLAIM_ROUND_LIMIT": 500,
+      "CLAIM_MAX_PER_DESTINATION": 3,
+      "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK": 1
+    }
+  },
+  "mockLatencyMs": {
+    "fast": {
+      "facebook": 25,
+      "instagram": 35,
+      "threads": 30,
+      "x": 20,
+      "tiktok": 30,
+      "youtube": 40
+    },
+    "heavy": {
+      "facebook": 120,
+      "instagram": 150,
+      "threads": 120,
+      "x": 140,
+      "tiktok": 150,
+      "youtube": 200
+    }
+  },
+  "throughputSnapshots": [
+    {
+      "elapsedSeconds": 24,
+      "settled": 4476,
+      "remaining": 45524
+    },
+    {
+      "elapsedSeconds": 39,
+      "settled": 7320,
+      "remaining": 42680
+    },
+    {
+      "elapsedSeconds": 54,
+      "settled": 9894,
+      "remaining": 40106
+    },
+    {
+      "elapsedSeconds": 69,
+      "settled": 12644,
+      "remaining": 37356
+    },
+    {
+      "elapsedSeconds": 84,
+      "settled": 15457,
+      "remaining": 34543
+    },
+    {
+      "elapsedSeconds": 100,
+      "settled": 18350,
+      "remaining": 31650
+    },
+    {
+      "elapsedSeconds": 115,
+      "settled": 21152,
+      "remaining": 28848
+    },
+    {
+      "elapsedSeconds": 130,
+      "settled": 23833,
+      "remaining": 26167
+    },
+    {
+      "elapsedSeconds": 145,
+      "settled": 26501,
+      "remaining": 23499
+    },
+    {
+      "elapsedSeconds": 160,
+      "settled": 29454,
+      "remaining": 20546
+    },
+    {
+      "elapsedSeconds": 175,
+      "settled": 32231,
+      "remaining": 17769
+    },
+    {
+      "elapsedSeconds": 191,
+      "settled": 35065,
+      "remaining": 14935
+    },
+    {
+      "elapsedSeconds": 206,
+      "settled": 36880,
+      "remaining": 13120
+    },
+    {
+      "elapsedSeconds": 221,
+      "settled": 37628,
+      "remaining": 12372
+    },
+    {
+      "elapsedSeconds": 236,
+      "settled": 38370,
+      "remaining": 11630
+    },
+    {
+      "elapsedSeconds": 251,
+      "settled": 39172,
+      "remaining": 10828
+    },
+    {
+      "elapsedSeconds": 266,
+      "settled": 39916,
+      "remaining": 10084
+    },
+    {
+      "elapsedSeconds": 281,
+      "settled": 40603,
+      "remaining": 9397
+    },
+    {
+      "elapsedSeconds": 296,
+      "settled": 41317,
+      "remaining": 8683
+    },
+    {
+      "elapsedSeconds": 311,
+      "settled": 42096,
+      "remaining": 7904
+    },
+    {
+      "elapsedSeconds": 326,
+      "settled": 42739,
+      "remaining": 7261
+    },
+    {
+      "elapsedSeconds": 342,
+      "settled": 43513,
+      "remaining": 6487
+    },
+    {
+      "elapsedSeconds": 357,
+      "settled": 44189,
+      "remaining": 5811
+    },
+    {
+      "elapsedSeconds": 372,
+      "settled": 44954,
+      "remaining": 5046
+    },
+    {
+      "elapsedSeconds": 387,
+      "settled": 45614,
+      "remaining": 4386
+    },
+    {
+      "elapsedSeconds": 402,
+      "settled": 46351,
+      "remaining": 3649
+    },
+    {
+      "elapsedSeconds": 417,
+      "settled": 47018,
+      "remaining": 2982
+    },
+    {
+      "elapsedSeconds": 432,
+      "settled": 47735,
+      "remaining": 2265
+    },
+    {
+      "elapsedSeconds": 447,
+      "settled": 48488,
+      "remaining": 1512
+    },
+    {
+      "elapsedSeconds": 463,
+      "settled": 49327,
+      "remaining": 673
+    }
+  ],
+  "successesByPlatformLane": {
+    "facebook|publish-fast": 8906,
+    "instagram|publish-fast": 2962,
+    "facebook|publish-heavy": 5934,
+    "threads|publish-fast": 2973,
+    "youtube|publish-fast": 5931,
+    "x|publish-fast": 2974,
+    "tiktok|publish-fast": 5933,
+    "instagram|publish-heavy": 1977,
+    "threads|publish-heavy": 1978,
+    "youtube|publish-heavy": 3958,
+    "x|publish-heavy": 1976,
+    "tiktok|publish-heavy": 3949
+  },
+  "tuning": {
+    "claimerConstants": {
+      "CLAIM_ROUND_LIMIT": 500,
+      "CLAIM_MAX_PER_DESTINATION": 3,
+      "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK": 1,
+      "note": "MAX_CLAIM_ROUNDS_PER_PLATFORM_LANE_PER_TICK tuned 4 → 1 on this branch (see claimer.ts comment + results md). CLAIM_ROUND_LIMIT and CLAIM_MAX_PER_DESTINATION unchanged from main."
+    },
+    "harnessDbConfig": "pgserver PostgreSQL, ALTER SYSTEM: shared_buffers=1GB, effective_cache_size=3GB, work_mem=64MB, random_page_cost=1.1 (defaults otherwise). Adapter sessions SET work_mem=64MB.",
+    "pacing": "Claim ticks run only while shim pending < 20,000 messages."
+  }
+}
