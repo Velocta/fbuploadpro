@@ -13,8 +13,9 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { SidebarProvider } from '@/components/shared/ui/sidebar';
-import { SidebarProvider as LegacySidebarProvider } from '@/components/ui/sidebar';
+import { createQueryClient } from '@/lib/data/query-client';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 
 let mockPathname = '/tenant/acme';
@@ -50,14 +51,14 @@ function Shell({
   subdomain = 'acme',
 }: Readonly<{ defaultOpen?: boolean; subdomain?: string }>) {
   return (
-    <SidebarProvider defaultOpen={defaultOpen}>
-      <LegacySidebarProvider>
+    <QueryClientProvider client={createQueryClient(subdomain)}>
+      <SidebarProvider defaultOpen={defaultOpen}>
         <WorkspaceSidebar
           subdomain={subdomain}
           user={{ name: 'Jane Doe', email: 'jane@example.com' }}
         />
-      </LegacySidebarProvider>
-    </SidebarProvider>
+      </SidebarProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -65,6 +66,26 @@ describe('WorkspaceSidebar (spec 130 rebuild on shared/ui Sidebar)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPathname = '/tenant/acme';
+    // The switcher footer's workspace-list query (typed client) reads
+    // the same response shape as GET /api/workspaces.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            workspaces: [
+              {
+                id: '11111111-1111-4111-8111-111111111111',
+                ownerId: '22222222-2222-4222-8222-222222222222',
+                name: 'Acme',
+                subdomain: 'acme',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+    );
   });
 
   it('renders branding as a Home link with the FBUploadPro Studio wordmark', () => {

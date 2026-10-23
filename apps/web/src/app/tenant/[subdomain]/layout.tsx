@@ -8,7 +8,6 @@ import {
   SidebarInset,
   SidebarTrigger,
 } from '@/components/shared/ui/sidebar';
-import { SidebarProvider as LegacySidebarProvider } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/shared/ui/toast';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb';
@@ -51,12 +50,13 @@ export async function generateMetadata({
  * only, and the shell mounts the one Toaster system plus the Banner
  * slot every tenant surface raises into.
  *
- * Transition state (spec 130 §11): `WorkspaceSidebar` and its footer
- * still consume the legacy sidebar until PR-130-2 migrates them, so
- * the legacy provider stays nested around the frame contents for this
- * PR only. Both providers persist to the same `sidebar_state` cookie
- * and both answer Cmd/Ctrl+B; the legacy file is deleted in PR-130-2
- * once its last consumers migrate.
+ * Provider state (spec 130 §11, closed by PR-130-2b): PR-130-1 left a
+ * legacy provider nested inside this frame as the designed transition
+ * state while the sidebar and footer migrated. PR-130-2a/2b migrated
+ * both, the legacy `components/ui/sidebar.tsx` is deleted, and this
+ * frame is now single-provider: the shared/ui `SidebarProvider` is
+ * the one sidebar state — the header trigger and Cmd/Ctrl+B drive
+ * exactly it.
  *
  * Identity (spec 137 §4.4): a null server session NEVER renders a
  * shell with invented identity data. Middleware already redirects
@@ -102,15 +102,14 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
         >
           Skip to content
         </a>
-        <LegacySidebarProvider>
-          <WorkspaceLifecycleGuard userId={session.userId} userEmail={session.email} />
-          <WorkspaceSidebar
-            subdomain={subdomain}
-            useCleanPaths={useCleanPaths}
-            user={user}
-            workspaceName={workspaceName ?? undefined}
-          />
-          <SidebarInset id="tenant-content" tabIndex={-1} className="scroll-mt-11">
+        <WorkspaceLifecycleGuard userId={session.userId} userEmail={session.email} />
+        <WorkspaceSidebar
+          subdomain={subdomain}
+          useCleanPaths={useCleanPaths}
+          user={user}
+          workspaceName={workspaceName ?? undefined}
+        />
+        <SidebarInset id="tenant-content" tabIndex={-1} className="scroll-mt-11">
             <header
               data-slot="workspace-topbar"
               data-testid="workspace-topbar"
@@ -129,8 +128,7 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
             */}
             <div id="tenant-banner-slot" data-slot="tenant-banner-slot" />
             {children}
-          </SidebarInset>
-        </LegacySidebarProvider>
+        </SidebarInset>
         <Toaster />
       </SidebarProvider>
     </DataProvider>

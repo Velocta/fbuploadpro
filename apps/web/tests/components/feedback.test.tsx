@@ -5,7 +5,12 @@ import { StatusDot } from '../../src/components/ui/status-dot';
 import { Tag } from '../../src/components/ui/tag';
 import { Skeleton } from '../../src/components/ui/skeleton';
 import { Alert } from '../../src/components/ui/alert';
-import { Tooltip } from '../../src/components/ui/tooltip';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../../src/components/shared/ui/tooltip';
 
 describe('Feedback & Signals Suite', () => {
   it('renders unboxed 6px luminous StatusDot across all states', () => {
@@ -42,10 +47,18 @@ describe('Feedback & Signals Suite', () => {
   });
 
   it('renders Tooltip trigger element', () => {
+    // Migrated by spec 130 PR-130-2b: the legacy `components/ui/tooltip`
+    // is deleted; the shared/ui Tooltip (Radix) renders its trigger
+    // server-side and the content on interaction.
     const html = renderToString(
-      <Tooltip content="Edit settings">
-        <button type="button">Settings</button>
-      </Tooltip>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Settings</button>
+          </TooltipTrigger>
+          <TooltipContent>Edit settings</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
     expect(html).toContain('Settings');
   });

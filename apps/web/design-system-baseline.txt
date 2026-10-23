@@ -47,7 +47,6 @@ hex apps/web/src/components/pages/dedicated/bulk/bulk-step-media.tsx 2
 hex apps/web/src/components/pages/dedicated/tab-settings.tsx 1
 hex apps/web/src/components/ui/checkbox.tsx 4
 hex apps/web/src/components/ui/switch.tsx 3
-hex apps/web/src/components/workspace/workspace-studio-footer.tsx 2
 rgb apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 10
 rgb apps/web/src/app/tenant/[subdomain]/pages/[pageId]/page.tsx 5
 rgb apps/web/src/app/tenant/[subdomain]/pages/page.tsx 5
@@ -88,11 +87,9 @@ rgb apps/web/src/components/ui/checkbox.tsx 1
 rgb apps/web/src/components/ui/dialog.tsx 1
 rgb apps/web/src/components/ui/input.tsx 1
 rgb apps/web/src/components/ui/select.tsx 1
-rgb apps/web/src/components/ui/sidebar.tsx 1
 rgb apps/web/src/components/ui/switch.tsx 2
 rgb apps/web/src/components/ui/tag.tsx 10
 rgb apps/web/src/components/ui/textarea.tsx 1
-rgb apps/web/src/components/workspace/create-workspace-modal.tsx 1
 rgb apps/web/src/lib/component-styles.ts 1
 fontsize apps/web/src/app/tenant/[subdomain]/accounts/page.tsx 1
 fontsize apps/web/src/app/tenant/[subdomain]/pages/page.tsx 1
@@ -116,15 +113,10 @@ zindex apps/web/src/components/pages/dedicated/queue/queue-toasts.tsx 1
 zindex apps/web/src/components/settings/platform-credentials-view.tsx 1
 zindex apps/web/src/components/ui/dialog.tsx 2
 zindex apps/web/src/components/ui/input.tsx 1
-zindex apps/web/src/components/ui/sidebar.tsx 6
-zindex apps/web/src/components/ui/tooltip.tsx 1
-zindex apps/web/src/components/workspace/create-workspace-modal.tsx 1
-zindex apps/web/src/components/workspace/workspace-studio-footer.tsx 1
 important apps/web/src/components/ui/button.tsx 7
 important apps/web/src/components/ui/checkbox.tsx 1
 important apps/web/src/components/ui/input.tsx 6
 important apps/web/src/components/ui/select.tsx 4
-important apps/web/src/components/ui/sidebar.tsx 4
 important apps/web/src/components/ui/skeleton.tsx 2
 important apps/web/src/components/ui/switch.tsx 1
 important apps/web/src/components/ui/textarea.tsx 4

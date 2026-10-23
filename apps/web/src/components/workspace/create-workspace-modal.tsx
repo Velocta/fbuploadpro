@@ -1,11 +1,76 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { THEME, PALETTE, RADII, SPACING, TYPOGRAPHY, COMPONENT_STYLES } from '@/lib/theme';
+/**
+ * CreateWorkspaceModal — rebuilt on the shared/ui Dialog primitive +
+ * the spec 137 §3.8 form standard (spec 130 §5.4, PR-130-2b).
+ *
+ * The legacy hand-rolled modal (the audit's one semantically-correct
+ * modal) is replaced by the Dialog primitive: focus trap, Esc, and
+ * focus return come from the primitive; Esc stays blocked while a
+ * submission is in flight, as before. The form is react-hook-form +
+ * zod with `onTouched` validation and the §4.2 messages verbatim;
+ * submission goes through the typed client as a mutation
+ * (`POST /api/workspaces`, `WorkspaceMutationResponseSchema`); the
+ * submit button carries the Button primitive's loading state while
+ * pending; the input is never cleared on failure.
+ *
+ * Error presentation (§3.8 wired pattern — the shape change from the
+ * legacy single error box is spec §9 item 2, named): field problems
+ * present inline + in the FormErrorSummary; server/network failures
+ * present as a dialog-level Alert. Wording is §4.2 verbatim: a
+ * server-provided `error` string takes precedence, then the listed
+ * fallbacks. The modal's `COMPONENT_STYLES` / `modal-styles.ts`
+ * imports are deleted (the modal-styles file itself survives — 8
+ * other consumers, spec §3.1).
+ *
+ * Success (§4.1 preserved): the modal closes and hands the created
+ * workspace to `onSuccess`; the switcher then switches into it by
+ * full-page navigation. The legacy modal's own extra self-navigation
+ * is not carried over — the switch flow is the single navigation,
+ * ending in the new workspace's home either way.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
+import { z } from 'zod';
+
+import { api, getErrorMessage, isApiError } from '@/lib/api';
+import { WorkspaceMutationResponseSchema } from '@/lib/api/schemas/workspaces';
+import { Alert, AlertDescription } from '@/components/shared/ui/alert';
+import { Button } from '@/components/shared/ui/button';
 import {
-  MODAL_BACKDROP_STYLE,
-  MODAL_CONTAINER_STYLE,
-} from '@/components/pages/dedicated/modal-styles';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shared/ui/dialog';
+import {
+  Form,
+  FormControl,
+  FormErrorSummary,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  type FormErrorSummaryEntry,
+} from '@/components/shared/ui/form';
+import { Input } from '@/components/shared/ui/input';
+
+export const createWorkspaceFormSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Please provide a workspace name.')
+    .min(2, 'Workspace name must be at least 2 characters long.'),
+});
+
+export type CreateWorkspaceFormValues = z.infer<typeof createWorkspaceFormSchema>;
+
+const NAME_FIELD_ID = 'ws-name-input';
 
 export interface CreateWorkspaceModalProps {
   isOpen: boolean;
@@ -13,262 +78,173 @@ export interface CreateWorkspaceModalProps {
   onSuccess?: ((workspace: { id: string; name: string; subdomain: string }) => void) | undefined;
 }
 
+/** Map a failed create onto the §4.2 verbatim fallbacks: a server
+ *  `error` string first (HTTP failures), then the invalid-response
+ *  fallback for parse failures, then the network fallback. */
+function createFailureMessage(error: unknown): string {
+  if (isApiError(error)) {
+    if (error.kind === 'http') {
+      return getErrorMessage(error, 'Server error while creating workspace. Please try again.');
+    }
+    if (error.kind === 'parse') {
+      return 'Server returned an invalid workspace response.';
+    }
+    if (error.kind === 'session-expired') {
+      return 'Server error while creating workspace. Please try again.';
+    }
+  }
+  return 'Network communication failed. Please try again.';
+}
+
 export function CreateWorkspaceModal({
   isOpen,
   onClose,
   onSuccess,
 }: Readonly<CreateWorkspaceModalProps>) {
-  const [name, setName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  const form = useForm<CreateWorkspaceFormValues>({
+    resolver: zodResolver(createWorkspaceFormSchema),
+    mode: 'onTouched',
+    shouldFocusError: false,
+    defaultValues: { name: '' },
+  });
 
   useEffect(() => {
     if (isOpen) {
-      setName('');
-      setIsSubmitting(false);
-      setError(null);
+      form.reset({ name: '' });
+      setServerError(null);
+      setSubmitAttempted(false);
     }
-  }, [isOpen]);
+  }, [isOpen, form]);
 
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!name.trim()) {
-      setError('Please provide a workspace name.');
-      return;
-    }
-    if (name.trim().length < 2) {
-      setError('Workspace name must be at least 2 characters long.');
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/workspaces', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
-      });
-
-      let data: { error?: string; workspace?: { id: string; name: string; subdomain: string } } = {};
-      try {
-        data = await response.json();
-      } catch {
-        // Response was not JSON
-      }
-
-      if (!response.ok) {
-        setError(data.error || 'Server error while creating workspace. Please try again.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      if (!data.workspace?.subdomain) {
-        setError('Server returned an invalid workspace response.');
-        setIsSubmitting(false);
-        return;
-      }
-
+  const createMutation = useMutation({
+    mutationFn: (name: string) =>
+      api.post('/api/workspaces', { name }, { schema: WorkspaceMutationResponseSchema }),
+    onSuccess: (data) => {
       onSuccess?.(data.workspace);
       onClose();
-      // Navigate to the newly created workspace
-      window.location.href = `/tenant/${data.workspace.subdomain}`;
-    } catch {
-      setError('Network communication failed. Please try again.');
-      setIsSubmitting(false);
+    },
+    onError: (error) => {
+      setServerError(createFailureMessage(error));
+    },
+  });
+
+  const isSubmitting = createMutation.isPending;
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open && !isSubmitting) {
+      onClose();
     }
   };
 
+  const onSubmit = (values: CreateWorkspaceFormValues) => {
+    setSubmitAttempted(true);
+    setServerError(null);
+    createMutation.mutate(values.name.trim());
+  };
+
+  const nameError = form.formState.errors.name?.message;
+  const summaryEntries: FormErrorSummaryEntry[] = [
+    ...(submitAttempted && nameError ? [{ fieldId: NAME_FIELD_ID, message: nameError }] : []),
+  ];
+
   return (
-    <div
-      style={MODAL_BACKDROP_STYLE}
-      role="presentation"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape' && !isSubmitting) onClose();
-      }}
-    >
-      <button
-        type="button"
-        aria-label="Close dialog"
-        tabIndex={-1}
-        onClick={() => {
-          if (!isSubmitting) onClose();
-        }}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          margin: 0,
-          cursor: 'default',
-        }}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+      <DialogContent
+        showCloseButton={false}
         aria-labelledby="create-workspace-title"
-        style={{ ...MODAL_CONTAINER_STYLE, maxWidth: '440px', position: 'relative', zIndex: 1 }}
+        onEscapeKeyDown={(e) => {
+          if (isSubmitting) e.preventDefault();
+        }}
+        className="max-w-md"
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h2
-            id="create-workspace-title"
-            style={{
-              margin: 0,
-              fontSize: '1.125rem',
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              color: `var(--text-main, ${THEME.default.text.primary})`,
-            }}
-          >
-            Create Workspace
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            aria-label="Close dialog"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              color: `var(--text-dim, ${THEME.default.text.muted})`,
-              padding: SPACING.xs,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-
-        <p
-          style={{
-            margin: 0,
-            fontSize: '0.875rem',
-            color: `var(--text-sub, ${THEME.default.text.secondary})`,
-            lineHeight: 1.4,
-          }}
-        >
-          Workspaces keep your social accounts, scheduled posts, and media organized in one dedicated space.
-        </p>
-
-        {error && (
-          <div
-            role="alert"
-            style={{
-              padding: `${SPACING.sm} ${SPACING.md}`,
-              backgroundColor: 'rgba(246, 70, 93, 0.1)',
-              border: `1px solid ${PALETTE.accent3}`,
-              borderRadius: RADII.sm,
-              color: PALETTE.accent3,
-              fontSize: '0.8125rem',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: SPACING.md }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.xs }}>
-            <label
-              htmlFor="ws-name-input"
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: TYPOGRAPHY.weights.medium,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-              }}
-            >
-              Workspace Name
-            </label>
-            <input
-              id="ws-name-input"
-              type="text"
-              placeholder="e.g. Acme Media or Brand Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={isSubmitting}
-              required
-              autoFocus
-              style={{
-                width: '100%',
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                color: `var(--text-main, ${THEME.default.text.primary})`,
-                fontSize: '0.875rem',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-            <p
-              style={{
-                margin: `${SPACING.xs} 0 0 0`,
-                fontSize: '0.75rem',
-                color: `var(--text-dim, ${THEME.default.text.muted})`,
-              }}
-            >
-              Give your workspace a recognizable name, such as your brand, company, or client project.
-            </p>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: SPACING.sm,
-              marginTop: SPACING.xs,
-            }}
-          >
-            <button
+        <DialogHeader>
+          <div className="flex items-center justify-between">
+            <DialogTitle id="create-workspace-title">Create Workspace</DialogTitle>
+            <Button
               type="button"
+              variant="ghost"
+              size="icon-sm"
               onClick={onClose}
               disabled={isSubmitting}
-              style={{
-                padding: `${SPACING.sm} ${SPACING.md}`,
-                backgroundColor: 'transparent',
-                border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-                borderRadius: RADII.sm,
-                color: `var(--text-sub, ${THEME.default.text.secondary})`,
-                fontSize: '0.8125rem',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              }}
+              aria-label="Close dialog"
+              className="size-11"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              data-testid="create-workspace-submit"
-              disabled={isSubmitting || !name.trim()}
-              style={{
-                ...COMPONENT_STYLES.primaryButton,
-                height: '36px',
-                fontSize: '0.8125rem',
-                cursor: isSubmitting || !name.trim() ? 'not-allowed' : 'pointer',
-                opacity: isSubmitting || !name.trim() ? 0.6 : 1,
-              }}
-            >
-              {isSubmitting ? 'Creating...' : 'Create Workspace'}
-            </button>
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </Button>
           </div>
-        </form>
-      </div>
-    </div>
+          <DialogDescription>
+            Workspaces keep your social accounts, scheduled posts, and media organized in one
+            dedicated space.
+          </DialogDescription>
+        </DialogHeader>
+
+        {serverError && (
+          <Alert variant="destructive">
+            <AlertDescription>{serverError}</AlertDescription>
+          </Alert>
+        )}
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4" noValidate>
+            {summaryEntries.length > 0 && <FormErrorSummary errors={summaryEntries} />}
+
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel htmlFor={NAME_FIELD_ID}>Workspace Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      id={NAME_FIELD_ID}
+                      type="text"
+                      placeholder="e.g. Acme Media or Brand Name"
+                      disabled={isSubmitting}
+                      autoFocus
+                      {...field}
+                    />
+                  </FormControl>
+                  <p className="text-metadata text-ink-dim">
+                    Give your workspace a recognizable name, such as your brand, company, or
+                    client project.
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                data-testid="create-workspace-submit"
+                loading={isSubmitting}
+                disabled={isSubmitting || !form.watch('name').trim()}
+              >
+                {isSubmitting ? 'Creating...' : 'Create Workspace'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
