@@ -61,9 +61,17 @@ test.describe('posting times — mobile gate (spec 142)', () => {
         expect(box, `${testId} has a bounding box`).not.toBeNull();
         expect(box!.height, `${testId} height`).toBeGreaterThanOrEqual(44);
       }
-      const toggleBox = await page.getByTestId(/toggle-slot-btn-/).first().boundingBox();
-      expect(toggleBox, 'toggle has a bounding box').not.toBeNull();
-      expect(toggleBox!.height, 'toggle hit area height').toBeGreaterThanOrEqual(44);
+      // The Switch's layout box is 24px by design; its hit area is the
+      // design system's hit-area-44 utility (a centred 44px ::after) —
+      // assert that effective hit area, and that a tap lands.
+      const toggle = page.getByTestId(/toggle-slot-btn-/).first();
+      const hitArea = await toggle.evaluate((el) => {
+        const after = getComputedStyle(el, '::after');
+        return { width: parseFloat(after.width), height: parseFloat(after.height) };
+      });
+      expect(hitArea.width, 'toggle hit area width').toBeGreaterThanOrEqual(44);
+      expect(hitArea.height, 'toggle hit area height').toBeGreaterThanOrEqual(44);
+      await toggle.click();
 
       // Add posting-time dialog: fits the viewport, submit reachable.
       await page.getByTestId('add-slot-button').click();
