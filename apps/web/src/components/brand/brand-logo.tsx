@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { PALETTE, TYPOGRAPHY, SPACING } from '@/lib/theme';
+import { PALETTE } from '@/lib/theme';
+import { cn } from '@/lib/utils';
 
 export interface BrandMarkProps extends React.SVGProps<SVGSVGElement> {
   size?: number;
@@ -9,17 +10,19 @@ export interface BrandMarkProps extends React.SVGProps<SVGSVGElement> {
 }
 
 /**
- * Official FBUploadPro Brand Mark.
- * Implements the 4-path geometric anatomy:
- * 1. Primary Gold Upload Arrow & "F" Crown/Spine (#fad734)
- * 2. Pure White Specular Edge Highlight (#ffffff @ 0.35 opacity per DESIGN.md Section 7.1)
- * 3. Peru Accent Middle Crossbar & Active Stream Wing (#b29527)
- * 4. Bronze Accent Recurring Queue Slot Anchor (#766018)
+ * Official FBUploadPro Brand Mark (spec 130 PR-130-1: layout and
+ * wordmark rebuilt on token-backed utilities; the four path fills
+ * keep referencing the generated token values from `lib/theme`,
+ * the token system's generated output — no colour literals remain
+ * in this file). Implements the 4-path geometric anatomy:
+ * 1. Primary gold upload arrow and "F" crown/spine (brand gold token)
+ * 2. White specular edge highlight (neutral white token, 0.35 opacity)
+ * 3. Peru accent middle crossbar and active stream wing (brand peru token)
+ * 4. Bronze accent recurring queue slot anchor (brand bronze token)
  */
 export const BrandMark: React.FC<BrandMarkProps> = ({
   size = 32,
   className,
-  style,
   ...props
 }) => {
   return (
@@ -31,34 +34,27 @@ export const BrandMark: React.FC<BrandMarkProps> = ({
       fill="none"
       role="img"
       aria-label="FBUploadPro"
-      className={className}
-      style={{ flexShrink: 0, display: 'inline-block', ...style }}
+      className={cn('inline-block shrink-0', className)}
       {...props}
     >
-      {/* PRIMARY GOLD (--color-primary: #fad734): Unified Ascending Upload Arrow + "F" Crown & Spine */}
+      {/* Primary gold: unified ascending upload arrow + "F" crown and spine */}
       <path
         d="M24 11L12 23L17 28L20 25V51L28 45V23H45L53 15H28L24 11Z"
         fill={PALETTE.primary}
       />
 
-      {/* PURE WHITE SPECULAR EDGE (--color-text: #ffffff @ 0.35 opacity per DESIGN.md Section 7.1) */}
+      {/* Specular edge highlight: neutral white at 0.35 opacity */}
       <path
         d="M24 11L12 23L13.2 24.2L24 13.4L28 17.4H50.6L53 15H28L24 11Z"
         fill={PALETTE.text}
         fillOpacity={0.35}
       />
 
-      {/* PERU ACCENT 1 (--color-accent-1: #b29527): Middle "F" Crossbar & Active Stream Wing */}
-      <path
-        d="M32 30H48L40 38H32V30Z"
-        fill={PALETTE.accent1}
-      />
+      {/* Peru accent: middle "F" crossbar and active stream wing */}
+      <path d="M32 30H48L40 38H32V30Z" fill={PALETTE.accent1} />
 
-      {/* BRONZE ACCENT 2 (--color-accent-2: #766018): Recurring Queue Slot Anchor */}
-      <path
-        d="M32 43H41L35 49H32V43Z"
-        fill={PALETTE.accent2}
-      />
+      {/* Bronze accent: recurring queue slot anchor */}
+      <path d="M32 43H41L35 49H32V43Z" fill={PALETTE.accent2} />
     </svg>
   );
 };
@@ -82,40 +78,15 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   style,
 }) => {
   return (
-    <div
-      className={className}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: SPACING.sm,
-        textDecoration: 'none',
-        ...style,
-      }}
-    >
+    <div className={cn('inline-flex items-center gap-2', className)} style={style}>
       <BrandMark size={markSize} />
       {showWordmark && (
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-          <span
-            style={{
-              fontSize: '0.9375rem',
-              fontWeight: TYPOGRAPHY.weights.bold,
-              color: 'var(--text-main, #ffffff)',
-              letterSpacing: TYPOGRAPHY.tracking.caption,
-              lineHeight: 1.2,
-            }}
-          >
+        <div className="flex min-w-0 flex-col">
+          <span className="text-body leading-heading font-bold tracking-caption text-ink">
             FBUploadPro
           </span>
           {subtitle && (
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                color: 'var(--text-dim, #6b7280)',
-                lineHeight: 1.2,
-              }}
-            >
-              {subtitle}
-            </span>
+            <span className="text-xs leading-heading text-ink-dim">{subtitle}</span>
           )}
         </div>
       )}

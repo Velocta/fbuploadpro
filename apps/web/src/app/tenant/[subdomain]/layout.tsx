@@ -1,14 +1,20 @@
 import type { Metadata } from 'next';
 import React from 'react';
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { shouldUseCleanTenantPaths } from '@/lib/tenant-href';
-import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
+import {
+  SidebarProvider,
+  SidebarInset,
+  SidebarTrigger,
+} from '@/components/shared/ui/sidebar';
+import { SidebarProvider as LegacySidebarProvider } from '@/components/ui/sidebar';
+import { Toaster } from '@/components/shared/ui/toast';
 import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { WorkspaceBreadcrumb } from '@/components/workspace/workspace-breadcrumb';
 import { WorkspaceLifecycleGuard } from '@/components/workspace/workspace-lifecycle-guard';
 import { getServerSessionContext } from '@/lib/auth';
 import { DataProvider } from '@/lib/data/provider';
-import { SPACING, THEME } from '@/lib/theme';
 import { getWorkspaceDisplayName } from './workspace-display-name';
 
 interface TenantLayoutProps {
@@ -38,9 +44,35 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * Tenant frame (spec 130 §5.1, PR-130-1): rebuilt on the shared/ui
+ * Sidebar primitive — provider, inset and header trigger come from
+ * `components/shared/ui/sidebar`, styling is token-backed utilities
+ * only, and the shell mounts the one Toaster system plus the Banner
+ * slot every tenant surface raises into.
+ *
+ * Transition state (spec 130 §11): `WorkspaceSidebar` and its footer
+ * still consume the legacy sidebar until PR-130-2 migrates them, so
+ * the legacy provider stays nested around the frame contents for this
+ * PR only. Both providers persist to the same `sidebar_state` cookie
+ * and both answer Cmd/Ctrl+B; the legacy file is deleted in PR-130-2
+ * once its last consumers migrate.
+ *
+ * Identity (spec 137 §4.4): a null server session NEVER renders a
+ * shell with invented identity data. Middleware already redirects
+ * unauthenticated tenant requests, so a null session here is a race
+ * or test path — it resolves via redirect to login, carrying the
+ * tenant return path in the `returnUrl` parameter the login flow
+ * already honours for tenant redirects (the middleware convention).
+ */
 export default async function TenantLayout({ params, children }: Readonly<TenantLayoutProps>) {
   const { subdomain } = await params;
   const session = await getServerSessionContext();
+
+  if (!session) {
+    redirect(`/login?returnUrl=${encodeURIComponent(`/tenant/${subdomain}`)}`);
+  }
+
   let hostHeader: string | null = null;
   try {
     hostHeader = (await headers()).get('host');
@@ -55,53 +87,52 @@ export default async function TenantLayout({ params, children }: Readonly<Tenant
   // never flash (or stick on) the internal slug before the client fetch lands.
   const workspaceName = await getWorkspaceDisplayName(subdomain);
 
-  const user = session
-    ? {
-        name: session.subdomain || session.email.split('@')[0],
-        email: session.email,
-      }
-    : {
-        name: subdomain,
-        email: `${subdomain}@fbuploadpro.com`,
-      };
+  const user = {
+    name: session.subdomain || session.email.split('@')[0],
+    email: session.email,
+  };
 
   return (
     <DataProvider subdomain={subdomain}>
-    <SidebarProvider>
-      <WorkspaceLifecycleGuard userId={session?.userId} userEmail={session?.email} />
-      <WorkspaceSidebar subdomain={subdomain} useCleanPaths={useCleanPaths} user={user} workspaceName={workspaceName ?? undefined} />
-      <SidebarInset>
-        <header
-          data-slot="workspace-topbar"
-          data-testid="workspace-topbar"
-          style={{
-            display: 'flex',
-            height: '44px',
-            flexShrink: 0,
-            alignItems: 'center',
-            gap: SPACING.sm,
-            padding: `0 ${SPACING.md}`,
-            borderBottom: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-            backgroundColor: `var(--bg-canvas, ${THEME.default.surfaces.canvas})`,
-          }}
+      <SidebarProvider>
+        {/* Skip link: the frame's first focusable element (spec 130 §5.1). */}
+        <a
+          href="#tenant-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-toast focus:rounded-sm focus:bg-panel focus:px-4 focus:py-2 focus:text-body focus:font-medium focus:text-ink focus:outline-2 focus:outline-offset-2 focus:outline-brand-gold"
         >
-          <SidebarTrigger />
-          <hr
-            aria-orientation="vertical"
-            style={{
-              width: '1px',
-              height: '16px',
-              border: 'none',
-              backgroundColor: `var(--border-subtle, ${THEME.default.borders.hairline})`,
-              margin: `0 ${SPACING.xs}`,
-              flexShrink: 0,
-            }}
+          Skip to content
+        </a>
+        <LegacySidebarProvider>
+          <WorkspaceLifecycleGuard userId={session.userId} userEmail={session.email} />
+          <WorkspaceSidebar
+            subdomain={subdomain}
+            useCleanPaths={useCleanPaths}
+            user={user}
+            workspaceName={workspaceName ?? undefined}
           />
-          <WorkspaceBreadcrumb subdomain={subdomain} useCleanPaths={useCleanPaths} />
-        </header>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+          <SidebarInset id="tenant-content" tabIndex={-1} className="scroll-mt-11">
+            <header
+              data-slot="workspace-topbar"
+              data-testid="workspace-topbar"
+              className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-canvas px-3"
+            >
+              <SidebarTrigger className="size-11" />
+              <div aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-line" />
+              <WorkspaceBreadcrumb subdomain={subdomain} useCleanPaths={useCleanPaths} />
+            </header>
+            {/*
+              Banner slot (spec 130 §5.1): the shell-level region directly
+              under the header where a persistent page/account-level Banner
+              (shared/ui) renders when a surface or the shell raises one.
+              Surfaces render their Banner into `#tenant-banner-slot`; no
+              banner is raised at baseline.
+            */}
+            <div id="tenant-banner-slot" data-slot="tenant-banner-slot" />
+            {children}
+          </SidebarInset>
+        </LegacySidebarProvider>
+        <Toaster />
+      </SidebarProvider>
     </DataProvider>
   );
 }
