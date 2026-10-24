@@ -1,14 +1,26 @@
 /**
  * @file platform-placeholder-accounts.test.tsx
- * @description Unit tests for PlatformPlaceholderAccounts component (Spec 047).
+ * @description Behavioural tests for the shared platform accounts shell
+ * (Spec 047 placeholder, rebuilt as spec 131 PR-131-5's
+ * `PlatformAccountsShell` — audit #12: five duplicate route shells, one
+ * shared shell).
+ *
+ * Migration note (named in PR-131-5): this suite previously rendered the
+ * legacy `PlatformPlaceholderAccounts` component through the static-markup
+ * helper and asserted its inline-style CSS variables (`var(--bg-panel`,
+ * `var(--shadow-card`, `var(--text-sub`). The shell is now built on the
+ * shared/ui primitives with token-backed utilities and zero inline
+ * styles, so the suite renders the new shell into jsdom and asserts
+ * behaviour instead: heading, the exact testing notice, the icon
+ * container, the verbatim description fallback, the connect area, and
+ * the Return to Overview navigation.
  */
 
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render } from '../components/setup';
-import {
-  PlatformPlaceholderAccounts,
-} from '@/components/workspace/platform-placeholder-accounts';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { PlatformAccountsShell } from '@/components/accounts/platform-accounts-shell';
 import {
   InstagramIcon,
   ThreadsIcon,
@@ -18,95 +30,127 @@ import {
   TESTING_PLACEHOLDER_TEXT,
 } from '@/components/workspace/platform-nav-config';
 
+const pushMock = vi.fn();
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: pushMock,
     replace: vi.fn(),
   }),
 }));
 
-describe('PlatformPlaceholderAccounts Component (Spec 047)', () => {
-  it('renders platform heading and the exact testing placeholder notice', () => {
-    const { hasText, hasAttribute } = render(
-      <PlatformPlaceholderAccounts
-        platformName="Instagram"
-        subdomain="acme"
-        icon={<InstagramIcon />}
-      />
-    );
+const PLATFORMS = [
+  { platformName: 'Instagram', icon: <InstagramIcon /> },
+  { platformName: 'Threads', icon: <ThreadsIcon /> },
+  { platformName: 'X (Twitter)', icon: <XTwitterIcon /> },
+  { platformName: 'TikTok', icon: <TikTokIcon /> },
+  { platformName: 'YouTube', icon: <YouTubeIcon /> },
+];
 
-    expect(hasAttribute('data-testid', 'platform-placeholder-accounts')).toBe(true);
-    expect(hasText('Instagram Accounts')).toBe(true);
-    expect(hasText(TESTING_PLACEHOLDER_TEXT)).toBe(true);
-    expect(hasText('Return to Overview')).toBe(true);
-    expect(hasAttribute('data-slot', 'platform-icon-container')).toBe(true);
-
-    // Verify theme-reactive CSS variables
-    const { html } = render(
-      <PlatformPlaceholderAccounts
-        platformName="Instagram"
-        subdomain="acme"
-        icon={<InstagramIcon />}
-      />
-    );
-    expect(html).toContain('var(--bg-panel');
-    expect(html).toContain('var(--shadow-card');
-    expect(html).toContain('var(--text-sub');
+describe('PlatformAccountsShell (Spec 047 / spec 131 PR-131-5)', () => {
+  beforeEach(() => {
+    pushMock.mockClear();
   });
 
-  it('renders correctly for Threads with ThreadsIcon', () => {
-    const { hasText, hasAttribute } = render(
-      <PlatformPlaceholderAccounts
+  it('renders the shell testids, heading and the exact testing placeholder notice', () => {
+    const { container } = render(
+      <PlatformAccountsShell
+        platformName="Instagram"
+        subdomain="acme"
+        icon={<InstagramIcon />}
+      />
+    );
+
+    expect(screen.getByTestId('platform-placeholder-accounts')).toBeTruthy();
+    expect(
+      screen.getByRole('heading', { name: 'Instagram Accounts' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('testing-placeholder-notice').textContent).toBe(
+      TESTING_PLACEHOLDER_TEXT
+    );
+    expect(
+      container.querySelector('[data-slot="platform-icon-container"]')
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Return to Overview' })
+    ).toBeTruthy();
+  });
+
+  it('renders the default description when none is passed', () => {
+    render(
+      <PlatformAccountsShell
+        platformName="Instagram"
+        subdomain="acme"
+        icon={<InstagramIcon />}
+      />
+    );
+
+    expect(
+      screen.getByText(
+        'Instagram integration is currently undergoing testing and verification. Account connectivity and publishing tools for this channel will be enabled once public validation completes.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('renders a verbatim custom description and the connect area', () => {
+    render(
+      <PlatformAccountsShell
+        platformName="Instagram"
+        subdomain="acme"
+        icon={<InstagramIcon />}
+        description="Connect your Instagram account to schedule and publish posts from one place."
+        connectArea={
+          <a href="/api/connect/instagram" data-testid="instagram-connect-link">
+            Connect Instagram
+          </a>
+        }
+      />
+    );
+
+    expect(
+      screen.getByText(
+        'Connect your Instagram account to schedule and publish posts from one place.'
+      )
+    ).toBeTruthy();
+    expect(screen.getByTestId('instagram-connect-link')).toBeTruthy();
+  });
+
+  it('Return to Overview navigates to the tenant overview', async () => {
+    const user = userEvent.setup();
+    render(
+      <PlatformAccountsShell
         platformName="Threads"
         subdomain="acme"
         icon={<ThreadsIcon />}
       />
     );
 
-    expect(hasText('Threads Accounts')).toBe(true);
-    expect(hasText(TESTING_PLACEHOLDER_TEXT)).toBe(true);
-    expect(hasAttribute('data-slot', 'platform-icon-container')).toBe(true);
-  });
-
-  it('renders correctly for X (Twitter) with XTwitterIcon', () => {
-    const { hasText, hasAttribute } = render(
-      <PlatformPlaceholderAccounts
-        platformName="X (Twitter)"
-        subdomain="acme"
-        icon={<XTwitterIcon />}
-      />
+    await user.click(
+      screen.getByRole('button', { name: 'Return to Overview' })
     );
-
-    expect(hasText('X (Twitter) Accounts')).toBe(true);
-    expect(hasText(TESTING_PLACEHOLDER_TEXT)).toBe(true);
-    expect(hasAttribute('data-slot', 'platform-icon-container')).toBe(true);
+    expect(pushMock).toHaveBeenCalledWith('/tenant/acme');
   });
 
-  it('renders correctly for TikTok with TikTokIcon', () => {
-    const { hasText, hasAttribute } = render(
-      <PlatformPlaceholderAccounts
-        platformName="TikTok"
-        subdomain="acme"
-        icon={<TikTokIcon />}
-      />
-    );
+  it.each(PLATFORMS)(
+    'renders correctly for $platformName',
+    ({ platformName, icon }) => {
+      const { container } = render(
+        <PlatformAccountsShell
+          platformName={platformName}
+          subdomain="acme"
+          icon={icon}
+        />
+      );
 
-    expect(hasText('TikTok Accounts')).toBe(true);
-    expect(hasText(TESTING_PLACEHOLDER_TEXT)).toBe(true);
-    expect(hasAttribute('data-slot', 'platform-icon-container')).toBe(true);
-  });
-
-  it('renders correctly for YouTube with YouTubeIcon', () => {
-    const { hasText, hasAttribute } = render(
-      <PlatformPlaceholderAccounts
-        platformName="YouTube"
-        subdomain="acme"
-        icon={<YouTubeIcon />}
-      />
-    );
-
-    expect(hasText('YouTube Accounts')).toBe(true);
-    expect(hasText(TESTING_PLACEHOLDER_TEXT)).toBe(true);
-    expect(hasAttribute('data-slot', 'platform-icon-container')).toBe(true);
-  });
+      expect(
+        screen.getByRole('heading', { name: `${platformName} Accounts` })
+      ).toBeTruthy();
+      expect(screen.getByTestId('testing-placeholder-notice').textContent).toBe(
+        TESTING_PLACEHOLDER_TEXT
+      );
+      expect(
+        container.querySelector('[data-slot="platform-icon-container"]')
+      ).toBeTruthy();
+    }
+  );
 });

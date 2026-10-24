@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { useParams } from 'next/navigation';
-import { PlatformPlaceholderAccounts } from '@/components/workspace/platform-placeholder-accounts';
+import { PlatformAccountsShell } from '@/components/accounts/platform-accounts-shell';
 import { TikTokIcon } from '@/components/workspace/platform-nav-config';
 import { Button } from '@/components/shared/ui/button';
 
@@ -11,7 +11,7 @@ export default function TikTokAccountsPage() {
   const subdomain = (params?.subdomain as string) || '';
 
   return (
-    <PlatformPlaceholderAccounts
+    <PlatformAccountsShell
       platformName="TikTok"
       subdomain={subdomain}
       icon={<TikTokIcon size={24} />}
