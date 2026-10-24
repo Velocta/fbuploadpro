@@ -114,7 +114,20 @@ export async function installApiFixtures(
     json(route, { page: FACEBOOK_PAGE })
   );
   await page.route(`**/api/tenant/${SUB}/pages`, (route) =>
-    json(route, { pages: [FACEBOOK_PAGE] })
+    // Schema-complete for the typed client (spec 131 PR-131-2): the
+    // list response carries `total`, and the page view carries the
+    // fields ListFacebookPagesResponseSchema requires.
+    json(route, {
+      pages: [
+        {
+          ...FACEBOOK_PAGE,
+          followersCount: FACEBOOK_PAGE.currentFollowers,
+          tasks: [],
+          updatedAt: FACEBOOK_PAGE.createdAt,
+        },
+      ],
+      total: 1,
+    })
   );
   // One active daily 09:00 UTC slot: the composer's default intent is
   // "queue" and a covering slot exists for every format.

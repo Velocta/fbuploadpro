@@ -103,9 +103,7 @@ export default [
     files: [
       "apps/web/src/components/media/media-import-progress-row.tsx",
       "apps/web/src/components/media/media-import-staging.tsx",
-      "apps/web/src/components/pages/add-page-modal.tsx",
       "apps/web/src/components/pages/dedicated/page-header.tsx",
-      "apps/web/src/components/pages/page-card.tsx"
     ],
     plugins: {
       "@next/next": nextPlugin

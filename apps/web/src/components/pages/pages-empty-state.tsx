@@ -1,15 +1,19 @@
 'use client';
 
-import React from 'react';
+/**
+ * Pages empty state (spec 131 PR-131-2) — rebuilt as a typed
+ * shared/ui `EmptyState` (type `first-use`: one primary action, per
+ * UI Rule 23 / UX Rule 6) inside the same panel geometry. Copy,
+ * testids, and the point-of-need Facebook-app guidance (shown only
+ * when the App ID and Secret are known to be missing) are preserved
+ * verbatim.
+ */
+import * as React from 'react';
 import Link from 'next/link';
-import {
-  THEME,
-  PALETTE,
-  RADII,
-  SPACING,
-  TYPOGRAPHY,
-  COMPONENT_STYLES,
-} from '@/lib/theme';
+import { PlusIcon } from 'lucide-react';
+
+import { Button } from '@/components/shared/ui/button';
+import { EmptyState } from '@/components/shared/ui/empty-state';
 
 export interface PagesEmptyStateProps {
   onAddPage: () => void;
@@ -30,129 +34,52 @@ export function PagesEmptyState({
   const showMissingAppGuidance =
     facebookAppConfigured === false && Boolean(subdomain);
   return (
-    <div
-      data-testid="pages-empty-state"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        textAlign: 'center',
-        padding: '64px 24px',
-        backgroundColor: `var(--bg-panel, ${THEME.default.surfaces.panel})`,
-        border: `1px solid var(--border-subtle, ${THEME.default.borders.hairline})`,
-        borderRadius: RADII.md,
-        boxShadow: `var(--shadow-card, ${THEME.default.shadows.card})`,
-        maxWidth: '560px',
-        margin: '40px auto',
-      }}
-    >
-      {/* Pages Icon Emblem */}
-      <div
-        style={{
-          width: '56px',
-          height: '56px',
-          borderRadius: RADII.full,
-          backgroundColor: PALETTE.primary,
-          color: PALETTE.background,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: TYPOGRAPHY.weights.bold,
-          fontSize: '1.25rem',
-          marginBottom: SPACING.md,
-          userSelect: 'none',
-        }}
-      >
-        PG
-      </div>
-
-      <h2
-        style={{
-          margin: `0 0 ${SPACING.xs} 0`,
-          fontSize: '1.25rem',
-          fontWeight: TYPOGRAPHY.weights.bold,
-          color: `var(--text-main, ${THEME.default.text.primary})`,
-        }}
-      >
-        No Facebook Pages added yet
-      </h2>
-
-      <p
-        style={{
-          margin: `0 0 ${SPACING.xl} 0`,
-          fontSize: '0.875rem',
-          lineHeight: 1.5,
-          color: `var(--text-sub, ${THEME.default.text.secondary})`,
-          maxWidth: '420px',
-        }}
-      >
-        Choose one of your connected Facebook accounts and select the pages you
-        want to manage and publish reels to.
-      </p>
-
-      {showMissingAppGuidance && (
-        <div
-          data-testid="pages-empty-facebook-app-guidance"
-          style={{
-            margin: `0 0 ${SPACING.xl} 0`,
-            padding: '10px 12px',
-            backgroundColor: 'rgba(250, 215, 52, 0.08)',
-            border: '1px solid rgba(250, 215, 52, 0.25)',
-            borderRadius: RADII.sm,
-            fontSize: '0.8125rem',
-            lineHeight: 1.5,
-            color: `var(--text-main, ${THEME.default.text.primary})`,
-            maxWidth: '420px',
-          }}
-        >
-          <p style={{ margin: `0 0 ${SPACING.xs} 0` }}>
-            No account connected yet? First add your Facebook App ID and App
-            Secret in Workspace Settings, under Facebook. Then connect your
-            account and add its pages here.
-          </p>
-          <Link
-            href={`/tenant/${subdomain}/settings?tab=byoc`}
-            data-testid="pages-empty-settings-facebook-link"
-            style={{
-              color: PALETTE.primary,
-              fontWeight: TYPOGRAPHY.weights.semibold,
-              textDecoration: 'underline',
-            }}
+    <div className="mx-auto my-10 w-full max-w-140 rounded-md border border-line bg-panel shadow-card">
+      <EmptyState
+        type="first-use"
+        data-testid="pages-empty-state"
+        className="px-6 pt-16 pb-2"
+        icon={
+          <div
+            aria-hidden
+            className="mb-2 flex size-14 items-center justify-center rounded-full bg-primary text-xl font-bold text-on-primary select-none"
           >
-            Add App ID and Secret in Settings
-          </Link>
-        </div>
-      )}
-
-      <button
-        type="button"
-        data-testid="empty-state-add-page-btn"
-        onClick={onAddPage}
-        style={{
-          ...COMPONENT_STYLES.primaryButton,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: SPACING.xs,
-          padding: `0 ${SPACING.lg}`,
-        }}
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+            PG
+          </div>
+        }
+        title="No Facebook Pages added yet"
+        description="Choose one of your connected Facebook accounts and select the pages you want to manage and publish reels to."
+      />
+      <div className="flex flex-col items-center px-6 pb-16">
+        {showMissingAppGuidance && (
+          <div
+            data-testid="pages-empty-facebook-app-guidance"
+            className="mb-6 w-full max-w-105 rounded-sm border border-brand-gold/25 bg-brand-gold/10 px-3 py-2.5 text-center text-body leading-body text-ink"
+          >
+            <p className="mb-1">
+              No account connected yet? First add your Facebook App ID and App
+              Secret in Workspace Settings, under Facebook. Then connect your
+              account and add its pages here.
+            </p>
+            <Link
+              href={`/tenant/${subdomain}/settings?tab=byoc`}
+              data-testid="pages-empty-settings-facebook-link"
+              className="font-semibold text-link underline"
+            >
+              Add App ID and Secret in Settings
+            </Link>
+          </div>
+        )}
+        <Button
+          type="button"
+          size="lg"
+          data-testid="empty-state-add-page-btn"
+          onClick={onAddPage}
         >
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-        <span>Add Page</span>
-      </button>
+          <PlusIcon aria-hidden />
+          <span>Add Page</span>
+        </Button>
+      </div>
     </div>
   );
 }

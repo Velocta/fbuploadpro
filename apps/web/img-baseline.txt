@@ -1,8 +1,8 @@
 # Raw <img> baseline (spec 137 §3.5 / PR-A4, guardrail check 15 +
 # ESLint @next/next/no-img-element at error in eslint.config.mjs).
 #
-# All 20 raw `<img>` occurrences in apps/web/src live in the 13 files
-# below — every one is surface-owned, none is in route/lib code, so
+# All 4 remaining raw `<img>` occurrences in apps/web/src live in the
+# 4 files below — every one is surface-owned, none is in route/lib code, so
 # PR-A4 converts none of them (spec §3.5 + plan A4: conversions ride
 # the surface rebuilds, §4.1.4). The ESLint rule is off for exactly
 # these files and an error everywhere else; this baseline freezes the
@@ -17,9 +17,7 @@
 #   src/components/media/media-import-staging.tsx         133 — OD-133-1(b) ALLOWLISTED (see below)
 #   src/components/media/media-preview-modal.tsx          133
 #   src/components/media/media-table-row.tsx              133
-#   src/components/pages/add-page-modal.tsx               131
 #   src/components/pages/dedicated/page-header.tsx        131
-#   src/components/pages/page-card.tsx                    131
 # No ownerless strays were found, so none are assigned to 130.
 #
 # OD-133-1(b) — DECIDED allowlist (spec 133 §11, PR-133-4): the two
@@ -34,6 +32,4 @@
 # Format: <file> <count>
 apps/web/src/components/media/media-import-progress-row.tsx 1
 apps/web/src/components/media/media-import-staging.tsx 1
-apps/web/src/components/pages/add-page-modal.tsx 3
 apps/web/src/components/pages/dedicated/page-header.tsx 1
-apps/web/src/components/pages/page-card.tsx 1
