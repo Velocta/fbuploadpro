@@ -39,7 +39,7 @@
         "firstLoadGzipBytes": 163912,
         "firstLoadRawBytes": 542410,
         "routeSpecificGzipBytes": 30064,
-        "routeSpecificRawBytes": 91458
+        "routeSpecificRawBytes": 96772
       },
       "/tenant/[subdomain]/settings": {
         "firstLoadGzipBytes": 162138,
@@ -128,8 +128,8 @@
       "/reset-password": {
         "firstLoadGzipBytes": 144081,
         "firstLoadRawBytes": 476662,
-        "routeSpecificGzipBytes": 10233,
-        "routeSpecificRawBytes": 25710
+        "routeSpecificGzipBytes": 11221,
+        "routeSpecificRawBytes": 28120
       },
       "/account-suspended": {
         "firstLoadGzipBytes": 143151,
@@ -225,8 +225,8 @@
       "/reset-password": {
         "firstLoadGzipBytes": 151286,
         "firstLoadRawBytes": 500496,
-        "routeSpecificGzipBytes": 10745,
-        "routeSpecificRawBytes": 26996
+        "routeSpecificGzipBytes": 11782,
+        "routeSpecificRawBytes": 29526
       },
       "/signup": {
         "firstLoadGzipBytes": 156377,
@@ -256,7 +256,7 @@
         "firstLoadGzipBytes": 172108,
         "firstLoadRawBytes": 569531,
         "routeSpecificGzipBytes": 31568,
-        "routeSpecificRawBytes": 96031
+        "routeSpecificRawBytes": 101611
       },
       "/tenant/[subdomain]/downloader": {
         "firstLoadGzipBytes": 179096,
