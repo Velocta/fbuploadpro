@@ -28,6 +28,10 @@ import {
   hasRealCaption,
 } from '../composer/queue-slot-utils';
 import {
+  getNextDestinationSlot,
+  toDestinationSlotViews,
+} from '../composer/destination/destination-slots';
+import {
   DestinationIntentSection,
   DestinationSubmitSection,
   defaultScheduleValue,
@@ -37,7 +41,6 @@ import {
   fetchDestinationPostingSlots,
   submitPlatformEnqueue,
 } from './destination-enqueue-client';
-import { getNextSlotForKind } from './destination-slot-utils';
 import { PlatformCaptionField } from './platform-caption-field';
 import {
   buildYouTubeEnqueueRequest,
@@ -116,9 +119,13 @@ export function YouTubeComposer({
   const slots = useMemo(() => slotsQuery.data?.slots ?? [], [slotsQuery.data]);
   const timezone = slotsQuery.data?.timezone ?? destination.timezone;
   const activeSlots = useMemo(() => slots.filter((s) => s.isActive), [slots]);
+  const slotViews = useMemo(
+    () => (slotsQuery.data ? toDestinationSlotViews(slotsQuery.data) : []),
+    [slotsQuery.data],
+  );
   const nextForKind = useMemo(
-    () => getNextSlotForKind(slots, 'video', timezone),
-    [slots, timezone],
+    () => getNextDestinationSlot(slotViews, 'video'),
+    [slotViews],
   );
 
   const scheduleDate = useMemo(

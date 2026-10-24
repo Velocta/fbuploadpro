@@ -28,6 +28,10 @@ import {
   hasRealCaption,
 } from '../composer/queue-slot-utils';
 import {
+  getNextDestinationSlot,
+  toDestinationSlotViews,
+} from '../composer/destination/destination-slots';
+import {
   DestinationIntentSection,
   DestinationSubmitSection,
   defaultScheduleValue,
@@ -37,7 +41,6 @@ import {
   fetchDestinationPostingSlots,
   submitPlatformEnqueue,
 } from './destination-enqueue-client';
-import { getNextSlotForKind } from './destination-slot-utils';
 import { PlatformCaptionField } from './platform-caption-field';
 import {
   buildTikTokEnqueueRequest,
@@ -108,9 +111,13 @@ export function TikTokComposer({
   const slots = useMemo(() => slotsQuery.data?.slots ?? [], [slotsQuery.data]);
   const timezone = slotsQuery.data?.timezone ?? destination.timezone;
   const activeSlots = useMemo(() => slots.filter((s) => s.isActive), [slots]);
+  const slotViews = useMemo(
+    () => (slotsQuery.data ? toDestinationSlotViews(slotsQuery.data) : []),
+    [slotsQuery.data],
+  );
   const nextForKind = useMemo(
-    () => getNextSlotForKind(slots, kind, timezone),
-    [slots, kind, timezone],
+    () => getNextDestinationSlot(slotViews, kind),
+    [slotViews, kind],
   );
 
   const scheduleDate = useMemo(

@@ -11,7 +11,7 @@ import {
   toDateTimeLocalValue,
 } from '../composer/queue-slot-utils';
 import { submitButtonLabel } from '../composer/composer-validation';
-import { destinationQueueGoesOutLine } from './destination-slot-utils';
+import { destinationQueueGoesOutLine } from '../composer/destination/destination-slots';
 import { Button } from '@/components/shared/ui/button';
 import { Input } from '@/components/shared/ui/input';
 
