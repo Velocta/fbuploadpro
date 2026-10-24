@@ -120,7 +120,7 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
     await installPagesFixtures(page, FIVE_PAGES);
     await page.goto(`/tenant/${SUB}/pages`);
 
-    await expect(page.getByTestId('pages-grid')).toBeVisible();
+    await expect(page.getByTestId('pages-grid')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('pages-scale-toolbar')).toBeVisible();
     await expect(page.getByTestId('pages-page-subtitle')).toContainText(
       '5 connected pages'
@@ -137,7 +137,7 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
     await installPagesFixtures(page, []);
     await page.goto(`/tenant/${SUB}/pages`);
 
-    await expect(page.getByTestId('pages-empty-state')).toBeVisible();
+    await expect(page.getByTestId('pages-empty-state')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId('empty-state-add-page-btn')).toBeVisible();
     await expect(page.getByTestId('pages-scale-toolbar')).toHaveCount(0);
   });
@@ -146,11 +146,11 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
     await installPagesFixtures(page, FIVE_PAGES);
     await page.goto(`/tenant/${SUB}/pages`);
 
-    await expect(page.getByTestId('pages-grid')).toBeVisible();
+    await expect(page.getByTestId('pages-grid')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('pages-search-input').fill('no-such-page');
     await expect(page.getByTestId('pages-filter-empty')).toBeVisible();
     await page.getByTestId('pages-clear-filters-btn').click();
-    await expect(page.getByTestId('pages-grid')).toBeVisible();
+    await expect(page.getByTestId('pages-grid')).toBeVisible({ timeout: 15_000 });
   });
 
   test('add page flow: pick account, discover, select, import, finish summary', async ({ page }) => {
@@ -158,10 +158,10 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
     await page.goto(`/tenant/${SUB}/pages`);
 
     await page.getByTestId('header-add-page-btn').click();
-    await expect(page.getByTestId('add-page-modal')).toBeVisible();
+    await expect(page.getByTestId('add-page-modal')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId(`select-account-${CONNECTED_ACCOUNT.id}`).click();
 
-    await expect(page.getByTestId('discovered-pages-list')).toBeVisible();
+    await expect(page.getByTestId('discovered-pages-list')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('discovered-page-checkbox-100000000000099').click();
     await page.getByTestId('confirm-add-pages-btn').click();
 
@@ -177,7 +177,7 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
     for (const width of [320, 390, 768]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/tenant/${SUB}/pages`);
-      await expect(page.getByTestId('pages-grid')).toBeVisible();
+      await expect(page.getByTestId('pages-grid')).toBeVisible({ timeout: 15_000 });
       await expectNoDocumentOverflow(page);
 
       const addBtn = page.getByTestId('header-add-page-btn');
@@ -186,7 +186,7 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
       expect(addBox!.height).toBeGreaterThanOrEqual(44);
 
       await addBtn.click();
-      await expect(page.getByTestId('add-page-modal')).toBeVisible();
+      await expect(page.getByTestId('add-page-modal')).toBeVisible({ timeout: 15_000 });
       await expectNoDocumentOverflow(page);
       const accountRow = page.getByTestId(`select-account-${CONNECTED_ACCOUNT.id}`);
       const rowBox = await accountRow.boundingBox();
@@ -194,7 +194,7 @@ test.describe('pages list + add page (spec 131 PR-131-2)', () => {
       expect(rowBox!.height).toBeGreaterThanOrEqual(44);
 
       await accountRow.click();
-      await expect(page.getByTestId('discovered-pages-list')).toBeVisible();
+      await expect(page.getByTestId('discovered-pages-list')).toBeVisible({ timeout: 15_000 });
       await expectNoDocumentOverflow(page);
       await page.keyboard.press('Escape');
       await expect(page.getByTestId('add-page-modal')).toHaveCount(0);

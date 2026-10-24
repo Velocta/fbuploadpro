@@ -237,7 +237,7 @@ export function PageCard({
       onClick={handleActivate}
       onKeyDown={handleKeyDown}
       className={cn(
-        'group flex min-h-38 cursor-pointer flex-col justify-between rounded-md border bg-panel p-6 shadow-card transition outline-none hover:-translate-y-0.5 hover:shadow-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold',
+        'group flex min-h-38 min-w-0 cursor-pointer flex-col justify-between rounded-md border bg-panel p-6 shadow-card transition outline-none hover:-translate-y-0.5 hover:shadow-elevated focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold',
         needsAttention
           ? 'border-brand-rose hover:border-brand-rose'
           : 'border-line hover:border-brand-emerald/40'
