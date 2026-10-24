@@ -41,8 +41,15 @@ test.describe('composer to queue', () => {
     await submit.click();
 
     // Composer closes; the queue now renders the created post as Queued.
+    // (PR-131-3 named update: the locator is scoped to the queue panel —
+    // the frame keeps visited tabs mounted per §9.3, so the dashboard's
+    // upcoming-queue summary legitimately contains the same caption in a
+    // hidden panel; the unscoped .first() matched that copy.)
     await expect(composer).toBeHidden();
-    const row = page.locator('text=E2E queued caption').first();
+    const row = page
+      .getByTestId('content-tab')
+      .locator('text=E2E queued caption')
+      .first();
     await expect(row).toBeVisible();
     await expect(page.getByText('Queued', { exact: true }).first()).toBeVisible();
 
