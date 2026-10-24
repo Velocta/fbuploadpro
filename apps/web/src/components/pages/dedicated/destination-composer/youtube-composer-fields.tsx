@@ -124,6 +124,7 @@ export function YouTubePrivacyField({ control, error }: Readonly<FieldProps>) {
             <SelectTrigger
               id="youtube-composer-privacy-field"
               data-testid="youtube-composer-privacy-field"
+              className="w-full"
               aria-invalid={error ? true : undefined}
               onBlur={field.onBlur}
             >
@@ -286,6 +287,7 @@ export function YouTubeCategoryField({ control }: Readonly<{ control: Control<Yo
             <SelectTrigger
               id="youtube-composer-category-field"
               data-testid="youtube-composer-category-field"
+              className="w-full"
               onBlur={field.onBlur}
             >
               <SelectValue placeholder="No category" />
